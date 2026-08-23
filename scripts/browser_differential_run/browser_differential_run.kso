@@ -2,6 +2,7 @@ import "std/io"
 import "std/json"
 import "std/list"
 import "std/net/http"
+import "std/os"
 import "std/text"
 
 # Which door each side must use, decided from the source alone. A program
@@ -134,12 +135,12 @@ fn counted progs
 fn with_page progs
   page = page_for progs
   on = (w -> with_engine progs page w)
-  io/read_file "docs/kanso.wasm" . on
+  os/read_file "docs/kanso.wasm" . on
 
 fn with_engine progs page w
   set = served page w
   on = (told_where -> chosen progs set told_where)
-  io/env "KANSO_CHROME" . on
+  os/env "KANSO_CHROME" . on
 
 mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
@@ -155,24 +156,24 @@ fn chosen progs set none
   first_chrome progs set chrome_paths 1
 
 fn chosen progs set where
-  io/exists where . (there -> told_of progs set where there)
+  os/exists where . (there -> told_of progs set where there)
 
 fn told_of progs set where true
   watching progs set where
 
 fn told_of _ _ where false
   said = "KANSO_CHROME names {where}, which is not there\n"
-  io/write said . (_ -> io/exit 1)
+  io/write said . (_ -> os/exit 1)
 
 fn first_chrome progs set paths at
   searched progs set paths at (at > length paths)
 
 fn searched _ _ _ _ true
-  io/write "no chrome found: set KANSO_CHROME\n" . (_ -> io/exit 1)
+  io/write "no chrome found: set KANSO_CHROME\n" . (_ -> os/exit 1)
 
 fn searched progs set paths at false
   on = (there -> found_at progs set paths at there)
-  io/exists paths[at]! . on
+  os/exists paths[at]! . on
 
 fn found_at progs set paths at true
   watching progs set paths[at]!
@@ -200,14 +201,14 @@ fn more_files _ _ acc book true
 
 fn more_files paths at acc book false
   on = (src -> one_file paths at acc book src)
-  io/read_file paths[at]! . on
+  os/read_file paths[at]! . on
 
 fn book_read paths at acc
   more_book_files paths at acc (at > length paths)
 
 fn more_book_files _ _ acc true
   on = (js -> with_playground acc js)
-  io/read_file "docs/play.js" . on
+  os/read_file "docs/play.js" . on
 
 fn with_playground acc js
   written = playground_from js
@@ -223,13 +224,13 @@ fn more_written written _ acc true
 fn more_written written at acc false
   one = written[at]!
   on = (_ -> laid_out written (at + 1) acc)
-  io/write_file one.path one.src . on
+  os/write_file one.path one.src . on
 
 fn more_book_files paths at acc false
   path = paths[at]!
   recorded = recorded_of path
   on = (there -> book_maybe paths at acc path there)
-  io/exists recorded . on
+  os/exists recorded . on
 
 fn book_maybe paths at acc _ false
   book_read paths (at + 1) acc
@@ -237,11 +238,11 @@ fn book_maybe paths at acc _ false
 fn book_maybe paths at acc path true
   recorded = recorded_of path
   on = (said -> book_with_out paths at acc path said)
-  io/read_file recorded . on
+  os/read_file recorded . on
 
 fn book_with_out paths at acc path said
   on = (src -> book_one paths at acc path said src)
-  io/read_file path . on
+  os/read_file path . on
 
 fn book_one paths at acc path said src
   kept = book_keep acc path src said
@@ -261,7 +262,7 @@ fn more_dirs _ _ acc true
 
 fn book_dirs simple
   on = (ds -> book_walk simple ds 1 [])
-  io/list_dir "docs/book/samples" . on
+  os/list_dir "docs/book/samples" . on
 
 fn book_walk simple ds at acc
   more_book simple ds at acc (at > length ds)
@@ -272,7 +273,7 @@ fn more_book simple _ _ acc true
 fn more_book simple ds at acc false
   here = "docs/book/samples/{ds[at]!}"
   on = (names -> book_files simple ds at acc here names)
-  io/list_dir here . on
+  os/list_dir here . on
 
 fn book_files simple ds at acc here names
   kept = list/to_list (list/select names kso?)
@@ -282,16 +283,16 @@ fn book_files simple ds at acc here names
 
 fn more_dirs ds at acc false
   on = (names -> with_names ds at acc names)
-  io/list_dir ds[at]! . on
+  os/list_dir ds[at]! . on
 
 pub play = gather_dirs dirs 1 []
 
 # What a tab cannot give a program. book-play.js upgrades a panel only when a
 # sample passes the same test, so the differential covers exactly the samples
 # a reader can press run on.
-machine_calls = ["io/read_file" "io/write_file" "io/args" "io/stdin"]
+machine_calls = ["os/read_file" "os/write_file" "os/args" "io/stdin"]
 
-more_calls = ["io/list_dir" "io/run" "io/make_dir" "io/exists" "io/is_dir"]
+more_calls = ["os/list_dir" "os/run" "os/make_dir" "os/exists" "os/is_dir"]
 
 needs_a_machine = text/concat machine_calls more_calls
 
@@ -378,7 +379,7 @@ pinned = "KANSO_SEED=2685821657"
 # there. The seed matches the page's kanso_set_seed, or a program that calls
 # `random` compares two unrelated streams.
 fn shell script
-  io/run "sh" ["-c" script]
+  os/run "sh" ["-c" script]
 
 fn dir_of path
   parts = text/split path "/"
@@ -627,7 +628,7 @@ fn flags url
 
 fn browsing chrome
   at = flags "http://127.0.0.1:{port}/"
-  io/start chrome at
+  os/start chrome at
 
 fn watching progs set chrome
   on = (raw -> reported progs raw)
@@ -636,7 +637,7 @@ fn watching progs set chrome
 
 fn reported progs raw
   on = (_ -> tallied progs raw)
-  io/run "pkill" ["-f" "kanso-differential-profile"] . on
+  os/run "pkill" ["-f" "kanso-differential-profile"] . on
 
 fn tallied progs raw
   read = json/decode raw
@@ -682,7 +683,7 @@ fn kept_crash acc _ _
 # the other. Each line is a path and the text the wasm engine answers instead.
 fn with_gaps progs seen
   on = (text -> against progs seen (gaps_from text) 1 [] 0 0)
-  io/read_file "tests/golden/wasm_gaps.txt" . on
+  os/read_file "tests/golden/wasm_gaps.txt" . on
 
 fn gaps_from text
   lines = text/split text "\n"
@@ -828,4 +829,4 @@ fn ended_run _ agreed skipped true
 fn ended_run bad agreed skipped false
   tally = "{agreed} agree, {skipped} known gaps"
   said = "FAIL  {length bad} disagree ({tally}):\n{text/join bad "\n"}\n"
-  io/write said . (_ -> io/exit 1)
+  io/write said . (_ -> os/exit 1)

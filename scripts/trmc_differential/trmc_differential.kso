@@ -1,0 +1,222 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# The accumulator rewrite, checked against the same program it refuses to
+# rewrite.
+#
+# `n * fact (n - 1)` is turned into a tail-calling helper threading an
+# accumulator, which reassociates the multiplication. Over integers that is
+# exact, and the license exists to make sure it is only ever asked over
+# integers — but nothing was comparing the rewritten answer against the
+# unrewritten one, and a reassociation bug answers a number rather than
+# failing.
+#
+# So every shape is written twice. `f` is the plain form the rewrite reaches.
+# `g` is the same arithmetic with the leftover operand passed through a
+# function, which the license refuses to read through, so the group descends
+# the way it always did. The two must answer identically at every depth, on
+# both engines.
+#
+# The last line is the instrument's own liveness, and it is read off the
+# INTERPRETER. A sum twenty thousand deep is past that engine's
+# ten-thousand-frame guard, so it can only answer there while the rewrite is
+# live; native would answer it either way, on whatever stack the operating
+# system handed the process. The day somebody deletes the pass, that line dies
+# and this gate goes red instead of quietly comparing two unrewritten
+# programs.
+# One shape: an operator, the work left over after the call, and what the
+# base arm answers.
+type shape
+  id
+  op
+  operand
+  base
+
+probe = "target/trmc_probe.kso"
+
+kanso = "target/release/kanso"
+
+ops = ["+" "*"]
+
+# Every one of these is arithmetic over the counter and integer literals,
+# which is exactly what the widened license accepts.
+operands = ["2" "n" "n * 2" "n + 1" "n * n"]
+
+bases = ["0" "1"]
+
+# Shapes the license must keep REFUSING. Neither form is rewritten today, so
+# they agree trivially — which is the point. The day a widening reaches them,
+# `f` starts reassociating where `g` does not, and floating-point addition
+# answers differently in a different order. Each is an operator, an operand
+# and a base, written out rather than crossed.
+guards = [["+" "0.1" "0"] ["+" "n * 0.1" "0"] ["+" "n / 2" "0"]]
+
+# Depth is per operator, and the reason is native's own limit rather than the
+# rewrite's: an int is arbitrary precision in the spec and an int64 in a native
+# build, so a product thirty-seven deep overflows there while the interpreter
+# answers. Every value below stays inside int64 on both engines, which is what
+# lets one output be compared against the other.
+sum_depths = [0 1 5 37]
+
+product_depths = [0 1 5 12]
+
+fn depths_for "+"
+  sum_depths
+
+fn depths_for _
+  product_depths
+
+deep = 20000
+
+deep_answer = "200010000"
+
+fn joined acc more
+  list/to_list (text/concat acc more)
+
+fn with_base op operand acc base
+  push acc (shape 0 op operand base)
+
+fn with_operand op acc operand
+  joined acc (list/fold bases [] (a b -> with_base op operand a b))
+
+fn with_op acc op
+  joined acc (list/fold operands [] (a o -> with_operand op a o))
+
+crossed = list/fold ops [] (acc op -> with_op acc op)
+
+fn guarding acc g
+  push acc (shape 0 g[1]! g[2]! g[3]!)
+
+unnumbered = list/fold guards crossed guarding
+
+fn numbered acc s
+  push acc (shape (length acc + 1) s.op s.operand s.base)
+
+shapes = list/to_list (list/fold unnumbered [] numbered)
+
+fn group_for s
+  """
+    fn f{s.id} 0
+      {s.base}
+
+    fn f{s.id} n
+      {s.operand} {s.op} f{s.id} (n - 1)
+
+    fn g{s.id} 0
+      {s.base}
+
+    fn g{s.id} n
+      opaque {s.operand} {s.op} g{s.id} (n - 1)
+
+  """
+
+fn lines_for s
+  wanted = depths_for s.op
+  text/join (list/to_list (list/map wanted (d -> line_for s d))) ""
+
+fn line_for s d
+  "print \"\{f{s.id} {d}} \{g{s.id} {d}}\"\n"
+
+source =
+  groups = text/join (list/to_list (list/map shapes group_for)) ""
+  prints = text/join (list/to_list (list/map shapes lines_for)) ""
+  """
+    fn opaque x
+      x
+
+    fn sum 0
+      0
+
+    fn sum n
+      n + sum (n - 1)
+
+    {groups}{prints}print "deep \{sum {deep}}"
+  """
+
+fn asked argv
+  os/run kanso argv
+
+fn ran src
+  os/write_file probe src . (_ -> asked ["play" probe]) . (n -> against n)
+
+fn against n
+  asked ["play" probe "--interp"] . (i -> verdict n i)
+
+# A line is either two answers that must match or the deep sum's own line.
+fn wrong? l
+  parts = list/to_list (list/select (text/split l " ") (p -> p != ""))
+  judged? parts (length parts)
+
+fn judged? parts 2
+  parts[1]! != parts[2]!
+
+fn judged? _ _
+  true
+
+fn faults out
+  lines = list/to_list (list/select (text/split out "\n") (l -> l != ""))
+  paired = list/to_list (list/reject lines deep?)
+  list/to_list (list/select paired wrong?)
+
+fn deep? l
+  text/slice l 1 4 == "deep"
+
+fn deep_line out
+  found = list/to_list (list/select (text/split out "\n") deep?)
+  only found (length found == 1)
+
+fn only found true
+  found[1]!
+
+fn only _ false
+  ""
+
+fn verdict n i
+  bad = faults n.stdout
+  live = deep_line i.stdout
+  agreed = n.stdout == i.stdout
+  told n i bad live (length bad == 0 and agreed and alive? live)
+
+fn alive? live
+  live == "deep {deep_answer}"
+
+fn told _ _ _ _ true
+  said = "rewritten and not, agree on both engines"
+  kept = "{length shapes} shapes ({length guards} the license refuses)"
+  io/write "PASS  {kept} at four depths each, {said}\n"
+
+fn told n i bad live false
+  io/write_err "trmc differential: the rewrite changed an answer\n"
+  >> reported bad (length bad == 0)
+  >> engines n i (n.stdout == i.stdout)
+  >> liveness live (alive? live)
+  >> os/exit 1
+
+fn reported _ true
+  io/write_err ""
+
+fn reported bad false
+  shown = list/to_list (list/map bad (l -> "    {l}\n"))
+  io/write_err "  lines where the rewritten and plain forms differ:\n"
+  >> io/write_err (text/join shown "")
+
+fn engines _ _ true
+  io/write_err ""
+
+fn engines n i false
+  io/write_err "  the engines disagree:\n"
+  >> io/write_err "    native: {n.stdout}{n.stderr}\n"
+  >> io/write_err "    interp: {i.stdout}{i.stderr}\n"
+
+fn liveness _ true
+  io/write_err ""
+
+fn liveness said false
+  io/write_err "  the deep sum reads `{said}`, not `deep {deep_answer}` —\n"
+  >> io/write_err "  a recursion twenty thousand deep only answers while the\n"
+  >> io/write_err "  rewrite is live, so this gate compares two unrewritten\n"
+  >> io/write_err "  programs and proves nothing.\n"
+
+pub play = ran source

@@ -11,6 +11,10 @@
 # process's stack and libc walks it before main, so a run id that gained a
 # digit reads as fourteen instructions of work that nobody wrote.
 set -e
+
+# Whose numbers these are, before spending a minute measuring against them.
+sh scripts/gates/measured_on.sh bench/instructions_golden.txt
+
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \

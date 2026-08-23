@@ -16,6 +16,13 @@
 # with a sentence in design/compiler-log.md saying so. A number that changes
 # without a sentence is the thing to catch.
 #
+# Which host, made checkable. .text is what the toolchain made of the source,
+# so the row belongs to the compiler that emitted it, and the gate compares
+# this line against the clang it is running under before it measures anything.
+# The upstream version is pinned and the package revision is not: what selects
+# codegen is the release, and nothing here shows a revision moving a byte.
+# measured-on clang=18.1.3
+#
 # 2026-08-12: encodebench 102,642 to 101,778, oneshot 101,826 to 100,962,
 # basket 93,186 to 92,322 — the same 864 bytes off each — and jsonbench
 # unmoved. A fall, and the emitted IR is byte-identical to the previous
@@ -69,17 +76,9 @@
 # pendbench FALLS 448:
 # its tail-position ifs now force through the shared maybe_force path
 # instead of each carrying its own cold-call plumbing.
-jsonbench text=79810
-encodebench text=96946
-oneshot text=97090
-basket text=88978
-widebench text=98034
-deepbench text=62802
-escapebench text=49650
 # 2026-08-20 (pendbench): the corpus gains its lazy row at 73,906 bytes —
 # a new binary, not a change to any existing one; the seven old rows are
 # untouched.
-pendbench text=73458
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -227,3 +226,11 @@ pendbench text=73458
 # is released. Each is an increment behind the stats branch that was already
 # there, which is why the figure is the same everywhere and small. deepbench
 # links least of the runtime and its section's alignment absorbs it.
+jsonbench text=79858
+encodebench text=96994
+oneshot text=97138
+basket text=88978
+widebench text=98082
+deepbench text=62802
+escapebench text=49458
+pendbench text=73362

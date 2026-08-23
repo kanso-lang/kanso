@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Differential check of the utf-8 validator against an independent reference.
@@ -86,7 +87,7 @@ fn flags_for _
 fn built flags
   head = text/concat ["-O2"] flags
   tail = ["-o" binary_path "scripts/utf8/harness.c" "-Itarget"]
-  io/run "clang" (text/concat head tail)
+  os/run "clang" (text/concat head tail)
 
 fn trimmed ""
   ""
@@ -101,7 +102,7 @@ fn dropped s _
   s
 
 fn written source
-  io/write_file extracted_path source . (_ -> io/run "uname" ["-m"])
+  os/write_file extracted_path source . (_ -> os/run "uname" ["-m"])
     . (u -> compiled (trimmed u.stdout))
 
 fn compiled arch
@@ -111,10 +112,10 @@ fn checked b
   ran (b.status == 0) b.stderr
 
 fn ran false trouble
-  io/write_err trouble . (_ -> io/exit 1)
+  io/write_err trouble . (_ -> os/exit 1)
 
 fn ran true _
-  io/run binary_path [] . reported
+  os/run binary_path [] . reported
 
 fn reported r
   io/write "{trimmed r.stdout}\n" . (_ -> verdict r.status)
@@ -124,6 +125,6 @@ fn verdict 0
 
 fn verdict _
   io/write_err "FAIL  the validator and the reference disagree\n"
-    . (_ -> io/exit 1)
+    . (_ -> os/exit 1)
 
-pub play = io/read_file "src/runtime.c" . (src -> written (as_harness src))
+pub play = os/read_file "src/runtime.c" . (src -> written (as_harness src))

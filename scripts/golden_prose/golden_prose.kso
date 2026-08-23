@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Prose numbers that quote a golden must match it, mechanically.
@@ -123,13 +124,13 @@ fn asks_write? given
   list/any? given (a -> a == "--write")
 
 fn loaded write
-  io/read_file decode_golden . (d -> with_decode write (counters d))
+  os/read_file decode_golden . (d -> with_decode write (counters d))
 
 fn with_decode write decode
-  io/read_file encode_golden . (e -> started (job decode (counters e) write))
+  os/read_file encode_golden . (e -> started (job decode (counters e) write))
 
 fn started j
-  io/list_dir "docs" . (names -> walked j "docs" (list/to_list names) 0)
+  os/list_dir "docs" . (names -> walked j "docs" (list/to_list names) 0)
     . (drift -> finished drift j.write)
 
 fn finished drift write
@@ -146,7 +147,7 @@ fn quiet true
   io/write ""
 
 fn quiet false
-  io/exit 1
+  os/exit 1
 
 fn walked j dir names drift
   onward j dir names drift (length names == 0)
@@ -157,10 +158,10 @@ fn onward _ _ _ drift true
 fn onward j dir names drift false
   rest = list/to_list (list/drop names 1)
   here = "{dir}/{names[1]!}"
-  io/is_dir here . (d -> entered j here d dir rest drift)
+  os/is_dir here . (d -> entered j here d dir rest drift)
 
 fn entered j here true dir rest drift
-  io/list_dir here . (names -> walked j here (list/to_list names) drift)
+  os/list_dir here . (names -> walked j here (list/to_list names) drift)
     . (n -> walked j dir rest n)
 
 fn entered j here false dir rest drift
@@ -170,7 +171,7 @@ fn read_or_skip j _ false dir rest drift
   walked j dir rest drift
 
 fn read_or_skip j here true dir rest drift
-  io/read_file here . (src -> visited j here src dir rest drift)
+  os/read_file here . (src -> visited j here src dir rest drift)
 
 fn visited j here src dir rest drift
   found = scanned j here src
@@ -187,7 +188,7 @@ fn saved j here found
   writing_back j.write (found.drift > 0) here found.out
 
 fn writing_back true true here out
-  io/write_file here out
+  os/write_file here out
 
 fn writing_back false _ _ _
   0
@@ -245,4 +246,4 @@ fn settled s key head shown body seen actual false
   out = "{s.out}{marker}{key}\"{head}>{want}<{tail}"
   sweep (s.drift + 1) "{s.notes}{note}" out
 
-pub play = io/args . (given -> loaded (asks_write? given))
+pub play = os/args . (given -> loaded (asks_write? given))

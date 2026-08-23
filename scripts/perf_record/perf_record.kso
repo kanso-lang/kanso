@@ -1,6 +1,7 @@
 import "std/io"
 import "std/json"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # One line of the performance history the compiler page charts.
@@ -111,7 +112,7 @@ fn all_there _ true
 
 fn all_there gone false
   listed = text/join gone " "
-  io/write_err "{unwatched}  not emitted: {listed}\n" . (_ -> io/exit 2)
+  io/write_err "{unwatched}  not emitted: {listed}\n" . (_ -> os/exit 2)
 
 fn body? l
   text/slice l 1 1 != "#" and length l > 0
@@ -191,7 +192,7 @@ fn compile_work text
   list/to_list (list/zip work_out (list/to_list totals))
 
 fn asked argv
-  io/run "git" argv
+  os/run "git" argv
 
 fn head_line r
   (text/split r.stdout "\n")[1]!
@@ -203,14 +204,14 @@ fn described line
   [["commit" parts[1]!] ["date" parts[2]!] ["subject" subject]]
 
 # What the compiler costs itself, on a real module rather than a sample small
-# enough that the number never moves. env carries the flag because io/run
+# enough that the number never moves. env carries the flag because os/run
 # takes a command and arguments, not an environment.
 fn compiler_cost _
   argv = ["KANSO_COUNTERS=1" "./target/release/kanso" "check" "lib/json"]
-  io/run "/usr/bin/env" argv
+  os/run "/usr/bin/env" argv
 
 fn welfare_score _
-  io/run "./target/release/kanso" ["run" "scripts/welfare"]
+  os/run "./target/release/kanso" ["run" "scripts/welfare"]
 
 # `welfare 65.56   floor 65.56  (...)` — the second field is the score.
 fn score_in text
@@ -218,20 +219,20 @@ fn score_in text
   parts[2]!
 
 fn stamped r
-  io/read_file "bench/cost_golden.txt" . (d -> with_decode (head_line r) d)
+  os/read_file "bench/cost_golden.txt" . (d -> with_decode (head_line r) d)
 
 fn with_decode line d
-  io/read_file "bench/cost_golden_encode.txt" . (e -> with_encode line d e)
+  os/read_file "bench/cost_golden_encode.txt" . (e -> with_encode line d e)
 
 fn with_encode line d e
-  io/read_file "bench/cost_golden_oneshot.txt" . (o -> with_oneshot line d e o)
+  os/read_file "bench/cost_golden_oneshot.txt" . (o -> with_oneshot line d e o)
 
 fn with_oneshot line d e o
-  io/read_file "bench/cost_golden_basket.txt"
+  os/read_file "bench/cost_golden_basket.txt"
     . (bk -> with_basket line d e o bk)
 
 fn with_basket line d e o bk
-  io/read_file "bench/compile_golden.txt" . (c -> recorded line d e o bk c)
+  os/read_file "bench/compile_golden.txt" . (c -> recorded line d e o bk c)
 
 fn recorded line d e o bk c
   every_watched d e o bk . (_ -> costed line d e o bk c)
@@ -254,10 +255,10 @@ fn assembled line d e o bk c cc w
   measured = text/concat own scored
   tail = text/concat rest measured
   rows = text/concat (described line) (text/concat veins tail)
-  io/read_file "bench/instructions_golden.txt" . (w -> with_work rows w)
+  os/read_file "bench/instructions_golden.txt" . (w -> with_work rows w)
 
 fn with_work rows w
-  io/read_file "bench/text_golden.txt" . (t -> written rows w t)
+  os/read_file "bench/text_golden.txt" . (t -> written rows w t)
 
 fn written pairs w t
   sized = [["text_bytes" (size_of t)]]

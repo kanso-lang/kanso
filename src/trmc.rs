@@ -10,11 +10,24 @@
 //! falls through to the original arms and behaves exactly as it always
 //! did — including the frame-per-call descent. The license is deliberately
 //! narrow: every arm is a single expression, the operator is one of `+`/`*`
-//! across all recursive arms, the non-recursive operand and every base body
-//! are integer literals, the recursive call is a direct call to the group's
-//! own name and arity, and some parameter position dispatches on an integer
-//! literal (the counter the descent consumes). Anything else — floats,
-//! guards, double recursion like fib — is left alone entirely.
+//! across all recursive arms, every base body is an integer literal, the
+//! recursive call is a direct call to the group's own name and arity, and
+//! some parameter position dispatches on an integer literal (the counter the
+//! descent consumes). Anything else — floats, guards, double recursion like
+//! fib — is left alone entirely.
+//!
+//! The leftover operand may be a literal or an expression the group's own
+//! shape proves is an integer: `n * fact (n - 1)` reassociates as exactly as
+//! `1 + count (n - 1)` does. What proves it is an induction the wrapper
+//! starts. The wrapper ascribes every counter position `int`, so a
+//! non-integer argument never enters the loop at all; each recursive call
+//! must then hand those positions arithmetic over counters, which is integer
+//! again. An operand built from counters and literals is therefore an integer
+//! at every depth, and it is pure — a name, a literal, and `+`/`-`/`*` reach
+//! no call and no effect, so computing it before the descent instead of after
+//! moves nothing a program can observe. Any operand outside that grammar, or
+//! any recursive call that hands a counter position something the grammar
+//! cannot read, leaves the whole group alone.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
 use num_bigint::BigInt;
@@ -22,7 +35,7 @@ use std::collections::HashMap;
 
 enum Arm<'a> {
     Base(BigInt),
-    Rec { op: &'static str, operand: BigInt, self_args: &'a [Expr] },
+    Rec { op: &'static str, operand: &'a Expr, self_args: &'a [Expr] },
 }
 
 /// The one shape an arm may take, or nothing.
@@ -37,20 +50,54 @@ fn classify<'a>(decl: &'a FnDecl, name: &str, arity: usize) -> Option<Arm<'a>> {
         "*" => "*",
         _ => return None,
     };
-    let (lit, call) = match (lhs.as_ref(), rhs.as_ref()) {
-        (Expr::Int(k, _), call) => (k, call),
-        (call, Expr::Int(k, _)) => (k, call),
+    // One side descends and the other is the work left over. Both sides
+    // descending is double recursion, which reassociates into nothing.
+    let (operand, call) = match (is_self_call(lhs, name, arity), is_self_call(rhs, name, arity)) {
+        (false, true) => (lhs.as_ref(), rhs.as_ref()),
+        (true, false) => (rhs.as_ref(), lhs.as_ref()),
         _ => return None,
     };
-    let Expr::App { head, args, .. } = call else { return None };
-    let Expr::Ident(callee, _) = head.as_ref() else { return None };
-    if callee != name || args.len() != arity {
+    let Expr::App { args, .. } = call else { return None };
+    if args.iter().any(|a| mentions(a, name)) || mentions(operand, name) {
         return None;
     }
-    if args.iter().any(|a| mentions(a, name)) {
-        return None;
+    Some(Arm::Rec { op, operand, self_args: args })
+}
+
+/// A direct call to the group's own name at its own arity.
+fn is_self_call(expr: &Expr, name: &str, arity: usize) -> bool {
+    let Expr::App { head, args, .. } = expr else { return false };
+    let Expr::Ident(callee, _) = head.as_ref() else { return false };
+    callee == name && args.len() == arity
+}
+
+/// Arithmetic over `ints` and integer literals, which is an integer and has
+/// no way to fail, allocate, or perform an effect.
+fn int_arithmetic(expr: &Expr, ints: &[String]) -> bool {
+    match expr {
+        Expr::Int(..) => true,
+        Expr::Ident(n, _) => ints.iter().any(|known| known == n),
+        Expr::BinOp { op, lhs, rhs, .. } => {
+            matches!(*op, "+" | "-" | "*") && int_arithmetic(lhs, ints) && int_arithmetic(rhs, ints)
+        }
+        _ => false,
     }
-    Some(Arm::Rec { op, operand: lit.clone(), self_args: args })
+}
+
+/// What this arm calls the arguments in counter positions. The wrapper
+/// ascribes those `int`, so a plain name in one is an integer; a name
+/// ascribed anything else is not, and a literal pattern binds nothing.
+fn counter_names(decl: &FnDecl, counter: &[bool]) -> Vec<String> {
+    counter
+        .iter()
+        .enumerate()
+        .filter(|(_, is_counter)| **is_counter)
+        .filter_map(|(i, _)| match decl.params.get(i) {
+            Some(Pattern::Var(n, _)) => Some(n.clone()),
+            Some(Pattern::Annotated { name, ty, .. }) if ty == "int" => Some(name.clone()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Does the expression call or reference the group anywhere inside?
@@ -136,6 +183,16 @@ pub fn rewrite(program: &mut Program) {
         if decls.iter().any(|d| d.synthetic) {
             continue;
         }
+        // the counter positions: where some arm dispatches on an integer
+        // literal. The wrapper ascribes those, so only integer arguments
+        // ever take the loop; without one, nothing bounds the descent and
+        // the group is left alone.
+        let counter: Vec<bool> = (0..*arity)
+            .map(|i| decls.iter().any(|d| matches!(d.params.get(i), Some(Pattern::IntLit(..)))))
+            .collect();
+        if !counter.iter().any(|c| *c) {
+            continue;
+        }
         let arms: Option<Vec<Arm>> = decls.iter().map(|d| classify(d, name, *arity)).collect();
         let Some(arms) = arms else { continue };
         let mut ops = arms.iter().filter_map(|a| match a {
@@ -146,14 +203,26 @@ pub fn rewrite(program: &mut Program) {
         if ops.any(|o| o != op) || !arms.iter().any(|a| matches!(a, Arm::Base(_))) {
             continue;
         }
-        // the counter positions: where some arm dispatches on an integer
-        // literal. The wrapper ascribes those, so only integer arguments
-        // ever take the loop; without one, nothing bounds the descent and
-        // the group is left alone.
-        let counter: Vec<bool> = (0..*arity)
-            .map(|i| decls.iter().any(|d| matches!(d.params.get(i), Some(Pattern::IntLit(..)))))
-            .collect();
-        if !counter.iter().any(|c| *c) {
+        // The induction that makes a named operand an integer: counters go in
+        // as integers and come out of every recursive call as arithmetic over
+        // integers. An operand that is only ever a literal needs none of it,
+        // and asking anyway would drop groups the narrow license already
+        // rewrites.
+        let proven = decls.iter().zip(&arms).all(|(decl, arm)| {
+            let Arm::Rec { operand, self_args, .. } = arm else { return true };
+            let ints = counter_names(decl, &counter);
+            if matches!(operand, Expr::Int(..)) {
+                return true;
+            }
+            int_arithmetic(operand, &ints)
+                && counter.iter().enumerate().filter(|(_, is_counter)| **is_counter).all(
+                    |(i, _)| match self_args.get(i) {
+                        Some(arg) => int_arithmetic(arg, &ints),
+                        None => false,
+                    },
+                )
+        });
+        if !proven {
             continue;
         }
         let helper = format!("trmc/{name}");
@@ -185,7 +254,7 @@ pub fn rewrite(program: &mut Program) {
                     args.push(Expr::BinOp {
                         op,
                         lhs: Box::new(Expr::Ident(acc.clone(), span)),
-                        rhs: Box::new(Expr::Int(operand.clone(), span)),
+                        rhs: Box::new((*operand).clone()),
                         span,
                     });
                     vec![Stmt::Expr(Expr::App {

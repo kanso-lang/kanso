@@ -15,6 +15,7 @@ use std::process::Command;
 
 const A_SERVER_THAT_KEEPS_ANSWERING: &str = r#"import "std/io"
 import "std/net/http"
+import "std/os"
 
 fn handled _ n
   stepped n (n > 40)
@@ -34,7 +35,7 @@ fn more _ true
 fn more at false
   where = "http://127.0.0.1:PORT/"
   wanted = ["-s" "-o" "/dev/null" "--retry-connrefused" where]
-  io/run "curl" wanted . (_ -> asked (at + 1))
+  os/run "curl" wanted . (_ -> asked (at + 1))
 
 http/serve_until PORT handled 1 . (n -> print "answered {n}")
 asked 1

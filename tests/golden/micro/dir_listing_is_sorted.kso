@@ -1,9 +1,9 @@
-import "std/io"
+import "std/os"
 
 pub play =
-  io/exists "listing" . show
-  >> io/exists "listing/nope" . show
-  >> io/list_dir "listing" . show
+  os/exists "listing" . show
+  >> os/exists "listing/nope" . show
+  >> os/list_dir "listing" . show
 
 pub fn show v
   print "{v}"

@@ -2,6 +2,7 @@ import "std/io"
 import "std/json"
 import "std/list"
 import "std/math"
+import "std/os"
 import "std/text"
 
 # One number for the whole project, and a ratchet under it.
@@ -366,7 +367,7 @@ fn filled s width false
   left "{s} " width
 
 fn asked path
-  io/read_file path
+  os/read_file path
 
 fn gauge d e o b c held w s
   comp = compile_totals c
@@ -376,7 +377,7 @@ fn gauge d e o b c held w s
   ec = counters e
   scan = counters s
   now = measured dc ec (counters o) (counters b) comp cm work scan
-  io/read_file floor_path . (held -> against now (json/decode held))
+  os/read_file floor_path . (held -> against now (json/decode held))
 
 # A term new to the model enters where its dimension already stands, so its
 # introduction is never a score move and only improvement from here pays.
@@ -432,7 +433,7 @@ fn pairs_of base
 fn against now held
   base = baseline_of held now
   value = score now base
-  io/args . (a -> either now base held value a)
+  os/args . (a -> either now base held value a)
 
 fn either now base held value args
   asked_to_set = length args > 0 and args[1]! == "--set"
@@ -471,14 +472,14 @@ unbought = """
 """
 
 fn banked _ _ _ ""
-  io/write_err unsaid . (_ -> io/exit 2)
+  io/write_err unsaid . (_ -> os/exit 2)
 
 fn banked base held value reason
   fall = held["floor"]! - value
   paid base held value reason (fall > 0.01)
 
 fn paid _ _ _ _ true
-  io/write_err unbought . (_ -> io/exit 2)
+  io/write_err unbought . (_ -> os/exit 2)
 
 fn paid base held value reason false
   units = math/round (value * 100)
@@ -489,7 +490,7 @@ fn paid base held value reason false
   written (list/to_h out) value reason
 
 fn written held value reason
-  io/write_file floor_path "{json/encode held}\n"
+  os/write_file floor_path "{json/encode held}\n"
     . (_ -> io/write "floor moved to {fixed value 2}: {reason}\n")
 
 fn era_of held
@@ -588,13 +589,13 @@ fn verdict value floor
   ruling value floor (value < floor - 0.001) (value > floor + 0.001)
 
 fn ruling value floor true true
-  fell (floor - value) . (_ -> io/exit 1)
+  fell (floor - value) . (_ -> os/exit 1)
 
 fn ruling value floor true _
-  fell (floor - value) . (_ -> io/exit 1)
+  fell (floor - value) . (_ -> os/exit 1)
 
 fn ruling value floor _ true
-  rose (value - floor) . (_ -> io/exit 1)
+  rose (value - floor) . (_ -> os/exit 1)
 
 fn ruling _ _ _ _
   io/write ""

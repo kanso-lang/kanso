@@ -1,5 +1,5 @@
 //! A program that writes a file has to be able to make the directory it goes
-//! in. `io/write_file` refuses a path whose parent is missing, so without this
+//! in. `os/write_file` refuses a path whose parent is missing, so without this
 //! every generator script shells out to `mkdir -p` — which is what
 //! bench/make_jsonbench still does, and what this exists to retire.
 //!
@@ -29,11 +29,11 @@ fn a_directory_is_made_with_its_parents() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to run in");
 
-    let program = "import \"std/io\"\n\n\
+    let program = "import \"std/os\"\n\n\
                    fn said yes\n  print \"{yes}\"\n\n\
-                   told = io/is_dir \"deep/nested\" . said\n\
-                   wrote = io/write_file \"deep/nested/f.txt\" \"hello\" . (_ -> told)\n\
-                   made = io/make_dir \"deep/nested\" . (_ -> wrote)\n\n\
+                   told = os/is_dir \"deep/nested\" . said\n\
+                   wrote = os/write_file \"deep/nested/f.txt\" \"hello\" . (_ -> told)\n\
+                   made = os/make_dir \"deep/nested\" . (_ -> wrote)\n\n\
                    made\n";
     let (out, err) = ran(program, &dir);
     let content = std::fs::read_to_string(dir.join("deep/nested/f.txt")).unwrap_or_default();
@@ -51,9 +51,9 @@ fn making_a_directory_that_exists_is_not_an_error() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to run in");
 
-    let program = "import \"std/io\"\n\n\
-                   twice = io/make_dir \"here\" . (_ -> print \"ok\")\n\
-                   once = io/make_dir \"here\" . (_ -> twice)\n\n\
+    let program = "import \"std/os\"\n\n\
+                   twice = os/make_dir \"here\" . (_ -> print \"ok\")\n\
+                   once = os/make_dir \"here\" . (_ -> twice)\n\n\
                    once\n";
     let (out, err) = ran(program, &dir);
     let _ = std::fs::remove_dir_all(&dir);

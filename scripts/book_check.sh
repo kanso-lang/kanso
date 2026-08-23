@@ -106,7 +106,7 @@ here=$(pwd)
 scratch=$(mktemp -d)
 mkdir -p "$scratch/docs/book"
 (cd docs/book && tar cf - .) | (cd "$scratch/docs/book" && tar xf -)
-python3 scripts/stale_a_panel.py "$scratch/docs/book/ch04.html"
+"$KANSO" run scripts/stale_a_panel -- "$scratch/docs/book/ch04.html"
 if ! (cd "$scratch" && "$KANSO" run "$here/scripts/book_panels" -- --write \
       >"$scratch/log" 2>&1); then
   echo "WRITE PATH: book_panels --write did not finish"

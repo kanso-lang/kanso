@@ -1,7 +1,7 @@
-import "std/io"
+import "std/os"
 import "std/time"
 
-crunch = io/args . (_ -> print "report: {grind 150000000}")
+crunch = os/args . (_ -> print "report: {grind 150000000}")
 
 fn grind n
   spin n 0

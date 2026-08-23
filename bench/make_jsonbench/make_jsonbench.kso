@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Rebuild bench/jsonbench: the json module plus a main that reads
@@ -29,28 +30,28 @@ bench_text = """
 
 main_text = """
   import "./jsonbench"
-  import "std/io"
+  import "std/os"
 
-  io/read_file "bench/large.json" . go
+  os/read_file "bench/large.json" . go
 """
 
 ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
 
 pub play = built
 
-built = io/make_dir out . (_ -> io/make_dir module_dir) . (_ -> copied)
+built = os/make_dir out . (_ -> os/make_dir module_dir) . (_ -> copied)
 
 copied = plain "number" . (_ -> plain "scan") . (_ -> plain "text")
   . (_ -> plain "value") . (_ -> trimmed) . (_ -> written)
 
 fn plain name
-  io/read_file "lib/json/{name}.kso"
-    . (s -> io/write_file "{module_dir}/{name}.kso" s)
+  os/read_file "lib/json/{name}.kso"
+    . (s -> os/write_file "{module_dir}/{name}.kso" s)
 
-trimmed = io/read_file "lib/json/json.kso" . stripped
+trimmed = os/read_file "lib/json/json.kso" . stripped
 
 fn stripped source
-  io/write_file "{module_dir}/json.kso" (kept source)
+  os/write_file "{module_dir}/json.kso" (kept source)
 
 # Blocks are separated by a blank line, which is what makes the one function
 # this benchmark does not want addressable without parsing the file.
@@ -62,6 +63,6 @@ fn kept source
 fn starts_dropped? block
   text/slice block 1 (length dropped) == dropped
 
-written = io/write_file "{module_dir}/bench.kso" bench_text
-  . (_ -> io/write_file "{out}/main.kso" main_text)
+written = os/write_file "{module_dir}/bench.kso" bench_text
+  . (_ -> os/write_file "{out}/main.kso" main_text)
   . (_ -> io/write ready)

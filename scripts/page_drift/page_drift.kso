@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # design/compiler-log.md is append-only chronology and docs/compiler.html is
@@ -15,7 +16,7 @@ import "std/text"
 budget = 3
 
 fn asked argv
-  io/run "git" argv
+  os/run "git" argv
 
 fn heading? l
   text/slice l 1 4 == "+## "
@@ -30,6 +31,25 @@ fn headings diff
   lines = text/split diff "\n"
   kept = list/select lines heading?
   list/to_list (list/map kept title)
+
+# A truncated history answers every question with a lie this gate cannot
+# see through: the boundary commit looks like the one that created every
+# file, so the page always appears to have moved with the tip and the count
+# is always zero. That is not a green, and it is how this check spent days
+# reporting `0/3` while the page fell twenty-two entries behind — the
+# workflow ran `git fetch origin main --depth 1` in the step above and
+# collapsed the clone to one commit.
+fn depth r
+  full (text/trim r.stdout == "false")
+
+fn full true
+  asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] . measured
+
+fn full false
+  io/write_err "page drift: this clone is shallow, so the page's last\n"
+  >> io/write_err "commit cannot be found and the count would read zero\n"
+  >> io/write_err "whatever the log did. Fetch the history before asking.\n"
+  >> os/exit 1
 
 fn measured r
   parts = text/split r.stdout "\n"
@@ -50,7 +70,7 @@ fn verdict _ count true
   io/write "page drift {count}/{budget} log entries since the page moved\n"
 
 fn verdict heads count false
-  told heads count . (_ -> io/exit 1)
+  told heads count . (_ -> os/exit 1)
 
 fn told heads count
   io/write "the log is {count} entries ahead, and the budget is {budget}:\n"
@@ -70,4 +90,4 @@ fn owed _
   >> io/write "fallen behind what the compiler does. Write the entry the\n"
   >> io/write "page owes — one for a campaign is fine, not one per commit.\n"
 
-pub play = asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] . measured
+pub play = asked ["rev-parse" "--is-shallow-repository"] . depth
