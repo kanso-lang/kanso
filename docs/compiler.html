@@ -972,6 +972,8 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>three attempts to write a benchmark that fails without that guard moved not one instruction between them. the shape that reproduces it is not "a loop over small lists" — that was attempt two — and the difference is something about how deeply the carried value nests. until a program in the corpus has that shape, the guard is held in place by a measurement of a program outside it, which is a weaker thing than every other number here and is written down as such.</p>
 
+<p>the same edge caught this page itself. a check counts the log entries written since this file last changed and fails when they get too far ahead, and it read <code>0/3</code> on every pull request for days while twenty-two entries piled up. the count was honest about what it could see: the step above it in the workflow fetched the main branch one commit deep, which truncates the history for every step after it, and in a truncated history the boundary commit looks like the one that created every file — so the page always appeared to have moved with the tip. the fetch is a full one now, and the check refuses to answer at all on a shallow clone rather than reporting a zero it cannot stand behind. a gate that cannot see must not report success.</p>
+
 <p>every counter this page names is recorded on every merged commit and drawn on <a href="/numbers.html">the long view</a>, one row each — what a run costs, what compiling costs, and the welfare score they roll up into.</p>
 
 <h2 id="onemodule"><span class="sec-num">19</span>a module reached two ways is one module</h2>

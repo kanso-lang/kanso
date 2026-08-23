@@ -1473,3 +1473,44 @@ the compiler's sources, which caught `docs/kanso.wasm` after a formatting-only
 edit: panic messages carry line numbers, so reformatting moves the bytes. Two
 rebuilds from one source hash identically, so the artifact is reproducible and
 the staleness guard is reading real drift rather than build noise.
+
+## 2026-08-23 — the gate that watches the page could not see the history
+
+The page-drift check counts log entries written since docs/compiler.html last
+changed and fails past a budget of three. It reported `0/3` on every pull
+request while the page fell twenty-two entries behind, and the reason is one
+line in the workflow, two steps above it:
+
+    git fetch origin main --depth 1
+
+The job checks out with `fetch-depth: 0`, so the history was there; that fetch
+truncates it for every step after it. In a truncated history the shallow
+boundary commit looks like the one that created every file, so
+`git log -1 -- docs/compiler.html` answers with the tip, and the diff from the
+tip to HEAD contains no log entries, so the count is zero.
+
+MEASURED, on main's tip in a fresh clone of this repository:
+
+    full history            the gate fails, 22 entries ahead of the page
+    after `--depth 1`       `page drift 0/3`, exit 0
+
+Two fixes, because either alone leaves the class open. The workflow's two
+fetches drop `--depth 1` — nothing in that job wanted a shallow one, and the
+checkout had already fetched everything. And the gate now asks
+`git rev-parse --is-shallow-repository` first and refuses to answer on a
+truncated clone, watched refusing before it was trusted. A gate that cannot see
+must not report success, which is the same rule as never trusting a spec you
+have not seen fail.
+
+This is what the ratchet exists to catch and could not: its rows prove a gate's
+own script goes red on a defect in the tree, and this defect was in the
+workflow around the script. The gate's script was fine. The clone it read was
+not.
+
+Found while checking why PR #985 has sat red for two days. That one is a
+different story and a real one: with its goldens regenerated — the decoder's
+emitted lines 11,593 to 11,603, the front end's rounds on lib/json 28 to 30,
+visits 23,224 to 23,345, peak 871,649 to 878,422 bytes — welfare reads 84.69
+against a floor of 84.85. It is not a stale golden. By the weights as written
+that change costs the project 0.16 points, and the branch owes either the
+reason it is worth it or the compile cost back.
