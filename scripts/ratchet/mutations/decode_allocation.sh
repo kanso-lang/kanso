@@ -7,11 +7,15 @@
 # less. A counter wired to nothing — reading a constant, or a length that has
 # no relation to the work — passes an edited golden and stays green under this.
 set -e
-python3 - <<'PY'
-path = "src/linear.rs"
-head = "    fn param_is_linear(&self, name: &str, arity: usize, i: usize) -> bool {\n"
-source = open(path).read()
-assert head in source, "param_is_linear moved; this mutation needs rewriting"
-open(path, "w").write(source.replace(head, head + "        return false;\n", 1))
-PY
+A='    fn param_is_linear(&self, name: &str, arity: usize, i: usize) -> bool {' \
+awk '
+  !hit && $0 == ENVIRON["A"] { print; print "        return false;"; hit = 1; next }
+  { print }
+  END { if (!hit) exit 3 }
+' src/linear.rs > src/linear.rs.mut || {
+  rm -f src/linear.rs.mut
+  echo "param_is_linear moved; this mutation needs rewriting" >&2
+  exit 1
+}
+mv src/linear.rs.mut src/linear.rs
 grep -A1 'fn param_is_linear' src/linear.rs | grep -q 'return false'

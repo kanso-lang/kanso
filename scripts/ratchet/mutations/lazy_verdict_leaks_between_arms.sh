@@ -9,12 +9,16 @@
 # pinned to a benchmark that allocates no thunks at all, survives an edited
 # golden and dies here.
 set -e
-python3 - <<'PY'
-path = "src/demand.rs"
-line = "            *seen = *seen && qualifies;\n"
-source = open(path).read()
-assert line in source, "the lazy fold moved; this mutation needs rewriting"
-open(path, "w").write(source.replace(line, "            *seen = *seen || qualifies;\n", 1))
-PY
+A='            *seen = *seen && qualifies;' \
+awk '
+  !hit && $0 == ENVIRON["A"] { print "            *seen = *seen || qualifies;"; hit = 1; next }
+  { print }
+  END { if (!hit) exit 3 }
+' src/demand.rs > src/demand.rs.mut || {
+  rm -f src/demand.rs.mut
+  echo "the lazy fold moved; this mutation needs rewriting" >&2
+  exit 1
+}
+mv src/demand.rs.mut src/demand.rs
 grep -q '\*seen = \*seen && qualifies;' src/demand.rs && exit 1
 exit 0

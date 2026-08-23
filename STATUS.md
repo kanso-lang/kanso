@@ -98,19 +98,22 @@ that emitted them. Each golden carries a `measured-on` line,
 gate, and off the reference host it refuses without printing a number to copy.
 Ratchet rows `instructions_host_unpinned` and `text_host_unpinned`.
 
-**The repo has one python left in it, and it is there on purpose** (task #55,
-closed too early). Both harnesses that drove headless chrome are kanso now, CI
-runs the kanso ones, and `scripts/stale_a_panel` — the last `.py` file, which
-the book gate ran on every build — is a kanso program as of 2026-08-23, checked
-byte-identical against the python it replaces on a real chapter.
+**The repo has no python left in it, and a gate says so** (task #55, closed
+too early, and re-opened by the regression below). Both harnesses that drove
+headless chrome are kanso, CI runs the kanso ones, and `scripts/stale_a_panel`
+— the last `.py` file, which the book gate ran on every build — is a kanso
+program as of 2026-08-23, checked byte-identical against the python it
+replaces on a real chapter.
 
-What stays python: the `python3 - <<'PY'` heredocs in six of
-`scripts/ratchet/mutations/*.sh`. Each edits a compiler source file before
-anything in that worktree is built, and the `target/` the worktree links to is
-shared across rows — so the binary sitting there is whatever the previous row's
-mutated source produced. A tool that damages the compiler cannot be written in
-the language that compiler compiles. The bootstrap is the reason, and it is
-written down here so nobody re-opens it as an oversight.
+The six heredocs in `scripts/ratchet/mutations/*.sh` that used to shell out to
+the other language are POSIX awk, producing byte-identical mutated sources and
+identical exits. They
+are not kanso, and the bootstrap is why: each edits a compiler source file
+before anything in that worktree is built, and the `target/` the worktree
+links to is shared across rows, so the binary sitting there is whatever the
+previous row's mutated source produced. A tool that damages the compiler
+cannot be written in the language that compiler compiles — but it can be
+written in awk, which needs no build at all.
 
 - `scripts/site_smoke` makes four visits, one per page the site promises — the
   landing sample, the playground, a book chapter and the chart. Each probe was
@@ -129,6 +132,13 @@ let the arena hand out memory past the end of a block (#823, caught by glibc on
 linux and invisible on macOS), and a program could only ever open sixty-three
 sockets and processes because the guard counted takes rather than asking
 whether a slot was free (#825).
+
+Python then crept back within days of that port — #854's mutation heredocs,
+#862's panel staler — and a dead bench/kq_race.sh predated it, racing an
+apps/kq this repo no longer holds. All three are gone: the staler is kanso,
+the heredocs are awk, the racer is deleted. `scripts/gates/python_free.sh`
+now fails CI on any tracked .py file or python invocation, with a ratchet
+row proving it turns red.
 
 ## Recently ruled by Clay
 

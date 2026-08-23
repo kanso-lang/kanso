@@ -75,6 +75,14 @@ linting = row
   (breaking "clippy_bait")
   no_setup
 
+python_free = row
+  "a python call creeping back into a harness"
+  false
+  (gating "python_free")
+  "python-free (the harnesses stay kanso)"
+  (breaking "python_creeps_back")
+  no_setup
+
 goldens = row
   "a micro sample answering something else"
   true
@@ -219,7 +227,7 @@ itself = row
   (breaking "unrowed_ci_job")
   release
 
-rows_a = [formatting linting goldens mem_shapes release_profile]
+rows_a = [formatting linting python_free goldens mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters]
 
