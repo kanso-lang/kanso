@@ -1438,3 +1438,38 @@ answers on the interpreter, and native reports `integer overflow (int64 native
 build; spec is arbitrary precision)`. The engines have always differed there;
 until now the interpreter ran out of frames first and the disagreement could
 not be reached.
+
+## 2026-08-23 — the last python leaves, and the one that stays says why
+
+`scripts/stale_a_panel.py` was the repo's only `.py` file and the book gate ran
+it on every build: it plants a marker word in two panels of ch04 so
+`book_panels --write` can be watched putting them back. It is kanso now, and
+the port was checked the way a port should be — byte-identical output against
+the python on a real chapter, the complaint path exercised on a chapter that
+carries neither panel title, and the gate watched going red with the planting
+removed before it was watched going green with it back.
+
+Writing it found its own bug, which is the reason the missing-title check runs
+before any planting rather than inside the walk. An arm that answered with an
+effect chain handed the next fold step an effect where a string belonged, and
+the run died with `split takes two strings` — the arm's own complaint never
+printed. A gate program is a program, and this is the class of mistake that
+only turns up in one.
+
+STATUS.md claimed the repo has no python in it. Six mutation scripts under
+`scripts/ratchet/mutations` still carry a `python3` heredoc, and they are
+staying: each damages a compiler source file before that worktree builds, and
+the `target/` the worktree links to is shared across rows, so the binary in it
+is whatever the previous row's mutated source produced. A tool that breaks the
+compiler cannot be written in the language that compiler compiles. Written down
+in STATUS.md so it is not re-opened as an oversight.
+
+Two smaller things fell out. `tests/golden/wasm_gaps.txt` carried four
+paragraphs describing knot-rendering divergences whose entries are gone because
+the engines agree now — the file's own rule calls a gap that closed and stayed
+written down a lie about the engine, and a paragraph is the same lie with a
+longer fuse. And the wasm spec refuses to run against an artifact older than
+the compiler's sources, which caught `docs/kanso.wasm` after a formatting-only
+edit: panic messages carry line numbers, so reformatting moves the bytes. Two
+rebuilds from one source hash identically, so the artifact is reproducible and
+the staleness guard is reading real drift rather than build noise.
