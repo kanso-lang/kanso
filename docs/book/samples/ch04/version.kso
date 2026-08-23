@@ -1,4 +1,4 @@
-import "std/io"
+import "std/os"
 import "std/text"
 
 fn announce text
@@ -7,4 +7,4 @@ fn announce text
 fn major_of text
   text/to_int text
 
-pub play = io/read_file "version.txt" . announce
+pub play = os/read_file "version.txt" . announce

@@ -1,0 +1,66 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+# Put a chapter out of date in the way that exercises the write path.
+#
+# Both panel shapes are staled, because they reach different code and only one
+# of them touches the escaping. A source panel is regenerated from the .kso. A
+# recorded-output panel is compared against the .out file and rewritten from it
+# when the two disagree, which is where a recorded body gets escaped into html.
+#
+# A chapter carrying both is what this needs. ch03 has no output panel at all,
+# so its title is only ever a `.kso` name and the comparison never runs.
+#
+# Deleting the .out reaches neither: a recorded output that is missing leaves
+# the panel alone, on the reading that the chapter may be quoting something the
+# book does not own.
+marker = "<pre><code>"
+
+named = "code-panel-title\">"
+
+titles = ["{named}railway.kso" "{named}kanso play railway.kso"]
+
+# The word the write path has to remove again. Anything the highlighter would
+# never emit does, and this one is legible in a failure report.
+stale = "STALE"
+
+# The first `<pre><code>` after `title`, with the marker word planted inside
+# it. Splitting on a string that occurs once answers two pieces, and the first
+# marker in the second piece is the first one after the title.
+fn staled src title
+  parts = text/split src title
+  bits = text/split parts[2]! marker
+  rest = text/slice bits 2 (length bits)
+  "{parts[1]!}{title}{bits[1]!}{marker}{stale}{text/join rest marker}"
+
+fn once? src title
+  length (text/split src title) == 2
+
+# Every title is checked before any is planted, because the walk that plants
+# them threads the chapter as a string and has nowhere to put a complaint.
+fn onto chapter src
+  gone = list/to_list (list/select titles (t -> not once? src t))
+  planted chapter src gone (length gone == 0)
+
+fn planted chapter src _ true
+  os/write_file chapter (list/fold titles src staled)
+
+# A title the chapter does not carry once is a mistake in this program rather
+# than a finding about the book, so it says which one and stops.
+fn planted _ _ gone false
+  io/write_err "stale_a_panel: not in the chapter exactly once: {gone}\n"
+    . (_ -> os/exit 1)
+
+fn with_args given
+  usage (length given != 1) given
+
+fn usage true _
+  io/write_err "usage: stale_a_panel <chapter.html>\n" . (_ -> os/exit 2)
+
+fn usage false given
+  chapter = given[1]!
+  os/read_file chapter . (src -> onto chapter src)
+
+pub play = os/args . with_args

@@ -1,13 +1,13 @@
 # Making a directory that is already there succeeds, the way `mkdir -p` does,
 # so a generator that runs twice is the ordinary case rather than an error.
 # `.` is always there, which keeps this from leaving anything behind.
-import "std/io"
+import "std/os"
 
 pub play = made
 
-made = io/make_dir "." . (_ -> told)
+made = os/make_dir "." . (_ -> told)
 
-told = io/is_dir "." . said
+told = os/is_dir "." . said
 
 fn said yes
   print "{yes}"

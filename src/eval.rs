@@ -2520,7 +2520,10 @@ impl<'a> Interp<'a> {
                     Value::Int(_) => return Ok(value),
                     _ => {
                         return Err(RuntimeError {
-                            message: "to_int takes a string".to_string(),
+                            message: format!(
+                                "to_int takes a string, bytes, or int, not {}",
+                                render(self, &value, true)
+                            ),
                             span,
                         })
                     }
@@ -2553,7 +2556,10 @@ impl<'a> Interp<'a> {
                     Value::Float(_) => return Ok(value),
                     _ => {
                         return Err(RuntimeError {
-                            message: "to_float takes a string or int".to_string(),
+                            message: format!(
+                                "to_float takes a string, bytes, or number, not {}",
+                                render(self, &value, true)
+                            ),
                             span,
                         })
                     }

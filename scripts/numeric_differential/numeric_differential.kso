@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Differential check of integer arithmetic between the two engines.
@@ -133,10 +134,10 @@ fn program cases
   text/join (list/to_list (list/map cases line_for)) ""
 
 fn asked argv
-  io/run "target/release/kanso" argv
+  os/run "target/release/kanso" argv
 
 fn ran source
-  io/write_file probe source . (_ -> asked ["run" probe]) . (n -> against n)
+  os/write_file probe source . (_ -> asked ["run" probe]) . (n -> against n)
 
 fn against n
   asked ["run" probe "--interp"] . (i -> both (told n) (told i))
@@ -286,13 +287,13 @@ fn dropped s _
 fn closed 0 0
   io/write "\nnothing reached the native ceiling — either the gap closed,\n"
     . (_ -> io/write "or the ranges above stopped straddling it.\n")
-    . (_ -> io/exit 1)
+    . (_ -> os/exit 1)
 
 fn closed 0 _
   io/write ""
 
 fn closed _ _
   io/write "\nthe interpreter is the oracle: these are native's to fix.\n"
-    . (_ -> io/exit 1)
+    . (_ -> os/exit 1)
 
-pub play = io/args . (given -> started (rounds_from given))
+pub play = os/args . (given -> started (rounds_from given))

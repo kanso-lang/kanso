@@ -51,7 +51,7 @@ fn a_deliberate_exit_sets_the_status_and_says_nothing() {
     std::fs::create_dir_all(&dir).expect("temp work dir");
     std::fs::write(
         dir.join("main.kso"),
-        "import \"std/io\"\n\nio/write \"before\\n\" . (_ -> io/exit 3)\n",
+        "import \"std/io\"\nimport \"std/os\"\n\nio/write \"before\\n\" . (_ -> os/exit 3)\n",
     )
     .expect("the entry writes");
 

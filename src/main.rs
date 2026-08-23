@@ -509,14 +509,14 @@ fn opens_block(line: &str) -> bool {
     head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
 }
 
-/// A deliberate exit is an err whose reason is `io/exit_status`. The endpoint
+/// A deliberate exit is an err whose reason is `os/exit_status`. The endpoint
 /// reads its code rather than reporting it, because the program did not fail
 /// to say what it meant — it said it.
 fn deliberate_exit(reason: &eval::Value) -> Option<u8> {
     let eval::Value::Record { ty, fields } = reason else { return None };
     // the type spells its module chain at whatever depth the import graph
-    // qualified it: io/exit_status directly, hako/io/exit_status one hop in
-    if !(ty.as_ref() == "io/exit_status" || ty.ends_with("/io/exit_status")) {
+    // qualified it: os/exit_status directly, hako/os/exit_status one hop in
+    if !(ty.as_ref() == "os/exit_status" || ty.ends_with("/os/exit_status")) {
         return None;
     }
     match fields.borrow().first() {
@@ -579,6 +579,19 @@ fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<Str
         .unwrap_or("out")
         .to_string();
     let stem = built_as.unwrap_or(named);
+    // A build is named for its program, so `kanso build myapp` from the
+    // directory above `myapp/` wants to write a file where the directory
+    // already is. The linker's own words for that are `cannot open output
+    // file myapp: Is a directory` followed by `clang failed`, which names
+    // neither the cause nor the way out.
+    if std::path::Path::new(&stem).is_dir() {
+        eprintln!(
+            "error: this build is named `{stem}`, and a directory of that name is here — \
+             build it from inside (`cd {stem} && kanso build .`), or build it from \
+             somewhere the name is free"
+        );
+        return ExitCode::from(2);
+    }
     let ll_path = format!("{stem}.ll");
     let ir = match release {
         true => narrow_tailcc(ir),

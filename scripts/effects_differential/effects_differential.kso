@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # A body, what it must write, and a name for it. `want` of `?` means the right
@@ -45,7 +46,7 @@ bind_drop = shape
   "ab"
 
 bind_value = shape
-  "io/env \"PATH\" . (v -> io/write \"\{v == none}\")"
+  "os/env \"PATH\" . (v -> io/write \"\{v == none}\")"
   "bind passes its value"
   "false"
 
@@ -99,60 +100,60 @@ bind_beside = shape
   "abc"
 
 group_of_binds = shape
-  "io/env \"A\" . (_ -> io/write \"a\")\n  io/env \"B\" . (_ -> io/write \"b\")"
+  "os/env \"A\" . (_ -> io/write \"a\")\n  os/env \"B\" . (_ -> io/write \"b\")"
   "a group of binds"
   "ab"
 
 # the effects that read the world, pinned so they answer the same anywhere
 unset = shape
-  "io/env \"KANSO_NO_SUCH_VAR\" . (v -> io/write \"\{v}\")"
+  "os/env \"KANSO_NO_SUCH_VAR\" . (v -> io/write \"\{v}\")"
   "an unset variable"
   "<none>"
 
 absent = shape
-  "io/exists \"/no/such/path\" . (v -> io/write \"\{v}\")"
+  "os/exists \"/no/such/path\" . (v -> io/write \"\{v}\")"
   "a path that is not there"
   "false"
 
 no_args = shape
-  "io/args . (a -> io/write \"\{length a}\")"
+  "os/args . (a -> io/write \"\{length a}\")"
   "the args of no args"
   "0"
 
 no_dir = shape
-  "io/list_dir \"/no/such/dir\" . (v -> io/write \"\{v}\")"
+  "os/list_dir \"/no/such/dir\" . (v -> io/write \"\{v}\")"
   "a directory that is not there"
   ""
 
 # a failure inside a combination: it takes the chain with it, and the two
 # engines have to agree on where it stops and what reaches the executor
 exit_in_bind = shape
-  "io/write \"a\" . (_ -> io/exit 3)"
+  "io/write \"a\" . (_ -> os/exit 3)"
   "exit inside a bind"
   "a"
 
 exit_before = shape
-  "io/write \"a\" . (_ -> io/exit 3) . (_ -> io/write \"b\")"
+  "io/write \"a\" . (_ -> os/exit 3) . (_ -> io/write \"b\")"
   "exit before a write"
   "a"
 
 exit_in_group = shape
-  "io/write \"a\"\n  io/exit 3"
+  "io/write \"a\"\n  os/exit 3"
   "exit in a parallel group"
   ""
 
 read_fails = shape
-  "io/read_file \"/no/such/file\" . (_ -> io/write \"read\")"
+  "os/read_file \"/no/such/file\" . (_ -> io/write \"read\")"
   "a read that fails"
   ""
 
 read_bound_twice = shape
-  "io/read_file \"/no/f\" . (_ -> io/write \"a\") . (_ -> io/write \"b\")"
+  "os/read_file \"/no/f\" . (_ -> io/write \"a\") . (_ -> io/write \"b\")"
   "a failed read, bound twice"
   ""
 
 read_beside = shape
-  "io/read_file \"/no/such/file\"\n  io/write \"b\""
+  "os/read_file \"/no/such/file\"\n  io/write \"b\""
   "a failed read beside a write"
   "b"
 
@@ -210,8 +211,30 @@ all_probes = text/concat probes tail
 
 # A probe is a whole program, so it carries exactly the imports it uses and no
 # others — an unused import is an error, and an error compares equal on both
-# engines, which would read as agreement.
-imports = "import \"std/io\"\n\n"
+# engines, which would read as agreement. Two modules can be reached from a
+# probe since the library took Go's split, so the header is read off the body
+# rather than fixed.
+io_import = "import \"std/io\"\n"
+
+os_import = "import \"std/os\"\n"
+
+fn reaches? body module
+  length (text/split body "{module}/") > 1
+
+fn imports_for body
+  needed body (reaches? body "io") (reaches? body "os")
+
+fn needed _ false false
+  ""
+
+fn needed _ true false
+  "{io_import}\n"
+
+fn needed _ false true
+  "{os_import}\n"
+
+fn needed _ true true
+  "{io_import}{os_import}\n"
 
 # The probe is a play file: its statements sit at the top level, where
 # adjacent ones are a parallel group exactly as they were inside a block.
@@ -219,7 +242,7 @@ imports = "import \"std/io\"\n\n"
 # one comes off.
 fn shaped body
   lines = text/split body "\n  "
-  "{imports}{text/join lines "\n"}\n"
+  "{imports_for body}{text/join lines "\n"}\n"
 
 # A legal probe that never returns is a finding, and a louder one than a
 # wording difference — so every run is under `timeout`, which answers 124 when
@@ -228,7 +251,7 @@ fn shaped body
 limit = "20"
 
 fn asked argv
-  io/run "timeout" (text/concat [limit kanso] argv)
+  os/run "timeout" (text/concat [limit kanso] argv)
 
 fn hung? 124
   true
@@ -237,7 +260,7 @@ fn hung? _
   false
 
 fn ran source
-  io/write_file probe source . (_ -> both)
+  os/write_file probe source . (_ -> both)
 
 both = asked ["play" probe] . against
 
@@ -309,7 +332,7 @@ sample = """
 """
 
 fn begun false
-  io/write_err complaint . (_ -> io/exit 2)
+  io/write_err complaint . (_ -> os/exit 2)
 
 fn begun true
   counted 0 . reported
@@ -323,6 +346,6 @@ fn reported 0
   io/write "0 wrong\n"
 
 fn reported n
-  io/write "{n} wrong\n" . (_ -> io/exit 1)
+  io/write "{n} wrong\n" . (_ -> os/exit 1)
 
 pub play = begun (shaped "io/write \"\{1}\"" == sample)

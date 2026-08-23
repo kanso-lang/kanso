@@ -1,4 +1,4 @@
-import "std/io"
+import "std/os"
 import "std/text"
 
 fn announce text
@@ -7,4 +7,4 @@ fn announce text
 fn major_of text
   text/to_int text
 
-io/read_file "garbage.txt" . announce
+os/read_file "garbage.txt" . announce

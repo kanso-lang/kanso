@@ -15,7 +15,7 @@
 
 use std::process::Command;
 
-const A_READ_LOOP: &str = r#"import "std/io"
+const A_READ_LOOP: &str = r#"import "std/os"
 import "std/text"
 
 fn gathered paths at acc
@@ -26,7 +26,7 @@ fn read_next _ _ acc true
 
 fn read_next paths at acc false
   on = (body -> gathered paths (at + 1) (text/concat acc [body]))
-  io/read_file paths[at]! . on
+  os/read_file paths[at]! . on
 
 wanted = ["README.md" "STATUS.md" "CLAUDE.md" "Cargo.toml"]
 

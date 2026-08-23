@@ -6470,7 +6470,7 @@ KValue k_b_from_code(KValue nv, const char* origin) {
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag == K_INT) return sv;
-    if (sv.tag != K_STR && sv.tag != K_BYTES) k_die("to_int takes a string");
+    if (sv.tag != K_STR && sv.tag != K_BYTES) k_die_value("to_int takes a string, bytes, or int", sv);
     const char* data;
     long long len;
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
@@ -7310,7 +7310,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;
     if (v.tag == K_INT) return k_float((double)v.payload);
-    if (v.tag != K_STR && v.tag != K_BYTES) k_die("to_float takes a string or int");
+    if (v.tag != K_STR && v.tag != K_BYTES) k_die_value("to_float takes a string, bytes, or number", v);
     const char* data;
     long long len;
     if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }
@@ -7395,7 +7395,7 @@ static void k_report_trace(KErrBox* box) {
     }
 }
 
-/* A deliberate exit is an err whose reason is `io/exit_status`. The endpoint
+/* A deliberate exit is an err whose reason is `os/exit_status`. The endpoint
    reads its code rather than reporting it: the program did not fail to say
    what it meant, it said it. Returns -1 when the err is an ordinary one. */
 static int k_exit_status(KValue e) {
@@ -7403,11 +7403,11 @@ static int k_exit_status(KValue e) {
     if (reason.tag != K_REC) return -1;
     KRec* r = k_as_rec(reason);
     /* the module chain qualifies at whatever depth the import graph built:
-       io/exit_status directly, hako/io/exit_status one hop in */
+       os/exit_status directly, hako/os/exit_status one hop in */
     const char* xty = k_type_name(r->type_id);
     size_t xn = strlen(xty);
-    if (strcmp(xty, "io/exit_status") &&
-        (xn < 15 || strcmp(xty + xn - 15, "/io/exit_status")))
+    if (strcmp(xty, "os/exit_status") &&
+        (xn < 15 || strcmp(xty + xn - 15, "/os/exit_status")))
         return -1;
     /* an exit_status carrying something that is not a status is not a program
        saying what it meant — it is one that went wrong computing the code, and

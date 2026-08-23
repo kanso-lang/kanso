@@ -3,8 +3,8 @@
 # cannot see through. That is the shape a real program has when a value
 # turns out to be the wrong kind at run time, and it is the only route
 # left to the builtin's own refusal.
-import "std/io"
+import "std/os"
 
 pub play =
   n = 5
-  io/exists n
+  os/exists n

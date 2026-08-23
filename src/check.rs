@@ -2753,9 +2753,43 @@ impl Resolver<'_> {
                 ));
             }
             false => {
-                self.diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+                self.diags.push(Diagnostic::new(
+                    "name",
+                    format!("unknown name `{name}`{}", moved_to_os(name)),
+                    span,
+                ));
             }
         }
+    }
+}
+
+/// The fourteen names that left `std/io` for `std/os` when the library took
+/// Go's split. A program written before that says `io/read_file` and gets told
+/// the name is unknown, which is true and useless: the name is right and the
+/// module moved. Answers the empty string for everything else, so the ordinary
+/// unknown name reads as it always did.
+fn moved_to_os(name: &str) -> String {
+    const MOVED: [&str; 14] = [
+        "args",
+        "env",
+        "exists",
+        "exit",
+        "exit_status",
+        "is_dir",
+        "kill",
+        "list_dir",
+        "make_dir",
+        "process",
+        "read_file",
+        "run",
+        "start",
+        "write_file",
+    ];
+    match name.strip_prefix("io/") {
+        Some(rest) if MOVED.contains(&rest) => {
+            format!(" — it moved to `os/{rest}`, and `std/io` keeps the reading and writing")
+        }
+        _ => String::new(),
     }
 }
 

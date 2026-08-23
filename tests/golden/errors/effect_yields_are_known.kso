@@ -1,9 +1,9 @@
-import "std/io"
+import "std/os"
 
 pub play =
-  io/exists "somewhere" . answer
-  >> io/env "SOME_VAR" . named?
-  >> io/list_dir "." . listed?
+  os/exists "somewhere" . answer
+  >> os/env "SOME_VAR" . named?
+  >> os/list_dir "." . listed?
 
 fn answer b
   b

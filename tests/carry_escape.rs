@@ -26,8 +26,8 @@ use std::process::Command;
 /// starts, and the same on every machine because it is relative.
 const ROOT: &str = "a_tree_of_sample_outputs";
 
-const PROGRAM: &str = r#"import "std/io"
-import "std/list"
+const PROGRAM: &str = r#"import "std/list"
+import "std/os"
 import "std/text"
 
 type source_file
@@ -35,7 +35,7 @@ type source_file
   body
 
 fn walk_all path
-  io/list_dir path . (names -> walk_names path names 1 [])
+  os/list_dir path . (names -> walk_names path names 1 [])
 
 fn walk_names path names at acc
   walking_names path names at acc (at > length names)
@@ -45,7 +45,7 @@ fn walking_names _ _ _ acc true
 
 fn walking_names path names at acc false
   kid = "{path}/{names[at]!}"
-  io/is_dir kid . (d -> walk_kid path names at acc kid d)
+  os/is_dir kid . (d -> walk_kid path names at acc kid d)
 
 fn walk_kid path names at acc kid true
   on = (deep -> walk_names path names (at + 1) (joined acc deep))
@@ -53,7 +53,7 @@ fn walk_kid path names at acc kid true
 
 fn walk_kid path names at acc kid false
   on = (body -> read_one path names at acc kid body)
-  io/read_file kid . on
+  os/read_file kid . on
 
 fn read_one path names at acc kid body
   walk_names path names (at + 1) (push acc (source_file kid body))

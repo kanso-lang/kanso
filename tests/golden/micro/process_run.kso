@@ -1,4 +1,4 @@
-import "std/io"
+import "std/os"
 
 # A process is a description like any other effect, and its answer is a record.
 # A non-zero status is what the process said rather than a failure — a caller
@@ -7,5 +7,5 @@ fn report a
   "status {a.status} said {a.stdout}"
 
 pub play =
-  io/run "printf" ["ready"] . (a -> print (report a))
-  >> io/run "false" [] . (b -> print (report b))
+  os/run "printf" ["ready"] . (a -> print (report a))
+  >> os/run "false" [] . (b -> print (report b))

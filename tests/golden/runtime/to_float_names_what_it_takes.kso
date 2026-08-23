@@ -1,0 +1,11 @@
+# The same refusal on the float side, and the same reason it is worth pinning:
+# `to_float` takes bytes as happily as it takes a string, and said neither.
+#
+# A `none` is the argument because it renders without a module name, so the
+# direct run and the run through an import say the same words.
+import "std/text"
+
+fn measured 0
+  none
+
+pub play = print "{text/to_float (measured 0)}"

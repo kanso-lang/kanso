@@ -1,68 +1,10 @@
-# A deliberate exit status. Exiting is a way of failing, so it is an err,
-# which means it propagates by the rule that already exists and everything
-# after it is skipped without a second mechanism for stopping a program.
-pub type exit_status
-  code
-
-# What a finished process leaves behind.
-pub type process
-  status
-  stderr
-  stdout
-
-pub args = builtin_args
-
-# An unset variable reads as none: not being configured is ordinary.
-pub fn env name
-  builtin_env name
-
-# Reach it by binding, not by sequencing: `write "…" . (_ -> exit 2)` runs the
-# write and then exits, where `write "…" >> exit 2` builds both descriptions
-# before either runs, and the err takes the whole chain with it.
-pub fn exit code
-  err (exit_status code)
-
-# A description of work answers a description, so it takes no `?` — the
-# mark belongs to a function that answers true or false directly.
-pub fn exists path
-  builtin_exists path
-
-# `exists` cannot say which a path is, and walking a tree needs to know: a
-# name that is not a directory is a file to read rather than a place to
-# descend. Answers false for a path that is not there at all.
-pub fn is_dir path
-  builtin_is_dir path
-
-# Names within a directory, sorted, so output never depends on the order a
-# filesystem happens to hand them back.
-pub fn list_dir path
-  builtin_list_dir path
-
-pub fn read_file path
-  builtin_read_file path
-
-# Starting a process is a description like any other effect. The answer is
-# three things, so the wrapper reads the builtin's list into a record: a
-# builtin cannot name a type that is declared here.
+# Reading and writing, and nothing else.
 #
-# A non-zero status is an outcome, not a failure. A caller usually wants to
-# read it — a missing repository answers 1 and that is the answer — so an err
-# is kept for the process never starting at all.
-pub fn run cmd argv
-  builtin_run cmd argv . answered
-
-# Where run waits, start hands back the process so the program decides when it
-# is done — a browser told to render a page ignores its own exit budget and
-# runs until something ends it.
-pub fn start cmd argv
-  builtin_start cmd argv
-
-pub fn kill p
-  builtin_kill p
-
-fn answered r
-  process r[1]! r[3]! r[2]!
-
+# The filesystem, the environment, the arguments and the processes moved to
+# `std/os` when the library took Go's split. What is left is what Go leaves in
+# `io`: the surface a program reads through and writes through. kanso has no
+# reader or writer type to abstract over yet, so the surface is three names —
+# the two ends of the standard streams, and the input the process was handed.
 pub stdin = builtin_stdin
 
 pub fn write content
@@ -71,9 +13,3 @@ pub fn write content
 # Diagnostics, so a tool's chatter stays out of what it is piped into.
 pub fn write_err content
   builtin_write_err content
-
-pub fn make_dir path
-  builtin_make_dir path
-
-pub fn write_file path content
-  builtin_write_file path content
