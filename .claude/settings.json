@@ -7,7 +7,12 @@
       "mcp__Claude_Code_Remote__list_sessions",
       "mcp__Claude_Code_Remote__list_repos",
       "mcp__Claude_Code_Remote__list_environments",
-      "mcp__Claude_Code_Remote__list_triggers"
+      "mcp__Claude_Code_Remote__list_triggers",
+      "mcp__Claude_Code_Remote__create_trigger",
+      "mcp__Claude_Code_Remote__fire_trigger",
+      "mcp__Claude_Code_Remote__update_trigger",
+      "mcp__Claude_Code_Remote__delete_trigger",
+      "mcp__Claude_Code_Remote__send_later"
     ]
   }
 }
