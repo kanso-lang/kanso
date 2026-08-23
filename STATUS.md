@@ -42,15 +42,44 @@ merge. It collides with #105 wanting the right side lazy.
 
 ## In flight
 
-**Branch `claude/go-to-town-m0dicm`, pushed, no pull request opened.**
-The accumulator rewrite reads an operand it can prove, which closed an engine
-disagreement on `n + weigh (n - 1)` past ten thousand frames and gained a
-differential of its own. The chain-depth spec measures with the kernel rather
-than with time(1), which a container does not have. page_drift could not see a
-truncated history and read `0/3` for days while the page fell twenty-two
-entries behind; both the workflow and the gate are fixed. `to_int` and
-`to_float` name every kind they take. The last `.py` file is a kanso program.
-A release workflow exists and fires on a tag, which nobody has pushed.
+**Branch `claude/go-to-town-m0dicm` is pull request #987, open, twenty-four
+commits, waiting on review.** Main requires one, so I cannot land it.
+
+The largest piece is the 2026-08-17 gavel built: `std/os` split out of
+`std/io`, fourteen names moved and three left behind, across 69 `.kso` files
+and 332 call sites. `stdin`, `write` and `write_err` stay in `io` — the
+boundary case, answered by the language committee rather than sent back, since
+Go's standard streams are files in `os` and the writing is done from `fmt`, and
+kanso has neither. A program written before the split is now told where the
+name went rather than that the name is unknown.
+
+**Merge order: #987 first, then bump `.kanso-version` on kanso-lang/kq#78.**
+kq's branch is red on purpose — it builds against a pinned compiler that has no
+`std/os`. kanso's own `kq specs` job is green against that branch. vse and
+kanso-json use none of the moved names.
+
+Also in it: the accumulator rewrite reads an operand it can prove, closing an
+engine disagreement on `n * fact (n - 1)` past ten thousand frames and gaining
+a differential of its own. Two gates that had gone blind — page_drift read
+`0/3` for days while the page fell twenty-two entries behind, because a shallow
+fetch two steps above it truncated the history it reads, and the pages build
+served whatever `docs/kanso.wasm` was committed rather than the engine it was
+built from. The chain-depth spec measures with the kernel rather than with
+time(1), which a container does not have. `to_int` and `to_float` name every
+kind they take. `kanso build myapp` from the directory above it says what
+happened instead of handing over the linker's complaint. The last `.py` file is
+a kanso program. A release workflow exists and fires on a tag, which nobody has
+pushed.
+
+**Two goldens now name the host that measured them**, because I read one on the
+wrong host and pasted this container's numbers over the runner's. Retired
+instruction counts belong to the runner's glibc — 2.39-0ubuntu8.7 here against
+2.39-0ubuntu8.8 there is about four hundred instructions before main, more than
+most of what that vein exists to catch — and `.text` sizes belong to the clang
+that emitted them. Each golden carries a `measured-on` line,
+`scripts/gates/measured_on.sh` reads it before the expensive part of either
+gate, and off the reference host it refuses without printing a number to copy.
+Ratchet rows `instructions_host_unpinned` and `text_host_unpinned`.
 
 **The repo has one python left in it, and it is there on purpose** (task #55,
 closed too early). Both harnesses that drove headless chrome are kanso now, CI
@@ -72,7 +101,7 @@ written down here so nobody re-opens it as an oversight.
 - `scripts/browser_differential_run` compiles every corpus program in the tab
   and requires byte-identical status and output against the native engine,
   excusing a disagreement only where tests/golden/wasm_gaps.txt records what the
-  wasm engine answers instead. Last run here, 2026-08-23: 315 programs, 308
+  wasm engine answers instead. Last run here, 2026-08-23: 317 programs, 310
   agree, 7 known gaps, 0 disagree.
 
 Porting them found four defects the suite could not see. Two were in the
