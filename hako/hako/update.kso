@@ -1,11 +1,12 @@
 import "std/io"
 import "std/list"
+import "std/os"
 
 # `kanso update` — walk tags forward and rewrite the lock. A release is the
 # only thing it walks to; a pin that is not a release stays where it is,
 # which is the dev-sha discipline made structural.
 pub fn updating dir only
-  io/read_file "{dir}/hako.lock" . (text -> opened dir only (parse text))
+  os/read_file "{dir}/hako.lock" . (text -> opened dir only (parse text))
 
 fn opened dir only pins
   nothing_pinned = refused "hako.lock pins nothing — run `kanso install` first"
@@ -30,14 +31,14 @@ fn held_reason only tag
   "`{only}` is pinned to `{tag}`, {walks} — {advice}, {drop}"
 
 fn settings dir only pins
-  io/env "KANSO_HAKO" . (set -> homed dir only pins set)
+  os/env "KANSO_HAKO" . (set -> homed dir only pins set)
 
 fn homed dir only pins set
-  io/env "HOME" . (home -> remoted dir only pins (cache_root set home))
+  os/env "HOME" . (home -> remoted dir only pins (cache_root set home))
 
 fn remoted dir only pins root
   start = (origin -> walked dir only pins root origin "" "" "")
-  io/env "KANSO_HAKO_REMOTE" . start
+  os/env "KANSO_HAKO_REMOTE" . start
 
 fn walked dir only pins root origin lines moved held
   done = written dir lines moved held
@@ -94,7 +95,7 @@ fn written dir lines moved held
   left = if (held == "") "" "left where they are:\n{held}"
   still = "every hako is already at its highest release\n{left}"
   report = if (moved == "") still "updated:\n{moved}{left}"
-  io/write_file "{dir}/hako.lock" lines . (_ -> io/write report)
+  os/write_file "{dir}/hako.lock" lines . (_ -> io/write report)
 
 fn refused why
-  io/write_err "error: {why}\n" . (_ -> io/exit 2)
+  io/write_err "error: {why}\n" . (_ -> os/exit 2)

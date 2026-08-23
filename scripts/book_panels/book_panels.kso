@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/regexp"
 import "std/text"
 
@@ -75,13 +76,13 @@ fn writing? given
 # without asking the filesystem anything: a substitution walk that could take a
 # bind half way through would have to carry the whole chapter through it.
 fn walk_all path after
-  io/is_dir path . (there -> walk_there path there after)
+  os/is_dir path . (there -> walk_there path there after)
 
 fn walk_there _ false after
   after []
 
 fn walk_there path true after
-  io/list_dir path . (names -> walk_names path names 1 [] after)
+  os/list_dir path . (names -> walk_names path names 1 [] after)
 
 fn walk_names path names at acc after
   walking_names path names at acc after (at > length names)
@@ -91,7 +92,7 @@ fn walking_names _ _ _ acc after true
 
 fn walking_names path names at acc after false
   kid = "{path}/{names[at]!}"
-  io/is_dir kid . (d -> walk_kid path names at acc after kid d)
+  os/is_dir kid . (d -> walk_kid path names at acc after kid d)
 
 fn walk_kid path names at acc after kid true
   on = (deep -> walk_names path names (at + 1) (joined acc deep) after)
@@ -114,14 +115,14 @@ fn reading _ _ acc after true
 fn reading wanted at acc after false
   path = wanted[at]!
   on = (body -> read_next wanted at acc after path body)
-  io/read_file path . on
+  os/read_file path . on
 
 fn read_next wanted at acc after path body
   read_each wanted (at + 1) (push acc (source_file path body)) after
 
 fn over_chapters write
   on = (names -> chapter_loop (only_chapters names) 1 0 write)
-  io/list_dir chapters . on
+  os/list_dir chapters . on
 
 fn only_chapters names
   list/sort (list/to_list (list/select names (n -> chapter? n)))
@@ -138,7 +139,7 @@ fn walking _ _ drift write true
 fn walking names at drift write false
   name = names[at]!
   on = (raw -> one_chapter names at drift write name raw)
-  io/read_file "{chapters}/{name}" . on
+  os/read_file "{chapters}/{name}" . on
 
 fn one_chapter names at drift write name raw
   dir = dir_of name
@@ -248,7 +249,7 @@ fn keeping _ _ true
   io/write ""
 
 fn keeping path text false
-  io/write_file path text
+  os/write_file path text
 
 # A python `PANEL.sub(fn, text)` in the small: walk the matches, copy the gap
 # before each, append what the fixer answered, and finish with the tail.
@@ -733,6 +734,6 @@ fn ending true
   io/write ""
 
 fn ending false
-  io/exit 1
+  os/exit 1
 
-pub play = io/args . (given -> over_chapters (writing? given))
+pub play = os/args . (given -> over_chapters (writing? given))

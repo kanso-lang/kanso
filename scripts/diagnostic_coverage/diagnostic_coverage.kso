@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Every diagnostic the compiler can raise, against the ones a golden pins.
@@ -255,7 +256,7 @@ fn read_src _ false rest found
   over_sources rest found
 
 fn read_src name true rest found
-  io/read_file "src/{name}" . (src -> more_sources rest found src)
+  os/read_file "src/{name}" . (src -> more_sources rest found src)
 
 fn more_sources rest found src
   over_sources rest (text/concat found (raised_in src))
@@ -265,7 +266,7 @@ fn gathered found
   corpus_of "tests/golden" [] . (parts -> with_tests every parts)
 
 fn with_tests every parts
-  io/list_dir "tests" . (names -> test_sources (list/to_list names) parts)
+  os/list_dir "tests" . (names -> test_sources (list/to_list names) parts)
     . (all -> with_corpus every (text/join all ""))
 
 fn test_sources names parts
@@ -283,10 +284,10 @@ fn read_test _ false rest parts
   test_sources rest parts
 
 fn read_test name true rest parts
-  io/read_file "tests/{name}" . (t -> test_sources rest (push parts t))
+  os/read_file "tests/{name}" . (t -> test_sources rest (push parts t))
 
 fn corpus_of dir parts
-  io/list_dir dir . (names -> in_dir dir (list/to_list names) parts)
+  os/list_dir dir . (names -> in_dir dir (list/to_list names) parts)
 
 fn in_dir dir names parts
   onward_corpus dir names parts (length names == 0)
@@ -297,7 +298,7 @@ fn onward_corpus _ _ parts true
 fn onward_corpus dir names parts false
   rest = list/to_list (list/drop names 1)
   here = "{dir}/{names[1]!}"
-  io/is_dir here . (d -> descend here d dir rest parts)
+  os/is_dir here . (d -> descend here d dir rest parts)
 
 fn descend here true dir rest parts
   corpus_of here parts . (grown -> in_dir dir rest grown)
@@ -309,10 +310,10 @@ fn take_stderr _ false dir rest parts
   in_dir dir rest parts
 
 fn take_stderr here true dir rest parts
-  io/read_file here . (t -> in_dir dir rest (push parts t))
+  os/read_file here . (t -> in_dir dir rest (push parts t))
 
 fn with_corpus every corpus
-  io/read_file listed_path . (t -> judged every corpus (allowances t))
+  os/read_file listed_path . (t -> judged every corpus (allowances t))
 
 fn allowances t
   lines = list/to_list (list/map (text/split t "\n") squeezed)
@@ -376,6 +377,6 @@ fn settled 0
   io/write ""
 
 fn settled _
-  io/exit 1
+  os/exit 1
 
-pub play = io/list_dir "src" . (names -> over_sources (list/to_list names) [])
+pub play = os/list_dir "src" . (names -> over_sources (list/to_list names) [])

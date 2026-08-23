@@ -20,8 +20,8 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-const SERVER_AND_CLIENT: &str = r#"import "std/io"
-import "std/net"
+const SERVER_AND_CLIENT: &str = r#"import "std/net"
+import "std/os"
 import "std/time"
 
 fn answered l c
@@ -37,13 +37,13 @@ fn said r
   print "the page says: {r.stdout}"
 
 fn serving_at l p
-  io/write_file "port.txt" "{p}" . (_ -> net/accept l) . (c -> answered l c)
+  os/write_file "port.txt" "{p}" . (_ -> net/accept l) . (c -> answered l c)
 
-asked = time/sleep 400 . (_ -> io/read_file "port.txt") . fetched
+asked = time/sleep 400 . (_ -> os/read_file "port.txt") . fetched
 
 fn fetched p
   url = "http://127.0.0.1:{p}/"
-  io/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] . said
+  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] . said
 
 net/listen 0 . (l -> net/port l . (p -> serving_at l p))
 asked
@@ -54,9 +54,9 @@ asked
 /// report that reaches the program. A smoke test decides pass or fail from
 /// what the page posts back, so a server that answers `none` when it stops
 /// leaves the harness with nothing to assert on.
-const SERVE_UNTIL_A_REPORT: &str = r#"import "std/io"
-import "std/net"
+const SERVE_UNTIL_A_REPORT: &str = r#"import "std/net"
 import "std/net/http"
+import "std/os"
 import "std/time"
 
 fn handled req carried
@@ -69,17 +69,17 @@ fn answered _ _ carried
   http/reply (http/ok "the page") carried
 
 fn serving_at l p
-  io/write_file "port.txt" "{p}"
+  os/write_file "port.txt" "{p}"
     . (_ -> http/serving l handled "open")
     . (r -> print "the report says: {r}")
 
-asked = time/sleep 400 . (_ -> io/read_file "port.txt") . visited
+asked = time/sleep 400 . (_ -> os/read_file "port.txt") . visited
 
 fn visited p
   url = "http://127.0.0.1:{p}"
   get = ["-s" "--retry" "5" "--retry-connrefused" "{url}/"]
   post = ["-s" "-d" "green" "{url}/report"]
-  io/run "curl" get . (_ -> io/run "curl" post)
+  os/run "curl" get . (_ -> os/run "curl" post)
 
 net/listen 0 . (l -> net/port l . (p -> serving_at l p))
 asked
@@ -90,9 +90,9 @@ asked
 /// kanso can open a bare socket — `net` has no `connect` — so the test drives
 /// this one itself, and the program keeps a second statement running to give
 /// the scheduler something to do while it waits.
-const A_CONNECTION_THAT_SAYS_NOTHING: &str = r#"import "std/io"
-import "std/net"
+const A_CONNECTION_THAT_SAYS_NOTHING: &str = r#"import "std/net"
 import "std/net/http"
+import "std/os"
 
 fn handled req carried
   answered req.path req carried
@@ -104,12 +104,12 @@ fn answered _ _ carried
   http/reply (http/ok "the page") carried
 
 fn serving_at l p
-  io/write_file "port.txt" "{p}"
+  os/write_file "port.txt" "{p}"
     . (_ -> http/serving l handled "open")
     . (r -> print "the report says: {r}")
 
 net/listen 0 . (l -> net/port l . (p -> serving_at l p))
-io/run "sleep" ["3"] . (_ -> print "waited")
+os/run "sleep" ["3"] . (_ -> print "waited")
 "#;
 
 /// Runs one program on one engine and answers what it printed. `drive` runs
@@ -317,7 +317,7 @@ fn a_served_report_reaches_the_program_on_both_engines() {
 /// ends, by which time there is nothing to connect to.
 #[test]
 fn a_listener_answers_the_port_it_was_given_on_both_engines() {
-    const ANNOUNCE: &str = "import \"std/io\"\nimport \"std/net\"\nimport \"std/time\"\n\npub fn announced l p\n  io/write_file \"port.txt\" \"{p}\"\n    . (_ -> time/sleep 3000)\n    . (_ -> net/close_listener l)\n";
+    const ANNOUNCE: &str = "import \"std/net\"\nimport \"std/os\"\nimport \"std/time\"\n\npub fn announced l p\n  os/write_file \"port.txt\" \"{p}\"\n    . (_ -> time/sleep 3000)\n    . (_ -> net/close_listener l)\n";
     const ENTRY: &str = "import \"./announce\"\nimport \"std/net\"\n\nnet/listen 0 . (l -> net/port l . (p -> announce/announced l p))\n";
 
     for (tag, engine) in [("native", &[][..]), ("interp", &["--interp"][..])] {

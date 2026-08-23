@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # The welfare gate already forces a sentence when one of its seven terms
@@ -84,7 +85,7 @@ mem_dir = "tests/golden/mem"
 advice = "movement is fine; silence is not. say why in design/compiler-log.md."
 
 fn asked argv
-  io/run "git" argv
+  os/run "git" argv
 
 fn field? f
   length (text/split f "=") == 2
@@ -223,7 +224,7 @@ fn against _ "" found
   io/write "" . (_ -> found)
 
 fn against golden base_text found
-  io/read_file golden[1]!
+  os/read_file golden[1]!
     . (ours -> weighed golden golden[2]! base_text ours found)
 
 fn weighed golden prefix base_text ours found
@@ -309,7 +310,7 @@ fn given args false
   args[1]!
 
 fn started base
-  io/list_dir mem_dir . (names -> gathered base names)
+  os/list_dir mem_dir . (names -> gathered base names)
 
 fn gathered base names
   walked base (every_golden names) [] . (ms -> priced base ms)
@@ -379,7 +380,7 @@ fn ruling worse better
   settled (length worse > 0 and length better == 0)
 
 fn settled true
-  refused 0 . (_ -> io/exit 1)
+  refused 0 . (_ -> os/exit 1)
 
 fn refused _
   io/write "\nFAIL  a pure regression: something got worse and nothing got\n"
@@ -389,4 +390,4 @@ fn refused _
 fn settled false
   io/write ""
 
-pub play = io/args . (a -> started (base_of a))
+pub play = os/args . (a -> started (base_of a))

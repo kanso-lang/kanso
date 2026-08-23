@@ -1,0 +1,86 @@
+# The operating system a program is standing on: its arguments, its
+# environment, its filesystem, its child processes, and the way it stops.
+#
+# The split is Go's, which is the split kanso agreed to mirror: `os` takes the
+# filesystem, the environment, the arguments and the processes, and `io` keeps
+# the read and write surface. Go answers most of the boundary cases and this
+# module answers the rest the same way — `MkdirAll` is `os`, so `make_dir` is
+# here; `os/exec` is a corner of `os` rather than a peer of it, so `run`,
+# `start` and `kill` are here too.
+#
+# The one Go does not answer is the standard streams. In Go they are files in
+# `os` and the writing is done from `fmt`, and kanso has neither files nor
+# `fmt` — what it has is three verbs. They stay in `io`, because a module that
+# keeps the read and write surface and holds nothing that reads or writes
+# would be a name with an empty room behind it.
+#
+# A deliberate exit status. Exiting is a way of failing, so it is an err,
+# which means it propagates by the rule that already exists and everything
+# after it is skipped without a second mechanism for stopping a program.
+pub type exit_status
+  code
+
+# What a finished process leaves behind.
+pub type process
+  status
+  stderr
+  stdout
+
+pub args = builtin_args
+
+# An unset variable reads as none: not being configured is ordinary.
+pub fn env name
+  builtin_env name
+
+# Reach it by binding, not by sequencing: `write "…" . (_ -> exit 2)` runs the
+# write and then exits, where `write "…" >> exit 2` builds both descriptions
+# before either runs, and the err takes the whole chain with it.
+pub fn exit code
+  err (exit_status code)
+
+# A description of work answers a description, so it takes no `?` — the
+# mark belongs to a function that answers true or false directly.
+pub fn exists path
+  builtin_exists path
+
+# `exists` cannot say which a path is, and walking a tree needs to know: a
+# name that is not a directory is a file to read rather than a place to
+# descend. Answers false for a path that is not there at all.
+pub fn is_dir path
+  builtin_is_dir path
+
+# Names within a directory, sorted, so output never depends on the order a
+# filesystem happens to hand them back.
+pub fn list_dir path
+  builtin_list_dir path
+
+pub fn make_dir path
+  builtin_make_dir path
+
+pub fn read_file path
+  builtin_read_file path
+
+# Starting a process is a description like any other effect. The answer is
+# three things, so the wrapper reads the builtin's list into a record: a
+# builtin cannot name a type that is declared here.
+#
+# A non-zero status is an outcome, not a failure. A caller usually wants to
+# read it — a missing repository answers 1 and that is the answer — so an err
+# is kept for the process never starting at all.
+pub fn run cmd argv
+  builtin_run cmd argv . answered
+
+# Where run waits, start hands back the process so the program decides when it
+# is done — a browser told to render a page ignores its own exit budget and
+# runs until something ends it.
+pub fn start cmd argv
+  builtin_start cmd argv
+
+pub fn kill p
+  builtin_kill p
+
+fn answered r
+  process r[1]! r[3]! r[2]!
+
+pub fn write_file path content
+  builtin_write_file path content

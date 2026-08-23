@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Put a chapter out of date in the way that exercises the write path.
@@ -44,22 +45,22 @@ fn onto chapter src
   planted chapter src gone (length gone == 0)
 
 fn planted chapter src _ true
-  io/write_file chapter (list/fold titles src staled)
+  os/write_file chapter (list/fold titles src staled)
 
 # A title the chapter does not carry once is a mistake in this program rather
 # than a finding about the book, so it says which one and stops.
 fn planted _ _ gone false
   io/write_err "stale_a_panel: not in the chapter exactly once: {gone}\n"
-    . (_ -> io/exit 1)
+    . (_ -> os/exit 1)
 
 fn with_args given
   usage (length given != 1) given
 
 fn usage true _
-  io/write_err "usage: stale_a_panel <chapter.html>\n" . (_ -> io/exit 2)
+  io/write_err "usage: stale_a_panel <chapter.html>\n" . (_ -> os/exit 2)
 
 fn usage false given
   chapter = given[1]!
-  io/read_file chapter . (src -> onto chapter src)
+  os/read_file chapter . (src -> onto chapter src)
 
-pub play = io/args . with_args
+pub play = os/args . with_args

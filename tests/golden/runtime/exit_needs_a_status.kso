@@ -1,4 +1,4 @@
-import "std/io"
+import "std/os"
 
 # `exit` takes a status. Handed something that is not one, the program did not
 # say what it meant — it went wrong computing the code, and every engine says
@@ -9,4 +9,4 @@ type wrong
 
 pub play =
   bad = wrong 1 2
-  print "{io/exit bad}"
+  print "{os/exit bad}"

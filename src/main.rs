@@ -509,14 +509,14 @@ fn opens_block(line: &str) -> bool {
     head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
 }
 
-/// A deliberate exit is an err whose reason is `io/exit_status`. The endpoint
+/// A deliberate exit is an err whose reason is `os/exit_status`. The endpoint
 /// reads its code rather than reporting it, because the program did not fail
 /// to say what it meant — it said it.
 fn deliberate_exit(reason: &eval::Value) -> Option<u8> {
     let eval::Value::Record { ty, fields } = reason else { return None };
     // the type spells its module chain at whatever depth the import graph
-    // qualified it: io/exit_status directly, hako/io/exit_status one hop in
-    if !(ty.as_ref() == "io/exit_status" || ty.ends_with("/io/exit_status")) {
+    // qualified it: os/exit_status directly, hako/os/exit_status one hop in
+    if !(ty.as_ref() == "os/exit_status" || ty.ends_with("/os/exit_status")) {
         return None;
     }
     match fields.borrow().first() {

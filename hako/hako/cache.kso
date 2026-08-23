@@ -1,4 +1,5 @@
 import "std/io"
+import "std/os"
 import "std/path"
 
 # Where fetched trees live. The cache is keyed by name and sha, so two
@@ -14,14 +15,14 @@ pub fn at root name sha
 # would answer the same bytes at the cost of a network round trip.
 pub fn fetched root name tag sha from
   into = at root name sha
-  io/exists into . (there -> if there (nothing 0) (cloned into tag from))
+  os/exists into . (there -> if there (nothing 0) (cloned into tag from))
 
 fn nothing _
   io/write ""
 
 fn cloned into tag from
   argv = ["clone" "--quiet" "--depth" "1" "--branch" tag from into]
-  io/run "git" argv . (p -> settled p into)
+  os/run "git" argv . (p -> settled p into)
 
 fn settled p into
   if (p.status == 0) (stripped into) (unreachable p)
@@ -29,7 +30,7 @@ fn settled p into
 # The cache holds source, not history: a shallow clone's .git is the largest
 # thing in it and nothing downstream reads it.
 fn stripped into
-  io/run "rm" ["-rf" (path/join into ".git")] . (_ -> io/write "")
+  os/run "rm" ["-rf" (path/join into ".git")] . (_ -> io/write "")
 
 fn unreachable p
   err "cannot fetch: {p.stderr}"

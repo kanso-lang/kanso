@@ -1,3 +1,4 @@
 import "std/io"
+import "std/os"
 
-pub play = io/read_file "/no/such/file" . (_ -> io/write "read")
+pub play = os/read_file "/no/such/file" . (_ -> io/write "read")

@@ -1,4 +1,4 @@
 import "./oneshot"
-import "std/io"
+import "std/os"
 
-io/read_file "bench/large.json" . report
+os/read_file "bench/large.json" . report

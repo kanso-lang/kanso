@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # The accumulator rewrite, checked against the same program it refuses to
@@ -135,10 +136,10 @@ source =
   """
 
 fn asked argv
-  io/run kanso argv
+  os/run kanso argv
 
 fn ran src
-  io/write_file probe src . (_ -> asked ["play" probe]) . (n -> against n)
+  os/write_file probe src . (_ -> asked ["play" probe]) . (n -> against n)
 
 fn against n
   asked ["play" probe "--interp"] . (i -> verdict n i)
@@ -191,7 +192,7 @@ fn told n i bad live false
   >> reported bad (length bad == 0)
   >> engines n i (n.stdout == i.stdout)
   >> liveness live (alive? live)
-  >> io/exit 1
+  >> os/exit 1
 
 fn reported _ true
   io/write_err ""

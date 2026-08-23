@@ -1659,3 +1659,56 @@ their base rather than their operand, and widening the operand rule left them
 refused. A guard that cannot fail is the failure this repo already has a rule
 about; the bases are integers now, and the widening was run again to watch the
 gate go red for the reason intended.
+
+## 2026-08-23 — the os package, built
+
+Gavel of 2026-08-17: the stdlib apes Go, `os` takes the filesystem, the
+environment, the arguments and the processes, `io` keeps the abstract read and
+write surface, `MkdirAll` goes to `os`, and any boundary case Go does not
+answer goes to the language committee and never back to Clay. It has sat
+unbuilt on the also-open list since.
+
+Moved: `exit_status`, `process`, `args`, `env`, `exit`, `exists`, `is_dir`,
+`list_dir`, `make_dir`, `read_file`, `run`, `start`, `kill`, `write_file`.
+Stayed: `stdin`, `write`, `write_err`.
+
+That last line is the boundary case, and this is the committee answering it.
+Go's standard streams are files in `os` and the writing is done from `fmt`;
+kanso has neither files nor a `fmt`, so what would move is three verbs and what
+would be left is a module named for a surface with nothing behind it. They stay
+in `io`, which is also what the gavel's own words ask for — "io keeps the
+abstract read/write surface" describes a module that still has one.
+
+The sweep: 69 `.kso` files rewritten, 332 call sites moved, 262 left; seven
+Rust tests carrying kanso programs in string literals; the `include_str!` table
+in `src/lib.rs`; and two places that knew the type's name — `deliberate_exit`
+in `src/main.rs` and `k_exit_status` in `src/runtime.c` both matched
+`io/exit_status` and now match `os/exit_status`, which is what keeps `os/exit 2`
+an exit rather than an unhandled err.
+
+Four things the sweep got wrong and the gates caught, each worth naming:
+
+  - A blanket re-sort of import blocks sorted `tests/golden/errors/import_order`,
+    the fixture whose whole job is to be out of order. The error corpus said so
+    on the next run.
+  - The imports in `.rs` string literals needed the same treatment as the files,
+    and a raw string is easier to rewrite than an escaped one.
+  - `bench/make_jsonbench` writes a program, and the program it writes carried
+    `import "std/io"` with nothing left in it that says `io/`. The decoder's
+    checksum gate reads that program.
+  - `scripts/effects_differential` emits one fixed import header for every
+    probe, and its own comment says a probe carries exactly the imports it uses,
+    because an unused import is an error and an error compares equal on both
+    engines — which reads as agreement. Eight probes went that way. The header
+    is read off the probe's body now.
+
+kq speaks the moved names and is the gating downstream job. Its branch is named
+`claude/go-to-town-m0dicm`, the same as this one, which is how
+`.github/clone-sibling.sh` checks the two together, and against this compiler
+its unit tests, twelve jq goldens, three cost goldens, scale gate and
+published-numbers stamp are all green. vse and kanso-json use none of the moved
+names and need no branch.
+
+Every counter gate is flat, both compile goldens byte-identical, welfare at
+84.85, the book's panels regenerated, and the browser differential reads 317
+programs with 0 disagreements.

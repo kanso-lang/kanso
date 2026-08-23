@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # design/compiler-log.md is append-only chronology and docs/compiler.html is
@@ -15,7 +16,7 @@ import "std/text"
 budget = 3
 
 fn asked argv
-  io/run "git" argv
+  os/run "git" argv
 
 fn heading? l
   text/slice l 1 4 == "+## "
@@ -48,7 +49,7 @@ fn full false
   io/write_err "page drift: this clone is shallow, so the page's last\n"
   >> io/write_err "commit cannot be found and the count would read zero\n"
   >> io/write_err "whatever the log did. Fetch the history before asking.\n"
-  >> io/exit 1
+  >> os/exit 1
 
 fn measured r
   parts = text/split r.stdout "\n"
@@ -69,7 +70,7 @@ fn verdict _ count true
   io/write "page drift {count}/{budget} log entries since the page moved\n"
 
 fn verdict heads count false
-  told heads count . (_ -> io/exit 1)
+  told heads count . (_ -> os/exit 1)
 
 fn told heads count
   io/write "the log is {count} entries ahead, and the budget is {budget}:\n"

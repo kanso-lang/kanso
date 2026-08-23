@@ -145,15 +145,15 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">count.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
-<span class="k">import</span> <span class="s">"std/list"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">count_lines</span> text
   newlines <span class="o">=</span> <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
   <span class="s">"flavors.txt has <span class="i">{newlines}</span> lines"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run count.kso</div>
     <pre><code>flavors.txt has 3 lines</code></pre>
@@ -220,10 +220,10 @@ called: 270</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">save.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</span>
-<span class="f">io/write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">io/read_file</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">os/read_file</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso --plan</div>
     <pre><code>one taiyaki, extra custard</code></pre>
@@ -240,7 +240,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 
 <div class="code-panel">
   <div class="code-panel-title">welcome.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 <span class="k">fn</span> <span class="f">first</span> xs
   xs[<span class="n">1</span>]!
@@ -248,7 +248,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
 
-<span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play welcome.kso -- clay</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
@@ -270,7 +270,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   </div>
 </div>
 
-<p>that is the whole i/o vocabulary of part i: <code>print</code>, ambient, and <code>io/read_file</code>, <code>io/write_file</code>, <code>io/args</code>, <code>io/stdin</code> behind one import. five verbs, zero new syntax, because the composition operators don't care what they compose.</p>
+<p>that is the whole i/o vocabulary of part i: <code>print</code>, ambient, and <code>os/read_file</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code> behind one import. five verbs, zero new syntax, because the composition operators don't care what they compose.</p>
 
 <h2>failure at the edge</h2>
 
@@ -278,7 +278,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 
 <div class="code-panel">
   <div class="code-panel-title">welcome.kso, run bare</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 <span class="k">fn</span> <span class="f">first</span> xs
   xs[<span class="n">1</span>]!
@@ -286,7 +286,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
 
-<span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play welcome.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
@@ -300,9 +300,9 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 
 <div class="code-panel">
   <div class="code-panel-title">missing.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
-<span class="f">io/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
@@ -313,7 +313,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 
 <div class="code-panel">
   <div class="code-panel-title">fallback.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 <span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
   <span class="s">"no orders yet"</span>
@@ -321,7 +321,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">fn</span> <span class="f">orders</span> text
   <span class="s">"yesterday: <span class="i">{text}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run fallback.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>

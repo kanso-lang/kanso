@@ -1,4 +1,4 @@
-import "std/io"
+import "std/os"
 
 fn first xs
   xs[1]!
@@ -6,4 +6,4 @@ fn first xs
 fn greet name
   "irasshaimase, {name}"
 
-io/args . first . greet . print
+os/args . first . greet . print

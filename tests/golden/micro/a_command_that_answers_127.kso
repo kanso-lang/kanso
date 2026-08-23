@@ -1,4 +1,4 @@
-import "std/io"
+import "std/os"
 
 # 127 is a status a program may choose, and it is also what a shell reports
 # for a command it could not find. Reading it off the exit code alone cannot
@@ -10,4 +10,4 @@ fn report a
 fn told a
   print (report a)
 
-pub play = io/run "sh" ["-c" "printf gone; exit 127"] . told
+pub play = os/run "sh" ["-c" "printf gone; exit 127"] . told

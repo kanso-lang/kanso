@@ -59,7 +59,7 @@ struct Ctx<'a> {
     all_dirty: bool,
     groups: HashMap<(&'a str, usize), Vec<usize>>,
     /// What a desc-valued local would yield to a bind, tracked through one
-    /// binding level so `x = io/read_file p` then `x . f` gives f the STR.
+    /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
     type_names: HashMap<&'a str, usize>,
     params: Vec<Vec<Set>>,

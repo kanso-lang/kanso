@@ -1,4 +1,4 @@
-import "std/io"
+import "std/os"
 import "std/text"
 
 fn banner line
@@ -34,4 +34,4 @@ fn major_of text
   text/to_int digits
 
 pub fn announce argv
-  io/read_file (chosen argv) . check
+  os/read_file (chosen argv) . check

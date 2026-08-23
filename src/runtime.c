@@ -7395,7 +7395,7 @@ static void k_report_trace(KErrBox* box) {
     }
 }
 
-/* A deliberate exit is an err whose reason is `io/exit_status`. The endpoint
+/* A deliberate exit is an err whose reason is `os/exit_status`. The endpoint
    reads its code rather than reporting it: the program did not fail to say
    what it meant, it said it. Returns -1 when the err is an ordinary one. */
 static int k_exit_status(KValue e) {
@@ -7403,11 +7403,11 @@ static int k_exit_status(KValue e) {
     if (reason.tag != K_REC) return -1;
     KRec* r = k_as_rec(reason);
     /* the module chain qualifies at whatever depth the import graph built:
-       io/exit_status directly, hako/io/exit_status one hop in */
+       os/exit_status directly, hako/os/exit_status one hop in */
     const char* xty = k_type_name(r->type_id);
     size_t xn = strlen(xty);
-    if (strcmp(xty, "io/exit_status") &&
-        (xn < 15 || strcmp(xty + xn - 15, "/io/exit_status")))
+    if (strcmp(xty, "os/exit_status") &&
+        (xn < 15 || strcmp(xty + xn - 15, "/os/exit_status")))
         return -1;
     /* an exit_status carrying something that is not a status is not a program
        saying what it meant — it is one that went wrong computing the code, and

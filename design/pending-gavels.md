@@ -423,10 +423,16 @@ welfare and the veins gate the cost.
   survivor-ratio guard: the multiplier is a judgment call; the principle
   (the dance's transient must stay at threshold scale) is recorded in
   the log.
-- **An `os` package — RULED 2026-08-17**: mirror Go's split exactly
-  (`os` takes filesystem/env/args/process; `io` keeps the abstract
-  read/write surface; MkdirAll → os); any boundary case Go does not
-  answer goes to the language committee, never back to Clay.
+- ~~**An `os` package — RULED 2026-08-17**~~ — BUILT 2026-08-23.
+  `std/os` holds `exit_status`, `process`, `args`, `env`, `exit`,
+  `exists`, `is_dir`, `list_dir`, `make_dir`, `read_file`, `run`,
+  `start`, `kill` and `write_file`; `std/io` keeps `stdin`, `write` and
+  `write_err`. The one boundary case Go does not answer — its standard
+  streams are files in `os` and the writing is done from `fmt`, and
+  kanso has neither — was answered by the committee rather than by
+  Clay, per the gavel: the three verbs stay in `io`, because what the
+  gavel asks `io` to keep is a read and write surface, and a module
+  named for one with nothing behind it is not that.
 - **An assert hako** (future design pass, queued 2026-08-17): a real
   assertion library in the rspec direction Clay sketched —
   `(expect 1) . to (equal x)` — as its own small surface design, never
