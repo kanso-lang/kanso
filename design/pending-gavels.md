@@ -23,32 +23,6 @@ Rules of the ledger:
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### Is a bare list of small ints bytes?
-
-The engines answer differently, which the differential law forbids
-outright. The interpreter has no distinct bytes value and runs any list
-through `bytes_to_str` where native has a `K_BYTES` tag; genuine bytes
-agree on both. Six functions split, and in four the ORACLE ANSWERS where
-native refuses — a program written against the oracle compiles and then
-dies. Measured 2026-08-23:
-
-    text/append ["a"] "x"           native refuses    oracle: ["a" 120]
-    text/append [65 66] "x"         native refuses    oracle: [65 66 120]
-    text/find2 [65 66] 1 65 66      native refuses    oracle: 1
-    text/find2_below [65 66] …      native refuses    oracle: 1
-    text/utf8 ["a"]                 native: an err    oracle: a refusal
-    text/to_float ["a"]             native refuses    oracle: an err
-
-`text/utf8 [65 66]` agrees ("AB" on both) because a list of small ints
-is bytes to each of them; the disagreement is everything a list can be
-that bytes cannot. Either answer settles all six at once. Widening
-native says a list and bytes are interchangeable, which is what the
-native representation exists to deny; giving the interpreter a real
-bytes value removes the ambiguity and touches every place it builds or
-reads them. No golden can pin the shape until this is ruled, and the
-diagnostic differential cannot see it: its one wrong value is a record,
-and a record is refused identically.
-
 ### The compile-memory band has been hiding main's own drift
 
 `bench/compile_memory_golden.txt` holds peak bytes at 871,649 and CI

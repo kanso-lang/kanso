@@ -2110,3 +2110,40 @@ any freeze returns.
 Unblocked: the fixture pinning an undemanded knot at zero on both
 engines, and the .mem/golden regeneration that lands with the native
 change. The entry leaves the ledger with this commit.
+
+## 2026-08-23 — gavel: a list is never bytes, and acceptance is declared
+
+Clay ruled the second ledger entry in the same sitting: "in general I
+like consistency," with the committee heard on the counterarguments
+before the gavel. The steelman for widening had three legs — bytes are
+just small ints (the data-is-data lens), the language has no bytes
+literal so `[104 105]` is the only spelling a user can write down, and
+`text/utf8 [65 66]` answers "AB" on both engines today, so full
+strictness would break the one case the engines agree on. The first leg
+dies on the evidence: `["a" 120]` — the oracle's answer for
+`text/append ["a"] "x"` — is not data-is-data, it is `bytes_to_str`
+accepting whatever list arrives. The other two legs are real and became
+the ruling's riders.
+
+The ruling: the interpreter gains a real bytes value, and a list is
+never ambiently bytes on any engine. The four cases where the oracle
+answered become refusals matching native's, and the fixture family
+(`append`, `find2`, `find2_below`, `utf8`, `to_float`) can finally pin.
+
+Two riders, named with the gavel:
+
+- **Acceptance is declared, not coerced.** Where a function genuinely
+  wants a list of small ints as byte input — utf8 is the live case —
+  that is a visible, per-function acceptance in the library, identical
+  on both engines. Whether utf8 keeps its list acceptance is a library
+  decision made in the migration, not an engine property. This is the
+  typeset-acceptance idiom already pending under the AA entry, applied
+  early.
+- **The constructor ships in the same change.** A list→bytes function
+  with a loud refusal on anything outside 0–255, so byte data stays
+  writable now that the coercion is gone. `text/bytes` covers strings;
+  this covers numbers.
+
+The entry leaves the ledger with this commit. Unblocked: the six-case
+fixture table, and the interpreter's bytes representation work, which
+is the implementer's.
