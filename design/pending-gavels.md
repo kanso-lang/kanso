@@ -371,6 +371,23 @@ welfare and the veins gate the cost.
 
 ## Also open, not blocking any current work
 
+- **Is a bare list of small ints bytes?** The engines answer differently,
+  which the differential law forbids outright, and nothing on a live
+  list said so — it was measured on 2026-08-02, recorded in the archive,
+  and re-found by a sweep on 2026-08-23. `text/to_float ["a"]` dies on
+  native with `to_float takes a string, bytes, or number, not ["a"]` and
+  answers an err on the oracle, `"bytes are not a number"`, because the
+  interpreter has no distinct bytes value and runs any list through
+  `bytes_to_str` where native has a `K_BYTES` tag. Genuine bytes agree
+  on both. Widening native says a list and bytes are interchangeable,
+  which is what the native representation exists to deny; giving the
+  interpreter a real bytes value removes the ambiguity and touches every
+  place it builds or reads them. Either answer settles `append`,
+  `find2`, `find2_below` and `utf8` at the same time, since all four
+  name bytes in refusals nothing pins. No golden can pin the shape until
+  it is decided, and the diagnostic differential cannot see it: its one
+  wrong value is a record, and a record is refused identically.
+
 - ~~**TRMC v2**~~ — SHIPPED 2026-08-23. The operand may be any arithmetic
   over integer literals and the group's own counters, which covers
   `n * fact (n - 1)`. Inference was never threaded out of

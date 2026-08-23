@@ -6470,7 +6470,7 @@ KValue k_b_from_code(KValue nv, const char* origin) {
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag == K_INT) return sv;
-    if (sv.tag != K_STR && sv.tag != K_BYTES) k_die("to_int takes a string");
+    if (sv.tag != K_STR && sv.tag != K_BYTES) k_die_value("to_int takes a string, bytes, or int", sv);
     const char* data;
     long long len;
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
@@ -7310,7 +7310,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;
     if (v.tag == K_INT) return k_float((double)v.payload);
-    if (v.tag != K_STR && v.tag != K_BYTES) k_die("to_float takes a string or int");
+    if (v.tag != K_STR && v.tag != K_BYTES) k_die_value("to_float takes a string, bytes, or number", v);
     const char* data;
     long long len;
     if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }

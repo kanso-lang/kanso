@@ -1514,3 +1514,57 @@ visits 23,224 to 23,345, peak 871,649 to 878,422 bytes — welfare reads 84.69
 against a floor of 84.85. It is not a stale golden. By the weights as written
 that change costs the project 0.16 points, and the branch owes either the
 reason it is worth it or the compile cost back.
+
+## 2026-08-23 — a sweep of the refusals, one divergence re-found and two messages fixed
+
+The `stale_a_panel` port died with `split takes two strings`, which named
+neither what it got nor where. That message is one of about twenty runtime
+refusals written separately for each engine, and the coverage ratchet does not
+reach them: `scripts/diagnostic_coverage` scans `Diagnostic::new(` literals,
+which are the check-time diagnostics, and a `RuntimeError` is not one.
+
+So the twelve most reachable were driven on both engines with a wrong argument
+hidden behind a call, since a literal is refused before the program runs.
+Eleven agree word for word — split, chars, bytes, join, slice, push, length,
+char_code, from_code, utf8, and to_int on an int, which answers rather than
+refusing.
+
+MEASURED, the twelfth:
+
+    text/to_float ["a"]
+    native:  to_float takes a string, bytes, or number, not ["a"]
+    oracle:  error[endpoint]: unhandled err reached the entry:
+             "bytes are not a number"
+
+Two engines, two answers, and not only the wording: native refuses at runtime
+where the oracle answers an err VALUE, which is a different channel. The cause
+is structural and already known — the interpreter has no distinct bytes value,
+so a list goes through `bytes_to_str`, and native's `K_BYTES` tag refuses
+anything that was never bytes. It was measured on 2026-08-02 and recorded, and
+the record went into the archive where nothing on a live list mentioned it
+again. It is in pending-gavels now, under also-open, with both ways out and
+what each costs.
+
+The sweep also showed why nothing caught it. `scripts/diagnostic_differential`
+already drives every std function with a wrong argument on both engines, and
+its one wrong value is a record — chosen because a record is wrong for
+everything and cannot be a literal. A record reaches the same refusal on both
+engines. Only a list reaches the one that differs, and a list is a legitimate
+argument to enough of the surface that probing with one needs care: `list/cycle`
+would not return. Widening the probe waits on the ruling that makes to_float's
+answer knowable.
+
+SHIPPED from the sweep, because it needed no ruling: `to_int` and `to_float`
+both accept the bytes a file read hands back, and neither said so — "to_int
+takes a string", "to_float takes a string or int". Both now name every kind
+they take and what arrived instead, the way `length` has all along, in both
+engines and byte-identical. Two fixtures pin them, watched red first. The
+arguments are a float and a `none`, which render without a module name, so the
+direct run and the run through an import say the same words and one golden
+covers both.
+
+The machine-code gate priced it: rendering the refused value costs 48 bytes of
+`.text` in four of the eight benchmarks and nothing in the other four, where the
+linker had already dropped the path. `bench/text_golden.txt` is regenerated on
+that reading. Every allocation counter is flat, both compile goldens are
+byte-identical, and welfare holds at 84.85.

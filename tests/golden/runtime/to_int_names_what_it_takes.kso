@@ -1,0 +1,14 @@
+# A refusal that lists two of the three kinds it accepts sends the reader off
+# to check the third by hand. `to_int` and `to_float` both take the bytes a
+# file read hands back, and neither said so; both now name every kind they
+# take, and name what arrived instead the way `length` has all along.
+#
+# The float arrives through a call because a literal one is refused before the
+# program runs — `text/to_int 3.5` is the compile-time check doing its job, and
+# this fixture is about the runtime path underneath it.
+import "std/text"
+
+fn measured 0
+  3.5
+
+pub play = print "{text/to_int (measured 0)}"
