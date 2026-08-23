@@ -2093,6 +2093,18 @@ One branch, taken once per constant. Clay's preferred shape is update in place
 and it stays the better form if this ever costs anything measurable. Nothing
 in this corpus says it does.
 
+Across the benchmark veins the shape repeats. Three of the eight `.text` rows
+rise by the branch — encodebench and widebench 16 bytes, escapebench 32, one
+per knotted constant — and five do not move at all, jsonbench among them,
+because the decoder links no knot and so the hottest path in the project is
+untouched. Three counter goldens fall: widebench loses five permanent
+allocations and six allocations outright, scanbench two permanent and two
+evacuations, encodebench two and two. Constants that used to be built before
+main are not built at all when nobody asks. Welfare holds at 84.85.
+
+Sixty-four bytes of `.text` is what update in place would take back, and this
+is the number it has to beat.
+
 A CORRECTION about how this was measured, because it nearly became a false
 report. `kanso run` compiles and runs; the oracle is `run --interp`. Measuring
 the ruling's program with `run` twice and calling one of them the oracle
