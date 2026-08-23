@@ -30,6 +30,14 @@
 # design/compiler-log.md, and never read a row against a number measured
 # somewhere else.
 #
+# The line below is that rule, made checkable. The gate reads it, compares it
+# against the host it is running on, and refuses to measure anywhere else —
+# because the warning above did not stop this vein being regenerated from a
+# container one glibc revision off the runner, whose rows sat about four
+# hundred instructions low. Two ubuntu 24.04 boxes at 2.39-0ubuntu8.7 and
+# 2.39-0ubuntu8.8 differ by more than most changes this vein is here to catch.
+# measured-on glibc=2.39-0ubuntu8.8
+#
 # 2026-08-12 (later): basket 56,597,311 to 56,597,316, the other three unmoved.
 # Five instructions, and they are the compare that stops `k_b_str_builder`
 # re-seeding a header with room to spare. That guard takes an accumulator handed
@@ -68,13 +76,21 @@
 # it no longer builds at startup — and oneshot pays 255 for the two new
 # jump-table arms its encode path now compares against. The other rows
 # are untouched.
+jsonbench 2860478794
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
+encodebench 9727148124
+oneshot 46596968
+basket 57400154
+widebench 84816675
+deepbench 806938306
+escapebench 258568077
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
+pendbench 988706559
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -276,11 +292,3 @@
 # What it buys is an honest vein. escapebench pinned bytes_malloc=0 against
 # bytes_freed=3000 — three thousand frees of buffers the counters said were
 # never allocated — and reads 12,000 against 12,000 now.
-jsonbench 2860478381
-encodebench 9727147725
-oneshot 46596569
-basket 57399741
-widebench 84815682
-deepbench 806934626
-escapebench 258567678
-pendbench 988706173

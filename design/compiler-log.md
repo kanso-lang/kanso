@@ -1845,3 +1845,67 @@ direction was never the argument.
 The lesson for this box: a counter gate reads what is on disk, and what was on
 disk was built before the change. `sh scripts/gates/build_benchmarks.sh` after
 `rm -f` on the binaries is what makes a local green mean anything.
+
+## 2026-08-23 (later) — the instructions vein belongs to the runner, and this box is not it
+
+The entry above regenerated three veins together. Two of them were right and
+one was measured in the wrong place, and CI said so on the next push: `emitted`
+and `machine code` went green against the new numbers, `work` stayed red.
+
+The two that held are real. Building main in a worktree on this same box
+reproduces its emitted golden to the line — 11,603 — and this branch gives
+11,588, so the fall is the branch's and not the box's. Its cause is visible in
+the IR: `import "std/io"` carried 957 module-level globals into the decoder and
+`import "std/os"` carries 945, with three blank lines between them. Defines,
+calls and branches are identical either way.
+
+Retired instructions do not follow, because a global nobody reads retires
+nothing. What this box measured as a fall of about four hundred instructions
+across all eight benchmarks is the box: glibc here is 2.39-0ubuntu8.7 and the
+runner's is 2.39-0ubuntu8.8, one Ubuntu revision apart on the same upstream
+release. That is worth about 400 instructions before main, and several thousand
+where memcpy carries the work — widebench 993 and deepbench 3,680.
+
+Measured where the vein lives, the branch's actual move is small:
+
+    jsonbench     2,860,478,794   unmoved
+    encodebench   9,727,148,124   unmoved
+    oneshot          46,596,968   unmoved
+    basket           57,400,154   unmoved
+    widebench        84,816,701 ->    84,816,675   -26
+    deepbench       806,938,332 ->   806,938,306   -26
+    escapebench     258,568,120 ->   258,568,077   -43
+    pendbench       988,706,663 ->   988,706,559  -104
+
+So the two figures the entry above published for this vein are withdrawn.
+jsonbench did not go to 2,860,478,381 and deepbench did not go to 806,934,626;
+neither number moved at all. Welfare is unchanged either way, which is the one
+claim that survives intact — a hundred instructions in a billion is far below
+what a saturating term can resolve, and there is nothing to `--set`.
+
+The file already said not to do this. Its header has warned since it was
+written that a row must never be read against a number measured somewhere else,
+and the warning did not stop me, because what I had in front of me was a diff
+and a diff invites a paste. So the rule is checkable now: the golden names the
+host that measured it in a `measured-on` line, and
+`scripts/gates/instructions_host.sh` compares that line against the host it is
+running on. `scripts/gates/instructions.sh` runs it first, so off the runner
+the refusal costs milliseconds and prints no numbers at all, which is the
+point — there is nothing to copy. On the runner nothing changes.
+
+It is its own script rather than a block inside the big one so the ratchet can
+prove it honestly. A row whose gate is `instructions.sh` would go red in a
+scratch worktree whether or not the mutation landed, because there are no
+benchmark binaries there to measure, and a row that is red either way is
+evidence of nothing. The small gate needs the golden and `ldd`, so it is green
+unmutated and red under `instructions_host_unpinned`, which moves the claim
+rather than the box. Both directions were watched.
+
+The fingerprint is glibc alone. Callgrind's own version belongs in it on the
+merits, and pinning it would make the check unprovable on a host with no
+valgrind to ask — the nightly ratchet runner is one. A valgrind bump moves the
+whole vein at once the way any toolchain bump does, which the header already
+covers.
+
+A toolchain bump will trip this, and should: every row moves with the image, no
+row has regressed, and the refusal says so and names both hosts.
