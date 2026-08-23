@@ -346,6 +346,10 @@ deliberately left the timings, with the reason in the commit.
   they cost a reader time and told them nothing the code does not.
 
 ### Design flow
-- Dialog before changes while Clay is designing; a gavel is recorded in the
-  append-only log AND a memory file before implementation starts.
+- Dialog before changes while Clay is designing. A decision that waits on
+  him lives in design/pending-gavels.md — the single ledger; STATUS.md
+  indexes it, sessions cite entries by heading, and no other file carries
+  pending-decision text. The ruling is recorded in the append-only log
+  and the entry leaves the ledger in the same commit; implementation
+  starts only after the gavel is recorded.
 - Docs present the settled design; chronology lives only in the log.

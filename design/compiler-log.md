@@ -2011,3 +2011,52 @@ ratchet row: no tracked .py file, no python3 call outside design/'s history
 and the one mutation whose job is to introduce one. Watched red three ways —
 the stale racer before its deletion, a python3 line appended to book_check
 (the row's mutation), a tracked creep.py — and green on the clean tree.
+## 2026-08-23 — one ledger: pending decisions live in pending-gavels, and nowhere else
+
+Clay ruled it in the developer chat, verbatim intent: "110% UNIFY those
+into a clear single source of truth. compiler-log was supposed to just
+be the history of actual decisions, whereas we need something like
+'pending-gavels' for keeping track of anything that requires my personal
+decision because it's about the 'UX' of the language, not the
+implementation details."
+
+What had happened: four surfaces claimed the same authority and
+disagreed. STATUS.md carried a full-text "Waiting on Clay" section that
+forked per branch — main's copy showed one item waiting, the working
+branch's showed four. design/pending-gavels.md said "every decision
+waiting on Clay, in one place" while filing list-as-bytes under "not
+blocking" as STATUS.md called it blocking. GAVELS.md sat orphaned at the
+root — nothing referenced it — holding nine July letters that never
+closed, plus a ruled ledger duplicating the log. And sessions were
+citing decisions to Clay by their own private task-list numbers ("#2
+list-as-bytes"), which resolve nowhere outside the session that minted
+them.
+
+The unification, per the ruling:
+
+- **design/pending-gavels.md is the ledger.** Charter at the top: UX
+  forks only, entries leave on ruling (the file's own 2026-08-15
+  precedent, drifted from since), STATUS.md indexes but never carries
+  text, entries are cited by heading, edits ride promptly-merged PRs.
+- **This log is history and nothing else.** Rulings land here; nothing
+  pending lives here.
+- **The ruled entries left the ledger** — gavels 1 (surface), 3+5, 6,
+  8, 15, 16, 17, 18+19, 20b, 21, 22, 23, 24, fixed-length lists,
+  the name of `[]T` — their rulings are above under their dates and
+  their full text is in the file's git history.
+- **GAVELS.md is deleted.** Its ruled ledger (A1–A5, R5, T, W, B, BB,
+  X, nullary-BB) duplicates rulings recorded here and in the archive;
+  its unclosed letters are triaged into the ledger: Y closed 2026-08-19
+  (`>>` keeps its glyph), F parked 2026-08-19, H shipped as entropy-by-
+  default with KANSO_SEED pinning, and C, D, G, Z, AA sit under a
+  "stale — revalidate against the post-24 language" heading rather than
+  pending, with Z marked presumed-declined by the 2026-08-15 err gavel.
+  Full text in git history.
+- **The four live decisions** — list-as-bytes (upgraded to blocking,
+  which the measurements say it is), the undemanded knot, the
+  compile-memory band, and `>>` under run-time effect failure — are the
+  ledger's blocking section, carried over verbatim from the branch
+  STATUS.md that held the freshest text.
+
+CLAUDE.md's design-flow line now names the ledger; the vague "AND a
+memory file" is gone.
