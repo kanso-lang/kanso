@@ -1,0 +1,25 @@
+import "std/io"
+import "std/list"
+
+# A knotted constant that no run demands. `x` mentions itself, so it can only
+# be built through a cell, and native used to fill every such cell in
+# `k_caf_init` before main — which meant the knot was built whether or not the
+# program ever asked for it. The oracle deferred it and read zero.
+#
+# Ruled 2026-08-23: the oracle is right. Work defers until it is presented to
+# IO, and eager evaluation is a resource heuristic inside that contract rather
+# than a semantic difference an engine may expose. So this program allocates no
+# thunk on either engine.
+#
+# The arm mentioning `x` is never taken, and no compile-time check can stand in
+# for this: an unreferenced knot is already `error[unused]`, and this one is
+# referenced right there in the second arm.
+x = [x]
+
+pub play = picked 1
+
+fn picked 1
+  io/write "one\n"
+
+fn picked _
+  io/write "{length (list/to_list x)}\n"
