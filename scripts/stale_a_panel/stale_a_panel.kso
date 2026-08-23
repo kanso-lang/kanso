@@ -1,0 +1,64 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# Put a chapter out of date in the way that exercises the write path.
+#
+# Both panel shapes are staled, because they reach different code and only one
+# of them touches the escaping. A source panel is regenerated from the .kso. A
+# recorded-output panel is compared against the .out file and rewritten from it
+# when the two disagree, which is where a recorded body gets escaped into html.
+#
+# A chapter carrying both is what this needs. ch03 has no output panel at all,
+# so its title is only ever a `.kso` name and the comparison never runs.
+#
+# Deleting the .out reaches neither: a recorded output that is missing leaves
+# the panel alone, on the reading that the chapter may be quoting something the
+# book does not own.
+marker = "<pre><code>"
+
+source_title = "code-panel-title\">railway.kso"
+
+output_title = "code-panel-title\">kanso play railway.kso"
+
+titles = [source_title output_title]
+
+fn with_args given
+  usage (length given != 1) given
+
+fn usage true _
+  io/write_err "usage: stale_a_panel <chapter.html>\n" . (_ -> io/exit 2)
+
+fn usage false given
+  chapter = given[1]!
+  io/read_file chapter . (source -> staling chapter source 1)
+
+fn staling chapter source at
+  staled chapter source at (at > length titles)
+
+fn staled chapter source _ true
+  io/write_file chapter source
+
+# The first <pre><code> after the title's first occurrence gains a STALE.
+fn staled chapter source at false
+  title = titles[at]!
+  p = text/split source title
+  titled chapter source at title p (length p >= 2)
+
+fn titled _ _ _ title _ false
+  io/write_err "missing panel title: {title}\n" . (_ -> io/exit 1)
+
+fn titled chapter _ at title p true
+  rest = text/join (list/to_list (list/drop p 1)) title
+  q = text/split rest marker
+  marked chapter at title p[1]! q (length q >= 2)
+
+fn marked _ _ title _ _ false
+  io/write_err "no {marker} after {title}\n" . (_ -> io/exit 1)
+
+fn marked chapter at title before q true
+  head = q[1]!
+  tail = text/join (list/to_list (list/drop q 1)) marker
+  staling chapter "{before}{title}{head}{marker}STALE{tail}" (at + 1)
+
+pub play = io/args . (given -> with_args given)
