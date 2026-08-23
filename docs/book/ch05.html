@@ -270,7 +270,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   </div>
 </div>
 
-<p>that is the whole i/o vocabulary of part i: <code>print</code>, ambient, and <code>os/read_file</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code> behind one import. five verbs, zero new syntax, because the composition operators don't care what they compose.</p>
+<p>that is the whole i/o vocabulary of part i: <code>print</code>, ambient, and <code>os/read_file</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code> behind two imports. five verbs, zero new syntax, because the composition operators don't care what they compose. the two modules split the way go splits them: <code>std/os</code> is the machine your program is standing on — its files, its environment, its arguments, the processes it starts — and <code>std/io</code> is what it reads and writes through.</p>
 
 <h2>failure at the edge</h2>
 
