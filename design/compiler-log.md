@@ -1712,3 +1712,18 @@ names and need no branch.
 Every counter gate is flat, both compile goldens byte-identical, welfare at
 84.85, the book's panels regenerated, and the browser differential reads 317
 programs with 0 disagreements.
+
+## 2026-08-23 — the names that moved say where they went
+
+A program written before the split says `io/read_file` and is told `unknown
+name`, which is true and useless: the name is right and the module moved. The
+refusal now names the destination and what stayed:
+
+    error[name]: unknown name `io/read_file` — it moved to `os/read_file`,
+    and `std/io` keeps the reading and writing
+
+Fourteen names, matched only under the `io/` prefix, so every other unknown
+name reads exactly as it did. Pinned at
+`tests/golden/errors/a_name_that_moved_to_os`, and the message before the
+change is on the record two entries up — the plain `unknown name` was what
+this repo's own migration met first.
