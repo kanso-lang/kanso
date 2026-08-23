@@ -1,8 +1,10 @@
 # Programs the wasm engine cannot run, and the text it answers instead.
 # Read by both harnesses — tests/wasm_engine.rs under an embedded interpreter
-# and scripts/browser_differential.py under headless Chrome — so a gap is
+# and scripts/browser_differential_run under headless Chrome — so a gap is
 # stated once. A program listed here that starts passing is an error in both,
 # because a gap that closed and stayed written down is a lie about the engine.
+# A paragraph describing a gap whose lines are gone is the same lie, slower to
+# catch, so an explanation leaves with the entry it explains.
 #
 # <path from the repo root><tab><substring the wasm engine answers>
 
@@ -26,33 +28,3 @@ tests/golden/runtime/read_missing_file.kso	the playground has no filesystem
 # no filesystem to ask — so the golden's first answer differs there.
 tests/golden/micro/is_dir.kso	false
 tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
-
-# A constant that names itself defers the mention, and the three engines hold
-# that deferral differently: native and the oracle keep a cell nobody has
-# demanded and say `<thunk>`, where the browser keeps the closure that would
-# answer it and says `<fn>`. Both are honest about having no value yet; they
-# do not use the same word for it. Closing this means teaching the renderer to
-# ask a deferral what it is, which reaches into the interpreter's own render.
-
-# Two constants naming each other. All three engines tie the knot and agree
-# on the values it holds — `2 1` here. They part on how a deferral RENDERS:
-# the browser keeps the closure that would answer the field and says `<fn>`,
-# where native and the oracle hold a cell and print the record behind it.
-#
-# The same difference as a_constant_that_holds_itself above, and it closes
-# with gavel 20b's render-forcing rather than with a blackhole: the browser
-# has a deferral here, it just prints the wrapper instead of asking it.
-
-# A constant naming itself as a MAP value. The knot ties here now — every
-# mention reaches one cell, so the map builds once and holds itself — and what
-# is left is the same render difference as the entries above: the browser
-# prints the closure that would answer the value rather than asking it.
-
-# An err whose reason holds a cell nobody demanded. Native and the oracle now
-# FORCE what they print, so the trace shows the ring and stops at `<cycle>`;
-# the browser holds its deferral as a closure and prints `<fn>`.
-#
-# The same difference as a_constant_that_holds_itself above, reached through
-# the trace rather than through print — which is the point of this fixture.
-# It closes when the browser's render forces, the work tracked beside the
-# blackhole.
