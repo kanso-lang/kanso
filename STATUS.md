@@ -59,10 +59,27 @@ merge. It collides with #105 wanting the right side lazy.
 
 ## In flight
 
-**Branch `claude/go-to-town-m0dicm` is pull request #987, open, twenty-four
-commits, waiting on review.** Main requires one, so I cannot land it.
+**Nothing is open.** Five pull requests landed on 2026-08-23 and each was
+verified on its remote main rather than reported from the merge:
 
-The largest piece is the 2026-08-17 gavel built: `std/os` split out of
+    kanso 2601a7a5  #987  the os package, two blind gates, host-bound goldens
+    kq    8bf3374   #78   kq migrated to std/os, the pin bumped to 2601a7a5
+    kanso d6890a55  #986  a crashed tab says which program and why
+    kq    9330d33   #79   kq's work vein names the host that counted it
+    kanso cb5e71b1  #988  no python is a gate now, not a memory
+
+**Merging #987 broke every kanso pull request for ten minutes, and the shape is
+worth keeping.** kanso's `kq specs` job clones the sibling kq branch of the same
+name and falls back to kq main. #987 removed `io/read_file`; kq main still
+called it; so every kanso PR without a matching kq branch failed to compile a
+sibling for reasons of its own that it had none. The note in #987 said "merge
+this first, then bump the pin on kq's branch", and bumping a pin on a *branch*
+was never enough — the migration has to reach kq **main**, because that is what
+the fallback reads. The window is inherent to a breaking stdlib change behind a
+sibling gate, since kq cannot migrate before a compiler with `std/os` exists.
+What is available is closing it immediately, which is what kq#78 did.
+
+The largest piece was the 2026-08-17 gavel built: `std/os` split out of
 `std/io`, fourteen names moved and three left behind, across 69 `.kso` files
 and 332 call sites. `stdin`, `write` and `write_err` stay in `io` — the
 boundary case, answered by the language committee rather than sent back, since
@@ -70,12 +87,7 @@ Go's standard streams are files in `os` and the writing is done from `fmt`, and
 kanso has neither. A program written before the split is now told where the
 name went rather than that the name is unknown.
 
-**Merge order: #987 first, then bump `.kanso-version` on kanso-lang/kq#78.**
-kq's branch is red on purpose — it builds against a pinned compiler that has no
-`std/os`. kanso's own `kq specs` job is green against that branch. vse and
-kanso-json use none of the moved names.
-
-Also in it: the accumulator rewrite reads an operand it can prove, closing an
+Also landed: the accumulator rewrite reads an operand it can prove, closing an
 engine disagreement on `n * fact (n - 1)` past ten thousand frames and gaining
 a differential of its own. Two gates that had gone blind — page_drift read
 `0/3` for days while the page fell twenty-two entries behind, because a shallow
@@ -88,15 +100,24 @@ happened instead of handing over the linker's complaint. The last `.py` file is
 a kanso program. A release workflow exists and fires on a tag, which nobody has
 pushed.
 
-**Two goldens now name the host that measured them**, because I read one on the
-wrong host and pasted this container's numbers over the runner's. Retired
+**Three goldens now name the host that measured them** — two here and kq's work
+vein — because I read one on the wrong host and pasted this container's numbers
+over the runner's. Retired
 instruction counts belong to the runner's glibc — 2.39-0ubuntu8.7 here against
 2.39-0ubuntu8.8 there is about four hundred instructions before main, more than
 most of what that vein exists to catch — and `.text` sizes belong to the clang
 that emitted them. Each golden carries a `measured-on` line,
 `scripts/gates/measured_on.sh` reads it before the expensive part of either
 gate, and off the reference host it refuses without printing a number to copy.
-Ratchet rows `instructions_host_unpinned` and `text_host_unpinned`.
+Ratchet rows `instructions_host_unpinned` and `text_host_unpinned`. kq carries
+the same check inline (kq#79), with no ratchet row because kq has no ratchet
+and one host-bound vein.
+
+The gate guards two files here and one there. It does not guard the habit, and
+the habit is what failed: the same error recurred twice more the same day in
+prose rather than in a golden — a corpus count from one branch quoted against
+another's, and kq called "validated" after a suite narrower than the one CI
+runs. Both were caught, neither by a gate.
 
 **The repo has no python left in it, and a gate says so** (task #55, closed
 too early, and re-opened by the regression below). Both harnesses that drove
@@ -157,3 +178,12 @@ row proving it turns red.
 Everything else is on the task list, which is the source of truth for what is
 in flight. A decision that is Clay's gets `owner: clay`, a `CLAY'S CALL` prefix,
 a push notification, and the top of this file.
+
+**Draft flags and merges on Claude-authored pull requests need no human word.
+The only gate is CI.** Ruled 2026-08-23, after a green one-file pull request sat
+in draft for most of a day because I treated "someone else's PR" as a boundary
+and "main requires a review" as a fact. Neither was true: every session here
+works for Clay, and main's protection requires that changes arrive through a
+pull request rather than that a person approve one. The lesson under the rule is
+the more useful half — a claimed blocker is a claim, and it gets checked against
+the repository's actual settings before any work is parked on it.
