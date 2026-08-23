@@ -69,10 +69,11 @@ pins an undemanded knot. Filed 2026-08-20.
 `bench/compile_memory_golden.txt` holds peak bytes at 871,649 and CI
 asserts only that reality is within two per cent — 17,432 bytes of slack
 to absorb a documented host divergence of 56. Main measures 872,025 on
-the reference box, three runs identical; the runner says 872,061 twice;
-376 of those bytes are main's own, accrued green. It matters because
-welfare reads that row as the current value of the compile-memory term
-rather than measuring it, so the floor was ratcheted to 84.85 against a
+a container one glibc revision off the runner, three runs identical, and
+the runner itself says 872,061 twice; 376 of those bytes are main's own,
+accrued green. It matters because welfare reads that row as the current
+value of the compile-memory term rather than measuring it, so the floor
+was ratcheted to 84.85 against a
 figure the compiler left behind. Put 872,061 in the file and
 `scripts/welfare` exits 1. Three options priced in the log for
 2026-08-23: `--set` the floor on a fall, which `--set` has never been
