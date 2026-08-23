@@ -396,6 +396,10 @@ jobs:
       # asks every exported std function for the wrong thing, in every
       # argument position, and requires the two engines to answer identically
       - run: ./target/release/kanso run scripts/diagnostic_differential
+      # the accumulator rewrite against the same arithmetic it refuses to
+      # rewrite. no counter and no golden can see that pass disappear: it
+      # changes the shape a recursion runs in and not one answer
+      - run: ./target/release/kanso run scripts/trmc_differential
       # rendering is written twice — `render` in the interpreter and
       # `k_render` in the C runtime — and every print goes through it
       - run: ./target/release/kanso run scripts/render_differential

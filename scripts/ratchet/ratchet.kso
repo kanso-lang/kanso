@@ -181,6 +181,14 @@ diagnostics = row
   (breaking "one_engine_reworded")
   release
 
+accumulator = row
+  "the accumulator rewrite deleted, which no counter and no golden can see"
+  true
+  "./target/release/kanso run scripts/trmc_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "accumulator_rewrite_deleted")
+  release
+
 itself = row
   "a gating job nobody said how to prove"
   true
@@ -197,7 +205,9 @@ rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
 rows_b = text/concat rows_b1 [emitted_code machine_code]
 
-rows_c = [welfare_floor grammar book_outputs diagnostics itself]
+rows_c1 = [welfare_floor grammar book_outputs]
+
+rows_c = text/concat rows_c1 [diagnostics accumulator itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

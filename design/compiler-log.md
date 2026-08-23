@@ -1597,3 +1597,41 @@ Nothing is fixed here, and nothing can be until the fork is ruled: either a
 bare list of small ints IS bytes, and native widens, or the interpreter gains a
 real bytes value. The table is in pending-gavels with both costs, and it is on
 the task list as Clay's.
+
+## 2026-08-23 — the accumulator rewrite gets a differential of its own
+
+Widening TRMC's license this morning meant trusting a reassociation nothing was
+checking. The pass rewrites `n * fact (n - 1)` into a tail-calling helper
+threading an accumulator, and a reassociation bug does not fail — it answers a
+number. No counter can see it: the rewrite changes the shape a recursion runs
+in and not one allocation.
+
+So the shapes are written twice. `f` is the plain form the rewrite reaches;
+`g` is the same arithmetic with the leftover operand passed through a function,
+which the license refuses to read through, so that group descends the way it
+always did. Twenty shapes — two operators over five operands over two base
+values — at four depths each, and the two forms must answer identically on both
+engines. It runs in 0.6 seconds, which is why it sits with the other
+differentials rather than in a nightly.
+
+The last line reads the instrument rather than the compiler: a sum twenty
+thousand deep, taken from the INTERPRETER's output, because that engine refuses
+unlicensed recursion at ten thousand frames and native would answer it either
+way on the operating system's stack. Delete the pass and that line dies.
+
+Watched red twice before it was trusted. With the identity for `*` changed from
+1 to 2, every product shape answers double and the gate names the lines. With
+the pass returning before it looks at anything, the deep sum stops answering on
+the interpreter and the gate says the comparison proves nothing.
+
+The depths are per operator, and the reason is native's own limit rather than
+the rewrite's: an int is arbitrary precision in the spec and an int64 in a
+native build, so a product thirty-seven deep overflows there while the
+interpreter answers. Every value the gate asks for stays inside int64 on both
+engines, which is what lets one output be compared against the other. The first
+run of the gate found that boundary by falling over it.
+
+`accumulator_rewrite_deleted` is the row that proves it, and it uses awk rather
+than the python heredoc its neighbours use — a line inserted after a matched
+line is one awk expression, and the six python mutations stay python for the
+bootstrapping reason recorded in STATUS.md rather than for the editing.
