@@ -54,6 +54,11 @@ fn breaking name
 fn gating name
   "sh scripts/gates/{name}.sh"
 
+# The host check is one script over two goldens, so its rows name the vein
+# rather than a script of their own.
+fn whose vein
+  "sh scripts/gates/measured_on.sh bench/{vein}_golden.txt"
+
 formatting = row
   "a file rustfmt would rewrite"
   false
@@ -153,9 +158,17 @@ machine_code = row
 instructions_host = row
   "the instructions vein read on a host that did not measure it"
   false
-  (gating "instructions_host")
+  (whose "instructions")
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "instructions_host_unpinned")
+  no_setup
+
+text_host = row
+  "the machine-code vein read under a toolchain that did not emit it"
+  false
+  (whose "text")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "text_host_unpinned")
   no_setup
 
 welfare_floor = row
@@ -214,7 +227,7 @@ rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
 rows_b1b = text/concat rows_b1 [emitted_code machine_code]
 
-rows_b = text/concat rows_b1b [instructions_host]
+rows_b = text/concat rows_b1b [instructions_host text_host]
 
 rows_c1 = [welfare_floor grammar book_outputs]
 

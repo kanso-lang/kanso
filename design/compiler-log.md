@@ -1901,11 +1901,28 @@ evidence of nothing. The small gate needs the golden and `ldd`, so it is green
 unmutated and red under `instructions_host_unpinned`, which moves the claim
 rather than the box. Both directions were watched.
 
-The fingerprint is glibc alone. Callgrind's own version belongs in it on the
-merits, and pinning it would make the check unprovable on a host with no
-valgrind to ask — the nightly ratchet runner is one. A valgrind bump moves the
-whole vein at once the way any toolchain bump does, which the header already
-covers.
+The machine-code vein has the same shape and got the same treatment, because
+the trap is the class rather than the instance. Its rows are `.text` sizes,
+which are what the toolchain made of the source, so they belong to the clang
+that emitted them as surely as retired instructions belong to the glibc that
+ran them. `bench/text_golden.txt` names `clang=18.1.3` and
+`scripts/gates/machine_code.sh` checks it before measuring. Nothing has gone
+wrong there — this box and the runner share a clang, which is why CI accepted
+the `.text` numbers regenerated here — and the point is that nothing had to.
+
+One script over both goldens, `scripts/gates/measured_on.sh`, reading whichever
+facts the `measured-on` line names. The granularities differ and the difference
+is deliberate: glibc carries its Ubuntu revision because two revisions of one
+upstream release demonstrably moved the rows, and clang carries only the
+upstream version, because what selects codegen is the release and nothing here
+shows a package revision moving a byte. A fact pinned tighter than the evidence
+reds the gate on changes that are not changes.
+
+Valgrind's version is in neither, though it belongs in the instructions one on
+the merits. Pinning it would make that check unprovable on a host with no
+valgrind to ask, and the nightly ratchet runner is one. A valgrind bump moves
+the whole vein at once the way any toolchain bump does, which the header
+already covers.
 
 A toolchain bump will trip this, and should: every row moves with the image, no
 row has regressed, and the refusal says so and names both hosts.
