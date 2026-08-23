@@ -767,6 +767,8 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <li><strong>differential engine testing</strong> — mckeeman-style differential oracles: one reference interpreter, two compiled backends, every golden byte-identical across all three.</li>
 <li><strong>float parsing at memory speed</strong> — eisel–lemire (lemire, 2021): the decode mirror of the rendering entry, verified against an independently written reference over thirty million doubles and pinned by the <code>el_parses</code> counter, which reads 318450 on the decode board.</li>
 <li><strong>vectorized utf-8 validation</strong> — keiser &amp; lemire (2021) in full: nibble-lookup classification with ascii-block skip, spec-strict, verified over seventy million boundary-crossing sequences.</li>
+<li><strong>accumulating recursion as a loop</strong> — tail recursion modulo an associative operator, the ghc lineage of accumulator transformations. a group whose leftover work adds or multiplies something the pass can prove is a whole number carries an accumulator and descends in tail position, so <code>n * fact (n - 1)</code> runs in flat memory on all three engines. floats stay out: their addition is not associative, so reassociating one changes the answer.</li>
+<li><strong>in-walk cycle guards</strong> — the path stack render carries, priced against a build with the scan removed. at depth 10 to 30 it sits inside the layout noise; at depth 1,000 it is 47% of render, and the linear scan crosses the cost of a whole pre-pass at about depth 1,400. json documents nest tens deep, so the guard stays as it is; a general cycle-safe walk wants a generation-stamped set with real removal instead.</li>
 <li><strong>branchless map search</strong> — eytzinger layout (khuong &amp; morin, 2017): built, measured, declined — string-keyed maps at json sizes don't reward it; the negative result is recorded so it stays declined.</li>
 <li><strong>tail recursion modulo context</strong> — leijen &amp; lorenzen (ICFP 2023). queued: results built in their final cells, no accumulator discipline at the source level.</li>
 <li><strong>fully-in-place discipline</strong> — lorenzen, leijen, swierstra (ICFP 2023). queued: in-place-ness as a checked guarantee instead of a discovered optimization.</li>
@@ -956,7 +958,7 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>the two rules make the same pair of algebraic objects, over one carrier: adjacency associative and commutative, the wall associative with the first failure absorbing. that is what makes the grouping invisible, and it is also what a user-supplied version of either would have to obey.</p>
 
-<h2 id="counted"><span class="sec-num">17</span>what a count can and cannot see</h2>
+<h2 id="counted"><span class="sec-num">18</span>what a count can and cannot see</h2>
 
 <p>every performance claim on this page is pinned to a count rather than a stopwatch, because a count cannot drift between machines. that choice has an edge, and knowing where it sits is part of reading the numbers.</p>
 
@@ -972,7 +974,7 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>every counter this page names is recorded on every merged commit and drawn on <a href="/numbers.html">the long view</a>, one row each — what a run costs, what compiling costs, and the welfare score they roll up into.</p>
 
-<h2 id="onemodule"><span class="sec-num">18</span>a module reached two ways is one module</h2>
+<h2 id="onemodule"><span class="sec-num">19</span>a module reached two ways is one module</h2>
 
 <p>a program with a dependency is a diamond. the entry imports <code>shape</code> and imports <code>mid</code>, and <code>mid</code> imports <code>shape</code> too. kanso used to build one <code>shape</code> per route, so the emitted code carried <code>mid/shape/describe</code> beside <code>shape/describe</code> and a value the entry built matched no arm the middle module had compiled. the call from the entry answered; the identical call one module in died with <code>no overload of mid/shape/describe matches these arguments</code>.</p>
 
@@ -986,6 +988,16 @@ print "{order [3 1 2]}"        # the bare spelling
 print "{geo/order [3 1 2]}"    # and the qualified one</code></pre>
 
 <p>the door opens only where the qualified spelling is free and one declaration answers it. a module that declares its own <code>select</code> beside an import's already owns <code>geo/select</code>, and two re-exports landing on one bare name leave a caller nothing to choose between.</p>
+
+<h2 id="accumulator"><span class="sec-num">20</span>a recursion the compiler can reassociate runs as a loop</h2>
+
+<p>recursion is the only loop the language has, and a call in tail position costs no stack — a promise all three engines keep. a call with work left over when it returns is the other shape: <code>n + weigh (n - 1)</code> holds a frame per call, and a million frames is more than any stack holds. the compiler has always turned the simplest of those into a loop by threading an accumulator through a tail-calling helper, and the license asked for an integer <em>literal</em> as the leftover work. <code>1 + count (n - 1)</code> qualified. <code>n * fact (n - 1)</code> did not.</p>
+
+<p>widening it needs a proof that the operand is a whole number, because reassociating a sum of floats changes the answer. the proof comes off the shape rather than out of inference. the wrapper the rewrite already generates ascribes every counter position <code>int</code>, so a non-integer argument never enters the loop at all; requiring each recursive call to hand those positions arithmetic over counters carries that property down every level. an operand built from counters and literals is therefore an integer at every depth, and it is pure — a name, a literal and <code>+</code>/<code>-</code>/<code>*</code> reach no call and no effect — so computing it before the descent rather than after moves nothing a program can observe.</p>
+
+<p>what it now reaches: <code>n * fact (n - 1)</code>, <code>n * n + r (n - 1)</code>, <code>n * 2 + w (n - 1)</code>. what it still declines, and why: a float operand, because the reassociation is not exact; a call in the leftover work or in a counter position, because the pass reads one group and cannot see through a call; and double recursion like fib, because there is no single descent to thread. the rewrite remains an optimization rather than a promise, so a program that needs flat memory writes the tail call itself.</p>
+
+<p>the evidence is an engine disagreement that closed. <code>weigh 100000</code> — the sum of the first hundred thousand integers, written the way anyone would write it — answered on native, which has whatever stack the operating system handed the process, and died on the interpreter, which refuses unlicensed recursion at ten thousand frames. it now answers 5000050000 on all three engines in under a tenth of a second, and the fixture that says so runs on each of them. every allocator counter, both compile goldens and the welfare score held still: the rewrite fires on shapes the benchmarks do not contain.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

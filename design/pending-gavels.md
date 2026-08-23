@@ -371,10 +371,14 @@ welfare and the veins gate the cost.
 
 ## Also open, not blocking any current work
 
-- **TRMC v2**: license operands by inferred set (any provably-int
-  expression, not just literals — covers `n * fact (n - 1)`). Needs
-  `Inference` threaded out of `check::check` rather than recomputed, or
-  the compile-cost golden pays a phantom infer run.
+- ~~**TRMC v2**~~ — SHIPPED 2026-08-23. The operand may be any arithmetic
+  over integer literals and the group's own counters, which covers
+  `n * fact (n - 1)`. Inference was never threaded out of
+  `check::check`: the wrapper already ascribes every counter `int`, so
+  requiring each recursive call to hand those positions arithmetic over
+  counters carries the integer property down by induction, and the pass
+  reads it off the syntax it already has. The compile-cost golden pays
+  no phantom infer run because there is no infer run.
 - **`--explain-copies`**: the *where* half of the observability item —
   a diagnostic naming the source site of each evacuation copy. Needs
   span plumbing through the carry machinery; the CLI surface deserves a
