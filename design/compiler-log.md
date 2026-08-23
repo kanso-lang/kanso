@@ -1780,3 +1780,31 @@ The pages build rebuilds the engine before jekyll copies `docs` now, so the
 site serves the compiler it was built from. The committed copy stays for a
 checkout to run and for the browser differential to load, and the specs go on
 rebuilding it, which is the check that the source has a third engine at all.
+
+## 2026-08-23 — `kanso build myapp` from the directory above it
+
+Exercising the verbs after the library split — the point being that a stdlib
+change can break a whole verb where no corpus looks — turned up one that has
+nothing to do with the split. A build is named for its program (#984), so
+`kanso build greeter` run beside `greeter/` wants to write a file where the
+directory is:
+
+    /usr/bin/ld: cannot open output file greeter: Is a directory
+    clang: error: linker command failed with exit code 1
+    error: clang failed on greeter.ll
+
+Three lines that name neither the cause nor the way out, and the way out is one
+line. The build refuses before it writes anything now, and says both:
+
+    error: this build is named `greeter`, and a directory of that name is
+    here — build it from inside (`cd greeter && kanso build .`), or build it
+    from somewhere the name is free
+
+The spec checks the refusal, that no `.ll` is left behind, that the linker's
+words never reach the user — and that the route it recommends actually builds
+and runs, which is what makes printing it worth anything. Watched red against
+the old path first, where it read the linker's complaint instead.
+
+Nothing in this repo trips it: the benchmarks build from the root, where
+`jsonbench` names a file rather than a directory. It is the single-module
+project — `myapp/` built from beside it — that always hit it.

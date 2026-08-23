@@ -579,6 +579,19 @@ fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<Str
         .unwrap_or("out")
         .to_string();
     let stem = built_as.unwrap_or(named);
+    // A build is named for its program, so `kanso build myapp` from the
+    // directory above `myapp/` wants to write a file where the directory
+    // already is. The linker's own words for that are `cannot open output
+    // file myapp: Is a directory` followed by `clang failed`, which names
+    // neither the cause nor the way out.
+    if std::path::Path::new(&stem).is_dir() {
+        eprintln!(
+            "error: this build is named `{stem}`, and a directory of that name is here — \
+             build it from inside (`cd {stem} && kanso build .`), or build it from \
+             somewhere the name is free"
+        );
+        return ExitCode::from(2);
+    }
     let ll_path = format!("{stem}.ll");
     let ir = match release {
         true => narrow_tailcc(ir),
