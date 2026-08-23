@@ -9,8 +9,7 @@ is stale — say so.
 The decisions live in design/pending-gavels.md — the single ledger; this
 file only indexes it. Blocking right now: **is a bare list of small ints
 bytes** (the engines split six ways and the oracle answers where native
-refuses); **does an undemanded knot count as a thunk allocation**;
-**the compile-memory band and its floor**; **does `>>` accumulate
+refuses); **the compile-memory band and its floor**; **does `>>` accumulate
 run-time effect failures or stop at the first**.
 
 ## In flight

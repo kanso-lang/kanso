@@ -2060,3 +2060,53 @@ The unification, per the ruling:
 
 CLAUDE.md's design-flow line now names the ledger; the vague "AND a
 memory file" is gone.
+
+## 2026-08-23 — gavel: an undemanded knot allocates nothing, on any engine
+
+Clay ruled the first entry in the unified ledger, in the developer chat.
+The principle: work defers until it is actually presented to IO — until
+it can affect the real world — and eager evaluation exists only as a
+resource-optimization heuristic inside that contract, never as a
+semantic difference an engine may expose.
+
+The shape that forced the question compiles clean and cannot be caught
+at compile time (an unreferenced knot is already `error[unused]`; this
+one is referenced in a dispatch arm the run never takes):
+
+    x = [x]
+
+    pub play = picked 1
+
+    fn picked 1
+      io/write "one\n"
+
+    fn picked _
+      io/write "{length (list/to_list x)}\n"
+
+Native reads `thunk_allocs=1, thunk_live_exit=1` — `k_caf_init` builds
+every knotted constant before main. The oracle reads zero. Reproduced
+today on both engines before ruling.
+
+The ruling: the oracle is right. A knotted constant defers like every
+other binding; an undemanded knot allocates nothing, and `thunk_allocs`
+stays in the engine-shared differential set counting demanded work
+only. The disagreement closes by changing native — the startup freeze
+goes — not by re-scoping the counter or splitting it.
+
+On the hot-loop cost that motivated the freeze, Clay rejected the
+premise that deferral means a perpetual conditional: "of course you
+need that check. but it shouldn't really be a 'check' like a
+conditional. instead, you just make a code change once it's evaluated.
+… imagine you have a stored lambda. when you run it, it says 'compute
+this expensive thing, then replace the existing lambda with a new one
+that just returns this'. then the next call doesn't need to 'check'
+anything. it just runs." That is update-in-place — the machinery the
+runtime already uses for ordinary thunks — an indirection rewritten at
+first evaluation, not a branch paid on every read. Implementation is
+the implementer's; if measurement finds a real hot-loop regression
+even in the update form, the number comes back to the ledger before
+any freeze returns.
+
+Unblocked: the fixture pinning an undemanded knot at zero on both
+engines, and the .mem/golden regeneration that lands with the native
+change. The entry leaves the ledger with this commit.

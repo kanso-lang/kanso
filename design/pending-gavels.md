@@ -49,21 +49,6 @@ reads them. No golden can pin the shape until this is ruled, and the
 diagnostic differential cannot see it: its one wrong value is a record,
 and a record is refused identically.
 
-### Does an undemanded knot count as a thunk allocation?
-
-`x = [x]` that nothing demands reads `thunk_allocs=1, thunk_live_exit=1`
-on native and `thunk_allocs=0` on the oracle; forces and evals agree at
-zero on both. Native freezes every knotted constant in `k_caf_init`
-before main, because the alternative is a branch and a store on every
-read of a frozen constant and that sits in the hottest dispatcher. A
-fixture cannot pin the shape until this is settled. Four ways out, each
-priced: defer the cell on native and pay that branch; give knot cells
-their own counter, which is additive and moves 146 `.mem` files, four
-cost goldens, the emitted golden, the ch10 sample and the siblings'
-veins; retire `thunk_allocs` from the engine-shared set, which narrows
-what the differential law covers; or leave it and record that no fixture
-pins an undemanded knot. Filed 2026-08-20.
-
 ### The compile-memory band has been hiding main's own drift
 
 `bench/compile_memory_golden.txt` holds peak bytes at 871,649 and CI
