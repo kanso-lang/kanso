@@ -20,6 +20,16 @@ engine-shared set, which narrows what the differential law covers; or leave it
 and record that no fixture pins an undemanded knot. Filed 2026-08-20 as a
 finding, unresolved since.
 
+**Is a bare list of small ints bytes?** (task #2). Six functions answer
+differently on the two engines, and in four of them the ORACLE answers where
+native refuses — `text/append ["a"] "x"` is `["a" 120]` on the interpreter and
+a refusal natively — so a program written against the oracle runs and the same
+program compiled dies. The cause is one representation: the interpreter has no
+distinct bytes value, so any list goes down the bytes path. Either native
+widens, and a list and bytes become interchangeable, or the interpreter gains a
+real bytes value and every place it builds or reads them moves. The measured
+table is in pending-gavels. Nothing can be pinned until this is ruled.
+
 **Does `>>` accumulate failures the way a parallel group does, or stop at the
 first one?** (task #141). Both channels are settled: the value channel answers
 one value, and failures merge associatively so the fractal you worried about
@@ -31,6 +41,16 @@ effects and unordered failures cannot preempt, or run the right anyway and
 merge. It collides with #105 wanting the right side lazy.
 
 ## In flight
+
+**Branch `claude/go-to-town-m0dicm`, pushed, no pull request opened.**
+The accumulator rewrite reads an operand it can prove, which closed an engine
+disagreement on `n + weigh (n - 1)` past ten thousand frames and gained a
+differential of its own. The chain-depth spec measures with the kernel rather
+than with time(1), which a container does not have. page_drift could not see a
+truncated history and read `0/3` for days while the page fell twenty-two
+entries behind; both the workflow and the gate are fixed. `to_int` and
+`to_float` name every kind they take. The last `.py` file is a kanso program.
+A release workflow exists and fires on a tag, which nobody has pushed.
 
 **The repo has one python left in it, and it is there on purpose** (task #55,
 closed too early). Both harnesses that drove headless chrome are kanso now, CI
