@@ -2118,3 +2118,28 @@ disagrees. Native reports `thunk_allocs=1` where the oracle reports `0`,
 because the oracle's `knotted` builds its cell without touching the counter.
 That predates this change and survives it, and which engine is right is a
 question about what the counter counts rather than a defect to pick a side on.
+
+### What the deferral costs, priced
+
+Four rows of `bench/instructions_golden.txt` rise, each by about what taking
+the ready-flag branch costs: encodebench +17,931, deepbench +155,986,
+escapebench +5,993, widebench +358. deepbench's is the largest and the
+smallest — 0.019% of 807 million — because it reads its knotted constants
+inside the hottest loop it has, so the ready-flag test is paid once per read
+instead of once per program. jsonbench, oneshot, basket and pendbench do not
+move at all. These numbers are the runner's: the vein carries
+`measured-on glibc=2.39-0ubuntu8.8` and this container is one revision off, so
+`scripts/gates/measured_on.sh` refuses to hand over a diff here and CI's job
+log is the only place they can come from.
+
+`encode_sh_buf` rises 96 bytes. A per-capacity histogram of freshly-allocated
+buffers, split by beat depth, says what it is: exactly one more five-element
+buffer, allocated inside the beat.
+Every other capacity class is byte-identical, `buf_reuse` does not move, and
+no five-element buffer is allocated before main under either codegen. Beside
+it on the same benchmark, two permanent allocations and two evacuation copies
+go away — `perm_allocs` 12 to 10, `evac_allocs` 19 to 17, `evac_bytes` 624 to
+576. Two constants that used to be frozen into malloc'd storage before main,
+and copied there out of the arena, are not frozen at all now; what is left is
+96 bytes of arena the beat reclaims on its next rewind, in place of two
+allocations that lived until exit and forty-eight bytes of copying.
