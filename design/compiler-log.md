@@ -1808,3 +1808,40 @@ the old path first, where it read the linker's complaint instead.
 Nothing in this repo trips it: the benchmarks build from the root, where
 `jsonbench` names a file rather than a directory. It is the single-module
 project — `myapp/` built from beside it — that always hit it.
+
+## 2026-08-23 — three veins moved, and one of this morning's numbers was backwards
+
+CI caught what a stale build hid here. The cost-goldens job went red three
+pushes running on `emitted`, `machine code` and `work`, while all three passed
+locally — because the benchmark binaries on this box predated the fix to
+`bench/make_jsonbench`, whose generated entry now imports `std/os`. Rebuilt from
+nothing, every one of them moves, and they move the same way:
+
+    emitted lines   11,603 -> 11,588
+    escapebench     49,650 -> 49,458 bytes of .text
+    pendbench       73,458 -> 73,362
+    jsonbench    2,860,478,794 -> 2,860,478,381 retired instructions
+    deepbench      806,938,332 ->   806,934,626
+    (encodebench, oneshot, basket, widebench, escapebench, pendbench alike)
+
+Every number falls, and one cause explains all of them: a program that imports
+`std/io` used to drag the filesystem, the environment, the arguments and the
+processes in with it, and now pulls a module with three names in it. Less code
+is emitted, less machine code is linked, and a few hundred fewer instructions
+run before main. A fall is a win to bank, so all three goldens are regenerated
+here. Welfare does not move — a few hundred instructions in three billion is far
+below anything a saturating term can see — so there is nothing to `--set`.
+
+CORRECTION to this morning's entry on PR #985, which recorded its emitted-line
+move as 11,593 → 11,603, a rise. It is the other way round: the golden is
+11,603 and that branch produces 11,593, which is a FALL of ten lines and a win
+rather than a regression. What does not change is the finding that mattered:
+with its goldens regenerated honestly, #985 reads welfare 84.69 against a floor
+of 84.85, and the term that pays is compile cost — front-end rounds on lib/json
+28 → 30, visits 23,224 → 23,345, peak 871,649 → 878,422 bytes. That branch owes
+the reason it is worth it or the compile cost back, and the emitted-line
+direction was never the argument.
+
+The lesson for this box: a counter gate reads what is on disk, and what was on
+disk was built before the change. `sh scripts/gates/build_benchmarks.sh` after
+`rm -f` on the binaries is what makes a local green mean anything.

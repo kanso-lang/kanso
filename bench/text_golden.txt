@@ -225,5 +225,5 @@ oneshot text=97138
 basket text=88978
 widebench text=98082
 deepbench text=62802
-escapebench text=49650
-pendbench text=73458
+escapebench text=49458
+pendbench text=73362
