@@ -645,7 +645,37 @@ fn tallied progs raw
   said = "the tab: {length results} answers, {counts}"
   seen = keyed results 1 {}
   on = (_ -> with_gaps progs seen)
-  io/write_err "{said}\n" . on
+  io/write_err "{said}{crash_note results}\n" . on
+
+# A crash count that is neither zero nor all is a tab that fell over partway,
+# and in a bare tally it reads the same as an engine that disagreed. The first
+# reason tells them apart, and a run that ends without one leaves the next
+# reader where the run of 2026-08-17 left this one.
+fn crash_note results
+  crashed = crashes results 1 []
+  noted_crashes crashed (length crashed == 0)
+
+fn noted_crashes _ true
+  ""
+
+fn noted_crashes crashed false
+  "\nfirst of {length crashed}: {crashed[1]!}"
+
+fn crashes results at acc
+  more_crashes results at acc (at > length results)
+
+fn more_crashes _ _ acc true
+  acc
+
+fn more_crashes results at acc false
+  one = results[at]!
+  crashes results (at + 1) (kept_crash acc one one["kind"])
+
+fn kept_crash acc one "crash"
+  text/concat acc ["{one["name"]}: {one["reason"]}"]
+
+fn kept_crash acc _ _
+  acc
 
 # The gaps live in tests/golden/wasm_gaps.txt, which tests/wasm_engine.rs reads
 # too: one home, so a gap cannot close in one harness and stay written down in
@@ -757,9 +787,17 @@ fn filed progs seen gaps at bad agreed skipped _ _ _ true
 
 fn filed progs seen gaps at bad agreed skipped p r said false
   mine = "native {r.status} {said_natively r}"
-  theirs = "tab {said["code"]} {said["text"]}"
+  theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
   against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
+
+# A crashed case answers no code and no text, so the ordinary line reads
+# `tab <none> <none>` and throws away the reason the tab already captured.
+fn tab_said said "crash"
+  "tab crashed: {said["reason"]}"
+
+fn tab_said said _
+  "tab {said["code"]} {said["text"]}"
 
 # A gap excuses a disagreement only when the tab answers the text the ledger
 # recorded for it. Anything else is a disagreement nobody wrote down.
