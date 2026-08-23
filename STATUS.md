@@ -6,6 +6,20 @@ is stale — say so.
 
 ## Waiting on Clay
 
+**Does an undemanded knot count as a thunk allocation?** The engines disagree
+and a fixture cannot pin the shape until this is settled. `x = [x]` that
+nothing demands reads `thunk_allocs=1, thunk_live_exit=1` on native and
+`thunk_allocs=0` on the oracle; forces and evals agree at zero on both. Native
+freezes every knotted constant in `k_caf_init` before main, because the
+alternative is a branch and a store on every read of a frozen constant and that
+sits in the hottest dispatcher. Four ways out, and the cost of each is known:
+defer the cell on native and pay that branch; give knot cells their own counter,
+which is additive and moves 146 `.mem` files, four cost goldens, the emitted
+golden, the ch10 sample and the siblings' veins; retire `thunk_allocs` from the
+engine-shared set, which narrows what the differential law covers; or leave it
+and record that no fixture pins an undemanded knot. Filed 2026-08-20 as a
+finding, unresolved since.
+
 **Does `>>` accumulate failures the way a parallel group does, or stop at the
 first one?** (task #141). Both channels are settled: the value channel answers
 one value, and failures merge associatively so the fractal you worried about

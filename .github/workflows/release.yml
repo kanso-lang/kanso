@@ -1,0 +1,57 @@
+# Nothing here runs until somebody pushes a tag. `git tag v0.1.0 && git push
+# origin v0.1.0` publishes a release with a binary for each host, which is what
+# lets a person run kanso without a clone and a rust toolchain.
+#
+# The kanso binary interprets and it compiles; compiling shells out to clang,
+# so `kanso build` on a machine without one reports what it could not find.
+# Everything else — run, play, check, test, repl — needs nothing but the binary.
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+
+jobs:
+  # The release exists before anything uploads to it. kq's workflow creates it
+  # in parallel with the builds and papers over the race with `|| true`, which
+  # loses a build's artifact whenever the create lands second.
+  create-release:
+    name: open the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "kanso ${{ github.ref_name }}" \
+            --notes "The reference interpreter and the native compiler. Unpack and run \`kanso repl\`, or \`kanso play file.kso\`. \`kanso build\` also wants clang on PATH."
+
+  build:
+    name: ${{ matrix.target }}
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: macos-arm64
+          - os: ubuntu-latest
+            target: linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      # The suite is what says this binary is the one the goldens describe.
+      # A release built from a red commit is worth less than no release.
+      - run: cargo test --release
+      - name: pack
+        run: |
+          cp target/release/kanso .
+          tar czf "kanso-${{ github.ref_name }}-${{ matrix.target }}.tar.gz" kanso LICENSE README.md
+          shasum -a 256 kanso-*.tar.gz > "kanso-${{ github.ref_name }}-${{ matrix.target }}.sha256"
+      - name: attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.ref_name }}" kanso-*.tar.gz kanso-*.sha256 --clobber
