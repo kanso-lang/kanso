@@ -1926,3 +1926,55 @@ already covers.
 
 A toolchain bump will trip this, and should: every row moves with the image, no
 row has regressed, and the refusal says so and names both hosts.
+
+## 2026-08-23 (later still) — the compile-memory band has been hiding main's own drift
+
+Looking for other veins with the provenance problem turned up a different one
+in `bench/compile_memory_golden.txt`. Its peak-bytes row is not diffed exactly.
+CI asserts only that reality is within two per cent of it, and the header gives
+the reason: peak bytes is measured by the compiler's own allocator and is a
+property of the host, with linux and macos disagreeing by 56 bytes on the same
+input.
+
+Two per cent of 871,649 is 17,432 bytes. The divergence it was written to
+absorb is 56. Everything between the two is drift nobody sees, and there is
+drift in there now:
+
+    golden                                     871,649
+    main, measured here, three runs identical  872,025
+    this branch, measured here                 872,035
+    this branch, measured on the runner        872,061   (two runs identical)
+
+The number is deterministic per host — three runs on this box give the same
+digits, and two CI runs give the same digits. This branch is worth ten of those
+bytes. The other 376 are main's, accumulated since whenever the golden was last
+written, and every gate has been green the whole way.
+
+That matters more than the bytes, because welfare reads `compile_peak_bytes`
+out of this golden as the CURRENT value of a term rather than measuring it. So
+the compile-memory term has been scored against a figure the compiler left
+behind, and the floor was ratcheted to 84.85 while it was.
+
+Correcting it costs the floor. With 872,061 in the file the score still prints
+84.85 — the term moves from 0.167 to 0.168 points, below the second decimal —
+and `scripts/welfare` exits 1, because the true value now sits under a floor
+that was set against the stale reading.
+
+**This is Clay's, and it is on the list.** The options, as I read them:
+
+1. Regenerate the golden and `--set` the floor with the reason, which banks a
+   fall rather than a rise. That is the one thing `--set` has never been used
+   for, and the doctrine is explicit that moving the floor while leaving the
+   weights alone declares the objective wrong without saying so. Against that:
+   nothing here is a code change, and the floor was set against a misreading.
+2. Pay the 376 bytes back out of the front end and regenerate at whatever it
+   then reads, which keeps the floor honest and costs real work on a term the
+   weights say matters least.
+3. Tighten the band to something near the divergence it documents — say 128
+   bytes rather than 17,432 — so the next drift is caught the week it happens.
+   That is orthogonal to 1 and 2 and looks right regardless of them, and the
+   `measured-on` line makes it affordable, since the gate can now refuse off
+   the reference host instead of widening to tolerate it.
+
+Nothing is changed here. This branch leaves the golden alone: its own ten bytes
+are inside any reading of it, and the 376 predate it.

@@ -30,6 +30,23 @@ widens, and a list and bytes become interchangeable, or the interpreter gains a
 real bytes value and every place it builds or reads them moves. The measured
 table is in pending-gavels. Nothing can be pinned until this is ruled.
 
+**The compile-memory band has been hiding main's own drift, and correcting it
+costs the floor.** `bench/compile_memory_golden.txt` holds peak bytes at
+871,649 and CI asserts only that reality is within two per cent of it — 17,432
+bytes of slack to absorb a documented host divergence of 56. Main measures
+872,025 on this box, three runs identical; this branch measures 872,035, and on
+the runner 872,061 twice. Ten of those bytes are the branch's and 376 are
+main's, accrued green. It matters because welfare reads that row as the current
+value of the compile-memory term rather than measuring it, so the term has been
+scored against a figure the compiler left behind and the floor was ratcheted to
+84.85 while it was. Put 872,061 in the file and `scripts/welfare` exits 1,
+though the printed score still reads 84.85. Three options priced in the log for
+2026-08-23: `--set` the floor on a fall, which `--set` has never been used for;
+pay the 376 bytes back out of the front end; or tighten the band to something
+near the divergence it documents, which looks right either way now that a gate
+can refuse off the reference host instead of widening to tolerate it. Nothing
+changed pending your call.
+
 **Does `>>` accumulate failures the way a parallel group does, or stop at the
 first one?** (task #141). Both channels are settled: the value channel answers
 one value, and failures merge associatively so the fractal you worried about
