@@ -1760,3 +1760,23 @@ The front-end measurement is the interesting one, because the library split
 adds a module for the resolver to find whenever a program imports `std/os`.
 It costs nothing measurable on a program that imports it, which is what the
 byte-identical compile goldens already implied and this confirms with a clock.
+
+## 2026-08-23 — the site served whatever copy of the engine was committed
+
+`docs/kanso.wasm` is what the playground runs, and the pages workflow shipped
+the committed file. It builds the compiler, but only to run the fingerprinter;
+nothing rebuilt the engine. So a merge that changed the compiler without a
+hand-rebuild published a playground older than the page describing it, and no
+gate could see it: the specs rebuild the artifact *before* they test it, which
+proves this commit's source has a third engine and says nothing about the file
+the site serves.
+
+It is easy to be wrong about, which is the argument. This branch tripped the
+spec's own staleness guard three times in one day — twice after a
+formatting-only edit, because panic messages carry line numbers and moving them
+moves the bytes.
+
+The pages build rebuilds the engine before jekyll copies `docs` now, so the
+site serves the compiler it was built from. The committed copy stays for a
+checkout to run and for the browser differential to load, and the specs go on
+rebuilding it, which is the check that the source has a third engine at all.
