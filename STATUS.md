@@ -178,3 +178,12 @@ row proving it turns red.
 Everything else is on the task list, which is the source of truth for what is
 in flight. A decision that is Clay's gets `owner: clay`, a `CLAY'S CALL` prefix,
 a push notification, and the top of this file.
+
+**Draft flags and merges on Claude-authored pull requests need no human word.
+The only gate is CI.** Ruled 2026-08-23, after a green one-file pull request sat
+in draft for most of a day because I treated "someone else's PR" as a boundary
+and "main requires a review" as a fact. Neither was true: every session here
+works for Clay, and main's protection requires that changes arrive through a
+pull request rather than that a person approve one. The lesson under the rule is
+the more useful half — a claimed blocker is a claim, and it gets checked against
+the repository's actual settings before any work is parked on it.
