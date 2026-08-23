@@ -8,12 +8,16 @@
 # would prove nothing about the counters. A fixture whose numbers came from
 # somewhere other than the bracket survives an edited golden and dies here.
 set -e
-python3 - <<'PY'
-path = "src/beat.rs"
-line = "            if entries.iter().any(|(from, _)| inside.contains(groups[*from].0.as_str())) {\n"
-source = open(path).read()
-assert line in source, "the cluster entry test moved; this mutation needs rewriting"
-open(path, "w").write(source.replace(line, "            if true {\n", 1))
-PY
+A='            if entries.iter().any(|(from, _)| inside.contains(groups[*from].0.as_str())) {' \
+awk '
+  !hit && $0 == ENVIRON["A"] { print "            if true {"; hit = 1; next }
+  { print }
+  END { if (!hit) exit 3 }
+' src/beat.rs > src/beat.rs.mut || {
+  rm -f src/beat.rs.mut
+  echo "the cluster entry test moved; this mutation needs rewriting" >&2
+  exit 1
+}
+mv src/beat.rs.mut src/beat.rs
 grep -q 'inside.contains(groups\[\*from\]' src/beat.rs && exit 1
 exit 0

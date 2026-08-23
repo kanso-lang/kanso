@@ -6,14 +6,25 @@
 # red. The mutation removes the walk rather than editing the golden because
 # the golden is what an edit would prove nothing about.
 set -e
-python3 - <<'PY'
-path = "src/runtime.c"
-source = open(path).read()
-a = source.find("    if (v.tag == K_THUNK) {\n        KThunk* t = (KThunk*)(intptr_t)v.payload;\n        if (k_copy_seen_check(t)) return 0;")
-assert a >= 0, "the k_copy_size thunk walk moved; this mutation needs rewriting"
-b = source.find("    if (!k_is_heap(v.tag)) return 0;", a)
-assert b > a, "the k_copy_size shape moved; this mutation needs rewriting"
-open(path, "w").write(source[:a] + source[b:])
-PY
+A1='    if (v.tag == K_THUNK) {' \
+A2='        KThunk* t = (KThunk*)(intptr_t)v.payload;' \
+A3='        if (k_copy_seen_check(t)) return 0;' \
+B='    if (!k_is_heap(v.tag)) return 0;' \
+awk '
+  state == 0 && $0 == ENVIRON["A1"] { one = $0; state = 1; next }
+  state == 1 && $0 == ENVIRON["A2"] { two = $0; state = 2; next }
+  state == 1 { print one; print; state = 0; next }
+  state == 2 && $0 == ENVIRON["A3"] { state = 3; next }
+  state == 2 { print one; print two; print; state = 0; next }
+  state == 3 && $0 == ENVIRON["B"] { state = 4; print; next }
+  state == 3 { next }
+  { print }
+  END { if (state != 4) exit 3 }
+' src/runtime.c > src/runtime.c.mut || {
+  rm -f src/runtime.c.mut
+  echo "the k_copy_size thunk walk moved; this mutation needs rewriting" >&2
+  exit 1
+}
+mv src/runtime.c.mut src/runtime.c
 grep -q 'if (k_copy_seen_check(t)) return 0;' src/runtime.c && exit 1
 exit 0

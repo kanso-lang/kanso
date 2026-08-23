@@ -10,12 +10,16 @@
 # one wired to a pool nobody allocates from, survives an edited golden and dies
 # here.
 set -e
-python3 - <<'PY'
-path = "src/runtime.c"
-line = "        if (perm) k_permreg_add(l, &l->items);\n"
-source = open(path).read()
-assert line in source, "the list growth registration moved; this mutation needs rewriting"
-open(path, "w").write(source.replace(line, "", 1))
-PY
+A='        if (perm) k_permreg_add(l, &l->items);' \
+awk '
+  !hit && $0 == ENVIRON["A"] { hit = 1; next }
+  { print }
+  END { if (!hit) exit 3 }
+' src/runtime.c > src/runtime.c.mut || {
+  rm -f src/runtime.c.mut
+  echo "the list growth registration moved; this mutation needs rewriting" >&2
+  exit 1
+}
+mv src/runtime.c.mut src/runtime.c
 grep -q 'k_permreg_add(l, &l->items)' src/runtime.c && exit 1
 exit 0

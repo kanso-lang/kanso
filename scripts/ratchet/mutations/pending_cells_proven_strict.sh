@@ -6,12 +6,21 @@
 # read zero this way and looked like broken fixtures rather than a working
 # analyser.
 set -e
-python3 - <<'PY'
-path = "src/demand.rs"
-line = "        self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))\n"
-source = open(path).read()
-assert line in source, "the lazy-bind membership moved; this mutation needs rewriting"
-open(path, "w").write(source.replace(line, "        let _ = (fn_name, arity, stmt_index);\n        false\n", 1))
-PY
+A='        self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))' \
+awk '
+  !hit && $0 == ENVIRON["A"] {
+    print "        let _ = (fn_name, arity, stmt_index);"
+    print "        false"
+    hit = 1
+    next
+  }
+  { print }
+  END { if (!hit) exit 3 }
+' src/demand.rs > src/demand.rs.mut || {
+  rm -f src/demand.rs.mut
+  echo "the lazy-bind membership moved; this mutation needs rewriting" >&2
+  exit 1
+}
+mv src/demand.rs.mut src/demand.rs
 grep -q 'let _ = (fn_name, arity, stmt_index);' src/demand.rs || exit 1
 exit 0
