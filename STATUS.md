@@ -32,17 +32,28 @@ merge. It collides with #105 wanting the right side lazy.
 
 ## In flight
 
-**The repo has no python in it** (task #55, closed). Both harnesses that drove
-headless chrome are kanso now, and CI runs the kanso ones.
+**The repo has one python left in it, and it is there on purpose** (task #55,
+closed too early). Both harnesses that drove headless chrome are kanso now, CI
+runs the kanso ones, and `scripts/stale_a_panel` — the last `.py` file, which
+the book gate ran on every build — is a kanso program as of 2026-08-23, checked
+byte-identical against the python it replaces on a real chapter.
+
+What stays python: the `python3 - <<'PY'` heredocs in six of
+`scripts/ratchet/mutations/*.sh`. Each edits a compiler source file before
+anything in that worktree is built, and the `target/` the worktree links to is
+shared across rows — so the binary sitting there is whatever the previous row's
+mutated source produced. A tool that damages the compiler cannot be written in
+the language that compiler compiles. The bootstrap is the reason, and it is
+written down here so nobody re-opens it as an oversight.
 
 - `scripts/site_smoke` makes four visits, one per page the site promises — the
   landing sample, the playground, a book chapter and the chart. Each probe was
   watched red before it was trusted.
-- `scripts/browser_differential_run` compiles all 287 corpus programs in the
-  tab and requires byte-identical status and output against the native engine,
+- `scripts/browser_differential_run` compiles every corpus program in the tab
+  and requires byte-identical status and output against the native engine,
   excusing a disagreement only where tests/golden/wasm_gaps.txt records what the
-  wasm engine answers instead. It says what the python said: 279 agree, 8 known
-  gaps, 0 disagree.
+  wasm engine answers instead. Last run here, 2026-08-23: 315 programs, 308
+  agree, 7 known gaps, 0 disagree.
 
 Porting them found four defects the suite could not see. Two were in the
 library: a server could not hand its report back, and a connection that said
