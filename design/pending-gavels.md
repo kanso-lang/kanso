@@ -440,7 +440,20 @@ welfare and the veins gate the cost.
   hako, so the err license needs nothing special.
 - **Dot chains route around accessor privacy** (Demeter): a chain can
   reach a field the owning module would not expose directly. Low
-  priority, and a real hole in the privacy story.
+  priority, and a real hole in the privacy story. It is the unbuilt
+  half of gavel 1b — per-field `pub` — and probing it on 2026-08-23
+  found what the build needs first: **the checker has no record type at
+  a field read**. `pub x` inside a type is a syntax error today, and
+  `has no field` is raised in `eval.rs` at run time rather than by
+  `check.rs`, so there is no place to ask whether the field crosses.
+  The parser and the AST are the cheap half — `TypeDecl` has five
+  construction sites and its `fields` is a plain tuple — and the fence
+  is the expensive one: a field read's base has to be resolved to a
+  declaring module before privacy can be checked before the program
+  runs, which is record-type inference the value sets do not do. A
+  run-time refusal was considered and declined: this language refuses
+  before anything runs, and privacy that waits for the read is not the
+  same promise.
 
 ## 20b. Pending cells at output — GAVELED 2026-08-15: render forces
 

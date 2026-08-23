@@ -1727,3 +1727,36 @@ name reads exactly as it did. Pinned at
 `tests/golden/errors/a_name_that_moved_to_os`, and the message before the
 change is on the record two entries up — the plain `unknown name` was what
 this repo's own migration met first.
+
+## 2026-08-23 — the perf check this branch owed, against main's own compiler
+
+Every change carries a perf check, and this branch moved the compiler three
+times — the accumulator rewrite, two refusal messages, and the library split.
+The counter gates say the decoder's emitted IR is byte-identical and both
+compile goldens held, but neither watches a clock, and the machine-code gate
+did move: the decoder's `.text` grew 48 bytes because `to_float`'s refusal
+renders the value it refused.
+
+So main's compiler was built beside this one and the two were interleaved on
+one box. That is a relative measurement and nothing else: this container has
+been compiling all day, and the published figures are a sitting on a quiet
+machine, so nothing here can re-sit them. What it can say is whether this
+branch moved anything.
+
+    front end, `check lib/json`, same input both sides, 12 rounds
+      main   21.6 ms best, 21.6–26.2 spread
+      here   21.2 ms best, 21.2–26.7 spread
+
+    decode, jsonbench, 6 rounds
+      main   332 ms best, 332–379 spread
+      here   336 ms best, 336–403 spread
+
+Both differences sit inside the per-run spread, and the decode difference is
+1.2% against the 3% this log already records for randomised layout on one
+tree. No published number moves. The 48 bytes are real and pinned in
+`bench/text_golden.txt`; they do not show up in the time.
+
+The front-end measurement is the interesting one, because the library split
+adds a module for the resolver to find whenever a program imports `std/os`.
+It costs nothing measurable on a program that imports it, which is what the
+byte-identical compile goldens already implied and this confirms with a clock.
