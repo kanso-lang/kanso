@@ -6,56 +6,12 @@ is stale — say so.
 
 ## Waiting on Clay
 
-**Does an undemanded knot count as a thunk allocation?** The engines disagree
-and a fixture cannot pin the shape until this is settled. `x = [x]` that
-nothing demands reads `thunk_allocs=1, thunk_live_exit=1` on native and
-`thunk_allocs=0` on the oracle; forces and evals agree at zero on both. Native
-freezes every knotted constant in `k_caf_init` before main, because the
-alternative is a branch and a store on every read of a frozen constant and that
-sits in the hottest dispatcher. Four ways out, and the cost of each is known:
-defer the cell on native and pay that branch; give knot cells their own counter,
-which is additive and moves 146 `.mem` files, four cost goldens, the emitted
-golden, the ch10 sample and the siblings' veins; retire `thunk_allocs` from the
-engine-shared set, which narrows what the differential law covers; or leave it
-and record that no fixture pins an undemanded knot. Filed 2026-08-20 as a
-finding, unresolved since.
-
-**Is a bare list of small ints bytes?** (task #2). Six functions answer
-differently on the two engines, and in four of them the ORACLE answers where
-native refuses — `text/append ["a"] "x"` is `["a" 120]` on the interpreter and
-a refusal natively — so a program written against the oracle runs and the same
-program compiled dies. The cause is one representation: the interpreter has no
-distinct bytes value, so any list goes down the bytes path. Either native
-widens, and a list and bytes become interchangeable, or the interpreter gains a
-real bytes value and every place it builds or reads them moves. The measured
-table is in pending-gavels. Nothing can be pinned until this is ruled.
-
-**The compile-memory band has been hiding main's own drift, and correcting it
-costs the floor.** `bench/compile_memory_golden.txt` holds peak bytes at
-871,649 and CI asserts only that reality is within two per cent of it — 17,432
-bytes of slack to absorb a documented host divergence of 56. Main measures
-872,025 on this box, three runs identical; this branch measures 872,035, and on
-the runner 872,061 twice. Ten of those bytes are the branch's and 376 are
-main's, accrued green. It matters because welfare reads that row as the current
-value of the compile-memory term rather than measuring it, so the term has been
-scored against a figure the compiler left behind and the floor was ratcheted to
-84.85 while it was. Put 872,061 in the file and `scripts/welfare` exits 1,
-though the printed score still reads 84.85. Three options priced in the log for
-2026-08-23: `--set` the floor on a fall, which `--set` has never been used for;
-pay the 376 bytes back out of the front end; or tighten the band to something
-near the divergence it documents, which looks right either way now that a gate
-can refuse off the reference host instead of widening to tolerate it. Nothing
-changed pending your call.
-
-**Does `>>` accumulate failures the way a parallel group does, or stop at the
-first one?** (task #141). Both channels are settled: the value channel answers
-one value, and failures merge associatively so the fractal you worried about
-never gets built — that is the applicative/monad split, with `.` as the monad.
-The open fork is measured: a *build* failure on either side merges, but a
-run-time *effect* failure on the left stops the right dead. So one operator
-behaves two ways depending on when the failure lands. Say the wall orders
-effects and unordered failures cannot preempt, or run the right anyway and
-merge. It collides with #105 wanting the right side lazy.
+The decisions live in design/pending-gavels.md — the single ledger; this
+file only indexes it. Blocking right now: **is a bare list of small ints
+bytes** (the engines split six ways and the oracle answers where native
+refuses); **does an undemanded knot count as a thunk allocation**;
+**the compile-memory band and its floor**; **does `>>` accumulate
+run-time effect failures or stop at the first**.
 
 ## In flight
 
@@ -176,8 +132,10 @@ row proving it turns red.
 ## Standing
 
 Everything else is on the task list, which is the source of truth for what is
-in flight. A decision that is Clay's gets `owner: clay`, a `CLAY'S CALL` prefix,
-a push notification, and the top of this file.
+in flight. A decision that is Clay's gets an entry in
+design/pending-gavels.md (the single ledger of what waits on him), a
+`CLAY'S CALL` task, a push notification, and a line in the index at the
+top of this file.
 
 **Draft flags and merges on Claude-authored pull requests need no human word.
 The only gate is CI.** Ruled 2026-08-23, after a green one-file pull request sat
