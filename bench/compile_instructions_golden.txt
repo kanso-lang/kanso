@@ -37,12 +37,13 @@
 # fine; silence is not.
 #
 # The row is the runner's, copied out of the job log the way this file's own
-# rule requires. The first reading, taken in a container on glibc
-# 2.39-0ubuntu8.7 and rustc 1.94.1, was 66,968,333 — half a per cent higher,
-# which is the provenance line earning its place on the gate's first run.
+# rule requires. On the gate's first run the container read 66,968,333 against
+# the runner's 66,450,587 — half a per cent apart on the same sources in the
+# same box, which is the provenance line earning its place before a bad paste
+# rather than after one.
 #
 # A figure quoted elsewhere from a plain `kanso check lib/json` in a checkout
 # will differ slightly from this row, and should. This one is measured in the
 # box with the environment emptied; that one is not.
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
-compile_instructions=66450587
+compile_instructions=65995610
