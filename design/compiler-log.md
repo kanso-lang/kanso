@@ -2670,6 +2670,40 @@ clean alike, because `var_os` on a missing variable answers None without
 allocating. The per-pass instrumentation costs nothing when off, which is the
 argument for keeping it rather than re-deriving it next time.
 
+## 2026-08-24 — check_merged runs four times, and the library is checked twice
+
+The entry above prices `check_merged` at about 3 ms and describes it as 22
+traversals. It is 22 traversals run four times. One `kanso check lib/json`
+reaches it once for each dependency and once for the merged program:
+
+    std/list     158 declarations   1.33 ms
+    std/text      26                0.19
+    std/render     2                0.02
+    merged       407                3.52
+
+Those are wall figures, so they carry the inference each call makes inside
+itself where the phase report subtracts it. The two agree: 5.06 ms less
+infer's 1.9 is the 3.17 the report gives, to a hundredth of a millisecond.
+Worth writing down because the apparent gap looked like a published number
+being wrong and was nearly filed as a correction.
+
+The merged pass's 407 declarations contain the dependencies' 186. So every
+compile of every program checks the standard library on its own and then
+checks it again inside the merge.
+
+Whether the per-dependency pass can go is a question about diagnostics
+rather than about time, and it is untested. `check_merged` exists because
+some checks need the whole program — gavel 1b's construction check and
+`check_call_arities` were moved there precisely because a per-file pass
+cannot see an imported group's arms. What the per-dependency pass catches
+that the merged pass would not is unproven in either direction, and the
+error corpus is the only thing that can answer it.
+
+If it can go, the saving is the 1.54 ms those three calls cost: near
+fifteen per cent of a 10.5 ms front end, and five times what
+`inline::aliases` is worth. That makes it the larger of the two leads
+recorded today, and the one to settle first.
+
 ## 2026-08-24 — a library is checked once, not once per compile that reaches it
 
 `check_merged` ran four times on one `kanso check lib/json`: once for each
