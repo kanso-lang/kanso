@@ -2375,3 +2375,35 @@ keeps the garbage with it. The size distribution is the decision variable,
 which is 5.2's survivor-ratio selection asked one level down.
 
 Nothing is built. What changed is that the board now says what the shelves say.
+
+## 2026-08-24 — two front-end passes stop allocating per occurrence
+
+Smaller than the fixpoint entry above it and in the same vein: reading the
+phase profile after that change, two passes were doing avoidable work.
+
+`prune_unused_getters` collected mentioned names into a `HashSet<String>`,
+which is one String allocation per identifier OCCURRENCE — every mention in the
+whole program, not every distinct name — plus a second for each qualified
+read's bare half. The set borrows the program's names now. A keep mask carries
+the answer across the end of the borrow so `retain` can have the program
+mutably. Interleaved three times on kq's query library, the pass reads
+0.84-0.89 ms against main's 1.11-1.19: about a quarter off, repeatable.
+
+`canonicalize_bare_aliases` found each synthetic bare alias's qualified twin by
+scanning every declaration in the program, with a `format!` inside the inner
+loop — quadratic, and one String per pair examined. A synthetic alias and its
+twin share a source position and an arity, so that tuple indexes them; the
+index is built once and the needle formatted once per alias rather than once
+per pair.
+
+That one does NOT show up in the clock at these sizes: 0.57-0.65 ms against
+0.52-0.76, which is noise on a loaded container. The change is asymptotic and
+should be described as nothing else — lib/json has 407 declarations and kq's
+query library is not much larger, so the quadratic has not had room to hurt
+yet. It is worth removing before something does.
+
+No counter moves: these passes run before inference and allocate transiently,
+so rounds, visits and `compile_peak_bytes` are all byte-identical, and welfare
+holds at 84.87. That is the honest shape of it — a structural improvement with
+a timing for corroboration rather than proof, on a box the log has already
+recorded as too noisy for a per-change wall-clock claim.

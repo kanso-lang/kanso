@@ -878,6 +878,20 @@ fn bound_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
 /// overload union (the import-incarnation gavel) and is left alone.
 pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     use std::collections::{HashMap, HashSet};
+    // A synthetic bare alias and the qualified declaration it stands for are
+    // the same source position with the same arity, so that tuple indexes
+    // them. Finding the twin used to be a scan of every declaration for every
+    // synthetic one — quadratic in the program, with a `format!` per pair
+    // inside the inner loop.
+    let mut at_site: HashMap<(&str, usize, usize, usize), Vec<&str>> = HashMap::new();
+    for twin in &program.fns {
+        if !twin.synthetic {
+            at_site
+                .entry((twin.file.as_str(), twin.span.line, twin.span.col, twin.params.len()))
+                .or_default()
+                .push(twin.name.as_str());
+        }
+    }
     let mut by_name: HashMap<&str, (bool, HashSet<&str>)> = HashMap::new();
     for d in &program.fns {
         if d.name.contains('/') {
@@ -886,15 +900,14 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
         let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::new()));
         entry.0 &= d.synthetic;
         if d.synthetic {
-            for twin in &program.fns {
-                if !twin.synthetic
-                    && twin.file == d.file
-                    && twin.span.line == d.span.line
-                    && twin.span.col == d.span.col
-                    && twin.params.len() == d.params.len()
-                    && twin.name.ends_with(&format!("/{}", d.name))
-                {
-                    entry.1.insert(twin.name.as_str());
+            let needle = format!("/{}", d.name);
+            if let Some(twins) =
+                at_site.get(&(d.file.as_str(), d.span.line, d.span.col, d.params.len()))
+            {
+                for name in twins {
+                    if name.ends_with(&needle) {
+                        entry.1.insert(name);
+                    }
                 }
             }
         }
@@ -1861,32 +1874,41 @@ fn desugar_expr(e: &mut ast::Expr) {
 /// function whose name the program does not mention — and it keeps the
 /// emitted output the size it was before accessors became functions.
 pub fn prune_unused_getters(program: &mut ast::Program) {
-    let mut mentioned = std::collections::HashSet::new();
-    for decl in &program.fns {
-        if decl.is_getter() {
-            continue;
+    // The set borrows the program's own names. It used to own them, which cost
+    // a String allocation per identifier OCCURRENCE — every mention in the
+    // whole program, not every distinct name — and a second for each qualified
+    // read's bare half. The keep mask exists so the borrow ends before the
+    // retain needs the program mutably.
+    let keep: Vec<bool> = {
+        let mut mentioned: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for decl in &program.fns {
+            if decl.is_getter() {
+                continue;
+            }
+            for stmt in &decl.body {
+                mentions_in_stmt(stmt, &mut mentioned);
+            }
         }
-        for stmt in &decl.body {
-            mentions_in_stmt(stmt, &mut mentioned);
-        }
-    }
-    program.fns.retain(|d| !d.is_getter() || mentioned.contains(&d.name));
+        program.fns.iter().map(|d| !d.is_getter() || mentioned.contains(d.name.as_str())).collect()
+    };
+    let mut mask = keep.into_iter();
+    program.fns.retain(|_| mask.next().unwrap_or(true));
 }
 
-fn mentions_in_stmt(stmt: &ast::Stmt, out: &mut std::collections::HashSet<String>) {
+fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut std::collections::HashSet<&'a str>) {
     match stmt {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => mentions_in_expr(expr, out),
         ast::Stmt::Set { value, .. } => mentions_in_expr(value, out),
     }
 }
 
-fn mentions_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
+fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut std::collections::HashSet<&'a str>) {
     match e {
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
-            out.insert(name.clone());
+            out.insert(name.as_str());
             // a qualified read reaches the same getter under its bare name
             if let Some((_, short)) = name.rsplit_once('/') {
-                out.insert(short.to_string());
+                out.insert(short);
             }
         }
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
