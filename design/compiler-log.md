@@ -2534,6 +2534,15 @@ peak is 876,930 both times: byte-identical, and the claim is measured rather
 than argued from what transient means. Where that leaves
 `bench/compile_memory_golden.txt` is a decision of Clay's and is in the ledger.
 
+The rest of the veins were swept for the same shape and are clean. The four
+runtime cost goldens produce byte-identical counter sets across a 38-character
+change of working directory, and so do all 51 fixtures in `tests/golden/mem`.
+Every counter that carries the path is a byte total on the compile side, which
+is the only place the compiler's own allocations are what is being counted:
+`compile_alloc_bytes` and `compile_peak_bytes`, and no others.
+`compile_allocs`, `compile_rounds`, `compile_visits` and `compile_passes` sit
+beside them and do not move.
+
 The row is kept under a toolchain guard anyway, because a good part of the
 count is the standard library's: a HashMap's growth schedule, a Vec's doubling,
 a String's spare. So the file carries a `measured-on rustc=` line and
