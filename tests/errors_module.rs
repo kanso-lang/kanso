@@ -19,8 +19,8 @@
 use std::process::Command;
 
 fn cases() -> Vec<std::path::PathBuf> {
-    let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/golden/errors_module");
+    let root =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/errors_module");
     let mut found: Vec<_> = std::fs::read_dir(&root)
         .expect("the module-error corpus reads")
         .filter_map(|e| e.ok().map(|e| e.path()))
