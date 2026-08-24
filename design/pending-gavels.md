@@ -23,17 +23,7 @@ Rules of the ledger:
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### Does `>>` accumulate run-time effect failures, or stop at the first?
-
-Both channels are otherwise settled: the value channel answers one
-value, and failures merge associatively so the feared fractal never gets
-built — the applicative/monad split, with `.` as the monad. The open
-fork is measured: a *build* failure on either side merges, but a
-run-time *effect* failure on the left stops the right dead — one
-operator behaving two ways depending on when the failure lands. Say the
-wall orders effects and unordered failures cannot preempt, or run the
-right anyway and merge. It collides with the ruling that `>>` defers its
-right side (2026-08-15) wanting the right lazy. Filed 2026-08-22.
+Nothing. The section stays so the next entry has somewhere to land.
 
 ## Open, not blocking
 

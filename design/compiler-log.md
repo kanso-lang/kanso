@@ -2715,3 +2715,24 @@ touching the counter — bookkeeping brought into line, no semantic
 change anywhere. Unblocked: the fixture pinning a demanded knot's
 allocation shape; values and forces already agree. The entry leaves the
 ledger with this commit.
+
+## 2026-08-24 — `>>` stops at the first run-time failure, which was never open
+
+The ledger's last blocking entry asked whether `>>` accumulates
+run-time effect failures or stops at the first, and Clay's answer was
+that he had answered it — repeatedly. He had. The July B ruling is
+explicit: an err is a true exception, it short-circuits except where
+parallelism makes that impossible, and a parallel join accumulates only
+because every member is already running. `>>` is the sequential
+operator; a run-time failure on its left stops its right, and under the
+deferral gavels that is structural rather than special-cased — the
+right side is a description that never gets demanded. Build failures
+merging on both sides was settled separately and stands; the two
+behaviors differ because the failures happen at different times, which
+is the distinction the operator exists to express.
+
+Recorded as ruled by standing precedent, not as a new gavel. The entry
+should have been checked against the July ledger before being filed —
+"search the archive before calling an idea new" already says so — and
+re-asking a settled question cost Clay the tenth answering of it. The
+entry leaves the ledger; the blocking section is empty.
