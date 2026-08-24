@@ -117,9 +117,17 @@ And a large list merely THREADED through a beat loop is not copied: a
 16,000-element list built before the loop and passed through 8,010 iterations
 evacuates 54 nodes of 32 bytes, because the list is below the mark and shared.
 So wide's four copies are not "a big carried list" and the postcard is not
-written yet. The next probe is which carry site produces them — the instrument
-already exists, and wants the beat depth and the `k_beat_iter_carry` call
-recorded beside the source address.
+written yet. The next probe was which carry site produces them, and it
+has been taken: the evacuation path tagged by site, and 263 of wide's 264
+evacuations — 776,320 bytes, three of the four large copies among them — come
+from `k_beat_iter_carry`. The fourth 256,016-byte copy comes from a
+`k_deep_copy` reached through none of the three sites tagged, which is the one
+loose end. Nothing at all comes from `k_beat_pop`'s result copy or from
+`k_caf_freeze`.
+
+So the target has a name and an address. The beat carry copies every unkept
+slot on every rewind, at any size, with no guard, and that is where the whole
+megabyte goes.
 
 There is a precedent for the pin, too, in the same file and at the same
 granularity the wide case wants. `k_carry_stage_kept` moves a builder's KStr
