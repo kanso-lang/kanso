@@ -1,0 +1,3 @@
+pub fn triple n
+  poynt a = n
+  a * 3

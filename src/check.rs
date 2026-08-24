@@ -1352,11 +1352,16 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
                 }
                 _ => String::new(),
             };
-            diags.push(Diagnostic::new(
-                "name",
-                format!("`{ty}` is not a type, so a binding cannot destructure with it{instead}"),
-                other_span(&fields[0]),
-            ));
+            diags.push(
+                Diagnostic::new(
+                    "name",
+                    format!(
+                        "`{ty}` is not a type, so a binding cannot destructure with it{instead}"
+                    ),
+                    other_span(&fields[0]),
+                )
+                .owned_by(&decl.file),
+            );
         }
     }
 }

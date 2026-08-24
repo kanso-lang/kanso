@@ -1,0 +1,1 @@
+error[name]: `poynt` is not a type, so a binding cannot destructure with it (module tests/golden/errors_module/binding_pattern_in_a_deep_library/mid/../deep)
