@@ -56,7 +56,13 @@ struct Ctx<'a> {
     /// Functions to visit next round. A field of a declared type widening can
     /// reach any function through pattern binding, so that one blankets.
     dirty_next: Vec<bool>,
-    all_dirty: bool,
+    /// The current round's work list. It lives here rather than in the loop
+    /// so a change can wake a reader the walk has not reached yet, and that
+    /// reader runs in this round instead of costing a whole extra one.
+    dirty: Vec<bool>,
+    /// Per declared type, the functions whose patterns destructure it — see
+    /// `field_readers`. A field's set growing wakes these and nothing else.
+    field_readers: Vec<Vec<usize>>,
     groups: HashMap<(&'a str, usize), Vec<usize>>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
@@ -104,13 +110,75 @@ pub mod work {
     }
 }
 
+/// Which functions can be affected when a declared type's field set grows.
+///
+/// Only a `Pattern::Ctor` reads `type_fields` — destructuring `(cell v)` is
+/// what turns a field's accumulated set into a binding — so the answer is
+/// static: every function whose patterns, in its head or anywhere in its body,
+/// destructure that type. Before this index existed a field growing marked
+/// EVERY function dirty, and lib/json spent three extra full sweeps of 407
+/// functions to let seven of them move.
+fn ctor_types(pat: &Pattern, type_names: &HashMap<&str, usize>, out: &mut Vec<usize>) {
+    if let Pattern::Ctor { ty, fields, .. } = pat {
+        if let Some(&i) = type_names.get(ty.as_str()) {
+            out.push(i);
+        }
+        for field in fields {
+            ctor_types(field, type_names, out);
+        }
+    }
+}
+
+fn stmt_ctor_types(stmt: &Stmt, type_names: &HashMap<&str, usize>, out: &mut Vec<usize>) {
+    match stmt {
+        Stmt::Bind { pattern, expr } => {
+            ctor_types(pattern, type_names, out);
+            expr_ctor_types(expr, type_names, out);
+        }
+        Stmt::Expr(expr) => expr_ctor_types(expr, type_names, out),
+        Stmt::Set { value, .. } => expr_ctor_types(value, type_names, out),
+    }
+}
+
+fn expr_ctor_types(expr: &Expr, type_names: &HashMap<&str, usize>, out: &mut Vec<usize>) {
+    if let Expr::Block(stmts, _) | Expr::Build(stmts, _) = expr {
+        for stmt in stmts {
+            stmt_ctor_types(stmt, type_names, out);
+        }
+    }
+    for child in crate::expr_children(expr) {
+        expr_ctor_types(child, type_names, out);
+    }
+}
+
+fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Vec<usize>> {
+    let mut readers = vec![Vec::new(); program.types.len()];
+    for (i, decl) in program.fns.iter().enumerate() {
+        let mut seen = Vec::new();
+        for pattern in &decl.params {
+            ctor_types(pattern, type_names, &mut seen);
+        }
+        for stmt in &decl.body {
+            stmt_ctor_types(stmt, type_names, &mut seen);
+        }
+        seen.sort_unstable();
+        seen.dedup();
+        for ty in seen {
+            readers[ty].push(i);
+        }
+    }
+    readers
+}
+
 pub fn infer(program: &Program) -> Inference {
     work::pass();
     let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
     }
-    let type_names = program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
+    let type_names: HashMap<&str, usize> =
+        program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
+    let field_readers = field_readers(program, &type_names);
     let defers_into_containers = program.fns.iter().any(|d| {
         fn mentions(expr: &Expr, name: &str) -> bool {
             if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
@@ -134,7 +202,8 @@ pub fn infer(program: &Program) -> Inference {
         current_index: 0,
         readers: vec![std::collections::HashSet::new(); program.fns.len()],
         dirty_next: vec![false; program.fns.len()],
-        all_dirty: false,
+        dirty: Vec::new(),
+        field_readers,
         groups,
         yields: HashMap::new(),
         type_names,
@@ -156,7 +225,7 @@ pub fn infer(program: &Program) -> Inference {
     // Every function is visited the first round; after that only the ones a
     // change can reach. Four fifths of the visits in a settled fixpoint find
     // nothing, and a visit costs a walk of the whole body.
-    let mut dirty = vec![true; fns.len()];
+    ctx.dirty = vec![true; fns.len()];
     // A round reads whatever earlier visits in the same round already wrote,
     // and the two flows want opposite orders: returns travel callee-to-caller,
     // params caller-to-callee. The first sweep runs callee-first so leaf
@@ -170,16 +239,17 @@ pub fn infer(program: &Program) -> Inference {
         work::round();
         let mut moved = 0usize;
         ctx.dirty_next = vec![false; fns.len()];
-        ctx.all_dirty = false;
+        let mut visited = 0usize;
         let walk: Box<dyn Iterator<Item = &usize>> = match rounds % 2 == 1 {
             true => Box::new(order.iter()),
             false => Box::new(order.iter().rev()),
         };
         for &i in walk {
             let decl = &fns[i];
-            if !dirty[i] {
+            if !ctx.dirty[i] {
                 continue;
             }
+            visited += 1;
             ctx.current_index = i;
             ctx.current = (decl.name.as_str(), decl.params.len());
             ctx.yields.clear();
@@ -196,18 +266,19 @@ pub fn infer(program: &Program) -> Inference {
                 moved += 1;
                 let readers = ctx.readers[i].clone();
                 for r in readers {
+                    // This round as well as the next. A reader the sweep has
+                    // not reached yet takes the new answer now instead of
+                    // costing a whole round to hear about it, and one already
+                    // behind the cursor is simply not walked again.
+                    ctx.dirty[r] = true;
                     ctx.dirty_next[r] = true;
                 }
             }
         }
-        let visited = dirty.iter().filter(|d| **d).count();
         if std::env::var_os("KANSO_PHASES").is_some() {
             eprintln!("round {rounds}: {moved} moved of {visited} visited");
         }
-        dirty = match ctx.all_dirty {
-            true => vec![true; fns.len()],
-            false => std::mem::take(&mut ctx.dirty_next),
-        };
+        ctx.dirty = std::mem::take(&mut ctx.dirty_next);
     }
     Inference { params: ctx.params, returns: ctx.returns, type_fields: ctx.type_fields }
 }
@@ -621,7 +692,10 @@ fn eval_call<'a>(
                 if refined != *slot {
                     *slot = refined;
                     ctx.changed = true;
-                    ctx.all_dirty = true;
+                    for &reader in &ctx.field_readers[idx] {
+                        ctx.dirty[reader] = true;
+                        ctx.dirty_next[reader] = true;
+                    }
                 }
             }
         }

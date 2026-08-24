@@ -1445,8 +1445,10 @@ impl<'a> WasmBackend<'a> {
             Expr::Ident(name, _) if crate::check::BUILTINS.contains(&name.as_str()) => {
                 let rest = args.len() - 1;
                 let name_lit = self.str_lit(name);
-                let fallible =
-                    matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes");
+                let fallible = matches!(
+                    name.as_str(),
+                    "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes"
+                );
                 let origin = match fallible {
                     true => Some(self.origin_lit(&ctx.prefix, span)),
                     false => None,

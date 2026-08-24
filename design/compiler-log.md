@@ -2279,3 +2279,53 @@ bug — and two micro fixtures for the surface that works and for the
 constructor's refusal. The error corpus moved three line numbers, and the book
 three more, because std/text grew five lines above `to_int` and an err trace
 names the line it was born on.
+
+## 2026-08-24 — a type field wakes its readers, not the whole program
+
+The bytes gavel cost lib/json 26 front-end visits, and looking at where they
+were spent found a much larger number sitting beside them. `KANSO_PHASES=1`
+on lib/json:
+
+    round 1: 365 moved of 407 visited
+    round 2:  45 moved of 407 visited
+    round 3:  52 moved of 407 visited
+    round 4:   7 moved of 407 visited
+
+Four full sweeps of every function, the last one to let seven of them move.
+The fixpoint has had dirty-tracking since it was written — a function's
+returns wake its readers and nobody else — and one line was defeating it. When
+a declared type's field set grew, inference set `all_dirty`, and the next round
+walked the program. It had to: nothing recorded which functions could care.
+
+They are static. `type_fields` is read in exactly one place, `bind_pattern`'s
+`Pattern::Ctor` arm, so the functions that can be affected are the ones whose
+patterns destructure that type — in the head or anywhere in the body. The index
+is built once, before the first round, and a field growing now wakes those and
+nothing else.
+
+The rounds it saved were paid back by rounds it cost: information travels one
+hop per round, and a round that walks forty functions carries it less far than
+one that walks four hundred. So a change moves its readers in the CURRENT round
+as well as the next. The sweep alternates direction, so about half of them are
+still ahead of the cursor and take the new answer immediately; the rest are
+behind it and are simply not walked again.
+
+    lib/json          rounds 28 -> 40, visits 23,224 -> 17,786
+    the module sample rounds  6 ->  6, visits  3,031 ->  2,403
+    the five samples  visits    133 ->    115
+
+`front_end_rounds` 28 -> 40 is the cost and it is real; 5,438 fewer expression
+visits is what it buys, and the visit is what carries the work — a round is a
+loop over a work list that is usually short now. Welfare weighs both and comes
+out ahead: 84.85 to 84.87, banked.
+
+The index costs memory to hold: `compile_peak_bytes` on lib/json reads 876,930
+here against main's 872,035 on the same box, three runs identical each way.
+That is inside the two per cent the gate allows and outside what welfare can
+see, because welfare reads the golden's number rather than measuring — which is
+the ledger entry that has been waiting on Clay since yesterday, and this change
+adds 4,895 bytes to what it is hiding.
+
+The answers do not move. Every engine, the error corpus, the diagnostics
+differential and the browser differential are unchanged — the only goldens that
+move are the ones that count the compiler's own work.
