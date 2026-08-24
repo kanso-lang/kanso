@@ -1090,7 +1090,7 @@ impl<'a> WasmBackend<'a> {
                     return true;
                 }
             }
-            crate::expr_children(expr).into_iter().any(|c| mentions(c, of))
+            crate::any_child(expr, |c| mentions(c, of))
         }
         if ctx.group.is_empty() {
             return false;

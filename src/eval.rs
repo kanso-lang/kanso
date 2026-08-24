@@ -2840,9 +2840,7 @@ impl<'a> Interp<'a> {
             if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
                 out.push(n);
             }
-            for child in crate::expr_children(expr) {
-                names(child, out);
-            }
+            crate::for_each_child(expr, |child| names(child, out));
         }
         let mut mentioned = Vec::new();
         names(expr, &mut mentioned);

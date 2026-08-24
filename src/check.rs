@@ -130,9 +130,7 @@ fn if_arity_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             ));
         }
     }
-    for child in crate::expr_children(expr) {
-        if_arity_walk(child, diags);
-    }
+    crate::for_each_child(expr, |child| if_arity_walk(child, diags));
 }
 
 fn check_boolean_equality(program: &Program, diags: &mut Vec<Diagnostic>) {
@@ -158,9 +156,7 @@ fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        boolean_equality_walk(child, diags);
-    }
+    crate::for_each_child(expr, |child| boolean_equality_walk(child, diags));
 }
 
 fn boolean_literal(expr: &Expr) -> Option<&'static str> {
@@ -294,9 +290,7 @@ fn call_shaped_walk(
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        call_shaped_walk(child, arities, bound, diags);
-    }
+    crate::for_each_child(expr, |child| call_shaped_walk(child, arities, bound, diags));
 }
 
 fn check_err_as_value(program: &Program, diags: &mut Vec<Diagnostic>) {
@@ -471,7 +465,7 @@ fn check_effect_discarded(
             let mut stack = vec![e];
             while let Some(cur) = stack.pop() {
                 walk(cur, diags);
-                stack.extend(crate::expr_children(cur));
+                crate::for_each_child(cur, |c| stack.push(c));
             }
         }
     }
@@ -556,7 +550,7 @@ fn check_none_exhaustive(
             let mut stack = vec![e];
             while let Some(cur) = stack.pop() {
                 walk(cur, diags, &decl.file);
-                stack.extend(crate::expr_children(cur));
+                crate::for_each_child(cur, |c| stack.push(c));
             }
         }
     }
@@ -596,9 +590,7 @@ fn check_none_in_collections(program: &Program, diags: &mut Vec<Diagnostic>) {
             }
             _ => {}
         }
-        for child in crate::expr_children(e) {
-            walk(child, diags);
-        }
+        crate::for_each_child(e, |child| walk(child, diags));
     }
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -671,7 +663,7 @@ fn field_supply(program: &Program) -> HashMap<(&str, &str), Vec<(&'static str, S
                     }
                 }
             }
-            stack.extend(crate::expr_children(cur));
+            crate::for_each_child(cur, |c| stack.push(c));
         }
     }
     supply
@@ -719,7 +711,7 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
                     demand_conflicts(program, &supply, &built, callee, args, diags);
                 }
             }
-            stack.extend(crate::expr_children(cur));
+            crate::for_each_child(cur, |c| stack.push(c));
         }
     }
 }
@@ -1265,9 +1257,7 @@ fn field_reads_expr(e: &Expr, declared: &HashSet<&str>, diags: &mut Vec<Diagnost
         field_reads_expr(base, declared, diags);
         return;
     }
-    for child in crate::expr_children(e) {
-        field_reads_expr(child, declared, diags);
-    }
+    crate::for_each_child(e, |child| field_reads_expr(child, declared, diags));
 }
 
 pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
@@ -1391,9 +1381,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
                 }
             }
         }
-        for child in crate::expr_children(e) {
-            walk(child, foreign, diags);
-        }
+        crate::for_each_child(e, |child| walk(child, foreign, diags));
     }
     for decl in &program.fns {
         if decl.synthetic || decl.name.contains('/') {
@@ -1480,9 +1468,7 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     if let Expr::Lambda { params, .. } = e {
         out.extend(params.iter().map(|(n, _)| n.as_str()));
     }
-    for child in crate::expr_children(e) {
-        bound_in_expr(child, out);
-    }
+    crate::for_each_child(e, |child| bound_in_expr(child, out));
 }
 
 fn arity_walk_stmt(
@@ -1547,9 +1533,7 @@ fn arity_walk_expr(
             }
         }
     }
-    for child in crate::expr_children(e) {
-        arity_walk_expr(child, arities, fields, bound, diags);
-    }
+    crate::for_each_child(e, |child| arity_walk_expr(child, arities, fields, bound, diags));
 }
 
 /// A literal argument no arm could ever take.
@@ -1794,9 +1778,9 @@ fn literal_walk_expr(
             }
         }
     }
-    for child in crate::expr_children(e) {
-        literal_walk_expr(child, groups, types, bound, builtins, diags);
-    }
+    crate::for_each_child(e, |child| {
+        literal_walk_expr(child, groups, types, bound, builtins, diags)
+    });
 }
 
 fn describe_literal(kind: LitKind) -> &'static str {
@@ -1892,9 +1876,7 @@ fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diag
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        build_walk_expr(child, type_names, diags);
-    }
+    crate::for_each_child(expr, |child| build_walk_expr(child, type_names, diags));
 }
 
 /// A call that merely returns a record may hand back something older.
@@ -2017,9 +1999,7 @@ fn demanded_refs<'a>(
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        demanded_refs(child, known, types, out);
-    }
+    crate::for_each_child(expr, |child| demanded_refs(child, known, types, out));
 }
 
 /// A constant defined in terms of itself has no value to compute: the
@@ -2317,9 +2297,7 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
                 }
             }
         }
-        for child in crate::expr_children(e) {
-            walk(child, torn, diags);
-        }
+        crate::for_each_child(e, |child| walk(child, torn, diags));
     }
     for d in &program.fns {
         if d.synthetic || d.name.contains('/') {
@@ -2856,7 +2834,7 @@ fn check_wall_operands(
                         ));
                     }
                 }
-                stack.extend(crate::expr_children(cur));
+                crate::for_each_child(cur, |c| stack.push(c));
             }
         }
     }
@@ -2993,9 +2971,7 @@ fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
             return;
         }
     }
-    for child in crate::expr_children(e) {
-        decidable_walk(child, diags);
-    }
+    crate::for_each_child(e, |child| decidable_walk(child, diags));
 }
 
 /// `to_int` and `to_float` given a literal that will not parse.
