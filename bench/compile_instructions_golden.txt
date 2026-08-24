@@ -36,10 +36,13 @@
 # A rise is a regression to explain and a fall is a win to bank. Movement is
 # fine; silence is not.
 #
-# THE ROW BELOW IS PROVISIONAL. It is the first reading taken in a container
-# on glibc 2.39-0ubuntu8.7 and rustc 1.94.1, written here so the gate has
-# something to diff against on its first run. The measured-on line names the
-# runner, so that run will refuse to match, print the runner's number, and
-# this row is replaced by it. Delete this paragraph when it is.
+# The row is the runner's, copied out of the job log the way this file's own
+# rule requires. The first reading, taken in a container on glibc
+# 2.39-0ubuntu8.7 and rustc 1.94.1, was 66,968,333 — half a per cent higher,
+# which is the provenance line earning its place on the gate's first run.
+#
+# A figure quoted elsewhere from a plain `kanso check lib/json` in a checkout
+# will differ slightly from this row, and should. This one is measured in the
+# box with the environment emptied; that one is not.
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
-compile_instructions=66968333
+compile_instructions=66450587

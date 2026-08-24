@@ -2944,10 +2944,16 @@ walked. That is the trap `compile_alloc_bytes` fell into, and the reason it is
 absent from its own golden rather than pinned in it. So the gate does not
 measure in the checkout: it copies `lib/` to a fixed path, compiles there, and
 the number then agrees to the digit from clones at different depths — 80
-characters and 115 characters both read 66,968,333.
+characters and 115 characters both read 66,968,333 in the container where that
+was tested.
+
+The row itself is the runner's, 66,450,587, copied out of the first job log.
+Half a per cent below the container's reading, which is the provenance line
+earning its place on the gate's opening run: same sources and the same box,
+a different rustc and a different libc.
 
 The ratchet row is `compile_ir`, and its mutation points inference's maps back
 at `std`'s hasher. That is the shape the vein exists for: instructions
-66,968,333 to 72,245,921, with `compile_allocs`, the rounds and the visits all
-byte-identical. A second row covers the provenance line, as the allocation and
+66,968,333 to 72,245,921 in the container, with `compile_allocs`, the rounds
+and the visits all byte-identical. A second row covers the provenance line, as the allocation and
 machine-code veins each have.
