@@ -60,6 +60,36 @@ which bought 5,438 expression visits and is a trade welfare took happily.
 None of it is visible to welfare, which reads the golden rather than the
 compiler, and that is the whole entry.
 
+Updated again 2026-08-24 with what the 26 bytes are: the checkout path.
+Peak reads 876,898 plus twice the length of the directory the compiler
+ran in, at every length measured — 16, 17, 21, 29 and 49 characters, one
+tree, one binary. `/home/runner/work/kanso/kanso` is 29 characters, so
+the formula gives 876,956, which is what the runner said. The container
+and the runner agree on the compiler's own number to the byte.
+
+That is the premise the band was widened against, and it does not hold.
+The header of `bench/compile_memory_golden.txt` cites a linux/macos
+divergence of 56 bytes; the gate runs in the cost-goldens job, which is
+ubuntu-only, so that divergence has never gated anything. What 17,432
+bytes of slack absorb on the machines CI actually uses is two bytes per
+character of checkout path, and 5,307 bytes of main's own drift.
+
+So there is a fourth option, and it is the one that fits the rule
+against bands. Subtract the path term in the gate and pin peak exactly.
+The coefficient need not be hardcoded: `kanso check lib/json` takes well
+under a second, so the gate can run it from two directories of known
+differing length and derive the term, which keeps working if the front
+end ever stops holding the path twice. Peak becomes a number rather than
+a band, drift shows the day it happens, and the three options already
+priced become a question about 5,307 bytes rather than about whether
+anyone can see them.
+
+The same measurement retired a row from `bench/compile_allocs_golden.txt`
+in #998: `compile_alloc_bytes` is 7,942,033 plus the identical term, so
+it was pinning the clone. `compile_allocs` is flat at 148,073 across all
+five lengths and across rustc 1.94.1 and 1.98.0, and it is what that
+golden holds.
+
 ### Does `>>` accumulate run-time effect failures, or stop at the first?
 
 Both channels are otherwise settled: the value channel answers one
