@@ -2515,6 +2515,21 @@ Both rows watched: green unmutated, red under `compile_allocs_unwatched` and
 under `compile_allocs_host_unpinned`, and the ratchet's cover check still says
 every CI job carries a mutation or a stated reason.
 
+The guard earned itself on its first outing, which was not the plan but is the
+best evidence it could have had. The golden went up carrying this container's
+`rustc=1.94.1`; the runner is on 1.98.0, and the gate refused rather than
+diffing — no numbers printed, both toolchains named. So the rows here are the
+runner's, taken from a job log, and a container cannot produce them. That is
+the same arrangement `bench/instructions_golden.txt` has had since a
+container's glibc numbers were pasted over the runner's, and the same
+bootstrap: name the host the vein will live on, let CI measure, copy the rows
+out.
+
+It follows that an image bump reds this gate. Every row moves with the
+toolchain and none has regressed; the response is a regeneration in one go, the
+line moved, and a sentence here — which is what the two veins beside it already
+ask for.
+
 ## 2026-08-24 — the megabyte was the benchmark doing its job, and a correction
 
 "The beat carry copies a loop-invariant capture" says, earlier today, that the
