@@ -12,7 +12,31 @@
       "mcp__Claude_Code_Remote__fire_trigger",
       "mcp__Claude_Code_Remote__update_trigger",
       "mcp__Claude_Code_Remote__delete_trigger",
-      "mcp__Claude_Code_Remote__send_later"
+      "mcp__Claude_Code_Remote__send_later",
+      "mcp__Claude_Code_Remote__create_session",
+      "mcp__Claude_Code_Remote__set_session_title",
+      "mcp__Claude_Code_Remote__set_session_tags",
+      "mcp__Claude_Code_Remote__subscribe_pr_activity",
+      "mcp__Claude_Code_Remote__unsubscribe_pr_activity",
+      "Bash(gh:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)"
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "Scheduling, listing, firing, updating or deleting this session's own check-ins and Routines through the claude-code-remote MCP tools (send_later, create_trigger, list_triggers, fire_trigger, update_trigger, delete_trigger). These wake this account's own sessions and nothing else, and are undone by deleting the trigger.",
+      "Any GitHub operation through the github MCP tools against a repository already in this session's scope: reading, creating branches, pushing commits, opening and updating pull requests, commenting, subscribing to PR activity, and merging a pull request whose CI is green.",
+      "git push to the branch this session was assigned, including --force-with-lease when restarting that branch from the default branch after its pull request has merged.",
+      "Running this repository's own checks: cargo build, test, fmt and clippy; the programs under scripts/; the gate scripts under scripts/gates/; and valgrind or callgrind measurements."
+    ],
+    "soft_deny": ["$defaults"],
+    "hard_deny": ["$defaults"],
+    "environment": [
+      "$defaults",
+      "This is the kanso language repository. CLAUDE.md states that CI green is the only gate on a merge and that a Claude-authored PR needs no human word to land."
     ]
   }
 }
