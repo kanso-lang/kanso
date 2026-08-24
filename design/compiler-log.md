@@ -2669,3 +2669,53 @@ the day's other change had just pinned. It does not: 148,073 instrumented and
 clean alike, because `var_os` on a missing variable answers None without
 allocating. The per-pass instrumentation costs nothing when off, which is the
 argument for keeping it rather than re-deriving it next time.
+
+## 2026-08-24 — a library is checked once, not once per compile that reaches it
+
+`check_merged` ran four times on one `kanso check lib/json`: once for each
+dependency as it was compiled, and once for the merged program. The merged
+program holds every declaration the dependencies brought, so the three
+earlier calls walked declarations the fourth was about to walk again. Every
+compile of every program checked the whole standard library twice.
+
+Only the outermost call runs now. On lib/json:
+
+    compile_rounds       40 ->     28
+    compile_visits   17,786 -> 15,210
+    compile_allocs  148,073 -> 130,747
+    compile_passes        5 ->      2
+    watched total     11.45 ms -> 10.25 ms
+
+Welfare 84.87 to 85.75, banked in this PR.
+
+The direction is safe because the merged pass is the one that can be
+complete, which is why the checks needing whole-program knowledge live there
+at all: gavel 1b's construction check and `check_call_arities` were both
+moved to `check_merged` because a per-file pass cannot see an imported
+group's arms. Nothing was moved the other way, so there is no check that a
+dependency's own pass could reach and the merge could not.
+
+That is an argument, and the corpus is the evidence. The full suite ran under
+the removal: the golden vein is green in all ten of its specs, error corpus,
+micro corpus, mem corpus and runtime corpus included, and every diagnostic is
+byte-identical. Before that, the 161 error-corpus fixtures were compared one
+by one with and without the dependency call — identical, and 22 of them
+import std modules so the path is exercised rather than skipped.
+
+The corpus has no fixture for an error inside a dependency, which is the
+shape this would break if it broke anything. One was built by hand to check:
+a library carrying a `check_merged`-owned boolean-equality error, imported by
+a program. Both spellings report it identically, module attribution included.
+That gap is worth closing on its own and is not closed here.
+
+`check_unused_private` stays per-compile. It asks whether a private name is
+used inside its own module, and the merge is the wrong scope for that
+question.
+
+`tests/inference_passes.rs` is what caught the change, which is what it is
+for. It pinned four whole-program inference passes and now pins three — the
+number is the count of `infer` calls rather than of `check_merged` calls, and
+the two other callers are outside this path. Its own docstring asks for the
+pass and the reason in this file, and #652 set the precedent when it took the
+count from ten to five by stopping `check_effect_discarded` re-inferring what
+`check_predicates` had just inferred. This is the same seam, one layer out.

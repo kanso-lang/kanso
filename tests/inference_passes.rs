@@ -25,10 +25,10 @@ fn passes_for_the_sample() -> u64 {
 }
 
 #[test]
-fn the_front_end_infers_the_whole_program_four_times() {
+fn the_front_end_infers_the_whole_program_three_times() {
     assert_eq!(
         passes_for_the_sample(),
-        4,
+        3,
         "the whole-program inference pass count moved; if that is intended, \
          name the pass and the reason in design/compiler-log.md and update \
          this number"

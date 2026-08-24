@@ -12,6 +12,6 @@
 # disagree by 56 bytes on the same input — so the score reads this number and
 # CI asserts only that reality has not drifted two per cent from it. Bucketing
 # to kibibytes was tried and does not work: the two values straddle a boundary.
-front_end_rounds=40
-front_end_visits=17786
+front_end_rounds=28
+front_end_visits=15210
 compile_peak_bytes=871649

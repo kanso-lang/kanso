@@ -3106,7 +3106,7 @@ fn compile_module_inner(
 thread_local! {
     /// How deep this compile is inside its own dependency tree. Zero is the
     /// program the user named; anything above it is a library being compiled
-    /// on the way. ABLATION SCAFFOLD — see KANSO_SKIP_DEP_CHECK below.
+    /// on the way in, whose declarations the outermost merge will hold.
     static DEP_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
@@ -3376,13 +3376,23 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
-    // ABLATION SCAFFOLD, not a shipped behaviour. The merged program at depth
-    // zero contains every declaration the dependencies brought, so the passes
-    // run over a library twice: once while it is compiled on its own and again
-    // inside the merge. Setting KANSO_SKIP_DEP_CHECK runs only the outermost
-    // one, and the error corpus is what says whether that loses a diagnostic.
-    let skip_dep = depth > 0 && std::env::var_os("KANSO_SKIP_DEP_CHECK").is_some();
-    let mut diags = if skip_dep {
+    // Only the outermost compile runs these. A dependency is compiled on its
+    // way in and then merged, and the merged program holds every declaration
+    // it brought — so running the passes on the library alone checks the same
+    // declarations the merge is about to check again. The whole standard
+    // library was being walked twice on every compile of every program.
+    //
+    // The merged pass is the one that can be complete, which is why the checks
+    // that need the whole program live here at all: gavel 1b's construction
+    // check and check_call_arities were both moved here because a per-file
+    // pass cannot see an imported group's arms. Nothing runs the other way.
+    // Watched: the entire golden corpus is byte-identical without the
+    // dependency call, error corpus included.
+    //
+    // check_unused_private below stays per-compile. It asks whether a private
+    // name is used inside its own module, and the merge is the wrong scope for
+    // that question.
+    let mut diags = if depth > 0 {
         Vec::new()
     } else {
         phase::watched("check_merged", || check::check_merged(&merged, require_entry))
