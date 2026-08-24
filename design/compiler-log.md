@@ -2319,6 +2319,13 @@ visits is what it buys, and the visit is what carries the work — a round is a
 loop over a work list that is usually short now. Welfare weighs both and comes
 out ahead: 84.85 to 84.87, banked.
 
+The clock does not show it, and the entry would be dishonest without saying
+so. Interleaved on this container, three runs each, `infer` reads 2.80-3.04 ms
+on the branch against 2.82-4.06 ms on main — inference is about a fifth of a
+15 ms front end and the spread here is wider than the effect. The visit count
+is the instrument that can see it, which is the whole reason the compile
+goldens count work rather than time.
+
 The index costs memory to hold: `compile_peak_bytes` on lib/json reads 876,930
 here against main's 872,035 on the same box, three runs identical each way.
 That is inside the two per cent the gate allows and outside what welfare can
