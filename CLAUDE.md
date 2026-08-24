@@ -220,6 +220,17 @@ Only Clay arms, disarms or retimes it.
   source, never a copy.
 
 ### Merge and conflict discipline
+- **CI is the only gate on a merge, and green means merge.** Clay has said so
+  three times, most recently on 2026-08-24: "stop asking me for permission to
+  merge things just merge them." A Claude-authored PR in this repo needs no
+  human word to leave draft or to land — not a request, not a heads-up, not a
+  sentence in the reply pausing for one. The discipline below says how to
+  merge well; none of it is a reason to wait for him. What goes to him is a
+  DECISION, in design/pending-gavels.md, never a merge. If a permission
+  prompt reaches him anyway that is the harness's auto-mode classifier rather
+  than a question being asked, and the lever is the permission MODE: the
+  allow list is not what gates it, because tools already listed there still
+  prompt.
 - **Never blanket-resolve conflicts** (`checkout --ours`/`--theirs`) on
   runtime.c or any load-bearing file — resolve hunk by hunk.
 - **No fire-and-forget merges.** Do not arm auto-merge and move on: wait
