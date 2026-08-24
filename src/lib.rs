@@ -3103,12 +3103,33 @@ fn compile_module_inner(
     loaded
 }
 
+thread_local! {
+    /// How deep this compile is inside its own dependency tree. Zero is the
+    /// program the user named; anything above it is a library being compiled
+    /// on the way. ABLATION SCAFFOLD — see KANSO_SKIP_DEP_CHECK below.
+    static DEP_DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+struct DepthGuard;
+
+impl Drop for DepthGuard {
+    fn drop(&mut self) {
+        DEP_DEPTH.with(|d| d.set(d.get() - 1));
+    }
+}
+
 fn compile_module_loaded(
     dir: &std::path::Path,
     require_entry: bool,
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
+    let depth = DEP_DEPTH.with(|d| {
+        let was = d.get();
+        d.set(was + 1);
+        was
+    });
+    let _guard = DepthGuard;
     let mut sources: Vec<(String, String)> = match embedded {
         Some(files) => files.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect(),
         // A module is a directory of files sharing one namespace, and one file
@@ -3355,7 +3376,17 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
-    let mut diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
+    // ABLATION SCAFFOLD, not a shipped behaviour. The merged program at depth
+    // zero contains every declaration the dependencies brought, so the passes
+    // run over a library twice: once while it is compiled on its own and again
+    // inside the merge. Setting KANSO_SKIP_DEP_CHECK runs only the outermost
+    // one, and the error corpus is what says whether that loses a diagnostic.
+    let skip_dep = depth > 0 && std::env::var_os("KANSO_SKIP_DEP_CHECK").is_some();
+    let mut diags = if skip_dep {
+        Vec::new()
+    } else {
+        phase::watched("check_merged", || check::check_merged(&merged, require_entry))
+    };
     check::check_unused_private(&merged, &used, &mut diags);
     finish_program(&mut merged);
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
