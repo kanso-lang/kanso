@@ -170,7 +170,8 @@ fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Ve
 
 pub fn infer(program: &Program) -> Inference {
     work::pass();
-    let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::default();
+    let mut groups: HashMap<(&str, usize), Vec<usize>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
     }
@@ -286,7 +287,8 @@ pub fn infer(program: &Program) -> Inference {
 /// fresh where the graph is acyclic, and a cycle costs rounds only for its
 /// own knot.
 fn callee_first(program: &Program) -> Vec<usize> {
-    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::default();
+    let mut by_name: HashMap<&str, Vec<usize>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, decl) in program.fns.iter().enumerate() {
         by_name.entry(decl.name.as_str()).or_default().push(i);
     }
