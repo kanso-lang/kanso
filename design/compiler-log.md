@@ -2442,6 +2442,16 @@ should be described as nothing else — lib/json has 407 declarations and kq's
 query library is not much larger, so the quadratic has not had room to hurt
 yet. It is worth removing before something does.
 
+One idea from the same sweep was measured and declined. `load_dependencies` is
+the second-largest phase at 2.13 ms, and its `visited` set is a cycle detector
+rather than a cache — it removes each path when the module finishes, so a
+diamond import would compile the shared module twice. There is no diamond to
+exploit: `KANSO_PHASES=1` prints one `load` line per module on both lib/json
+and kq's query library, four and six modules with no repeats, because the
+stdlib modules these programs import do not import each other. Memoizing by
+canonical path would buy nothing today. Recorded so it stays declined until a
+program has the shape.
+
 No counter moves: these passes run before inference and allocate transiently,
 so rounds, visits and `compile_peak_bytes` are all byte-identical, and welfare
 holds at 84.87. That is the honest shape of it — a structural improvement with
