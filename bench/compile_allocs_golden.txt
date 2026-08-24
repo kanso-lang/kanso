@@ -14,7 +14,9 @@
 #
 # The allocator prints a second counter, compile_alloc_bytes, and that one is
 # deliberately absent. It measures the checkout path. Five directory lengths,
-# same tree, same binary:
+# same tree, same binary — read against the compiler as it stood on
+# 2026-08-24, before the child walk stopped building vectors, so these are the
+# shape rather than today's totals:
 #
 #   16 chars  7942065        29 chars  7942091
 #   17 chars  7942067        49 chars  7942131
@@ -31,12 +33,12 @@
 # doubling, a String's spare. So the file names its toolchain and
 # scripts/gates/measured_on.sh refuses to read the row anywhere else, the same
 # arrangement the instructions and machine-code veins have. On the two
-# toolchains measured so far it has not moved: 148073 under rustc 1.94.1 and
-# under 1.98.0 alike, and at all five path lengths above. Two versions is
+# toolchains measured so far it has not moved: 91185 under rustc 1.94.1 and
+# under 1.98.0 alike, as 148073 was before it. Two versions is
 # evidence rather than a guarantee, so the provenance line stays. A bump that
 # does move the row is a number to regenerate and a sentence to write.
 #
 # A rise is a regression to explain and a fall is a win to bank. Movement is
 # fine; silence is not.
 # measured-on rustc=1.98.0
-compile_allocs=148073
+compile_allocs=91185
