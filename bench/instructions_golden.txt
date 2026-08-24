@@ -81,12 +81,12 @@ jsonbench 2860478794
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 9727148124
+encodebench 9727166055
 oneshot 46596968
 basket 57400154
-widebench 84816675
-deepbench 806938306
-escapebench 258568077
+widebench 84817033
+deepbench 807094292
+escapebench 258574070
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
