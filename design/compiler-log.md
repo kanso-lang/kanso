@@ -3057,13 +3057,21 @@ allocated another key to throw away:
 
 The sets are `Set<(&'a str, usize, usize)>` now, borrowed from the program.
 
-    compile_allocs        85,788 -> 84,261   -1,527
-    front_end_rounds          40 -> 40        flat
-    front_end_visits      17,786 -> 17,786    flat
+    compile_allocs        85,788 -> 84,261       -1,527
+    compile_instructions  65,590,655 -> 65,216,434  -374,221
+    front_end_rounds          40 -> 40            flat
+    front_end_visits      17,786 -> 17,786        flat
 
 1,527 of the 2,813 the pass was spending, which is 54% — near enough the 55%
 the door analysis gave up yesterday to suggest the shape has a characteristic
 size. What stays is the fixpoint's own vectors and the discard map.
+
+The instruction fall works out at 245 per allocation removed, against 270 for
+the door analysis yesterday. Both are the same order as the malloc machinery
+alone: `_int_malloc`, `malloc`, `_int_free` and `free` together are
+15,367,938 of this run's 65,216,434, which over 84,261 allocations is 182
+apiece before any name is copied. Rounds, visits and peak are flat, so the
+allocation and instruction veins are the whole record of the change.
 
 The query allocations go too, and no vein can see it: `is_lazy_bind` and
 `is_releasable` are called only from codegen, which `kanso check` never runs.
