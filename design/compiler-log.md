@@ -3095,3 +3095,122 @@ tally the votes under a key whose name is `""` and
 `discard_capable_argument_is_lazy` fails while
 `scrutinized_binding_stays_strict` stays green, which is the lookup path and
 only the lookup path.
+
+## 2026-08-24 — the alias canonicaliser borrows the names it reasons about
+
+`canonicalize_bare_aliases` decides which bare function names are clones of a
+qualified original and rewrites them to the qualified spelling. Two things it
+did cost allocations that had nothing to do with that decision.
+
+The first was a needle. For every synthetic declaration it built
+`format!("/{}", d.name)` and asked whether a twin's name ended with it, then
+dropped the string. `strip_suffix` asks the same question without building
+anything:
+
+    let qualified = name
+        .strip_suffix(d.name.as_str())
+        .is_some_and(|qual| qual.ends_with('/'));
+
+The second was the binder walk. `bound_in_pattern`, `bound_in_stmt` and
+`bound_in_expr` collect every name a declaration binds — parameters, `x = ...`
+bindings, lambda parameters, destructured fields — so that a name which is
+ever locally bound is never rewritten. They collected them as `String`.
+`check.rs` has carried a borrowed twin of the same walk at :1453 and :1463 for
+as long as this one has owned its names, so the shape was already in the tree
+and already proven. This walk was the outlier.
+
+    compile_allocs        84,261 -> 82,848      -1,413
+    front_end_rounds          40 -> 40           flat
+    front_end_visits      17,786 -> 17,786       flat
+    compile_peak_bytes   864,274 -> 864,274      flat
+
+Measured against main before the demand pass landed, this same diff was worth
+66,117,450 -> 65,586,233, a fall of 531,217. Measured against main after it
+landed, the identical diff is worth 65,709,239 -> 65,364,674, a fall of
+344,565. The allocation delta is -1,413 in both cases. Every count is exact:
+the branch figure reads 65,364,674 on two consecutive runs in the fixed box,
+which is what the seedless hash bought.
+
+So the same 1,413 allocations are worth 376 instructions apiece on the fatter
+tree and 244 on the leaner one. Allocation counts compose — 84,261 - 1,413 is
+82,848 and that is what the counter reads — and instruction counts do not.
+The malloc machinery's cost per call depends on the state of the free lists,
+and a tree that already stopped making 1,527 allocations presents a cheaper
+one. That is a caution about a habit this log has been building: three entries
+now have quoted an instructions-per-allocation ratio (270 for the door
+analysis, 245 for the demand pass), and the ratio is a property of the
+measurement rather than of the change. Two changes each worth "250 per
+allocation" do not add up to their sum.
+
+The golden row was predicted before CI ran, by carrying the container's delta
+across to the runner's baseline: 65,216,434 - 344,565 = 64,871,869. The runner
+read 64,840,962, so the prediction was 30,907 high — the runner's own delta is
+-375,472 against the container's -344,565. Allocations transferred exactly
+(82,848 was predicted and 82,848 is what CI read, as it has every time), and
+instructions did not. The toolchains differ, 1.98.0 on the runner against
+1.94.1 here, and the malloc-shape argument above says the instruction cost of a
+change depends on the tree it lands in. Predicting the allocation row is safe.
+Predicting the instruction row saves nothing, because being 0.05% out costs the
+same red cycle as not guessing at all.
+
+`beat::tests::a_locally_bound_name_is_never_rewritten` is the spec, and the
+mutation was watched. Make `bound_in_pattern` insert nothing for `Var` and
+`Annotated` and it fails with `the local was rewritten: {"list/first", "xs"}`,
+while the other 33 in that module stay green — the skip set loses the local
+`xs`, and the bare alias is rewritten straight over it. That is the walk's
+entire purpose and the only path that moves.
+
+The ratchet needed a repair to survive this. Its `compile_allocs` mutation
+rewrote `out.insert(name.as_str());` unscoped, meaning to hit `mentions_in_expr`
+— the only place that line existed. `bound_in_pattern` now has a line spelled
+exactly the same, and the sed rewrote both, which put a `String` into a
+`Set<&str>` and made the mutation fail to compile. The substitution is scoped
+to `mentions_in_expr` by address now, and it was checked the long way: apply
+it, confirm the tree still builds, confirm `bound_in_pattern` was left alone,
+and read the counter at 88,634 against a golden of 82,848.
+
+The reason this could have gone unnoticed is written down in `ratchet.kso` as a
+deliberate rule: "a build that breaks because of the mutation is the gate going
+red early, and `prove` counts that as red." So a mutation that stops compiling
+passes `prove` exactly as a working one does, and the row goes on asserting
+that `compile_allocs` notices an owned-name pass when nothing has tested that
+in months.
+
+The rule is reasonable for a mutation whose defect is meant to break the build.
+It is wrong for this vein, where the whole claim is that a COUNTER moves: a
+tree that will not compile never reaches the counter, so the row proves
+nothing. Any mutation keyed on a line of source rather than on a function is
+one identical line away from that state, and by the rule above it will not
+announce the change.
+
+That is the ratchet's own design, so by the pending-gavels rule it is settled
+here rather than sent up. `prove` now requires `setup` to succeed, and a row
+whose mutated tree will not build reports UNBUILT instead of red. The split is
+safe because the rows whose defect IS a build or lint failure — clippy bait,
+misformatted source, a given-up tail call — carry `no_setup` and do their
+building inside the GATE, where a failure still counts. Only the ten rows
+carrying `release` as setup are affected, and every one of their gates reads a
+counter or a golden.
+
+The demonstration is the bug itself. With the unscoped sed restored, on the
+same tree:
+
+    old prove:  red      ... every row turned its gate red
+    new prove:  UNBUILT  ... 1 rows proved nothing
+
+and with the sed scoped, the new code reads red again and all eight rows pass.
+
+Fixing that turned up a second thing immediately, which is the argument for
+the change. Two rows came back UNBUILT on an unmutated tree, and the reason
+was that `prove` symlinks each worktree's `target` at a shared
+`/tmp/kanso-ratchet-target` that nothing creates. On a fresh machine the link
+dangles, `cargo build` stops with "Not a directory", and every row carrying
+`release` as setup was being counted red without its gate ever running. It
+takes a `mkdir -p` to fix. How long it had been true is not something this log
+can say — the old code could not distinguish that state from a working row,
+which is the whole point.
+
+One thing found on the way. The doc comment above `bound_in_pattern` had
+collected two paragraphs belonging to other functions: one describing
+`qualify` and one describing `canonicalize_types`, both of which sat
+undocumented further down the file. They are back where they belong.
