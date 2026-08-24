@@ -2228,3 +2228,54 @@ disagrees. Native reports `thunk_allocs=1` where the oracle reports `0`,
 because the oracle's `knotted` builds its cell without touching the counter.
 That predates this change and survives it, and which engine is right is a
 question about what the counter counts rather than a defect to pick a side on.
+
+## 2026-08-24 — bytes are a value on every engine
+
+Implementing the bytes gavel. The interpreter had no bytes: `text/bytes`
+answered a list of integers and every consumer ran whatever list arrived
+through `bytes_to_str`, which is how `text/append ["a"] "x"` came to answer
+`["a" 120]` where native refused. `Value::Bytes(Rc<Vec<u8>>)` exists now, and
+the six rows the ledger measured agree word for word on both engines:
+
+    text/append ["a"] "x"        append takes bytes and a string, bytes, or byte
+    text/append [65 66] "x"      append takes bytes and a string, bytes, or byte
+    text/find2 [65 66] 1 65 66   find2 takes bytes
+    text/find2_below [65 66] …   find2_below takes bytes
+    text/utf8 ["a"]              err "utf8 takes byte values (0-255)"
+    text/to_float ["a"]          to_float takes a string, bytes, or number, not ["a"]
+
+Four of those were the oracle ANSWERING where native refused, which is a
+program that runs under the interpreter and dies compiled. The browser engine
+comes along for free: `rt_builtin` calls the interpreter's `call_builtin`, so
+one implementation serves two of the three engines.
+
+The two riders shipped with it. utf8 keeps its list acceptance, spelled the
+same on both engines — there is no bytes literal, `[104 105]` is the only
+spelling a program can write down, and `text/utf8 [65 66]` was the one case
+the engines already agreed on. And `text/to_bytes` is the constructor, loud
+outside 0-255 rather than keeping the low byte: `text/bytes` covers strings,
+this covers numbers. The one place the low byte is still taken is
+`text/append`'s single-number form, because that is what the compiled engine
+has always done (`x.payload & 0xff`) and matching it is the differential law.
+Whether either engine should refuse there instead is a separate question.
+
+`==` still crosses. Native has compared a byte string against a list of its
+numbers since it was written (`k_bytes_eq_list`), so the interpreter does too;
+making both refuse is a change to native's semantics that the gavel did not
+order.
+
+What it cost: `front_end_visits` on lib/json 23,224 -> 23,250, and the
+decoder's emitted lines 11,588 -> 11,595. Both are the price of a public
+function in std/text, which lib/json imports. Measured separately: a plain
+`pub fn zzz x / x` in std/text costs 13 visits by itself, so roughly half of
+the 26 is the function existing and half is the builtin call in its body. No
+allocation counter moves, no `.text` row moves, and welfare's floor moved to
+whatever it cost — which welfare's own header says is what happens to a change
+that makes the engines agree.
+
+The goldens: six refusal fixtures under tests/golden/runtime, each watched
+red against the old oracle first — four of them ANSWERED there, which is the
+bug — and two micro fixtures for the surface that works and for the
+constructor's refusal. The error corpus moved three line numbers, and the book
+three more, because std/text grew five lines above `to_int` and an err trace
+names the line it was born on.
