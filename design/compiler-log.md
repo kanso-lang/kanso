@@ -2669,3 +2669,35 @@ the day's other change had just pinned. It does not: 148,073 instrumented and
 clean alike, because `var_os` on a missing variable answers None without
 allocating. The per-pass instrumentation costs nothing when off, which is the
 argument for keeping it rather than re-deriving it next time.
+
+## 2026-08-24 — gavel: no tolerance bands — a golden is exact, per platform
+
+Clay ruled the compile-memory entry: "that shouldn't be a tolerance. it
+should be a setting per platform. or a conversion now that you're
+running in the cloud instead of locally on my Mac."
+
+The band was the bug's whole habitat. Two per cent of 871,649 is 17,432
+bytes of slack for a host divergence documented at 56, and main drifted
+376 bytes greener inside it with CI green the entire time. The
+host-pinning that landed on 2026-08-23 already built the other half of
+the ruling: goldens carry a measured-on line and an off-reference host
+refuses to compare rather than fuzzing.
+
+The ruling, in three clauses:
+
+- `bench/compile_memory_golden.txt` holds an exact figure for its named
+  platform and the gate asserts equality — the two-per-cent band dies.
+- Platform is a setting, not a tolerance: the file's shape allows one
+  row per reference host (the CI runner is the reference now that the
+  work runs in the cloud rather than on Clay's Mac), and any host
+  without its row refuses, which the measured-on machinery already
+  does.
+- The stored figure corrects to the runner's true number (872,061,
+  measured twice), and the welfare floor moves with it via `--set`,
+  recorded as a data correction rather than a relaxation: the 84.85
+  floor was ratcheted against a figure the compiler had already left
+  behind, so the correction restores the term to measuring reality.
+
+The entry leaves the ledger with this commit. Implementation — the gate
+edit, the corrected figure, the floor `--set` with this entry cited —
+is the implementer's, in one PR so the red window never exists.

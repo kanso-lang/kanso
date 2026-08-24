@@ -8,8 +8,8 @@ is stale — say so.
 
 The decisions live in design/pending-gavels.md — the single ledger; this
 file only indexes it. Blocking right now: **does a DEMANDED knot count as a
-thunk allocation**; **the compile-memory band and its floor**; **does `>>`
-accumulate run-time effect failures or stop at the first**.
+thunk allocation**; **does `>>` accumulate run-time effect failures or
+stop at the first**.
 
 ## In flight
 
