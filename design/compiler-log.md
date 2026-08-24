@@ -2703,3 +2703,53 @@ If it can go, the saving is the 1.54 ms those three calls cost: near
 fifteen per cent of a 10.5 ms front end, and five times what
 `inline::aliases` is worth. That makes it the larger of the two leads
 recorded today, and the one to settle first.
+
+## 2026-08-24 — the per-dependency check is not redundant, and counting declarations never said it was
+
+The entry above says `check_merged` runs four times on one compile, once for
+each dependency and once for the merged program, and that the merged pass's
+declarations contain the dependencies'. Both are true. Removing the
+per-dependency call still loses a diagnostic.
+
+A field read no record type declares, inside a library reached through
+another library, goes unreported: `ok` where main answers `no record type has
+a field ...`. It is a fixture now — `tests/golden/errors_module/`
+`field_read_in_a_deep_library` — so the idea cannot come back quietly.
+
+`desugar_field_reads` is the reason, established by ablation rather than
+argued. It runs inside the dependency's own compile, before that compile
+returns, and rewrites `n.nosuchfield` into a shape `check_field_exists`
+cannot see. Guard all four of its call sites behind an environment variable
+and the diagnostic comes back:
+
+    desugar on     ok
+    desugar off    error[name]: no record type has a field `nosuchfield`
+
+Under main the dependency's own `check_merged` runs before that rewrite and
+catches the fault there. Take the pass away and the fault is unreachable by
+the time the entry merges.
+
+So the declarations are present and are no longer checkable. A check that
+reads a syntactic shape can only fire in the compile where that shape still
+exists, and a count of declarations says nothing about whether it can. That
+is the whole error: the case for removing the pass was that the same
+declarations get walked twice, which is true and is not the question.
+
+What it would have bought is real — rounds 40 to 28, visits 17,786 to 15,210,
+allocs 148,073 to 130,747, welfare 84.87 to 85.75 — and is available only to
+a change that moves the rewriting passes after the whole-program check, or
+splits the checks into those that read syntax and those that do not. Neither
+is started.
+
+Four claims were made wrong and corrected on the way, and they are one habit:
+evidence gathered under one configuration read as evidence about all of them.
+The suite was green because the error corpus is 161 single-file fixtures and
+none of them has a dependency. A comparison of two fixtures called them
+identical while running on a branch that did not contain them, both binaries
+answering `cannot read` and the digests agreeing. The first divergence was
+read as a labelling problem and a fix was built for it, which was real work
+at the wrong layer. The entry was said to get no whole-program check at all,
+from instrumenting one of `check_merged`'s four call sites instead of the
+function. Instrument the function. Run the ablation. Before generalising from
+a green fixture, ask what would have to be true for it to pass while the
+claim is false, and go build that.
