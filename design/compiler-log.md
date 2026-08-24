@@ -2525,6 +2525,15 @@ traffic, `compile_peak_bytes` for the residency.
 The count survives the same test. It reads 148,073 at all five lengths, and
 148,073 under rustc 1.94.1 in the container and under 1.98.0 on the runner.
 
+`compile_peak_bytes` carries the same term — 876,898 plus twice the length,
+exact at all five — and that is a trap for the table above, which claims peak
+does not move under the mutation. The first reading of it said peak moved 132
+bytes, taken from a mutated build in a scratch worktree 66 characters deeper
+than the tree it was compared against. Rerun at one path, mutated and clean,
+peak is 876,930 both times: byte-identical, and the claim is measured rather
+than argued from what transient means. Where that leaves
+`bench/compile_memory_golden.txt` is a decision of Clay's and is in the ledger.
+
 The row is kept under a toolchain guard anyway, because a good part of the
 count is the standard library's: a HashMap's growth schedule, a Vec's doubling,
 a String's spare. So the file carries a `measured-on rustc=` line and
