@@ -107,6 +107,20 @@ any size. And the beat carry is where the remaining evacuation lives — wide
 reports `cohort_frees=0` and `cohort_kept=0` beside its 264 evacuations, so
 none of its megabyte passes the guard that would have refused it.
 
+Two things a first attempt at a reduced fixture ruled out, both worth not
+repeating. A cohort is licensed narrowly — codegen wraps one only around a
+qualified call that crosses DOWN into a nested module, from a caller that is
+not itself a rewinding loop, with every argument a non-heapish shape — so a
+same-module call never produces one however much garbage it makes, and the
+`.mem` corpus has no cohort fixture for that reason rather than by oversight.
+And a large list merely THREADED through a beat loop is not copied: a
+16,000-element list built before the loop and passed through 8,010 iterations
+evacuates 54 nodes of 32 bytes, because the list is below the mark and shared.
+So wide's four copies are not "a big carried list" and the postcard is not
+written yet. The next probe is which carry site produces them — the instrument
+already exists, and wants the beat depth and the `k_beat_iter_carry` call
+recorded beside the source address.
+
 There is a precedent for the pin, too, in the same file and at the same
 granularity the wide case wants. `k_carry_stage_kept` moves a builder's KStr
 header off the arena — malloc'd once, "a promoted header survives the mark
