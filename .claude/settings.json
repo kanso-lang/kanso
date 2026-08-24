@@ -1,6 +1,9 @@
 {
   "permissions": {
     "allow": [
+      "mcp__Claude_Code_Remote",
+      "mcp__claude-code-remote",
+      "mcp__github",
       "mcp__Claude_Code_Remote__register_repo_root",
       "mcp__Claude_Code_Remote__add_repo",
       "mcp__Claude_Code_Remote__get_session",
