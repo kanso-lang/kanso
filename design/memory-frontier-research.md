@@ -139,6 +139,19 @@ is "this cycle's own builder". A loop-invariant capture is the other thing a
 carried slot can be, it is statically recognisable, and promoting it once
 would delete the whole megabyte without any change to how the arena rewinds.
 
+**The postcard exists now**, as a pair in `tests/golden/mem`. Two programs
+identical but for one line — a 500-element list built inside the chain, and the
+same list built as an argument — over the same loop and the same number of
+rewinds:
+
+    a_loop_invariant_capture_is_copied_every_rewind   24 allocs   32,672 bytes
+    the_same_capture_built_below_the_mark_is_shared    6 allocs      192 bytes
+
+The first is wide's shape reduced to twenty lines. Nothing else in the corpus
+watched the beat carry, which is where every remaining evacuation on the
+benchmark shelves is spent, and a change that makes those two converge is the
+one worth having.
+
 There is a precedent for the pin, too, in the same file and at the same
 granularity the wide case wants. `k_carry_stage_kept` moves a builder's KStr
 header off the arena — malloc'd once, "a promoted header survives the mark

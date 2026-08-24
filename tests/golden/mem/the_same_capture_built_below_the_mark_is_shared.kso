@@ -1,0 +1,30 @@
+import "std/io"
+
+# The twin of a_loop_invariant_capture_is_copied_every_rewind, differing in one
+# line: `xs` is built as an argument rather than inside the chain, so it lands
+# BELOW the outer beat's mark. Everything else — the loop, the list, the number
+# of rewinds — is identical.
+#
+# The carry shares it instead of copying it, and the evacuation falls from
+# 32,672 bytes to a few dozen. The two files together say that the cost is
+# about where a captured value was built and not about what the loop does, and
+# a change that makes them converge is the one worth having.
+fn built n acc
+  more n acc (n < 1)
+
+fn more _ acc true
+  acc
+
+fn more n acc false
+  built (n - 1) (push acc n)
+
+fn walk xs i
+  step xs i (length xs < i)
+
+fn step _ _ true
+  io/write "done\n"
+
+fn step xs i false
+  io/write "" . (_ -> walk xs (i + 1))
+
+pub play = walk (built 500 []) 1

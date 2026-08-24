@@ -2375,3 +2375,43 @@ keeps the garbage with it. The size distribution is the decision variable,
 which is 5.2's survivor-ratio selection asked one level down.
 
 Nothing is built. What changed is that the board now says what the shelves say.
+
+## 2026-08-24 — the beat carry copies a loop-invariant capture, once per rewind
+
+Chasing where widebench's megabyte of evacuation goes, from the reposed
+copy-or-pin entry. `k_deep_copy` has exactly three entry points — `k_beat_pop`'s
+result copy, `k_caf_freeze`, and `k_beat_iter_carry` — and tagging all three
+says all 264 evacuations and all 1,032,336 bytes come from the beat carry. The
+other two contribute nothing.
+
+What the carry copies is one slot, unkept, tag 8: a `K_DESC`. widebench's
+streaming loop hands on `io/write (...) . (_ -> stream_elems xs (i + 1))`, and
+the 256,016 bytes are the `xs` that description captures — the 16,000-element
+list, decoded inside `read_file`'s continuation and therefore ABOVE the outer
+beat's mark. It is the same value every iteration and never rebuilt, and the
+carry deep-copies it forward on every rewind regardless.
+
+Reduced to a pair of fixtures in `tests/golden/mem`, identical but for where
+the list is built:
+
+    a_loop_invariant_capture_is_copied_every_rewind   24 allocs   32,672 bytes
+    the_same_capture_built_below_the_mark_is_shared    6 allocs      192 bytes
+
+Same loop, same 500-element list, 504 rewinds against 502. Build it as an
+argument and it sits below the mark and is shared; build it inside the chain
+and it travels forward whole, once per rewind. The difference is invisible in
+the source shape, which is why it went unnoticed — and why the corpus needed
+both halves rather than a description of one.
+
+Two things this closes. `k_cohort_pop` has had a survivor-ratio guard since
+#389 — it sizes the survivor and refuses a copy that exceeds half the reclaim,
+or one above four times the block threshold — and `k_beat_iter_carry` has
+nothing of the kind: it copies every unkept slot at any size. The board's 5.2,
+"per-beat policy selection by survivor ratio", is therefore shipped for cohorts
+and absent exactly where the remaining cost is. And the page-pinning framing
+the board carried is the wrong shape for this: `k_carry_kept` already exists to
+say a slot must not be copied, it means "this cycle's own builder" today, and a
+loop-invariant capture is the other thing a carried slot can be.
+
+Nothing is built. The fixtures pin the cost as it stands, and a change that
+makes those two numbers converge is what they are for.
