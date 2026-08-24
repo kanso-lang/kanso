@@ -1,0 +1,4 @@
+import "./inner"
+import "std/io"
+
+io/write "{inner/twice 21}"
