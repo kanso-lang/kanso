@@ -2336,3 +2336,39 @@ adds 4,895 bytes to what it is hiding.
 The answers do not move. Every engine, the error corpus, the diagnostics
 differential and the browser differential are unchanged — the only goldens that
 move are the ones that count the compiler's own work.
+
+## 2026-08-24 — the highest-ranked idea on the memory board was priced against a number that is gone
+
+`design/memory-frontier-research.md` has ranked copy-or-pin first since
+2026-08-07, on a measurement: half of every allocation the one-shot shelf made
+was the copy-out before a rewind — 63,967 evacuation allocations of 128,528,
+1,991,456 bytes. Rechecked today, one-shot reads `evac_allocs=3`,
+`evac_bytes=96`. #868 took it from 63,967 to 5 and #977 to 3. The measured half
+the idea was going to delete had been deleted by something else, and the memo
+did not know, because a status table records what an idea IS rather than
+whether its premise still holds.
+
+Where evacuation lives now, across the eight shelves: wide 264 allocations for
+1,032,336 bytes, pending 2,658 for 498,976, scan 36 for 8,800, and everything
+else under six hundred bytes. So the idea gets reposed rather than retired —
+and the instrument that priced it the first time can price it again. The
+evacuation path was instrumented to record each survivor's source address and
+copied size.
+
+Wide is four copies. Four nodes of 256,016 bytes — a 16,000-element list
+buffer, 16 + 16 x 16000 — carry 99.2% of the megabyte, from three distinct
+addresses, so one of them is copied twice. The other 260 survivors are 8,272
+bytes between them, median 32.
+
+Pending is diffuse: 666 of 2,658 survivors are needed to reach 90% of half a
+megabyte, nothing above four kilobytes, largest 3,216.
+
+That is the answer the memo asked for and nobody had taken, and it is two
+answers rather than one. A quarter-megabyte survivor occupies whole pages by
+itself, so not copying it retains almost nothing — and it does not need general
+page pinning, only a size threshold and storage that does not rewind. A
+three-kilobyte survivor is threaded through the garbage, and pinning its page
+keeps the garbage with it. The size distribution is the decision variable,
+which is 5.2's survivor-ratio selection asked one level down.
+
+Nothing is built. What changed is that the board now says what the shelves say.

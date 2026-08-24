@@ -24,7 +24,7 @@ this says only which of them are in the tree.
 | 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
 | 4.4 | build-blocks hosting in-place graph algorithms | **not expressible today** — the blocker is the block-born rule, not the theorem |
 | 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
-| 5.1 | copy-or-pin for survivors | **measured, not built** — the highest-value move on the board, see below |
+| 5.1 | copy-or-pin for survivors | **its premise is gone** (rechecked 2026-08-24) — one-shot's evacuation is 3 allocations, not 63,967; #868 deleted the copy-out this was going to delete. Reposed below against where evacuation actually lives now |
 | 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |
 | 5.3 | the reuse delta — does dynamic reuse beat static? | **the well-posed form of "Perceus vs beats"** |
 
@@ -36,7 +36,7 @@ Perceus runtime. **The first is closed.** `evac_allocs` and `evac_bytes` count
 at `k_copy_alloc`, the one point every evacuated byte passes through, and they
 are CI-gated across four cost goldens and 41 `.mem` fixtures.
 
-The cost is concentrated far more sharply than anyone expected:
+The cost was concentrated far more sharply than anyone expected:
 
 | shelf | evacuation allocations | of total | evacuated bytes |
 |---|---|---|---|
@@ -45,11 +45,55 @@ The cost is concentrated far more sharply than anyone expected:
 | basket | 0 | — | 0 |
 | **one-shot** | **63,967** | **128,528** | **1,991,456** |
 
-Half of every allocation the one-shot program makes is the copy-out. The
-streaming shelves pay almost nothing, where a refcounting runtime would be
-paying per-reference traffic throughout. That reshapes the second gap: a
-head-to-head on decode is a formality kanso wins by construction, and one-shot
-is the only shelf where the comparison has teeth.
+Half of every allocation the one-shot program made was the copy-out, and that
+is what put copy-or-pin at the top of the board.
+
+**Rechecked 2026-08-24, and the table above is history.** One-shot reads
+`evac_allocs=3`, `evac_bytes=96` today. #868 — the keyword compare rewrite —
+took it from 63,967 to 5, and #977 to 3. The measured half copy-or-pin was
+going to delete had already been deleted by something else, which is exactly
+the thing a top-ranked idea priced against a stale number cannot tell you.
+
+Where evacuation actually lives now, across the eight shelves:
+
+| shelf | evacuation allocations | evacuated bytes | bytes per survivor |
+|---|---|---|---|
+| **wide** | 264 | **1,032,336** | 3,910 |
+| **pending** | 2,658 | 498,976 | 188 |
+| scan | 36 | 8,800 | 244 |
+| encode | 17 | 576 | 34 |
+| decode | 3 | 112 | 37 |
+| one-shot | 3 | 96 | 32 |
+| basket, escape | 0 | 0 | — |
+
+That reposes 5.1 rather than retiring it, and it reposes it better. The shelf
+with teeth is wide, and its survivors are large — four kilobytes each, against
+the thirty-odd bytes the one-shot survivors averaged. Page pinning wins where
+survivors are page-localized and loses where they are scattered through the
+garbage, so the old shelf was close to the worst case for the idea and the new
+one is close to the best. The measurement that decides it is where the bytes
+sit, and it has now been taken — the evacuation path instrumented to record
+each survivor's source address and copied size, on both shelves.
+
+**Wide is four copies.** Four nodes of 256,016 bytes each — a 16,000-element
+list buffer, `16 + 16 x 16000` — carry 99.2% of the megabyte. The other 260
+survivors total 8,272 bytes between them, median 32. Three distinct source
+addresses, so one of those buffers is copied twice. This is the best case the
+idea could ask for: a quarter-megabyte survivor occupies whole pages by itself,
+so retiring its storage instead of copying it retains almost no garbage, and it
+does not need general page pinning — a size threshold and a block that does not
+rewind would take the whole million bytes.
+
+**Pending is the opposite, and the same instrument says so.** 666 of its 2,658
+survivors are needed to reach 90% of half a megabyte, nothing is above four
+kilobytes, and the largest is 3,216 bytes. Survivors that size are threaded
+through the garbage; pinning their pages keeps the garbage with them.
+
+So copy-or-pin is not one idea with one answer. On a large-survivor shelf it is
+nearly free and deletes nearly everything; on a diffuse one it trades a copy
+for retention. The size distribution is the decision variable, it is available
+statically for the wide case (the list's length is a loop bound), and 5.2's
+survivor-ratio selection is the same question asked one level up.
 
 **5.1 Copy-or-pin.** The one-shot cost is the evacuation rather than the free
 schedule. Instead of copying a survivor out before the rewind, pin its page and
