@@ -9,7 +9,7 @@
 //! errs toward strict, which is today's behavior.
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
-use std::collections::{HashMap, HashSet};
+use crate::hash::{Map as HashMap, Set as HashSet};
 
 pub struct DemandInfo {
     /// (owning fn name, owning fn arity, statement index) of each lazy bind.
@@ -200,7 +200,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
 /// For each (group name, arity), which argument positions have at least one
 /// arm that discards the parameter outright.
 fn discard_positions(program: &Program) -> HashMap<(String, usize), Vec<bool>> {
-    let mut positions: HashMap<(String, usize), Vec<bool>> = HashMap::new();
+    let mut positions: HashMap<(String, usize), Vec<bool>> = HashMap::default();
     for f in &program.fns {
         let slots = positions
             .entry((f.name.clone(), f.params.len()))
@@ -369,7 +369,7 @@ pub fn analyze(program: &Program) -> DemandInfo {
     // A measurement tool, not a semantics switch — forcing runs what laziness
     // would skip (design/compiler-log.md, strict-mode thread).
     if std::env::var_os("KANSO_STRICT").is_some() {
-        return DemandInfo { lazy_binds: HashSet::new(), releasable: HashSet::new() };
+        return DemandInfo { lazy_binds: HashSet::default(), releasable: HashSet::default() };
     }
     let discard = discard_positions(program);
     let fn_names: HashSet<&str> = program.fns.iter().map(|f| f.name.as_str()).collect();
@@ -380,7 +380,7 @@ pub fn analyze(program: &Program) -> DemandInfo {
     // binds a recursive call there. regexp's character-class arm paid
     // 501,502 thunks for its lookahead sibling's laziness. The releasability
     // fold below already works this way.
-    let mut lazy_votes: HashMap<(String, usize, usize), bool> = HashMap::new();
+    let mut lazy_votes: HashMap<(String, usize, usize), bool> = HashMap::default();
     for f in &program.fns {
         for (i, stmt) in f.body.iter().enumerate() {
             let Stmt::Bind { pattern: Pattern::Var(name, _), .. } = stmt else {
@@ -414,7 +414,7 @@ pub fn analyze(program: &Program) -> DemandInfo {
         lazy_votes.into_iter().filter_map(|(key, ok)| ok.then_some(key)).collect();
     // A (group, arity, index) key can name a bind in more than one arm of
     // the group; the release verdict must hold for every arm it names.
-    let mut verdicts: HashMap<(String, usize, usize), bool> = HashMap::new();
+    let mut verdicts: HashMap<(String, usize, usize), bool> = HashMap::default();
     for decl in &program.fns {
         for (i, stmt) in decl.body.iter().enumerate() {
             let key = (decl.name.clone(), decl.params.len(), i);

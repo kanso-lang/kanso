@@ -29,8 +29,8 @@
 //!    position) — a value call would be an unbracketed entry.
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
+use crate::hash::{Map as HashMap, Set as HashSet};
 use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, MAP, REC, STR};
-use std::collections::{HashMap, HashSet};
 
 /// A function group: its name and arity.
 pub type Group = (String, usize);
@@ -117,8 +117,8 @@ impl Beats {
 
 pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &MutSites) -> Beats {
     let chains = chain_groups(program, mut_sites);
-    let mut ids = HashMap::new();
-    let mut carried = HashMap::new();
+    let mut ids = HashMap::default();
+    let mut carried = HashMap::default();
     let mut next = 0;
     for (name, arity, v) in classify_all(program, inference, mut_sites, &chains) {
         if v == Verdict::Beat {
@@ -126,7 +126,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             next += 1;
         }
     }
-    let mut demoted = HashSet::new();
+    let mut demoted = HashSet::default();
     for cluster in eligible_clusters(program, inference, mut_sites, &chains) {
         for member in cluster.members {
             ids.insert(member, next);
@@ -166,17 +166,16 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // rewind is a pointer reset, and a module loop that earned one keeps
     // it. Groups with a synthetic arm stay out of everything — a bare clone
     // is a second spelling the analyses cannot see through.
-    let has_synthetic: std::collections::HashSet<&str> =
+    let has_synthetic: crate::hash::Set<&str> =
         program.fns.iter().filter(|d| d.synthetic).map(|d| d.name.as_str()).collect();
-    let imported: std::collections::HashSet<&str> = program
+    let imported: crate::hash::Set<&str> = program
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/") || d.file.starts_with("lib/"))
         .map(|d| d.name.as_str())
         .collect();
     ids.retain(|(name, _), _| !has_synthetic.contains(name.as_str()));
-    let carried_needed: std::collections::HashSet<(String, usize)> =
-        carried.keys().cloned().collect();
+    let carried_needed: crate::hash::Set<(String, usize)> = carried.keys().cloned().collect();
     carried.retain(|(name, _), _| {
         !has_synthetic.contains(name.as_str()) && !imported.contains(name.as_str())
     });
@@ -202,7 +201,7 @@ fn demotable_entries(
     chains: &HashSet<Group>,
 ) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
     let allocating = alloc_groups(program);
-    let mut cyclic: HashSet<Group> = HashSet::new();
+    let mut cyclic: HashSet<Group> = HashSet::default();
     // a group is cyclic when any tail path returns to it (self-edge or SCC)
     let mut tail_edges: Vec<(Group, Group)> = Vec::new();
     for decl in &program.fns {
@@ -298,7 +297,7 @@ fn accumulator_grows(program: &Program, name: &str, arity: usize, position: usiz
 /// Sites where a push/append/put was proven unique, keyed by source
 /// position — the linearity analysis's output, threaded in so the chain
 /// test below can insist on pointer identity rather than merely on type.
-pub type MutSites = std::collections::HashSet<(String, usize, usize)>;
+pub type MutSites = crate::hash::Set<(String, usize, usize)>;
 
 /// Groups whose every arm returns the very object that arrived as its first
 /// parameter — pointer identity through mut appends, folds, conditionals and
@@ -450,7 +449,7 @@ fn crossing_positions(
 /// Groups belonging to any multi-group tail cycle.
 fn tail_cycles(edges: &[(Group, Group)]) -> Vec<Vec<Group>> {
     let nodes: Vec<Group> = {
-        let mut set = HashSet::new();
+        let mut set = HashSet::default();
         for (a, b) in edges {
             set.insert(a.clone());
             set.insert(b.clone());
@@ -585,7 +584,7 @@ fn cluster_edges_ok(
     // start: every slot whose values are all immutable-payload is a candidate
     // an EMPTY slot set means inference saw no direct call site (the group
     // is only ever entered through a lambda) — unknown, never assumed safe
-    let mut threaded: HashSet<(usize, usize)> = HashSet::new();
+    let mut threaded: HashSet<(usize, usize)> = HashSet::default();
     for &g in members {
         for i in 0..groups[g].1 {
             let s = slot_set(g, i);
@@ -628,7 +627,7 @@ fn cluster_edges_ok(
     // cycle: greatest fixpoint, assume every bytes slot qualifies, knock
     // out any an edge disproves.
     let folds = crate::linear::fold_spellings(program);
-    let mut chain_threaded: HashSet<(usize, usize)> = HashSet::new();
+    let mut chain_threaded: HashSet<(usize, usize)> = HashSet::default();
     for &g in members {
         for i in 0..groups[g].1 {
             let s = slot_set(g, i);
@@ -662,7 +661,7 @@ fn cluster_edges_ok(
     }
     // every remaining edge argument becomes a carried slot on its callee;
     // growth in a carried slot disqualifies the cluster
-    let mut carried: HashMap<Group, Vec<usize>> = HashMap::new();
+    let mut carried: HashMap<Group, Vec<usize>> = HashMap::default();
     for (_, to, di, args) in &inner {
         let decl = &program.fns[*di];
         for (i, arg) in args.iter().enumerate() {
@@ -999,7 +998,7 @@ fn classify(
 /// compares, adds, and recurses through pure predicates stays out.
 fn alloc_groups(program: &Program) -> HashSet<&str> {
     let fn_names: HashSet<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
-    let mut allocating: HashSet<&str> = HashSet::new();
+    let mut allocating: HashSet<&str> = HashSet::default();
     for d in &program.fns {
         if d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, true)) {
             allocating.insert(d.name.as_str());
@@ -1462,7 +1461,7 @@ fn group_param_set(
 /// body, a guard, alike. Built once per analysis and read by every cluster
 /// that has an entry to judge.
 fn mention_map(program: &Program) -> HashMap<&str, HashSet<String>> {
-    let mut mentions: HashMap<&str, HashSet<String>> = HashMap::new();
+    let mut mentions: HashMap<&str, HashSet<String>> = HashMap::default();
     for decl in &program.fns {
         let entry = mentions.entry(decl.name.as_str()).or_default();
         for stmt in &decl.body {
@@ -1480,7 +1479,7 @@ fn reachable_names<'a>(
     mentions: &HashMap<&str, HashSet<String>>,
     seeds: impl Iterator<Item = &'a str>,
 ) -> HashSet<String> {
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut seen: HashSet<String> = HashSet::default();
     let mut queue: Vec<String> = seeds.map(str::to_string).collect();
     while let Some(name) = queue.pop() {
         for next in mentions.get(name.as_str()).into_iter().flatten() {
@@ -1610,7 +1609,7 @@ mod tests {
         (program, inference)
     }
 
-    fn loops_of(src: &str) -> std::collections::HashSet<(String, usize)> {
+    fn loops_of(src: &str) -> crate::hash::Set<(String, usize)> {
         // the tests assert membership; the cluster ids are irrelevant here
         let program = crate::compile("test.kso", src, false).unwrap();
         let inference = infer::infer(&program);
@@ -1932,7 +1931,7 @@ mod tests {
             .expect("fixture writes");
         let program = crate::compile_module(&dir, false).unwrap();
         let label = program.fns.iter().find(|d| d.name == "label").expect("label compiles");
-        let mut idents = std::collections::HashSet::new();
+        let mut idents = crate::hash::Set::default();
         for stmt in &label.body {
             collect_idents(stmt, &mut idents);
         }
@@ -1940,7 +1939,7 @@ mod tests {
         assert!(idents.contains("first"), "the local was rewritten: {idents:?}");
     }
 
-    fn collect_idents(stmt: &crate::ast::Stmt, out: &mut std::collections::HashSet<String>) {
+    fn collect_idents(stmt: &crate::ast::Stmt, out: &mut crate::hash::Set<String>) {
         let e = match stmt {
             crate::ast::Stmt::Bind { expr, .. }
             | crate::ast::Stmt::Expr(expr)
@@ -1949,7 +1948,7 @@ mod tests {
         idents_in(e, out);
     }
 
-    fn idents_in(e: &crate::ast::Expr, out: &mut std::collections::HashSet<String>) {
+    fn idents_in(e: &crate::ast::Expr, out: &mut crate::hash::Set<String>) {
         if let crate::ast::Expr::Ident(n, _) = e {
             out.insert(n.clone());
         }

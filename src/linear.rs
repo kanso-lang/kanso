@@ -11,13 +11,13 @@
 //! aliased. Anything the analysis can't follow leaves the push allocating.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt, TemplatePart};
-use std::collections::{HashMap, HashSet};
+use crate::hash::{Map as HashMap, Set as HashSet};
 
 /// Push call sites, keyed `(file, line, col)`, whose list argument is uniquely
 /// owned and may be extended in place.
 pub fn in_place_pushes(program: &Program) -> HashSet<(String, usize, usize)> {
     let analysis = Analysis::new(program);
-    let mut out = HashSet::new();
+    let mut out = HashSet::default();
     for decl in real_fns(program) {
         collect_pushes(&analysis, decl, &decl.body, &mut out);
     }
@@ -78,8 +78,8 @@ impl<'a> Analysis<'a> {
         let mut a = Analysis {
             program,
             types,
-            linear_params: HashSet::new(),
-            returns_unique: HashSet::new(),
+            linear_params: HashSet::default(),
+            returns_unique: HashSet::default(),
             folds,
         };
         for decl in real_fns(program) {
@@ -716,7 +716,7 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
 pub fn reusable_records(program: &Program) -> HashMap<(String, usize, usize), String> {
     let analysis = Analysis::new(program);
     let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for decl in real_fns(program) {
         for stmt in &decl.body {
             let e = match stmt {
@@ -820,8 +820,8 @@ pub type Sites = HashSet<(String, usize, usize)>;
 /// the emitter can convert the seed where a caller hands one in from outside.
 pub fn string_builders(program: &Program) -> (Sites, Sites, Sites) {
     let analysis = Analysis::new(program);
-    let mut sites = HashSet::new();
-    let mut accs = HashSet::new();
+    let mut sites = HashSet::default();
+    let mut accs = HashSet::default();
     for decl in real_fns(program) {
         for stmt in &decl.body {
             let e = match stmt {
@@ -885,7 +885,7 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Sites) -> 
             break;
         }
     }
-    let mut out = HashSet::new();
+    let mut out = HashSet::default();
     for decl in real_fns(program) {
         let built = built_locals(joins, decl);
         for stmt in &decl.body {

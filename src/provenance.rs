@@ -16,7 +16,7 @@
 //! package must return an err.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt, TemplatePart};
-use std::collections::{HashMap, HashSet};
+use crate::hash::{Map as HashMap, Set as HashSet};
 
 type Group = (String, usize);
 /// Packages as a bitmask over an interned table — a program sees a handful,
@@ -205,12 +205,17 @@ impl Walk<'_> {
 
 pub fn analyze(program: &Program) -> Provenance {
     let table = intern(program);
-    let mut groups: HashMap<Group, Vec<usize>> = HashMap::new();
+    let mut groups: HashMap<Group, Vec<usize>> = HashMap::default();
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry(group_of(decl)).or_default().push(i);
     }
-    let mut walk =
-        Walk { program, groups, returns: HashMap::new(), params: HashMap::new(), changed: true };
+    let mut walk = Walk {
+        program,
+        groups,
+        returns: HashMap::default(),
+        params: HashMap::default(),
+        changed: true,
+    };
     // a pub group's callers are not all in view: the package raises errs and
     // anyone may hand one back, so a published err parameter is assumed to
     // see its own package's failures. Private groups are fed only by the call
@@ -245,7 +250,7 @@ pub fn analyze(program: &Program) -> Provenance {
             let pkg = bit(&table, package_of(&decl.file));
             let group = group_of(decl);
             // a parameter that matches err holds whatever callers fed it
-            let mut binds: HashMap<String, Pkgs> = HashMap::new();
+            let mut binds: HashMap<String, Pkgs> = HashMap::default();
             for (i, pattern) in decl.params.iter().enumerate() {
                 let Pattern::Annotated { name, ty, .. } = pattern else { continue };
                 if ty != "err" {
@@ -285,7 +290,7 @@ pub fn violations(
     returns: &[crate::infer::Set],
 ) -> Vec<String> {
     let mut out = Vec::new();
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     for (i, decl) in program.fns.iter().enumerate() {
         if decl.synthetic {
             continue;

@@ -79,7 +79,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     // one, and otherwise mark a line the gap already holds — a statement's
     // line is not a declaration's neighbour, so nothing is being invented
     // about the code, only about the space between two forms.
-    let blanks: std::collections::HashSet<usize> = lexed.blank_lines.iter().copied().collect();
+    let blanks: crate::hash::Set<usize> = lexed.blank_lines.iter().copied().collect();
     let mut decl_blanks: Vec<usize> = Vec::new();
     for pair in decl_lines.windows(2) {
         let (a, b) = (pair[0].number, pair[1].number);

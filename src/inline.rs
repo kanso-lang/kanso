@@ -18,7 +18,7 @@ use crate::ast::*;
 /// site that called them. Kept in step with codegen's origin-passing list.
 const BIRTHS_ERR: [&str; 4] =
     ["builtin_to_int", "builtin_to_float", "builtin_utf8", "builtin_from_code"];
-use std::collections::HashMap;
+use crate::hash::Map as HashMap;
 
 /// Wrapper name and arity, mapped to the builtin it stands for. An arm
 /// qualifies when its body is exactly one call to a builtin, passing its own
@@ -30,7 +30,7 @@ use std::collections::HashMap;
 /// type checker reads this map per arm; the call-site rewrite below adds the
 /// stricter only-arm condition on top.
 pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
-    let mut found = direct_aliases(program, &HashMap::new());
+    let mut found = direct_aliases(program, &HashMap::default());
     loop {
         let grown = direct_aliases(program, &found);
         if grown.len() == found.len() {
@@ -44,11 +44,11 @@ fn direct_aliases(
     program: &Program,
     known: &HashMap<(String, usize), String>,
 ) -> HashMap<(String, usize), String> {
-    let mut counts: HashMap<(&str, usize), usize> = HashMap::new();
+    let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
     for decl in &program.fns {
         *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
     }
-    let mut found = HashMap::new();
+    let mut found = HashMap::default();
     for decl in &program.fns {
         let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
             continue;
@@ -101,7 +101,7 @@ fn direct_aliases(
 /// sending its calls straight to the builtin would delete the dispatch that
 /// reaches the other arm.
 pub fn inline_builtin_wrappers(program: &mut Program) {
-    let mut counts: HashMap<(&str, usize), usize> = HashMap::new();
+    let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
     for decl in &program.fns {
         *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
     }
