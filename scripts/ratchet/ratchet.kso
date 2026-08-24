@@ -195,6 +195,22 @@ compile_allocs_host = row
   (breaking "compile_allocs_host_unpinned")
   no_setup
 
+compile_ir = row
+  "front-end work that costs instructions and moves no other counter"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_ir_unwatched")
+  release
+
+compile_ir_host = row
+  "the instruction vein read under a toolchain that did not retire it"
+  false
+  (whose "compile_instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_ir_host_unpinned")
+  no_setup
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -253,7 +269,9 @@ rows_b1b = text/concat rows_b1 [emitted_code machine_code]
 
 rows_b1c = text/concat rows_b1b [instructions_host text_host]
 
-rows_b = text/concat rows_b1c [compile_allocs compile_allocs_host]
+rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
+
+rows_b = text/concat rows_b1d [compile_ir compile_ir_host]
 
 rows_c1 = [welfare_floor grammar book_outputs]
 

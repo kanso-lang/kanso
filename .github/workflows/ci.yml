@@ -284,6 +284,11 @@ jobs:
         continue-on-error: true
         run: sh scripts/gates/compile_allocs.sh
 
+      - name: compile instructions
+        id: compile_ir
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/compile_instructions.sh
       - name: compile memory
         id: compile_memory
         if: always()
@@ -317,6 +322,7 @@ jobs:
                       "basket counters:${{ steps.basket.outcome }}" \
                       "compile memory:${{ steps.compile_memory.outcome }}" \
                       "compile allocations:${{ steps.compile_allocs.outcome }}" \
+                      "compile instructions:${{ steps.compile_ir.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}"; do
