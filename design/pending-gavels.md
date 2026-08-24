@@ -23,18 +23,6 @@ Rules of the ledger:
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### Does a DEMANDED knot count as a thunk allocation?
-
-The undemanded half is ruled and built; this is what survived it. `x = [x]`
-that something reads answers `1` on both engines, and the counters do not
-agree about what building it cost: native reports `thunk_allocs=1` and the
-oracle `0`, because the oracle's `knotted` makes its cell without touching
-the counter. It predates the deferral and is untouched by it. The question
-is what `thunk_allocs` counts — every cell, or only the ones a program's own
-laziness made — and the answer decides which engine moves. No fixture can pin
-a demanded knot's allocation shape until it is settled; the value and the
-forces already agree, so nothing else waits. Filed 2026-08-24.
-
 ### Does `>>` accumulate run-time effect failures, or stop at the first?
 
 Both channels are otherwise settled: the value channel answers one

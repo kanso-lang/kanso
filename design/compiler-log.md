@@ -2701,3 +2701,17 @@ The ruling, in three clauses:
 The entry leaves the ledger with this commit. Implementation — the gate
 edit, the corrected figure, the floor `--set` with this entry cited —
 is the implementer's, in one PR so the red window never exists.
+
+## 2026-08-24 — gavel: a demanded knot counts, and the oracle moves
+
+Clay confirmed the recommendation ("it seems so obvious"), and it is the
+other half of the undemanded-knot gavel: `thunk_allocs` counts the
+program's own demanded work, identically on every engine. An undemanded
+knot is not demanded work, so it counts nowhere — ruled and built as
+#992. A demanded knot IS demanded work, so it counts everywhere: both
+engines report `thunk_allocs=1` for `x = [x]` that something reads. The
+engine that moves is the oracle, whose `knotted` builds its cell without
+touching the counter — bookkeeping brought into line, no semantic
+change anywhere. Unblocked: the fixture pinning a demanded knot's
+allocation shape; values and forces already agree. The entry leaves the
+ledger with this commit.
