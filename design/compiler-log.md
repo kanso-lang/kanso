@@ -3011,9 +3011,10 @@ strings already in memory, keyed and hashed as copies. They are `Set<&str>`
 now, borrowed from the program. `door_advisories` still returns owned
 `Vec<String>` messages, so no lifetime escapes the pass.
 
-    compile_allocs   87,290 -> 85,788   -1,502
-    front_end_rounds     40 -> 40        flat
-    front_end_visits 17,786 -> 17,786    flat
+    compile_allocs        87,290 -> 85,788           -1,502
+    compile_instructions  65,995,610 -> 65,590,655   -0.61%
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
 
 That is 55% of what the pass spent. The rest is the fixpoint's own vectors
 and the message strings, which are the work it exists to do.
@@ -3022,6 +3023,19 @@ and the message strings, which are the work it exists to do.
 `name_types` answer an empty set for a declared type and
 `a_pub_fn_returning_a_foreign_type_with_no_accepting_op_is_advised` fails
 while the other five stay green — the door path and only the door path.
+
+The gate's own profile shows the swap where it happened. The owned-key line
+falls from 1,308,039 to 1,106,146, and a borrowed-key line stands beside it
+at 1,196,935:
+
+    1,196,935 (1.82%)  HashMap<&str, (), Fx>::insert
+    1,106,146 (1.69%)  HashMap<String, (), Fx>::insert
+
+Those two cannot be added together and compared against the old single line.
+The listing is thresholded at 90%, so a borrowed-key line may well have been
+there before and sat under the cut; what a reader can take from it is which
+monomorphisation the pass now uses, and nothing about totals. The total is
+the row: 65,590,655.
 
 Worth saying where this came from: nobody went looking for it. The gate added
 yesterday prints its profile on every run, and the profile named the type on
