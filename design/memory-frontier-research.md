@@ -118,16 +118,26 @@ And a large list merely THREADED through a beat loop is not copied: a
 evacuates 54 nodes of 32 bytes, because the list is below the mark and shared.
 So wide's four copies are not "a big carried list" and the postcard is not
 written yet. The next probe was which carry site produces them, and it
-has been taken: the evacuation path tagged by site, and 263 of wide's 264
-evacuations — 776,320 bytes, three of the four large copies among them — come
-from `k_beat_iter_carry`. The fourth 256,016-byte copy comes from a
-`k_deep_copy` reached through none of the three sites tagged, which is the one
-loose end. Nothing at all comes from `k_beat_pop`'s result copy or from
-`k_caf_freeze`.
+has been taken: `k_deep_copy` has exactly three entry points — `k_beat_pop`'s
+result copy, `k_caf_freeze`, and `k_beat_iter_carry` — and with all three
+tagged, **all 264 of wide's evacuations and all 1,032,336 bytes come from
+`k_beat_iter_carry`**, the four large copies included. Nothing comes from the
+other two.
 
-So the target has a name and an address. The beat carry copies every unkept
-slot on every rewind, at any size, with no guard, and that is where the whole
-megabyte goes.
+A third probe says what the copied slot is, and it is not what the shape
+suggested. There is exactly ONE carry slot (`n=1`), it is not marked kept, and
+its tag is 8 — `K_DESC`. The carried value is the description
+`io/write (...) . (_ -> stream_elems xs (i + 1))`, and what costs 256 KB is
+the `xs` it captures: a 16,000-element list built by `decode` after the outer
+beat's mark was taken, so it sits above the mark and the carry copies it
+forward on every rewind. The list is loop-INVARIANT — the same value every
+iteration, never rebuilt — and it is deep-copied whole each time anyway.
+
+That is the finding, and it points somewhere the page-pinning framing did not.
+`k_carry_kept` already exists for exactly this purpose, and its meaning today
+is "this cycle's own builder". A loop-invariant capture is the other thing a
+carried slot can be, it is statically recognisable, and promoting it once
+would delete the whole megabyte without any change to how the arena rewinds.
 
 There is a precedent for the pin, too, in the same file and at the same
 granularity the wide case wants. `k_carry_stage_kept` moves a builder's KStr
