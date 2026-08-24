@@ -1552,7 +1552,13 @@ fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
     let types: HashMap<&str, &TypeDecl> =
         program.types.iter().map(|t| (t.name.as_str(), t)).collect();
-    let builtins = crate::inline::aliases(program);
+    // Borrowed for the walk: the map is keyed by an owned name, and looking
+    // one up needed a String built from the callee at every call expression —
+    // twice, since the same key answered `forwards`. A view keyed by the
+    // program's own names answers both from one lookup and allocates nothing.
+    let owned = crate::inline::aliases(program);
+    let builtins: HashMap<(&str, usize), &str> =
+        owned.iter().map(|((n, a), t)| ((n.as_str(), *a), t.as_str())).collect();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -1688,7 +1694,7 @@ fn literal_walk_stmt(
     groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
-    builtins: &HashMap<(String, usize), String>,
+    builtins: &HashMap<(&str, usize), &str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     match stmt {
@@ -1703,7 +1709,7 @@ fn literal_walk_expr(
     groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
-    builtins: &HashMap<(String, usize), String>,
+    builtins: &HashMap<(&str, usize), &str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     if let Expr::App { head, args, .. } = e {
@@ -1711,13 +1717,10 @@ fn literal_walk_expr(
             if !bound.contains(name.as_str()) {
                 // a std wrapper is a rename over a builtin, so the builtin's
                 // demand is the one that will actually be met
+                let alias = builtins.get(&(name.as_str(), args.len())).copied();
                 let bare =
-                    builtins.get(&(name.clone(), args.len())).cloned().unwrap_or_else(|| {
-                        name.rsplit_once('/')
-                            .map(|(_, n)| n.to_string())
-                            .unwrap_or_else(|| name.clone())
-                    });
-                let bare = bare.strip_prefix("builtin_").unwrap_or(&bare).to_string();
+                    alias.unwrap_or_else(|| name.rsplit_once('/').map(|(_, n)| n).unwrap_or(name));
+                let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
                 // A program that declares its own `run` calls its own `run`,
                 // and the arms below say what those take. Without this, every
                 // function sharing a bare name with a builtin would inherit
@@ -1730,11 +1733,11 @@ fn literal_walk_expr(
                 // refused at compile time naming its argument while
                 // `text/chars 5` answered a bare runtime string: not a
                 // decision, an accident of which names have wrappers.
-                let forwards = builtins.contains_key(&(name.clone(), args.len()));
+                let forwards = alias.is_some();
                 let shadowed = !forwards && groups.contains_key(&(name.as_str(), args.len()));
                 for (i, arg) in args.iter().enumerate() {
                     let Some(kind) = literal_kind(arg) else { continue };
-                    let Some(allowed) = builtin_demand(&bare, i).filter(|_| !shadowed) else {
+                    let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {
                         continue;
                     };
                     if !allowed.contains(&kind) {
