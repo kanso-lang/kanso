@@ -844,7 +844,7 @@ pub struct Interp<'a> {
     fns: HashMap<&'a str, Vec<&'a FnDecl>>,
     types: HashMap<&'a str, &'a TypeDecl>,
     entry_decl: TypeDecl,
-    demand: crate::demand::DemandInfo,
+    demand: crate::demand::DemandInfo<'a>,
     pub thunk_stats: ThunkStats,
     depth: Cell<usize>,
     /// Computed once, because a stack exhaustion is reported where the cause

@@ -576,7 +576,7 @@ struct Backend<'a> {
     /// fills these before main any more: a constant builds itself on the
     /// first read, so one nobody reads is never built.
     caf_cells: Vec<String>,
-    demand: crate::demand::DemandInfo,
+    demand: crate::demand::DemandInfo<'a>,
     /// (site evaluator symbol, captured-arg count), indexed by site id.
     thunk_sites: Vec<(String, usize)>,
 }

@@ -3042,3 +3042,48 @@ yesterday prints its profile on every run, and the profile named the type on
 the first red diff it produced. That is the second thing the instruction vein
 has found in a day, and both times the finding was in output that already
 existed rather than in a measurement somebody set out to take.
+
+## 2026-08-24 — the demand pass owns keys made of names the program holds
+
+`DemandInfo` answers two questions for codegen: is the bind at this statement
+lazy, and may its cell be released with the frame. Both are sets keyed by
+`(owning fn name, arity, statement index)`, and the name was a `String`.
+
+That cost twice. Tallying the votes allocated a key per statement per
+declaration — names the program was already holding — and every query
+allocated another key to throw away:
+
+    self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
+
+The sets are `Set<(&'a str, usize, usize)>` now, borrowed from the program.
+
+    compile_allocs        85,788 -> 84,261   -1,527
+    front_end_rounds          40 -> 40        flat
+    front_end_visits      17,786 -> 17,786    flat
+
+1,527 of the 2,813 the pass was spending, which is 54% — near enough the 55%
+the door analysis gave up yesterday to suggest the shape has a characteristic
+size. What stays is the fixpoint's own vectors and the discard map.
+
+The query allocations go too, and no vein can see it: `is_lazy_bind` and
+`is_releasable` are called only from codegen, which `kanso check` never runs.
+They are gone all the same.
+
+Two things about the borrow were settled by building rather than reasoning.
+The first was whether `DemandInfo` could borrow at all, given that it outlives
+its pass — all three owners already carry a lifetime and already borrow the
+program, so `infer::Ctx<'a>`, `eval::Interp<'a>` and `codegen::Backend<'a>`
+took it unchanged. The second looked worse: `HashSet::contains` wants
+`K: Borrow<Q>`, and for a tuple key `Q` is the tuple exactly, so a
+`Set<(&'a str, …)>` seemed to need an `&'a str` to probe with rather than the
+shorter-lived `&str` the query signature offers. The plan was to restructure
+as `Map<&'a str, Set<(usize, usize)>>` to avoid it. The plan was unnecessary:
+`&str` is covariant and `HashSet` is covariant in its key, so the probe
+compiles as written. One build settled what an afternoon of reasoning would
+have got wrong in the safe direction.
+
+`src/demand.rs`'s own two tests are the spec, and the mutation was watched:
+tally the votes under a key whose name is `""` and
+`discard_capable_argument_is_lazy` fails while
+`scrutinized_binding_stays_strict` stays green, which is the lookup path and
+only the lookup path.

@@ -43,7 +43,7 @@ struct Ctx<'a> {
     /// has to admit one; no other program does, and none pays for it.
     defers_into_containers: bool,
     program: &'a Program,
-    demand: crate::demand::DemandInfo,
+    demand: crate::demand::DemandInfo<'a>,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
     current: (&'a str, usize),
     /// Which function is being evaluated, so a read of somebody's return set
