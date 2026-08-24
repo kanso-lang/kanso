@@ -2914,3 +2914,46 @@ each applied to a fresh copy of the converted tree and all twenty-three still
 take. `cover` runs per PR and only checks that every job has a row, so a
 mutation that stopped matching would have gone unnoticed until the nightly
 `prove`.
+
+## 2026-08-24 — the compiler's own instruction count gets a vein
+
+`bench/instructions_golden.txt` counts the benchmarks, which are the programs
+the compiler produces. Nothing counted the compiler. The hasher change earlier
+today took `kanso check lib/json` from 90.9 million retired instructions to
+67.2 million and every gate in the tree reported nothing: `compile_allocs`
+identical at 87,824, rounds identical at 40, visits identical at 17,786, and
+`compile_peak_bytes` moving twelve thousand bytes inside a thirty-five
+thousand byte band. A quarter of the work went away in silence, and a quarter
+coming back would have been just as quiet.
+
+`bench/compile_instructions_golden.txt` is that dimension, and
+`scripts/gates/compile_instructions.sh` reads it.
+
+Two things had to be true first, and only one of them was.
+
+The count has to be repeatable, and under `std`'s hasher it was not: 90,704,760
+on one run and 90,676,800 on the next, same binary and same sources, because
+the per-process key moves the probe sequences and moves where the rehashes
+land. Forty thousand instructions of spread with nothing behind it. That is
+why this gate lands the day after the hasher and not before — the earlier
+change was the precondition, not merely something the gate would have caught.
+
+The count also moves with the length of the directory the compiler runs in,
+about 160 instructions per character, because the absolute path is copied and
+walked. That is the trap `compile_alloc_bytes` fell into, and the reason it is
+absent from its own golden rather than pinned in it. So the gate does not
+measure in the checkout: it copies `lib/` to a fixed path, compiles there, and
+the number then agrees to the digit from clones at different depths — 80
+characters and 115 characters both read 66,968,333 in the container where that
+was tested.
+
+The row itself is the runner's, 66,450,587, copied out of the first job log.
+Half a per cent below the container's reading, which is the provenance line
+earning its place on the gate's opening run: same sources and the same box,
+a different rustc and a different libc.
+
+The ratchet row is `compile_ir`, and its mutation points inference's maps back
+at `std`'s hasher. That is the shape the vein exists for: instructions
+66,968,333 to 72,245,921 in the container, with `compile_allocs`, the rounds
+and the visits all byte-identical. A second row covers the provenance line, as the allocation and
+machine-code veins each have.
