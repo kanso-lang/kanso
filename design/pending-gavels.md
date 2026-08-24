@@ -44,12 +44,21 @@ a container one glibc revision off the runner, three runs identical, and
 the runner itself says 872,061 twice; 376 of those bytes are main's own,
 accrued green. It matters because welfare reads that row as the current
 value of the compile-memory term rather than measuring it, so the floor
-was ratcheted to 84.85 against a
-figure the compiler left behind. Put 872,061 in the file and
+was ratcheted against a
+figure the compiler left behind. Put the measured number in the file and
 `scripts/welfare` exits 1. Three options priced in the log for
 2026-08-23: `--set` the floor on a fall, which `--set` has never been
-used for; pay the 376 bytes back out of the front end; or tighten the
+used for; pay the bytes back out of the front end; or tighten the
 band to something near the divergence it documents. Filed 2026-08-23.
+
+Updated 2026-08-24, because the gap has grown and the entry should be
+decided against what is true now. Main measures 876,930 here (three runs
+identical) and the runner said 876,956 on the same tree, so the drift is
+5,307 bytes against 17,432 of slack — up from 376 when this was filed.
+#993 is 4,895 of that: the reader index the inference fixpoint now holds,
+which bought 5,438 expression visits and is a trade welfare took happily.
+None of it is visible to welfare, which reads the golden rather than the
+compiler, and that is the whole entry.
 
 ### Does `>>` accumulate run-time effect failures, or stop at the first?
 
