@@ -81,7 +81,7 @@ fn direct_aliases(
         // born in `text/to_int` would start saying it was born in whichever
         // function called it, which is worse for the reader and is a real
         // change in what the program reports. Those wrappers stay.
-        if BIRTHS_ERR.iter().any(|b| target == *b) {
+        if BIRTHS_ERR.contains(&target) {
             continue;
         }
         let mut threads = true;
