@@ -2060,3 +2060,84 @@ The unification, per the ruling:
 
 CLAUDE.md's design-flow line now names the ledger; the vague "AND a
 memory file" is gone.
+
+## 2026-08-23 — the startup freeze goes, and an undemanded knot builds nothing
+
+Implementing the gavel above. `k_caf_init` used to seed every knotted
+constant's cell and run every builder before main, so a knot the program never
+demands was built anyway. Each constant now seeds and builds its own cell on
+the first read, and `k_caf_init` is left holding only the math-id handshake.
+
+The ready flag is set BEFORE the builder runs, which is the same discipline
+`k_caf_init` had when it seeded every cell before running any builder: a
+constant that mentions itself re-enters the reader and has to find the
+blackhole rather than the zeroed global, which is an integer zero and reads as
+one. That seeding is what keeps the cycle finite, and the demanded knot still
+answers `1` on both engines.
+
+Measured on the ruling's own program, with the counters the differential
+shares:
+
+    undemanded      oracle 0 allocs   native 1 -> 0
+    demanded        oracle 0 allocs   native 1 -> 1
+
+The ruled disagreement closes. It cost nothing and paid something: the one
+fixture in the mem corpus whose numbers move,
+`an_unasked_equality_stays_a_cell`, falls from six allocations to two and from
+four evacuations to none, because a constant nobody asks for is no longer
+built and so never has to be evacuated as a survivor. The freeze had been
+buying eagerness nobody wanted and paying for it in the beat.
+
+One branch, taken once per constant. Clay's preferred shape is update in place
+— rewrite the indirection at first evaluation so later reads check nothing —
+and it stays the better form if this ever costs anything measurable. Nothing
+in this corpus says it does.
+
+Across the benchmark veins the shape repeats. Three of the eight `.text` rows
+rise by the branch — encodebench and widebench 16 bytes, escapebench 32, one
+per knotted constant — and five do not move at all, jsonbench among them,
+because the decoder links no knot and so the hottest path in the project is
+untouched. Three counter goldens fall: widebench loses five permanent
+allocations and six allocations outright, scanbench two permanent and two
+evacuations, encodebench two and two. Constants that used to be built before
+main are not built at all when nobody asks. Welfare holds at 84.85.
+
+Sixty-four bytes of `.text` is what update in place would take back, and this
+is the number it has to beat.
+
+A CORRECTION about how this was measured, because it nearly became a false
+report. `kanso run` compiles and runs; the oracle is `run --interp`. Measuring
+the ruling's program with `run` twice and calling one of them the oracle
+produced two identical rows and the conclusion that the gavel's premise did not
+reproduce. The premise reproduces exactly. The lesson is the same one three
+goldens now carry in a `measured-on` line, arriving this time through a verb
+rather than a host: a number means nothing without the thing that produced it.
+
+The price came back from the runner. Four rows of
+`bench/instructions_golden.txt` rise, each by about what taking the ready-flag
+branch costs: encodebench +17,931, deepbench +155,986, escapebench +5,993,
+widebench +358. deepbench's is the largest and the smallest — 0.019% of 807
+million — because it reads its knotted constants inside the hottest loop it
+has, so the ready-flag test is paid once per read instead of once per program.
+jsonbench, oneshot, basket and pendbench do not move at all. These numbers are
+the runner's: the vein carries `measured-on glibc=2.39-0ubuntu8.8` and this
+container is one revision off, so `scripts/gates/measured_on.sh` refuses to
+hand over a diff here and CI's job log is the only place they can come from.
+
+`encode_sh_buf` rises 96 bytes. A per-capacity histogram of freshly-allocated
+buffers, split by beat depth, says what it is: exactly one more five-element
+buffer, allocated inside the beat. Every other capacity class is
+byte-identical, `buf_reuse` does not move, and no five-element buffer is allocated
+before main under either codegen. Beside it on the same benchmark, two
+permanent allocations and two evacuation copies go away — `perm_allocs` 12 to
+10, `evac_allocs` 19 to 17, `evac_bytes` 624 to 576. Two constants that used
+to be frozen into malloc'd storage before main, and copied there out of the
+arena, are not frozen at all now; what is left is 96 bytes of arena the beat
+reclaims on its next rewind, in place of two allocations that lived until exit
+and forty-eight bytes of copying.
+
+Left open, and going to the ledger as its own entry: the DEMANDED knot still
+disagrees. Native reports `thunk_allocs=1` where the oracle reports `0`,
+because the oracle's `knotted` builds its cell without touching the counter.
+That predates this change and survives it, and which engine is right is a
+question about what the counter counts rather than a defect to pick a side on.

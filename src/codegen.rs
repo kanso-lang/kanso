@@ -534,7 +534,6 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         knotted,
         print_value_wrapper: false,
         caf_cells: Vec::new(),
-        caf_fills: Vec::new(),
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
     };
@@ -572,10 +571,11 @@ struct Backend<'a> {
     /// Zero-arity names that reach themselves through other constants.
     knotted: std::collections::HashSet<String>,
     print_value_wrapper: bool,
-    /// One cache cell per frozen constant, emitted as globals at the end.
+    /// One cache cell per frozen constant, emitted as globals at the end,
+    /// each beside an `i8` that says whether its builder has run. Nothing
+    /// fills these before main any more: a constant builds itself on the
+    /// first read, so one nobody reads is never built.
     caf_cells: Vec<String>,
-    /// (cell, builder) pairs filled by @k_caf_init before main runs.
-    caf_fills: Vec<(String, String)>,
     demand: crate::demand::DemandInfo,
     /// (site evaluator symbol, captured-arg count), indexed by site id.
     thunk_sites: Vec<(String, usize)>,
@@ -1492,22 +1492,10 @@ impl<'a> Backend<'a> {
         // Sites are emitted as cases as lazy binds are compiled; a program
         // with no lazy sites still defines the symbol so every binary links.
         self.emit_thunk_dispatcher();
-        let mut fills = String::new();
-        // Every cell is seeded before any builder runs, so a constant that
-        // mentions itself loads a blackhole rather than the zeroed global —
-        // which is an integer zero and reads as one.
-        for (i, (cell, _)) in self.caf_fills.iter().enumerate() {
-            let _ = writeln!(fills, "  %b{i} = call %KValue @k_caf_blackhole()");
-            let _ = writeln!(fills, "  store %KValue %b{i}, ptr @{cell}");
-        }
-        for (i, (cell, build)) in self.caf_fills.iter().enumerate() {
-            let _ = writeln!(fills, "  %v{i} = call tailcc %KValue @{build}()");
-            let _ = writeln!(
-                fills,
-                "  %f{i} = call %KValue @k_caf_complete(%KValue %v{i}, %KValue %b{i})"
-            );
-            let _ = writeln!(fills, "  store %KValue %f{i}, ptr @{cell}");
-        }
+        // No fills. Each constant seeds and builds its own cell on the first
+        // read, so a program that never demands one never builds it. What is
+        // left here is the math-id handshake below.
+        let fills = String::new();
         // Division answers a declared type, so the runtime has to be told which
         // id the compiler gave it. Before the constants, because a constant may
         // divide. A program that cannot reach a math failure never declares the
@@ -1977,13 +1965,42 @@ impl<'a> Backend<'a> {
         self.emit_dispatcher_as(&build, name, 0, decls)?;
         let cell = format!("caf_{}", self.caf_cells.len());
         self.caf_cells.push(cell.clone());
-        // A bare load: no branch, no store. A store on this path is an
-        // alias-analysis barrier, and it sits inside the hottest dispatcher.
+        // Built on first demand, not before main. `k_caf_init` used to run
+        // every builder at startup, which made an undemanded knot do its work
+        // anyway — ruled 2026-08-23 to be wrong, because work defers until it
+        // is presented to IO and eager evaluation is a resource heuristic
+        // inside that contract rather than a semantic an engine may expose.
+        //
+        // The ready flag is set BEFORE the builder runs, for the same reason
+        // `k_caf_init` seeded every cell before running any builder: a
+        // constant that mentions itself re-enters here, and it has to find the
+        // blackhole rather than the zeroed global, which is an integer zero
+        // and reads as one. That seeding is what makes the cycle finite.
+        //
+        // One branch, taken once. The alternative Clay named is update in
+        // place — rewriting the indirection at first evaluation so later reads
+        // check nothing — and it is the better shape if this costs anything
+        // measurable. The number goes to the ledger before any freeze returns.
         let _ = writeln!(
             self.body,
-            "define tailcc %KValue @{sym}() {{\nentry:\n  %c = load %KValue, ptr @{cell}\n  ret %KValue %c\n}}\n"
+            "define tailcc %KValue @{sym}() {{\n\
+             entry:\n  \
+               %r = load i8, ptr @{cell}_ready\n  \
+               %is = icmp eq i8 %r, 0\n  \
+               br i1 %is, label %build, label %ready\n\
+             build:\n  \
+               %b = call %KValue @k_caf_blackhole()\n  \
+               store %KValue %b, ptr @{cell}\n  \
+               store i8 1, ptr @{cell}_ready\n  \
+               %v = call tailcc %KValue @{build}()\n  \
+               %f = call %KValue @k_caf_complete(%KValue %v, %KValue %b)\n  \
+               store %KValue %f, ptr @{cell}\n  \
+               ret %KValue %f\n\
+             ready:\n  \
+               %c = load %KValue, ptr @{cell}\n  \
+               ret %KValue %c\n\
+             }}\n"
         );
-        self.caf_fills.push((cell.clone(), build));
         Ok(())
     }
 

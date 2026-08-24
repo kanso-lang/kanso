@@ -228,6 +228,15 @@ Only Clay arms, disarms or retimes it.
   and repeat. A PR is not "shipped" until this loop closes; saying
   otherwise is false reporting. (Auto-merge silently failed to fire on
   green PRs more than once, and stale docs sat live for hours.)
+- **Opening a PR without arming a wake is how one gets abandoned.** In a
+  container nothing runs between turns: a session is woken by a subscription
+  or a scheduled check-in and by nothing else. So the moment a PR is opened,
+  subscribe to it AND arm a check-in, in the same turn, before doing anything
+  else. Two PRs opened on 2026-08-23 skipped this; one went red within four
+  minutes and sat there for over an hour, and the session had no way to know.
+  Neither the plan nor the intent was missing — only the wake. `list_triggers`
+  and the PR's own subscription state are the check: if no wake covers an open
+  PR, it is abandoned whatever the task list says.
 - `git add -A` sweeps stray working-tree files into commits — scope adds
   to the paths the change owns. (A stray repl experiment once rode into a
   PR and silently broke its CI for a day.)

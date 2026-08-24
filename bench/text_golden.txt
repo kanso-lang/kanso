@@ -226,11 +226,31 @@
 # is released. Each is an increment behind the stats branch that was already
 # there, which is why the figure is the same everywhere and small. deepbench
 # links least of the runtime and its section's alignment absorbs it.
+# 2026-08-23: three rows rise and five hold. encodebench and widebench take
+# 16 bytes each, escapebench 32, and jsonbench, oneshot, basket, deepbench and
+# pendbench do not move at all.
+#
+# The gavel of the same date took the startup freeze out: `k_caf_init` used to
+# build every knotted constant before main, and each constant now seeds and
+# builds its own cell on the first read. That read was a bare load and is now a
+# flag test with a build arm, so a program pays 16 bytes per knotted constant
+# and nothing at all for not having one. The three rows that move are the three
+# programs with knots; escapebench has two.
+#
+# The decoder holds still, which is the row that matters most here: jsonbench
+# links no knotted constant, so the hottest path in the project is untouched.
+# What the branch buys is on the other veins — the mem corpus fixture for an
+# unasked constant falls from six allocations to two and from four evacuations
+# to none, because a constant nobody demands is no longer built.
+#
+# Update in place, rewriting the indirection at first evaluation so later reads
+# test nothing, would take these 64 bytes back. It stays the better shape and
+# this is the number it would have to beat.
 jsonbench text=79858
-encodebench text=96994
+encodebench text=97010
 oneshot text=97138
 basket text=88978
-widebench text=98082
+widebench text=98098
 deepbench text=62802
-escapebench text=49458
+escapebench text=49490
 pendbench text=73362
