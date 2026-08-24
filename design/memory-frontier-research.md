@@ -152,6 +152,16 @@ watched the beat carry, which is where every remaining evacuation on the
 benchmark shelves is spent, and a change that makes those two converge is the
 one worth having.
 
+**And the pair says where to look, which is not the carry.** The two programs
+differ only in whether the list is built before the mark or after it, and that
+is a question about where the beat's mark is placed rather than about what the
+carry does with what it finds. The prologue work here — decode once, then
+stream — is loop-invariant, and the loop's bracket encloses it. Marking the
+slot kept without moving its storage would be a use-after-free, and promoting
+the storage is the copy again; hoisting the mark past invariant prologue work
+is neither. That is a `beat.rs` question, and it is the one to answer before
+any runtime change is written.
+
 There is a precedent for the pin, too, in the same file and at the same
 granularity the wide case wants. `k_carry_stage_kept` moves a builder's KStr
 header off the arena — malloc'd once, "a promoted header survives the mark
