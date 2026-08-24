@@ -2795,3 +2795,41 @@ blind spot `bench/compile_allocs_golden.txt` was added for earlier today, and
 that gate is now the only thing in the tree that can see this change at all.
 Whether welfare should carry a traffic term is an argument about the weights,
 and it is not made here.
+
+## 2026-08-24 — a String per call expression, to look up a map
+
+Timing the twenty-two checks in `check_merged` individually put one of them
+at half the phase: `check_literal_arguments` 1.93 ms against a whole compile
+of about 19 ms, where no other check reaches 0.5. Splitting it again put 0.53
+ms in `inline::aliases` and 1.41 ms in the walk.
+
+The walk asks, at every call expression, whether the callee is a std wrapper
+over a builtin. `aliases` answers that from a `Map<(String, usize), String>`,
+and a lookup needs a key — so the callee's name was cloned into a `String`,
+twice, because `forwards` asked the same question a second line later. Two
+more `String`s followed for the bare name and for stripping `builtin_`. Four
+allocations per call expression to read a map.
+
+A view keyed by the program's own names is built once per pass:
+
+    let builtins: HashMap<(&str, usize), &str> =
+        owned.iter().map(|((n, a), t)| ((n.as_str(), *a), t.as_str())).collect();
+
+and the walk borrows through it. One lookup answers both questions and
+nothing is allocated.
+
+    compile_allocs   91,185 -> 87,824   -3.7%
+    front_end_rounds     40 -> 40        flat
+    front_end_visits 17,786 -> 17,786    flat
+
+Wall clock does not move outside the noise of a loaded container, which is
+the honest report: 3,361 allocations is about 840 call expressions reached
+per pass, times four passes, times one saved allocation each after the
+compiler folds the rest. The 1.41 ms is the traversal, not the malloc.
+
+`tests/golden/errors/a_std_wrapper_does_not_hide_its_builtin` is the spec and
+it was watched red first. Pin `forwards` to false — the one substitution that
+would be wrong if `alias.is_some()` and `contains_key` disagreed — and the
+fixture reports two diagnostics where it should report three, losing the one
+for `split`, whose demand comes through a wrapper. Restore it and the corpus
+is green.
