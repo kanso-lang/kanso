@@ -2991,3 +2991,40 @@ number is large. What makes it worth an entry is that the vein landed six
 hours ago and this is the first change it has seen — a move too small for the
 wall clock on a loaded box, and invisible to rounds, visits and peak, which
 all sat still.
+
+## 2026-08-24 — the door analysis was copying names the program already held
+
+The runner's profile, printed by the instruction gate on its opening run,
+named a type outright:
+
+    1,308,039 (1.98%)  HashMap<String, (), BuildHasherDefault<Fx>>::insert
+
+A set of owned strings, hot enough to reach the top fifteen. Ablating the
+door advisory behind an environment variable sized it: `compile_allocs`
+87,824 to 85,118, so the pass was spending 2,706 allocations, and
+`phase::watched` puts it at 0.41 ms of about 11.8.
+
+Every name that analysis carries is a type the program declares. `name_types`
+answered a declared type with `name.to_string()`, and the fixpoint's
+`returns`, `env` and `tail` were `Set<String>` the whole way up — copies of
+strings already in memory, keyed and hashed as copies. They are `Set<&str>`
+now, borrowed from the program. `door_advisories` still returns owned
+`Vec<String>` messages, so no lifetime escapes the pass.
+
+    compile_allocs   87,290 -> 85,788   -1,502
+    front_end_rounds     40 -> 40        flat
+    front_end_visits 17,786 -> 17,786    flat
+
+That is 55% of what the pass spent. The rest is the fixpoint's own vectors
+and the message strings, which are the work it exists to do.
+
+`tests/advisory.rs` is the spec and it was watched red first. Make
+`name_types` answer an empty set for a declared type and
+`a_pub_fn_returning_a_foreign_type_with_no_accepting_op_is_advised` fails
+while the other five stay green — the door path and only the door path.
+
+Worth saying where this came from: nobody went looking for it. The gate added
+yesterday prints its profile on every run, and the profile named the type on
+the first red diff it produced. That is the second thing the instruction vein
+has found in a day, and both times the finding was in output that already
+existed rather than in a measurement somebody set out to take.
