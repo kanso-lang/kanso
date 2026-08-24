@@ -2228,3 +2228,150 @@ disagrees. Native reports `thunk_allocs=1` where the oracle reports `0`,
 because the oracle's `knotted` builds its cell without touching the counter.
 That predates this change and survives it, and which engine is right is a
 question about what the counter counts rather than a defect to pick a side on.
+
+## 2026-08-24 — bytes are a value on every engine
+
+Implementing the bytes gavel. The interpreter had no bytes: `text/bytes`
+answered a list of integers and every consumer ran whatever list arrived
+through `bytes_to_str`, which is how `text/append ["a"] "x"` came to answer
+`["a" 120]` where native refused. `Value::Bytes(Rc<Vec<u8>>)` exists now, and
+the six rows the ledger measured agree word for word on both engines:
+
+    text/append ["a"] "x"        append takes bytes and a string, bytes, or byte
+    text/append [65 66] "x"      append takes bytes and a string, bytes, or byte
+    text/find2 [65 66] 1 65 66   find2 takes bytes
+    text/find2_below [65 66] …   find2_below takes bytes
+    text/utf8 ["a"]              err "utf8 takes byte values (0-255)"
+    text/to_float ["a"]          to_float takes a string, bytes, or number, not ["a"]
+
+Four of those were the oracle ANSWERING where native refused, which is a
+program that runs under the interpreter and dies compiled. The browser engine
+comes along for free: `rt_builtin` calls the interpreter's `call_builtin`, so
+one implementation serves two of the three engines.
+
+The two riders shipped with it. utf8 keeps its list acceptance, spelled the
+same on both engines — there is no bytes literal, `[104 105]` is the only
+spelling a program can write down, and `text/utf8 [65 66]` was the one case
+the engines already agreed on. And `text/to_bytes` is the constructor, loud
+outside 0-255 rather than keeping the low byte: `text/bytes` covers strings,
+this covers numbers. The one place the low byte is still taken is
+`text/append`'s single-number form, because that is what the compiled engine
+has always done (`x.payload & 0xff`) and matching it is the differential law.
+Whether either engine should refuse there instead is a separate question.
+
+`==` still crosses. Native has compared a byte string against a list of its
+numbers since it was written (`k_bytes_eq_list`), so the interpreter does too;
+making both refuse is a change to native's semantics that the gavel did not
+order.
+
+What it cost: `front_end_visits` on lib/json 23,224 -> 23,250, and the
+decoder's emitted lines 11,588 -> 11,595. Both are the price of a public
+function in std/text, which lib/json imports. Measured separately: a plain
+`pub fn zzz x / x` in std/text costs 13 visits by itself, so roughly half of
+the 26 is the function existing and half is the builtin call in its body. No
+allocation counter moves, no `.text` row moves, and welfare's floor moved to
+whatever it cost — which welfare's own header says is what happens to a change
+that makes the engines agree.
+
+The goldens: six refusal fixtures under tests/golden/runtime, each watched
+red against the old oracle first — four of them ANSWERED there, which is the
+bug — and two micro fixtures for the surface that works and for the
+constructor's refusal. The error corpus moved three line numbers, and the book
+three more, because std/text grew five lines above `to_int` and an err trace
+names the line it was born on.
+
+## 2026-08-24 — a type field wakes its readers, not the whole program
+
+The bytes gavel cost lib/json 26 front-end visits, and looking at where they
+were spent found a much larger number sitting beside them. `KANSO_PHASES=1`
+on lib/json:
+
+    round 1: 365 moved of 407 visited
+    round 2:  45 moved of 407 visited
+    round 3:  52 moved of 407 visited
+    round 4:   7 moved of 407 visited
+
+Four full sweeps of every function, the last one to let seven of them move.
+The fixpoint has had dirty-tracking since it was written — a function's
+returns wake its readers and nobody else — and one line was defeating it. When
+a declared type's field set grew, inference set `all_dirty`, and the next round
+walked the program. It had to: nothing recorded which functions could care.
+
+They are static. `type_fields` is read in exactly one place, `bind_pattern`'s
+`Pattern::Ctor` arm, so the functions that can be affected are the ones whose
+patterns destructure that type — in the head or anywhere in the body. The index
+is built once, before the first round, and a field growing now wakes those and
+nothing else.
+
+The rounds it saved were paid back by rounds it cost: information travels one
+hop per round, and a round that walks forty functions carries it less far than
+one that walks four hundred. So a change moves its readers in the CURRENT round
+as well as the next. The sweep alternates direction, so about half of them are
+still ahead of the cursor and take the new answer immediately; the rest are
+behind it and are simply not walked again.
+
+    lib/json          rounds 28 -> 40, visits 23,224 -> 17,786
+    the module sample rounds  6 ->  6, visits  3,031 ->  2,403
+    the five samples  visits    133 ->    115
+
+`front_end_rounds` 28 -> 40 is the cost and it is real; 5,438 fewer expression
+visits is what it buys, and the visit is what carries the work — a round is a
+loop over a work list that is usually short now. Welfare weighs both and comes
+out ahead: 84.85 to 84.87, banked.
+
+The clock does not show it, and the entry would be dishonest without saying
+so. Interleaved on this container, three runs each, `infer` reads 2.80-3.04 ms
+on the branch against 2.82-4.06 ms on main — inference is about a fifth of a
+15 ms front end and the spread here is wider than the effect. The visit count
+is the instrument that can see it, which is the whole reason the compile
+goldens count work rather than time.
+
+The index costs memory to hold: `compile_peak_bytes` on lib/json reads 876,930
+here against main's 872,035 on the same box, three runs identical each way.
+That is inside the two per cent the gate allows and outside what welfare can
+see, because welfare reads the golden's number rather than measuring — which is
+the ledger entry that has been waiting on Clay since yesterday, and this change
+adds 4,895 bytes to what it is hiding.
+
+The answers do not move. Every engine, the error corpus, the diagnostics
+differential and the browser differential are unchanged — the only goldens that
+move are the ones that count the compiler's own work.
+
+## 2026-08-24 — the highest-ranked idea on the memory board was priced against a number that is gone
+
+`design/memory-frontier-research.md` has ranked copy-or-pin first since
+2026-08-07, on a measurement: half of every allocation the one-shot shelf made
+was the copy-out before a rewind — 63,967 evacuation allocations of 128,528,
+1,991,456 bytes. Rechecked today, one-shot reads `evac_allocs=3`,
+`evac_bytes=96`. #868 took it from 63,967 to 5 and #977 to 3. The measured half
+the idea was going to delete had been deleted by something else, and the memo
+did not know, because a status table records what an idea IS rather than
+whether its premise still holds.
+
+Where evacuation lives now, across the eight shelves: wide 264 allocations for
+1,032,336 bytes, pending 2,658 for 498,976, scan 36 for 8,800, and everything
+else under six hundred bytes. So the idea gets reposed rather than retired —
+and the instrument that priced it the first time can price it again. The
+evacuation path was instrumented to record each survivor's source address and
+copied size.
+
+Wide is four copies. Four nodes of 256,016 bytes — a 16,000-element list
+buffer, 16 + 16 x 16000 — carry 99.2% of the megabyte. `bench/wide.json` is a
+16,000-element list, so that is its top-level buffer evacuated as the streaming
+loop's carried accumulator, once per rewind. Two of the four report the same
+source address, which says only that the arena reused it — the addresses are
+bump-allocated and a rewind hands the same bytes back. The other 260 survivors
+are 8,272 bytes between them, median 32.
+
+Pending is diffuse: 666 of 2,658 survivors are needed to reach 90% of half a
+megabyte, nothing above four kilobytes, largest 3,216.
+
+That is the answer the memo asked for and nobody had taken, and it is two
+answers rather than one. A quarter-megabyte survivor occupies whole pages by
+itself, so not copying it retains almost nothing — and it does not need general
+page pinning, only a size threshold and storage that does not rewind. A
+three-kilobyte survivor is threaded through the garbage, and pinning its page
+keeps the garbage with it. The size distribution is the decision variable,
+which is 5.2's survivor-ratio selection asked one level down.
+
+Nothing is built. What changed is that the board now says what the shelves say.

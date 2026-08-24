@@ -297,6 +297,7 @@ declare %KValue @k_b_bit_shr(%KValue, %KValue)
 declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
+declare %KValue @k_b_to_bytes(%KValue, ptr)
 declare %KValue @k_b_render_value(%KValue)
 declare i64 @k_check_sub_tag(%KValue, i64)
 declare i64 @k_check_sub_bool(%KValue)
@@ -312,7 +313,7 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 51] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
     ("net_port", 1),
     ("start", 2),
     ("kill", 1),
@@ -322,6 +323,7 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 51] = [
     ("find2", 4),
     ("find2_below", 5),
     ("bytes", 1),
+    ("to_bytes", 1),
     ("read_file", 1),
     ("write", 1),
     ("write_err", 1),
@@ -4253,7 +4255,7 @@ impl<'a> Backend<'a> {
                 emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
-            if matches!(name, "to_int" | "to_float" | "utf8" | "from_code") {
+            if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes") {
                 args_ir.push(self.origin_arg(f, span));
             }
             // A push the linearity analysis proved unique extends its list in

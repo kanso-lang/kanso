@@ -1,0 +1,16 @@
+# The bytes gavel's second rider: the constructor ships with the coercion's
+# removal, so byte data stays writable, and it refuses loudly outside 0-255
+# rather than keeping the low byte the way `append` does for a single number.
+import "std/text"
+
+fn shown (err reason)
+  "{reason}"
+
+fn shown other
+  "{other}"
+
+pub play =
+  print "in range: {shown (text/to_bytes [104 105])}"
+  >> print "out of range: {shown (text/to_bytes [104 300])}"
+  >> print "negative: {shown (text/to_bytes [-1])}"
+  >> print "not a number: {shown (text/to_bytes ["a"])}"

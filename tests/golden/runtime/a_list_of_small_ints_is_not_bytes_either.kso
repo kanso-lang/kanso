@@ -1,0 +1,5 @@
+# The same refusal where every element IS a byte value. What a list holds does
+# not make it bytes: `text/bytes` and `text/to_bytes` are what make bytes.
+import "std/text"
+
+pub play = print "{text/append [65 66] "x"}"

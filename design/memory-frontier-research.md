@@ -14,17 +14,17 @@ this says only which of them are in the tree.
 |---|---|---|
 | 3.1 | wire `linear.rs` into codegen | **shipped** — consumed at four sites in `beat.rs`; codegen selects `k_b_push_mut`; 334,950 buffer reuses per gauntlet run |
 | 3.2 | free-the-top mini-rewind | **declined** 2026-07-27, with the reopening condition named |
-| 3.3 | generalize the non-heap-scalar rewind | **unverified** — the cited `runtime.c:134` has moved and the `SCALAR` set now lives in `beat.rs`; nobody has rechecked whether the generalization landed |
+| 3.3 | generalize the non-heap-scalar rewind | **not landed**, rechecked 2026-08-24 — the runtime rule is still `k_beat_pop` alone (`src/runtime.c`, "a non-heap result rewinds as always"), firing only when a beat closes. `SCALAR` in `beat.rs` is used for slot and threading decisions, never to rewind at a call boundary. The open idea is intact and so is its warning: a callee that returns a scalar may still have written heap into something the caller holds, and rewinding there frees it |
 | 3.4 | three-way escape split | **declined** 2026-07-27, measured |
 | 3.5 | `--explain-copies` + AARA footprint ratchet | **half shipped** — the counter stack exists and is CI-gated; the diagnostic naming each copy's source site does not |
-| 3.6 | TRMC | **shipped** (#394, #395) |
+| 3.6 | TRMC | **shipped** (#394, #395), and **widened** 2026-08-23 — the operand proof comes off the shape, so `n * fact (n - 1)` qualifies without Inference threaded from check |
 | 3.7 | cohort-counting soundness ratchet test | **shipped** |
 | 4.1 | static reuse-in-place inside the build-block | **declined**, measured |
 | 4.2 | tag-hoist under monomorphism speculation | **already harvested** |
 | 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
 | 4.4 | build-blocks hosting in-place graph algorithms | **not expressible today** — the blocker is the block-born rule, not the theorem |
 | 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
-| 5.1 | copy-or-pin for survivors | **measured, not built** — the highest-value move on the board, see below |
+| 5.1 | copy-or-pin for survivors | **its premise is gone** (rechecked 2026-08-24) — one-shot's evacuation is 3 allocations, not 63,967; #868 deleted the copy-out this was going to delete. Reposed below against where evacuation actually lives now |
 | 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |
 | 5.3 | the reuse delta — does dynamic reuse beat static? | **the well-posed form of "Perceus vs beats"** |
 
@@ -36,7 +36,7 @@ Perceus runtime. **The first is closed.** `evac_allocs` and `evac_bytes` count
 at `k_copy_alloc`, the one point every evacuated byte passes through, and they
 are CI-gated across four cost goldens and 41 `.mem` fixtures.
 
-The cost is concentrated far more sharply than anyone expected:
+The cost was concentrated far more sharply than anyone expected:
 
 | shelf | evacuation allocations | of total | evacuated bytes |
 |---|---|---|---|
@@ -45,11 +45,57 @@ The cost is concentrated far more sharply than anyone expected:
 | basket | 0 | — | 0 |
 | **one-shot** | **63,967** | **128,528** | **1,991,456** |
 
-Half of every allocation the one-shot program makes is the copy-out. The
-streaming shelves pay almost nothing, where a refcounting runtime would be
-paying per-reference traffic throughout. That reshapes the second gap: a
-head-to-head on decode is a formality kanso wins by construction, and one-shot
-is the only shelf where the comparison has teeth.
+Half of every allocation the one-shot program made was the copy-out, and that
+is what put copy-or-pin at the top of the board.
+
+**Rechecked 2026-08-24, and the table above is history.** One-shot reads
+`evac_allocs=3`, `evac_bytes=96` today. #868 — the keyword compare rewrite —
+took it from 63,967 to 5, and #977 to 3. The measured half copy-or-pin was
+going to delete had already been deleted by something else, which is exactly
+the thing a top-ranked idea priced against a stale number cannot tell you.
+
+Where evacuation actually lives now, across the eight shelves:
+
+| shelf | evacuation allocations | evacuated bytes | bytes per survivor |
+|---|---|---|---|
+| **wide** | 264 | **1,032,336** | 3,910 |
+| **pending** | 2,658 | 498,976 | 188 |
+| scan | 36 | 8,800 | 244 |
+| encode | 17 | 576 | 34 |
+| decode | 3 | 112 | 37 |
+| one-shot | 3 | 96 | 32 |
+| basket, escape | 0 | 0 | — |
+
+That reposes 5.1 rather than retiring it, and it reposes it better. The shelf
+with teeth is wide, and its survivors are large — four kilobytes each, against
+the thirty-odd bytes the one-shot survivors averaged. Page pinning wins where
+survivors are page-localized and loses where they are scattered through the
+garbage, so the old shelf was close to the worst case for the idea and the new
+one is close to the best. The measurement that decides it is where the bytes
+sit, and it has now been taken — the evacuation path instrumented to record
+each survivor's source address and copied size, on both shelves.
+
+**Wide is four copies.** Four nodes of 256,016 bytes each — a 16,000-element
+list buffer, `16 + 16 x 16000` — carry 99.2% of the megabyte, and
+`bench/wide.json` is a 16,000-element list: that is its top-level buffer
+evacuated as the streaming loop's carried accumulator, once per rewind. The
+other 260 survivors total 8,272 bytes between them, median 32. This is the best
+case the
+idea could ask for: a quarter-megabyte survivor occupies whole pages by itself,
+so retiring its storage instead of copying it retains almost no garbage, and it
+does not need general page pinning — a size threshold and a block that does not
+rewind would take the whole million bytes.
+
+**Pending is the opposite, and the same instrument says so.** 666 of its 2,658
+survivors are needed to reach 90% of half a megabyte, nothing is above four
+kilobytes, and the largest is 3,216 bytes. Survivors that size are threaded
+through the garbage; pinning their pages keeps the garbage with them.
+
+So copy-or-pin is not one idea with one answer. On a large-survivor shelf it is
+nearly free and deletes nearly everything; on a diffuse one it trades a copy
+for retention. The size distribution is the decision variable, it is available
+statically for the wide case (the list's length is a loop bound), and 5.2's
+survivor-ratio selection is the same question asked one level up.
 
 **5.1 Copy-or-pin.** The one-shot cost is the evacuation rather than the free
 schedule. Instead of copying a survivor out before the rewind, pin its page and
@@ -164,12 +210,19 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
    the *where* — a diagnostic naming the source site of each evacuation
    copy — which needs span plumbing through the carry machinery and a
    CLI surface worth a ruling before building.
-6. **TRMC — SHIPPED at the exact slice (#394, #395).** Accumulating
-   integer recursion with literal operands runs as a loop on all three
-   engines, through additive int-ascribed wrappers so every non-integer
-   argument keeps its original behavior. Widening to inferred-int
-   operands is scoped (needs Inference threaded from check, not
-   recomputed). Single-consumer bit + surgical DPS remain unexplored.
+6. **TRMC — SHIPPED, and WIDENED (2026-08-23).** Accumulating integer
+   recursion runs as a loop on all three engines. The widening landed
+   without threading Inference from check, which is what the earlier
+   scope assumed it needed: the proof comes off the shape instead. The
+   wrapper the rewrite already generates ascribes every counter position
+   `int`, so requiring each recursive call to hand those positions
+   arithmetic over counters carries integer-ness down every level, and
+   an operand built from counters and literals is an integer at every
+   depth. `n * fact (n - 1)` and `n * n + r (n - 1)` now qualify where
+   only `1 + count (n - 1)` did. Floats stay refused — reassociating
+   their addition changes the answer, and three fixtures are there to be
+   refused for exactly that reason. Single-consumer bit + surgical DPS
+   remain unexplored.
 7. **Cohort-counting soundness ratchet TEST — DONE (adversarial corpus,
    2026-07-27).** Five attacks live in tests/golden/errors, all rejected
    with pinned diagnostics: writing an argument's older value

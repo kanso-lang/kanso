@@ -1,0 +1,7 @@
+# The bytes gavel of 2026-08-23: a list is never ambiently bytes on any engine.
+# The oracle used to answer `["a" 120]` here, because it ran every list through
+# a byte conversion and took whatever came back. Both engines refuse now, and
+# they refuse in the same words.
+import "std/text"
+
+pub play = print "{text/append ["a"] "x"}"

@@ -3,10 +3,11 @@ use crate::diag::{Diagnostic, Span};
 use num_traits::Zero;
 use std::collections::{HashMap, HashSet};
 
-pub const BUILTINS: [&str; 54] = [
+pub const BUILTINS: [&str; 55] = [
     "append",
     "args",
     "bytes",
+    "to_bytes",
     "char_code",
     "chars",
     "concat",
@@ -1588,6 +1589,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("length", &[&[Str, List, Map]]),
         ("entries", &[&[Map]]),
         ("bytes", &[&[Str]]),
+        ("to_bytes", &[&[List]]),
         ("char_code", &[&[Str]]),
         ("chars", &[&[Str]]),
         ("split", &[&[Str], &[Str]]),

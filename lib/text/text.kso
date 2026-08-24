@@ -77,6 +77,11 @@ fn step_back s from at true
 fn step_back s from at false
   slice s from at
 
+# `bytes` covers strings; this covers numbers. It refuses loudly outside 0-255
+# rather than truncating, because a number that is not a byte is a mistake.
+pub fn to_bytes xs
+  builtin_to_bytes xs
+
 pub fn to_float x
   builtin_to_float x
 

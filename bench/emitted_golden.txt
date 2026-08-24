@@ -35,7 +35,12 @@
 # A library keeps everything, because its callers are outside the module.
 # The binary does not change — -flto already internalised and stripped these,
 # __TEXT is 114,688 either way. What is saved is writing them and reading them.
+# 2026-08-24: lines 11588 -> 11595. std/text gained `to_bytes`, which the bytes
+# gavel required ship beside the coercion's removal, and the decoder imports
+# std/text. Seven lines of module-level global for a function it never calls —
+# the same shape the os split measured in the other direction. defines, calls
+# and branches do not move.
 defines=154
 calls=1775
 branches=1175
-lines=11588
+lines=11595
