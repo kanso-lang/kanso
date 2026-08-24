@@ -3142,6 +3142,17 @@ analysis, 245 for the demand pass), and the ratio is a property of the
 measurement rather than of the change. Two changes each worth "250 per
 allocation" do not add up to their sum.
 
+The golden row was predicted before CI ran, by carrying the container's delta
+across to the runner's baseline: 65,216,434 - 344,565 = 64,871,869. The runner
+read 64,840,962, so the prediction was 30,907 high — the runner's own delta is
+-375,472 against the container's -344,565. Allocations transferred exactly
+(82,848 was predicted and 82,848 is what CI read, as it has every time), and
+instructions did not. The toolchains differ, 1.98.0 on the runner against
+1.94.1 here, and the malloc-shape argument above says the instruction cost of a
+change depends on the tree it lands in. Predicting the allocation row is safe.
+Predicting the instruction row saves nothing, because being 0.05% out costs the
+same red cycle as not guessing at all.
+
 `beat::tests::a_locally_bound_name_is_never_rewritten` is the spec, and the
 mutation was watched. Make `bound_in_pattern` insert nothing for `Var` and
 `Annotated` and it fails with `the local was rewritten: {"list/first", "xs"}`,
