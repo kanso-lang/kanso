@@ -3164,16 +3164,51 @@ The ratchet needed a repair to survive this. Its `compile_allocs` mutation
 rewrote `out.insert(name.as_str());` unscoped, meaning to hit `mentions_in_expr`
 — the only place that line existed. `bound_in_pattern` now has a line spelled
 exactly the same, and the sed rewrote both, which put a `String` into a
-`Set<&str>` and made the mutation fail to compile. A mutation that cannot build
-looks the same as a mutation that works, because the gate script exits non-zero
-either way and the ratchet reads that as red. The substitution is scoped to
-`mentions_in_expr` by address now, and it was checked the long way: apply it,
-confirm the tree still builds, confirm `bound_in_pattern` was left alone, and
-read the counter at 88,634 against a golden of 82,848.
+`Set<&str>` and made the mutation fail to compile. The substitution is scoped
+to `mentions_in_expr` by address now, and it was checked the long way: apply
+it, confirm the tree still builds, confirm `bound_in_pattern` was left alone,
+and read the counter at 88,634 against a golden of 82,848.
 
-That is a general hazard for this kind of mutation. Any of them that keys on a
-line of code rather than on a function is one identical line away from proving
-nothing, and it will not announce the change.
+The reason this could have gone unnoticed is written down in `ratchet.kso` as a
+deliberate rule: "a build that breaks because of the mutation is the gate going
+red early, and `prove` counts that as red." So a mutation that stops compiling
+passes `prove` exactly as a working one does, and the row goes on asserting
+that `compile_allocs` notices an owned-name pass when nothing has tested that
+in months.
+
+The rule is reasonable for a mutation whose defect is meant to break the build.
+It is wrong for this vein, where the whole claim is that a COUNTER moves: a
+tree that will not compile never reaches the counter, so the row proves
+nothing. Any mutation keyed on a line of source rather than on a function is
+one identical line away from that state, and by the rule above it will not
+announce the change.
+
+That is the ratchet's own design, so by the pending-gavels rule it is settled
+here rather than sent up. `prove` now requires `setup` to succeed, and a row
+whose mutated tree will not build reports UNBUILT instead of red. The split is
+safe because the rows whose defect IS a build or lint failure — clippy bait,
+misformatted source, a given-up tail call — carry `no_setup` and do their
+building inside the GATE, where a failure still counts. Only the ten rows
+carrying `release` as setup are affected, and every one of their gates reads a
+counter or a golden.
+
+The demonstration is the bug itself. With the unscoped sed restored, on the
+same tree:
+
+    old prove:  red      ... every row turned its gate red
+    new prove:  UNBUILT  ... 1 rows proved nothing
+
+and with the sed scoped, the new code reads red again and all eight rows pass.
+
+Fixing that turned up a second thing immediately, which is the argument for
+the change. Two rows came back UNBUILT on an unmutated tree, and the reason
+was that `prove` symlinks each worktree's `target` at a shared
+`/tmp/kanso-ratchet-target` that nothing creates. On a fresh machine the link
+dangles, `cargo build` stops with "Not a directory", and every row carrying
+`release` as setup was being counted red without its gate ever running. It
+takes a `mkdir -p` to fix. How long it had been true is not something this log
+can say — the old code could not distinguish that state from a working row,
+which is the whole point.
 
 One thing found on the way. The doc comment above `bound_in_pattern` had
 collected two paragraphs belonging to other functions: one describing

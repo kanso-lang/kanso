@@ -23,9 +23,15 @@ import "std/text"
 # a tool the host lacks says so and exits non-zero, which reads here as red
 # and is not evidence: the nightly runs where ci does.
 #
-# `setup` prepares what the gate reads and is allowed to fail — a build that
-# breaks because of the mutation is the gate going red early, and `prove`
-# counts that as red. `dear` marks a row that builds the compiler.
+# `setup` prepares what the gate reads and MUST succeed. It used to be allowed
+# to fail, on the reading that a build the mutation broke is the gate going red
+# early; that reading credits a row whose gate never ran. The ten rows that
+# carry `release` as setup all have gates that read a counter or a golden, and
+# a tree that will not compile never reaches one, so a broken build there is
+# UNBUILT rather than red. The rows whose defect IS a build or lint failure —
+# clippy bait, misformatted source, a given-up tail call — carry `no_setup` and
+# do the building inside the gate, where it still counts. `dear` marks a row
+# that builds the compiler.
 type row
   claim
   dear
@@ -410,23 +416,30 @@ fn proven list at acc false
 # Every row's build lands in one directory, so the first is cold and the rest
 # are incremental. A dozen rows each paying a full release build is an hour
 # that buys nothing: cargo already rebuilds exactly what the mutation touched.
+# Created here rather than assumed: nothing else makes this directory, so on a
+# fresh machine the symlink dangled, `cargo build` failed with "Not a
+# directory", and every row carrying `release` as setup was counted red without
+# its gate ever running.
 shared_target = "/tmp/kanso-ratchet-target"
 
 fn after_worktree list at acc r dir
-  linking = "ln -s {shared_target} target"
+  linking = "mkdir -p {shared_target} && ln -s {shared_target} target"
   shell dir linking . (_ -> after_target list at acc r dir)
 
 fn after_target list at acc r dir
   shell dir r.mutation . (m -> after_mutation list at acc r dir m.status)
 
 fn after_mutation list at acc r dir 0
-  shell dir r.setup . (_ -> after_setup list at acc r dir)
+  shell dir r.setup . (s -> after_setup list at acc r dir s.status)
 
 fn after_mutation list at acc r dir _
   cleaned dir . (_ -> proving list (at + 1) (push acc (broke r)))
 
-fn after_setup list at acc r dir
+fn after_setup list at acc r dir 0
   shell dir r.gate . (g -> after_gate list at acc r dir g.status)
+
+fn after_setup list at acc r dir _
+  cleaned dir . (_ -> proving list (at + 1) (push acc (unbuilt r)))
 
 fn after_gate list at acc r dir 0
   cleaned dir . (_ -> proving list (at + 1) (push acc (blind r)))
@@ -445,6 +458,9 @@ fn blind r
 
 fn broke r
   finding "  BROKE {r.job} — {r.claim}: the mutation would not apply\n" false
+
+fn unbuilt r
+  finding "  UNBUILT {r.job} — {r.claim}: it would not build\n" false
 
 fn reported list acc
   lines = list/to_list (list/map acc (f -> f.line))
