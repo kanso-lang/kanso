@@ -2452,8 +2452,25 @@ stdlib modules these programs import do not import each other. Memoizing by
 canonical path would buy nothing today. Recorded so it stays declined until a
 program has the shape.
 
-No counter moves: these passes run before inference and allocate transiently,
-so rounds, visits and `compile_peak_bytes` are all byte-identical, and welfare
-holds at 84.87. That is the honest shape of it — a structural improvement with
-a timing for corroboration rather than proof, on a box the log has already
-recorded as too noisy for a per-change wall-clock claim.
+No GOLDEN counter moves — rounds, visits and `compile_peak_bytes` are
+byte-identical and welfare holds at 84.87 — but a counter does, and finding it
+corrects the sentence this entry originally carried. `kanso check` has printed
+`compile_allocs` and `compile_alloc_bytes` since the counting allocator went in;
+nothing pins them, so they were invisible. On lib/json, two runs each,
+identical:
+
+    compile_allocs       153,346 -> 148,073   (-5,273, -3.4%)
+    compile_alloc_bytes  7,860,884 -> 7,942,065   (+81,181, +1.0%)
+
+Five thousand fewer allocations and eighty-one thousand more bytes: the Strings
+that went away were many and small, and the keep mask and the site index that
+replaced them are few and larger. The count is what the 24% fell out of, and the
+bytes are transient. Stating it as "no counter moves" would have been the
+silence the trend gate exists to refuse, on a dimension no gate watches.
+
+That the dimension is unwatched is its own finding. Both counters are
+deterministic here across runs, and neither is in
+`bench/compile_memory_golden.txt`, which pins rounds, visits and peak. Whether
+they can be pinned depends on whether they agree across hosts the way rounds
+and visits do and peak does not — that question, and the ratchet row a new gate
+owes, are a change of their own rather than a rider on this one.
