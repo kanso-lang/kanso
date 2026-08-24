@@ -2356,9 +2356,12 @@ evacuation path was instrumented to record each survivor's source address and
 copied size.
 
 Wide is four copies. Four nodes of 256,016 bytes — a 16,000-element list
-buffer, 16 + 16 x 16000 — carry 99.2% of the megabyte, from three distinct
-addresses, so one of them is copied twice. The other 260 survivors are 8,272
-bytes between them, median 32.
+buffer, 16 + 16 x 16000 — carry 99.2% of the megabyte. `bench/wide.json` is a
+16,000-element list, so that is its top-level buffer evacuated as the streaming
+loop's carried accumulator, once per rewind. Two of the four report the same
+source address, which says only that the arena reused it — the addresses are
+bump-allocated and a rewind hands the same bytes back. The other 260 survivors
+are 8,272 bytes between them, median 32.
 
 Pending is diffuse: 666 of 2,658 survivors are needed to reach 90% of half a
 megabyte, nothing above four kilobytes, largest 3,216.

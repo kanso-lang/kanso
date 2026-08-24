@@ -76,9 +76,11 @@ sit, and it has now been taken — the evacuation path instrumented to record
 each survivor's source address and copied size, on both shelves.
 
 **Wide is four copies.** Four nodes of 256,016 bytes each — a 16,000-element
-list buffer, `16 + 16 x 16000` — carry 99.2% of the megabyte. The other 260
-survivors total 8,272 bytes between them, median 32. Three distinct source
-addresses, so one of those buffers is copied twice. This is the best case the
+list buffer, `16 + 16 x 16000` — carry 99.2% of the megabyte, and
+`bench/wide.json` is a 16,000-element list: that is its top-level buffer
+evacuated as the streaming loop's carried accumulator, once per rewind. The
+other 260 survivors total 8,272 bytes between them, median 32. This is the best
+case the
 idea could ask for: a quarter-megabyte survivor occupies whole pages by itself,
 so retiring its storage instead of copying it retains almost no garbage, and it
 does not need general page pinning — a size threshold and a block that does not
