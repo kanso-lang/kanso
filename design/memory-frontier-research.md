@@ -97,6 +97,23 @@ for retention. The size distribution is the decision variable, it is available
 statically for the wide case (the list's length is a loop bound), and 5.2's
 survivor-ratio selection is the same question asked one level up.
 
+**And the project has already built that selection once — on the other path.**
+`k_cohort_pop` sizes its survivor before the dance and refuses twice: when the
+copy exceeds half the reclaim, and when the survivor is larger than four times
+the block threshold, because the dance transiently holds the copy twice on top
+of the garbage it frees. That is 5.2, shipped, for cohorts. The beat carry has
+no such guard: `k_beat_iter_carry` copies every unkept slot, every rewind, at
+any size. And the beat carry is where the remaining evacuation lives — wide
+reports `cohort_frees=0` and `cohort_kept=0` beside its 264 evacuations, so
+none of its megabyte passes the guard that would have refused it.
+
+There is a precedent for the pin, too, in the same file and at the same
+granularity the wide case wants. `k_carry_stage_kept` moves a builder's KStr
+header off the arena — malloc'd once, "a promoted header survives the mark
+from then on" — precisely so the rewind cannot reclaim it. It promotes a
+header and shares the data. What wide needs is the same move made for the
+storage rather than the header, on the one slot big enough to be worth it.
+
 **5.1 Copy-or-pin.** The one-shot cost is the evacuation rather than the free
 schedule. Instead of copying a survivor out before the rewind, pin its page and
 rewind around it. This deletes the measured half without importing a single
