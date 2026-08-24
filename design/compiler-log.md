@@ -2474,3 +2474,43 @@ deterministic here across runs, and neither is in
 they can be pinned depends on whether they agree across hosts the way rounds
 and visits do and peak does not — that question, and the ratchet row a new gate
 owes, are a change of their own rather than a rider on this one.
+
+## 2026-08-24 — the dimension that watched nothing
+
+The entry above corrected itself once: it said no counter moved, and one did.
+`kanso check` has printed `compile_allocs` and `compile_alloc_bytes` since the
+counting allocator went into main.rs, and no golden has ever held them. So the
+front end has had an allocation-traffic dimension that nothing watched, and the
+pass rewrite is what walked into it — a quarter off its time, and every gate in
+the tree reporting nothing.
+
+`bench/compile_allocs_golden.txt` holds the two rows now, with a gate beside
+the compile-memory one. The proof that it earns its place is the ratchet's, and
+it is worth stating because a new gate that duplicates an old one is cost with
+no cover. Under `compile_allocs_unwatched` — the pass put back to owning the
+program's names, one String per identifier occurrence:
+
+    compile_rounds        40 ->        40
+    compile_visits    17,786 ->    17,786
+    compile_peak_bytes 876,930 ->   876,930
+    compile memory     green
+    welfare            green
+    compile allocations  RED    148,073 -> 153,859
+
+Rounds and visits cannot see it because the decision work is identical. Peak
+cannot see it because the strings are transient — allocated, dropped, and gone
+before the high-water mark is anywhere near them. That is three gates blind to
+the same shape, and the fourth is the reason to add a fourth.
+
+The rows belong to the rustc that built the binary, because a good part of the
+count is the standard library's: a HashMap's growth schedule, a Vec's doubling,
+a String's spare. So the file carries a `measured-on rustc=` line and
+`scripts/gates/measured_on.sh` learned to read it, which makes three veins that
+name their host and one script that reads all three. Upstream version only, no
+point release — the same granularity clang gets, for the same reason: nothing
+here shows a point release moving a count, and a fact pinned tighter than the
+evidence reds the gate on changes that are not changes.
+
+Both rows watched: green unmutated, red under `compile_allocs_unwatched` and
+under `compile_allocs_host_unpinned`, and the ratchet's cover check still says
+every CI job carries a mutation or a stated reason.

@@ -279,6 +279,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/basket_counters.sh
+      - name: compile allocations
+        id: compile_allocs
+        continue-on-error: true
+        run: sh scripts/gates/compile_allocs.sh
+
       - name: compile memory
         id: compile_memory
         if: always()
@@ -311,6 +316,7 @@ jobs:
                       "one-shot counters:${{ steps.oneshot.outcome }}" \
                       "basket counters:${{ steps.basket.outcome }}" \
                       "compile memory:${{ steps.compile_memory.outcome }}" \
+                      "compile allocations:${{ steps.compile_allocs.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}"; do

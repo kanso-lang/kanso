@@ -1,0 +1,27 @@
+# What the front end ALLOCATES on lib/json, beside what it keeps.
+#
+# bench/compile_memory_golden.txt holds the work the compiler decided to do —
+# rounds and visits — and the peak it held while deciding. Neither can see the
+# traffic: a pass that allocates a String per identifier occurrence and one
+# that borrows the program's names finish with the same rounds, the same
+# visits and the same peak, because the strings are transient. That pass was
+# rewritten on 2026-08-24 for a quarter off its time, and every gate in the
+# tree reported nothing.
+#
+# These two rows are that dimension. They come off the counting allocator in
+# src/main.rs, which has printed them since it went in and which nothing has
+# ever pinned.
+#
+# They belong to the rustc that built the binary, because a good part of the
+# count is the standard library's — a HashMap's growth schedule, a Vec's
+# doubling, a String's spare. So the file names its toolchain and
+# scripts/gates/measured_on.sh refuses to read the rows anywhere else, the
+# same arrangement the instructions and machine-code veins have. A toolchain
+# bump moves every row and none has regressed: regenerate them in one go, move
+# the line naming the toolchain, and say so in design/compiler-log.md.
+#
+# A rise is a regression to explain and a fall is a win to bank. Movement is
+# fine; silence is not.
+# measured-on rustc=1.94.1
+compile_allocs=148073
+compile_alloc_bytes=7942065

@@ -51,6 +51,17 @@ for fact in $want; do
       v=$(clang --version 2>/dev/null | sed -n '1s/.*version \([0-9][0-9.]*\).*/\1/p')
       have="$have clang=${v:-unknown}"
       ;;
+    rustc)
+      # The compiler's own allocation counts are partly the standard library's
+      # — a HashMap's growth schedule, a Vec's doubling, a String's spare — so
+      # they belong to the rustc that built it as surely as .text belongs to
+      # clang. The upstream version only, for the same reason clang carries no
+      # package revision: nothing here shows a point release moving a count,
+      # and pinning tighter than the evidence reds the gate on changes that
+      # are not changes.
+      v=$(rustc --version 2>/dev/null | sed -n '1s/^rustc \([0-9][0-9.]*\).*/\1/p')
+      have="$have rustc=${v:-unknown}"
+      ;;
     *)
       echo "::error::$golden names a fact this gate cannot read: ${fact%%=*}"
       exit 2

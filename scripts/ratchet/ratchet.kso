@@ -179,6 +179,22 @@ text_host = row
   (breaking "text_host_unpinned")
   no_setup
 
+compile_allocs = row
+  "a front-end pass that owns the program's names instead of borrowing them"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_allocs_unwatched")
+  release
+
+compile_allocs_host = row
+  "the allocation vein read under a toolchain that did not count it"
+  false
+  (whose "compile_allocs")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "compile_allocs_host_unpinned")
+  no_setup
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -235,7 +251,9 @@ rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
 rows_b1b = text/concat rows_b1 [emitted_code machine_code]
 
-rows_b = text/concat rows_b1b [instructions_host text_host]
+rows_b1c = text/concat rows_b1b [instructions_host text_host]
+
+rows_b = text/concat rows_b1c [compile_allocs compile_allocs_host]
 
 rows_c1 = [welfare_floor grammar book_outputs]
 
