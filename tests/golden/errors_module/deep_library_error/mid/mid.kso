@@ -1,0 +1,4 @@
+import "../deep"
+
+pub fn twice n
+  deep/triple n
