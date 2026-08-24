@@ -2957,3 +2957,30 @@ at `std`'s hasher. That is the shape the vein exists for: instructions
 66,968,333 to 72,245,921 in the container, with `compile_allocs`, the rounds
 and the visits all byte-identical. A second row covers the provenance line, as the allocation and
 machine-code veins each have.
+
+## 2026-08-24 — the first thing the instruction vein caught
+
+`inline::direct_aliases` decides whether a function is a rename over a
+builtin. It resolved the target by stripping `builtin_` off the callee and
+then rebuilding `format!("builtin_{target}")` — two `String` allocations per
+candidate, on every pass of the fixpoint, for a round trip that cannot change
+the string. Every value the map holds was written with the prefix on it, and
+the other arm only fires when the callee already carries one, so both paths
+came back to where they started. `counts` was rebuilt on each pass as well,
+though the program does not change while the fixpoint runs.
+
+    compile_allocs        87,824 -> 87,290
+    compile_instructions      — -> —          (runner's row, from the gate)
+    front_end_rounds          40 -> 40         flat
+    front_end_visits      17,786 -> 17,786     flat
+
+`bench/emitted_golden.txt` is unmoved, and that is the evidence that matters
+rather than the argument above: the same map drives
+`inline_builtin_wrappers`, so a round trip that was not the identity would
+have changed what the compiler wrote.
+
+Half a per cent of the front end's instructions, and 534 allocations. Neither
+number is large. What makes it worth an entry is that the vein landed six
+hours ago and this is the first change it has seen — a move too small for the
+wall clock on a loaded box, and invisible to rounds, visits and peak, which
+all sat still.
