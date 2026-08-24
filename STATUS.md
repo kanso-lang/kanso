@@ -7,14 +7,41 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this
-file only indexes it. Blocking right now: **the compile-memory band and
-its floor**; **does `>>` accumulate run-time effect failures or stop at
-the first**.
+file only indexes it. Blocking right now: **does a DEMANDED knot count as a
+thunk allocation**; **the compile-memory band and its floor**; **does `>>`
+accumulate run-time effect failures or stop at the first**.
 
 ## In flight
 
-**Nothing is open.** Five pull requests landed on 2026-08-23 and each was
-verified on its remote main rather than reported from the merge:
+**kanso #993 — bytes are a value on every engine, and a type field wakes its
+readers.** Every gate green on this box before it was pushed: the full suite,
+every counter gate, welfare 84.87 banked, the trend gate priced, page drift
+0/3, prose and golden-prose clean. Subscribed, with a check-in armed.
+
+Three landed since this file was last rewritten, each verified on origin/main
+rather than reported from the merge response:
+
+    kanso 3413eaf4  #991  the two gavels recorded, their ledger entries removed
+    kanso 7f81a022  #992  an undemanded knot builds nothing, on either engine
+    kanso e3052383  #990  one ledger for what waits on Clay
+
+**#992 made a knotted constant build on first read** instead of before main, so
+a knot nothing demands costs nothing. It cost one branch per constant: three
+`.text` rows rise by 16 to 32 bytes, four instruction rows rise by the flag
+test, and one mem fixture falls from six allocations to two because a constant
+nobody asks for is never evacuated as a survivor either. jsonbench does not
+move at all — the decoder links no knot.
+
+**#993 gave the interpreter a real bytes value.** Six programs disagreed across
+the engines and in four of them the ORACLE answered where native refused, which
+is a program that runs under the interpreter and dies compiled. Measuring what
+the fix cost — 26 front-end visits, for one public function in std/text — found
+four full sweeps of 407 functions sitting beside it, because a declared type's
+field growing woke the whole program. It wakes the functions whose patterns
+destructure it now, and lib/json's front end does 17,786 expression visits
+where it did 23,224.
+
+## What landed before them, on 2026-08-23
 
     kanso 2601a7a5  #987  the os package, two blind gates, host-bound goldens
     kq    8bf3374   #78   kq migrated to std/os, the pin bumped to 2601a7a5
