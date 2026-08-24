@@ -2625,3 +2625,47 @@ the copies are made, which the entry above measured correctly; the policy is at
 its caller, which the entry did not look for. And the framing this came from —
 copy-or-pin, page pinning, `k_carry_kept` — was aimed at a mechanism the tree
 already has in a better form. The memo carries the same correction.
+
+## 2026-08-24 — where the front end spends itself now
+
+Two compile-side changes landed today — #993's reader index and #996's
+borrowed names — and the plan carried forward from before them is stale. It
+named lex at 1.53 ms and parse at 1.58 ms as what was left. Measured on
+`kanso check lib/json`, five runs:
+
+    check_merged   3.0-4.0 ms   30%
+    infer          1.9-2.6 ms   19%
+    parse          1.1-1.3 ms   11%
+    lex            1.1-1.25 ms  10%
+
+Lex and parse have each fallen by about a third and are no longer where to
+look. `check_merged` is, and the number is its own work: `phase::watched`
+computes `mine = whole - IN_CHILDREN`, so infer's time is subtracted rather
+than counted twice.
+
+It is 22 independent whole-program traversals. Instrumenting each one puts
+the sum at 3.04 ms with no single pass to blame:
+
+    literal_arguments 0.73   call_arities  0.40   effect_discarded    0.37
+    call_shaped_list  0.21   wall_operands 0.18   none_in_collections 0.12
+    build_blocks      0.12   if_arity      0.11   field_exists        0.11
+    arm_ties          0.11   and twelve more below 0.10
+
+So a fix here is fusion — one traversal running every per-expression check —
+rather than a hot pass to rewrite. That is a real refactor and it is not
+started.
+
+`literal_arguments` earned a look on its own at twice the next largest, and
+most of it is its own walk. `inline::aliases`, which it calls, is a fixpoint
+that rebuilds a `HashMap<(String, usize), String>` every round and clones a
+callee name to build each lookup key — the shape #996 fixed twice elsewhere —
+and it has two callers. Priced at 0.30 ms across both, near three per cent of
+the front end. Worth doing and small, recorded here so the size is known
+before anybody starts.
+
+One hypothesis killed on the way. `phase::watched` calls `env::var_os` on
+every invocation, so 22 more calls per compile might have moved the counter
+the day's other change had just pinned. It does not: 148,073 instrumented and
+clean alike, because `var_os` on a missing variable answers None without
+allocating. The per-pass instrumentation costs nothing when off, which is the
+argument for keeping it rather than re-deriving it next time.
