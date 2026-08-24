@@ -162,7 +162,31 @@ the bracket is pushed against when the argument is evaluated, and the next probe
 is `k_beat_depth` and the current mark at the moment the 500-element buffer is
 allocated, in both programs.
 
-**And the pair says where to look, which is not the carry.** The two programs
+**CORRECTED 2026-08-24, and the correction is the finding.** The claim above
+that the beat carry has no guard is wrong. The guard is in the bind-chain
+driver that pushes the beat those copies happen under: `k_exec` sizes the
+staged continuation and takes one of three paths — under 4 KB in an undrifted
+region, leave it; over 256 KB, floor the region instead of evacuating; between,
+stage and copy. It landed with streaming stdout on 2026-07-27 and took kq's
+full print from 47.5 MB to 30.0.
+
+widebench's continuation captures 256,016 bytes, 2,128 short of that line, and
+the cliff is sharp: 16,000 elements evacuate 1,028,512 bytes, 16,380 evacuate
+3,648. Lowering the threshold to 64 KB measures beautifully — widebench's
+`evac_bytes` 1,032,336 to 7,488, seven shelves byte-identical, `arena_peak_bytes`
+unmoved anywhere. It should still not land: `bench/cost_golden_wide.txt` says in
+its own header that sixteen thousand was chosen so the shelf sits BELOW the
+threshold and exercises the staging path, and moving the line would hide the
+cost this shelf exists to show.
+
+The question that survives is whether the 4 KB-to-256 KB band is right for
+programs rather than for a shelf placed under it. On the reduced fixture,
+flooring is free at 128 KB and 192 KB survivors. That argument has to be made
+on real programs, and it has to move widebench's size in the same change or the
+shelf loses its point either way.
+
+**And the pair said where to look, which was not the carry — but not here
+either.** The two programs
 differ only in whether the list is built before the mark or after it, and that
 is a question about where the beat's mark is placed rather than about what the
 carry does with what it finds. The prologue work here — decode once, then
