@@ -1,0 +1,39 @@
+import "std/io"
+
+# The carried slot of a streaming loop is the description it hands on, and a
+# description carries what it captured. Here that is `xs`, which is built once
+# and never rebuilt — and which the beat carry deep-copies forward on every
+# rewind anyway, because it was built ABOVE the mark.
+#
+# Where `xs` is built decides everything, and the difference is not visible in
+# the source shape. Build it before the chain and it sits below the outer mark,
+# where the carry shares it: the twin fixture beside this one is the same
+# program with that one line moved, and it evacuates 192 bytes. Build it inside
+# the chain — as this does, and as a program that decodes inside `read_file`'s
+# continuation does — and the whole list travels forward once per rewind, for
+# 32,672.
+#
+# So this pins a cost rather than an answer: evac_bytes here is the list's
+# storage times the number of rewinds, and it grows with the list while the
+# loop's own work does not. The fixture exists because nothing else in the
+# corpus watches the beat carry, which is where every remaining evacuation on
+# the benchmark shelves is spent.
+fn built n acc
+  more n acc (n < 1)
+
+fn more _ acc true
+  acc
+
+fn more n acc false
+  built (n - 1) (push acc n)
+
+fn walk xs i
+  step xs i (length xs < i)
+
+fn step _ _ true
+  io/write "done\n"
+
+fn step xs i false
+  io/write "" . (_ -> walk xs (i + 1))
+
+pub play = io/write "" . (_ -> walk (built 500 []) 1)

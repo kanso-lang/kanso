@@ -97,6 +97,78 @@ for retention. The size distribution is the decision variable, it is available
 statically for the wide case (the list's length is a loop bound), and 5.2's
 survivor-ratio selection is the same question asked one level up.
 
+**And the project has already built that selection once — on the other path.**
+`k_cohort_pop` sizes its survivor before the dance and refuses twice: when the
+copy exceeds half the reclaim, and when the survivor is larger than four times
+the block threshold, because the dance transiently holds the copy twice on top
+of the garbage it frees. That is 5.2, shipped, for cohorts. The beat carry has
+no such guard: `k_beat_iter_carry` copies every unkept slot, every rewind, at
+any size. And the beat carry is where the remaining evacuation lives — wide
+reports `cohort_frees=0` and `cohort_kept=0` beside its 264 evacuations, so
+none of its megabyte passes the guard that would have refused it.
+
+Two things a first attempt at a reduced fixture ruled out, both worth not
+repeating. A cohort is licensed narrowly — codegen wraps one only around a
+qualified call that crosses DOWN into a nested module, from a caller that is
+not itself a rewinding loop, with every argument a non-heapish shape — so a
+same-module call never produces one however much garbage it makes, and the
+`.mem` corpus has no cohort fixture for that reason rather than by oversight.
+And a large list merely THREADED through a beat loop is not copied: a
+16,000-element list built before the loop and passed through 8,010 iterations
+evacuates 54 nodes of 32 bytes, because the list is below the mark and shared.
+So wide's four copies are not "a big carried list" and the postcard is not
+written yet. The next probe was which carry site produces them, and it
+has been taken: `k_deep_copy` has exactly three entry points — `k_beat_pop`'s
+result copy, `k_caf_freeze`, and `k_beat_iter_carry` — and with all three
+tagged, **all 264 of wide's evacuations and all 1,032,336 bytes come from
+`k_beat_iter_carry`**, the four large copies included. Nothing comes from the
+other two.
+
+A third probe says what the copied slot is, and it is not what the shape
+suggested. There is exactly ONE carry slot (`n=1`), it is not marked kept, and
+its tag is 8 — `K_DESC`. The carried value is the description
+`io/write (...) . (_ -> stream_elems xs (i + 1))`, and what costs 256 KB is
+the `xs` it captures: a 16,000-element list built by `decode` after the outer
+beat's mark was taken, so it sits above the mark and the carry copies it
+forward on every rewind. The list is loop-INVARIANT — the same value every
+iteration, never rebuilt — and it is deep-copied whole each time anyway.
+
+That is the finding, and it points somewhere the page-pinning framing did not.
+`k_carry_kept` already exists for exactly this purpose, and its meaning today
+is "this cycle's own builder". A loop-invariant capture is the other thing a
+carried slot can be, it is statically recognisable, and promoting it once
+would delete the whole megabyte without any change to how the arena rewinds.
+
+**The postcard exists now**, as a pair in `tests/golden/mem`. Two programs
+identical but for one line — a 500-element list built inside the chain, and the
+same list built as an argument — over the same loop and the same number of
+rewinds:
+
+    a_loop_invariant_capture_is_copied_every_rewind   24 allocs   32,672 bytes
+    the_same_capture_built_below_the_mark_is_shared    6 allocs      192 bytes
+
+The first is wide's shape reduced to twenty lines. Nothing else in the corpus
+watched the beat carry, which is where every remaining evacuation on the
+benchmark shelves is spent, and a change that makes those two converge is the
+one worth having.
+
+**And the pair says where to look, which is not the carry.** The two programs
+differ only in whether the list is built before the mark or after it, and that
+is a question about where the beat's mark is placed rather than about what the
+carry does with what it finds. The prologue work here — decode once, then
+stream — is loop-invariant, and the loop's bracket encloses it. Marking the
+slot kept without moving its storage would be a use-after-free, and promoting
+the storage is the copy again; hoisting the mark past invariant prologue work
+is neither. That is a `beat.rs` question, and it is the one to answer before
+any runtime change is written.
+
+There is a precedent for the pin, too, in the same file and at the same
+granularity the wide case wants. `k_carry_stage_kept` moves a builder's KStr
+header off the arena — malloc'd once, "a promoted header survives the mark
+from then on" — precisely so the rewind cannot reclaim it. It promotes a
+header and shares the data. What wide needs is the same move made for the
+storage rather than the header, on the one slot big enough to be worth it.
+
 **5.1 Copy-or-pin.** The one-shot cost is the evacuation rather than the free
 schedule. Instead of copying a survivor out before the rewind, pin its page and
 rewind around it. This deletes the measured half without importing a single
