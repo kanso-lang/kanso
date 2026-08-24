@@ -2416,11 +2416,71 @@ loop-invariant capture is the other thing a carried slot can be.
 Nothing is built. The fixtures pin the cost as it stands, and a change that
 makes those two numbers converge is what they are for.
 
+## 2026-08-24 — two front-end passes stop allocating per occurrence
+
+A follow-on to the fixpoint entry earlier today, and much smaller: reading the
+phase profile that change produced, two passes were doing avoidable work.
+
+`prune_unused_getters` collected mentioned names into a `HashSet<String>`,
+which is one String allocation per identifier OCCURRENCE — every mention in the
+whole program, not every distinct name — plus a second for each qualified
+read's bare half. The set borrows the program's names now. A keep mask carries
+the answer across the end of the borrow so `retain` can have the program
+mutably. Interleaved three times on kq's query library, the pass reads
+0.84-0.89 ms against main's 1.11-1.19: about a quarter off, repeatable.
+
+`canonicalize_bare_aliases` found each synthetic bare alias's qualified twin by
+scanning every declaration in the program, with a `format!` inside the inner
+loop — quadratic, and one String per pair examined. A synthetic alias and its
+twin share a source position and an arity, so that tuple indexes them; the
+index is built once and the needle formatted once per alias rather than once
+per pair.
+
+That one does NOT show up in the clock at these sizes: 0.57-0.65 ms against
+0.52-0.76, which is noise on a loaded container. The change is asymptotic and
+should be described as nothing else — lib/json has 407 declarations and kq's
+query library is not much larger, so the quadratic has not had room to hurt
+yet. It is worth removing before something does.
+
+One idea from the same sweep was measured and declined. `load_dependencies` is
+the second-largest phase at 2.13 ms, and its `visited` set is a cycle detector
+rather than a cache — it removes each path when the module finishes, so a
+diamond import would compile the shared module twice. There is no diamond to
+exploit: `KANSO_PHASES=1` prints one `load` line per module on both lib/json
+and kq's query library, four and six modules with no repeats, because the
+stdlib modules these programs import do not import each other. Memoizing by
+canonical path would buy nothing today. Recorded so it stays declined until a
+program has the shape.
+
+No GOLDEN counter moves — rounds, visits and `compile_peak_bytes` are
+byte-identical and welfare holds at 84.87 — but a counter does, and finding it
+corrects the sentence this entry originally carried. `kanso check` has printed
+`compile_allocs` and `compile_alloc_bytes` since the counting allocator went in;
+nothing pins them, so they were invisible. On lib/json, two runs each,
+identical:
+
+    compile_allocs       153,346 -> 148,073   (-5,273, -3.4%)
+    compile_alloc_bytes  7,860,884 -> 7,942,065   (+81,181, +1.0%)
+
+Five thousand fewer allocations and eighty-one thousand more bytes: the Strings
+that went away were many and small, and the keep mask and the site index that
+replaced them are few and larger. The count is what the 24% fell out of, and the
+bytes are transient. Stating it as "no counter moves" would have been the
+silence the trend gate exists to refuse, on a dimension no gate watches.
+
+That the dimension is unwatched is its own finding. Both counters are
+deterministic here across runs, and neither is in
+`bench/compile_memory_golden.txt`, which pins rounds, visits and peak. Whether
+they can be pinned depends on whether they agree across hosts the way rounds
+and visits do and peak does not — that question, and the ratchet row a new gate
+owes, are a change of their own rather than a rider on this one.
+
 ## 2026-08-24 — the megabyte was the benchmark doing its job, and a correction
 
-The entry above says the beat carry "copies every unkept slot on every rewind,
-at any size, with no guard", and that is wrong. Writing the change that would
-have followed from it is what found out.
+"The beat carry copies a loop-invariant capture" says, earlier today, that the
+carry "copies every unkept slot on every rewind, at any size, with no guard",
+and that is wrong. Writing the change that would have followed from it is what
+found out.
 
 The guard is in the bind-chain driver, which is what pushes the beat those
 copies happen under. `k_exec`'s chain case sizes the staged continuation with
