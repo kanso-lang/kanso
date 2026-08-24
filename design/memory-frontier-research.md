@@ -152,6 +152,16 @@ watched the beat carry, which is where every remaining evacuation on the
 benchmark shelves is spent, and a change that makes those two converge is the
 one worth having.
 
+One more fact about the pair, which narrows the next probe: **the two programs
+have identical beat analysis.** `KANSO_BEAT_REPORT=1` prints the same two lines
+for each — `walk/2` and `step/3` bracketed with their cluster, also unbracketed
+entries — so the compiler sees no difference at all. The difference is where the
+list's storage lands at run time relative to a mark the analysis places
+identically. Whatever explains it is not in `beat.rs`'s verdicts; it is in when
+the bracket is pushed against when the argument is evaluated, and the next probe
+is `k_beat_depth` and the current mark at the moment the 500-element buffer is
+allocated, in both programs.
+
 **And the pair says where to look, which is not the carry.** The two programs
 differ only in whether the list is built before the mark or after it, and that
 is a question about where the beat's mark is placed rather than about what the
