@@ -1,0 +1,2 @@
+pub fn triple n
+  n.nosuchfield * 3
