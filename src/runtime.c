@@ -5400,6 +5400,27 @@ KValue k_b_bytes(KValue sv) {
     return k_bytes_view((const unsigned char*)s->data, s->len);
 }
 
+/* `bytes` covers strings; this covers numbers, and it is what keeps byte data
+   writable now that a list is never ambiently bytes. Loud outside 0-255 rather
+   than truncating, which is the one place this differs from `append`'s single
+   byte: there the number is a byte by position, here the list is the thing
+   being claimed as bytes and a wrong element is a mistake in the claim. */
+KValue k_b_to_bytes(KValue lv, const char* origin) {
+    if (!k_not_failure(lv)) return lv;
+    if (lv.tag != K_LIST) k_die("to_bytes takes a list of byte values");
+    KList* l = k_as_list(lv);
+    unsigned char* data = (unsigned char*)k_alloc((size_t)(l->len ? l->len : 1));
+    for (long long i = 0; i < l->len; i++) {
+        KValue item = l->items[i];
+        if (!k_not_failure(item)) return item;
+        if (item.tag != K_INT || item.payload < 0 || item.payload > 255) {
+            return k_err(k_str("to_bytes takes byte values (0-255)"), origin);
+        }
+        data[i] = (unsigned char)item.payload;
+    }
+    return k_bytes_view(data, l->len);
+}
+
 /* A list or a bytes view, seen as a sequence of values. */
 static long long k_seq_len(KValue v) {
     if (v.tag == K_LIST) return k_as_list(v)->len;

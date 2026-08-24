@@ -1,0 +1,17 @@
+made: [104 105 32 116 104 101 114 101]
+length: 8
+index: 104 32 <none>
+slice: [104 105]
+utf8: hi there
+utf8 of a list: AB
+built: [104 105]
+built and read: hi
+append a string: [97 98 99]
+append bytes: [97 122]
+append a byte: [97 66]
+find2: 3
+find2_below: 1
+to_int: 42
+to_float: 1.5
+equal to its numbers: true
+equal to itself: true

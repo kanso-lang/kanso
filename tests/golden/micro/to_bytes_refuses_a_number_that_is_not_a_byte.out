@@ -1,0 +1,4 @@
+in range: [104 105]
+out of range: to_bytes takes byte values (0-255)
+negative: to_bytes takes byte values (0-255)
+not a number: to_bytes takes byte values (0-255)
