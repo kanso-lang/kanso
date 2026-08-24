@@ -759,24 +759,24 @@ fn short_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// Prefix every top-level name of `dep` with `qual/`, rewriting the module's
-/// own references so it still resolves internally, and record which
-/// qualified names are pub — the boundary the checker enforces.
-/// Rewrite every type reference that resolves to an enrollment clone to
-/// the canonical (origin) name: patterns and typeset members are type
-/// positions, so no local binding can shadow them. Records then match by
-/// one identity no matter which spelling constructed or destructured them.
-fn bound_in_pattern(p: &ast::Pattern, out: &mut crate::hash::Set<String>) {
+/// Names a pattern binds, borrowed from the program.
+///
+/// `check.rs` has carried a borrowed twin of this walk for as long as this
+/// one has owned its names; this was the outlier. Owning them cost a `String`
+/// per bound name — every parameter, every binding, every lambda parameter,
+/// every destructured field, across every declaration — for names the
+/// program was already holding.
+fn bound_in_pattern<'a>(p: &'a ast::Pattern, out: &mut crate::hash::Set<&'a str>) {
     match p {
         ast::Pattern::Var(n, _) => {
-            out.insert(n.clone());
+            out.insert(n.as_str());
         }
         ast::Pattern::Annotated { name, .. } => {
-            out.insert(name.clone());
+            out.insert(name.as_str());
         }
         ast::Pattern::Ctor { fields, whole, .. } => {
             if let Some(named) = whole {
-                out.insert(named.0.clone());
+                out.insert(named.0.as_str());
             }
             for f in fields {
                 bound_in_pattern(f, out);
@@ -784,7 +784,7 @@ fn bound_in_pattern(p: &ast::Pattern, out: &mut crate::hash::Set<String>) {
         }
         ast::Pattern::Keyed { entries, .. } => {
             for e in entries {
-                out.insert(e.bind_name.clone());
+                out.insert(e.bind_name.as_str());
             }
         }
         ast::Pattern::IntLit(..)
@@ -794,7 +794,7 @@ fn bound_in_pattern(p: &ast::Pattern, out: &mut crate::hash::Set<String>) {
     }
 }
 
-fn bound_in_stmt(stmt: &ast::Stmt, out: &mut crate::hash::Set<String>) {
+fn bound_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>) {
     match stmt {
         ast::Stmt::Bind { pattern, expr } => {
             bound_in_pattern(pattern, out);
@@ -804,11 +804,11 @@ fn bound_in_stmt(stmt: &ast::Stmt, out: &mut crate::hash::Set<String>) {
     }
 }
 
-fn bound_in_expr(e: &ast::Expr, out: &mut crate::hash::Set<String>) {
+fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
     match e {
         ast::Expr::Lambda { params, body, .. } => {
             for (n, _) in params {
-                out.insert(n.clone());
+                out.insert(n.as_str());
             }
             bound_in_expr(body, out);
         }
@@ -901,21 +901,30 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
         let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::default()));
         entry.0 &= d.synthetic;
         if d.synthetic {
-            let needle = format!("/{}", d.name);
             if let Some(twins) =
                 at_site.get(&(d.file.as_str(), d.span.line, d.span.col, d.params.len()))
             {
                 for name in twins {
-                    if name.ends_with(&needle) {
+                    // `qual/name`, asked without building the needle. A
+                    // `format!("/{}", d.name)` here cost a String per
+                    // synthetic declaration, which is most of what this pass
+                    // allocates and none of what it decides.
+                    let qualified =
+                        name.strip_suffix(d.name.as_str()).is_some_and(|qual| qual.ends_with('/'));
+                    if qualified {
                         entry.1.insert(name);
                     }
                 }
             }
         }
     }
-    let mut skip: HashSet<String> = std::env::var("KANSO_ALIAS_SKIP")
+    // The escape hatch's names come from the environment rather than the
+    // program, so they are owned here and borrowed into `skip` beside the
+    // program's own.
+    let env_skip: Vec<String> = std::env::var("KANSO_ALIAS_SKIP")
         .map(|v| v.split(',').map(str::to_string).collect())
         .unwrap_or_default();
+    let mut skip: HashSet<&str> = env_skip.iter().map(String::as_str).collect();
     // a name that is ever locally bound — a parameter, a `x = ...` binding, a
     // lambda parameter, a destructured field — must not be rewritten, because
     // an occurrence may mean the local rather than the function. Excluding
@@ -1027,6 +1036,10 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>) {
     }
 }
 
+/// Rewrite every type reference that resolves to an enrollment clone to
+/// the canonical (origin) name: patterns and typeset members are type
+/// positions, so no local binding can shadow them. Records then match by
+/// one identity no matter which spelling constructed or destructured them.
 pub fn canonicalize_types(program: &mut ast::Program) {
     let aliases: crate::hash::Map<String, String> = program
         .types
@@ -1598,6 +1611,9 @@ pub(crate) fn is_operator(name: &str) -> bool {
     matches!(name, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==")
 }
 
+/// Prefix every top-level name of `dep` with `qual/`, rewriting the module's
+/// own references so it still resolves internally, and record which
+/// qualified names are pub — the boundary the checker enforces.
 fn qualify(
     dep: &mut ast::Program,
     qual: &str,
