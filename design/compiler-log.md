@@ -2969,10 +2969,17 @@ the other arm only fires when the callee already carries one, so both paths
 came back to where they started. `counts` was rebuilt on each pass as well,
 though the program does not change while the fixpoint runs.
 
-    compile_allocs        87,824 -> 87,290
-    compile_instructions      — -> —          (runner's row, from the gate)
-    front_end_rounds          40 -> 40         flat
-    front_end_visits      17,786 -> 17,786     flat
+    compile_allocs        87,824 -> 87,290       -534
+    compile_instructions  66,450,587 -> 65,995,610   -0.68%
+    front_end_rounds          40 -> 40             flat
+    front_end_visits      17,786 -> 17,786         flat
+
+Both rows are the runner's. Part of the instruction fall is a second edit CI
+asked for: with the target a `&str` rather than a `&String`,
+`BIRTHS_ERR.iter().any(|b| target == *b)` is `manual_contains` and clippy
+refuses it — and the slice's own `contains` is the better codegen too, worth
+another 75,373 instructions on the container reading. I had run clippy before
+the cherry-pick and not after, so CI caught that rather than me.
 
 `bench/emitted_golden.txt` is unmoved, and that is the evidence that matters
 rather than the argument above: the same map drives
