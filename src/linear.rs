@@ -608,9 +608,7 @@ fn consumed_sibling_uses(var: &str, e: &Expr) -> usize {
         }
         n += consumed_sibling_uses(var, head);
     } else {
-        for child in crate::expr_children(e) {
-            n += consumed_sibling_uses(var, child);
-        }
+        crate::for_each_child(e, |child| n += consumed_sibling_uses(var, child));
     }
     n
 }

@@ -146,9 +146,7 @@ fn expr_ctor_types(expr: &Expr, type_names: &HashMap<&str, usize>, out: &mut Vec
             stmt_ctor_types(stmt, type_names, out);
         }
     }
-    for child in crate::expr_children(expr) {
-        expr_ctor_types(child, type_names, out);
-    }
+    crate::for_each_child(expr, |child| expr_ctor_types(child, type_names, out));
 }
 
 fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Vec<usize>> {
@@ -186,7 +184,7 @@ pub fn infer(program: &Program) -> Inference {
                     return true;
                 }
             }
-            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+            crate::any_child(expr, |c| mentions(c, name))
         }
         d.params.is_empty()
             && d.body.iter().any(|stmt| match stmt {
@@ -296,9 +294,7 @@ fn callee_first(program: &Program) -> Vec<usize> {
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
             names.push(n.as_str());
         }
-        for child in crate::expr_children(expr) {
-            gather(child, names);
-        }
+        crate::for_each_child(expr, |child| gather(child, names));
     }
     let mut calls: Vec<Vec<usize>> = vec![Vec::new(); program.fns.len()];
     for (i, decl) in program.fns.iter().enumerate() {

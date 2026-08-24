@@ -2753,3 +2753,45 @@ from instrumenting one of `check_merged`'s four call sites instead of the
 function. Instrument the function. Run the ablation. Before generalising from
 a green fixture, ask what would have to be true for it to pass while the
 claim is false, and go build that.
+
+## 2026-08-24 — the children were gathered into a vector nobody kept
+
+`expr_children` handed every caller a fresh `Vec<&Expr>`. Thirty-seven call
+sites ask it, and twenty-four of them are the same shape — `for child in
+expr_children(e) { walk(child) }` — read once and dropped at the end of the
+loop. Counting inside the function on one `kanso check lib/json`: 94,784
+calls, of which 33,453 returned something and so allocated. The whole compile
+makes 148,073 allocations.
+
+The replacement is `for_each_child(e, |child| …)`, which hands the children
+over one at a time, and `any_child` for the predicates that were writing
+`expr_children(e).into_iter().any(..)`. Both sit on a private `walk_children`
+taking `&mut dyn FnMut(&Expr) -> bool`, which stops as soon as the answer is
+false — those predicates recurse into whole subtrees, so the short-circuit
+`Iterator::any` gave them had to survive. Same nodes, same order, no pass
+moved, and `front_end_rounds` 40 and `front_end_visits` 17,786 are identical
+on both sides.
+
+    compile_allocs        148,073 -> 91,185     -38.4%
+    compile_alloc_bytes 7,942,065 -> 6,830,193  -14.0%
+    compile_peak_bytes    876,930 -> 876,930     flat
+
+Thirty-eight per cent where the instrumentation predicted twenty-three. The
+counter recorded calls that allocated at least once, and several arms
+allocate twice: `vec![cond, early]` followed by an `extend` of the guard's
+rest reallocates, and a `.collect()` from a filtered iterator grows. 56,888
+allocations removed over 33,453 allocating calls is 1.70 apiece, which is
+what that shape predicts.
+
+Wall clock, interleaved, twenty compiles a reading, on a container that had
+been building all day: 16.5 ms down to 14.4 ms, about 13%. The figures on the
+compiler page are a dated quiet-box sitting and are not re-sat from here.
+
+Welfare reads 84.87 on both sides. It has no term for what compilation
+allocates: its compile terms are rounds and visits, which count the work the
+compiler decided to do, and `compile_peak_bytes`, which counts what it held.
+A third of the traffic disappearing is invisible to all three. This is the
+blind spot `bench/compile_allocs_golden.txt` was added for earlier today, and
+that gate is now the only thing in the tree that can see this change at all.
+Whether welfare should carry a traffic term is an argument about the weights,
+and it is not made here.

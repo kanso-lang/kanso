@@ -416,9 +416,7 @@ pub(crate) fn knotted_constants(program: &Program) -> std::collections::HashSet<
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
             out.push(n.clone());
         }
-        for child in crate::expr_children(expr) {
-            names(child, out);
-        }
+        crate::for_each_child(expr, |child| names(child, out));
     }
     let mut mentions: HashMap<&str, Vec<String>> = HashMap::new();
     for decl in program.fns.iter().filter(|d| d.params.is_empty()) {
@@ -1264,7 +1262,7 @@ impl<'a> Backend<'a> {
                     return true;
                 }
             }
-            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+            crate::any_child(expr, |c| mentions(c, name))
         }
         f.arity == 0 && !f.group.is_empty() && mentions(expr, &f.group)
     }
