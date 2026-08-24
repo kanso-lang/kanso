@@ -9,11 +9,27 @@ pub struct Diagnostic {
     pub kind: &'static str,
     pub message: String,
     pub span: Span,
+    /// The source file the faulty declaration lives in, where the raiser knew
+    /// it. A check over the MERGED program holds declarations from every
+    /// module at once, so the compile unit that ran the check is not the
+    /// module at fault — a library imported through another library was named
+    /// for the module that imported it. Absent means the renderer falls back
+    /// to the compile unit's directory, which is what every raiser did before
+    /// this field existed.
+    pub file: Option<String>,
 }
 
 impl Diagnostic {
     pub fn new(kind: &'static str, message: String, span: Span) -> Self {
-        Diagnostic { kind, message, span }
+        Diagnostic { kind, message, span, file: None }
+    }
+
+    /// Name the file this diagnostic is about. Takes the declaration's own
+    /// `file`, so the module it reports is the one that owns the mistake and
+    /// the path is the real one rather than the route it was imported by.
+    pub fn owned_by(mut self, file: &str) -> Self {
+        self.file = Some(file.to_string());
+        self
     }
 }
 

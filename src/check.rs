@@ -145,21 +145,21 @@ fn check_boolean_equality(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            boolean_equality_walk(expr, diags);
+            boolean_equality_walk(expr, &decl.file, diags);
         }
     }
 }
 
-fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+fn boolean_equality_walk(expr: &Expr, file: &str, diags: &mut Vec<Diagnostic>) {
     if let Expr::BinOp { op, lhs, rhs, span } = expr {
         if matches!(*op, "==" | "!=") {
             if let Some(word) = boolean_literal(lhs).or_else(|| boolean_literal(rhs)) {
-                diags.push(Diagnostic::new("name", said_plainly(op, word), *span));
+                diags.push(Diagnostic::new("name", said_plainly(op, word), *span).owned_by(file));
             }
         }
     }
     for child in crate::expr_children(expr) {
-        boolean_equality_walk(child, diags);
+        boolean_equality_walk(child, file, diags);
     }
 }
 
@@ -1173,7 +1173,7 @@ fn check_predicates(
 ) {
     use crate::infer::{ERR, FALSE, TRUE};
     // inference is handed in: one pass serves every check that reads it
-    let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> =
+    let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span, &str)> =
         std::collections::HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
         // test functions are assertions the test verb consumes — their own
@@ -1192,14 +1192,14 @@ fn check_predicates(
         {
             continue;
         }
-        let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span));
+        let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span, decl.file.as_str()));
         entry.0 |= inference.returns[i];
     }
     // a HashMap hands these back in a different order every run, which makes
     // a multi-diagnostic file's output unstable; report in source order
     let mut groups: Vec<_> = groups.into_iter().collect();
-    groups.sort_by_key(|(name, (_, span))| (span.line, span.col, *name));
-    for (name, (set, span)) in groups {
+    groups.sort_by_key(|(name, (_, span, _))| (span.line, span.col, *name));
+    for (name, (set, span, file)) in groups {
         let short = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
         let is_question = short.ends_with('?');
         // only err rides along (a predicate over fallible work is still a
@@ -1222,11 +1222,14 @@ fn check_predicates(
             ));
         }
         if !is_question && boolish {
-            diags.push(Diagnostic::new(
-                "naming",
-                format!("`{short}` answers only true or false: name it `{short}?`"),
-                span,
-            ));
+            diags.push(
+                Diagnostic::new(
+                    "naming",
+                    format!("`{short}` answers only true or false: name it `{short}?`"),
+                    span,
+                )
+                .owned_by(file),
+            );
         }
     }
 }

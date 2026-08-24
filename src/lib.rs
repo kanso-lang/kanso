@@ -2159,6 +2159,7 @@ fn merge_ambient_arms_with(
                     decl.name
                 ),
                 span: decl.span,
+                file: None,
             });
             continue;
         }
@@ -3404,10 +3405,30 @@ fn compile_module_loaded(
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
-        let file = dir.to_string_lossy();
+        // A diagnostic that knows the file it is about names that file's
+        // module; one that does not falls back to the unit being compiled,
+        // which is what every raiser relied on before diagnostics carried a
+        // file. The fallback is wrong whenever the merged program holds a
+        // module other than this one, and each converted raiser retires a
+        // little more of it.
+        let unit = dir.to_string_lossy().to_string();
         let rendered: Vec<String> = diags
             .iter()
-            .map(|d| format!("error[{}]: {} (module {file})\n", d.kind, d.message))
+            .map(|d| {
+                // A module is the directory its files sit in, so the
+                // declaration's file names its module through its parent. A
+                // file compiled with no directory component IS the module the
+                // reader sees, and its empty parent must not be printed.
+                let file = d
+                    .file
+                    .as_deref()
+                    .map(|f| match std::path::Path::new(f).parent() {
+                        Some(p) if !p.as_os_str().is_empty() => p.to_string_lossy().to_string(),
+                        _ => f.to_string(),
+                    })
+                    .unwrap_or_else(|| unit.clone());
+                format!("error[{}]: {} (module {file})\n", d.kind, d.message)
+            })
             .collect();
         return Err(rendered.join(""));
     }
