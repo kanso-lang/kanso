@@ -8,25 +8,35 @@
 # rewritten on 2026-08-24 for a quarter off its time, and every gate in the
 # tree reported nothing.
 #
-# These two rows are that dimension. They come off the counting allocator in
-# src/main.rs, which has printed them since it went in and which nothing has
+# The row below is that dimension. It comes off the counting allocator in
+# src/main.rs, which has printed it since it went in and which nothing has
 # ever pinned.
 #
-# They belong to the rustc that built the binary, because a good part of the
-# count is the standard library's — a HashMap's growth schedule, a Vec's
+# The allocator prints a second counter, compile_alloc_bytes, and that one is
+# deliberately absent. It measures the checkout path. Five directory lengths,
+# same tree, same binary:
+#
+#   16 chars  7942065        29 chars  7942091
+#   17 chars  7942067        49 chars  7942131
+#   21 chars  7942075
+#
+# which is 7942033 plus twice the length of the directory the compiler ran in,
+# exactly, at every point — two allocations hold the absolute path. A row that
+# moves when the repository is cloned somewhere else is pinning the clone. The
+# dimension it was wanted for is covered on both sides: compile_allocs holds
+# the traffic and compile_peak_bytes holds the residency.
+#
+# The count belongs to the rustc that built the binary, because a good part of
+# it is the standard library's — a HashMap's growth schedule, a Vec's
 # doubling, a String's spare. So the file names its toolchain and
-# scripts/gates/measured_on.sh refuses to read the rows anywhere else, the
-# same arrangement the instructions and machine-code veins have. A toolchain
-# bump moves every row and none has regressed: regenerate them in one go, move
-# the line naming the toolchain, and say so in design/compiler-log.md.
+# scripts/gates/measured_on.sh refuses to read the row anywhere else, the same
+# arrangement the instructions and machine-code veins have. On the two
+# toolchains measured so far it has not moved: 148073 under rustc 1.94.1 and
+# under 1.98.0 alike, and at all five path lengths above. Two versions is
+# evidence rather than a guarantee, so the provenance line stays. A bump that
+# does move the row is a number to regenerate and a sentence to write.
 #
 # A rise is a regression to explain and a fall is a win to bank. Movement is
 # fine; silence is not.
-#
-# The rows below are the RUNNER's, which is the only place they can come from:
-# this vein's first run refused on its first outing — golden 1.94.1 against a
-# runner on 1.98.0 — which is the guard doing exactly what it is for. A
-# container cannot measure these.
 # measured-on rustc=1.98.0
 compile_allocs=148073
-compile_alloc_bytes=7942065

@@ -9,7 +9,7 @@ golden=bench/compile_allocs_golden.txt
 sh scripts/gates/measured_on.sh "$golden"
 KANSO_COUNTERS=1 ./target/release/kanso check lib/json 2>counters_allocs.txt >/dev/null
 grep -v '^#' "$golden" > allocs_want.txt
-for k in compile_allocs compile_alloc_bytes; do
+for k in compile_allocs; do
   grep "^${k}=" counters_allocs.txt
 done > allocs_got.txt
 diff allocs_want.txt allocs_got.txt || {

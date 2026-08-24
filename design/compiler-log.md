@@ -2484,8 +2484,8 @@ front end has had an allocation-traffic dimension that nothing watched, and the
 pass rewrite is what walked into it — a quarter off its time, and every gate in
 the tree reporting nothing.
 
-`bench/compile_allocs_golden.txt` holds the two rows now, with a gate beside
-the compile-memory one. The proof that it earns its place is the ratchet's, and
+`bench/compile_allocs_golden.txt` holds the count now, with a gate beside the
+compile-memory one. The proof that it earns its place is the ratchet's, and
 it is worth stating because a new gate that duplicates an old one is cost with
 no cover. Under `compile_allocs_unwatched` — the pass put back to owning the
 program's names, one String per identifier occurrence:
@@ -2502,7 +2502,30 @@ cannot see it because the strings are transient — allocated, dropped, and gone
 before the high-water mark is anywhere near them. That is three gates blind to
 the same shape, and the fourth is the reason to add a fourth.
 
-The rows belong to the rustc that built the binary, because a good part of the
+The allocator prints a second counter and the golden does not hold it. The
+first version of this file pinned `compile_alloc_bytes` beside the count, and
+the runner disagreed with the container by 26 bytes on a number near eight
+million — too small for a toolchain and too exact for noise. Five directory
+lengths, one tree, one binary:
+
+    16 chars   7,942,065        29 chars   7,942,091
+    17 chars   7,942,067        49 chars   7,942,131
+    21 chars   7,942,075
+
+which is 7,942,033 plus twice the length of the directory the compiler ran in,
+at every point. Two allocations hold the absolute path, and
+`/home/runner/work/kanso/kanso` is thirteen characters longer than
+`/home/user/kanso`. A row like that pins the clone rather than the compiler,
+and it would have reddened the first time somebody checked the repository out
+somewhere else — under a name that said the front end's allocation traffic had
+moved. It is dropped, with the measurement in the file so nobody puts it back.
+What it was wanted for is held on both sides already: `compile_allocs` for the
+traffic, `compile_peak_bytes` for the residency.
+
+The count survives the same test. It reads 148,073 at all five lengths, and
+148,073 under rustc 1.94.1 in the container and under 1.98.0 on the runner.
+
+The row is kept under a toolchain guard anyway, because a good part of the
 count is the standard library's: a HashMap's growth schedule, a Vec's doubling,
 a String's spare. So the file carries a `measured-on rustc=` line and
 `scripts/gates/measured_on.sh` learned to read it, which makes three veins that
@@ -2511,7 +2534,11 @@ point release — the same granularity clang gets, for the same reason: nothing
 here shows a point release moving a count, and a fact pinned tighter than the
 evidence reds the gate on changes that are not changes.
 
-Both rows watched: green unmutated, red under `compile_allocs_unwatched` and
+Two toolchains agreeing is evidence rather than a guarantee, and a regeneration
+taken in the wrong place is silent, so the guard stays and the ratchet row that
+proves it stays with it.
+
+The row watched: green unmutated, red under `compile_allocs_unwatched` and
 under `compile_allocs_host_unpinned`, and the ratchet's cover check still says
 every CI job carries a mutation or a stated reason.
 
@@ -2525,10 +2552,10 @@ container's glibc numbers were pasted over the runner's, and the same
 bootstrap: name the host the vein will live on, let CI measure, copy the rows
 out.
 
-It follows that an image bump reds this gate. Every row moves with the
-toolchain and none has regressed; the response is a regeneration in one go, the
-line moved, and a sentence here — which is what the two veins beside it already
-ask for.
+It follows that an image bump can red this gate. If it does, the row moved with
+the toolchain and has not regressed; the response is a regeneration, the line
+moved, and a sentence here — which is what the two veins beside it already ask
+for.
 
 ## 2026-08-24 — the megabyte was the benchmark doing its job, and a correction
 
