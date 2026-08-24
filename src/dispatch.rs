@@ -14,8 +14,8 @@
 //! every value to be a byte or none. Anything less certain leaves it boxed.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
+use crate::hash::Set as HashSet;
 use crate::infer::{Inference, Set, INT, NONE};
-use std::collections::HashSet;
 
 /// (function name, arity, discriminator index) triples whose discriminator can
 /// be passed and switched as a raw i64 (byte value, or 256 for none).
@@ -23,8 +23,8 @@ pub fn byte_dispatched(
     program: &Program,
     inference: &Inference,
 ) -> HashSet<(String, usize, usize)> {
-    let mut out = HashSet::new();
-    let mut seen: HashSet<(&str, usize)> = HashSet::new();
+    let mut out = HashSet::default();
+    let mut seen: HashSet<(&str, usize)> = HashSet::default();
     for decl in &program.fns {
         let key = (decl.name.as_str(), decl.params.len());
         if !seen.insert(key) {

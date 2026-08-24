@@ -9,6 +9,7 @@ pub mod dispatch;
 pub mod escape;
 pub mod eval;
 pub mod hako;
+pub mod hash;
 pub mod infer;
 pub mod inline;
 pub mod lexer;
@@ -99,10 +100,10 @@ fn compile_parsed_entry(
     }
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
-    let mut visited = std::collections::HashSet::new();
+    let mut visited = crate::hash::Set::default();
     let (dep_program, exports, shadowed, surfaced) =
         load_dependencies(&base, &import_list, &mut visited)?;
-    let mut quals = std::collections::HashSet::new();
+    let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
     mark_bare_quals(&program, &surfaced, &mut quals);
     mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
@@ -126,18 +127,18 @@ fn compile_parsed_entry(
     // merged checks — never file-order rules across module boundaries
     let mut all_markers = check::marker_names(&program);
     all_markers.extend(check::marker_names(&dep_program));
-    let mut all_type_names: std::collections::HashSet<String> =
+    let mut all_type_names: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let extern_globals = check::declared_names(&dep_program);
-    let shadowable: std::collections::HashSet<String> = dep_program
+    let shadowable: crate::hash::Set<String> = dep_program
         .fns
         .iter()
         .filter(|d| d.synthetic)
         .map(|d| d.name.clone())
         .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
         .collect();
-    let mut used = std::collections::HashSet::new();
+    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
     diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
@@ -253,13 +254,13 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     // a play library may import like any module; the ambient module rides
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
-    let mut visited = std::collections::HashSet::new();
+    let mut visited = crate::hash::Set::default();
     let (mut dep_program, exports, shadowed, surfaced) =
         phase::watched("load_dependencies", || {
             load_dependencies(&base, &import_list, &mut visited)
         })?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
-    let mut quals = std::collections::HashSet::new();
+    let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
     mark_bare_quals(&program, &surfaced, &mut quals);
     mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
@@ -284,7 +285,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
         return Err(diag::render(&diags, file, source));
     }
     let extern_globals = check::declared_names(&dep_program);
-    let shadowable: std::collections::HashSet<String> = dep_program
+    let shadowable: crate::hash::Set<String> = dep_program
         .fns
         .iter()
         .filter(|d| d.synthetic)
@@ -293,10 +294,10 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
         .collect();
     let mut all_markers = check::marker_names(&program);
     all_markers.extend(check::marker_names(&dep_program));
-    let mut all_type_names: std::collections::HashSet<String> =
+    let mut all_type_names: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
-    let mut used = std::collections::HashSet::new();
+    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
     diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
@@ -340,11 +341,11 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
-    let mut visited = std::collections::HashSet::new();
+    let mut visited = crate::hash::Set::default();
     let (mut dep_program, exports, shadowed, surfaced) =
         load_dependencies(&base, &import_list, &mut visited)?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
-    let mut quals = std::collections::HashSet::new();
+    let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
     mark_bare_quals(&program, &surfaced, &mut quals);
     mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
@@ -365,7 +366,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
         return Err(diag::render(&diags, file, source));
     }
     let extern_globals = check::declared_names(&dep_program);
-    let shadowable: std::collections::HashSet<String> = dep_program
+    let shadowable: crate::hash::Set<String> = dep_program
         .fns
         .iter()
         .filter(|d| d.synthetic)
@@ -374,10 +375,10 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
         .collect();
     let mut all_markers = check::marker_names(&program);
     all_markers.extend(check::marker_names(&dep_program));
-    let mut all_type_names: std::collections::HashSet<String> =
+    let mut all_type_names: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
-    let mut used = std::collections::HashSet::new();
+    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
     diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
@@ -456,8 +457,8 @@ thread_local! {
     /// Display paths and the canonical paths they resolve to, both mapped to
     /// one id per file. Two routes to a module reach it under two spellings
     /// and both land on the id the canonical path was given.
-    static CANON_IDS: std::cell::RefCell<std::collections::HashMap<String, u32>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
+    static CANON_IDS: std::cell::RefCell<crate::hash::Map<String, u32>> =
+        std::cell::RefCell::new(crate::hash::Map::default());
 }
 
 /// The identity `file` cannot carry. Two import routes to one module spell
@@ -591,7 +592,7 @@ fn synthesize_getters(program: &mut ast::Program) {
     // Keyed by the type as well as the field. One getter group holds an arm
     // per type that has the field, and skipping on the name alone would let
     // the first type through and leave every later one unreadable.
-    let already: std::collections::HashSet<(String, String)> = program
+    let already: crate::hash::Set<(String, String)> = program
         .fns
         .iter()
         .filter(|f| f.is_getter())
@@ -765,7 +766,7 @@ fn short_name(path: &str) -> &str {
 /// the canonical (origin) name: patterns and typeset members are type
 /// positions, so no local binding can shadow them. Records then match by
 /// one identity no matter which spelling constructed or destructured them.
-fn bound_in_pattern(p: &ast::Pattern, out: &mut std::collections::HashSet<String>) {
+fn bound_in_pattern(p: &ast::Pattern, out: &mut crate::hash::Set<String>) {
     match p {
         ast::Pattern::Var(n, _) => {
             out.insert(n.clone());
@@ -793,7 +794,7 @@ fn bound_in_pattern(p: &ast::Pattern, out: &mut std::collections::HashSet<String
     }
 }
 
-fn bound_in_stmt(stmt: &ast::Stmt, out: &mut std::collections::HashSet<String>) {
+fn bound_in_stmt(stmt: &ast::Stmt, out: &mut crate::hash::Set<String>) {
     match stmt {
         ast::Stmt::Bind { pattern, expr } => {
             bound_in_pattern(pattern, out);
@@ -803,7 +804,7 @@ fn bound_in_stmt(stmt: &ast::Stmt, out: &mut std::collections::HashSet<String>) 
     }
 }
 
-fn bound_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
+fn bound_in_expr(e: &ast::Expr, out: &mut crate::hash::Set<String>) {
     match e {
         ast::Expr::Lambda { params, body, .. } => {
             for (n, _) in params {
@@ -877,13 +878,13 @@ fn bound_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
 /// self-recursion again. A bare name that also has local arms is a real
 /// overload union (the import-incarnation gavel) and is left alone.
 pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
-    use std::collections::{HashMap, HashSet};
+    use crate::hash::{Map as HashMap, Set as HashSet};
     // A synthetic bare alias and the qualified declaration it stands for are
     // the same source position with the same arity, so that tuple indexes
     // them. Finding the twin used to be a scan of every declaration for every
     // synthetic one — quadratic in the program, with a `format!` per pair
     // inside the inner loop.
-    let mut at_site: HashMap<(&str, usize, usize, usize), Vec<&str>> = HashMap::new();
+    let mut at_site: HashMap<(&str, usize, usize, usize), Vec<&str>> = HashMap::default();
     for twin in &program.fns {
         if !twin.synthetic {
             at_site
@@ -892,12 +893,12 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
                 .push(twin.name.as_str());
         }
     }
-    let mut by_name: HashMap<&str, (bool, HashSet<&str>)> = HashMap::new();
+    let mut by_name: HashMap<&str, (bool, HashSet<&str>)> = HashMap::default();
     for d in &program.fns {
         if d.name.contains('/') {
             continue;
         }
-        let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::new()));
+        let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::default()));
         entry.0 &= d.synthetic;
         if d.synthetic {
             let needle = format!("/{}", d.name);
@@ -955,7 +956,7 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     }
 }
 
-fn alias_stmt(stmt: &mut ast::Stmt, aliases: &std::collections::HashMap<String, String>) {
+fn alias_stmt(stmt: &mut ast::Stmt, aliases: &crate::hash::Map<String, String>) {
     match stmt {
         ast::Stmt::Bind { expr, .. }
         | ast::Stmt::Expr(expr)
@@ -963,7 +964,7 @@ fn alias_stmt(stmt: &mut ast::Stmt, aliases: &std::collections::HashMap<String, 
     }
 }
 
-fn alias_expr(e: &mut ast::Expr, aliases: &std::collections::HashMap<String, String>) {
+fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>) {
     match e {
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
             if let Some(q) = aliases.get(name) {
@@ -1027,7 +1028,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &std::collections::HashMap<String, Str
 }
 
 pub fn canonicalize_types(program: &mut ast::Program) {
-    let aliases: std::collections::HashMap<String, String> = program
+    let aliases: crate::hash::Map<String, String> = program
         .types
         .iter()
         .filter_map(|t| t.origin.clone().map(|o| (t.name.clone(), o)))
@@ -1035,12 +1036,12 @@ pub fn canonicalize_types(program: &mut ast::Program) {
     if aliases.is_empty() {
         return;
     }
-    fn fix(name: &mut String, aliases: &std::collections::HashMap<String, String>) {
+    fn fix(name: &mut String, aliases: &crate::hash::Map<String, String>) {
         if let Some(canon) = aliases.get(name.as_str()) {
             *name = canon.clone();
         }
     }
-    fn walk_pattern(p: &mut ast::Pattern, aliases: &std::collections::HashMap<String, String>) {
+    fn walk_pattern(p: &mut ast::Pattern, aliases: &crate::hash::Map<String, String>) {
         match p {
             ast::Pattern::Ctor { ty, fields, .. } => {
                 fix(ty, aliases);
@@ -1081,8 +1082,8 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
     if std::env::var_os("KANSO_NO_FUSE").is_some() {
         return;
     }
-    let mut shorts: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    let std_names: std::collections::HashSet<String> = program
+    let mut shorts: crate::hash::Map<String, String> = crate::hash::Map::default();
+    let std_names: crate::hash::Set<String> = program
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/list"))
@@ -1114,7 +1115,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
     // file_under), resolved to whatever qualified spelling the module
     // graph produced — privacy is a check-time property, and fusion runs
     // after the check
-    let helpers: std::collections::HashMap<String, String> = program
+    let helpers: crate::hash::Map<String, String> = program
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/list") && !d.synthetic)
@@ -1147,10 +1148,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
 /// adapter application and whose name is used exactly once — as the
 /// collection argument of a later enumerable call — inlines back into the
 /// chain before fusion looks. The binding was a rename, not an escape.
-fn inline_single_use_chains(
-    body: &mut Vec<ast::Stmt>,
-    shorts: &std::collections::HashMap<String, String>,
-) {
+fn inline_single_use_chains(body: &mut Vec<ast::Stmt>, shorts: &crate::hash::Map<String, String>) {
     use ast::{Expr, Stmt};
     const ADAPTERS: [&str; 5] = ["drop", "map", "reject", "select", "take"];
     let mut idx = 0;
@@ -1212,11 +1210,7 @@ fn count_ident_uses(e: &ast::Expr, name: &str, uses: &mut usize) {
 }
 
 /// Is the sole use of `name` the collection argument of an enumerable call?
-fn coll_arg_use(
-    e: &ast::Expr,
-    name: &str,
-    shorts: &std::collections::HashMap<String, String>,
-) -> bool {
+fn coll_arg_use(e: &ast::Expr, name: &str, shorts: &crate::hash::Map<String, String>) -> bool {
     if let ast::Expr::App { head, args, .. } = e {
         if let ast::Expr::Ident(h, _) = head.as_ref() {
             if shorts.contains_key(h.as_str()) {
@@ -1296,9 +1290,9 @@ fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
 
 fn fuse_expr(
     e: &mut ast::Expr,
-    shorts: &std::collections::HashMap<String, String>,
+    shorts: &crate::hash::Map<String, String>,
     fold_name: &str,
-    helpers: &std::collections::HashMap<String, String>,
+    helpers: &crate::hash::Map<String, String>,
     counter: &mut usize,
 ) {
     use ast::Expr;
@@ -1371,9 +1365,9 @@ fn fuse_expr(
 /// is one tag test per chain and a second copy of the chain's code.
 fn try_fuse_piped(
     e: &ast::Expr,
-    shorts: &std::collections::HashMap<String, String>,
+    shorts: &crate::hash::Map<String, String>,
     fold_name: &str,
-    helpers: &std::collections::HashMap<String, String>,
+    helpers: &crate::hash::Map<String, String>,
     counter: &mut usize,
 ) -> Option<ast::Expr> {
     use ast::{Expr, Pattern, Stmt};
@@ -1443,9 +1437,9 @@ fn try_fuse_piped(
 
 fn try_fuse(
     e: &ast::Expr,
-    shorts: &std::collections::HashMap<String, String>,
+    shorts: &crate::hash::Map<String, String>,
     fold_name: &str,
-    helpers: &std::collections::HashMap<String, String>,
+    helpers: &crate::hash::Map<String, String>,
     counter: &mut usize,
 ) -> Option<ast::Expr> {
     use ast::Expr;
@@ -1584,17 +1578,9 @@ fn try_fuse(
 /// A name the import declares itself records no owner. That is the ordinary
 /// case, so the inner sets stay empty for a program with no re-exports, and
 /// what the front end holds does not grow with a module's own spellings.
-type Surfaced = std::collections::HashMap<
-    String,
-    std::collections::HashMap<String, std::collections::HashSet<String>>,
->;
+type Surfaced = crate::hash::Map<String, crate::hash::Map<String, crate::hash::Set<String>>>;
 
-type Loaded = (
-    ast::Program,
-    std::collections::HashMap<String, bool>,
-    std::collections::HashSet<String>,
-    Surfaced,
-);
+type Loaded = (ast::Program, crate::hash::Map<String, bool>, crate::hash::Set<String>, Surfaced);
 
 /// The groups syntax names, spelled the same in every module. An arm carries
 /// this name because the compiler put it there, not because anybody wrote it,
@@ -1615,7 +1601,7 @@ pub(crate) fn is_operator(name: &str) -> bool {
 fn qualify(
     dep: &mut ast::Program,
     qual: &str,
-    exports: &mut std::collections::HashMap<String, bool>,
+    exports: &mut crate::hash::Map<String, bool>,
     // GAVEL 51: which DECLARATION claimed each qualified spelling, by
     // interned canonical path. `exports` records only whether a name is pub, and under
     // one module a dependency arrives by every route that reaches it — sealed
@@ -1623,20 +1609,20 @@ fn qualify(
     // importer's own import. Without identity those two are indistinguishable
     // from a genuine shadow, where this module declares a name one of its
     // imports also exports.
-    claims: &mut std::collections::HashMap<String, u32>,
+    claims: &mut crate::hash::Map<String, u32>,
     // GAVEL 51: a re-exported name arrives under the spelling its owner gave
     // it, so `geo` re-exporting list's `sort` as `order` enrolls `list/order`
     // and nothing in that name says the importer reached it through `geo`.
     // The qualifier is recorded here because this is where it is known.
     surfaced: &mut Surfaced,
-    shadowed: &mut std::collections::HashSet<String>,
+    shadowed: &mut crate::hash::Set<String>,
 ) {
     // A getter's declaration is left bare below, because one group answers a
     // field name across every module. Its calls have to be left bare too: a
     // dependency that reads a field of its own record was qualifying the call
     // to `dep/Get_x` against a declaration that had kept the plain name, and
     // the importer's build asked for a group nothing declares.
-    let getters: std::collections::HashSet<String> =
+    let getters: crate::hash::Set<String> =
         dep.fns.iter().filter(|f| f.is_getter()).map(|f| f.name.clone()).collect();
     // The prelude's types belong to the compiler, not to whichever module is
     // being qualified. Renaming them per module would leave every module with
@@ -1647,7 +1633,7 @@ fn qualify(
     // canonical spelling. Prefixing it again mints a second `shape/blank`
     // under every route that reaches it, and a value built by one matches no
     // arm compiled against the other.
-    let owned: std::collections::HashSet<String> = check::declared_names(dep)
+    let owned: crate::hash::Set<String> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(n))
         .filter(|n| !n.contains('/'))
@@ -1665,7 +1651,7 @@ fn qualify(
     // arriving through this module, and its identity is the canonical path.
     // Left in, a typeset member or a parent spelled `shape/blank` picks up a
     // second prefix and names a type nothing declares.
-    let own_types: std::collections::HashSet<String> =
+    let own_types: crate::hash::Set<String> =
         dep.types.iter().map(|t| t.name.clone()).filter(|n| !n.contains('/')).collect();
     for ty in &mut dep.types {
         if ty.name.contains('/') {
@@ -1878,7 +1864,7 @@ pub fn prune_unused_getters(program: &mut ast::Program) {
     // read's bare half. The keep mask exists so the borrow ends before the
     // retain needs the program mutably.
     let keep: Vec<bool> = {
-        let mut mentioned: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        let mut mentioned: crate::hash::Set<&str> = crate::hash::Set::default();
         for decl in &program.fns {
             if decl.is_getter() {
                 continue;
@@ -1893,14 +1879,14 @@ pub fn prune_unused_getters(program: &mut ast::Program) {
     program.fns.retain(|_| mask.next().unwrap_or(true));
 }
 
-fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut std::collections::HashSet<&'a str>) {
+fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>) {
     match stmt {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => mentions_in_expr(expr, out),
         ast::Stmt::Set { value, .. } => mentions_in_expr(value, out),
     }
 }
 
-fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut std::collections::HashSet<&'a str>) {
+fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
     match e {
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
             out.insert(name.as_str());
@@ -1951,7 +1937,7 @@ fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
     }
 }
 
-fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &std::collections::HashSet<String>) {
+fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &crate::hash::Set<String>) {
     match p {
         ast::Pattern::Ctor { ty, fields, .. } => {
             if owned.contains(ty.as_str()) {
@@ -1971,7 +1957,7 @@ fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &std::collections::H
 fn rewrite_stmt(
     stmt: &mut ast::Stmt,
     qual: &str,
-    owned: &std::collections::HashSet<String>,
+    owned: &crate::hash::Set<String>,
     bound: &mut Vec<String>,
 ) {
     match stmt {
@@ -1988,7 +1974,7 @@ fn rewrite_stmt(
 fn rewrite_scope(
     stmts: &mut [ast::Stmt],
     qual: &str,
-    owned: &std::collections::HashSet<String>,
+    owned: &crate::hash::Set<String>,
     bound: &[String],
 ) {
     let mut inner = bound.to_vec();
@@ -1997,12 +1983,7 @@ fn rewrite_scope(
     }
 }
 
-fn rewrite_expr(
-    e: &mut ast::Expr,
-    qual: &str,
-    owned: &std::collections::HashSet<String>,
-    bound: &[String],
-) {
+fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &crate::hash::Set<String>, bound: &[String]) {
     match e {
         ast::Expr::Guard { cond, early, rest, .. } => {
             rewrite_expr(cond, qual, owned, bound);
@@ -2075,8 +2056,8 @@ fn rewrite_expr(
 /// specificity) work unchanged.
 fn enroll_bare(
     dep_program: &mut ast::Program,
-    exports: &std::collections::HashMap<String, bool>,
-    renamed: &std::collections::HashSet<String>,
+    exports: &crate::hash::Map<String, bool>,
+    renamed: &crate::hash::Set<String>,
 ) {
     let mut bare_fns = Vec::new();
     for f in &dep_program.fns {
@@ -2116,7 +2097,7 @@ fn enroll_bare(
 /// user's `fn to_string (money cents)` is an arm of render/to_string —
 /// arming your own types needs no import (the ratified Ruby-shaped rule).
 fn merge_ambient_arms(program: &mut ast::Program) -> Vec<diag::Diagnostic> {
-    let local_types: std::collections::HashSet<String> =
+    let local_types: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     merge_ambient_arms_with(program, &local_types)
 }
@@ -2125,7 +2106,7 @@ fn merge_ambient_arms(program: &mut ast::Program) -> Vec<diag::Diagnostic> {
 /// defined in any of them.
 fn merge_ambient_arms_with(
     program: &mut ast::Program,
-    local_types: &std::collections::HashSet<String>,
+    local_types: &crate::hash::Set<String>,
 ) -> Vec<diag::Diagnostic> {
     let mut diags = Vec::new();
     for decl in &mut program.fns {
@@ -2192,7 +2173,7 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
 /// of the declaration it was cloned from: dropping one as a duplicate of its
 /// own original cost a million-frame accumulating recursion its loop.
 fn collapse_diamonds(program: &mut ast::Program) {
-    let mut fns = std::collections::HashSet::new();
+    let mut fns = crate::hash::Set::default();
     program.fns.retain(|f| {
         fns.insert((
             canon_id(&f.file),
@@ -2203,7 +2184,7 @@ fn collapse_diamonds(program: &mut ast::Program) {
             f.synthetic,
         ))
     });
-    let mut types = std::collections::HashSet::new();
+    let mut types = crate::hash::Set::default();
     program.types.retain(|t| types.insert((t.name.clone(), t.span.line, t.span.col)));
 }
 
@@ -2211,7 +2192,7 @@ fn collapse_diamonds(program: &mut ast::Program) {
 fn load_dependencies(
     base: &std::path::Path,
     imports: &[ast::Import],
-    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    visited: &mut crate::hash::Set<std::path::PathBuf>,
 ) -> Result<Loaded, String> {
     let mut dep_program = ast::Program {
         fns: Vec::new(),
@@ -2219,10 +2200,10 @@ fn load_dependencies(
         imports: Vec::new(),
         reexports: Vec::new(),
     };
-    let mut exports = std::collections::HashMap::new();
-    let mut claims: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
-    let mut surfaced: Surfaced = std::collections::HashMap::new();
-    let mut shadowed = std::collections::HashSet::new();
+    let mut exports = crate::hash::Map::default();
+    let mut claims: crate::hash::Map<String, u32> = crate::hash::Map::default();
+    let mut surfaced: Surfaced = crate::hash::Map::default();
+    let mut shadowed = crate::hash::Set::default();
     for import in imports {
         let path = &import.path;
         let qual_owned;
@@ -2348,7 +2329,7 @@ fn load_dependencies(
     // a rename replaces that token's spellings: bare `yours` and
     // `qual/yours` enroll, bare `theirs` never does — the qualified
     // original stays, because the qualified spelling is permanent identity
-    let renamed: std::collections::HashSet<String> = imports
+    let renamed: crate::hash::Set<String> = imports
         .iter()
         .flat_map(|import| {
             let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
@@ -2410,7 +2391,7 @@ fn load_dependencies(
 fn mark_reexport_quals(
     program: &ast::Program,
     surfaces: impl Fn(&str) -> bool,
-    quals: &mut std::collections::HashSet<String>,
+    quals: &mut crate::hash::Set<String>,
 ) {
     for import in &program.imports {
         let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
@@ -2439,9 +2420,9 @@ fn mark_reexport_quals(
 fn open_qualified_doors(
     program: &mut ast::Program,
     surfaced: &Surfaced,
-    exports: &std::collections::HashMap<String, bool>,
+    exports: &crate::hash::Map<String, bool>,
 ) {
-    let mut doors = std::collections::HashMap::new();
+    let mut doors = crate::hash::Map::default();
     for (bare, by_qual) in surfaced {
         for (qual, owners) in by_qual {
             let door = format!("{qual}/{bare}");
@@ -2490,14 +2471,14 @@ fn open_qualified_doors(
     }
 }
 
-fn door_type(ty: &mut String, doors: &std::collections::HashMap<String, String>) {
+fn door_type(ty: &mut String, doors: &crate::hash::Map<String, String>) {
     if let Some(owner) = doors.get(ty.as_str()) {
         *ty = owner.clone();
     }
 }
 
 /// `(v):ty` names a type where nothing else in an expression does.
-fn door_stmt(stmt: &mut ast::Stmt, doors: &std::collections::HashMap<String, String>) {
+fn door_stmt(stmt: &mut ast::Stmt, doors: &crate::hash::Map<String, String>) {
     match stmt {
         ast::Stmt::Bind { expr, .. }
         | ast::Stmt::Expr(expr)
@@ -2505,7 +2486,7 @@ fn door_stmt(stmt: &mut ast::Stmt, doors: &std::collections::HashMap<String, Str
     }
 }
 
-fn door_expr(e: &mut ast::Expr, doors: &std::collections::HashMap<String, String>) {
+fn door_expr(e: &mut ast::Expr, doors: &crate::hash::Map<String, String>) {
     if let ast::Expr::Upcast { ty, .. } = e {
         door_type(ty, doors);
     }
@@ -2514,7 +2495,7 @@ fn door_expr(e: &mut ast::Expr, doors: &std::collections::HashMap<String, String
 
 /// A type is named in patterns as well as in expressions, and the door has to
 /// answer in both or an arm matches a spelling its caller cannot write.
-fn door_pattern(p: &mut ast::Pattern, doors: &std::collections::HashMap<String, String>) {
+fn door_pattern(p: &mut ast::Pattern, doors: &crate::hash::Map<String, String>) {
     match p {
         // A user's nullary type parses as a binding — the parser reserves
         // `Nullary` for the built-in names — and only a type can carry a
@@ -2547,10 +2528,10 @@ fn door_pattern(p: &mut ast::Pattern, doors: &std::collections::HashMap<String, 
 fn mark_bare_quals(
     program: &ast::Program,
     surfaced: &Surfaced,
-    quals: &mut std::collections::HashSet<String>,
+    quals: &mut crate::hash::Set<String>,
 ) {
-    let mut bare = std::collections::HashSet::new();
-    fn collect(e: &ast::Expr, bare: &mut std::collections::HashSet<String>) {
+    let mut bare = crate::hash::Set::default();
+    fn collect(e: &ast::Expr, bare: &mut crate::hash::Set<String>) {
         if let ast::Expr::Ident(name, _) = e {
             if !name.contains('/') {
                 bare.insert(name.clone());
@@ -2586,13 +2567,13 @@ fn mark_bare_quals(
 
 /// Every module qualifier the program references: `json/decode` marks
 /// `json` as used, in expressions, patterns, and typeset members alike.
-fn used_quals(program: &ast::Program, quals: &mut std::collections::HashSet<String>) {
-    fn mark(name: &str, quals: &mut std::collections::HashSet<String>) {
+fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
+    fn mark(name: &str, quals: &mut crate::hash::Set<String>) {
         if let Some((qual, _)) = name.split_once('/') {
             quals.insert(qual.to_string());
         }
     }
-    fn walk_pattern(p: &ast::Pattern, quals: &mut std::collections::HashSet<String>) {
+    fn walk_pattern(p: &ast::Pattern, quals: &mut crate::hash::Set<String>) {
         match p {
             ast::Pattern::Ctor { ty, fields, .. } => {
                 mark(ty, quals);
@@ -2604,7 +2585,7 @@ fn used_quals(program: &ast::Program, quals: &mut std::collections::HashSet<Stri
             _ => {}
         }
     }
-    fn walk_expr(e: &ast::Expr, quals: &mut std::collections::HashSet<String>) {
+    fn walk_expr(e: &ast::Expr, quals: &mut crate::hash::Set<String>) {
         if let ast::Expr::Ident(name, _) = e {
             mark(name, quals);
         }
@@ -2637,7 +2618,7 @@ fn used_quals(program: &ast::Program, quals: &mut std::collections::HashSet<Stri
 /// An import no qualified name ever touches.
 fn unused_imports(
     imports: &[ast::Import],
-    quals: &std::collections::HashSet<String>,
+    quals: &crate::hash::Set<String>,
 ) -> Vec<diag::Diagnostic> {
     imports
         .iter()
@@ -2708,14 +2689,14 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
 /// A qualified reference to a name its module did not mark pub.
 fn private_uses(
     stmt: &ast::Stmt,
-    exports: &std::collections::HashMap<String, bool>,
-    shadowed: &std::collections::HashSet<String>,
+    exports: &crate::hash::Map<String, bool>,
+    shadowed: &crate::hash::Set<String>,
     diags: &mut Vec<diag::Diagnostic>,
 ) {
     fn walk(
         e: &ast::Expr,
-        exports: &std::collections::HashMap<String, bool>,
-        shadowed: &std::collections::HashSet<String>,
+        exports: &crate::hash::Map<String, bool>,
+        shadowed: &crate::hash::Set<String>,
         diags: &mut Vec<diag::Diagnostic>,
     ) {
         if let ast::Expr::Ident(name, span) = e {
@@ -2934,7 +2915,7 @@ fn walk_children<'a>(e: &'a ast::Expr, f: &mut dyn FnMut(&'a ast::Expr) -> bool)
 /// Canonical ordering holds per file; an overload group lives in one file.
 pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
-    let mut visited = std::collections::HashSet::new();
+    let mut visited = crate::hash::Set::default();
     compile_module_root(dir, require_entry, &mut visited)
 }
 
@@ -2961,8 +2942,8 @@ thread_local! {
     /// path. The browser compiles a program with no filesystem under it, and
     /// a program is a library plus the entry file that runs it.
     static HANDED_SOURCES: std::cell::RefCell<
-        std::collections::HashMap<String, Vec<(String, String)>>,
-    > = std::cell::RefCell::new(std::collections::HashMap::new());
+        crate::hash::Map<String, Vec<(String, String)>>,
+    > = std::cell::RefCell::new(crate::hash::Map::default());
 }
 
 /// Hands the compiler a module's files under the path an import will name.
@@ -2991,7 +2972,7 @@ const HAKO_FILES: &[(&str, &str)] = &[
 fn compile_module_root(
     dir: &std::path::Path,
     require_entry: bool,
-    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    visited: &mut crate::hash::Set<std::path::PathBuf>,
 ) -> Result<ast::Program, String> {
     AMBIENT_ROOT.with(|c| c.set(true));
     let result = compile_module_inner(dir, require_entry, visited, None);
@@ -3026,7 +3007,7 @@ fn check_reexports(
     file: &str,
     source: &str,
 ) -> Result<(), String> {
-    let was_pub: std::collections::HashSet<String> = dep_program
+    let was_pub: crate::hash::Set<String> = dep_program
         .fns
         .iter()
         .filter(|f| f.is_pub)
@@ -3046,7 +3027,7 @@ fn check_reexports(
 
 fn apply_reexport(
     dep_program: &mut ast::Program,
-    was_pub: &std::collections::HashSet<String>,
+    was_pub: &crate::hash::Set<String>,
     import_quals: &[String],
     re: &ast::Reexport,
 ) -> Result<(), diag::Diagnostic> {
@@ -3150,7 +3131,7 @@ fn apply_reexport(
 fn compile_module_inner(
     dir: &std::path::Path,
     require_entry: bool,
-    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    visited: &mut crate::hash::Set<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
     let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
@@ -3168,7 +3149,7 @@ fn compile_module_inner(
 fn compile_module_loaded(
     dir: &std::path::Path,
     require_entry: bool,
-    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    visited: &mut crate::hash::Set<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
     let mut sources: Vec<(String, String)> = match embedded {
@@ -3252,7 +3233,7 @@ fn compile_module_loaded(
     // the exception because its arms match primitives, which that same rule
     // reserves to the stdlib.
     if !dir.ends_with("render") {
-        let module_types: std::collections::HashSet<String> =
+        let module_types: crate::hash::Set<String> =
             parsed.iter().flat_map(|(_, _, p)| p.types.iter().map(|t| t.name.clone())).collect();
         for (file, source, program) in &mut parsed {
             let ownership_diags = merge_ambient_arms_with(program, &module_types);
@@ -3267,7 +3248,7 @@ fn compile_module_loaded(
     // boundary — importers of this module see none of them — and only an
     // explicit re-export puts an imported name back on the surface, as a
     // pub the importer then enrolls like any other.
-    let was_pub: std::collections::HashSet<String> = dep_program
+    let was_pub: crate::hash::Set<String> = dep_program
         .fns
         .iter()
         .filter(|f| f.is_pub)
@@ -3294,8 +3275,8 @@ fn compile_module_loaded(
     // files; imports do not, so a file that leans on a sibling's import is
     // a file whose dependencies are invisible in it.
     let mut import_diags = Vec::new();
-    let mut quals = std::collections::HashSet::new();
-    let mut named = std::collections::HashSet::new();
+    let mut quals = crate::hash::Set::default();
+    let mut named = crate::hash::Set::default();
     let mut borrowed: Vec<String> = Vec::new();
     let own = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     for (file, source, program) in &parsed {
@@ -3337,7 +3318,7 @@ fn compile_module_loaded(
     // Imports are module-scoped, so use is counted across every file before
     // any one file's import block is called unused. Bare spellings count
     // too — enrollment makes the qualifier optional, not the dependency.
-    let mut quals = std::collections::HashSet::new();
+    let mut quals = crate::hash::Set::default();
     for (_, _, program) in &parsed {
         used_quals(program, &mut quals);
         mark_bare_quals(program, &surfaced, &mut quals);
@@ -3359,9 +3340,9 @@ fn compile_module_loaded(
     for (_, _, program) in &mut parsed {
         open_qualified_doors(program, &surfaced, &exports);
     }
-    let mut all_names = std::collections::HashSet::new();
-    let mut all_markers = std::collections::HashSet::new();
-    let mut all_type_names = std::collections::HashSet::new();
+    let mut all_names = crate::hash::Set::default();
+    let mut all_markers = crate::hash::Set::default();
+    let mut all_type_names = crate::hash::Set::default();
     for (_, _, program) in &parsed {
         all_names.extend(check::declared_names(program));
         all_markers.extend(check::marker_names(program));
@@ -3370,14 +3351,14 @@ fn compile_module_loaded(
     all_names.extend(check::declared_names(&dep_program));
     all_markers.extend(check::marker_names(&dep_program));
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
-    let shadowable: std::collections::HashSet<String> = dep_program
+    let shadowable: crate::hash::Set<String> = dep_program
         .fns
         .iter()
         .filter(|d| d.synthetic)
         .map(|d| d.name.clone())
         .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
         .collect();
-    let mut used = std::collections::HashSet::new();
+    let mut used = crate::hash::Set::default();
     for (file, source, program) in &mut parsed {
         let mut extern_globals = all_names.clone();
         for name in check::declared_names(program) {
@@ -3584,12 +3565,12 @@ fn hoist_in_body(body: &mut Vec<ast::Stmt>, counter: &mut usize) {
             }
             ast::Stmt::Set { value, .. } => collect_hoistable(value, &mut found),
         }
-        let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut seen: crate::hash::Map<String, usize> = crate::hash::Map::default();
         for (shape, _) in &found {
             *seen.entry(shape.clone()).or_default() += 1;
         }
         let mut repeated: Vec<(String, ast::Expr)> = Vec::new();
-        let mut taken: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut taken: crate::hash::Set<String> = crate::hash::Set::default();
         for (shape, expr) in found {
             if seen.get(&shape).copied().unwrap_or(0) > 1 && taken.insert(shape.clone()) {
                 repeated.push((shape, expr));

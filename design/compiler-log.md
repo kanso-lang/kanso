@@ -2833,3 +2833,84 @@ would be wrong if `alias.is_some()` and `contains_key` disagreed — and the
 fixture reports two diagnostics where it should report three, losing the one
 for `split`, whose demand comes through a wrapper. Restore it and the corpus
 is green.
+
+## 2026-08-24 — the compiler was hashing against an attacker who was never coming
+
+Callgrind on `kanso check lib/json`, after the child walk stopped building
+vectors:
+
+    14,622,313 (16.09%)  core::hash::sip::Hasher::write
+    12,475,688 (13.73%)  core::hash::BuildHasher::hash_one
+
+Twenty-nine point eight per cent of every instruction the front end retired
+was the default hasher. `std` picks SipHash-1-3 with a per-process random key
+because a server keying a map on a request header needs collisions to be
+unpredictable. A compiler keying a map on the identifiers in a file it was
+handed has no such adversary and pays for the protection at every lookup.
+
+`src/hash.rs` is the multiply-rotate hash rustc has used for its own interner
+since 2015, twenty lines of it, no dependency added. `Map` and `Set` alias
+`std`'s containers over it, and every file in the compiler moved: check,
+infer, lib, inline, advisory, beat, codegen, demand, dispatch, escape,
+linear, provenance, trmc, wasm_backend, parser. `eval.rs` and `wasm_rt.rs`
+keep `std`'s maps — those hold a running program's values rather than the
+compiler's own bookkeeping.
+
+    instructions   90,899,357 -> 67,160,895   -26.1%
+    compile_allocs     87,824 -> 87,824        flat
+    front_end_rounds       40 -> 40            flat
+    front_end_visits   17,786 -> 17,786        flat
+    compile_peak_bytes 876,930 -> 864,274      -12,656
+
+The peak falls because `BuildHasherDefault` is zero-sized where `RandomState`
+carries sixteen bytes of key, and every map in the compile is that much
+smaller. It stays inside the compile-memory band, so no golden moves.
+
+### The determinism, which was the real find
+
+Instruction counts were being taken to check the change, and the baseline
+would not sit still. Same binary, same sources, same directory, empty
+environment:
+
+    default hasher   90,704,760   90,676,800      len 80
+                     90,667,959   90,708,405      len 115
+    seedless hash    66,961,255 x3                len 80
+                     66,966,868 x3                len 115
+
+(These are lower than the pair above because they were taken with `env -i`
+and from a copied tree; the comparison is within each block.)
+
+Forty thousand instructions of spread between two runs of identical code,
+because the random key changes the probe sequences and moves where the
+rehashes land. The seedless hash gives the same digits three times.
+
+So the compiler's instruction count was not a measurable quantity, and now it
+is. That matters more than the 26%: every other vein in the tree pins an
+exact number, and this dimension could not have had one. What the goldens
+could see of this change is nothing — allocations identical, rounds and
+visits identical, peak inside its band — which is the shape #998 was written
+about, one dimension over. The vein that would see it is a separate change
+and is written down as one.
+
+Path length still moves the count, 160 instructions per character, visible
+only once the run-to-run noise is gone. Any such gate has to compile from a
+fixed-length directory rather than from the checkout, for the same reason
+`compile_alloc_bytes` is absent from its own golden.
+
+### Why iteration order was never at risk
+
+`RandomState` reseeds every process, so map iteration order has always varied
+run to run. The compiler's output is byte-deterministic and its goldens are
+not flaky, which means nothing observable reads that order. A different hash
+changes the order and can change nothing else. The full suite agrees: 161
+flat error fixtures, the three directory cases, the diagnostics differential
+and the browser differential are all green.
+
+The ratchet's `compile_allocs_unwatched` mutation greps for
+`std::collections::HashSet` in `src/lib.rs`, which this rename moves, so it
+was rewritten against the new spelling and re-proved: applied, the counter
+goes 87,824 to 93,610 and the gate reds. The other twenty-two mutations were
+each applied to a fresh copy of the converted tree and all twenty-three still
+take. `cover` runs per PR and only checks that every job has a row, so a
+mutation that stopped matching would have gone unnoticed until the nightly
+`prove`.

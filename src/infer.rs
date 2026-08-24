@@ -1,5 +1,5 @@
 use crate::ast::*;
-use std::collections::HashMap;
+use crate::hash::Map as HashMap;
 
 /// Propagable type sets as tag bitsets — the single monotone inference
 /// fixpoint (the story is told in about.html part 03), coarse to start:
@@ -52,7 +52,7 @@ struct Ctx<'a> {
     /// For each function, the functions that have read its return set. A
     /// return that widens only ever changes the answer of a function that
     /// asked for it.
-    readers: Vec<std::collections::HashSet<usize>>,
+    readers: Vec<crate::hash::Set<usize>>,
     /// Functions to visit next round. A field of a declared type widening can
     /// reach any function through pattern binding, so that one blankets.
     dirty_next: Vec<bool>,
@@ -170,7 +170,7 @@ fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Ve
 
 pub fn infer(program: &Program) -> Inference {
     work::pass();
-    let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::new();
+    let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::default();
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
     }
@@ -198,12 +198,12 @@ pub fn infer(program: &Program) -> Inference {
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
         current_index: 0,
-        readers: vec![std::collections::HashSet::new(); program.fns.len()],
+        readers: vec![crate::hash::Set::default(); program.fns.len()],
         dirty_next: vec![false; program.fns.len()],
         dirty: Vec::new(),
         field_readers,
         groups,
-        yields: HashMap::new(),
+        yields: HashMap::default(),
         type_names,
         params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
         returns: vec![0; program.fns.len()],
@@ -218,7 +218,7 @@ pub fn infer(program: &Program) -> Inference {
     // count in the twenties turns a clone here into thousands of allocations
     // that only ever serve as a lookup key.
     let fns = &program.fns;
-    let mut env: HashMap<&str, Set> = HashMap::new();
+    let mut env: HashMap<&str, Set> = HashMap::default();
     let mut param_sets: Vec<Set> = Vec::new();
     // Every function is visited the first round; after that only the ones a
     // change can reach. Four fifths of the visits in a settled fixpoint find
@@ -286,7 +286,7 @@ pub fn infer(program: &Program) -> Inference {
 /// fresh where the graph is acyclic, and a cycle costs rounds only for its
 /// own knot.
 fn callee_first(program: &Program) -> Vec<usize> {
-    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::default();
     for (i, decl) in program.fns.iter().enumerate() {
         by_name.entry(decl.name.as_str()).or_default().push(i);
     }

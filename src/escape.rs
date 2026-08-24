@@ -12,7 +12,7 @@
 //! stay syntactic (no heap-flow dataflow) while remaining sound.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
-use std::collections::{HashMap, HashSet};
+use crate::hash::{Map as HashMap, Set as HashSet};
 
 /// What codegen needs to hand register-returnable records back by value.
 pub struct EscapeInfo {
@@ -45,7 +45,7 @@ pub fn analyze(program: &Program, inference: &crate::infer::Inference) -> Escape
     // boxed: their arms come from different modules with independently
     // computed conventions, and mixing %parsed with %KValue in one
     // dispatcher is the register-ABI crash family
-    let mut union_groups = std::collections::HashSet::new();
+    let mut union_groups = crate::hash::Set::default();
     for d in &program.fns {
         if d.synthetic {
             union_groups.insert((d.name.clone(), d.params.len()));
@@ -58,14 +58,14 @@ pub fn analyze(program: &Program, inference: &crate::infer::Inference) -> Escape
 
 fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> EscapeInfo {
     let returnable = register_returnable(program, inference);
-    let mut field_count = HashMap::new();
-    let mut returns = HashMap::new();
-    let mut carries = HashMap::new();
+    let mut field_count = HashMap::default();
+    let mut returns = HashMap::default();
+    let mut carries = HashMap::default();
     for ty in &returnable {
         if let Some(decl) = program.types.iter().find(|t| &t.name == ty) {
             field_count.insert(ty.clone(), decl.fields.len());
         }
-        let mut analysis = Analysis { program, returns_ty: HashSet::new() };
+        let mut analysis = Analysis { program, returns_ty: HashSet::default() };
         analysis.compute_returns_ty(ty);
         for key in analysis.returns_ty {
             returns.insert(key, ty.clone());
@@ -139,7 +139,7 @@ pub fn register_returnable(
     let ctors: HashSet<&str> =
         program.types.iter().filter(|t| !t.fields.is_empty()).map(|t| t.name.as_str()).collect();
 
-    let analysis = Analysis { program, returns_ty: HashSet::new() };
+    let analysis = Analysis { program, returns_ty: HashSet::default() };
 
     ctors
         .iter()

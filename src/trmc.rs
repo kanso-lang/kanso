@@ -30,8 +30,8 @@
 //! cannot read, leaves the whole group alone.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
+use crate::hash::Map as HashMap;
 use num_bigint::BigInt;
-use std::collections::HashMap;
 
 enum Arm<'a> {
     Base(BigInt),
@@ -170,7 +170,7 @@ fn bound_names(p: &Pattern, out: &mut Vec<String>) {
 }
 
 pub fn rewrite(program: &mut Program) {
-    let mut groups: HashMap<(String, usize), Vec<usize>> = HashMap::new();
+    let mut groups: HashMap<(String, usize), Vec<usize>> = HashMap::default();
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry((decl.name.clone(), decl.params.len())).or_default().push(i);
     }

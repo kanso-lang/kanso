@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::diag::Span;
+use crate::hash::Map as HashMap;
 use crate::infer::{self, Set, BYTES, DESC, ERR, FAIL, FLOAT, INT, LIST, MAP, NONE, REC, STR, TOP};
-use std::collections::HashMap;
 use std::fmt::Write as _;
 
 const K_TRUE: i64 = 2;
@@ -372,11 +372,11 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
 /// body exactly `builtin_X p1 p2 ...` in order. Call sites bypass the
 /// dispatch hop and reach the builtin (and its inline twins) directly.
 fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
-    let mut counts: HashMap<(String, usize), usize> = HashMap::new();
+    let mut counts: HashMap<(String, usize), usize> = HashMap::default();
     for d in &program.fns {
         *counts.entry((d.name.clone(), d.params.len())).or_default() += 1;
     }
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for d in &program.fns {
         if counts[&(d.name.clone(), d.params.len())] != 1 || d.body.len() != 1 {
             continue;
@@ -411,14 +411,14 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
 /// unfrozen mention re-enters the builder, and the recursion has no floor.
 /// One name reaching itself and two names reaching each other are the same
 /// shape, so the question is cycle membership.
-pub(crate) fn knotted_constants(program: &Program) -> std::collections::HashSet<String> {
+pub(crate) fn knotted_constants(program: &Program) -> crate::hash::Set<String> {
     fn names(expr: &Expr, out: &mut Vec<String>) {
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
             out.push(n.clone());
         }
         crate::for_each_child(expr, |child| names(child, out));
     }
-    let mut mentions: HashMap<&str, Vec<String>> = HashMap::new();
+    let mut mentions: HashMap<&str, Vec<String>> = HashMap::default();
     for decl in program.fns.iter().filter(|d| d.params.is_empty()) {
         let found = mentions.entry(decl.name.as_str()).or_default();
         for stmt in &decl.body {
@@ -432,7 +432,7 @@ pub(crate) fn knotted_constants(program: &Program) -> std::collections::HashSet<
         .keys()
         .copied()
         .filter(|start| {
-            let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            let mut seen: crate::hash::Set<&str> = crate::hash::Set::default();
             let mut queue: Vec<&str> = vec![start];
             while let Some(here) = queue.pop() {
                 for next in mentions.get(here).into_iter().flatten() {
@@ -455,7 +455,7 @@ pub(crate) fn knotted_constants(program: &Program) -> std::collections::HashSet<
 pub fn emit_ir(program: &Program) -> Result<String, String> {
     let knotted = knotted_constants(program);
     let inference = infer::infer(program);
-    let mut type_ids = HashMap::new();
+    let mut type_ids = HashMap::default();
     type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {
         type_ids.insert(ty.name.as_str(), (i + 1) as i64);
@@ -487,7 +487,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
                 })
             })
     });
-    let packable: std::collections::HashSet<String> = escape.field_count.keys().cloned().collect();
+    let packable: crate::hash::Set<String> = escape.field_count.keys().cloned().collect();
     escape.returns.retain(|_, ty| packable.contains(ty));
     escape.carries.retain(|_, ty| packable.contains(ty));
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
@@ -525,7 +525,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         beat,
         type_ids,
         strings: Vec::new(),
-        interned: HashMap::new(),
+        interned: HashMap::default(),
         body: String::new(),
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
@@ -550,13 +550,13 @@ struct Backend<'a> {
     /// typeset name -> members; an annotated param matches any member
     typesets: HashMap<String, Vec<String>>,
     escape: crate::escape::EscapeInfo,
-    byte_disc: std::collections::HashSet<(String, usize, usize)>,
-    in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
-    reusable_records: std::collections::HashMap<(String, usize, usize), String>,
-    builder_joins: std::collections::HashSet<(String, usize, usize)>,
-    builder_params: std::collections::HashSet<(String, usize, usize)>,
+    byte_disc: crate::hash::Set<(String, usize, usize)>,
+    in_place_pushes: crate::hash::Set<(String, usize, usize)>,
+    reusable_records: crate::hash::Map<(String, usize, usize), String>,
+    builder_joins: crate::hash::Set<(String, usize, usize)>,
+    builder_params: crate::hash::Set<(String, usize, usize)>,
     /// Argument positions already carrying the builder, so no seed is needed.
-    builder_carried: std::collections::HashSet<(String, usize, usize)>,
+    builder_carried: crate::hash::Set<(String, usize, usize)>,
     beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
@@ -569,7 +569,7 @@ struct Backend<'a> {
     builtin_value_wrappers: Vec<(String, usize)>,
     defers_self_reference: bool,
     /// Zero-arity names that reach themselves through other constants.
-    knotted: std::collections::HashSet<String>,
+    knotted: crate::hash::Set<String>,
     print_value_wrapper: bool,
     /// One cache cell per frozen constant, emitted as globals at the end,
     /// each beside an `i8` that says whether its builder has run. Nothing
@@ -609,7 +609,7 @@ struct FnEmit {
     /// Temps carrying the by-value %parsed type rather than a boxed KValue.
     /// Operands living in the by-value convention, and the record type
     /// each one holds — boxing one back needs to name its type and its id.
-    parsed: std::collections::HashMap<String, (String, i64)>,
+    parsed: crate::hash::Map<String, (String, i64)>,
     /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
@@ -635,9 +635,9 @@ impl FnEmit {
             tmp: 0,
             label: 0,
             cur_label: "entry".to_string(),
-            versions: HashMap::new(),
-            sets: HashMap::new(),
-            parsed: std::collections::HashMap::new(),
+            versions: HashMap::default(),
+            sets: HashMap::default(),
+            parsed: crate::hash::Map::default(),
             origin_prefix: String::new(),
             file: String::new(),
             ret_ty: "%KValue".to_string(),
@@ -1382,7 +1382,7 @@ impl<'a> Backend<'a> {
             });
         }
         for (name, decls) in &groups {
-            let mut by_arity: HashMap<usize, Vec<&FnDecl>> = HashMap::new();
+            let mut by_arity: HashMap<usize, Vec<&FnDecl>> = HashMap::default();
             for d in decls {
                 by_arity.entry(d.params.len()).or_default().push(d);
             }
@@ -4424,7 +4424,7 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// second copy of "when do we musttail" would drift from the first and the
 /// symptom of drift is silent corruption.
 fn narrow_tailcc(ir: String) -> String {
-    let mut keep: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
     for line in ir.lines() {
         if let Some(rest) = line.strip_prefix("define ") {
@@ -4444,7 +4444,7 @@ fn narrow_tailcc(ir: String) -> String {
     // AArch64 passes them in. The count is the same on every host so the ir is
     // too; x86 passes fewer and does not exhibit the defect anyway.
     let mut trampolines: Vec<String> = Vec::new();
-    let mut spilling: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut spilling: crate::hash::Set<String> = crate::hash::Set::default();
     for line in ir.lines() {
         let Some(rest) = line.strip_prefix("define tailcc ") else { continue };
         let Some(name) = symbol_of(rest) else { continue };
