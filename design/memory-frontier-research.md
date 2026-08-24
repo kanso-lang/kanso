@@ -14,10 +14,10 @@ this says only which of them are in the tree.
 |---|---|---|
 | 3.1 | wire `linear.rs` into codegen | **shipped** — consumed at four sites in `beat.rs`; codegen selects `k_b_push_mut`; 334,950 buffer reuses per gauntlet run |
 | 3.2 | free-the-top mini-rewind | **declined** 2026-07-27, with the reopening condition named |
-| 3.3 | generalize the non-heap-scalar rewind | **unverified** — the cited `runtime.c:134` has moved and the `SCALAR` set now lives in `beat.rs`; nobody has rechecked whether the generalization landed |
+| 3.3 | generalize the non-heap-scalar rewind | **not landed**, rechecked 2026-08-24 — the runtime rule is still `k_beat_pop` alone (`src/runtime.c`, "a non-heap result rewinds as always"), firing only when a beat closes. `SCALAR` in `beat.rs` is used for slot and threading decisions, never to rewind at a call boundary. The open idea is intact and so is its warning: a callee that returns a scalar may still have written heap into something the caller holds, and rewinding there frees it |
 | 3.4 | three-way escape split | **declined** 2026-07-27, measured |
 | 3.5 | `--explain-copies` + AARA footprint ratchet | **half shipped** — the counter stack exists and is CI-gated; the diagnostic naming each copy's source site does not |
-| 3.6 | TRMC | **shipped** (#394, #395) |
+| 3.6 | TRMC | **shipped** (#394, #395), and **widened** 2026-08-23 — the operand proof comes off the shape, so `n * fact (n - 1)` qualifies without Inference threaded from check |
 | 3.7 | cohort-counting soundness ratchet test | **shipped** |
 | 4.1 | static reuse-in-place inside the build-block | **declined**, measured |
 | 4.2 | tag-hoist under monomorphism speculation | **already harvested** |
@@ -164,12 +164,19 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
    the *where* — a diagnostic naming the source site of each evacuation
    copy — which needs span plumbing through the carry machinery and a
    CLI surface worth a ruling before building.
-6. **TRMC — SHIPPED at the exact slice (#394, #395).** Accumulating
-   integer recursion with literal operands runs as a loop on all three
-   engines, through additive int-ascribed wrappers so every non-integer
-   argument keeps its original behavior. Widening to inferred-int
-   operands is scoped (needs Inference threaded from check, not
-   recomputed). Single-consumer bit + surgical DPS remain unexplored.
+6. **TRMC — SHIPPED, and WIDENED (2026-08-23).** Accumulating integer
+   recursion runs as a loop on all three engines. The widening landed
+   without threading Inference from check, which is what the earlier
+   scope assumed it needed: the proof comes off the shape instead. The
+   wrapper the rewrite already generates ascribes every counter position
+   `int`, so requiring each recursive call to hand those positions
+   arithmetic over counters carries integer-ness down every level, and
+   an operand built from counters and literals is an integer at every
+   depth. `n * fact (n - 1)` and `n * n + r (n - 1)` now qualify where
+   only `1 + count (n - 1)` did. Floats stay refused — reassociating
+   their addition changes the answer, and three fixtures are there to be
+   refused for exactly that reason. Single-consumer bit + surgical DPS
+   remain unexplored.
 7. **Cohort-counting soundness ratchet TEST — DONE (adversarial corpus,
    2026-07-27).** Five attacks live in tests/golden/errors, all rejected
    with pinned diagnostics: writing an argument's older value
