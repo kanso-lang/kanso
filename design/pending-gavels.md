@@ -23,46 +23,17 @@ Rules of the ledger:
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### Is a bare list of small ints bytes?
+### Does a DEMANDED knot count as a thunk allocation?
 
-The engines answer differently, which the differential law forbids
-outright. The interpreter has no distinct bytes value and runs any list
-through `bytes_to_str` where native has a `K_BYTES` tag; genuine bytes
-agree on both. Six functions split, and in four the ORACLE ANSWERS where
-native refuses — a program written against the oracle compiles and then
-dies. Measured 2026-08-23:
-
-    text/append ["a"] "x"           native refuses    oracle: ["a" 120]
-    text/append [65 66] "x"         native refuses    oracle: [65 66 120]
-    text/find2 [65 66] 1 65 66      native refuses    oracle: 1
-    text/find2_below [65 66] …      native refuses    oracle: 1
-    text/utf8 ["a"]                 native: an err    oracle: a refusal
-    text/to_float ["a"]             native refuses    oracle: an err
-
-`text/utf8 [65 66]` agrees ("AB" on both) because a list of small ints
-is bytes to each of them; the disagreement is everything a list can be
-that bytes cannot. Either answer settles all six at once. Widening
-native says a list and bytes are interchangeable, which is what the
-native representation exists to deny; giving the interpreter a real
-bytes value removes the ambiguity and touches every place it builds or
-reads them. No golden can pin the shape until this is ruled, and the
-diagnostic differential cannot see it: its one wrong value is a record,
-and a record is refused identically.
-
-### Does an undemanded knot count as a thunk allocation?
-
-`x = [x]` that nothing demands reads `thunk_allocs=1, thunk_live_exit=1`
-on native and `thunk_allocs=0` on the oracle; forces and evals agree at
-zero on both. Native freezes every knotted constant in `k_caf_init`
-before main, because the alternative is a branch and a store on every
-read of a frozen constant and that sits in the hottest dispatcher. A
-fixture cannot pin the shape until this is settled. Four ways out, each
-priced: defer the cell on native and pay that branch; give knot cells
-their own counter, which is additive and moves 146 `.mem` files, four
-cost goldens, the emitted golden, the ch10 sample and the siblings'
-veins; retire `thunk_allocs` from the engine-shared set, which narrows
-what the differential law covers; or leave it and record that no fixture
-pins an undemanded knot. Filed 2026-08-20.
+The undemanded half is ruled and built; this is what survived it. `x = [x]`
+that something reads answers `1` on both engines, and the counters do not
+agree about what building it cost: native reports `thunk_allocs=1` and the
+oracle `0`, because the oracle's `knotted` makes its cell without touching
+the counter. It predates the deferral and is untouched by it. The question
+is what `thunk_allocs` counts — every cell, or only the ones a program's own
+laziness made — and the answer decides which engine moves. No fixture can pin
+a demanded knot's allocation shape until it is settled; the value and the
+forces already agree, so nothing else waits. Filed 2026-08-24.
 
 ### The compile-memory band has been hiding main's own drift
 
