@@ -2514,3 +2514,54 @@ evidence reds the gate on changes that are not changes.
 Both rows watched: green unmutated, red under `compile_allocs_unwatched` and
 under `compile_allocs_host_unpinned`, and the ratchet's cover check still says
 every CI job carries a mutation or a stated reason.
+
+## 2026-08-24 — the megabyte was the benchmark doing its job, and a correction
+
+"The beat carry copies a loop-invariant capture" says, earlier today, that the
+carry "copies every unkept slot on every rewind, at any size, with no guard",
+and that is wrong. Writing the change that would have followed from it is what
+found out.
+
+The guard is in the bind-chain driver, which is what pushes the beat those
+copies happen under. `k_exec`'s chain case sizes the staged continuation with
+the cohort guard's budgeted pass and takes one of three paths: under 4 KB in a
+region that has not drifted, leave it unstaged; over 256 KB, skip the
+evacuation and floor the region under it; between, stage and copy. It landed
+with the streaming-stdout work on 2026-07-27, where the 256 KB line was chosen
+low enough to exempt kq's 13 MB decoded document and took kq's full print from
+47.5 MB to 30.0.
+
+widebench's carried continuation captures 256,016 bytes, which is 2,128 short
+of that line. The cliff is sharp and reproducible — the same fixture at a range
+of sizes, `evac_bytes` against the survivor:
+
+    16,000 elements   256,016 bytes   1,028,512 evacuated
+    16,380 elements   262,096 bytes       3,648 evacuated
+
+So the proposed change was one constant: 256 KB down to 64 KB. It measures
+extremely well. widebench's `evac_bytes` falls 1,032,336 to 7,488,
+`alloc_bytes` by exactly one survivor copy, `beat_iters` 43 to 39; seven of the
+eight shelves are byte-identical; `arena_peak_bytes` does not move on any of
+them, nor on the reduced fixture at 128 KB or 192 KB survivors, where the
+copying disappears for nothing.
+
+**And it should not land.** Regenerating `bench/cost_golden_wide.txt` put its
+header on screen, which has said since the shelf was written: "Sixteen thousand
+elements, not twenty. The evacuation cost stops at 16,384 … so a fixture above
+that line exercises none of it. This one sits below." The size is deliberate.
+widebench exists to hold the staging path where a counter can see it, and
+lowering the threshold would move the shelf out of the band it was built to
+watch — hiding the cost rather than paying it.
+
+What survives is a real question asked properly. The 4 KB-to-256 KB staging
+band has never been measured against flooring on a program that is not a
+benchmark; on the reduced fixture, flooring is free at 128 KB and 192 KB. That
+is an argument for moving the line, and it has to be made on programs rather
+than on the shelf that was placed to sit under it — with widebench's own size
+moved in the same change, or the shelf loses its point either way.
+
+Two smaller corrections while the file is open. `k_beat_iter_carry` is where
+the copies are made, which the entry above measured correctly; the policy is at
+its caller, which the entry did not look for. And the framing this came from —
+copy-or-pin, page pinning, `k_carry_kept` — was aimed at a mechanism the tree
+already has in a better form. The memo carries the same correction.
