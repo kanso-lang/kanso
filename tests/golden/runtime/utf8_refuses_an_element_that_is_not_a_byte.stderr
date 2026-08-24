@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the entry: "utf8 takes byte values (0-255)"
+  born in text/utf8 at std/text/text.kso:92

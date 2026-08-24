@@ -23,6 +23,11 @@ pub enum Value {
     NoneV,
     ErrV(Rc<ErrInfo>),
     List(Rc<Vec<Value>>),
+    /// Byte data, as `text/bytes` and the scanner produce it. Distinct from
+    /// a list of small ints on every engine: native has had the tag since it
+    /// was written, and a list that happens to hold numbers in 0..255 is not
+    /// silently one of these.
+    Bytes(Rc<Vec<u8>>),
     Record {
         ty: Rc<str>,
         fields: Rc<RefCell<Vec<Value>>>,
@@ -100,13 +105,16 @@ pub fn err_value(reason: Value, origin: Option<Rc<str>>) -> Value {
 /// A byte list (the scanner's `bytes`/`slice` view) as its utf-8 text, so a
 /// number can be parsed straight from bytes without first materializing a
 /// string. None when the bytes aren't valid utf-8 byte values.
-fn bytes_to_str(items: &[Value]) -> Option<String> {
-    let mut raw = Vec::with_capacity(items.len());
-    for item in items {
-        let Value::Int(n) = item else { return None };
-        raw.push(u8::try_from(n.clone()).ok()?);
-    }
-    String::from_utf8(raw).ok()
+fn bytes_to_str(raw: &[u8]) -> Option<String> {
+    String::from_utf8(raw.to_vec()).ok()
+}
+
+/// The low byte of a number, which is what the compiled engine reads where a
+/// byte is wanted: `payload & 0xff`. Every engine has to truncate the same
+/// way or the same program answers two things.
+fn low_byte(n: &BigInt) -> u8 {
+    let (_, digits) = n.to_bytes_le();
+    digits.first().copied().unwrap_or(0)
 }
 
 /// A dispatcher passing a failure through appends its name; none stays bare.
@@ -2185,8 +2193,45 @@ impl<'a> Interp<'a> {
                 let Value::Str(text) = &text else {
                     return Err(RuntimeError { message: "bytes takes a string".to_string(), span });
                 };
-                let list = text.bytes().map(|b| Value::Int(BigInt::from(b))).collect();
-                Ok(Value::List(Rc::new(list)))
+                Ok(Value::Bytes(Rc::new(text.as_bytes().to_vec())))
+            }
+            // `text/bytes` covers strings; this covers numbers. Without it the
+            // gavel would have taken away the only way to write byte data down
+            // and left nothing in its place. Loud outside 0-255: a number that
+            // is not a byte is a mistake, not a value to truncate.
+            "to_bytes" => {
+                let [list] = arity(args, name, span)?;
+                if is_failure(&list) {
+                    return Ok(list);
+                }
+                let Value::List(items) = &list else {
+                    return Err(RuntimeError {
+                        message: "to_bytes takes a list of byte values".to_string(),
+                        span,
+                    });
+                };
+                let mut raw = Vec::with_capacity(items.len());
+                for item in items.iter() {
+                    match item {
+                        Value::Int(n) => match u8::try_from(n.clone()) {
+                            Ok(b) => raw.push(b),
+                            Err(_) => {
+                                return Ok(err_value(
+                                    Value::Str("to_bytes takes byte values (0-255)".to_string()),
+                                    origin_at(frame, span),
+                                ))
+                            }
+                        },
+                        bad if is_failure(bad) => return Ok(bad.clone()),
+                        _ => {
+                            return Ok(err_value(
+                                Value::Str("to_bytes takes byte values (0-255)".to_string()),
+                                origin_at(frame, span),
+                            ))
+                        }
+                    }
+                }
+                Ok(Value::Bytes(Rc::new(raw)))
             }
             "concat" => {
                 let [a, b] = arity(args, name, span)?;
@@ -2200,35 +2245,51 @@ impl<'a> Interp<'a> {
                 joined.extend(ys.iter().cloned());
                 Ok(Value::List(Rc::new(joined)))
             }
+            // The one declared acceptance the bytes gavel left standing: utf8
+            // reads a list of small ints as well as real bytes, because there
+            // is no bytes literal and `[104 105]` is the only spelling a
+            // program can write down. It is a library choice, spelled the same
+            // on every engine, rather than a list quietly being bytes.
             "utf8" => {
                 let [list] = arity(args, name, span)?;
-                let Value::List(items) = &list else {
-                    return Err(RuntimeError {
-                        message: "utf8 takes a list of byte values".to_string(),
-                        span,
-                    });
-                };
-                let mut raw = Vec::with_capacity(items.len());
-                for item in items.iter() {
-                    match item {
-                        Value::Int(n) => match u8::try_from(n.clone()) {
-                            Ok(b) => raw.push(b),
-                            Err(_) => {
-                                return Ok(err_value(
-                                    Value::Str("utf8 takes byte values (0-255)".to_string()),
-                                    origin_at(frame, span),
-                                ))
-                            }
-                        },
-                        bad if is_failure(bad) => return Ok(bad.clone()),
-                        _ => {
-                            return Err(RuntimeError {
-                                message: "utf8 takes a list of byte values".to_string(),
-                                span,
-                            })
-                        }
-                    }
+                if is_failure(&list) {
+                    return Ok(list);
                 }
+                let raw = match &list {
+                    Value::Bytes(items) => (**items).clone(),
+                    Value::List(items) => {
+                        let mut raw = Vec::with_capacity(items.len());
+                        for item in items.iter() {
+                            match item {
+                                Value::Int(n) => match u8::try_from(n.clone()) {
+                                    Ok(b) => raw.push(b),
+                                    Err(_) => {
+                                        return Ok(err_value(
+                                            Value::Str(
+                                                "utf8 takes byte values (0-255)".to_string(),
+                                            ),
+                                            origin_at(frame, span),
+                                        ))
+                                    }
+                                },
+                                bad if is_failure(bad) => return Ok(bad.clone()),
+                                _ => {
+                                    return Ok(err_value(
+                                        Value::Str("utf8 takes byte values (0-255)".to_string()),
+                                        origin_at(frame, span),
+                                    ))
+                                }
+                            }
+                        }
+                        raw
+                    }
+                    _ => {
+                        return Err(RuntimeError {
+                            message: "utf8 takes a list of byte values".to_string(),
+                            span,
+                        })
+                    }
+                };
                 match String::from_utf8(raw) {
                     Ok(text) => Ok(Value::Str(text)),
                     Err(_) => Ok(err_value(
@@ -2330,7 +2391,7 @@ impl<'a> Interp<'a> {
                         return Ok(v.clone());
                     }
                 }
-                let Value::List(items) = &acc else {
+                let Value::Bytes(items) = &acc else {
                     return Err(RuntimeError {
                         message: "append takes bytes and a string, bytes, or byte".to_string(),
                         span,
@@ -2338,11 +2399,13 @@ impl<'a> Interp<'a> {
                 };
                 let mut out = (**items).clone();
                 match &x {
-                    Value::Str(s) => {
-                        out.extend(s.bytes().map(|b| Value::Int(BigInt::from(b))));
-                    }
-                    Value::List(more) => out.extend(more.iter().cloned()),
-                    Value::Int(_) => out.push(x.clone()),
+                    Value::Str(s) => out.extend_from_slice(s.as_bytes()),
+                    Value::Bytes(more) => out.extend_from_slice(more),
+                    // The low byte, which is what the compiled engine takes:
+                    // `x.payload & 0xff`. Matching it is the differential law;
+                    // whether either engine should instead refuse a number
+                    // above 255 here is a question this change does not answer.
+                    Value::Int(n) => out.push(low_byte(n)),
                     _ => {
                         return Err(RuntimeError {
                             message: "append takes bytes and a string, bytes, or byte".to_string(),
@@ -2350,7 +2413,7 @@ impl<'a> Interp<'a> {
                         })
                     }
                 }
-                Ok(Value::List(Rc::new(out)))
+                Ok(Value::Bytes(Rc::new(out)))
             }
             "find2_below" => {
                 let [cs, from, a, b, lim] = arity(args, name, span)?;
@@ -2360,7 +2423,7 @@ impl<'a> Interp<'a> {
                     }
                 }
                 let (
-                    Value::List(items),
+                    Value::Bytes(items),
                     Value::Int(from),
                     Value::Int(a),
                     Value::Int(b),
@@ -2372,11 +2435,12 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
+                let (a, b, lim) = (low_byte(a), low_byte(b), lim.clone());
                 let len = items.len();
                 let start = usize::try_from(from.clone()).unwrap_or(1).max(1);
                 let mut at = len + 1;
-                for (i, item) in items.iter().enumerate().skip(start - 1) {
-                    if matches!(item, Value::Int(byte) if byte == a || byte == b || byte < lim) {
+                for (i, byte) in items.iter().enumerate().skip(start - 1) {
+                    if *byte == a || *byte == b || BigInt::from(*byte) < lim {
                         at = i + 1;
                         break;
                     }
@@ -2390,16 +2454,17 @@ impl<'a> Interp<'a> {
                         return Ok(v.clone());
                     }
                 }
-                let (Value::List(items), Value::Int(from), Value::Int(a), Value::Int(b)) =
+                let (Value::Bytes(items), Value::Int(from), Value::Int(a), Value::Int(b)) =
                     (&cs, &from, &a, &b)
                 else {
                     return Err(RuntimeError { message: "find2 takes bytes".to_string(), span });
                 };
+                let (a, b) = (low_byte(a), low_byte(b));
                 let len = items.len();
                 let start = usize::try_from(from.clone()).unwrap_or(1).max(1);
                 let mut at = len + 1;
-                for (i, item) in items.iter().enumerate().skip(start - 1) {
-                    if matches!(item, Value::Int(byte) if byte == a || byte == b) {
+                for (i, byte) in items.iter().enumerate().skip(start - 1) {
+                    if *byte == a || *byte == b {
                         at = i + 1;
                         break;
                     }
@@ -2422,6 +2487,12 @@ impl<'a> Interp<'a> {
                             .map(|r| items[r].to_vec())
                             .unwrap_or_default();
                         Ok(Value::List(Rc::new(sliced)))
+                    }
+                    Value::Bytes(items) => {
+                        let sliced = slice_range(items.len(), from, to)
+                            .map(|r| items[r].to_vec())
+                            .unwrap_or_default();
+                        Ok(Value::Bytes(Rc::new(sliced)))
                     }
                     Value::Str(text) => {
                         let all: Vec<char> = text.chars().collect();
@@ -2508,7 +2579,7 @@ impl<'a> Interp<'a> {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
                     Value::Str(s) => s.clone(),
-                    Value::List(items) => match bytes_to_str(items) {
+                    Value::Bytes(items) => match bytes_to_str(items) {
                         Some(s) => s,
                         None => {
                             return Ok(err_value(
@@ -2540,7 +2611,7 @@ impl<'a> Interp<'a> {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
                     Value::Str(s) => s.clone(),
-                    Value::List(items) => match bytes_to_str(items) {
+                    Value::Bytes(items) => match bytes_to_str(items) {
                         Some(s) => s,
                         None => {
                             return Ok(err_value(
@@ -2587,6 +2658,7 @@ impl<'a> Interp<'a> {
                 let [list] = arity(args, name, span)?;
                 match list {
                     Value::List(items) => Ok(Value::Int(BigInt::from(items.len()))),
+                    Value::Bytes(items) => Ok(Value::Int(BigInt::from(items.len()))),
                     Value::Str(s) => Ok(Value::Int(BigInt::from(s.chars().count()))),
                     Value::Map(entries) => Ok(Value::Int(BigInt::from(entries.len()))),
                     other => Err(RuntimeError {
@@ -3022,6 +3094,13 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
             let idx = usize::try_from(i.clone()).ok();
             Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
                 Some(i) => items[i - 1].clone(),
+                None => Value::NoneV,
+            })
+        }
+        (Value::Bytes(items), Value::Int(i)) => {
+            let idx = usize::try_from(i.clone()).ok();
+            Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
+                Some(i) => Value::Int(BigInt::from(items[i - 1])),
                 None => Value::NoneV,
             })
         }
@@ -3522,6 +3601,18 @@ fn values_equal_seen(
             }
             true
         }
+        (Value::Bytes(x), Value::Bytes(y)) => x == y,
+        // `==` crosses where the functions do not, because the compiled engine
+        // has compared a byte string against a list of its numbers since it was
+        // written (k_bytes_eq_list) and the differential law is what it is.
+        // Whether it should is a separate question from the one just ruled.
+        (Value::Bytes(x), Value::List(y)) | (Value::List(y), Value::Bytes(x)) => {
+            x.len() == y.len()
+                && x.iter().zip(y.iter()).all(|(a, b)| match b {
+                    Value::Int(n) => BigInt::from(*a) == *n,
+                    _ => false,
+                })
+        }
         (Value::Record { ty: tx, fields: fx }, Value::Record { ty: ty_, fields: fy }) => {
             if tx != ty_ {
                 return Ok(false);
@@ -3686,6 +3777,14 @@ fn render_seen(
             let inner: Vec<String> =
                 items.iter().map(|i| render_seen(interp, i, true, seen)).collect();
             seen.remove(&ptr);
+            format!("[{}]", inner.join(" "))
+        }
+        // The compiled engine prints byte data as the numbers between
+        // brackets, and this is the one place where a list and bytes are meant
+        // to look alike: they are what a reader sees, not what a function
+        // accepts.
+        Value::Bytes(items) => {
+            let inner: Vec<String> = items.iter().map(|b| b.to_string()).collect();
             format!("[{}]", inner.join(" "))
         }
         Value::Record { ty, fields } => match fields.borrow().is_empty() {

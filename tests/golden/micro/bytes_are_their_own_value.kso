@@ -1,0 +1,35 @@
+# What byte data does now that it is a value rather than a list that happened
+# to hold numbers. The gavel of 2026-08-23 took the coercion away; everything
+# here is what is left, and every line answers the same on all three engines.
+#
+# The render is the one place a list and bytes still look alike: brackets and
+# numbers, because that is what a reader wants to see. What changed is what a
+# function will accept, not what it prints.
+import "std/text"
+
+b = text/bytes "hi there"
+
+fn shown (err reason)
+  "{reason}"
+
+fn shown other
+  "{other}"
+
+pub play =
+  print "made: {b}"
+  >> print "length: {length b}"
+  >> print "index: {b[1]} {b[3]} {b[99]}"
+  >> print "slice: {text/slice b 1 2}"
+  >> print "utf8: {text/utf8 b}"
+  >> print "utf8 of a list: {text/utf8 [65 66]}"
+  >> print "built: {text/to_bytes [104 105]}"
+  >> print "built and read: {text/utf8 (text/to_bytes [104 105])}"
+  >> print "append a string: {text/append (text/bytes "a") "bc"}"
+  >> print "append bytes: {text/append (text/bytes "a") (text/bytes "z")}"
+  >> print "append a byte: {text/append (text/bytes "a") 66}"
+  >> print "find2: {text/find2 (text/bytes "abcd") 1 99 100}"
+  >> print "find2_below: {text/find2_below (text/bytes "abcd") 1 99 100 98}"
+  >> print "to_int: {text/to_int (text/bytes "42")}"
+  >> print "to_float: {text/to_float (text/bytes "1.5")}"
+  >> print "equal to its numbers: {b == [104 105 32 116 104 101 114 101]}"
+  >> print "equal to itself: {b == text/bytes "hi there"}"

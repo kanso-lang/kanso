@@ -1397,7 +1397,7 @@ impl<'a> WasmBackend<'a> {
     fn stamp_fallible(&mut self, ctx: &mut Ctx, name: &str, span: crate::diag::Span) {
         // wrap_err mints an err too — through the generic builtin bridge,
         // where no frame exists, so the site's origin is stamped here
-        if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "wrap_err") {
+        if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "wrap_err" | "to_bytes") {
             let origin = self.origin_lit(&ctx.prefix, span);
             ctx.body.i32_const(origin as i64);
             ctx.body.call(RT_ERR_STAMP);
@@ -1446,7 +1446,7 @@ impl<'a> WasmBackend<'a> {
                 let rest = args.len() - 1;
                 let name_lit = self.str_lit(name);
                 let fallible =
-                    matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code");
+                    matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes");
                 let origin = match fallible {
                     true => Some(self.origin_lit(&ctx.prefix, span)),
                     false => None,

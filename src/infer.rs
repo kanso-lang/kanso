@@ -757,6 +757,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "append" => BYTES | fails,
         "is_desc" => BOOL | fails,
         "bytes" => BYTES | fails,
+        "to_bytes" => BYTES | ERR | fails,
         "find2" => INT | fails,
         "find2_below" => INT | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | fails,

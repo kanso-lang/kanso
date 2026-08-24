@@ -1,0 +1,1 @@
+error[runtime]: append takes bytes and a string, bytes, or byte

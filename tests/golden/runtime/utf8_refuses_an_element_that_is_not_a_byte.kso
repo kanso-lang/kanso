@@ -1,0 +1,7 @@
+# utf8 keeps its list acceptance — the gavel's first rider, because there is no
+# bytes literal and `[104 105]` is the only spelling a program can write down.
+# What it will not take is an element that is not a byte value, and a string is
+# not one.
+import "std/text"
+
+pub play = print "{text/utf8 ["a"]}"
