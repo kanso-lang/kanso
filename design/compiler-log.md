@@ -2475,6 +2475,106 @@ they can be pinned depends on whether they agree across hosts the way rounds
 and visits do and peak does not — that question, and the ratchet row a new gate
 owes, are a change of their own rather than a rider on this one.
 
+## 2026-08-24 — the dimension that watched nothing
+
+The entry above corrected itself once: it said no counter moved, and one did.
+`kanso check` has printed `compile_allocs` and `compile_alloc_bytes` since the
+counting allocator went into main.rs, and no golden has ever held them. So the
+front end has had an allocation-traffic dimension that nothing watched, and the
+pass rewrite is what walked into it — a quarter off its time, and every gate in
+the tree reporting nothing.
+
+`bench/compile_allocs_golden.txt` holds the count now, with a gate beside the
+compile-memory one. The proof that it earns its place is the ratchet's, and
+it is worth stating because a new gate that duplicates an old one is cost with
+no cover. Under `compile_allocs_unwatched` — the pass put back to owning the
+program's names, one String per identifier occurrence:
+
+    compile_rounds        40 ->        40
+    compile_visits    17,786 ->    17,786
+    compile_peak_bytes 876,930 ->   876,930
+    compile memory     green
+    welfare            green
+    compile allocations  RED    148,073 -> 153,859
+
+Rounds and visits cannot see it because the decision work is identical. Peak
+cannot see it because the strings are transient — allocated, dropped, and gone
+before the high-water mark is anywhere near them. That is three gates blind to
+the same shape, and the fourth is the reason to add a fourth.
+
+The allocator prints a second counter and the golden does not hold it. The
+first version of this file pinned `compile_alloc_bytes` beside the count, and
+the runner disagreed with the container by 26 bytes on a number near eight
+million — too small for a toolchain and too exact for noise. Five directory
+lengths, one tree, one binary:
+
+    16 chars   7,942,065        29 chars   7,942,091
+    17 chars   7,942,067        49 chars   7,942,131
+    21 chars   7,942,075
+
+which is 7,942,033 plus twice the length of the directory the compiler ran in,
+at every point. Two allocations hold the absolute path, and
+`/home/runner/work/kanso/kanso` is thirteen characters longer than
+`/home/user/kanso`. A row like that pins the clone rather than the compiler,
+and it would have reddened the first time somebody checked the repository out
+somewhere else — under a name that said the front end's allocation traffic had
+moved. It is dropped, with the measurement in the file so nobody puts it back.
+What it was wanted for is held on both sides already: `compile_allocs` for the
+traffic, `compile_peak_bytes` for the residency.
+
+The count survives the same test. It reads 148,073 at all five lengths, and
+148,073 under rustc 1.94.1 in the container and under 1.98.0 on the runner.
+
+`compile_peak_bytes` carries the same term — 876,898 plus twice the length,
+exact at all five — and that is a trap for the table above, which claims peak
+does not move under the mutation. The first reading of it said peak moved 132
+bytes, taken from a mutated build in a scratch worktree 66 characters deeper
+than the tree it was compared against. Rerun at one path, mutated and clean,
+peak is 876,930 both times: byte-identical, and the claim is measured rather
+than argued from what transient means. Where that leaves
+`bench/compile_memory_golden.txt` is a decision of Clay's and is in the ledger.
+
+The rest of the veins were swept for the same shape and are clean. The four
+runtime cost goldens produce byte-identical counter sets across a 38-character
+change of working directory, and so do all 51 fixtures in `tests/golden/mem`.
+Every counter that carries the path is a byte total on the compile side, which
+is the only place the compiler's own allocations are what is being counted:
+`compile_alloc_bytes` and `compile_peak_bytes`, and no others.
+`compile_allocs`, `compile_rounds`, `compile_visits` and `compile_passes` sit
+beside them and do not move.
+
+The row is kept under a toolchain guard anyway, because a good part of the
+count is the standard library's: a HashMap's growth schedule, a Vec's doubling,
+a String's spare. So the file carries a `measured-on rustc=` line and
+`scripts/gates/measured_on.sh` learned to read it, which makes three veins that
+name their host and one script that reads all three. Upstream version only, no
+point release — the same granularity clang gets, for the same reason: nothing
+here shows a point release moving a count, and a fact pinned tighter than the
+evidence reds the gate on changes that are not changes.
+
+Two toolchains agreeing is evidence rather than a guarantee, and a regeneration
+taken in the wrong place is silent, so the guard stays and the ratchet row that
+proves it stays with it.
+
+The row watched: green unmutated, red under `compile_allocs_unwatched` and
+under `compile_allocs_host_unpinned`, and the ratchet's cover check still says
+every CI job carries a mutation or a stated reason.
+
+The guard earned itself on its first outing, which was not the plan but is the
+best evidence it could have had. The golden went up carrying this container's
+`rustc=1.94.1`; the runner is on 1.98.0, and the gate refused rather than
+diffing — no numbers printed, both toolchains named. So the rows here are the
+runner's, taken from a job log, and a container cannot produce them. That is
+the same arrangement `bench/instructions_golden.txt` has had since a
+container's glibc numbers were pasted over the runner's, and the same
+bootstrap: name the host the vein will live on, let CI measure, copy the rows
+out.
+
+It follows that an image bump can red this gate. If it does, the row moved with
+the toolchain and has not regressed; the response is a regeneration, the line
+moved, and a sentence here — which is what the two veins beside it already ask
+for.
+
 ## 2026-08-24 — the megabyte was the benchmark doing its job, and a correction
 
 "The beat carry copies a loop-invariant capture" says, earlier today, that the
