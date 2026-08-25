@@ -3261,3 +3261,66 @@ row was taken from CI rather than predicted, which is what the previous entry
 concluded to do.
 
 A third of `reserve_rehash` remains, in maps this change does not touch.
+
+## 2026-08-25 — the allocation map, and one throwaway vector it found
+
+Every allocation win so far was found by reading the instruction profile and
+guessing which pass behind it was allocating. That guessing has been wrong at
+least once today: `used_globals` looked like the obvious owner of the
+986,615-instruction `Set<String>::insert` line, and instrumenting it showed 612
+inserts, which cannot be it.
+
+The per-phase allocation probe was built for this and declined, because it
+costs the shipped compiler 92,873 instructions per compile to carry a counter
+nobody outside a profiling run reads. It did not need to be in the compiler.
+`valgrind --tool=dhat` records every allocation with its call stack and needs
+no code at all — build with `RUSTFLAGS=-g` for symbols and read the JSON. It
+agrees with the counter exactly: 82,788 blocks against `compile_allocs`
+82,776, the difference being twelve allocations before the counting allocator
+is installed.
+
+Attributing each block to its innermost kanso frame gives the map the tree has
+never had:
+
+    8,649  10.4%  lexer::lex_line
+    7,733   9.3%  infer::eval_expr
+    5,768   7.0%  walk_children
+    5,236   6.3%  hashbrown fallible_with_capacity
+    3,956   4.8%  Tok::clone
+    3,866   4.7%  infer::infer
+    3,184   3.8%  lexer::lex
+    2,726   3.3%  inline::rewrite
+    2,407   2.9%  trmc::rewrite
+    2,366   2.9%  provenance::Walk::expr
+    2,318   2.8%  check::param_names
+    2,239   2.7%  parser::P::parse_app
+
+Lexing is 19.1% of the total across its three frames, which is the largest
+single area and the one whose obvious fix was declined on 2026-08-24 for
+reasons that still hold.
+
+`check::param_names` is not that. It answered `Vec<&str>` — already borrowed,
+but a vector per call, and the `Ctor` arm built one for the fields and then a
+second to put the `whole` name in front of it, so a nested pattern allocated
+one per level for names nobody kept. That is the shape `expr_children` had
+before it took a callback. It takes one now, with `first_param_name` beside it
+for the single caller that wants only the first.
+
+    compile_allocs        82,776 -> 80,458   -2,318
+    front_end_rounds          40 -> 40        flat
+    front_end_visits      17,786 -> 17,786    flat
+    compile_peak_bytes   864,274 -> 864,274   flat
+
+The fall is exactly what dhat attributed to that frame, which is the useful
+part: the map predicts, rather than merely explains after the fact.
+
+The spec is `tests/golden/errors/let_binding.kso` and it was watched red. Make
+`for_each_param_name` hand back nothing for `Var` and `Annotated` and the
+corpus reports ``a binding is ` = …` `` where it should say
+``a binding is `x = …` ``, which is `first_param_name` and only that path.
+
+Worth naming honestly: that mutation blinds both functions, and only the one
+golden moved. The four callers that build a `bound` set — the shadow checks and
+the literal walk — went on passing with every set empty. Their coverage is
+thinner than it looks, and that is true of the code as it stood this morning
+rather than anything this change did.

@@ -1328,7 +1328,7 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
             }
             // `let x = 1` reads as destructuring a `let`, which is how every
             // language that spells a binding with a keyword arrives here.
-            let bound = param_names(&fields[0]).first().copied().unwrap_or_default();
+            let bound = first_param_name(&fields[0]).unwrap_or_default();
             let instead = match ty.as_str() {
                 "let" | "var" | "const" | "val" => {
                     format!(" — a binding is `{bound} = …`, with no keyword")
@@ -1415,7 +1415,12 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
         if decl.synthetic {
             continue;
         }
-        let mut bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
+        let mut bound: HashSet<&str> = HashSet::default();
+        for param in &decl.params {
+            for_each_param_name(param, &mut |n| {
+                bound.insert(n);
+            });
+        }
         for stmt in &decl.body {
             bound_in_stmt(stmt, &mut bound);
         }
@@ -1425,20 +1430,41 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-fn param_names(p: &Pattern) -> Vec<&str> {
+/// Hands each name a pattern binds to `f`, in the order the pattern spells
+/// them. This used to answer a `Vec<&str>`, and the `Ctor` arm built one per
+/// field and then a second to put the `whole` name in front, so a nested
+/// pattern allocated a vector per level for names nobody kept — the shape
+/// `expr_children` had before it took a callback.
+fn for_each_param_name<'a>(p: &'a Pattern, f: &mut dyn FnMut(&'a str)) {
     match p {
-        Pattern::Var(n, _) => vec![n.as_str()],
-        Pattern::Annotated { name, .. } => vec![name.as_str()],
+        Pattern::Var(n, _) => f(n.as_str()),
+        Pattern::Annotated { name, .. } => f(name.as_str()),
         Pattern::Ctor { fields, whole, .. } => {
-            let parts: Vec<&str> = fields.iter().flat_map(param_names).collect();
-            match whole {
-                Some(named) => std::iter::once(named.0.as_str()).chain(parts).collect(),
-                None => parts,
+            if let Some(named) = whole {
+                f(named.0.as_str());
+            }
+            for field in fields {
+                for_each_param_name(field, f);
             }
         }
-        Pattern::Keyed { entries, .. } => entries.iter().map(|e| e.bind_name.as_str()).collect(),
-        _ => Vec::new(),
+        Pattern::Keyed { entries, .. } => {
+            for e in entries {
+                f(e.bind_name.as_str());
+            }
+        }
+        _ => {}
     }
+}
+
+/// The first name a pattern binds, which is the one a diagnostic quotes back.
+fn first_param_name(p: &Pattern) -> Option<&str> {
+    let mut first = None;
+    for_each_param_name(p, &mut |n| {
+        if first.is_none() {
+            first = Some(n);
+        }
+    });
+    first
 }
 
 /// Every name this declaration binds anywhere in its body — its parameters,
@@ -1453,7 +1479,9 @@ fn param_names(p: &Pattern) -> Vec<&str> {
 fn bound_in_stmt<'a>(stmt: &'a Stmt, out: &mut HashSet<&'a str>) {
     match stmt {
         Stmt::Bind { pattern, expr } => {
-            out.extend(param_names(pattern));
+            for_each_param_name(pattern, &mut |n| {
+                out.insert(n);
+            });
             bound_in_expr(expr, out);
         }
         Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => bound_in_expr(expr, out),
@@ -1559,7 +1587,12 @@ fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
         if decl.synthetic {
             continue;
         }
-        let bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
+        let mut bound: HashSet<&str> = HashSet::default();
+        for param in &decl.params {
+            for_each_param_name(param, &mut |n| {
+                bound.insert(n);
+            });
+        }
         for stmt in &decl.body {
             literal_walk_stmt(stmt, &groups, &types, &bound, &builtins, diags);
         }
