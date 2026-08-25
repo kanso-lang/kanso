@@ -2584,3 +2584,61 @@ The corrupt rows hold no numbers to recover — the values were never written,
 only one per group survived under a mangled key. The file is bounded to 500
 rows and appended on main, so it corrects itself as new commits land rather
 than by any edit here.
+
+## 2026-08-25 — the compile-memory band is gone, and the figure it hid was not the one the gavel named
+
+The no-tolerance-bands gavel of 2026-08-24 is built. Its three clauses, and
+what each turned out to cost:
+
+**The band dies.** `scripts/gates/compile_memory.sh` asserts equality on
+`compile_peak_bytes`. Rounds and visits are counts of the compiler's own
+algorithm, so they stay checked on every host; the peak is checked only where
+its measured-on line says it may be.
+
+**Platform is a setting.** `bench/compile_memory_golden.txt` carries
+`# measured-on rustc=1.98.0` and the gate runs `measured_on.sh` before the
+peak comparison, so an unlisted host refuses instead of measuring. rustc alone,
+for the reason the allocation vein gives: what the front end holds is counted
+by its own allocator, and a good part of the figure is the standard library's
+growth schedules.
+
+**The figure corrects — to 864,300, not the 872,061 the gavel recorded.**
+That number was measured on 2026-08-24 and twelve allocation PRs landed after
+it. Writing it would have shipped a gate red on arrival. The runner's current
+figure was read out of this PR's own CI log, where the gate prints it on every
+run including the green ones:
+
+    front end holds 864300 bytes; golden 871649, band 854217..889081
+
+A container on rustc 1.94.1 reads 864,274 against that 864,300 — twenty-six
+bytes apart, the scale the measured-on prose documents, and the reason the
+line exists. The stored 871,649 was 7,349 bytes above reality, which is what a
+two-per-cent band is for.
+
+Welfare rises 84.87 to 84.89 and is `--set` in the same commit. The move is a
+data correction rather than work: the term had been scoring a peak the compiler
+had already left behind.
+
+### The gate had no mutation, which is why it could rot
+
+The ratchet had rows for `compile_allocs`, `compile_allocs_host`, `compile_ir`
+and `compile_ir_host`, and nothing at all for compile memory. Both are added.
+
+`compile_memory_banded` puts 865,300 into the golden — 1,026 bytes off, 0.119%,
+comfortably inside the two per cent the old gate allowed. It was watched red
+against the new gate and priced against the old one, so the mutation says in
+one number what the ruling was about.
+
+`compile_memory_host_unpinned` moves the measured-on line to `rustc=0.0.0` and
+the gate refuses rather than printing a diff somebody would paste.
+
+Both were proved locally by pinning the golden to the container's own toolchain
+so the peak comparison could be reached at all; the committed file names the
+runner.
+
+### One more thing the line broke
+
+`# measured-on rustc=1.98.0` contains an `=`, and `scripts/welfare/welfare.kso`
+read every line with an `=` in it as a counter. It died on
+`"1.98.0" is not an integer`. Every golden in the tree is commented, so the
+guard went on the shared reader rather than on the one file that grew the line.

@@ -7,11 +7,24 @@
 # nothing a compiler change does moves that number. This one moves.
 #
 # Rounds and visits are counts of the compiler's own algorithm, so they are the
-# same everywhere and CI diffs them exactly. Peak bytes is measured by the
-# compiler's allocator and is a property of the host too — linux and macos
-# disagree by 56 bytes on the same input — so the score reads this number and
-# CI asserts only that reality has not drifted two per cent from it. Bucketing
-# to kibibytes was tried and does not work: the two values straddle a boundary.
+# same everywhere and the gate diffs them on every host.
+#
+# Peak bytes is measured by the compiler's own allocator, so it belongs to the
+# rustc that built it as surely as .text belongs to clang — a HashMap's growth
+# schedule and a Vec's doubling are the standard library's. It used to be read
+# against a two-per-cent band, and Clay ruled the band away on 2026-08-24: "that
+# shouldn't be a tolerance. it should be a setting per platform." So the row
+# below is exact for the host its measured-on line names, and any other host
+# refuses to compare rather than fuzzing. The band was the bug's whole habitat —
+# two per cent of 871,649 is 17,432 bytes of slack for a divergence documented
+# at tens of bytes, and main drifted 376 bytes greener inside it with CI green
+# the entire time.
+#
+# The stored figure is the runner's, read out of its own job log rather than
+# measured here: a container on rustc 1.94.1 reads 864,274 against the runner's
+# 864,300 on the same sources, and pasting the container's number in is exactly
+# what the measured-on machinery exists to stop.
+# measured-on rustc=1.98.0
 front_end_rounds=40
 front_end_visits=17786
-compile_peak_bytes=871649
+compile_peak_bytes=864300
