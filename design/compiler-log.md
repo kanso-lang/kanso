@@ -3177,3 +3177,41 @@ and read as evidence about another. The first was a set of counter gates
 reading benchmark binaries built before the change. Both were caught by
 cross-checking against something independent rather than by noticing at the
 time.
+
+### The same reads answer to a cheaper instrument
+
+A second probe asked what a rule with no inference in it would win of the same
+ground. Take the set of fields read off one value in one body. If no declared
+record holds all of them together, the program is wrong whatever that value's
+type turns out to be.
+
+Across the same eight roots:
+
+    bases with at least one field read       60
+    bases reading two or more fields         30
+      ... pinning exactly one declared type  30
+      ... pinning none, or more than one      0
+
+Every base that reads two fields determines its type completely. Two of the
+thirty match a pair of names — `row` and `ratchet/row` — which is one
+declaration under a qualified and an unqualified spelling rather than two
+types.
+
+The refusal's reach was measured by substitution: for every base, and every
+field name declared anywhere in that root that the base does not already read,
+does the rule refuse the base with that name added? It refuses 1,992 of 2,123,
+or 93.8%. Every substituted name is declared on some type, so the fence shipped
+in #1029 — which refuses a field no type declares at all — says nothing about
+any of them, and the 93.8% is ground it does not hold.
+
+Soundness needs the reads to happen together, which costs almost nothing here.
+A second gather kept only the reads that certainly execute: never inside a
+lambda, which may never be called; never in a deferred arm of `if`; never under
+a name a nested binder has shadowed. That gather loses one base of the thirty
+and none of the refusals.
+
+This does not replace the fixpoint. A base with a single field read is out of
+reach, and so is the 6.2% where some other record happens to hold the confused
+pair. What it changes is the price of the 142: a walk of each body against the
+type table, rather than a second value threaded through every arm of
+`eval_expr`.
