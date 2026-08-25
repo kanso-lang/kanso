@@ -3304,3 +3304,65 @@ A value read for a single field, and the 6.2% of substitutions where some other
 record happens to hold the confused pair. Both need the whole-program fixpoint,
 which is still the next increment and is now worth less than it was this
 morning.
+
+## 2026-08-25 — the interned symbol is DECLINED, and the churn was counted by making the name opaque
+
+The economics have been settled since the "how big an interner would have to
+be" entry: around 400 distinct names per program, 622 across the build, against
+roughly 11,000 `String::clone`s. What was left open was the churn, and the note
+left for whoever started said to count the print sites in the back ends and the
+interpreter first.
+
+A grep would have given a number nobody could check. The instrument that
+answers it is the compiler. Make the name type opaque — a newtype in a private
+module with a constructor and no way to read the text — change one AST field to
+it, and every site rustc reports is a site an interner's table would have to
+reach.
+
+    pub Expr::Ident(String, Span)  ->  Expr::Ident(Name, Span)
+
+**365 errors in the library, 366 including the test target.** One field.
+
+    codegen  63     linear   36     demand    9     advisory  7
+    check    62     infer    28     parser    8     provenance 4
+    lib      42     trmc      9     inline    7     dispatch  1
+    beat     42     escape    9     eval      5     ast       1
+
+That is a lower bound twice over. Errors cascade, so fixing this wave uncovers
+sites the first one hid; and `ast.rs` holds 28 other String-typed name fields
+that a real move would have to convert too. The back-end and interpreter half
+the note asked for is codegen's 63 and eval's 5, with `wasm_backend.rs`
+reporting none — it works off a lowering that has already resolved names.
+
+### What the objective can see
+
+Welfare's compile terms are `front_end_rounds`, `front_end_visits`,
+`emitted_lines` and `compile_peak_bytes`. An interner moves none of the first
+three: it changes what the compiler allocates, not what it decides. The one
+term it does touch is the one it would likely make worse, because a table holds
+every name for the whole compile where a String dies with its scope.
+
+So the index would read the same or lower for 365-plus sites of churn.
+
+That is not the whole argument, and saying it is would be dishonest about the
+model. Wall time is absent from welfare deliberately, and what a model leaves
+out it weights at zero — the borrow-the-names work on 2026-08-24 took a quarter
+off a pass's time with every gate in the tree reporting nothing, which is
+exactly the dimension an interner is aimed at. `compile_allocs` is pinned in a
+vein of its own for that reason and would fall.
+
+### The ruling
+
+DECLINED as a whole-AST move. The win is real and invisible to the objective;
+the cost is 365 sites for one field of twenty-nine, on a front end that already
+finishes lib/json in about six milliseconds. Under the satiation the project
+chose for compile cost — 0.5, where successive doublings are worth 4.3, 2.9,
+1.7 and 0.9 points — a compiler that is already imperceptible has little left
+to win.
+
+What survives is narrower and was already isolated by the churn analysis. Two
+questions do genuine text work: "is this qualified?" (21 `contains('/')` sites)
+and "make a qualified name" (26 `format!` sites, 23 of them in lib.rs's
+qualification machinery). A name carrying its module and base answers both
+structurally, and it is a fraction of the conversion. Whoever returns to this
+should measure that, not the interner.
