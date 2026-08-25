@@ -3275,10 +3275,20 @@ exist at all, and can the fields read off this value belong to one record —
 differ only in where they may look: the first is asked wherever the read
 appears, the second only where the read certainly runs. So the walk carries
 `certain` and stops recording under the shapes that defer, rather than
-traversing twice. Measured on the container host, `kanso check lib/json` is
-60,404,144 against 60,625,645 for the compiler as it stood, both figures
-repeated to the instruction; the runner's own numbers are what the golden takes
-and they are recorded beside this.
+traversing twice.
+
+**The runner reads 59,717,892 against 59,773,156, a fall of 55,264.** So the
+refusal lands with the front end doing LESS work than before it existed: the
+gather rides a walk that was already there, and folding the two tightened the
+one that remains — `walk_children` 1,703,108 to 1,631,080, its recursive twin
+965,191 to 940,511, `check_merged` 1,793,255 to 1,771,785. The golden takes the
+new figure and this is the sentence beside it. `compile_peak_bytes` held at
+864,300 on the same run, and `compile_instructions` is not a welfare term, so
+the floor does not move.
+
+The container host agrees on direction and not on magnitude, which is why the
+row is host-pinned: 60,404,144 against 60,625,645 there, each repeated to the
+instruction.
 
 ### Watched red
 
