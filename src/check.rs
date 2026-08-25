@@ -1260,6 +1260,27 @@ fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
         // Statements are walked in order, so a rebinding of the same name
         // replaces the entry rather than confusing it.
         let mut local: HashMap<&str, &str> = HashMap::default();
+        // Two parameter forms name their type without any inference at all.
+        // An annotation says it outright, and a constructor pattern's
+        // as-binding is whatever dispatch matched — `r@(rect w h)` reached
+        // this arm because the value IS a rect. Neither needs the
+        // whole-program fixpoint, which is why they come before it.
+        for pattern in &decl.params {
+            let named = match pattern {
+                Pattern::Annotated { name, ty, .. } => Some((name.as_str(), ty.as_str())),
+                Pattern::Ctor { ty, whole: Some(bound), .. } => {
+                    Some((bound.0.as_str(), ty.as_str()))
+                }
+                _ => None,
+            };
+            // A name the type table does not hold is a typeset or a subtype,
+            // and answers nothing here.
+            if let Some((bind, ty)) = named {
+                if let Some((known, _)) = plain.get_key_value(ty) {
+                    local.insert(bind, known);
+                }
+            }
+        }
         for stmt in &decl.body {
             field_reads(stmt, &declared, &plain, &local, diags);
             if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {

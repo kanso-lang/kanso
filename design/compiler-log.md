@@ -3078,3 +3078,43 @@ The parameter case, which needs the per-expression record-type set the census
 above sized: one type or unknown, sourced at constructors, carried by the
 fixpoint the value sets already use. This increment needs none of that, which
 is why it went first.
+
+## 2026-08-25 — two parameter forms name their type without the fixpoint
+
+The increment before this refused a field read when the type was plain to read
+off a statement: a construction written where it stands, or a local bound to
+one. It said a parameter answers nothing, and left that to the whole-program
+set the census sized.
+
+Two parameter forms are not a guess and need none of it.
+
+An **annotation** says the type outright — `fn shown m:money` — and a
+**constructor pattern's as-binding** is whatever dispatch matched, since
+`fn sized r@(money c)` reached that arm because the value IS a money. Both
+seed the same per-body map the locals use, before the walk starts.
+
+    fn shown m:money        m.text    money has no field text
+    fn sized r@(money c)    r.width   money has no field width
+
+A parameter that is neither still answers nothing, which is the honest state
+until the fixpoint carries a type.
+
+`Pattern::Annotated`'s `ty` may name a typeset or a subtype, and those are not
+in the plain-record table, so the lookup misses and the check stays quiet. The
+conservative direction falls out of the table rather than needing a rule.
+
+### It costs nothing
+
+`compile_allocs` is 64,950 either side — the same figure the previous increment
+landed on. The seeding reuses the map that was already being built per function
+body, so there is no new allocation anywhere; the loop over parameters is the
+whole of the addition. Rounds, visits and peak are identical too. Whatever the
+instruction count does is CI's to report, and it is a loop over a handful of
+parameters per declaration.
+
+### Watched red
+
+`tests/golden/errors/field_of_an_annotated_parameter.kso` covers both forms,
+each reading a DIFFERENT absent field so the golden tells them apart. Without
+the seeding it prints the old `error[runtime]` and exits 0, where the error
+corpus requires exit 2.
