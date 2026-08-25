@@ -3127,3 +3127,91 @@ binaries and once about a golden figure taken before twelve merges.
 each reading a DIFFERENT absent field so the golden tells them apart. Without
 the seeding it prints the old `error[runtime]` and exits 0, where the error
 corpus requires exit 2.
+
+## 2026-08-25 — the field fence types none of the fleet, and the first census that said otherwise was invalid
+
+Two increments of gavel 1b's read half shipped today, and before building the
+third — the whole-program fixpoint, which touches every arm of `eval_expr` —
+the question worth answering is how many field reads it would newly answer.
+
+**142 declared field reads across the fleet. The fence types zero of them.**
+
+    lib/regexp                       reads=100  typed=0
+    scripts/ratchet                  reads= 24  typed=0
+    scripts/welfare                  reads= 11  typed=0
+    bench/pendbench                  reads=  4  typed=0
+    scripts/perf_record              reads=  3  typed=0
+    lib/json, lib/list, lib/text     reads=  0
+
+So the five shapes that answer — a construction where it stands, a local bound
+to one, an annotated parameter, a constructor pattern's as-binding, and a field
+no type declares — cover the shape a MISTAKE takes and not the shape the IDIOM
+takes. Real code reads a field off a bare parameter, which is the one case only
+the fixpoint can see.
+
+That is worth stating plainly against any impression that the fence is mostly
+built. What is built catches the beginner's error, where a value is constructed
+and then misread three lines later. The fixpoint is not an increment on top of
+that; it is where the fence starts earning its keep on programs people wrote.
+
+### The first census was invalid, for a reason already in this log
+
+The first attempt walked `Expr::Field` over merged programs and reported fifty
+field reads in the whole tree, four of them answerable. A grep of the sources
+finds hundreds. The AST census was measuring nothing.
+
+The reason is recorded in the 2026-08-19 withdrawal of the per-dependency
+`check_merged` removal: *"the rewriting passes run inside the dependency's own
+compile, before it returns: by the time the entry merges, a field read has been
+desugared into a shape the check that looks for it can no longer see."* A
+merged program is exactly the wrong place to count field reads, and that is why
+the per-dependency pass is not redundant.
+
+The instrument that works is the check itself, which runs per dependency where
+the shape still exists. Counting there gives the 142 above, and it was verified
+against the two error goldens first — they report typed, as they must, so a
+zero elsewhere is a fact rather than a broken probe.
+
+This is the second time today a measurement was taken under one configuration
+and read as evidence about another. The first was a set of counter gates
+reading benchmark binaries built before the change. Both were caught by
+cross-checking against something independent rather than by noticing at the
+time.
+
+### The same reads answer to a cheaper instrument
+
+A second probe asked what a rule with no inference in it would win of the same
+ground. Take the set of fields read off one value in one body. If no declared
+record holds all of them together, the program is wrong whatever that value's
+type turns out to be.
+
+Across the same eight roots:
+
+    bases with at least one field read       60
+    bases reading two or more fields         30
+      ... pinning exactly one declared type  30
+      ... pinning none, or more than one      0
+
+Every base that reads two fields determines its type completely. Two of the
+thirty match a pair of names — `row` and `ratchet/row` — which is one
+declaration under a qualified and an unqualified spelling rather than two
+types.
+
+The refusal's reach was measured by substitution: for every base, and every
+field name declared anywhere in that root that the base does not already read,
+does the rule refuse the base with that name added? It refuses 1,992 of 2,123,
+or 93.8%. Every substituted name is declared on some type, so the fence shipped
+in #1029 — which refuses a field no type declares at all — says nothing about
+any of them, and the 93.8% is ground it does not hold.
+
+Soundness needs the reads to happen together, which costs almost nothing here.
+A second gather kept only the reads that certainly execute: never inside a
+lambda, which may never be called; never in a deferred arm of `if`; never under
+a name a nested binder has shadowed. That gather loses one base of the thirty
+and none of the refusals.
+
+This does not replace the fixpoint. A base with a single field read is out of
+reach, and so is the 6.2% where some other record happens to hold the confused
+pair. What it changes is the price of the 142: a walk of each body against the
+type table, rather than a second value threaded through every arm of
+`eval_expr`.
