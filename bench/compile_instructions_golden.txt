@@ -46,4 +46,4 @@
 # will differ slightly from this row, and should. This one is measured in the
 # box with the environment emptied; that one is not.
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
-compile_instructions=61349546
+compile_instructions=60277520

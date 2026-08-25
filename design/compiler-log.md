@@ -2113,7 +2113,7 @@ references out of `all_names` rather than copying and subtracting:
     };
 
     compile_allocs        70,356 -> 67,948           -2,408
-    compile_instructions  container 61,904,116 -> 60,920,861
+    compile_instructions  61,349,546 -> 60,277,520   -1,072,026
     front_end_rounds          40 -> 40                flat
     front_end_visits      17,786 -> 17,786            flat
     compile_peak_bytes   864,274 -> 864,274           flat
