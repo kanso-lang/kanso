@@ -2965,3 +2965,116 @@ It carries a row and a mutation now, and the mutation is the original bug
 rather than a stand-in: it collapses the interpolated key to a constant, so
 every pair in a group shares one name and `list/to_h` keeps the last. Watched
 red, and it names all thirty.
+## 2026-08-25 — how wide a record-type set has to be, measured before building one
+
+The read half of gavel 1b needs a per-expression record-type set, and the
+obvious shape is the one the value sets already use: a bitmask, one bit per
+declared type, saturating to "unknown" when it overflows. `Set` is a `u16` of
+fourteen kind bits, so a `u64` for types looks like the natural sibling.
+
+A census of every module in the tree says otherwise. Merged programs, which is
+what inference sees — a module plus everything it imports:
+
+    types= 87  scripts/grammar_check
+    types= 79  scripts/fingerprint
+    types= 69  scripts/book_panels
+    types= 67  scripts/site_smoke
+    types= 67  scripts/browser_differential_run
+    types= 65  scripts/prose_check
+    types= 54  scripts/welfare
+    types= 53  scripts/perf_record
+    types= 46  bench/scanbench
+    types= 45  lib/regexp
+
+Eight programs in this repository already exceed sixty-three, so a `u64` would
+saturate on them and the fence would go quiet exactly where the programs are
+biggest. `u128` fits today's maximum with 1.46× headroom, which is thin for a
+number that only grows.
+
+Worth knowing before writing any of it, because the per-file counts suggest the
+opposite: `lib/regexp` declares fifteen types in its own source and lib/ holds
+eighteen between all of it. The merged figure is four to six times that, since
+a program carries its dependencies' types too.
+
+### What the shape probably is instead
+
+One type or unknown — a single index with a sentinel — rather than a set. It
+costs four bytes, has no width limit and no saturation cliff, and it answers
+the question the fence actually asks, which is whether the base is *definitely*
+some named type. A union of several types degrades to unknown, and the check
+stays silent there, which is what today's compiler does anyway.
+
+The cost is on the correctness half rather than the privacy half: with a real
+set, `p.name` could be refused when no member of the union has the field; with
+one-or-unknown it is refused only when exactly one type is known. That is still
+strictly more than the nothing the checker does today, and it does not saturate
+on the programs that need it most.
+
+Recorded rather than built. The measurement is what kills the bitmask, and it
+would have been discovered halfway through writing one.
+
+## 2026-08-25 — a field read the checker can see the type of is refused before it runs
+
+The first increment of gavel 1b's read half, and it closes the correctness
+half rather than the privacy half.
+
+`check_field_exists` asked whether ANY declared record has the field, and its
+own comment recorded the limit: "Reading a field a *particular* record lacks
+stays a runtime error, since only the value knows its type." That is true of a
+parameter. It is not true of a local bound to a bare construction, and that is
+where the mistake is usually written:
+
+    p = point 1 2
+    print "{p.name}"
+
+    was   error[runtime]: `point` has no field `name`
+    now   error[name]: `point` has no field `name`, with the span
+
+Both engines, refused before anything runs, which is what the doctrine asks
+for. The run-time refusal was a hole rather than a design.
+
+### What it will and will not answer
+
+The type is read off the statement, with no inference: a construction written
+where it stands, or a local bound to one. A parameter still answers nothing,
+because what it will hold is a question for the whole-program fixpoint, and
+this check stays quiet rather than guessing.
+
+It also only trusts a **plain** record — no parent to inherit fields from, no
+typeset members standing for something else. Certainty is the whole licence for
+refusing early, and a type that borrows its shape from elsewhere has none to
+offer here.
+
+`tests/cross_module_fields.rs` still passes unchanged, which is the honest
+measure of the limit: its case reads a field off a value this analysis cannot
+see the type of, so the run-time refusal is still there for it.
+
+### Cost
+
+`compile_allocs` 64,884 to **64,950**, sixty-six allocations for the type table
+and one small map per function body. The container and the runner agree to the
+digit on this one, which they do not always.
+
+`compile_instructions` 59,528,061 to **59,732,726**, a rise of 204,665 or
+0.34%. `check_merged` carries 16,184 of it and the `&str` map's insert another
+8,227, which is the type table being built and the locals being recorded.
+`compile_peak_bytes` does not move at all: the maps are small and transient.
+
+A third of a per cent of the front end to turn a run-time failure into a
+compile-time one is worth paying, and it is the first increment's price rather
+than the fence's — the per-expression set the census sized will cost more, and
+should be weighed on its own evidence when it is built.
+
+### Watched red
+
+`tests/golden/errors/field_of_the_wrong_record.kso` prints the old
+`error[runtime]` and exits 0 without the change, where the error corpus
+requires exit 2. So the fixture fails for the right reason rather than for the
+absence of a message.
+
+### What is left
+
+The parameter case, which needs the per-expression record-type set the census
+above sized: one type or unknown, sourced at constructors, carried by the
+fixpoint the value sets already use. This increment needs none of that, which
+is why it went first.

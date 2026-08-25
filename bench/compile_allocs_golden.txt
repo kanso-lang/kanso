@@ -41,4 +41,4 @@
 # A rise is a regression to explain and a fall is a win to bank. Movement is
 # fine; silence is not.
 # measured-on rustc=1.98.0
-compile_allocs=64884
+compile_allocs=64950
