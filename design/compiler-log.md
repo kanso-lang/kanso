@@ -2062,10 +2062,19 @@ The set and both maps borrow from the program now, and `Resolver` holds
 `&'a HashSet<&'a str>` where it held `&'a HashSet<String>`.
 
     compile_allocs        72,756 -> 70,356           -2,400
-    compile_instructions  container 62,890,451 -> 61,904,116
+    compile_instructions  62,351,359 -> 61,349,546   -1,001,813
     front_end_rounds          40 -> 40                flat
     front_end_visits      17,786 -> 17,786            flat
     compile_peak_bytes   864,274 -> 864,274           flat
+
+The gate's own profile shows the swap where it happened. The
+`HashMap<String, ()>::insert` line that has sat in the top fifteen since the
+seedless hash went in — 986,615 instructions — is gone from the listing
+entirely, and the borrowed-key line beside it rises from 1,310,405 to
+1,543,975. As with the door analysis on 2026-08-24, those two figures cannot be
+added and compared against the old pair: the listing is thresholded at 90% and
+what a reader can take from it is which monomorphisation the pass uses. The
+total is the row.
 
 `used_globals` stays owned, and that is not an oversight. It accumulates across
 every dependency in the build and is read after each one's program has gone, so
