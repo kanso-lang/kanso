@@ -3256,13 +3256,29 @@ a record together, the diagnostic points at that read, because it is the one to
 change. `n.kind + n.from + n.to` points at `kind`, since `from` and `to` are a
 `span`.
 
-**Cost.** `compile_allocs` on lib/json is 64,950 before and after, byte for
-byte, and rounds, visits and peak bytes are all unmoved. The first draft cost
-157 allocations, all of them a set built per binding statement whether or not
-anything was open, and a walk that carries the open bases and asks the pattern
-about each one allocates nothing until a body actually reads a field. lib/json
-reads none, so the golden's program pays nothing at all — a body that does read
-fields pays a small vector per base, and no gate in the tree measures one.
+**Cost, and a second walk that CI caught.** `compile_allocs` on lib/json is
+64,950 before and after, byte for byte, and rounds and visits are unmoved. The
+first draft cost 157 allocations, all of them a set built per binding statement
+whether or not anything was open; a walk that carries the open bases and asks
+the pattern about each one allocates nothing until a body actually reads a
+field, and lib/json reads none.
+
+Allocations were the wrong dimension to stop at. The draft was a SECOND
+traversal of every body beside the one the #1029 fence already does, and the
+vein built for exactly this reported it: `compile_instructions` rose 59,773,156
+to 60,090,679 on the runner, **+317,523 for a module with no field reads in
+it**. Nothing else moved, because a walk that finds nothing allocates nothing
+and decides nothing.
+
+The fix is one walk. The two questions a field read raises — does this field
+exist at all, and can the fields read off this value belong to one record —
+differ only in where they may look: the first is asked wherever the read
+appears, the second only where the read certainly runs. So the walk carries
+`certain` and stops recording under the shapes that defer, rather than
+traversing twice. Measured on the container host, `kanso check lib/json` is
+60,404,144 against 60,625,645 for the compiler as it stood, both figures
+repeated to the instruction; the runner's own numbers are what the golden takes
+and they are recorded beside this.
 
 ### Watched red
 
