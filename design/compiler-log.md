@@ -2322,3 +2322,84 @@ question about how much code moves rather than about whether the move pays.
 The probe is not in the tree. It was two functions behind an environment
 variable, run once, and reverted — a census is a thing to know, not a thing to
 carry.
+
+## 2026-08-25 — ruling archaeology: what was decided and never became record
+
+Clay: *"the goal here would be to not have anything left to gavel. I feel like
+I keep gathering things and then you ask me the same question 10 to 20 more
+times."* This is one sweep of the log, the archive and every `design/*.md` for
+rulings whose content is not reflected in the ledger, the gavels, or shipped
+behaviour. Seventy-nine attributed rulings across the two log files; four
+findings.
+
+### Gavel 1b, ruled, half built, and its marker lost twice
+
+`### 1b. Foreign structure access, gaveled — per-field pub` sits in the archive
+at 2026-08-14. Named structure reads cross packages, `pub` is granted per
+field, and the gavel explicitly "retires failure_position-style projections".
+
+The construction half was enforced on 2026-08-20 — *"yes 251 is mine"* — and
+that entry says plainly it is "1b implemented rather than a second decision".
+The read half is not built: `pub x` inside a type is still a syntax error, so
+the field-level fence the gavel grants has no way to be written.
+
+The marker has now fallen out of the ledger twice. The first loss was caught
+and written up in the archive under A TRAP WORTH THE SENTENCE — *"the index is
+maintained by hand and can lose a fact; the log is append-only and cannot. They
+disagree in one direction only, so when they do, the log wins"* — and the
+marker was restored in that same commit. It went again in `e3052383`, the
+rewrite that consolidated four files into the one ledger, and has been absent
+since.
+
+Three things follow, and none of them is a question for Clay:
+
+- The ledger's **Dot chains route around accessor privacy (Demeter)** entry
+  sits under "Open, not blocking" in a file whose charter is decisions
+  awaiting Clay. It is not awaiting Clay. It is awaiting an implementer, and
+  it says so itself — "the unbuilt half of per-field `pub`".
+- `failure_position` and `failure_reason` still ship in `lib/json/json.kso`,
+  four arms of them, though 1b retires exactly that shape.
+- kanso#985 is that migration. The 2026-08-17 entry scopes it — "the
+  projections, json_failure_door.kso, and the ch08 suite" — and rules the ch08
+  leg with it. It has sat as a draft since 2026-08-21.
+
+I had this one wrong earlier today and the correction is the point of the
+sweep: I told Clay #985 was a language-surface decision and therefore his. It
+is the implementation of a gavel he gave on 2026-08-14.
+
+### G — eta-reduction as canon — has its answer in a declined experiment
+
+The ledger asks whether to ban the forwarding lambda, `map (c -> fetch c)`
+becoming `map fetch`. The archive answers the premise on 2026-07-25 under
+BUILT, MEASURED, DECLINED: the rewrite is not semantics-preserving here,
+because an `err` records a hop for every function it passes through, so
+removing the lambda changes the provenance the trace prints and native stops
+agreeing with the oracle.
+
+Two forms that print different traces cannot be canonicalised into each other.
+That retires G's premise rather than G's question, which is why this one is a
+recommendation with the reason attached rather than a strike: one word closes
+it.
+
+### `--explain-copies` is part-superseded and the ledger does not say so
+
+The archive records it at 2026-07-27: part-superseded by the counter stack
+(`bytes_peak`, `cohort_kept`, `carry_dedup`, the trend gate, the welfare peak
+terms), with the unserved half — naming the source site of each evacuation
+copy — scoped and waiting on a CLI-surface ruling. The ledger entry describes
+only the unserved half without recording that the rest already landed, which
+reads as a larger open question than it is.
+
+### The assert hako is correctly filed, and this says so
+
+Its licence half was ruled on 2026-08-17 — assertions are ordinary foreign
+rescue — and the ledger entry already carries that sentence. Recorded here so
+the next sweep does not re-derive it.
+
+### What the sweep did not find
+
+`C` (pure/yield), `D` (what a succeeded effect yields), `Z` (errors without
+exceptions) and `AA` (newtype dispatch acceptance) have no prior ruling in
+either log file. They are genuinely open, and the ledger's own caveat about C
+and D — that they were asked before `>>` deferred its right side, so the
+question's shape may not have survived — still stands.

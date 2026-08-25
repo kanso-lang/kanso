@@ -14,6 +14,21 @@ one `git log -p -- design/pending-gavels.md` away.
 
 Rules of the ledger:
 
+- **An entry cites its search, or it is invalid.** Before filing, search
+  design/compiler-log.md, design/log/compiler-log-archive.md and every
+  design/*.md for the question. The entry then says what the search found
+  — the ruling that partly covers it, the experiment that answers its
+  premise — or states plainly that it found nothing. An entry with no
+  citation line is not a pending decision; it is an unsearched one, and
+  it does not go to Clay.
+- **A gaveled item carries its citation forever.** Where an entry
+  survives because only part of it was ruled, the ruling's marker stays
+  in the entry. This rule exists because gavel 1b's marker has now
+  fallen out of this file twice — once caught and restored, once in the
+  `e3052383` rewrite that made this single ledger — and each loss made a
+  settled question look open. The log is append-only and cannot lose a
+  fact; this file is maintained by hand and has. When the two disagree,
+  the log wins.
 - STATUS.md may index this file. It does not carry decision text.
 - Sessions cite entries by the headings below, never by a session task
   id — a task list is private to its session and its numbers resolve
@@ -85,6 +100,10 @@ all. Filed 2026-08-24.
 
 ### `--explain-copies`
 
+**Cited: part-superseded, archive 2026-07-27 — the counter stack
+(`bytes_peak`, `cohort_kept`, `carry_dedup`, the trend gate, the welfare
+peak terms) served the rest. What is open is only the shape below.**
+
 The *where* half of the observability item — a diagnostic naming the
 source site of each evacuation copy. Needs span plumbing through the
 carry machinery; the CLI surface deserves a shape ruling before
@@ -92,12 +111,20 @@ building.
 
 ### An assert hako
 
+**Cited: the licence half is ruled — archive 2026-08-17, assertions are
+ordinary foreign rescue. What is open is the surface shape only.**
+
 A real assertion library in the rspec direction Clay sketched —
 `(expect 1) . to (equal x)` — as its own small surface design, never
 improvised inside a test fix. Its arms are foreign to every tested hako,
 so the err license needs nothing special. Queued 2026-08-17.
 
 ### Dot chains route around accessor privacy (Demeter)
+
+**Cited: GAVELED as 1b, archive "1b. Foreign structure access, gaveled —
+per-field pub" (2026-08-14). Construction half enforced 2026-08-20. This
+is the unbuilt read half — an implementation task, not a decision, and
+it is listed here only until someone takes it.**
 
 A chain can reach a field the owning module would not expose directly —
 the unbuilt half of per-field `pub`, and a real hole in the privacy
@@ -131,6 +158,13 @@ world of 2026-08-17 before it is worth Clay's time:
   (`map (c -> fetch c)` → `map fetch`) plus the composition rules a
   dispatch group held as a value still owes
   (design/function-values.md).
+  **Cited: premise answered, archive 2026-07-25 "BUILT, MEASURED,
+  DECLINED: eta-reduction is not semantics-preserving here" — an `err`
+  records a hop per function, so the two forms print different
+  provenance and native stops agreeing with the oracle. Two forms that
+  trace differently cannot be canonicalised into each other.
+  RECOMMENDATION: strike G on that reason. One word closes it; the
+  composition-rules half stays.**
 - **Z — errors without exceptions**: presumed declined — the 2026-08-15
   err gavel kept err with the foreign-only rescue license, which is the
   world Z1 abolished. One word confirms and this line moves to the log.
