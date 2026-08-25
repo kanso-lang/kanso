@@ -3446,3 +3446,31 @@ and "make a qualified name" (26 `format!` sites, 23 of them in lib.rs's
 qualification machinery). A name carrying its module and base answers both
 structurally, and it is a fraction of the conversion. Whoever returns to this
 should measure that, not the interner.
+## 2026-08-25 — gavel: welfare measures what compiling costs, not what it counts
+
+Clay ruled the sweep's first entry, and against its recommendation. Told
+that welfare's compile-speed terms are front_end_rounds, front_end_visits
+and emitted_lines — counts of what the compiler decided to do rather
+than what doing it cost — his words: "then you have a MASSIVE deficiency
+in your welfare metric. my god." The recommendation was to leave the
+model alone and note the gap in prose; the ruling is the opposite.
+
+The ruling: welfare's compile-cost model measures actual cost. The terms
+that stand in for compile speed become the measured ones — instructions
+retired and allocator traffic, the two deterministic host-pinned veins
+that already exist (bench/compile_instructions_golden.txt and
+bench/compile_allocs_golden.txt) — so that making the compiler genuinely
+faster or leaner always moves the score, and a 26% front-end improvement
+can never again land silent. compile_peak_bytes stays as the memory
+term; the no-tolerance-bands gavel already un-stales its reading. The
+proxy counters stay pinned in their goldens as regression tripwires;
+they stop being scored.
+
+Weights and satiation for the measured terms are the holder's to price
+from evidence, the way the 2026-08-01 weights session did — that is
+implementation under the ledger's own charter, and it does not come
+back here. The floor re-ratchets from the rescored model in the same
+change, recorded as a model correction.
+
+The entry leaves the ledger with this commit. Fifteen of the sweep's
+sixteen remain with Clay.
