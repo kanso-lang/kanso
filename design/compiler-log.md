@@ -2191,3 +2191,38 @@ back ends and the interpreter. It is recorded here as the shape of the next
 move rather than proposed, because the prize is known (about eleven thousand
 allocations) and the cost is not measured, and this log has a rule about
 building rather than describing.
+
+## 2026-08-25 — how big an interner would have to be
+
+The entry above left the interned-symbol idea recorded rather than proposed,
+on the grounds that the prize was known and the cost was not. Half of that cost
+is cheap to measure, so here it is.
+
+A throwaway census over `check_merged` counts the DISTINCT names a merged
+program carries against the number of times one appears — declaration names,
+file names, type and field names, and every `Ident` or `Partial` in every body:
+
+    distinct=167  occurrences=1,098
+    distinct=57   occurrences=143
+    distinct=4    occurrences=6
+    distinct=394  occurrences=2,875
+
+The largest program in the json build holds 394 distinct names, and 622 across
+all four before counting the overlap a shared table would collapse. Against
+that, the front end still makes about eleven thousand `String::clone`s.
+
+So an interner would be a few hundred entries — one small allocation each,
+made once — standing in for eleven thousand copies, and every name comparison
+in the compiler would become a `u32` compare instead of a `memcmp`. The
+`__memcmp_avx2_movbe` line has sat in the gate's top fifteen at 1.3 million
+instructions all day, and it is names being compared.
+
+What that settles is the economics, which are not close. What it does not
+settle is the churn: `ast::Expr::Ident` holds a `String` today and every pass,
+both back ends and the interpreter read it, so the table has to be reachable
+wherever a name is printed. That is the part still unmeasured, and it is a
+question about how much code moves rather than about whether the move pays.
+
+The probe is not in the tree. It was two functions behind an environment
+variable, run once, and reverted — a census is a thing to know, not a thing to
+carry.
