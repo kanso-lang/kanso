@@ -2642,3 +2642,39 @@ runner.
 read every line with an `=` in it as a counter. It died on
 `"1.98.0" is not an integer`. Every golden in the tree is commented, so the
 guard went on the shared reader rather than on the one file that grew the line.
+
+## 2026-08-25 — `valid_utf8` has nothing left to do, and the reason is a gavel
+
+The err-arm migration plan was deleted earlier today because it describes gavel
+B's world. Its one additive item was carried forward rather than deleted with
+it: a `valid_utf8` predicate over bytes, "the test-validity-first predicate
+lib/json needs".
+
+It is not needed, and the same gavel that superseded the plan is why.
+
+Under gavel B an err was unhandleable — it rose to the endpoint and an
+`(err reason)` arm was a compile error — so a program that wanted to know
+whether some bytes were valid utf-8 had to ask before converting. Gavel 1
+(2026-08-15) replaced that absolute with the foreign-only rescue license, and
+`std/text` is foreign to every program that imports it. So the question can be
+put to the conversion:
+
+    fn told (err _)
+      "refused"
+
+    fn told _
+      "ok"
+
+    told (text/utf8 [104 105])   ok
+    told (text/utf8 [255])       refused
+
+Both engines agree. lib/json already relies on this shape — `text/utf8` raises
+on an invalid byte and the decoder lets it ride — so nothing in the library was
+waiting on a predicate either.
+
+`tests/golden/runtime/utf8_of_a_slice_names_the_wrapper.kso` pinned the refusal
+reaching the endpoint when nobody asks. Nothing pinned that somebody may ask,
+which is the fact this cancellation rests on, so a micro golden pins it on all
+three engines. Removing its err arm turns the program into an endpoint failure,
+so the fixture discriminates rather than passing on any compiler that happens
+to print two lines.

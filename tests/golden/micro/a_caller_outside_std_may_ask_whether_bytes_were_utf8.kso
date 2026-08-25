@@ -1,0 +1,23 @@
+# Gavel B made an err unhandleable — it rose to the endpoint and dispatching on
+# it was a compile error — so a program that wanted to know whether some bytes
+# were valid utf-8 had to test before converting. That is why the July err-arm
+# migration plan carried a `valid_utf8` predicate as its one additive item.
+#
+# Gavel 1 (2026-08-15) replaced the absolute with the foreign-only rescue
+# license, and `std/text` is foreign to every program that imports it, so the
+# question can be asked of the conversion itself. The predicate has nothing left
+# to do, and the plan that wanted it was deleted on 2026-08-25.
+#
+# tests/golden/runtime/utf8_of_a_slice_names_the_wrapper.kso pins the other
+# side of this — the same refusal reaching the endpoint when nobody asks.
+import "std/text"
+
+fn told (err _)
+  "refused"
+
+fn told _
+  "ok"
+
+pub play =
+  print "{told (text/utf8 [104 105])}"
+  >> print "{told (text/utf8 [255])}"
