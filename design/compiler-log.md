@@ -3299,6 +3299,17 @@ Lexing is 19.1% of the total across its three frames, which is the largest
 single area and the one whose obvious fix was declined on 2026-08-24 for
 reasons that still hold.
 
+One row in that table needs reading carefully, and it is a caution about the
+method rather than about the row. `walk_children` does not allocate — it was
+given a callback in #1007 precisely so that it would not. Its 5,768 blocks are
+`RawVec::grow_one` inside `for_each_child`'s closure, which is a CALLER's
+vector growing while the walk runs. Four places in `check.rs` spell
+`let mut stack = vec![e]` once per statement and then push children into it, so
+each statement allocates a worklist and doubles it as it fills. The innermost
+kanso frame is the honest thing for dhat to report and it is not the same as
+the frame that owns the memory; where a callback separates the two, the stack
+has to be read rather than the label.
+
 `check::param_names` is not that. It answered `Vec<&str>` — already borrowed,
 but a vector per call, and the `Ctor` arm built one for the fields and then a
 second to put the `whole` name in front of it, so a nested pattern allocated
