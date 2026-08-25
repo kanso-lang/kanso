@@ -2913,3 +2913,51 @@ The corpus fixture carries the nested case as well as the flat one — a
 per-element `map` inside a once-only continuation, which is where both halves
 of the rule meet. Removing either half turns all three of its lines into
 `["abc" "abc" "abc"]`, so the fixture discriminates on both.
+
+## 2026-08-25 — how wide a record-type set has to be, measured before building one
+
+The read half of gavel 1b needs a per-expression record-type set, and the
+obvious shape is the one the value sets already use: a bitmask, one bit per
+declared type, saturating to "unknown" when it overflows. `Set` is a `u16` of
+fourteen kind bits, so a `u64` for types looks like the natural sibling.
+
+A census of every module in the tree says otherwise. Merged programs, which is
+what inference sees — a module plus everything it imports:
+
+    types= 87  scripts/grammar_check
+    types= 79  scripts/fingerprint
+    types= 69  scripts/book_panels
+    types= 67  scripts/site_smoke
+    types= 67  scripts/browser_differential_run
+    types= 65  scripts/prose_check
+    types= 54  scripts/welfare
+    types= 53  scripts/perf_record
+    types= 46  bench/scanbench
+    types= 45  lib/regexp
+
+Eight programs in this repository already exceed sixty-three, so a `u64` would
+saturate on them and the fence would go quiet exactly where the programs are
+biggest. `u128` fits today's maximum with 1.46× headroom, which is thin for a
+number that only grows.
+
+Worth knowing before writing any of it, because the per-file counts suggest the
+opposite: `lib/regexp` declares fifteen types in its own source and lib/ holds
+eighteen between all of it. The merged figure is four to six times that, since
+a program carries its dependencies' types too.
+
+### What the shape probably is instead
+
+One type or unknown — a single index with a sentinel — rather than a set. It
+costs four bytes, has no width limit and no saturation cliff, and it answers
+the question the fence actually asks, which is whether the base is *definitely*
+some named type. A union of several types degrades to unknown, and the check
+stays silent there, which is what today's compiler does anyway.
+
+The cost is on the correctness half rather than the privacy half: with a real
+set, `p.name` could be refused when no member of the union has the field; with
+one-or-unknown it is refused only when exactly one type is known. That is still
+strictly more than the nothing the checker does today, and it does not saturate
+on the programs that need it most.
+
+Recorded rather than built. The measurement is what kills the bitmask, and it
+would have been discovered halfway through writing one.
