@@ -2549,11 +2549,14 @@ fn mark_bare_quals(
     surfaced: &Surfaced,
     quals: &mut crate::hash::Set<String>,
 ) {
-    let mut bare = crate::hash::Set::default();
-    fn collect(e: &ast::Expr, bare: &mut crate::hash::Set<String>) {
+    // Borrowed from the program: this walks every expression of every
+    // declaration and used to keep a `String` per bare identifier OCCURRENCE,
+    // for a set that is asked two questions below and dropped.
+    let mut bare: crate::hash::Set<&str> = crate::hash::Set::default();
+    fn collect<'a>(e: &'a ast::Expr, bare: &mut crate::hash::Set<&'a str>) {
         if let ast::Expr::Ident(name, _) = e {
             if !name.contains('/') {
-                bare.insert(name.clone());
+                bare.insert(name.as_str());
             }
         }
         for_each_child(e, |child| collect(child, bare));
@@ -2572,13 +2575,13 @@ fn mark_bare_quals(
     // `list/order` — so reading the first segment credits `list` for an import
     // the caller wrote as `geo`, and the caller's import then reads as unused.
     for (name, quals_for) in surfaced {
-        if bare.contains(name) {
+        if bare.contains(name.as_str()) {
             quals.extend(quals_for.keys().cloned());
         }
     }
     for import in &program.imports {
         let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
-        if import.renames.iter().any(|(_, yours)| bare.contains(yours)) {
+        if import.renames.iter().any(|(_, yours)| bare.contains(yours.as_str())) {
             quals.insert(qual);
         }
     }
