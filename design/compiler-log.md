@@ -3423,3 +3423,56 @@ frames. Nothing here is acted on yet.
 The lesson is the same one the `walk_children` row taught, and it is worth
 stating once: a profile that names functions is naming the frames the compiler
 left behind, not the code that ran. Read the inline info, or read the stacks.
+
+## 2026-08-25 — provenance borrows its group keys, and gets a spec at last
+
+The sharpened map put `String::clone` at a third of the front end's
+allocations, spread across a dozen passes. Provenance was the largest cluster
+outside the lexer, 4,195 blocks across `Walk::expr` and `analyze`.
+
+`type Group = (String, usize)` — a declaration's name and arity, with the name
+owned. That is the shape the demand pass had before 2026-08-24, and it cost the
+same way, only worse: this is a fixpoint that runs the whole program through up
+to two hundred rounds, and every round rebuilt the key for every group it
+touched. `self.returns.get(&(name.clone(), args.len()))` allocated a `String`
+per lookup and dropped it.
+
+`Group<'a>` is `(&'a str, usize)` now, `binds` is `HashMap<&'a str, Pkgs>`, and
+`Provenance<'a>` carries the lifetime out to its one consumer in `main.rs`,
+where the program outlives it. It compiled on the first attempt; the covariance
+question that was settled by building on 2026-08-24 did not come up again.
+
+    compile_allocs        77,249 -> 72,756           -4,493
+    compile_instructions  container 64,116,715 -> 62,890,451
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+The fall is larger than the 4,195 dhat charged to provenance, because the
+candidate list's `group.clone()` and the vectors around it went with the keys.
+
+### The pass had no spec, and now it does
+
+The mutation was run before the change shipped, and it found nothing. Collapse
+every group's name — `("", decl.params.len())` — so that provenance can no
+longer tell one declaration from another of the same arity, and all six
+advisories in `tests/advisory.rs` stay green, and lib/json's three licence
+advisories come back byte-identical. The central key of a whole pass, and the
+suite could not see it change.
+
+`tests/golden/advisory/group_identity` is the fixture that can. `rescue` is pub,
+so provenance seeds it — a published err parameter is assumed to see its own
+package's failures, because its callers are not all in view. `quiet` is private
+and uncalled, so nothing ever feeds it. The two differ only in their name. With
+the key intact only `rescue` is advised; with the names collapsed `quiet`
+inherits what `rescue` was fed and is advised for a rescue it never made, and
+`a_group_is_told_apart_by_its_name_and_not_only_its_arity` goes red while the
+other six stay green.
+
+One thing worth recording about how that was found, because it nearly went the
+other way. Restoring the source and re-running WITHOUT rebuilding produced a
+reading that looked like a genuine result — both functions advised on correct
+code — and the explanation for it was already half-written before a `grep` of
+the source against the binary's behaviour showed the binary was still the
+mutated one. The rule that saves this is cheap: after restoring a mutation,
+rebuild before reading anything.
