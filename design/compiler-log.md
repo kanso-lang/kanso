@@ -3380,13 +3380,45 @@ rather than about the worklists. It is recorded here rather than fixed because
 the fixture that would catch it — a leak that changes which file a diagnostic
 names — belongs to whoever next touches those checkers.
 
-The lexer is now 22.5% of the remaining 77,261 blocks across its three frames,
-and inference 15%. The map after this change:
+### The map was blurred, and sharpening it moved the headline
 
-    8,649  11.2%  lexer::lex_line
-    7,733  10.0%  infer::eval_expr
-    5,236   6.8%  hashbrown table allocation
-    4,237   5.5%  walk_children
-    3,956   5.1%  Tok::clone
-    3,866   5.0%  infer::infer
-    3,184   4.1%  lexer::lex
+The map in the previous entry, and the one this entry started with, attributed
+every block to the innermost kanso frame valgrind reported. On an optimised
+build that frame is the ENCLOSING function: everything inlined into it collapses
+under its name. The `walk_children` row was one symptom, caught by reading the
+stacks. It was not the only one.
+
+`valgrind --tool=dhat --read-inline-info=yes` resolves the inlined frames, and
+the same 77,261 blocks sort quite differently:
+
+    25,966  33.6%  String::clone
+     5,885   7.6%  Vec::from_iter
+     5,236   6.8%  hashbrown table allocation
+     4,802   6.2%  infer::eval_expr
+     3,707   4.8%  String::from_iter(&char)
+     3,263   4.2%  Vec::clone
+     3,078   4.0%  lexer::lex_line
+
+A third of everything the front end allocates is copying a `String`. That did
+not appear anywhere in the coarse map, because each clone was charged to
+whichever pass had inlined it. `infer::eval_expr` shrank from 7,733 to 4,802
+for the same reason, and its 3-to-5-byte blocks — which no `HashMap<&str, u16>`
+clone could ever produce, since the smallest hashbrown table is over a hundred
+bytes — are the ones that moved out.
+
+Charging each `String::clone` to the first kanso frame beneath it gives the
+list worth working from:
+
+    3,807  Tok::clone                 1,628  inline::direct_aliases
+    2,916  for_each_child closure     1,192  check::declared_names
+    2,366  provenance::Walk::expr     1,046  trmc::rewrite
+    2,292  check::check_file_shadow     919  demand::analyze
+    2,105  compile_module_loaded        843  inline::rewrite
+    1,829  provenance::analyze          788  fuse_enumerable
+
+Provenance is the largest cluster outside the lexer at 4,195 across its two
+frames. Nothing here is acted on yet.
+
+The lesson is the same one the `walk_children` row taught, and it is worth
+stating once: a profile that names functions is naming the frames the compiler
+left behind, not the code that ran. Read the inline info, or read the stacks.
