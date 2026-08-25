@@ -2754,3 +2754,43 @@ address escape. Three arrangements were measured: exporting the counter costs
 0.14% of the compiler permanently on a diagnostic is exactly the trade welfare
 cannot see, which is the open ledger entry. It ships with that ruling or not at
 all.
+
+## 2026-08-25 — what the read half of 1b actually needs, measured rather than assumed
+
+The ledger said the fence "needs record-type inference the value sets do not
+do". That was written from reading the code; this is the same claim from
+running the compiler, because the sizing is what anyone starting the work needs
+and a guess about it would be worth nothing.
+
+**A field no type declares is refused before anything runs.** `p.z` where no
+record has a `z` gives `error[name]: no record type has a field 'z'`, pinned by
+tests/golden/errors/field_missing.
+
+**A field the wrong type declares is not.** Two types, one with `name`, and
+reading `p.name` off a `point` gives `error[runtime]: 'point' has no field
+'name'` — on both engines, pinned across all three by
+tests/cross_module_fields.rs. The static check asks whether ANY record has the
+field, never which record is in hand.
+
+**The value sets cannot answer the second question by construction.** `Set` in
+src/infer.rs is a `u16` of fourteen kind bits, and `REC` is one of them. It
+records that an expression may be a record and carries no identity, so there is
+nothing to consult at a field read.
+
+So the fence needs a new analysis: record-type identity per expression, sourced
+at constructors and carried through bindings, parameters and returns the way
+the value sets already are. Then a field read can be refused for the type in
+hand rather than for the program's whole vocabulary.
+
+### The gap is wider than privacy
+
+`error[runtime]: 'point' has no field 'name'` is a refusal this language's own
+doctrine says should not exist — it refuses before anything runs. That is a
+correctness hole, older than the privacy question and independent of it, and
+the same analysis closes both: knowing the type in hand turns the run-time
+refusal static, and knowing whether the field is `pub` for a foreign type is
+one more question asked at the same site.
+
+Worth stating because it changes what the work is for. The privacy fence looked
+like a low-priority nicety with a large prerequisite. The prerequisite is
+carrying a correctness gap of its own.
