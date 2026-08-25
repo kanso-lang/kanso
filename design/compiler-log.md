@@ -2500,3 +2500,87 @@ in the ledger was re-run without the escapes before it was written down. A
 citation is only worth what the search behind it was worth, and an alternation
 that silently matches nothing is the failure mode a filing gate cannot catch
 by itself.
+
+## 2026-08-25 — a string built from a captured seed shared one buffer, and the history had been recording it
+
+`origin/perf-history` has rows like this in it, and has had for months:
+
+    "compile_alloc_bytescompile_allocscompile_peak_bytescompile_passes":5
+    "allocsalloc_bytesarena_blocksperm_allocsbeat_itersel_parses…":0
+
+Four counter names appended into one key with a single value under it. Five of
+the six groups perf_record writes came out that way, so `compile_peak_bytes`,
+`compile_allocs`, the decode counters, the encode counters, the oneshot
+counters and the basket counters have never been plotted. The row still looked
+like a row, the job stayed green, and the chart drew the dimensions that
+survived.
+
+### What it was
+
+Native miscompiled this, and the oracle did not:
+
+    fn kept prefix n
+      "{prefix}{n}"
+
+    fn go prefix
+      list/to_list (list/map ["a" "b" "c"] (n -> kept prefix n))
+
+    print (go "")
+
+    native  ["abc" "abc" "abc"]        oracle  ["a" "b" "c"]
+
+Every returned string aliased one buffer that each call had appended to. Three
+things are all required, found by bisection: the interpolated parameter is
+first (`"{n}{prefix}"` is correct), the interpolation is in a named function
+seeded by that function's own parameter (a literal at the call site is
+correct), and the call reaches it through `list/map` (a direct call is
+correct).
+
+### Why the analysis said yes
+
+`string_builders` in src/linear.rs licenses a join to write through its seed
+when the seed is finished: every mention of the parameter in the arm is inside
+the join, and `callers_hand_over` says every caller hands the value over. The
+second half was measured by counting mentions, and `go` mentions `prefix`
+once. `list/map` then hands it to `kept` once per element. One textual use,
+three hand-overs.
+
+`walk_for_builder` already knew the shape of this — "a lambda runs when
+somebody else decides", and it refuses to license a join site inside a lambda.
+The caller half had no such refusal.
+
+### The fix, and the one it had to keep
+
+Refusing every call inside a lambda was the first attempt and it was too
+broad: `tests/golden/mem/a_loop_invariant_capture_is_copied_every_rewind.kso`
+went from 2,012 allocations to 2,512 with `push_mut_fast` 496 to 0, because
+its `_ -> walk (built 500 []) 1` hands `built` a fresh `[]` on every run and
+that push is legitimately in place.
+
+So the capture is what the rule turns on, not the lambda. The names a lambda
+binds — its parameters and its own locals — travel down the walk, and a call
+inside it counts as a hand-over only when its argument is built entirely from
+them. `[]` qualifies. A parameter of the enclosing function does not.
+
+Every counter gate, the mem corpus and welfare are byte-identical across the
+fix: 84.87 before and after, floor untouched. The licence that went was one
+nothing sound was using.
+
+### The fixture, and the version of it that proved nothing
+
+tests/golden/micro/an_interpolation_seeded_by_a_capture_is_its_own_string.kso
+pins it on all three engines, and carries the in-place push beside the broken
+join so a future fix cannot buy one by losing the other.
+
+The first draft of that fixture passed on the unfixed compiler. It reached
+`go` through a module constant — `empty = ""` — and a shared constant is not a
+unique source, so the chain never formed and the bug never fired. Watching it
+go red first is what caught that; a fixture written after a fix and never seen
+red is a guess about what the code does.
+
+### What the history cannot get back
+
+The corrupt rows hold no numbers to recover — the values were never written,
+only one per group survived under a mangled key. The file is bounded to 500
+rows and appended on main, so it corrects itself as new commits land rather
+than by any edit here.

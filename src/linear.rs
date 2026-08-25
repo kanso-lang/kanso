@@ -211,7 +211,7 @@ impl<'a> Analysis<'a> {
     /// True unless some call to `name`/`arity` in `e` passes a non-unique list
     /// at position `i`.
     fn callsites_unique(&self, ctx: &FnDecl, e: &Expr, name: &str, arity: usize, i: usize) -> bool {
-        self.callsites_unique_in(ctx, e, name, arity, i, None)
+        self.callsites_unique_in(ctx, e, &Handover { name, arity, i }, None, None)
     }
 
     /// `scoped` names a value that is unique within `e` because of how `e` was
@@ -223,15 +223,16 @@ impl<'a> Analysis<'a> {
         &self,
         ctx: &FnDecl,
         e: &Expr,
-        name: &str,
-        arity: usize,
-        i: usize,
+        q: &Handover,
         scoped: Option<&str>,
+        lambda_bound: Option<&HashSet<String>>,
     ) -> bool {
+        let Handover { name, arity, i } = *q;
         if let Expr::App { head, args, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _) if n == name)
                 && args.len() == arity
-                && !self.unique_in(&args[i], ctx, scoped)
+                && (!self.unique_in(&args[i], ctx, scoped)
+                    || !hands_over_fresh(&args[i], lambda_bound))
             {
                 return false;
             }
@@ -245,13 +246,33 @@ impl<'a> Analysis<'a> {
                     (&args[2], self.folder_is_unique(&args[2], ctx, scoped))
                 {
                     let inner = params.first().map(|(n, _)| n.as_str());
-                    return self.callsites_unique_in(ctx, &args[0], name, arity, i, scoped)
-                        && self.callsites_unique_in(ctx, &args[1], name, arity, i, scoped)
-                        && self.callsites_unique_in(ctx, body, name, arity, i, inner);
+                    return self.callsites_unique_in(ctx, &args[0], q, scoped, lambda_bound)
+                        && self.callsites_unique_in(ctx, &args[1], q, scoped, lambda_bound)
+                        && self.callsites_unique_in(ctx, body, q, inner, lambda_bound);
                 }
             }
         }
-        child_exprs(e).into_iter().all(|c| self.callsites_unique_in(ctx, c, name, arity, i, scoped))
+        // A lambda body runs when its consumer decides, and how many times is
+        // not a question this walk can answer. `list/map xs (n -> kept s n)`
+        // mentions `s` once and hands it over once per element, so the one-use
+        // count that licenses a hand-over is measuring the wrong thing.
+        // `walk_for_builder` already refuses to license a join site inside a
+        // lambda for the same reason.
+        //
+        // What survives is the call whose argument the lambda MAKES rather than
+        // captures: `_ -> walk (built 500 []) 1` hands over a fresh `[]` every
+        // time it runs, and the twin fixture in tests/golden/mem depends on
+        // that push staying in place. So the names bound by the lambda travel
+        // down, and only an argument built entirely from them still counts.
+        if let Expr::Lambda { params, body, .. } = e {
+            let mut bound: HashSet<String> = lambda_bound.cloned().unwrap_or_else(HashSet::default);
+            bound.extend(params.iter().map(|(n, _)| n.clone()));
+            collect_bound_names(body, &mut bound);
+            return self.callsites_unique_in(ctx, body, q, scoped, Some(&bound));
+        }
+        child_exprs(e)
+            .into_iter()
+            .all(|c| self.callsites_unique_in(ctx, c, q, scoped, lambda_bound))
     }
 
     /// Does `e` evaluate to a freshly-owned list (refcount would be one)?
@@ -801,6 +822,54 @@ fn mentioned_as_value(e: &Expr, name: &str, arity: usize) -> bool {
         return escaping_head || args.iter().any(|a| mentioned_as_value(a, name, arity));
     }
     child_exprs(e).into_iter().any(|c| mentioned_as_value(c, name, arity))
+}
+
+/// The hand-over being asked about: which group, at which arity, at which
+/// parameter. Fixed for the whole walk, so it travels as one value rather than
+/// three that every recursive call has to thread by hand.
+struct Handover<'a> {
+    name: &'a str,
+    arity: usize,
+    i: usize,
+}
+
+/// Every name a lambda body binds for itself: the locals of its blocks and
+/// guards, added to the parameters the caller already put in the set.
+fn collect_bound_names(e: &Expr, out: &mut HashSet<String>) {
+    match e {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for stmt in stmts {
+                if let Stmt::Bind { pattern: Pattern::Var(n, _), .. } = stmt {
+                    out.insert(n.clone());
+                }
+            }
+        }
+        Expr::Lambda { params, .. } => out.extend(params.iter().map(|(n, _)| n.clone())),
+        _ => {}
+    }
+    for child in child_exprs(e) {
+        collect_bound_names(child, out);
+    }
+}
+
+/// Outside a lambda, every hand-over is the one the use count measured, so this
+/// answers yes. Inside one, only a value the lambda builds from what it binds
+/// itself is fresh on each run — a captured name is handed over once per
+/// invocation and the count says nothing about how many that is.
+fn hands_over_fresh(arg: &Expr, lambda_bound: Option<&HashSet<String>>) -> bool {
+    let Some(bound) = lambda_bound else { return true };
+    let mut names = Vec::new();
+    collect_idents_here(arg, &mut names);
+    names.iter().all(|n| bound.contains(n))
+}
+
+fn collect_idents_here(e: &Expr, out: &mut Vec<String>) {
+    if let Expr::Ident(name, _) = e {
+        out.push(name.clone());
+    }
+    for child in child_exprs(e) {
+        collect_idents_here(child, out);
+    }
 }
 
 /// A set of source positions, or of (group, arity, index) triples — the two
