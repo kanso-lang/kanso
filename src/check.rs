@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
+use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
-use std::collections::{HashMap, HashSet};
 
 pub const BUILTINS: [&str; 55] = [
     "append",
@@ -68,10 +68,10 @@ pub const AMBIENT: [&str; 6] = ["entries", "if", "length", "print", "push", "put
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
-    let mut used = HashSet::new();
+    let mut used = HashSet::default();
     let mut diags = resolve_markers(program, &markers);
     diags.extend(check_typesets(program, &type_names));
-    diags.extend(check_file(program, &HashSet::new(), &mut used));
+    diags.extend(check_file(program, &HashSet::default(), &mut used));
     if require_entry {
         check_entry(program, &mut diags);
     }
@@ -130,9 +130,7 @@ fn if_arity_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             ));
         }
     }
-    for child in crate::expr_children(expr) {
-        if_arity_walk(child, diags);
-    }
+    crate::for_each_child(expr, |child| if_arity_walk(child, diags));
 }
 
 fn check_boolean_equality(program: &Program, diags: &mut Vec<Diagnostic>) {
@@ -158,9 +156,7 @@ fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        boolean_equality_walk(child, diags);
-    }
+    crate::for_each_child(expr, |child| boolean_equality_walk(child, diags));
 }
 
 fn boolean_literal(expr: &Expr) -> Option<&'static str> {
@@ -193,7 +189,7 @@ fn said_plainly(op: &str, word: &str) -> String {
 /// x)` calls, and `&f` holds. Refusing the bare form costs a sigil and takes
 /// away a shape whose two meanings looked identical.
 fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut arities: std::collections::HashMap<&str, usize> = Default::default();
+    let mut arities: crate::hash::Map<&str, usize> = Default::default();
     for decl in &program.fns {
         let widest = arities.entry(decl.name.as_str()).or_insert(0);
         *widest = (*widest).max(decl.params.len());
@@ -220,7 +216,7 @@ fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
         }
         // A name bound here is this scope's, whatever a function elsewhere is
         // called: sha256 binds `first` and `list/first` is not what it means.
-        let mut bound: std::collections::HashSet<&str> = Default::default();
+        let mut bound: crate::hash::Set<&str> = Default::default();
         for p in &decl.params {
             collect_pattern_names(p, &mut bound);
         }
@@ -239,7 +235,7 @@ fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut std::collections::HashSet<&'a str>) {
+fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>) {
     match p {
         Pattern::Var(name, _) => {
             out.insert(name.as_str());
@@ -266,8 +262,8 @@ fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut std::collections::HashSet
 
 fn call_shaped_walk(
     expr: &Expr,
-    arities: &std::collections::HashMap<&str, usize>,
-    bound: &std::collections::HashSet<&str>,
+    arities: &crate::hash::Map<&str, usize>,
+    bound: &crate::hash::Set<&str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     if let Expr::List(items, _) = expr {
@@ -294,9 +290,7 @@ fn call_shaped_walk(
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        call_shaped_walk(child, arities, bound, diags);
-    }
+    crate::for_each_child(expr, |child| call_shaped_walk(child, arities, bound, diags));
 }
 
 fn check_err_as_value(program: &Program, diags: &mut Vec<Diagnostic>) {
@@ -419,10 +413,9 @@ fn check_effect_discarded(
     use crate::infer::DESC;
     // inference is handed in: one pass serves every check that reads it
 
-    let mut returns: std::collections::HashMap<(&str, usize), crate::infer::Set> =
-        Default::default();
+    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> = Default::default();
     // a position every arm throws away
-    let mut discarded: std::collections::HashMap<(&str, usize, usize), bool> = Default::default();
+    let mut discarded: crate::hash::Map<(&str, usize, usize), bool> = Default::default();
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
         *returns.entry(key).or_insert(0) |= inference.returns[i];
@@ -463,15 +456,23 @@ fn check_effect_discarded(
         }
     };
 
+    // One worklist for the whole program rather than one per statement, which
+    // keeps the capacity a long declaration earned instead of doubling up from
+    // nothing at the next one. The `clear` is what makes that safe: the loop
+    // below happens to drain the stack every time, but nothing tests that it
+    // does — a mutation that leaves items behind keeps the whole error corpus
+    // green — so the reuse does not rest on it.
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             };
-            let mut stack = vec![e];
+            stack.clear();
+            stack.push(e);
             while let Some(cur) = stack.pop() {
                 walk(cur, diags);
-                stack.extend(crate::expr_children(cur));
+                crate::for_each_child(cur, |c| stack.push(c));
             }
         }
     }
@@ -489,9 +490,8 @@ fn check_none_exhaustive(
     // inference is handed in: one pass serves every check that reads it
 
     // group -> joined return set, and whether any arm names none at a position
-    let mut returns: std::collections::HashMap<(&str, usize), crate::infer::Set> =
-        Default::default();
-    let mut handles: std::collections::HashMap<(&str, usize, usize), bool> = Default::default();
+    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> = Default::default();
+    let mut handles: crate::hash::Map<(&str, usize, usize), bool> = Default::default();
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
         *returns.entry(key).or_insert(0) |= inference.returns[i];
@@ -548,15 +548,23 @@ fn check_none_exhaustive(
         }
     };
 
+    // One worklist for the whole program rather than one per statement, which
+    // keeps the capacity a long declaration earned instead of doubling up from
+    // nothing at the next one. The `clear` is what makes that safe: the loop
+    // below happens to drain the stack every time, but nothing tests that it
+    // does — a mutation that leaves items behind keeps the whole error corpus
+    // green — so the reuse does not rest on it.
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             };
-            let mut stack = vec![e];
+            stack.clear();
+            stack.push(e);
             while let Some(cur) = stack.pop() {
                 walk(cur, diags, &decl.file);
-                stack.extend(crate::expr_children(cur));
+                crate::for_each_child(cur, |c| stack.push(c));
             }
         }
     }
@@ -596,9 +604,7 @@ fn check_none_in_collections(program: &Program, diags: &mut Vec<Diagnostic>) {
             }
             _ => {}
         }
-        for child in crate::expr_children(e) {
-            walk(child, diags);
-        }
+        crate::for_each_child(e, |child| walk(child, diags));
     }
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -644,9 +650,10 @@ fn article(word: &str) -> String {
 /// of literal kinds seen there. This is the supply side of a field's type,
 /// and with no annotation it is all the compiler is told.
 fn field_supply(program: &Program) -> HashMap<(&str, &str), Vec<(&'static str, Span)>> {
-    let mut supply: HashMap<(&str, &str), Vec<(&'static str, Span)>> = HashMap::new();
+    let mut supply: HashMap<(&str, &str), Vec<(&'static str, Span)>> = HashMap::default();
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
-        let mut stack: Vec<&Expr> = Vec::new();
+        stack.clear();
         for stmt in &decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -671,7 +678,7 @@ fn field_supply(program: &Program) -> HashMap<(&str, &str), Vec<(&'static str, S
                     }
                 }
             }
-            stack.extend(crate::expr_children(cur));
+            crate::for_each_child(cur, |c| stack.push(c));
         }
     }
     supply
@@ -689,8 +696,9 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
     // a local bound straight to a constructor is where a field read's owning
     // type is knowable without knowing anything else, the same footing the
     // assignment check stands on
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
-        let mut built: HashMap<&str, &str> = HashMap::new();
+        let mut built: HashMap<&str, &str> = HashMap::default();
         for stmt in &decl.body {
             if let Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::App { head, .. } } =
                 stmt
@@ -705,7 +713,7 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
         if built.is_empty() {
             continue;
         }
-        let mut stack: Vec<&Expr> = Vec::new();
+        stack.clear();
         for stmt in &decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -719,7 +727,7 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
                     demand_conflicts(program, &supply, &built, callee, args, diags);
                 }
             }
-            stack.extend(crate::expr_children(cur));
+            crate::for_each_child(cur, |c| stack.push(c));
         }
     }
 }
@@ -793,7 +801,7 @@ fn check_sub_parents(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// lore; kanso outlaws the shape instead. The fix is always the same:
 /// write the doubly-specific arm.
 pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let parents: std::collections::HashMap<&str, &str> = program
+    let parents: crate::hash::Map<&str, &str> = program
         .types
         .iter()
         .filter_map(|t| t.parent.as_deref().map(|p| (t.name.as_str(), p)))
@@ -842,8 +850,7 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
             None => false,
         })
     }
-    let mut groups: std::collections::HashMap<(&str, usize), Vec<&FnDecl>> =
-        std::collections::HashMap::new();
+    let mut groups: crate::hash::Map<(&str, usize), Vec<&FnDecl>> = crate::hash::Map::default();
     for d in &program.fns {
         groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
     }
@@ -1054,13 +1061,13 @@ pub fn check_typesets(program: &Program, type_names: &HashSet<String>) -> Vec<Di
 }
 
 /// Names a file declares, for the module-wide first pass.
-pub fn declared_names(program: &Program) -> HashSet<String> {
-    let mut names = HashSet::new();
+pub fn declared_names(program: &Program) -> HashSet<&str> {
+    let mut names = HashSet::default();
     for ty in &program.types {
-        names.insert(ty.name.clone());
+        names.insert(ty.name.as_str());
     }
     for decl in &program.fns {
-        names.insert(decl.name.clone());
+        names.insert(decl.name.as_str());
     }
     names
 }
@@ -1070,10 +1077,10 @@ pub fn declared_names(program: &Program) -> HashSet<String> {
 /// names the file uses, for the unused-private check.
 pub fn check_file(
     program: &Program,
-    extern_globals: &HashSet<String>,
+    extern_globals: &HashSet<&str>,
     used_globals: &mut HashSet<String>,
 ) -> Vec<Diagnostic> {
-    check_file_shadow(program, extern_globals, used_globals, &HashSet::new())
+    check_file_shadow(program, extern_globals, used_globals, &HashSet::default())
 }
 
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
@@ -1081,7 +1088,7 @@ pub fn check_file(
 /// every stdlib export a forbidden binding name.
 pub fn check_file_shadow(
     program: &Program,
-    extern_globals: &HashSet<String>,
+    extern_globals: &HashSet<&str>,
     used_globals: &mut HashSet<String>,
     shadowable: &HashSet<String>,
 ) -> Vec<Diagnostic> {
@@ -1095,11 +1102,10 @@ pub fn check_file_shadow(
     check_field_conflicts(program, &mut diags);
     check_annotation_names(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
-    globals.extend(extern_globals.iter().cloned());
-    let mut fn_arities: std::collections::HashMap<String, Vec<usize>> =
-        std::collections::HashMap::new();
+    globals.extend(extern_globals.iter().copied());
+    let mut fn_arities: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
     for decl in &program.fns {
-        let arities = fn_arities.entry(decl.name.clone()).or_default();
+        let arities = fn_arities.entry(decl.name.as_str()).or_default();
         if !arities.contains(&decl.params.len()) {
             arities.push(decl.params.len());
         }
@@ -1109,11 +1115,11 @@ pub fn check_file_shadow(
     // function with one, and the compiler knows both counts. A typeset never
     // constructs and a subtype takes the one value it wraps, so neither is
     // entered here.
-    let type_arity: std::collections::HashMap<String, usize> = program
+    let type_arity: crate::hash::Map<&str, usize> = program
         .types
         .iter()
         .filter(|t| t.members.is_empty() && t.parent.is_none() && !t.fields.is_empty())
-        .map(|t| (t.name.clone(), t.fields.len()))
+        .map(|t| (t.name.as_str(), t.fields.len()))
         .collect();
     for decl in &program.fns {
         check_fn_body_shadow(
@@ -1137,7 +1143,7 @@ pub fn check_unused_private(
     used_globals: &HashSet<String>,
     diags: &mut Vec<Diagnostic>,
 ) {
-    let mut reported: HashSet<&str> = HashSet::new();
+    let mut reported: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.name.starts_with('_')
             && !used_globals.contains(&decl.name)
@@ -1173,8 +1179,8 @@ fn check_predicates(
 ) {
     use crate::infer::{ERR, FALSE, TRUE};
     // inference is handed in: one pass serves every check that reads it
-    let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> =
-        std::collections::HashMap::new();
+    let mut groups: crate::hash::Map<&str, (crate::infer::Set, crate::diag::Span)> =
+        crate::hash::Map::default();
     for (i, decl) in program.fns.iter().enumerate() {
         // test functions are assertions the test verb consumes — their own
         // convention, not questions
@@ -1265,9 +1271,7 @@ fn field_reads_expr(e: &Expr, declared: &HashSet<&str>, diags: &mut Vec<Diagnost
         field_reads_expr(base, declared, diags);
         return;
     }
-    for child in crate::expr_children(e) {
-        field_reads_expr(child, declared, diags);
-    }
+    crate::for_each_child(e, |child| field_reads_expr(child, declared, diags));
 }
 
 pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
@@ -1342,7 +1346,7 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
             }
             // `let x = 1` reads as destructuring a `let`, which is how every
             // language that spells a binding with a keyword arrives here.
-            let bound = param_names(&fields[0]).first().copied().unwrap_or_default();
+            let bound = first_param_name(&fields[0]).unwrap_or_default();
             let instead = match ty.as_str() {
                 "let" | "var" | "const" | "val" => {
                     format!(" — a binding is `{bound} = …`, with no keyword")
@@ -1391,9 +1395,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
                 }
             }
         }
-        for child in crate::expr_children(e) {
-            walk(child, foreign, diags);
-        }
+        crate::for_each_child(e, |child| walk(child, foreign, diags));
     }
     for decl in &program.fns {
         if decl.synthetic || decl.name.contains('/') {
@@ -1420,7 +1422,7 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
         .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
         .map(|ty| (ty.name.as_str(), ty.fields.len()))
         .collect();
-    let mut arities: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut arities: HashMap<&str, Vec<usize>> = HashMap::default();
     for decl in &program.fns {
         let slot = arities.entry(decl.name.as_str()).or_default();
         if !slot.contains(&decl.params.len()) {
@@ -1431,7 +1433,12 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
         if decl.synthetic {
             continue;
         }
-        let mut bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
+        let mut bound: HashSet<&str> = HashSet::default();
+        for param in &decl.params {
+            for_each_param_name(param, &mut |n| {
+                bound.insert(n);
+            });
+        }
         for stmt in &decl.body {
             bound_in_stmt(stmt, &mut bound);
         }
@@ -1441,20 +1448,41 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-fn param_names(p: &Pattern) -> Vec<&str> {
+/// Hands each name a pattern binds to `f`, in the order the pattern spells
+/// them. This used to answer a `Vec<&str>`, and the `Ctor` arm built one per
+/// field and then a second to put the `whole` name in front, so a nested
+/// pattern allocated a vector per level for names nobody kept — the shape
+/// `expr_children` had before it took a callback.
+fn for_each_param_name<'a>(p: &'a Pattern, f: &mut dyn FnMut(&'a str)) {
     match p {
-        Pattern::Var(n, _) => vec![n.as_str()],
-        Pattern::Annotated { name, .. } => vec![name.as_str()],
+        Pattern::Var(n, _) => f(n.as_str()),
+        Pattern::Annotated { name, .. } => f(name.as_str()),
         Pattern::Ctor { fields, whole, .. } => {
-            let parts: Vec<&str> = fields.iter().flat_map(param_names).collect();
-            match whole {
-                Some(named) => std::iter::once(named.0.as_str()).chain(parts).collect(),
-                None => parts,
+            if let Some(named) = whole {
+                f(named.0.as_str());
+            }
+            for field in fields {
+                for_each_param_name(field, f);
             }
         }
-        Pattern::Keyed { entries, .. } => entries.iter().map(|e| e.bind_name.as_str()).collect(),
-        _ => Vec::new(),
+        Pattern::Keyed { entries, .. } => {
+            for e in entries {
+                f(e.bind_name.as_str());
+            }
+        }
+        _ => {}
     }
+}
+
+/// The first name a pattern binds, which is the one a diagnostic quotes back.
+fn first_param_name(p: &Pattern) -> Option<&str> {
+    let mut first = None;
+    for_each_param_name(p, &mut |n| {
+        if first.is_none() {
+            first = Some(n);
+        }
+    });
+    first
 }
 
 /// Every name this declaration binds anywhere in its body — its parameters,
@@ -1469,7 +1497,9 @@ fn param_names(p: &Pattern) -> Vec<&str> {
 fn bound_in_stmt<'a>(stmt: &'a Stmt, out: &mut HashSet<&'a str>) {
     match stmt {
         Stmt::Bind { pattern, expr } => {
-            out.extend(param_names(pattern));
+            for_each_param_name(pattern, &mut |n| {
+                out.insert(n);
+            });
             bound_in_expr(expr, out);
         }
         Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => bound_in_expr(expr, out),
@@ -1480,9 +1510,7 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     if let Expr::Lambda { params, .. } = e {
         out.extend(params.iter().map(|(n, _)| n.as_str()));
     }
-    for child in crate::expr_children(e) {
-        bound_in_expr(child, out);
-    }
+    crate::for_each_child(e, |child| bound_in_expr(child, out));
 }
 
 fn arity_walk_stmt(
@@ -1547,9 +1575,7 @@ fn arity_walk_expr(
             }
         }
     }
-    for child in crate::expr_children(e) {
-        arity_walk_expr(child, arities, fields, bound, diags);
-    }
+    crate::for_each_child(e, |child| arity_walk_expr(child, arities, fields, bound, diags));
 }
 
 /// A literal argument no arm could ever take.
@@ -1562,18 +1588,29 @@ fn arity_walk_expr(
 /// the call that could never have worked, reported where the author wrote it
 /// instead of when the value arrives.
 fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> = HashMap::new();
+    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> = HashMap::default();
     for decl in &program.fns {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(decl);
     }
     let types: HashMap<&str, &TypeDecl> =
         program.types.iter().map(|t| (t.name.as_str(), t)).collect();
-    let builtins = crate::inline::aliases(program);
+    // Borrowed for the walk: the map is keyed by an owned name, and looking
+    // one up needed a String built from the callee at every call expression —
+    // twice, since the same key answered `forwards`. A view keyed by the
+    // program's own names answers both from one lookup and allocates nothing.
+    let owned = crate::inline::aliases(program);
+    let builtins: HashMap<(&str, usize), &str> =
+        owned.iter().map(|((n, a), t)| ((n.as_str(), *a), t.as_str())).collect();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
-        let bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
+        let mut bound: HashSet<&str> = HashSet::default();
+        for param in &decl.params {
+            for_each_param_name(param, &mut |n| {
+                bound.insert(n);
+            });
+        }
         for stmt in &decl.body {
             literal_walk_stmt(stmt, &groups, &types, &bound, &builtins, diags);
         }
@@ -1704,7 +1741,7 @@ fn literal_walk_stmt(
     groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
-    builtins: &HashMap<(String, usize), String>,
+    builtins: &HashMap<(&str, usize), &str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     match stmt {
@@ -1719,7 +1756,7 @@ fn literal_walk_expr(
     groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
-    builtins: &HashMap<(String, usize), String>,
+    builtins: &HashMap<(&str, usize), &str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     if let Expr::App { head, args, .. } = e {
@@ -1727,13 +1764,10 @@ fn literal_walk_expr(
             if !bound.contains(name.as_str()) {
                 // a std wrapper is a rename over a builtin, so the builtin's
                 // demand is the one that will actually be met
+                let alias = builtins.get(&(name.as_str(), args.len())).copied();
                 let bare =
-                    builtins.get(&(name.clone(), args.len())).cloned().unwrap_or_else(|| {
-                        name.rsplit_once('/')
-                            .map(|(_, n)| n.to_string())
-                            .unwrap_or_else(|| name.clone())
-                    });
-                let bare = bare.strip_prefix("builtin_").unwrap_or(&bare).to_string();
+                    alias.unwrap_or_else(|| name.rsplit_once('/').map(|(_, n)| n).unwrap_or(name));
+                let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
                 // A program that declares its own `run` calls its own `run`,
                 // and the arms below say what those take. Without this, every
                 // function sharing a bare name with a builtin would inherit
@@ -1746,11 +1780,11 @@ fn literal_walk_expr(
                 // refused at compile time naming its argument while
                 // `text/chars 5` answered a bare runtime string: not a
                 // decision, an accident of which names have wrappers.
-                let forwards = builtins.contains_key(&(name.clone(), args.len()));
+                let forwards = alias.is_some();
                 let shadowed = !forwards && groups.contains_key(&(name.as_str(), args.len()));
                 for (i, arg) in args.iter().enumerate() {
                     let Some(kind) = literal_kind(arg) else { continue };
-                    let Some(allowed) = builtin_demand(&bare, i).filter(|_| !shadowed) else {
+                    let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {
                         continue;
                     };
                     if !allowed.contains(&kind) {
@@ -1794,9 +1828,9 @@ fn literal_walk_expr(
             }
         }
     }
-    for child in crate::expr_children(e) {
-        literal_walk_expr(child, groups, types, bound, builtins, diags);
-    }
+    crate::for_each_child(e, |child| {
+        literal_walk_expr(child, groups, types, bound, builtins, diags)
+    });
 }
 
 fn describe_literal(kind: LitKind) -> &'static str {
@@ -1869,7 +1903,7 @@ fn build_walk_stmt(stmt: &Stmt, type_names: &HashSet<&str>, diags: &mut Vec<Diag
 
 fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
     if let Expr::Build(stmts, _) = expr {
-        let mut born: HashSet<&str> = HashSet::new();
+        let mut born: HashSet<&str> = HashSet::default();
         for stmt in stmts {
             match stmt {
                 Stmt::Bind { pattern, expr } => {
@@ -1892,9 +1926,7 @@ fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diag
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        build_walk_expr(child, type_names, diags);
-    }
+    crate::for_each_child(expr, |child| build_walk_expr(child, type_names, diags));
 }
 
 /// A call that merely returns a record may hand back something older.
@@ -1903,16 +1935,20 @@ fn constructs(expr: &Expr, type_names: &HashSet<&str>) -> bool {
         if matches!(&**head, Expr::Ident(name, _) if type_names.contains(name.as_str())))
 }
 
-fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<String> {
-    let mut globals: HashSet<String> = AMBIENT.iter().map(|b| b.to_string()).collect();
-    globals.insert("entry".to_string());
-    globals.insert("err".to_string());
-    globals.insert("wrap_err".to_string());
+/// Every name a module's own declarations put in scope, borrowed from the
+/// program. These used to be owned, and `check_file_shadow` then extended the
+/// set with a clone of every extern global on top — a `String` per declared
+/// name and per imported name, for a set that is read and dropped.
+fn collect_globals<'a>(program: &'a Program, diags: &mut Vec<Diagnostic>) -> HashSet<&'a str> {
+    let mut globals: HashSet<&str> = AMBIENT.iter().copied().collect();
+    globals.insert("entry");
+    globals.insert("err");
+    globals.insert("wrap_err");
     for nullary in NULLARY {
-        globals.insert(nullary.to_string());
+        globals.insert(nullary);
     }
     for ty in &program.types {
-        if !globals.insert(ty.name.clone()) {
+        if !globals.insert(ty.name.as_str()) {
             diags.push(Diagnostic::new(
                 "name",
                 format!("the name `{}` is already taken", ty.name),
@@ -1930,7 +1966,7 @@ fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<St
                 decl.span,
             ));
         }
-        globals.insert(decl.name.clone());
+        globals.insert(decl.name.as_str());
     }
     globals
 }
@@ -2017,9 +2053,7 @@ fn demanded_refs<'a>(
             }
         }
     }
-    for child in crate::expr_children(expr) {
-        demanded_refs(child, known, types, out);
-    }
+    crate::for_each_child(expr, |child| demanded_refs(child, known, types, out));
 }
 
 /// A constant defined in terms of itself has no value to compute: the
@@ -2135,7 +2169,7 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
     let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
     let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();
     let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
-    let mut refs: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut refs: HashMap<&str, Vec<&str>> = HashMap::default();
     for decl in &constants {
         let out = refs.entry(decl.name.as_str()).or_default();
         for stmt in &decl.body {
@@ -2147,7 +2181,7 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
         }
     }
     for decl in &constants {
-        let mut seen: HashSet<&str> = HashSet::new();
+        let mut seen: HashSet<&str> = HashSet::default();
         let mut stack: Vec<&str> = refs.get(decl.name.as_str()).cloned().unwrap_or_default();
         while let Some(cur) = stack.pop() {
             if cur == decl.name {
@@ -2249,7 +2283,7 @@ fn check_overload_ranks(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// commitment. Qualified calls stay legal, and a local arm of the same shape
 /// still shadows the imports, per the ruled precedence.
 fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
-    use std::collections::HashMap;
+    use crate::hash::Map as HashMap;
     let origin_of = |d: &FnDecl| -> Option<String> {
         program
             .fns
@@ -2264,7 +2298,7 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
             })
             .map(|t| t.name.clone())
     };
-    let mut torn: HashMap<(&str, usize), Vec<String>> = HashMap::new();
+    let mut torn: HashMap<(&str, usize), Vec<String>> = HashMap::default();
     for (i, a) in program.fns.iter().enumerate() {
         if !a.synthetic || a.name.contains('/') {
             continue;
@@ -2317,15 +2351,13 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
                 }
             }
         }
-        for child in crate::expr_children(e) {
-            walk(child, torn, diags);
-        }
+        crate::for_each_child(e, |child| walk(child, torn, diags));
     }
     for d in &program.fns {
         if d.synthetic || d.name.contains('/') {
             continue;
         }
-        let bound: std::collections::HashSet<&str> = d
+        let bound: crate::hash::Set<&str> = d
             .params
             .iter()
             .filter_map(|p| match p {
@@ -2398,7 +2430,7 @@ struct Local {
 }
 
 struct Resolver<'a> {
-    globals: &'a HashSet<String>,
+    globals: &'a HashSet<&'a str>,
     locals: Vec<Local>,
     used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
@@ -2406,10 +2438,10 @@ struct Resolver<'a> {
     /// Arities of this module's own fn groups; an application of a local
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
-    fn_arities: &'a std::collections::HashMap<String, Vec<usize>>,
+    fn_arities: &'a crate::hash::Map<&'a str, Vec<usize>>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
-    type_arity: &'a std::collections::HashMap<String, usize>,
+    type_arity: &'a crate::hash::Map<&'a str, usize>,
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
@@ -2417,12 +2449,12 @@ struct Resolver<'a> {
 
 fn check_fn_body_shadow(
     decl: &FnDecl,
-    globals: &HashSet<String>,
+    globals: &HashSet<&str>,
     used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &HashSet<String>,
-    fn_arities: &std::collections::HashMap<String, Vec<usize>>,
-    type_arity: &std::collections::HashMap<String, usize>,
+    fn_arities: &crate::hash::Map<&str, Vec<usize>>,
+    type_arity: &crate::hash::Map<&str, usize>,
 ) {
     let mut resolver = Resolver {
         globals,
@@ -2573,7 +2605,7 @@ impl Resolver<'_> {
     }
 
     fn flush_unused(&mut self, from: usize) {
-        let mut shadowed: HashSet<String> = HashSet::new();
+        let mut shadowed: HashSet<String> = HashSet::default();
         for local in self.locals[from..].iter().rev() {
             // `_:type` ascribes without binding: there is no name to use
             if local.name == "_" {
@@ -2807,7 +2839,7 @@ fn check_wall_operands(
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::new();
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::default();
     for (i, d) in program.fns.iter().enumerate() {
         *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
     }
@@ -2834,6 +2866,9 @@ fn check_wall_operands(
         }
     };
 
+    // One worklist for the whole program rather than one per statement; the
+    // loop below drains it every time, so the capacity carries forward.
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -2842,7 +2877,8 @@ fn check_wall_operands(
             let root = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             };
-            let mut stack = vec![root];
+            stack.clear();
+            stack.push(root);
             while let Some(cur) = stack.pop() {
                 if let Expr::Seq(lhs, rhs, span) = cur {
                     if never_describes(lhs) || never_describes(rhs) {
@@ -2856,7 +2892,7 @@ fn check_wall_operands(
                         ));
                     }
                 }
-                stack.extend(crate::expr_children(cur));
+                crate::for_each_child(cur, |c| stack.push(c));
             }
         }
     }
@@ -2875,7 +2911,7 @@ fn check_discarded_value(
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::new();
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::default();
     for (i, d) in program.fns.iter().enumerate() {
         *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
     }
@@ -2993,9 +3029,7 @@ fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
             return;
         }
     }
-    for child in crate::expr_children(e) {
-        decidable_walk(child, diags);
-    }
+    crate::for_each_child(e, |child| decidable_walk(child, diags));
 }
 
 /// `to_int` and `to_float` given a literal that will not parse.

@@ -1,5 +1,5 @@
 use crate::ast::*;
-use std::collections::HashMap;
+use crate::hash::Map as HashMap;
 
 /// Propagable type sets as tag bitsets — the single monotone inference
 /// fixpoint (the story is told in about.html part 03), coarse to start:
@@ -43,7 +43,7 @@ struct Ctx<'a> {
     /// has to admit one; no other program does, and none pays for it.
     defers_into_containers: bool,
     program: &'a Program,
-    demand: crate::demand::DemandInfo,
+    demand: crate::demand::DemandInfo<'a>,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
     current: (&'a str, usize),
     /// Which function is being evaluated, so a read of somebody's return set
@@ -52,7 +52,7 @@ struct Ctx<'a> {
     /// For each function, the functions that have read its return set. A
     /// return that widens only ever changes the answer of a function that
     /// asked for it.
-    readers: Vec<std::collections::HashSet<usize>>,
+    readers: Vec<crate::hash::Set<usize>>,
     /// Functions to visit next round. A field of a declared type widening can
     /// reach any function through pattern binding, so that one blankets.
     dirty_next: Vec<bool>,
@@ -146,9 +146,7 @@ fn expr_ctor_types(expr: &Expr, type_names: &HashMap<&str, usize>, out: &mut Vec
             stmt_ctor_types(stmt, type_names, out);
         }
     }
-    for child in crate::expr_children(expr) {
-        expr_ctor_types(child, type_names, out);
-    }
+    crate::for_each_child(expr, |child| expr_ctor_types(child, type_names, out));
 }
 
 fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Vec<usize>> {
@@ -172,7 +170,8 @@ fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Ve
 
 pub fn infer(program: &Program) -> Inference {
     work::pass();
-    let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::new();
+    let mut groups: HashMap<(&str, usize), Vec<usize>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
     }
@@ -186,7 +185,7 @@ pub fn infer(program: &Program) -> Inference {
                     return true;
                 }
             }
-            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+            crate::any_child(expr, |c| mentions(c, name))
         }
         d.params.is_empty()
             && d.body.iter().any(|stmt| match stmt {
@@ -200,12 +199,12 @@ pub fn infer(program: &Program) -> Inference {
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
         current_index: 0,
-        readers: vec![std::collections::HashSet::new(); program.fns.len()],
+        readers: vec![crate::hash::Set::default(); program.fns.len()],
         dirty_next: vec![false; program.fns.len()],
         dirty: Vec::new(),
         field_readers,
         groups,
-        yields: HashMap::new(),
+        yields: HashMap::default(),
         type_names,
         params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
         returns: vec![0; program.fns.len()],
@@ -220,7 +219,7 @@ pub fn infer(program: &Program) -> Inference {
     // count in the twenties turns a clone here into thousands of allocations
     // that only ever serve as a lookup key.
     let fns = &program.fns;
-    let mut env: HashMap<&str, Set> = HashMap::new();
+    let mut env: HashMap<&str, Set> = HashMap::default();
     let mut param_sets: Vec<Set> = Vec::new();
     // Every function is visited the first round; after that only the ones a
     // change can reach. Four fifths of the visits in a settled fixpoint find
@@ -288,7 +287,8 @@ pub fn infer(program: &Program) -> Inference {
 /// fresh where the graph is acyclic, and a cycle costs rounds only for its
 /// own knot.
 fn callee_first(program: &Program) -> Vec<usize> {
-    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+    let mut by_name: HashMap<&str, Vec<usize>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, decl) in program.fns.iter().enumerate() {
         by_name.entry(decl.name.as_str()).or_default().push(i);
     }
@@ -296,9 +296,7 @@ fn callee_first(program: &Program) -> Vec<usize> {
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
             names.push(n.as_str());
         }
-        for child in crate::expr_children(expr) {
-            gather(child, names);
-        }
+        crate::for_each_child(expr, |child| gather(child, names));
     }
     let mut calls: Vec<Vec<usize>> = vec![Vec::new(); program.fns.len()];
     for (i, decl) in program.fns.iter().enumerate() {

@@ -1,0 +1,49 @@
+# Retired instructions for `kanso check lib/json`, counted under callgrind.
+#
+# bench/instructions_golden.txt counts the benchmarks, which are the programs
+# the compiler PRODUCES. This counts the compiler. Until 2026-08-24 nothing
+# did, and on that day a change took the front end from 90.9 million retired
+# instructions to 67.2 million with every gate in the tree reporting nothing:
+# compile_allocs identical at 87,824, rounds identical at 40, visits identical
+# at 17,786, and compile_peak_bytes moving twelve thousand bytes inside a
+# thirty-five thousand byte band. A quarter of the work went away in silence,
+# and a quarter coming back would have been just as quiet.
+#
+# THIS ROW COULD NOT HAVE EXISTED BEFORE THAT CHANGE. std's default hasher
+# carries a per-process random key, and the key moves the probe sequences and
+# moves where the rehashes land, so the count was not a repeatable quantity.
+# Same binary, same sources, same directory, empty environment:
+#
+#   default hasher   90,704,760   90,676,800
+#   seedless hash    66,961,255   66,961,255   66,961,255
+#
+# Forty thousand instructions of spread against nothing to explain it. The
+# compiler hashes its own maps with a seedless hash now, and three runs give
+# the same digits.
+#
+# MEASURED IN A BOX. The count moves with the length of the directory the
+# compiler runs in — 5,613 instructions across 35 characters, about 160 each,
+# because the absolute path is copied and walked. Read from the checkout this
+# row would pin the clone, which is the reason compile_alloc_bytes is absent
+# from its own golden rather than pinned in it. The gate copies lib/ to a
+# fixed path and compiles from there, so two clones at different depths agree
+# to the digit.
+#
+# The row belongs to the toolchain that built the binary and to the libc that
+# serves its malloc and its memcpy, so it names both and
+# scripts/gates/measured_on.sh refuses to read it anywhere else.
+#
+# A rise is a regression to explain and a fall is a win to bank. Movement is
+# fine; silence is not.
+#
+# The row is the runner's, copied out of the job log the way this file's own
+# rule requires. On the gate's first run the container read 66,968,333 against
+# the runner's 66,450,587 — half a per cent apart on the same sources in the
+# same box, which is the provenance line earning its place before a bad paste
+# rather than after one.
+#
+# A figure quoted elsewhere from a plain `kanso check lib/json` in a checkout
+# will differ slightly from this row, and should. This one is measured in the
+# box with the environment emptied; that one is not.
+# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
+compile_instructions=59527334

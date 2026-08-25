@@ -1,0 +1,5 @@
+pub fn triple n
+  n * 3
+
+pub fn silly b
+  b == true

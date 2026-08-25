@@ -9,24 +9,29 @@
 //! errs toward strict, which is today's behavior.
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
-use std::collections::{HashMap, HashSet};
+use crate::hash::{Map as HashMap, Set as HashSet};
 
-pub struct DemandInfo {
+pub struct DemandInfo<'a> {
     /// (owning fn name, owning fn arity, statement index) of each lazy bind.
-    lazy_binds: HashSet<(String, usize, usize)>,
+    ///
+    /// The names are borrowed from the program. Owning them meant a `String`
+    /// per key while the votes were tallied — one per statement per
+    /// declaration, for names the program was already holding — and another
+    /// on every query, to build a key that was thrown away.
+    lazy_binds: HashSet<(&'a str, usize, usize)>,
     /// The subset whose cell provably dies with its frame: every use targets
     /// a safe callee position, so the frame epilogue may release it (guarded
     /// by the returned-thunk alias check at runtime).
-    releasable: HashSet<(String, usize, usize)>,
+    releasable: HashSet<(&'a str, usize, usize)>,
 }
 
-impl DemandInfo {
+impl<'a> DemandInfo<'a> {
     pub fn is_lazy_bind(&self, fn_name: &str, arity: usize, stmt_index: usize) -> bool {
-        self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
+        self.lazy_binds.contains(&(fn_name, arity, stmt_index))
     }
 
     pub fn is_releasable(&self, fn_name: &str, arity: usize, stmt_index: usize) -> bool {
-        self.releasable.contains(&(fn_name.to_string(), arity, stmt_index))
+        self.releasable.contains(&(fn_name, arity, stmt_index))
     }
 
     pub fn lazy_bind_count(&self) -> usize {
@@ -200,7 +205,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
 /// For each (group name, arity), which argument positions have at least one
 /// arm that discards the parameter outright.
 fn discard_positions(program: &Program) -> HashMap<(String, usize), Vec<bool>> {
-    let mut positions: HashMap<(String, usize), Vec<bool>> = HashMap::new();
+    let mut positions: HashMap<(String, usize), Vec<bool>> = HashMap::default();
     for f in &program.fns {
         let slots = positions
             .entry((f.name.clone(), f.params.len()))
@@ -364,12 +369,12 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
     }
 }
 
-pub fn analyze(program: &Program) -> DemandInfo {
+pub fn analyze<'a>(program: &'a Program) -> DemandInfo<'a> {
     // The worst-case measurement mode: force everything by thunking nothing.
     // A measurement tool, not a semantics switch — forcing runs what laziness
     // would skip (design/compiler-log.md, strict-mode thread).
     if std::env::var_os("KANSO_STRICT").is_some() {
-        return DemandInfo { lazy_binds: HashSet::new(), releasable: HashSet::new() };
+        return DemandInfo { lazy_binds: HashSet::default(), releasable: HashSet::default() };
     }
     let discard = discard_positions(program);
     let fn_names: HashSet<&str> = program.fns.iter().map(|f| f.name.as_str()).collect();
@@ -380,7 +385,7 @@ pub fn analyze(program: &Program) -> DemandInfo {
     // binds a recursive call there. regexp's character-class arm paid
     // 501,502 thunks for its lookahead sibling's laziness. The releasability
     // fold below already works this way.
-    let mut lazy_votes: HashMap<(String, usize, usize), bool> = HashMap::new();
+    let mut lazy_votes: HashMap<(&str, usize, usize), bool> = HashMap::default();
     for f in &program.fns {
         for (i, stmt) in f.body.iter().enumerate() {
             let Stmt::Bind { pattern: Pattern::Var(name, _), .. } = stmt else {
@@ -405,19 +410,19 @@ pub fn analyze(program: &Program) -> DemandInfo {
                 && uses.deferrable > 0
                 && uses.demanding == 0
                 && expensive(expr, &fn_names);
-            let key = (f.name.clone(), f.params.len(), i);
+            let key = (f.name.as_str(), f.params.len(), i);
             let seen = lazy_votes.entry(key).or_insert(true);
             *seen = *seen && qualifies;
         }
     }
-    let lazy_binds: HashSet<(String, usize, usize)> =
+    let lazy_binds: HashSet<(&str, usize, usize)> =
         lazy_votes.into_iter().filter_map(|(key, ok)| ok.then_some(key)).collect();
     // A (group, arity, index) key can name a bind in more than one arm of
     // the group; the release verdict must hold for every arm it names.
-    let mut verdicts: HashMap<(String, usize, usize), bool> = HashMap::new();
+    let mut verdicts: HashMap<(&str, usize, usize), bool> = HashMap::default();
     for decl in &program.fns {
         for (i, stmt) in decl.body.iter().enumerate() {
-            let key = (decl.name.clone(), decl.params.len(), i);
+            let key = (decl.name.as_str(), decl.params.len(), i);
             if !lazy_binds.contains(&key) {
                 continue;
             }

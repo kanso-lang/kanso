@@ -27,6 +27,51 @@ Nothing. The section stays so the next entry has somewhere to land.
 
 ## Open, not blocking
 
+### Welfare cannot see what the compiler costs to run
+
+Four merges on 2026-08-24 took `compile_allocs` from 148,073 to 87,290 and
+the front end's retired instructions down about a quarter, and the welfare
+score did not move: 84.87 before, 84.87 after, floor untouched.
+
+That is not a bug in the script. Its model of compile cost is four counters,
+and every one of them is flat across those changes:
+
+    compile_speed_counters = ["front_end_rounds" "front_end_visits" "emitted_lines"]
+    compile_memory_counters = ["compile_peak_bytes"]
+
+    front_end_rounds        40 -> 40
+    front_end_visits    17,786 -> 17,786
+    emitted_lines        1,534 -> 1,534
+    compile_peak_bytes 871,649 -> 871,649   (the golden welfare reads)
+
+Rounds and visits count the work the compiler decided to do. Emitted lines
+count what it wrote. Peak counts what it held. None of them counts what it
+does — the allocator traffic, or the instructions retired getting there. What
+a model leaves out it weights at zero, and the tree now has two veins,
+`bench/compile_allocs_golden.txt` and `bench/compile_instructions_golden.txt`,
+watching a dimension the objective scores at nothing.
+
+The question is whether welfare should carry a compile-traffic term, and at
+what weight and satiation. The case for: a compiler that retires a quarter
+fewer instructions is faster in the way a user feels, and the score is
+supposed to say whether the project came out ahead. The case against: the
+score already has four compile terms against three runtime dimensions, the
+weights were argued once with reasons recorded, and adding a fifth to chase
+today's work is how an objective gets fitted to its history.
+
+There is a smaller variant that avoids the weights argument entirely: leave
+the terms alone and note in the script's own prose that compile traffic is
+deliberately outside the model, so the next person to find a silent 26% knows
+it was a choice.
+
+One tangle worth naming, because it shares a root with the compile-memory
+entry above: `compile_peak_bytes` DID move, 876,930 to 864,274, an
+improvement of 12,656 bytes. Welfare did not see it because welfare reads the
+golden rather than the compiler, and the band lets the golden sit unmoved.
+Whatever is ruled there decides whether this term reports live movement at
+all. Filed 2026-08-24.
+
+
 ### Riders under the err gavel (the three-combinator model, 2026-08-15)
 
 - **Spelling**: names and syntax for annotate and rescue — combinator

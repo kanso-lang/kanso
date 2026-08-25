@@ -1,0 +1,5 @@
+pub fn twice n
+  n * 2
+
+pub fn silly b
+  b == true

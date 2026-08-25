@@ -3,8 +3,8 @@
 //! has no memory and no data — literals are pre-registered at compile time
 //! and baked in as handle constants; dispatch, calls, and recursion are wasm.
 use crate::ast::*;
+use crate::hash::Map as HashMap;
 use crate::wasm_encode::{Body, Import, Module};
-use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 pub enum Lit {
@@ -140,7 +140,7 @@ pub struct WasmBackend<'a> {
     dispatchers: HashMap<(String, usize), u32>,
     wrappers: HashMap<String, u32>,
     /// Zero-arity names that reach themselves through other constants.
-    knotted: std::collections::HashSet<String>,
+    knotted: crate::hash::Set<String>,
     tailcalls: bool,
 }
 
@@ -189,7 +189,7 @@ fn partial_lambda(
 }
 
 pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
-    let mut type_ids = HashMap::new();
+    let mut type_ids = HashMap::default();
     type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {
         type_ids.insert(ty.name.as_str(), (i + 1) as i64);
@@ -209,10 +209,10 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         program,
         module: Module::new(imports()),
         lits: Vec::new(),
-        lit_map: HashMap::new(),
+        lit_map: HashMap::default(),
         type_ids,
-        dispatchers: HashMap::new(),
-        wrappers: HashMap::new(),
+        dispatchers: HashMap::default(),
+        wrappers: HashMap::default(),
         knotted: crate::codegen::knotted_constants(program),
         tailcalls,
     };
@@ -231,7 +231,7 @@ impl<'a> WasmBackend<'a> {
         }
         // a subtype annotation outranks its ancestors: arms sort deepest
         // first, mirroring the native dispatcher and the interp's scores
-        let parents: std::collections::HashMap<&str, &str> = self
+        let parents: crate::hash::Map<&str, &str> = self
             .program
             .types
             .iter()
@@ -246,7 +246,7 @@ impl<'a> WasmBackend<'a> {
             }
             d
         };
-        let typeset_names: std::collections::HashSet<&str> = self
+        let typeset_names: crate::hash::Set<&str> = self
             .program
             .types
             .iter()
@@ -353,7 +353,7 @@ impl<'a> WasmBackend<'a> {
     ) -> Result<Body, String> {
         let mut ctx = Ctx {
             body: Body::new(arity as u32),
-            scope: HashMap::new(),
+            scope: HashMap::default(),
             prefix: String::new(),
             group: match arity {
                 0 => name.to_string(),
@@ -1066,7 +1066,7 @@ impl<'a> WasmBackend<'a> {
         let tidx = (self.module.table.len() - 1) as u32;
         let mut inner = Ctx {
             body: Body::new(2),
-            scope: HashMap::new(),
+            scope: HashMap::default(),
             prefix: ctx.prefix.clone(),
             group: String::new(),
         };
@@ -1090,7 +1090,7 @@ impl<'a> WasmBackend<'a> {
                     return true;
                 }
             }
-            crate::expr_children(expr).into_iter().any(|c| mentions(c, of))
+            crate::any_child(expr, |c| mentions(c, of))
         }
         if ctx.group.is_empty() {
             return false;
@@ -1116,7 +1116,7 @@ impl<'a> WasmBackend<'a> {
         let tidx = (self.module.table.len() - 1) as u32;
         let mut inner = Ctx {
             body: Body::new(2),
-            scope: HashMap::new(),
+            scope: HashMap::default(),
             prefix: ctx.prefix.clone(),
             group: ctx.group.clone(),
         };
@@ -1160,7 +1160,7 @@ impl<'a> WasmBackend<'a> {
         let tidx = (self.module.table.len() - 1) as u32;
         let mut inner = Ctx {
             body: Body::new(2),
-            scope: HashMap::new(),
+            scope: HashMap::default(),
             prefix: ctx.prefix.clone(),
             group: String::new(),
         };

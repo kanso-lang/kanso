@@ -844,7 +844,7 @@ pub struct Interp<'a> {
     fns: HashMap<&'a str, Vec<&'a FnDecl>>,
     types: HashMap<&'a str, &'a TypeDecl>,
     entry_decl: TypeDecl,
-    demand: crate::demand::DemandInfo,
+    demand: crate::demand::DemandInfo<'a>,
     pub thunk_stats: ThunkStats,
     depth: Cell<usize>,
     /// Computed once, because a stack exhaustion is reported where the cause
@@ -2840,9 +2840,7 @@ impl<'a> Interp<'a> {
             if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
                 out.push(n);
             }
-            for child in crate::expr_children(expr) {
-                names(child, out);
-            }
+            crate::for_each_child(expr, |child| names(child, out));
         }
         let mut mentioned = Vec::new();
         names(expr, &mut mentioned);

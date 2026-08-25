@@ -18,7 +18,7 @@ use crate::ast::*;
 /// site that called them. Kept in step with codegen's origin-passing list.
 const BIRTHS_ERR: [&str; 4] =
     ["builtin_to_int", "builtin_to_float", "builtin_utf8", "builtin_from_code"];
-use std::collections::HashMap;
+use crate::hash::Map as HashMap;
 
 /// Wrapper name and arity, mapped to the builtin it stands for. An arm
 /// qualifies when its body is exactly one call to a builtin, passing its own
@@ -30,9 +30,15 @@ use std::collections::HashMap;
 /// type checker reads this map per arm; the call-site rewrite below adds the
 /// stricter only-arm condition on top.
 pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
-    let mut found = direct_aliases(program, &HashMap::new());
+    // The group sizes do not change while the fixpoint runs, so they are
+    // counted once here rather than rebuilt on each pass.
+    let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
+    for decl in &program.fns {
+        *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
+    }
+    let mut found = direct_aliases(program, &HashMap::default(), &counts);
     loop {
-        let grown = direct_aliases(program, &found);
+        let grown = direct_aliases(program, &found, &counts);
         if grown.len() == found.len() {
             return found;
         }
@@ -43,12 +49,9 @@ pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
 fn direct_aliases(
     program: &Program,
     known: &HashMap<(String, usize), String>,
+    counts: &HashMap<(&str, usize), usize>,
 ) -> HashMap<(String, usize), String> {
-    let mut counts: HashMap<(&str, usize), usize> = HashMap::new();
-    for decl in &program.fns {
-        *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
-    }
-    let mut found = HashMap::new();
+    let mut found = HashMap::default();
     for decl in &program.fns {
         let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
             continue;
@@ -57,15 +60,19 @@ fn direct_aliases(
         // A hop through a named wrapper is a rename only when that wrapper is
         // its own group's single arm — a second arm makes it a dispatch, and
         // the value could take the other door.
-        let resolved = match callee.strip_prefix("builtin_") {
-            Some(target) => Some(target.to_string()),
-            None => known
+        //
+        // Every value this map holds was written with the `builtin_` prefix on
+        // it, and this arm only fires when the callee already carries one — so
+        // stripping the prefix and putting it back was the identity, twice
+        // allocated. The name is taken as it stands.
+        let resolved: Option<&str> = match callee.starts_with("builtin_") {
+            true => Some(callee.as_str()),
+            false => known
                 .get(&(callee.clone(), args.len()))
                 .filter(|_| counts.get(&(callee.as_str(), args.len())) == Some(&1))
-                .map(|v| v.strip_prefix("builtin_").unwrap_or(v).to_string()),
+                .map(|v| v.as_str()),
         };
         let Some(target) = resolved else { continue };
-        let callee = &format!("builtin_{target}");
         if args.len() != decl.params.len() {
             continue;
         }
@@ -74,7 +81,7 @@ fn direct_aliases(
         // born in `text/to_int` would start saying it was born in whichever
         // function called it, which is worse for the reader and is a real
         // change in what the program reports. Those wrappers stay.
-        if BIRTHS_ERR.iter().any(|b| callee == b) {
+        if BIRTHS_ERR.contains(&target) {
             continue;
         }
         let mut threads = true;
@@ -89,7 +96,7 @@ fn direct_aliases(
             }
         }
         if threads {
-            found.insert((decl.name.clone(), decl.params.len()), callee.clone());
+            found.insert((decl.name.clone(), decl.params.len()), target.to_string());
         }
     }
     found
@@ -101,7 +108,7 @@ fn direct_aliases(
 /// sending its calls straight to the builtin would delete the dispatch that
 /// reaches the other arm.
 pub fn inline_builtin_wrappers(program: &mut Program) {
-    let mut counts: HashMap<(&str, usize), usize> = HashMap::new();
+    let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
     for decl in &program.fns {
         *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
     }

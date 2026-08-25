@@ -54,6 +54,8 @@ bench/history_series.jsonl
 /work_want.txt
 /allocs_want.txt
 /allocs_got.txt
+/compile_ir_want.txt
+/compile_ir_got.txt
 /tests/golden/cohort/escapes.json
 /widebench
 /escapebench

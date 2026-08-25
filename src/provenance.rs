@@ -16,18 +16,22 @@
 //! package must return an err.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt, TemplatePart};
-use std::collections::{HashMap, HashSet};
+use crate::hash::{Map as HashMap, Set as HashSet};
 
-type Group = (String, usize);
+/// A declaration's identity for this pass: its name and arity. The name is
+/// borrowed from the program, which outlives every `Provenance` built from
+/// it. Owning it cost a `String` per group per fixpoint round, and the loop
+/// below runs the whole program through up to two hundred of them.
+type Group<'a> = (&'a str, usize);
 /// Packages as a bitmask over an interned table — a program sees a handful,
 /// and the fixpoint runs often enough that hashing strings dominated it.
 type Pkgs = u32;
 
-pub struct Provenance {
+pub struct Provenance<'a> {
     /// per group, per parameter: packages whose errs may arrive there. The
     /// per-group return sets the fixpoint computes on the way are what feed
     /// these, and are not wanted afterwards.
-    params: HashMap<Group, Vec<Pkgs>>,
+    params: HashMap<Group<'a>, Vec<Pkgs>>,
     table: Vec<String>,
 }
 
@@ -50,8 +54,8 @@ pub fn package_of(file: &str) -> &str {
     }
 }
 
-fn group_of(decl: &FnDecl) -> Group {
-    (decl.name.clone(), decl.params.len())
+fn group_of(decl: &FnDecl) -> Group<'_> {
+    (decl.name.as_str(), decl.params.len())
 }
 
 /// Does this pattern admit an err at all? Only an err-shaped pattern does:
@@ -66,9 +70,9 @@ fn receives_err(pattern: &Pattern) -> bool {
 
 struct Walk<'a> {
     program: &'a Program,
-    groups: HashMap<Group, Vec<usize>>,
-    returns: HashMap<Group, Pkgs>,
-    params: HashMap<Group, Vec<Pkgs>>,
+    groups: HashMap<Group<'a>, Vec<usize>>,
+    returns: HashMap<Group<'a>, Pkgs>,
+    params: HashMap<Group<'a>, Vec<Pkgs>>,
     changed: bool,
 }
 
@@ -94,10 +98,10 @@ fn bit(table: &[String], pkg: &str) -> Pkgs {
     }
 }
 
-impl Walk<'_> {
+impl<'a> Walk<'a> {
     /// The packages whose errs this expression may evaluate to, in a
     /// declaration belonging to `pkg` with `binds` naming what locals hold.
-    fn expr(&mut self, e: &Expr, pkg: Pkgs, binds: &HashMap<String, Pkgs>) -> Pkgs {
+    fn expr(&mut self, e: &'a Expr, pkg: Pkgs, binds: &HashMap<&'a str, Pkgs>) -> Pkgs {
         match e {
             Expr::App { head, args, .. } => {
                 let Expr::Ident(name, _) = head.as_ref() else {
@@ -112,12 +116,12 @@ impl Walk<'_> {
                 for (i, arg) in args.iter().enumerate() {
                     let carried = self.expr(arg, pkg, binds);
                     if carried != 0 {
-                        self.feed((name.clone(), args.len()), i, carried);
+                        self.feed((name.as_str(), args.len()), i, carried);
                     }
                 }
-                self.returns.get(&(name.clone(), args.len())).copied().unwrap_or(0)
+                self.returns.get(&(name.as_str(), args.len())).copied().unwrap_or(0)
             }
-            Expr::Ident(name, _) => binds.get(name).copied().unwrap_or(0),
+            Expr::Ident(name, _) => binds.get(name.as_str()).copied().unwrap_or(0),
             Expr::Seq(_, b, _) => self.expr(b, pkg, binds),
             // a guard's two exits are both this expression's value
             Expr::Guard { early, rest, .. } => {
@@ -180,7 +184,7 @@ impl Walk<'_> {
     }
 
     /// Record that a caller may hand this group an err from these packages.
-    fn feed(&mut self, group: Group, index: usize, pkgs: Pkgs) {
+    fn feed(&mut self, group: Group<'a>, index: usize, pkgs: Pkgs) {
         let Some(arity) = self.groups.get(&group).and_then(|d| self.program.fns.get(d[0])) else {
             return;
         };
@@ -194,7 +198,7 @@ impl Walk<'_> {
         }
     }
 
-    fn absorb(&mut self, group: Group, pkgs: Pkgs) {
+    fn absorb(&mut self, group: Group<'a>, pkgs: Pkgs) {
         let slot = self.returns.entry(group).or_default();
         if *slot | pkgs != *slot {
             *slot |= pkgs;
@@ -203,20 +207,25 @@ impl Walk<'_> {
     }
 }
 
-pub fn analyze(program: &Program) -> Provenance {
+pub fn analyze(program: &Program) -> Provenance<'_> {
     let table = intern(program);
-    let mut groups: HashMap<Group, Vec<usize>> = HashMap::new();
+    let mut groups: HashMap<Group<'_>, Vec<usize>> = HashMap::default();
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry(group_of(decl)).or_default().push(i);
     }
-    let mut walk =
-        Walk { program, groups, returns: HashMap::new(), params: HashMap::new(), changed: true };
+    let mut walk = Walk {
+        program,
+        groups,
+        returns: HashMap::default(),
+        params: HashMap::default(),
+        changed: true,
+    };
     // a pub group's callers are not all in view: the package raises errs and
     // anyone may hand one back, so a published err parameter is assumed to
     // see its own package's failures. Private groups are fed only by the call
     // sites actually written. The candidates never change; only whether their
     // package is known to raise yet.
-    let candidates: Vec<(Group, usize, Pkgs)> = program
+    let candidates: Vec<(Group<'_>, usize, Pkgs)> = program
         .fns
         .iter()
         .filter(|d| d.is_pub && !d.synthetic)
@@ -227,7 +236,7 @@ pub fn analyze(program: &Program) -> Provenance {
                 .iter()
                 .enumerate()
                 .filter(|(_, p)| receives_err(p))
-                .map(move |(i, _)| (group.clone(), i, pkg))
+                .map(move |(i, _)| (group, i, pkg))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -238,14 +247,14 @@ pub fn analyze(program: &Program) -> Provenance {
         let raising: Pkgs = walk.returns.values().fold(0, |a, b| a | b);
         for (group, i, pkg) in &candidates {
             if raising & pkg != 0 {
-                walk.feed(group.clone(), *i, *pkg);
+                walk.feed(*group, *i, *pkg);
             }
         }
         for decl in &program.fns {
             let pkg = bit(&table, package_of(&decl.file));
             let group = group_of(decl);
             // a parameter that matches err holds whatever callers fed it
-            let mut binds: HashMap<String, Pkgs> = HashMap::new();
+            let mut binds: HashMap<&str, Pkgs> = HashMap::default();
             for (i, pattern) in decl.params.iter().enumerate() {
                 let Pattern::Annotated { name, ty, .. } = pattern else { continue };
                 if ty != "err" {
@@ -253,7 +262,7 @@ pub fn analyze(program: &Program) -> Provenance {
                 }
                 let arriving =
                     walk.params.get(&group).and_then(|v| v.get(i)).cloned().unwrap_or_default();
-                binds.insert(name.clone(), arriving);
+                binds.insert(name.as_str(), arriving);
             }
             let mut result = 0;
             for stmt in &decl.body {
@@ -261,7 +270,7 @@ pub fn analyze(program: &Program) -> Provenance {
                     Stmt::Bind { pattern, expr } => {
                         let value = walk.expr(expr, pkg, &binds);
                         if let Pattern::Var(name, _) = pattern {
-                            binds.insert(name.clone(), value);
+                            binds.insert(name.as_str(), value);
                         }
                     }
                     Stmt::Expr(expr) => result = walk.expr(expr, pkg, &binds),
@@ -285,7 +294,7 @@ pub fn violations(
     returns: &[crate::infer::Set],
 ) -> Vec<String> {
     let mut out = Vec::new();
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     for (i, decl) in program.fns.iter().enumerate() {
         if decl.synthetic {
             continue;

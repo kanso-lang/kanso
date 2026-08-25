@@ -1,0 +1,4 @@
+import "./mid"
+import "std/io"
+
+io/write "{mid/twice 21}"
