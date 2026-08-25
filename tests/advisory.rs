@@ -45,6 +45,27 @@ fn rescuing_an_err_this_package_raised_is_advised() {
     );
 }
 
+/// Provenance keys its fixpoint on (name, arity). Nothing pinned the name half
+/// of that: collapsing every group's name to `""` left all six advisories here
+/// green and lib/json's three unchanged, so the pass could have been gutted
+/// without a spec noticing.
+///
+/// `rescue` is pub, so provenance seeds it — a published err parameter is
+/// assumed to see its own package's failures, because its callers are not all
+/// in view. `quiet` is private and uncalled, so nothing feeds it. They differ
+/// only in their name, and if the key stops telling them apart `quiet`
+/// inherits what `rescue` was fed and is advised for a rescue it never made.
+#[test]
+fn a_group_is_told_apart_by_its_name_and_not_only_its_arity() {
+    assert_eq!(
+        licenses("tests/golden/advisory/group_identity"),
+        vec!["advisory[license]: `rescue` rescues an err raised in this program \
+             — a failure is handled by a package that did not raise it; return an \
+             err, or let a caller elsewhere name the reason"
+            .to_string()]
+    );
+}
+
 #[test]
 fn re_raising_ones_own_err_is_silent() {
     assert!(licenses("tests/golden/advisory/reraises").is_empty());
