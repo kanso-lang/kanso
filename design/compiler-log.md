@@ -3215,3 +3215,66 @@ reach, and so is the 6.2% where some other record happens to hold the confused
 pair. What it changes is the price of the 142: a walk of each body against the
 type table, rather than a second value threaded through every arm of
 `eval_expr`.
+
+## 2026-08-25 — a value read for fields no one record declares is refused, and no inference is behind it
+
+The measurement in the entry above said the fence types none of the fleet and
+that a rule with no inference in it reaches 93.8% of the same confusions. This
+is that rule.
+
+**The argument.** `Expr::Field` in `eval.rs` reads a field off `Value::Record`
+and errors on everything else, and a subtype reads through to its base record,
+so a value a body reads for two fields is one record and a record this program
+declares. When no declaration holds every field read off a value, those reads
+cannot all be of the same value, and the program is wrong whatever type it
+would have had. Nothing is inferred; the type table and one walk of the body
+answer it.
+
+    fn width m
+      m.to - m.wanted
+
+    error[name]: `m` is read for `to` and `wanted`, and no record type has both
+
+`to` is declared on `span` and `wanted` on `node`, so the fence shipped in
+#1029 — which asks only whether any record declares the name — passes both
+reads through and the program dies at run time.
+
+**Which reads may be pooled.** Only the ones that run whenever the body runs.
+Three shapes defer: a lambda, which may never be called; the two arms of an
+`if` or a guard, of which one is taken; and the right operand of `and` or `or`,
+which the left may already have decided. A binding of the same name ends the
+run, because the reads after it are of a different value, and a `build` block
+runs its statements so a binding inside one ends a run too. `set p.x = v` is
+counted as a read, since a build block runs its sets and the field must exist.
+
+The restriction is nearly free. Measured over the fleet before building this:
+the certain-only gather loses one base of the thirty that read two or more
+fields, and none of the refusals.
+
+**The odd one out.** When dropping exactly one field leaves the rest sitting on
+a record together, the diagnostic points at that read, because it is the one to
+change. `n.kind + n.from + n.to` points at `kind`, since `from` and `to` are a
+`span`.
+
+**Cost.** `compile_allocs` on lib/json is 64,950 before and after, byte for
+byte, and rounds, visits and peak bytes are all unmoved. The first draft cost
+157 allocations, all of them a set built per binding statement whether or not
+anything was open, and a walk that carries the open bases and asks the pattern
+about each one allocates nothing until a body actually reads a field. lib/json
+reads none, so the golden's program pays nothing at all — a body that does read
+fields pays a small vector per base, and no gate in the tree measures one.
+
+### Watched red
+
+`tests/golden/errors/fields_that_no_one_record_declares.kso` on the compiler as
+it stood exits **1** with `error[runtime]: `span` has no field `wanted``. With
+the check it exits 2 with two diagnostics, one for the two-field message and
+one for the three-field message. That is the hole this closes: a language that
+refuses before anything runs was deferring this one to run time.
+
+### What it does not reach
+
+A value read for a single field, and the 6.2% of substitutions where some other
+record happens to hold the confused pair. Both need the whole-program fixpoint,
+which is still the next increment and is now worth less than it was this
+morning.
