@@ -3254,4 +3254,10 @@ So the blanket `program.fns.len()` ships, and this is recorded mostly because
 the reasoning was careful, checkable, and beaten by the measurement. There was
 no way to reach it from the bucket arithmetic alone.
 
+    compile_instructions  64,840,962 -> 64,771,091   -69,871
+
+The runner's fall is 69,871 against the container's 80,631, and this time the
+row was taken from CI rather than predicted, which is what the previous entry
+concluded to do.
+
 A third of `reserve_rehash` remains, in maps this change does not touch.
