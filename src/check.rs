@@ -456,12 +456,20 @@ fn check_effect_discarded(
         }
     };
 
+    // One worklist for the whole program rather than one per statement, which
+    // keeps the capacity a long declaration earned instead of doubling up from
+    // nothing at the next one. The `clear` is what makes that safe: the loop
+    // below happens to drain the stack every time, but nothing tests that it
+    // does — a mutation that leaves items behind keeps the whole error corpus
+    // green — so the reuse does not rest on it.
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             };
-            let mut stack = vec![e];
+            stack.clear();
+            stack.push(e);
             while let Some(cur) = stack.pop() {
                 walk(cur, diags);
                 crate::for_each_child(cur, |c| stack.push(c));
@@ -540,12 +548,20 @@ fn check_none_exhaustive(
         }
     };
 
+    // One worklist for the whole program rather than one per statement, which
+    // keeps the capacity a long declaration earned instead of doubling up from
+    // nothing at the next one. The `clear` is what makes that safe: the loop
+    // below happens to drain the stack every time, but nothing tests that it
+    // does — a mutation that leaves items behind keeps the whole error corpus
+    // green — so the reuse does not rest on it.
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             };
-            let mut stack = vec![e];
+            stack.clear();
+            stack.push(e);
             while let Some(cur) = stack.pop() {
                 walk(cur, diags, &decl.file);
                 crate::for_each_child(cur, |c| stack.push(c));
@@ -635,8 +651,9 @@ fn article(word: &str) -> String {
 /// and with no annotation it is all the compiler is told.
 fn field_supply(program: &Program) -> HashMap<(&str, &str), Vec<(&'static str, Span)>> {
     let mut supply: HashMap<(&str, &str), Vec<(&'static str, Span)>> = HashMap::default();
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
-        let mut stack: Vec<&Expr> = Vec::new();
+        stack.clear();
         for stmt in &decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -679,6 +696,7 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
     // a local bound straight to a constructor is where a field read's owning
     // type is knowable without knowing anything else, the same footing the
     // assignment check stands on
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
         let mut built: HashMap<&str, &str> = HashMap::default();
         for stmt in &decl.body {
@@ -695,7 +713,7 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
         if built.is_empty() {
             continue;
         }
-        let mut stack: Vec<&Expr> = Vec::new();
+        stack.clear();
         for stmt in &decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
@@ -2844,6 +2862,9 @@ fn check_wall_operands(
         }
     };
 
+    // One worklist for the whole program rather than one per statement; the
+    // loop below drains it every time, so the capacity carries forward.
+    let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -2852,7 +2873,8 @@ fn check_wall_operands(
             let root = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             };
-            let mut stack = vec![root];
+            stack.clear();
+            stack.push(root);
             while let Some(cur) = stack.pop() {
                 if let Expr::Seq(lhs, rhs, span) = cur {
                     if never_describes(lhs) || never_describes(rhs) {

@@ -3336,3 +3336,57 @@ golden moved. The four callers that build a `bound` set — the shadow checks an
 the literal walk — went on passing with every set empty. Their coverage is
 thinner than it looks, and that is true of the code as it stood this morning
 rather than anything this change did.
+
+## 2026-08-25 — five worklists that were rebuilt for every statement
+
+The entry above found that `walk_children`'s 5,768 blocks in the allocation
+map belong to callers rather than to the walk. This is those callers.
+
+Five places in `check.rs` drive an explicit worklist instead of recursing —
+`let mut stack = vec![e]`, then pop and push the children. Three built that
+vector once per STATEMENT and two once per DECLARATION, and in every case it
+started empty and doubled its way up as the walk filled it. A vector per
+statement, across every statement of every declaration, for a scratch list
+that is empty again by the time the statement ends.
+
+One vector per site now, cleared and reused.
+
+    compile_allocs        80,458 -> 77,249   -3,209
+    front_end_rounds          40 -> 40        flat
+    front_end_visits      17,786 -> 17,786    flat
+    compile_peak_bytes   864,274 -> 864,274   flat
+
+dhat agrees on where it went: `walk_children` falls from 5,768 blocks to
+4,237, and the rest of the difference is the `vec![e]` itself, which was
+attributed to the calling function rather than to the closure.
+
+The `clear()` is the part worth explaining, because the reuse does not need it
+to be correct. Every one of those loops drains its stack — `while let Some(cur)
+= stack.pop()` runs to empty, and none of the five has a `break`, `continue` or
+`return` inside it, which was checked rather than assumed. So the stack is
+already empty when the next statement starts.
+
+What the `clear()` buys is that nothing has to keep being true. The mutation
+was run: make one of those loops stop early, so it leaves items on the stack
+for the next statement to inherit, and the entire golden error corpus stays
+green. Ten golden tests, every diagnostic compared exactly, and not one of them
+can see a walk that carries expressions from one statement into the next. An
+invariant that load-bearing, with no spec under it, is not one to build a
+performance change on top of; a `clear()` on an empty vector costs a store and
+removes the question.
+
+That the corpus cannot see this is the finding, and it is about the corpus
+rather than about the worklists. It is recorded here rather than fixed because
+the fixture that would catch it — a leak that changes which file a diagnostic
+names — belongs to whoever next touches those checkers.
+
+The lexer is now 22.5% of the remaining 77,261 blocks across its three frames,
+and inference 15%. The map after this change:
+
+    8,649  11.2%  lexer::lex_line
+    7,733  10.0%  infer::eval_expr
+    5,236   6.8%  hashbrown table allocation
+    4,237   5.5%  walk_children
+    3,956   5.1%  Tok::clone
+    3,866   5.0%  infer::infer
+    3,184   4.1%  lexer::lex
