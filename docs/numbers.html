@@ -14,6 +14,8 @@ description: "one row per merged commit: what a run costs, what compiling costs,
 
 <p>each line is scaled to its own range, because an instruction count and a byte peak cannot share an axis and stay readable. what the chart shows is shape — which way a number went and when it stepped. the horizontal axis is commit order, because commits are what the ratchet acts on. a line starts where its counters start: the schema grew with the project, so the compile lines reach back to the first recorded row while the welfare line begins where the score was first written down.</p>
 
+<p>two of these lines have a gap in them. the run-memory and compile-memory series were blank for a stretch because the program that writes these rows was miscompiled: an interpolation shared one buffer across a loop, so five groups of counters left it with their key names run together into a single key each. the rows were written, the job was green, and the chart simply could not find the numbers. the compiler bug is fixed, and so is the reason nothing caught it — the row is now checked against the same lists on the way out as on the way in, and the check runs on every pull request rather than only after a merge. a completeness check on the inputs is not one on the outputs.</p>
+
 <div id="trend-chart"><p class="perf-loading">loading the chart…</p></div>
 
 <p class="chart-legend">how each line is derived, from the code that draws it.
