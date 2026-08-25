@@ -98,9 +98,11 @@ thunks. The design survives the move cleanly — better than cleanly:
   Rc leaks — acceptable for the correctness oracle short-term,
   fixed by giving the cohort one owner cell mirroring the native
   story when it matters.
-- **Rendering/equality/encode over cyclic values** need a visited
-  write or a depth rule — to be settled at implementation time (the
-  book chapter's examples will force the answer).
+- **Rendering/equality/encode over cyclic values** — SETTLED at
+  implementation time as this note expected: rendering carries a visited
+  set and prints `<cycle>` at re-entry, with shared acyclic subtrees
+  still rendering in full; equality on two distinct cyclic values is
+  bisimulation, pinned by examples/build_cyclic_eq.kso.
 - The book chapter ships **with** the feature — panels must execute.
 
 ## AMENDMENT 2026-08-01: a build block does not return a value

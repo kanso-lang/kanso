@@ -21,6 +21,10 @@ Rules of the ledger:
   premise — or states plainly that it found nothing. An entry with no
   citation line is not a pending decision; it is an unsearched one, and
   it does not go to Clay.
+- **An entry carries a recommendation.** Every question below says what
+  the holder of the file would do and why, so a sitting can be a yes or a
+  no rather than a fresh design conversation. Where the recommendation is
+  to close the question, one word does it.
 - **A gaveled item carries its citation forever.** Where an entry
   survives because only part of it was ruled, the ruling's marker stays
   in the entry. This rule exists because gavel 1b's marker has now
@@ -36,6 +40,14 @@ Rules of the ledger:
 - Edits to this file ride small, promptly-merged PRs, never a feature
   branch, so the ledger cannot fork.
 
+The residual sweep of 2026-08-25 walked the log, the archive and every
+design doc for questions that were asked and never answered. What it
+found is below: every remaining question asked once, with a recommendation,
+so the list can be ruled in batched sittings and end. The intent is that
+this is the whole of it. Six candidates the sweep turned up
+were already answered by the shipped code or by a later gavel, and those
+went to the log rather than here.
+
 ## Blocking — a fixture, gate, or merge is waiting
 
 Nothing. The section stays so the next entry has somewhere to land.
@@ -43,6 +55,11 @@ Nothing. The section stays so the next entry has somewhere to land.
 ## Open, not blocking
 
 ### Welfare cannot see what the compiler costs to run
+
+**Cited: the weights and satiations were argued once with reasons — archive
+2026-08-01 "the four weights, decided from evidence" and archive 2026-07-26 "a
+second of compile time is not a second of runtime". Nothing since revisits
+them, and no entry anywhere proposes a compile-traffic term.**
 
 Four merges on 2026-08-24 took `compile_allocs` from 148,073 to 87,290 and
 the front end's retired instructions down about a quarter, and the welfare
@@ -67,36 +84,83 @@ a model leaves out it weights at zero, and the tree now has two veins,
 watching a dimension the objective scores at nothing.
 
 The question is whether welfare should carry a compile-traffic term, and at
-what weight and satiation. The case for: a compiler that retires a quarter
-fewer instructions is faster in the way a user feels, and the score is
-supposed to say whether the project came out ahead. The case against: the
-score already has four compile terms against three runtime dimensions, the
-weights were argued once with reasons recorded, and adding a fifth to chase
-today's work is how an objective gets fitted to its history.
+what weight and satiation.
 
-There is a smaller variant that avoids the weights argument entirely: leave
-the terms alone and note in the script's own prose that compile traffic is
-deliberately outside the model, so the next person to find a silent 26% knows
-it was a choice.
+**RECOMMENDATION: take the smaller variant — leave the weights alone and say
+in the script's own prose that compile traffic is deliberately outside the
+model.** The score already has four compile terms against three runtime
+dimensions, and adding a fifth to score the work of the week it was proposed
+is how an objective gets fitted to its history. A sentence in the script
+means the next person to find a silent 26% reads that it was a choice. The
+two veins already catch a deletion, which is the job the goldens do and
+welfare does not.
 
-One tangle worth naming, because it shares a root with the compile-memory
-entry above: `compile_peak_bytes` DID move, 876,930 to 864,274, an
-improvement of 12,656 bytes. Welfare did not see it because welfare reads the
-golden rather than the compiler, and the band lets the golden sit unmoved.
-Whatever is ruled there decides whether this term reports live movement at
-all. Filed 2026-08-24.
-
+One tangle worth naming: `compile_peak_bytes` DID move, 876,930 to 864,274.
+Welfare did not see it because welfare reads the golden rather than the
+compiler, and the band let the golden sit unmoved. The no-tolerance-bands
+gavel of 2026-08-24 settles that half; once the gate asserts equality this
+term reports live movement again, with no change here. Filed 2026-08-24.
 
 ### Riders under the err gavel (the three-combinator model, 2026-08-15)
+
+**Cited: gavel 1, archive 2026-08-15, listed six riders. Four have since
+closed — the test surface (archive 2026-08-17, assertions are ordinary
+foreign rescue), ch08's pedagogy (scoped into the 1b migration, archive
+2026-08-17), and the three small July spellings (archive 2026-08-19, "the
+July spellings"). These two are what remain.**
 
 - **Spelling**: names and syntax for annotate and rescue — combinator
   call vs marked arm on a chain — and whether the existing chain
   err-arm syntax is annotate's surface (the chain's value arm and err
   arm are bind's and annotate's callbacks already, spelled as dispatch
   arms).
+
+  **RECOMMENDATION: the existing err arm IS annotate's surface, and
+  `rescue` gets the one new word.** Two of the three combinators already
+  have a spelling that programs use and the book teaches; minting names
+  for them would be a migration that buys a symmetry nobody asked for.
+  Rescue is the licensed door and the only one a reader needs to
+  recognise on sight, so it earns a keyword of its own.
+
 - **Construction enforcement**: reason building module-private is
   stated by the doctrine, unnecessary for soundness now that provenance
-  is computed, and unenforced. Enforce it or strike it.
+  is computed, and unenforced.
+
+  **RECOMMENDATION: strike it.** It was the proxy for provenance, and
+  provenance is computed (archive 2026-07-28, "Clay: build it
+  correctly"). A rule that buys nothing and costs a fleet migration is
+  doctrine the code has outgrown.
+
+- Downstream of the spelling, not a separate question: the arm-based
+  advisory migrates onto whatever surface is chosen. Implementation.
+
+### An arm cannot see an own-origin err — semantics, or an advisory?
+
+**Cited: derived by the committee in design/testing.md (2026-08-19), with a
+veto window offered to Clay that never closed. The search found no ruling
+either way, and the code answers a third way: src/provenance.rs raises
+`advisory[license]` and nothing refuses.**
+
+Gavel 24's clause 1 says no arm may match an own-origin err. The July record
+also seeds every pub dispatch group's receivable set with its own hako, and
+the committee found the two cannot both stand: the seeding would statically
+refuse every pub bare-err arm, `when_failed`'s included, and with it the
+generic foreign rescuers Clay blessed by name.
+
+The derivation was that clause 1 is dispatch semantics rather than a static
+check alone — at match time, an err whose origin hako equals the arm's hako
+does not match, infectiousness carries it onward, and the doctrine executes
+itself. The pub seed retires; the static refusal stays for what provenance
+proves without self-seeding.
+
+None of that is built. Today the case is an advisory, so a program that
+rescues its own failure compiles and runs.
+
+**RECOMMENDATION: ratify the derivation and build it.** An advisory is the
+one shape the err thesis cannot afford, because the whole claim is that the
+discipline is structural rather than advisory, and try/catch's failure is
+named in the gavel as exactly this. Match-time skipping also keeps
+`when_failed` working with no exemption written for it.
 
 ### `--explain-copies`
 
@@ -106,8 +170,12 @@ peak terms) served the rest. What is open is only the shape below.**
 
 The *where* half of the observability item — a diagnostic naming the
 source site of each evacuation copy. Needs span plumbing through the
-carry machinery; the CLI surface deserves a shape ruling before
-building.
+carry machinery.
+
+**RECOMMENDATION: decline it until a copy surprises somebody.** The
+counters already say how much is copied and when the number moves, and
+nobody has yet asked which line did it. Span plumbing through the carry
+machinery is a fortnight of work for a question that has not come up.
 
 ### An assert hako
 
@@ -119,41 +187,132 @@ A real assertion library in the rspec direction Clay sketched —
 improvised inside a test fix. Its arms are foreign to every tested hako,
 so the err license needs nothing special. Queued 2026-08-17.
 
-### Dot chains route around accessor privacy (Demeter)
+**RECOMMENDATION: build it as its own design pass, after the err
+spelling above is ruled.** The matcher surface reads failures, so its
+shape depends on how a failure is spelled; designing it first would mean
+designing it twice.
 
-**Cited: GAVELED as 1b, archive "1b. Foreign structure access, gaveled —
-per-field pub" (2026-08-14). Construction half enforced 2026-08-20. This
-is the unbuilt read half — an implementation task, not a decision, and
-it is listed here only until someone takes it.**
+### A bare call two imports answer alike
 
-A chain can reach a field the owning module would not expose directly —
-the unbuilt half of per-field `pub`, and a real hole in the privacy
-story. Probing it on 2026-08-23 found what the build needs first: the
-checker has no record type at a field read (`pub x` inside a type is a
-syntax error today; `has no field` is raised in eval.rs at run time), so
-the fence needs record-type inference the value sets do not do. A
-run-time refusal was considered and declined: this language refuses
-before anything runs. Low priority.
+**Cited: INTERIM committee ruling, archive 2026-07-27, "a bare call two
+imports answer alike is refused" — built, pinned, and explicitly awaiting
+Clay's reassessment. `check_bare_ambiguity` is live in src/check.rs today.
+The search found no reassessment.**
+
+Two imports export the same name with the same shape, a bare call reaches
+the group, and dispatch has nothing to pick by. It used to pick import
+order, which the formatter forces alphabetical, so directory names decided
+semantics. The interim ruling refuses the call.
+
+**RECOMMENDATION: confirm the interim as final.** Refusing is the
+conservative direction — a refused program can be given meaning by a later
+gavel, and a silently-resolved one is a commitment nobody made. It has
+shipped for a month without a complaint. One word retires the "interim".
+
+### Dependency modules' render arms stay out of the root group
+
+**Cited: recorded once, archive 2026-07-27 — "whether they should is a
+surface question for Clay" — in a render-plan.md that no longer exists. The
+search found nothing else, and no ruling.**
+
+A module's render arms join its own root group across its files, so an arm
+in show.kso matches a type in types.kso. Arms from a *dependency* stay
+qualified and never join. A program that imports a hako defining a money
+type therefore does not get that hako's rendering for free.
+
+**RECOMMENDATION: keep them out.** Rendering is a visible property of a
+value, and a dependency silently changing how a caller's output looks is
+the kind of action at a distance the hako boundary exists to stop. The
+owning module can export a render arm deliberately, and then the caller can
+read that it did.
+
+### `first coll n`
+
+**Cited: design/enumerable.md §9.3, open since the 2026-07-18 ratification.
+The search found `take`/`first` in the archive only as the fusion note
+("take/first never fuse, so infinite sources keep their meaning"), which
+does not touch the question. lib/list ships `first coll` with no n.**
+
+Is there a `first coll n` consumer convenience, or only `take` (adapter)
+plus `to_list`? One-right-way says pick one.
+
+**RECOMMENDATION: only `take`.** `first coll` answers a different question
+— one element or `none` — and giving the same name a second arity that
+returns a list would make the return shape depend on the argument count.
+
+### Where `std/` comes from
+
+**Cited: design/hako.md, "Open questions for the observation clause",
+undated. The search found no entry anywhere on how std is distributed.**
+
+Whether `std/` ships inside the toolchain binary or as a pinned hako. It is
+a user-facing question: it decides whether a program can pin a std version,
+and whether upgrading the compiler can change what a program does.
+
+**RECOMMENDATION: inside the binary, and say so.** A pinnable std means a
+matrix of compiler-and-std pairs behind every differential golden, and the
+oracle law is expensive enough already. The compiler version becomes the
+std version, which is one number for a user to report in a bug.
+
+### Block-born as a dataflow property
+
+**Cited: design/memory-frontier-research.md §4.4 — "Clay's call, since it
+widens what the checker admits". The original block-born rule is archive
+2026-07-23 (a set target must trace to a direct constructor binding). The
+search found no later ruling on widening it.**
+
+The birthday theorem needs the cohort closed — everything born in the block,
+nothing escaping — and a node reached by indexing a block-born list is in
+the cohort. The shipped rule is syntactic on the binding, which is
+conservative rather than necessary. Making block-born a dataflow property
+(through aliases, conditionals, indexes of block-born collections, fields of
+block-born nodes) is scoped compiler work, and it admits programs the
+checker refuses today.
+
+**RECOMMENDATION: hold until a real program is refused.** The case the book
+teaches — wiring a cycle among a fixed set of directly-named constructions —
+is what build blocks are for, and nothing in the fleet has hit the fence.
+Widening a checker is easy to do later and impossible to undo.
 
 ### The interpreter's 10,000-frame guard
 
-Constant chosen to hold under debug builds on the 1 GB thread. Standing
-offer: say the word for a higher constant or an env override.
+**Cited: archive 2026-08-15 and 2026-08-19 both record it as a documented
+limit alongside the OS stack ceiling. It has been a standing offer, not a
+question, since it was chosen.**
+
+Constant chosen to hold under debug builds on the 1 GB thread.
+
+**RECOMMENDATION: close the offer and leave the constant.** It has stood
+since it was set, the accumulator rewrite removed the case that used to hit
+it, and both limits are documented. If a program ever needs more, that
+program is the reason to revisit it.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
 The July design doc ruled its A1–X and BB (those rulings are in the log
 and archive; the doc's full text is in git history). Letters that never
-closed, each needing revalidation against the post-boundary-language
-world of 2026-08-17 before it is worth Clay's time:
+closed:
 
 - **C — pure/yield**: does the fold-yield idiom need a named primitive
   (`out >> yield store`) or does a plain value on `>>`'s right
-  auto-lift? Asked before `>>` deferred its right side; the question's
-  shape may not have survived.
+  auto-lift? Asked before `>>` deferred its right side.
+  **Cited: the search found no ruling; the deferral gavels that changed
+  its premise are archive 2026-08-15 onward.
+  RECOMMENDATION: strike as asked, re-ask if the idiom reappears. Under
+  deferral the right side of `>>` is a description that gets demanded,
+  which is the lifting the question wanted, so the primitive has nothing
+  left to do.**
+
 - **D — what a succeeded effect yields**: `none` today, whose silent
-  railway-skip is a footgun; a `done` marker was the alternative. Same
-  caveat as C.
+  railway-skip is a footgun; a `done` marker was the alternative.
+  **Cited: the search found no ruling. The nearest is archive 2026-08-25,
+  `>>` stops at the first run-time failure, which settles sequencing and
+  not the yielded value.
+  RECOMMENDATION: mint `done`. The footgun is real — a succeeded effect
+  yielding `none` means a chain that tests for `none` cannot tell success
+  from absence — and it is the one place in the language where a value
+  means two things.**
+
 - **G — eta-reduction as canon**: ban the forwarding lambda
   (`map (c -> fetch c)` → `map fetch`) plus the composition rules a
   dispatch group held as a value still owes
@@ -165,13 +324,23 @@ world of 2026-08-17 before it is worth Clay's time:
   trace differently cannot be canonicalised into each other.
   RECOMMENDATION: strike G on that reason. One word closes it; the
   composition-rules half stays.**
+
 - **Z — errors without exceptions**: presumed declined — the 2026-08-15
   err gavel kept err with the foreign-only rescue license, which is the
-  world Z1 abolished. One word confirms and this line moves to the log.
-- **AA — newtype dispatch acceptance**: ancestor-walking was rejected
-  by every prior finding; the live half is typeset acceptance as the
-  idiom vs explicit cast only. The 2026-08-19 ruling covered the
-  declaration and ctor form, not acceptance.
+  world Z1 abolished.
+  **Cited: archive 2026-08-15, gavel 1.
+  RECOMMENDATION: confirm declined. One word and this line moves to the
+  log.**
+
+- **AA — newtype dispatch acceptance**: the live half is typeset
+  acceptance as the idiom vs explicit cast only. The 2026-08-19 ruling
+  covered the declaration and ctor form, not acceptance.
+  **Cited: archive 2026-08-19, "the July spellings" — `type
+  post_body:string` declares, `post_body ""` constructs, and acceptance
+  is untouched by it.
+  RECOMMENDATION: explicit cast only. A subtype that is accepted wherever
+  its base is accepted is a comment, and the reason to mint one is that
+  the compiler refuses the mix-up.**
 
 ## Parked — on the record, no action
 
@@ -184,7 +353,14 @@ world of 2026-08-17 before it is worth Clay's time:
 - `;` inline separator: the borrow if inline groups are ever demanded.
 - `&` as bitwise: orthogonal, someday.
 - `serve` / processes: the executor-loop primitive; next design
-  campaign — three investigations already terminate there.
+  campaign — three investigations already terminate there. The July
+  reification form (an err becoming an inert Failure record at the
+  supervisory boundary) died with gavel 1; the campaign starts from
+  the three combinators.
+- Hako tag-signing and checksum policy: parked in design/hako.md until
+  something is worth attacking. The lock already carries a sha.
+- Monorepo hakos (several modules per repo): the path shape allows it;
+  the lock-granularity decision waits for a real case.
 - Survivor cap 4× block threshold: the multiplier is a judgment call;
   the principle (the dance's transient stays at threshold scale) is in
   the log.

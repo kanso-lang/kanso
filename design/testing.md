@@ -109,7 +109,10 @@ for what the computed provenance set proves WITHOUT self-seeding
 (arms naming own reason types, provably-own flows); the pub seed
 retires. For `when_failed` this means: a testing-raised err reaching
 it skips both arms and propagates, so the harness reports the failure
-— exactly right. Veto window Clay's, as with every derivation.
+— exactly right. Veto window Clay's, as with every derivation. Filed
+2026-08-25 in design/pending-gavels.md as **An arm cannot see an
+own-origin err — semantics, or an advisory?**, since the window never
+closed and the shipped behaviour is an advisory rather than either.
 
 ## Refinement-phase stitches, logged while drafting
 

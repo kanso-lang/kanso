@@ -175,7 +175,12 @@ source* (`std/` included); relative resolution is the one local path.
 
 ## Open questions for the observation clause
 
-- Whether `std/` ships inside the toolchain binary or as a pinned hako.
-- Tag-signing / checksum policy once anything matters enough to attack.
-- Monorepo hakos (multiple modules per repo) — the path shape allows it;
-  the lock granularity decision waits for a real case.
+All three moved to design/pending-gavels.md on 2026-08-25 so the ledger
+indexes every open question in one place:
+
+- Whether `std/` ships inside the toolchain binary or as a pinned hako —
+  filed as **Where `std/` comes from**, with a recommendation.
+- Tag-signing / checksum policy once anything matters enough to attack —
+  parked there.
+- Monorepo hakos (multiple modules per repo) — parked there; the path
+  shape allows it and the lock-granularity decision waits for a real case.

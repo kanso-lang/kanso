@@ -192,7 +192,10 @@ fusion (no side effects to reorder); closed-world + monomorphization erase the
 3. **`first n` vs `take n . to_list`** — is there a `first coll n` consumer
    convenience, or only `take` (adapter) + `to_list`? One-right-way says pick
    one.
-4. **Lambda-in-pipe-stage syntax** — parens required (`map (x -> x * 2)`) so `.`
-   chains cleanly instead of the lambda body swallowing it. Needs a lexer rule.
-5. **The `next` primitive** — signature of the role method a type defines
-   (`next state -> (elem, state) | done`), and how `fold`/consumers drive it.
+4. **Lambda-in-pipe-stage syntax** — RESOLVED by the grammar, verified
+   2026-08-25: parens are required. `list/map (x -> x * 2)` chains; the same
+   line without them dies at the arrow with `error[syntax]: expected )`.
+5. **The `next` primitive** — RESOLVED by the implementation: lib/list ships
+   `next` as one dispatch group with an arm per adapter (`capped`, `bounded`,
+   `cursor`, `counting`, `cycled`, `grown`, `mapped`, `paired`, …), and
+   consumers drive it through that group.

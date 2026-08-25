@@ -2403,3 +2403,100 @@ exceptions) and `AA` (newtype dispatch acceptance) have no prior ruling in
 either log file. They are genuinely open, and the ledger's own caveat about C
 and D — that they were asked before `>>` deferred its right side, so the
 question's shape may not have survived — still stands.
+
+## 2026-08-25 — the residual sweep: what is left to rule, and what never was
+
+The archaeology sweep earlier today asked which rulings never became record.
+This one asks the complement: of everything anybody ever wrote down as open,
+what is still genuinely un-ruled. The ledger now holds that list, each entry
+with a citation and a recommendation, so a sitting can be a yes or a no.
+
+Six candidates were answered already, and each is written here so it never
+reaches Clay a second time.
+
+**A lambda in a chain stage needs its parens, and the grammar says so.**
+design/enumerable.md §9.4 lists it as open and adds "needs a lexer rule". The
+rule is there. `list/map (x -> x * 2)` prints `[2 4 6]`; the same line without
+the parens dies at the arrow with `error[syntax]: expected )`. Both forms were
+run before this was written.
+
+**The `next` primitive has its signature.** §9.5 asks what the role method
+looks like and how consumers drive it. lib/list ships eleven `next` arms —
+`capped`, `bounded`, `cursor`, `counting`, `cycled`, `grown`, `mapped`,
+`paired` and the rest — as one dispatch group, which is the answer the item
+was waiting for.
+
+**Rendering and equality over cyclic values were settled at implementation
+time, exactly as the note predicted.** design/build-blocks.md defers them to
+"the book chapter's examples will force the answer"; archive 2026-07-23
+records the answer twice over — rendering carries a visited set and prints
+`<cycle>` at re-entry, with shared acyclic subtrees still rendering in full,
+and equality on two distinct cyclic values is bisimulation, pinned by
+examples/build_cyclic_eq.kso.
+
+**`run` and `play` separated themselves.** Archive 2026-07-29 left it for
+Clay as a CLI decision, noting his instinct that the two should be separate
+and that only one was documented. Today `play` has its own line in the usage
+text and `run` on a `pub play` file refuses by name: "is a library — nothing
+to run … or run its definitions beside their statements with `kanso play`".
+His instinct is what shipped.
+
+**The three small July spellings were ruled on 2026-08-19** — local imports
+wear the dot prefix, subtypes declare as `type post_body:string`, and
+into-subtype is the ctor form — and **the write-once field marker was ruled
+on 2026-08-24** as `_`, filling exactly once. Both were carried as riders in
+entries that never got a closing line, which is how they stayed findable only
+by reading the whole archive.
+
+### What the sweep changed in the ledger
+
+Gavel 1 of 2026-08-15 listed six riders. Four have closed since — the test
+surface, ch08's pedagogy, and the three July spellings — so the err entry now
+says which two remain and cites where the others went. The arm-based advisory
+migration is not a seventh question: it follows whatever spelling is chosen.
+
+The Demeter entry leaves. This morning's sweep established it is the unbuilt
+read half of gavel 1b and therefore an implementer's job, and a ledger whose
+charter is decisions awaiting Clay should not carry it. It moves to the task
+list.
+
+The July reification form — an err becoming an inert Failure record at the
+opacity and supervisory boundaries — is recorded in the `serve` parking note
+as dead. Gavel 1 replaced it with `rescue`, and the entry describing it
+(archive 2026-07-24) was the only place it ever appeared, so a `serve`
+campaign starting from the archive would have started from a design that no
+longer exists.
+
+design/err-migration.md is deleted. It plans gavel B's world, where an `err`
+is unhandleable and an `(err reason)` arm is a compile error. Gavel 1 replaced
+that absolute with the foreign-only rescue license, so the plan's first two
+compiler items would now be wrong, and none of its three ever shipped. Its one
+additive piece, a `valid_utf8` predicate for lib/json, was never built and is
+not part of what gavel 1 superseded; it goes to the task list rather than
+vanishing with the file.
+
+### Six entries filed, each with its search
+
+Own-origin err arms as dispatch semantics rather than the advisory that ships
+today (derived in design/testing.md with a veto window Clay never used); the
+bare-call cross-module tie, refused by an interim committee ruling that is
+still live in `check_bare_ambiguity` and still says "interim"; whether a
+dependency's render arms should join the root group, recorded once in a
+render-plan.md that no longer exists; `first coll n`; whether `std/` ships
+inside the toolchain binary; and block-born as a dataflow property, which
+widens what the checker admits.
+
+The charter gains a second rule to match the filing gate: an entry carries a
+recommendation. A question with no proposed answer makes a sitting into a
+design conversation, which is the thing that turns one question into ten.
+
+### A grep that lied, and the correction
+
+Half of this sweep's first pass ran `grep -rniE "a\|b"`, which under `-E`
+matches a literal pipe and finds nothing. Three phrases came back empty that
+were sitting in the archive — "dot-prefixed" is in design/hako.md line 45, and
+a direct grep found it a minute later. Every "the search found nothing" line
+in the ledger was re-run without the escapes before it was written down. A
+citation is only worth what the search behind it was worth, and an alternation
+that silently matches nothing is the failure mode a filing gate cannot catch
+by itself.
