@@ -2048,3 +2048,34 @@ front end allocates 72,756 times where the page said 82,776, and retires
 two things from this sweep that outlast the numbers — that dhat gives an
 allocation map with no code in the compiler, and that its first map was blurred
 because an optimised build charges inlined code to the enclosing frame.
+
+## 2026-08-25 — the shadow checker's globals, and the arities beside them
+
+`collect_globals` builds the set of every name a module puts in scope — the
+ambient builtins, the nullary forms, every type and every declaration — and it
+built that set out of `String`. `check_file_shadow` then extended it with a
+clone of every extern global on top, and beside it keyed two more maps,
+`fn_arities` and `type_arity`, on cloned declaration and type names. All of it
+read once and dropped at the end of the call.
+
+The set and both maps borrow from the program now, and `Resolver` holds
+`&'a HashSet<&'a str>` where it held `&'a HashSet<String>`.
+
+    compile_allocs        72,756 -> 70,356           -2,400
+    compile_instructions  container 62,890,451 -> 61,904,116
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+`used_globals` stays owned, and that is not an oversight. It accumulates across
+every dependency in the build and is read after each one's program has gone, so
+its contents have to outlive the thing they came from. It is the one name set
+here that cannot borrow.
+
+This path is pinned, unlike the last two. Drop declaration names from the
+globals set and thirty of `beat.rs`'s tests fail, the first of them with a wall
+of `error[name]: unknown name` over std/text — every function in the program
+becomes a name nothing declared. That is what a covered invariant looks like,
+and it is worth putting beside the two found bare today: the difference is that
+this set is what a user meets as a diagnostic, while a fixpoint's key and a
+worklist's residue are internal and were tested as if they did not exist.

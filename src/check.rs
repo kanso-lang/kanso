@@ -1102,10 +1102,10 @@ pub fn check_file_shadow(
     check_field_conflicts(program, &mut diags);
     check_annotation_names(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
-    globals.extend(extern_globals.iter().cloned());
-    let mut fn_arities: crate::hash::Map<String, Vec<usize>> = crate::hash::Map::default();
+    globals.extend(extern_globals.iter().map(String::as_str));
+    let mut fn_arities: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
     for decl in &program.fns {
-        let arities = fn_arities.entry(decl.name.clone()).or_default();
+        let arities = fn_arities.entry(decl.name.as_str()).or_default();
         if !arities.contains(&decl.params.len()) {
             arities.push(decl.params.len());
         }
@@ -1115,11 +1115,11 @@ pub fn check_file_shadow(
     // function with one, and the compiler knows both counts. A typeset never
     // constructs and a subtype takes the one value it wraps, so neither is
     // entered here.
-    let type_arity: crate::hash::Map<String, usize> = program
+    let type_arity: crate::hash::Map<&str, usize> = program
         .types
         .iter()
         .filter(|t| t.members.is_empty() && t.parent.is_none() && !t.fields.is_empty())
-        .map(|t| (t.name.clone(), t.fields.len()))
+        .map(|t| (t.name.as_str(), t.fields.len()))
         .collect();
     for decl in &program.fns {
         check_fn_body_shadow(
@@ -1935,16 +1935,20 @@ fn constructs(expr: &Expr, type_names: &HashSet<&str>) -> bool {
         if matches!(&**head, Expr::Ident(name, _) if type_names.contains(name.as_str())))
 }
 
-fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<String> {
-    let mut globals: HashSet<String> = AMBIENT.iter().map(|b| b.to_string()).collect();
-    globals.insert("entry".to_string());
-    globals.insert("err".to_string());
-    globals.insert("wrap_err".to_string());
+/// Every name a module's own declarations put in scope, borrowed from the
+/// program. These used to be owned, and `check_file_shadow` then extended the
+/// set with a clone of every extern global on top — a `String` per declared
+/// name and per imported name, for a set that is read and dropped.
+fn collect_globals<'a>(program: &'a Program, diags: &mut Vec<Diagnostic>) -> HashSet<&'a str> {
+    let mut globals: HashSet<&str> = AMBIENT.iter().copied().collect();
+    globals.insert("entry");
+    globals.insert("err");
+    globals.insert("wrap_err");
     for nullary in NULLARY {
-        globals.insert(nullary.to_string());
+        globals.insert(nullary);
     }
     for ty in &program.types {
-        if !globals.insert(ty.name.clone()) {
+        if !globals.insert(ty.name.as_str()) {
             diags.push(Diagnostic::new(
                 "name",
                 format!("the name `{}` is already taken", ty.name),
@@ -1962,7 +1966,7 @@ fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<St
                 decl.span,
             ));
         }
-        globals.insert(decl.name.clone());
+        globals.insert(decl.name.as_str());
     }
     globals
 }
@@ -2426,7 +2430,7 @@ struct Local {
 }
 
 struct Resolver<'a> {
-    globals: &'a HashSet<String>,
+    globals: &'a HashSet<&'a str>,
     locals: Vec<Local>,
     used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
@@ -2434,10 +2438,10 @@ struct Resolver<'a> {
     /// Arities of this module's own fn groups; an application of a local
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
-    fn_arities: &'a crate::hash::Map<String, Vec<usize>>,
+    fn_arities: &'a crate::hash::Map<&'a str, Vec<usize>>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
-    type_arity: &'a crate::hash::Map<String, usize>,
+    type_arity: &'a crate::hash::Map<&'a str, usize>,
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
@@ -2445,12 +2449,12 @@ struct Resolver<'a> {
 
 fn check_fn_body_shadow(
     decl: &FnDecl,
-    globals: &HashSet<String>,
+    globals: &HashSet<&str>,
     used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &HashSet<String>,
-    fn_arities: &crate::hash::Map<String, Vec<usize>>,
-    type_arity: &crate::hash::Map<String, usize>,
+    fn_arities: &crate::hash::Map<&str, Vec<usize>>,
+    type_arity: &crate::hash::Map<&str, usize>,
 ) {
     let mut resolver = Resolver {
         globals,
