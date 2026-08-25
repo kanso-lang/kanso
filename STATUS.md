@@ -6,165 +6,88 @@ is stale — say so.
 
 ## Waiting on Clay
 
-The decisions live in design/pending-gavels.md — the single ledger; this
-file only indexes it. Blocking right now: nothing.
+The decisions live in design/pending-gavels.md — the single ledger; this file
+only indexes it. **Blocking right now: nothing.**
+
+**Sixteen questions are ready to rule, and every one of them carries a
+recommendation.** That is the point of the 2026-08-25 sweep: Clay's ask was
+*"the goal here would be to not have anything left to gavel. I feel like I keep
+gathering things and then you ask me the same question 10 to 20 more times."*
+So each entry now cites the search behind it and proposes an answer, and a
+sitting can be a yes or a no rather than a fresh design conversation.
+
+**Eleven open, not blocking** — welfare's blindness to compile traffic; the two
+surviving err-gavel riders (the annotate/rescue spelling, and construction
+enforcement); whether an own-origin err arm is dispatch semantics or the
+advisory that ships today; `--explain-copies`; the assert hako's surface; the
+bare-call cross-module tie whose interim ruling is still live and still called
+interim; whether a dependency's render arms join the root group; `first coll n`;
+where `std/` comes from; block-born as a dataflow property; and the
+ten-thousand-frame guard, which is a standing offer rather than a question.
+
+**Five July letters** — C (pure/yield), D (what a succeeded effect yields), G
+(eta-reduction as canon), Z (errors without exceptions), AA (newtype dispatch
+acceptance). Three of the five are recommended for one word: strike, confirm
+declined, strike.
+
+Six candidates the sweep turned up were **already answered by shipped code**
+and went to the log rather than the ledger, so they cannot reach him again: the
+lambda-parens rule, `next`'s signature, cyclic rendering and equality, `run`
+versus `play`, the three small July spellings, and the write-once marker.
+
+Two rules now guard the file. An entry **cites its search** of the log, the
+archive and every design doc, or it is invalid — an unsearched question does
+not go to Clay. And an entry **carries a recommendation**, because a question
+with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso #993 — bytes are a value on every engine, and a type field wakes its
-readers.** Every gate green on this box before it was pushed: the full suite,
-every counter gate, welfare 84.87 banked, the trend gate priced, page drift
-0/3, prose and golden-prose clean. Subscribed, with a check-in armed.
+**kanso #1027 — the history row is checked on the way out, and before a merge.**
+The second half of the interpolation miscompilation: `docs/numbers.html` had
+two trend series and two panel sections empty for months because five groups of
+counter keys were being run together into one key each, and `site_smoke` could
+not see it because its fixture is hand-written and supplies the keys itself.
+`perf_record` now checks its output against the same lists it checks its inputs
+against, and the step that builds the row runs on every pull request instead of
+only after a merge. That promotes the perf-history job out of the ratchet's
+unproven list.
 
-Three landed since this file was last rewritten, each verified on origin/main
-rather than reported from the merge response:
+## What landed on 2026-08-25
 
-    kanso 3413eaf4  #991  the two gavels recorded, their ledger entries removed
-    kanso 7f81a022  #992  an undemanded knot builds nothing, on either engine
-    kanso e3052383  #990  one ledger for what waits on Clay
+    kanso ca5dc614  #1026  four gavels, the archaeology, the residual list,
+                           a miscompilation, and the band gavel built
 
-**#992 made a knotted constant build on first read** instead of before main, so
-a knot nothing demands costs nothing. It cost one branch per constant: three
-`.text` rows rise by 16 to 32 bytes, four instruction rows rise by the flag
-test, and one mem fixture falls from six allocations to two because a constant
-nobody asks for is never evacuated as a survivor either. jsonbench does not
-move at all — the decoder links no knot.
+**Four gavels reached the record** — no tolerance bands, a demanded knot counts,
+a build hole is spelled `_`, and `>>` stops at the first run-time failure
+(which was never open; July's B ruling had answered it).
 
-**#993 gave the interpreter a real bytes value.** Six programs disagreed across
-the engines and in four of them the ORACLE answered where native refused, which
-is a program that runs under the interpreter and dies compiled. Measuring what
-the fix cost — 26 front-end visits, for one public function in std/text — found
-four full sweeps of 407 functions sitting beside it, because a declared type's
-field growing woke the whole program. It wakes the functions whose patterns
-destructure it now, and lib/json's front end does 17,786 expression visits
-where it did 23,224.
+**The band gavel is built.** `bench/compile_memory_golden.txt` is exact for the
+host its `measured-on` line names, and the figure corrected to the runner's
+864,300 — not the 872,061 the ruling recorded, which predated twelve merges.
+Welfare 84.87 to 84.89, banked. The gate had carried no ratchet mutation at
+all, which is how it could rot; it has two now.
 
-## What landed before them, on 2026-08-23
+**A miscompilation, found from a symptom.** An interpolation seeded by a
+captured parameter shared one buffer across map iterations, so native printed
+`["abc" "abc" "abc"]` where the oracle printed `["a" "b" "c"]`. The first fix
+was too broad and cost pendbench 2% for no correctness; the parser already drew
+the distinction, between a lambda applied where it stands and one handed to a
+consumer. Final cost 727 front-end instructions.
 
-    kanso 2601a7a5  #987  the os package, two blind gates, host-bound goldens
-    kq    8bf3374   #78   kq migrated to std/os, the pin bumped to 2601a7a5
-    kanso d6890a55  #986  a crashed tab says which program and why
-    kq    9330d33   #79   kq's work vein names the host that counted it
-    kanso cb5e71b1  #988  no python is a gate now, not a memory
+**Three results recorded so they stay recorded**: the lexer's names cannot move
+into the AST (declined, with the reason, on the compiler page); `valid_utf8` is
+cancelled by the gavel that superseded the plan carrying it; and the interner's
+churn is measured — wide in count, narrow in kind.
 
-**Merging #987 broke every kanso pull request for ten minutes, and the shape is
-worth keeping.** kanso's `kq specs` job clones the sibling kq branch of the same
-name and falls back to kq main. #987 removed `io/read_file`; kq main still
-called it; so every kanso PR without a matching kq branch failed to compile a
-sibling for reasons of its own that it had none. The note in #987 said "merge
-this first, then bump the pin on kq's branch", and bumping a pin on a *branch*
-was never enough — the migration has to reach kq **main**, because that is what
-the fallback reads. The window is inherent to a breaking stdlib change behind a
-sibling gate, since kq cannot migrate before a compiler with `std/os` exists.
-What is available is closing it immediately, which is what kq#78 did.
+## Next
 
-The largest piece was the 2026-08-17 gavel built: `std/os` split out of
-`std/io`, fourteen names moved and three left behind, across 69 `.kso` files
-and 332 call sites. `stdin`, `write` and `write_err` stay in `io` — the
-boundary case, answered by the language committee rather than sent back, since
-Go's standard streams are files in `os` and the writing is done from `fmt`, and
-kanso has neither. A program written before the split is now told where the
-name went rather than that the name is unknown.
+**The read half of gavel 1b** is the largest remaining piece, and it is sized
+rather than guessed: a field the WRONG type declares is caught at run time, not
+before, because `Set` in src/infer.rs is fourteen kind bits with no type
+identity. The work is a per-expression record-type set, sourced at constructors
+and carried by the fixpoint the value sets already use. It closes a correctness
+gap older than the privacy question — the doctrine says this language refuses
+before anything runs, and `has no field` does not.
 
-Also landed: the accumulator rewrite reads an operand it can prove, closing an
-engine disagreement on `n * fact (n - 1)` past ten thousand frames and gaining
-a differential of its own. Two gates that had gone blind — page_drift read
-`0/3` for days while the page fell twenty-two entries behind, because a shallow
-fetch two steps above it truncated the history it reads, and the pages build
-served whatever `docs/kanso.wasm` was committed rather than the engine it was
-built from. The chain-depth spec measures with the kernel rather than with
-time(1), which a container does not have. `to_int` and `to_float` name every
-kind they take. `kanso build myapp` from the directory above it says what
-happened instead of handing over the linker's complaint. The last `.py` file is
-a kanso program. A release workflow exists and fires on a tag, which nobody has
-pushed.
-
-**Three goldens now name the host that measured them** — two here and kq's work
-vein — because I read one on the wrong host and pasted this container's numbers
-over the runner's. Retired
-instruction counts belong to the runner's glibc — 2.39-0ubuntu8.7 here against
-2.39-0ubuntu8.8 there is about four hundred instructions before main, more than
-most of what that vein exists to catch — and `.text` sizes belong to the clang
-that emitted them. Each golden carries a `measured-on` line,
-`scripts/gates/measured_on.sh` reads it before the expensive part of either
-gate, and off the reference host it refuses without printing a number to copy.
-Ratchet rows `instructions_host_unpinned` and `text_host_unpinned`. kq carries
-the same check inline (kq#79), with no ratchet row because kq has no ratchet
-and one host-bound vein.
-
-The gate guards two files here and one there. It does not guard the habit, and
-the habit is what failed: the same error recurred twice more the same day in
-prose rather than in a golden — a corpus count from one branch quoted against
-another's, and kq called "validated" after a suite narrower than the one CI
-runs. Both were caught, neither by a gate.
-
-**The repo has no python left in it, and a gate says so** (task #55, closed
-too early, and re-opened by the regression below). Both harnesses that drove
-headless chrome are kanso, CI runs the kanso ones, and `scripts/stale_a_panel`
-— the last `.py` file, which the book gate ran on every build — is a kanso
-program as of 2026-08-23, checked byte-identical against the python it
-replaces on a real chapter.
-
-The six heredocs in `scripts/ratchet/mutations/*.sh` that used to shell out to
-the other language are POSIX awk, producing byte-identical mutated sources and
-identical exits. They
-are not kanso, and the bootstrap is why: each edits a compiler source file
-before anything in that worktree is built, and the `target/` the worktree
-links to is shared across rows, so the binary sitting there is whatever the
-previous row's mutated source produced. A tool that damages the compiler
-cannot be written in the language that compiler compiles — but it can be
-written in awk, which needs no build at all.
-
-- `scripts/site_smoke` makes four visits, one per page the site promises — the
-  landing sample, the playground, a book chapter and the chart. Each probe was
-  watched red before it was trusted.
-- `scripts/browser_differential_run` compiles every corpus program in the tab
-  and requires byte-identical status and output against the native engine,
-  excusing a disagreement only where tests/golden/wasm_gaps.txt records what the
-  wasm engine answers instead. Last run here, 2026-08-23: 317 programs, 310
-  agree, 7 known gaps, 0 disagree.
-
-Porting them found four defects the suite could not see. Two were in the
-library: a server could not hand its report back, and a connection that said
-nothing killed it — which is what a browser's speculative preconnection is.
-Two were in the runtime: a repair raised three of a beat mark's four fields and
-let the arena hand out memory past the end of a block (#823, caught by glibc on
-linux and invisible on macOS), and a program could only ever open sixty-three
-sockets and processes because the guard counted takes rather than asking
-whether a slot was free (#825).
-
-Python then crept back within days of that port — #854's mutation heredocs,
-#862's panel staler — and a dead bench/kq_race.sh predated it, racing an
-apps/kq this repo no longer holds. All three are gone: the staler is kanso,
-the heredocs are awk, the racer is deleted. `scripts/gates/python_free.sh`
-now fails CI on any tracked .py file or python invocation, with a ratchet
-row proving it turns red.
-
-## Recently ruled by Clay
-
-- **2026-08-05** — two errs in one operation merge, both engines. Shipped.
-
-- **2026-08-05** — the chart draws from deterministic counters; wall clock is
-  only for kq's table against jq, where a third party's cost cannot be counted.
-- **2026-08-05** — the wider decode field (rust, go) is a demonstration re-sat at
-  releases, not a CI gate. It lives under the CI board, dated.
-- **2026-08-04** — `kanso play` is the relaxed single file: runs, never builds,
-  stdlib imports only.
-- **2026-08-04** — the stdlib apes Go. `std/net/http` carries Go's name and shape.
-
-## Standing
-
-Everything else is on the task list, which is the source of truth for what is
-in flight. A decision that is Clay's gets an entry in
-design/pending-gavels.md (the single ledger of what waits on him), a
-`CLAY'S CALL` task, a push notification, and a line in the index at the
-top of this file.
-
-**Draft flags and merges on Claude-authored pull requests need no human word.
-The only gate is CI.** Ruled 2026-08-23, after a green one-file pull request sat
-in draft for most of a day because I treated "someone else's PR" as a boundary
-and "main requires a review" as a fact. Neither was true: every session here
-works for Clay, and main's protection requires that changes arrive through a
-pull request rather than that a person approve one. The lesson under the rule is
-the more useful half — a claimed blocker is a claim, and it gets checked against
-the repository's actual settings before any work is parked on it.
+**kanso#985** is the implementation of gavel 1b's json half, not a decision.
+One log conflict from ready; `merge-tree` says everything else applies cleanly.
