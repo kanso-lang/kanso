@@ -2678,3 +2678,79 @@ which is the fact this cancellation rests on, so a micro golden pins it on all
 three engines. Removing its err arm turns the program into an endpoint failure,
 so the fixture discriminates rather than passing on any compiler that happens
 to print two lines.
+
+## 2026-08-25 — BUILT, MEASURED, DECLINED: the lexer's names cannot move into the AST
+
+Recorded because nothing recorded it. The investigation ran, reached an answer,
+and the answer lived only in a session's task list — which is the shape of an
+idea that gets re-attempted in three weeks.
+
+### The map that started it
+
+A per-phase allocation probe, measured on the tree that read `compile_allocs`
+85,788, with 59,593 of it inside watched phases. The tree has since fallen to
+64,884, so read these as proportions of that sitting rather than as today's
+counts:
+
+    lex                       12,600   21.1%
+    load_dependencies         11,348   19.0%
+    check_merged               9,943   16.7%
+    infer                      9,565   16.1%
+    parse                      9,408   15.8%
+    infer/demand               2,813    4.7%
+    canonicalize_bare_aliases  2,107    3.5%
+    fuse_enumerable            1,362    2.3%
+    finish_program               330    0.6%
+
+`load_dependencies` is the unwatched orchestration of the nested compiles; the
+dependencies' own lex, parse, infer and check_merged are watched and already
+subtracted. Lex and parse together are 36.9%, and the reason is one habit:
+`Tok::Ident(String)` owns its identifier and the parser clones it into the AST,
+so every name in the program is allocated twice.
+
+### The idea, and the audit that passed
+
+Move the `String` out of the token rather than cloning it — the parser walks
+forward, so a consumed token's payload is dead.
+
+Inside one parser that holds. `self.pos` is monotonic: its single reassignment,
+`self.pos = arrow_end + 1`, is a forward jump. Of sixteen token reads only
+parser.rs:2317 looks backward, and `tolerated_before` reads a payload solely
+for `Tok::Op`, while `ends_an_atom` matches `Tok::Ident(_)` and `Tok::Str(_)`
+by kind — an emptied payload still answers correctly.
+
+### Where it dies
+
+`P` holds `toks: &'a [(Tok, Span)]`. It borrows the stream, and the same tokens
+are handed to several parsers over overlapping slices: parser.rs:555 and :682
+both build over `&header.tokens`, and :1445 parses a whole line before :1458
+and :1461 re-parse `[..i]` and `[i+1..]` of it. So "consumed" is not a property
+of a token, and emptying one robs a later parser of a name it still needs. The
+borrow checker says the same thing more bluntly, since `toks` is behind a `&`.
+
+Removing the double allocation for real means the AST borrows too —
+`ast::Expr::Ident` owns a `String` — which is a whole-compiler lifetime
+refactor rather than a local change. Measure the ceiling before anyone starts.
+
+### Two corrections to my own notes
+
+parser.rs:2127 does `match tok.clone()`, which I called waste. In the common
+case it is not: the clone happens once and the taken arm uses it, so nothing is
+thrown away unless the match falls through to the error arm. The double
+allocation across lex and parse is real; that site is not the evidence for it.
+
+And the probe disagreed with an earlier `ld/compile_dep` measurement of 2.65 ms
+until the configurations were compared: the probe tree carries no `ld/*`
+watches, so the two are consistent. I nearly filed the apparent disagreement as
+a finding, which would have been this log's own recurring error — evidence
+gathered under one configuration read as evidence about another.
+
+### The probe is not shipped, and the reason is task #20's question
+
+It costs 92,873 instructions on every compile, about one per allocation,
+because letting the library read the binary's counter makes that static's
+address escape. Three arrangements were measured: exporting the counter costs
+173,229, a bare extra atomic 254,029, the OnceLock reader 92,873. Spending
+0.14% of the compiler permanently on a diagnostic is exactly the trade welfare
+cannot see, which is the open ledger entry. It ships with that ruling or not at
+all.
