@@ -2914,6 +2914,57 @@ per-element `map` inside a once-only continuation, which is where both halves
 of the rule meet. Removing either half turns all three of its lines into
 `["abc" "abc" "abc"]`, so the fixture discriminates on both.
 
+## 2026-08-25 — the row is checked on the way out now, and the check runs before a merge
+
+The miscompilation fixed this morning had a second half nobody had looked at:
+what it damaged, and why nothing said so.
+
+`docs/numbers.html` fetches the perf-history branch and renders rows by key.
+Two of its six trend series read keys the bug had mangled — `run memory` reads
+`oneshot_arena_peak_bytes`, `compile memory` reads `compile_peak_bytes` — so
+both were empty for months. So were the panel's whole decode and encode
+sections. The other four series read top-level keys the bug never touched,
+which is why the chart looked like a working chart.
+
+### The gate for it could not have caught this
+
+`scripts/site_smoke` stubs the fetch with a six-row hand-written history and
+asserts every series draws exactly six points. Its own comment says a presence
+check "would pass on an empty canvas, which is the failure this exists to
+catch" — and it does catch that. What it cannot catch is the pipeline no longer
+emitting the keys, because the fixture supplies them itself, spelled correctly,
+throughout.
+
+That is this project's own rule about hand-built intermediate state, met in the
+wild: a spec written against a fixture the real pipeline never produces passes
+forever.
+
+### Where the check belongs
+
+Not in the browser test. `perf_record` already refuses when a watched counter
+is absent from the goldens it reads — `every_watched` — and the goldens were
+fine the whole time. The names reached `counters` and did not reach the row, so
+the row is now checked against the same lists on the way out. Thirty keys, and
+the refusal names the ones that went.
+
+Run against this morning's compiler it exits 2 and lists `allocs alloc_bytes
+arena_blocks perm_allocs …`, which is the original failure, caught at the point
+it happened.
+
+### And it runs before a merge now
+
+The step that builds the row was `if: github.ref == 'refs/heads/main'`. A pull
+request never ran it, so a change that broke the row reached main before
+anything executed the program that writes the published numbers. The record
+step now runs on every pull request; only the append to the history branch
+stays main-only.
+
+That promotes the job out of the ratchet's unproven list, where it sat with the
+reason "writes to a branch, and red means writing there from a mutated tree".
+It carries a row and a mutation now, and the mutation is the original bug
+rather than a stand-in: it collapses the interpolated key to a constant, so
+every pair in a group shares one name and `list/to_h` keeps the last. Watched
+red, and it names all thirty.
 ## 2026-08-25 — how wide a record-type set has to be, measured before building one
 
 The read half of gavel 1b needs a per-expression record-type set, and the
