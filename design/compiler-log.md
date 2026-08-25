@@ -2136,3 +2136,56 @@ an earlier one was still running in the background, which put them on the same
 target directory and produced a failing `ir_verifier` that reran green on its
 own. A test result read out of a contended run is not a result. One suite at a
 time, and read the exit code rather than grepping the stream.
+
+## 2026-08-25 — the bare-name set in mark_bare_quals
+
+The last row on the allocation map that was neither the lexer nor a scattering
+of small ones. `for_each_child::{{closure}}` carried 2,916 `String::clone`
+blocks, and reading the stacks put every one of them in `mark_bare_quals`:
+
+    if let ast::Expr::Ident(name, _) = e {
+        if !name.contains('/') {
+            bare.insert(name.clone());
+        }
+    }
+
+That walk covers every expression of every declaration in the program, and it
+kept a `String` per bare identifier OCCURRENCE — not per distinct name — for a
+set that is asked two questions at the bottom of the function and dropped.
+
+    compile_allocs        67,948 -> 64,884           -3,064
+    compile_instructions  container 60,920,861 -> 60,187,291
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+The fall is larger than the 2,916 charged to the closure, because the recursion
+carried captures of its own that went with the change.
+
+Watched red: insert `""` instead of the name and
+`every_example_runs_by_the_verb_its_shape_asks_for` fails with
+`error[unused]: unused import "std/list"` against two examples that plainly use
+it. A blinded set marks no qualifier as used, so every import looks dead. That
+is the whole purpose of the function and the only path that moves.
+
+### Where this leaves the sweep
+
+`compile_allocs` has gone 85,788 -> 64,884 across eleven changes today, which
+is 24.4%, with `front_end_rounds`, `front_end_visits` and `compile_peak_bytes`
+identical at both ends: the same passes decide the same things and hold the
+same memory, without copying names the program is already holding.
+
+What is left of `String::clone` is about eleven thousand blocks and it no
+longer has a large single owner. `Tok::clone` is 3,807 of it and belongs to the
+lexer, where the obvious fix was declined on 2026-08-24 for reasons that still
+hold. The rest is one and two thousand at a time in `inline`, `trmc`, `demand`
+and `fuse_enumerable` — real, but each its own small errand rather than a
+thread.
+
+The systemic answer from here is an interned symbol in the AST, which turns
+every one of those clones into a copy of four bytes. That is a much larger
+change than anything in this sweep: it touches the parser, every pass, both
+back ends and the interpreter. It is recorded here as the shape of the next
+move rather than proposed, because the prize is known (about eleven thousand
+allocations) and the cost is not measured, and this log has a rule about
+building rather than describing.
