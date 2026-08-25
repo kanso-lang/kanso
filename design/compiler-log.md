@@ -2794,3 +2794,43 @@ one more question asked at the same site.
 Worth stating because it changes what the work is for. The privacy fence looked
 like a low-priority nicety with a large prerequisite. The prerequisite is
 carrying a correctness gap of its own.
+
+## 2026-08-25 — the interner's other half: the churn is wide in count and narrow in kind
+
+The census above settled the economics — a few hundred entries standing in for
+eleven thousand copies — and left the churn explicitly unmeasured: "a question
+about how much code moves rather than about whether the move pays". Here is
+that count.
+
+**What holds a name.** 230 sites destructure `Expr::Ident(` across seventeen
+files, led by linear.rs at 34, lib.rs at 32, and check.rs and beat.rs at 31
+each. Beside `Ident` itself, ast.rs declares twenty-eight further String-typed
+name fields — parameters, type names, field names, parents, members, renames —
+which move with it or the compiler carries two representations of a name.
+
+**Most of it gets cheaper rather than harder.** 36 of those sites compare the
+name against something, and a comparison becomes a `u32` test. Of the nineteen
+that call a string method, most call `as_str()` only to index a
+`HashSet<&str>` — hash lookups that also get cheaper. `__memcmp_avx2_movbe`
+has sat in the gate's top fifteen at 1.3 million instructions, and that is
+names being compared.
+
+**The genuine text work is two questions.** "Is this name qualified?" is 21
+`contains('/')` sites, nineteen of them about a declaration or type name and
+two about a file path. "Make a qualified name" is 26 `format!("{qual}/{…}")`
+sites, 23 in lib.rs's module-qualification machinery and three elsewhere, two
+of which are beat.rs diagnostics rather than names. Splitting an identifier
+apart happens in exactly two places, infer.rs:750 and provenance.rs:47; the
+other four `split('/')` sites are splitting file paths.
+
+So the textual work is not scattered string handling. It is one concept —
+whether a name carries a module, and how it gets one — and a symbol that holds
+its module and its base answers the first with a null check and the second by
+construction. The eighty-odd sites collapse into the symbol type rather than
+spreading across it.
+
+**What this does not measure**, and the reason the idea stays recorded rather
+than proposed: the back ends and the interpreter print names, so a table has to
+be reachable at every print site. That is a different shape of question from
+the front end's, and counting it is the next thing anybody starting this should
+do rather than trusting the paragraph above to cover it.
