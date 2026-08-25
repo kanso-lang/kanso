@@ -2154,7 +2154,7 @@ kept a `String` per bare identifier OCCURRENCE — not per distinct name — for
 set that is asked two questions at the bottom of the function and dropped.
 
     compile_allocs        67,948 -> 64,884           -3,064
-    compile_instructions  container 60,920,861 -> 60,187,291
+    compile_instructions  60,277,520 -> 59,527,334   -750,186
     front_end_rounds          40 -> 40                flat
     front_end_visits      17,786 -> 17,786            flat
     compile_peak_bytes   864,274 -> 864,274           flat
@@ -2171,9 +2171,11 @@ is the whole purpose of the function and the only path that moves.
 ### Where this leaves the sweep
 
 `compile_allocs` has gone 85,788 -> 64,884 across eleven changes today, which
-is 24.4%, with `front_end_rounds`, `front_end_visits` and `compile_peak_bytes`
-identical at both ends: the same passes decide the same things and hold the
-same memory, without copying names the program is already holding.
+is 24.4%, and `compile_instructions` 65,590,655 -> 59,527,334, which is 9.2%
+and takes the front end under sixty million for the first time. `front_end_rounds`,
+`front_end_visits` and `compile_peak_bytes` are identical at both ends: the same
+passes decide the same things and hold the same memory, without copying names
+the program is already holding.
 
 What is left of `String::clone` is about eleven thousand blocks and it no
 longer has a large single owner. `Tok::clone` is 3,807 of it and belongs to the
