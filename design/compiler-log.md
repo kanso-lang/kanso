@@ -3317,10 +3317,11 @@ one per level for names nobody kept. That is the shape `expr_children` had
 before it took a callback. It takes one now, with `first_param_name` beside it
 for the single caller that wants only the first.
 
-    compile_allocs        82,776 -> 80,458   -2,318
-    front_end_rounds          40 -> 40        flat
-    front_end_visits      17,786 -> 17,786    flat
-    compile_peak_bytes   864,274 -> 864,274   flat
+    compile_allocs        82,776 -> 80,458           -2,318
+    compile_instructions  64,771,091 -> 64,175,885   -595,206
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
 
 The fall is exactly what dhat attributed to that frame, which is the useful
 part: the map predicts, rather than merely explains after the fact.
