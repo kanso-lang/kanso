@@ -1,0 +1,27 @@
+# The type of a parameter is usually a question for the whole-program fixpoint,
+# and this check stays quiet rather than guessing at it. Two forms are not a
+# guess. An annotation says the type outright, and a constructor pattern's
+# as-binding is whatever dispatch matched — `r@(money c)` reached this arm
+# because the value IS a money.
+#
+# Both are pinned here, reading a DIFFERENT absent field each, so the golden
+# tells them apart. The day the fixpoint answers the general case, these two
+# keep answering without it.
+type money
+  cents
+
+type label
+  text
+
+type box
+  width
+
+fn shown m:money
+  "{m.text}"
+
+fn sized r@(money c)
+  "{c} {r.width}"
+
+pub play =
+  print (shown (money 350))
+  >> print (sized (money 1))
