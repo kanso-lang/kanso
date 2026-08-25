@@ -3051,9 +3051,19 @@ see the type of, so the run-time refusal is still there for it.
 
 ### Cost
 
-`compile_allocs` 64,884 to 64,950 in a container, sixty-six allocations, for
-the type table and one small map per function body. Rounds, visits and peak are
-identical. The host-pinned figure comes from CI.
+`compile_allocs` 64,884 to **64,950**, sixty-six allocations for the type table
+and one small map per function body. The container and the runner agree to the
+digit on this one, which they do not always.
+
+`compile_instructions` 59,528,061 to **59,732,726**, a rise of 204,665 or
+0.34%. `check_merged` carries 16,184 of it and the `&str` map's insert another
+8,227, which is the type table being built and the locals being recorded.
+`compile_peak_bytes` does not move at all: the maps are small and transient.
+
+A third of a per cent of the front end to turn a run-time failure into a
+compile-time one is worth paying, and it is the first increment's price rather
+than the fence's — the per-expression set the census sized will cost more, and
+should be weighed on its own evidence when it is built.
 
 ### Watched red
 
