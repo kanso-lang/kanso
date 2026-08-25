@@ -233,6 +233,14 @@ compile_mem_host = row
   (breaking "compile_memory_host_unpinned")
   no_setup
 
+perf_row = row
+  "a history row that loses a counter it extracted"
+  false
+  "./target/release/kanso run scripts/perf_record"
+  "perf history (appended to the history branch)"
+  (breaking "perf_row_loses_a_group")
+  release
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -299,7 +307,9 @@ rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs]
 
-rows_c = text/concat rows_c1 [diagnostics accumulator itself]
+rows_c1a = text/concat rows_c1 [perf_row]
+
+rows_c = text/concat rows_c1a [diagnostics accumulator itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
@@ -338,15 +348,11 @@ no_row_h = unproven
   "browser differential (three engines, byte-identical, headless chrome)"
   "needs headless chrome in the scratch worktree"
 
-no_row_i = unproven
-  "perf history (appended to the history branch)"
-  "writes to a branch, and red means writing there from a mutated tree"
-
 unproven_a = [no_row_a no_row_b no_row_c]
 
 unproven_b = [no_row_d no_row_e no_row_f]
 
-unproven_c = [no_row_g no_row_h no_row_i]
+unproven_c = [no_row_g no_row_h]
 
 unproven_jobs = text/concat unproven_a (text/concat unproven_b unproven_c)
 

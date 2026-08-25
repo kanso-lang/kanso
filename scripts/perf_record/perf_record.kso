@@ -49,6 +49,24 @@ unwatched = """
   here in the same change that renamed it there.
 """
 
+# The check above asks whether the compiler still EMITS each counter. It reads
+# the goldens, and they were fine throughout. What it cannot see is the row
+# losing a name on the way OUT, which is what happened: a miscompiled
+# interpolation appended five groups' key names into a single key each, so
+# `compile_peak_bytes` and the decode, encode, oneshot and basket counters left
+# this program as one blob apiece. docs/numbers.html charted the result for
+# months with two series permanently empty and this job green.
+#
+# So the row is checked against the same lists on the way out. A completeness
+# check on the inputs is not one on the outputs, and it was the outputs that
+# went.
+mangled = """
+  perf_record built a row that is missing a counter it extracted, so the
+  history branch would carry a dimension the chart cannot find. This is an
+  assembly fault rather than a missing counter — the name reached `counters`
+  and did not reach the row.
+"""
+
 # What deciding cost, and what got written.
 work_keys = ["rounds" "visits" "lines" "calls" "branches" "defines"]
 
@@ -260,9 +278,38 @@ fn assembled line d e o bk c cc w
 fn with_work rows w
   os/read_file "bench/text_golden.txt" . (t -> written rows w t)
 
+fn prefixed prefix names
+  list/to_list (list/map names (n -> "{prefix}{n}"))
+
+fn key_of pair
+  pair[1]!
+
+# Every key the five `counters` calls are supposed to have produced, spelled the
+# way they are spelled in the row.
+expected_keys =
+  a = text/concat decode_watched (prefixed "encode_" encode_watched)
+  b = text/concat (prefixed "oneshot_" oneshot_watched)
+    (prefixed "basket_" basket_all)
+  text/concat (text/concat a b) compiler_watched
+
+fn kept_out pairs
+  keys = list/to_list (list/map pairs key_of)
+  list/to_list (list/select expected_keys (g -> missing? keys g))
+
 fn written pairs w t
   sized = [["text_bytes" (size_of t)]]
   worked = text/concat (instructions w) sized
-  io/write "{json/encode (list/to_h (text/concat pairs worked))}\n"
+  all = text/concat pairs worked
+  assembled_row all (kept_out all)
+
+fn assembled_row all gone
+  intact all gone (length gone == 0)
+
+fn intact all _ true
+  io/write "{json/encode (list/to_h all)}\n"
+
+fn intact _ gone false
+  listed = text/join gone " "
+  io/write_err "{mangled}  lost: {listed}\n" . (_ -> os/exit 2)
 
 pub play = asked ["log" "-1" "--format=%h %cI %s"] . stamped
