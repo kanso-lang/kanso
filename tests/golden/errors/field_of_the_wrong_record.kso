@@ -1,0 +1,21 @@
+# `name` is a field SOME record declares, so the older check — which asks only
+# whether any type has it — passes this straight through, and the read used to
+# fail at run time with `error[runtime]: `point` has no field `name``.
+#
+# This language refuses before anything runs, so that run-time refusal was a
+# hole rather than a design. It is closed for the case the checker can see
+# without inference: `p` is bound to a bare construction, so the type in hand
+# is plain to read off the statement above.
+#
+# A parameter still answers nothing here — the type it will hold is a question
+# for whole-program inference, and this check stays quiet rather than guessing.
+type point
+  x
+  y
+
+type person
+  name
+
+pub play =
+  p = point 1 2
+  print "{p.name}"

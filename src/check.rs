@@ -1244,22 +1244,66 @@ fn check_predicates(
 fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
     let declared: HashSet<&str> =
         program.types.iter().flat_map(|t| t.fields.iter().map(|(f, _, _)| f.as_str())).collect();
+    // A plain record is one that constructs its own fields: no parent to
+    // inherit from, no typeset members to stand for something else. Only
+    // those can say with certainty which fields a value of theirs has, and
+    // certainty is the whole licence for refusing before anything runs.
+    let plain: HashMap<&str, HashSet<&str>> = program
+        .types
+        .iter()
+        .filter(|t| t.parent.is_none() && t.members.is_empty() && !t.fields.is_empty())
+        .map(|t| (t.name.as_str(), t.fields.iter().map(|(f, _, _)| f.as_str()).collect()))
+        .collect();
     for decl in &program.fns {
+        // Locals whose initialiser is a bare construction, so the type in
+        // hand is known without inference: `p = point 1 2` and then `p.z`.
+        // Statements are walked in order, so a rebinding of the same name
+        // replaces the entry rather than confusing it.
+        let mut local: HashMap<&str, &str> = HashMap::default();
         for stmt in &decl.body {
-            field_reads(stmt, &declared, diags);
+            field_reads(stmt, &declared, &plain, &local, diags);
+            if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
+                match constructed_type(expr, &plain) {
+                    Some(ty) => local.insert(n.as_str(), ty),
+                    None => local.remove(n.as_str()),
+                };
+            }
         }
     }
 }
 
-fn field_reads(stmt: &Stmt, declared: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+/// The record type this expression constructs, when that is plain to read off
+/// the call itself. Anything else answers `None` and the read stays as it was.
+fn constructed_type<'a>(
+    e: &'a Expr,
+    plain: &HashMap<&'a str, HashSet<&'a str>>,
+) -> Option<&'a str> {
+    let Expr::App { head, .. } = e else { return None };
+    let Expr::Ident(name, _) = head.as_ref() else { return None };
+    plain.get_key_value(name.as_str()).map(|(k, _)| *k)
+}
+
+fn field_reads<'a>(
+    stmt: &'a Stmt,
+    declared: &HashSet<&str>,
+    plain: &HashMap<&'a str, HashSet<&'a str>>,
+    local: &HashMap<&'a str, &'a str>,
+    diags: &mut Vec<Diagnostic>,
+) {
     let expr = match stmt {
         Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
         Stmt::Set { value, .. } => value,
     };
-    field_reads_expr(expr, declared, diags);
+    field_reads_expr(expr, declared, plain, local, diags);
 }
 
-fn field_reads_expr(e: &Expr, declared: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+fn field_reads_expr<'a>(
+    e: &'a Expr,
+    declared: &HashSet<&str>,
+    plain: &HashMap<&'a str, HashSet<&'a str>>,
+    local: &HashMap<&'a str, &'a str>,
+    diags: &mut Vec<Diagnostic>,
+) {
     if let Expr::Field { base, name, span } = e {
         if !declared.contains(name.as_str()) {
             diags.push(Diagnostic::new(
@@ -1267,11 +1311,28 @@ fn field_reads_expr(e: &Expr, declared: &HashSet<&str>, diags: &mut Vec<Diagnost
                 format!("no record type has a field `{name}`"),
                 *span,
             ));
+        } else if let Some(ty) = base_type(base, plain, local) {
+            if !plain[ty].contains(name.as_str()) {
+                diags.push(Diagnostic::new("name", format!("`{ty}` has no field `{name}`"), *span));
+            }
         }
-        field_reads_expr(base, declared, diags);
+        field_reads_expr(base, declared, plain, local, diags);
         return;
     }
-    crate::for_each_child(e, |child| field_reads_expr(child, declared, diags));
+    crate::for_each_child(e, |child| field_reads_expr(child, declared, plain, local, diags));
+}
+
+/// The type of the value this field read is reading from, when the checker can
+/// know it: a construction written where it stands, or a local bound to one.
+fn base_type<'a>(
+    base: &'a Expr,
+    plain: &HashMap<&'a str, HashSet<&'a str>>,
+    local: &HashMap<&'a str, &'a str>,
+) -> Option<&'a str> {
+    match base {
+        Expr::Ident(n, _) => local.get(n.as_str()).copied(),
+        other => constructed_type(other, plain),
+    }
 }
 
 pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {

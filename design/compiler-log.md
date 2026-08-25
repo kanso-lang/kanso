@@ -3012,3 +3012,59 @@ on the programs that need it most.
 
 Recorded rather than built. The measurement is what kills the bitmask, and it
 would have been discovered halfway through writing one.
+
+## 2026-08-25 — a field read the checker can see the type of is refused before it runs
+
+The first increment of gavel 1b's read half, and it closes the correctness
+half rather than the privacy half.
+
+`check_field_exists` asked whether ANY declared record has the field, and its
+own comment recorded the limit: "Reading a field a *particular* record lacks
+stays a runtime error, since only the value knows its type." That is true of a
+parameter. It is not true of a local bound to a bare construction, and that is
+where the mistake is usually written:
+
+    p = point 1 2
+    print "{p.name}"
+
+    was   error[runtime]: `point` has no field `name`
+    now   error[name]: `point` has no field `name`, with the span
+
+Both engines, refused before anything runs, which is what the doctrine asks
+for. The run-time refusal was a hole rather than a design.
+
+### What it will and will not answer
+
+The type is read off the statement, with no inference: a construction written
+where it stands, or a local bound to one. A parameter still answers nothing,
+because what it will hold is a question for the whole-program fixpoint, and
+this check stays quiet rather than guessing.
+
+It also only trusts a **plain** record — no parent to inherit fields from, no
+typeset members standing for something else. Certainty is the whole licence for
+refusing early, and a type that borrows its shape from elsewhere has none to
+offer here.
+
+`tests/cross_module_fields.rs` still passes unchanged, which is the honest
+measure of the limit: its case reads a field off a value this analysis cannot
+see the type of, so the run-time refusal is still there for it.
+
+### Cost
+
+`compile_allocs` 64,884 to 64,950 in a container, sixty-six allocations, for
+the type table and one small map per function body. Rounds, visits and peak are
+identical. The host-pinned figure comes from CI.
+
+### Watched red
+
+`tests/golden/errors/field_of_the_wrong_record.kso` prints the old
+`error[runtime]` and exits 0 without the change, where the error corpus
+requires exit 2. So the fixture fails for the right reason rather than for the
+absence of a message.
+
+### What is left
+
+The parameter case, which needs the per-expression record-type set the census
+above sized: one type or unknown, sourced at constructors, carried by the
+fixpoint the value sets already use. This increment needs none of that, which
+is why it went first.
