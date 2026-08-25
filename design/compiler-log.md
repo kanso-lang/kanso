@@ -2896,4 +2896,20 @@ pendbench's counters together are what pinned them.
 Final state: the nine-line reproduction prints `["a" "b" "c"]` on both engines,
 every counter gate passes against freshly built benchmarks, welfare is 84.89
 against its floor, and `cost_golden_pend` is byte-identical to the row it held
-before any of this.
+before any of this. `text_golden` and `instructions_golden` are back to their
+old rows too — pendbench's machine code and its billion instructions were the
+whole of the 2%.
+
+**What the fix costs, in the end: 727 instructions in the front end**,
+`compile_instructions` 59,527,334 to 59,528,061, or 0.0012%. That is the
+capture set being built and walked at the lambdas the analysis now looks
+through, measured on the runner and read out of the gate's own output because
+the row is host-pinned. A rise of a thousandth of a per cent to stop the
+compiler emitting three strings that are secretly one is not a trade worth
+arguing about; it is recorded because the rule is that a moved number gets a
+sentence.
+
+The corpus fixture carries the nested case as well as the flat one — a
+per-element `map` inside a once-only continuation, which is where both halves
+of the rule meet. Removing either half turns all three of its lines into
+`["abc" "abc" "abc"]`, so the fixture discriminates on both.

@@ -15,6 +15,7 @@
 # So the capture is what the fixture pins, not the lambda. `built` below is
 # called inside a lambda too and keeps its licence, because the argument it
 # hands over is made there rather than caught from outside.
+import "std/io"
 import "std/list"
 
 fn kept prefix n
@@ -32,10 +33,20 @@ fn more _ acc true
 fn more n acc false
   built (n - 1) (push acc n)
 
+# A per-element lambda nested INSIDE a once-only continuation: both halves of
+# the rule at once. The map's callback still gets the capture check even though
+# the continuation around it does not, and this is the shape a future change is
+# most likely to break, because getting either half alone looks like it works —
+# the narrow rule alone put the miscompilation back, and the broad rule alone
+# cost pendbench its in-place push and two per cent of its instructions.
+fn nested p
+  print "{go p}"
+
 fn shown p
   print "{go p}"
 
 pub play =
   shown ""
   >> shown "-"
+  >> io/write "" . (_ -> nested "+")
   >> print "{length (built 4 [])}"
