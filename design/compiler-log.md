@@ -3443,10 +3443,14 @@ where the program outlives it. It compiled on the first attempt; the covariance
 question that was settled by building on 2026-08-24 did not come up again.
 
     compile_allocs        77,249 -> 72,756           -4,493
-    compile_instructions  container 64,116,715 -> 62,890,451
+    compile_instructions  63,492,172 -> 62,351,359   -1,140,813
     front_end_rounds          40 -> 40                flat
     front_end_visits      17,786 -> 17,786            flat
     compile_peak_bytes   864,274 -> 864,274           flat
+
+That is 1.8% of the front end's work for one pass's keys, and 254 instructions
+per allocation removed — the highest rate of the day, because a fixpoint pays
+for its keys once per round rather than once.
 
 The fall is larger than the 4,195 dhat charged to provenance, because the
 candidate list's `group.clone()` and the vectors around it went with the keys.
