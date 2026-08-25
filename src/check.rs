@@ -1061,13 +1061,13 @@ pub fn check_typesets(program: &Program, type_names: &HashSet<String>) -> Vec<Di
 }
 
 /// Names a file declares, for the module-wide first pass.
-pub fn declared_names(program: &Program) -> HashSet<String> {
+pub fn declared_names(program: &Program) -> HashSet<&str> {
     let mut names = HashSet::default();
     for ty in &program.types {
-        names.insert(ty.name.clone());
+        names.insert(ty.name.as_str());
     }
     for decl in &program.fns {
-        names.insert(decl.name.clone());
+        names.insert(decl.name.as_str());
     }
     names
 }
@@ -1077,7 +1077,7 @@ pub fn declared_names(program: &Program) -> HashSet<String> {
 /// names the file uses, for the unused-private check.
 pub fn check_file(
     program: &Program,
-    extern_globals: &HashSet<String>,
+    extern_globals: &HashSet<&str>,
     used_globals: &mut HashSet<String>,
 ) -> Vec<Diagnostic> {
     check_file_shadow(program, extern_globals, used_globals, &HashSet::default())
@@ -1088,7 +1088,7 @@ pub fn check_file(
 /// every stdlib export a forbidden binding name.
 pub fn check_file_shadow(
     program: &Program,
-    extern_globals: &HashSet<String>,
+    extern_globals: &HashSet<&str>,
     used_globals: &mut HashSet<String>,
     shadowable: &HashSet<String>,
 ) -> Vec<Diagnostic> {
@@ -1102,7 +1102,7 @@ pub fn check_file_shadow(
     check_field_conflicts(program, &mut diags);
     check_annotation_names(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
-    globals.extend(extern_globals.iter().map(String::as_str));
+    globals.extend(extern_globals.iter().copied());
     let mut fn_arities: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
     for decl in &program.fns {
         let arities = fn_arities.entry(decl.name.as_str()).or_default();

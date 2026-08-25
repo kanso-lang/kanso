@@ -2088,3 +2088,51 @@ becomes a name nothing declared. That is what a covered invariant looks like,
 and it is worth putting beside the two found bare today: the difference is that
 this set is what a user meets as a diagnostic, while a fixpoint's key and a
 worklist's residue are internal and were tested as if they did not exist.
+
+## 2026-08-25 — the extern name set stops being copied once per file
+
+`declared_names` answered `HashSet<String>`, and the loop that checks each file
+of a module used it twice over:
+
+    let mut extern_globals = all_names.clone();
+    for name in check::declared_names(program) {
+        extern_globals.remove(&name);
+    }
+
+`all_names` holds every name the whole build declares. Cloning it once per file
+is a `String` per name per file, and `declared_names` allocated another set of
+its own on the next line so the copy could have names removed from it. The
+result is read by the shadow check and dropped.
+
+`declared_names` borrows now, and the extern set is built by filtering
+references out of `all_names` rather than copying and subtracting:
+
+    let extern_globals: crate::hash::Set<&str> = {
+        let own = check::declared_names(program);
+        all_names.iter().map(String::as_str).filter(|n| !own.contains(n)).collect()
+    };
+
+    compile_allocs        70,356 -> 67,948           -2,408
+    compile_instructions  container 61,904,116 -> 60,920,861
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+`all_names` itself stays owned, and the borrow checker is the reason rather
+than a preference: the loop below it takes `&mut parsed`, so a set holding
+references into those programs could not live across it. It is fed with an
+explicit `String::from` now, which says at the call site that the copy is
+deliberate.
+
+Watched red: invert the filter, so the set holds a file's own names instead of
+everything else, and six of `beat.rs`'s and the dispatch, escape and linear
+suites go red together.
+
+Two things about the method, both mine to own. The clippy that CI runs
+(`--all-targets`, no `--release`) refused `declared_names<'a>` as a needless
+lifetime; the elided form is what shipped, and running the CI form locally is
+what caught it rather than CI. And a `cargo test --release` was started while
+an earlier one was still running in the background, which put them on the same
+target directory and produced a failing `ir_verifier` that reran green on its
+own. A test result read out of a contended run is not a result. One suite at a
+time, and read the exit code rather than grepping the stream.

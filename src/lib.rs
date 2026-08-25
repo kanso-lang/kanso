@@ -1653,9 +1653,10 @@ fn qualify(
     // arm compiled against the other.
     let owned: crate::hash::Set<String> = check::declared_names(dep)
         .into_iter()
-        .filter(|n| !getters.contains(n))
+        .filter(|n| !getters.contains(*n))
         .filter(|n| !n.contains('/'))
-        .filter(|n| n != MATH_FAILURE && n != DIVIDE_BY_ZERO)
+        .filter(|n| *n != MATH_FAILURE && *n != DIVIDE_BY_ZERO)
+        .map(String::from)
         .collect();
     // The prelude's own declarations go, rather than travelling under this
     // module's name: `install_prelude` puts one bare pair back on the merged
@@ -3362,11 +3363,11 @@ fn compile_module_loaded(
     let mut all_markers = crate::hash::Set::default();
     let mut all_type_names = crate::hash::Set::default();
     for (_, _, program) in &parsed {
-        all_names.extend(check::declared_names(program));
+        all_names.extend(check::declared_names(program).into_iter().map(String::from));
         all_markers.extend(check::marker_names(program));
         all_type_names.extend(program.types.iter().map(|t| t.name.clone()));
     }
-    all_names.extend(check::declared_names(&dep_program));
+    all_names.extend(check::declared_names(&dep_program).into_iter().map(String::from));
     all_markers.extend(check::marker_names(&dep_program));
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let shadowable: crate::hash::Set<String> = dep_program
@@ -3378,10 +3379,14 @@ fn compile_module_loaded(
         .collect();
     let mut used = crate::hash::Set::default();
     for (file, source, program) in &mut parsed {
-        let mut extern_globals = all_names.clone();
-        for name in check::declared_names(program) {
-            extern_globals.remove(&name);
-        }
+        // Every name in the build except this file's own, as references into
+        // `all_names`. This used to clone the whole set per file and then
+        // remove from the copy — a `String` per name per file, for a set the
+        // shadow check only ever reads.
+        let extern_globals: crate::hash::Set<&str> = {
+            let own = check::declared_names(program);
+            all_names.iter().map(String::as_str).filter(|n| !own.contains(n)).collect()
+        };
         let mut diags = check::resolve_markers(program, &all_markers);
         diags.extend(check::check_typesets(program, &all_type_names));
         diags.extend(check::check_file_shadow(program, &extern_globals, &mut used, &shadowable));
