@@ -130,34 +130,6 @@ July spellings"). These two are what remain.**
 - Downstream of the spelling, not a separate question: the arm-based
   advisory migrates onto whatever surface is chosen. Implementation.
 
-### An arm cannot see an own-origin err — semantics, or an advisory?
-
-**Cited: derived by the committee in design/testing.md (2026-08-19), with a
-veto window offered to Clay that never closed. The search found no ruling
-either way, and the code answers a third way: src/provenance.rs raises
-`advisory[license]` and nothing refuses.**
-
-Gavel 24's clause 1 says no arm may match an own-origin err. The July record
-also seeds every pub dispatch group's receivable set with its own hako, and
-the committee found the two cannot both stand: the seeding would statically
-refuse every pub bare-err arm, `when_failed`'s included, and with it the
-generic foreign rescuers Clay blessed by name.
-
-The derivation was that clause 1 is dispatch semantics rather than a static
-check alone — at match time, an err whose origin hako equals the arm's hako
-does not match, infectiousness carries it onward, and the doctrine executes
-itself. The pub seed retires; the static refusal stays for what provenance
-proves without self-seeding.
-
-None of that is built. Today the case is an advisory, so a program that
-rescues its own failure compiles and runs.
-
-**RECOMMENDATION: ratify the derivation and build it.** An advisory is the
-one shape the err thesis cannot afford, because the whole claim is that the
-discipline is structural rather than advisory, and try/catch's failure is
-named in the gavel as exactly this. Match-time skipping also keeps
-`when_failed` working with no exemption written for it.
-
 ### `--explain-copies`
 
 **Cited: part-superseded, archive 2026-07-27 — the counter stack
