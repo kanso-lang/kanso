@@ -884,7 +884,8 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     // them. Finding the twin used to be a scan of every declaration for every
     // synthetic one — quadratic in the program, with a `format!` per pair
     // inside the inner loop.
-    let mut at_site: HashMap<(&str, usize, usize, usize), Vec<&str>> = HashMap::default();
+    let mut at_site: HashMap<(&str, usize, usize, usize), Vec<&str>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for twin in &program.fns {
         if !twin.synthetic {
             at_site
@@ -893,7 +894,8 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
                 .push(twin.name.as_str());
         }
     }
-    let mut by_name: HashMap<&str, (bool, HashSet<&str>)> = HashMap::default();
+    let mut by_name: HashMap<&str, (bool, HashSet<&str>)> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
         if d.name.contains('/') {
             continue;

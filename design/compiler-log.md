@@ -3214,3 +3214,50 @@ One thing found on the way. The doc comment above `bound_in_pattern` had
 collected two paragraphs belonging to other functions: one describing
 `qualify` and one describing `canonicalize_types`, both of which sat
 undocumented further down the file. They are back where they belong.
+
+## 2026-08-24 — four maps that knew their size and did not say so
+
+`reserve_rehash` was 2,402,471 instructions of the front end's 65.4 million,
+which is a map growing from empty and copying itself at 3, 7, 14, 28 entries
+and so on. Four of the maps that pay it are built by walking `program.fns`,
+whose length is known before the loop starts: `groups` and `callee_first`'s
+`by_name` in inference, `at_site` and `by_name` in the alias canonicaliser.
+They are pre-sized now.
+
+    compile_allocs        82,848 -> 82,776   -72
+    front_end_rounds          40 -> 40        flat
+    front_end_visits      17,786 -> 17,786    flat
+    compile_peak_bytes   864,274 -> 864,274   flat
+
+The instruction figure is the part worth keeping. Rehash work fell by 419,151,
+from 2,402,471 to 1,983,320, and the total fell by 80,631 — a fifth of what
+was saved. The rest went back out in the larger table: a capacity hint that
+over-shoots buys a bigger allocation and a bigger region to clear.
+
+Which suggested sizing each map to what it actually holds, so the table would
+be no larger than natural growth would have made it. The sizes were measured
+rather than guessed — printing `len()` at the end of each build over lib/json
+and its dependencies gives 89/158, 22/26, 1/2, 240/407 and 186/326 for the two
+name-keyed maps, so five eighths is above every sample; `at_site` runs at
+1.00, 1.00, 1.00 and 0.81, so it wants the full count. Working through
+hashbrown's bucket arithmetic, that lands each table on the same power of two
+natural growth reaches, with none of the rehashes. It should have been strictly
+better than the blanket hint.
+
+It was worse. Sized to need reads 65,318,681 against the blanket 65,284,043,
+so the careful version gives back 34,638 of the 80,631. The blanket hint's
+extra room is not waste: a table at half load probes in fewer steps, and that
+is worth more than the memset it costs. The arithmetic was right about bucket
+counts and wrong about what bucket counts are for.
+
+So the blanket `program.fns.len()` ships, and this is recorded mostly because
+the reasoning was careful, checkable, and beaten by the measurement. There was
+no way to reach it from the bucket arithmetic alone.
+
+    compile_instructions  64,840,962 -> 64,771,091   -69,871
+
+The runner's fall is 69,871 against the container's 80,631, and this time the
+row was taken from CI rather than predicted, which is what the previous entry
+concluded to do.
+
+A third of `reserve_rehash` remains, in maps this change does not touch.
