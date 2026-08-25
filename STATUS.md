@@ -16,7 +16,7 @@ gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**Eleven open, not blocking** — welfare's blindness to compile traffic; the two
+**Ten open, not blocking** — the two
 surviving err-gavel riders (the annotate/rescue spelling, and construction
 enforcement); whether an own-origin err arm is dispatch semantics or the
 advisory that ships today; `--explain-copies`; the assert hako's surface; the

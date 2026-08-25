@@ -97,53 +97,6 @@ gaming the index.
 
 ## Open, not blocking
 
-### Welfare cannot see what the compiler costs to run
-
-**Cited: the weights and satiations were argued once with reasons — archive
-2026-08-01 "the four weights, decided from evidence" and archive 2026-07-26 "a
-second of compile time is not a second of runtime". Nothing since revisits
-them, and no entry anywhere proposes a compile-traffic term.**
-
-Four merges on 2026-08-24 took `compile_allocs` from 148,073 to 87,290 and
-the front end's retired instructions down about a quarter, and the welfare
-score did not move: 84.87 before, 84.87 after, floor untouched.
-
-That is not a bug in the script. Its model of compile cost is four counters,
-and every one of them is flat across those changes:
-
-    compile_speed_counters = ["front_end_rounds" "front_end_visits" "emitted_lines"]
-    compile_memory_counters = ["compile_peak_bytes"]
-
-    front_end_rounds        40 -> 40
-    front_end_visits    17,786 -> 17,786
-    emitted_lines        1,534 -> 1,534
-    compile_peak_bytes 871,649 -> 871,649   (the golden welfare reads)
-
-Rounds and visits count the work the compiler decided to do. Emitted lines
-count what it wrote. Peak counts what it held. None of them counts what it
-does — the allocator traffic, or the instructions retired getting there. What
-a model leaves out it weights at zero, and the tree now has two veins,
-`bench/compile_allocs_golden.txt` and `bench/compile_instructions_golden.txt`,
-watching a dimension the objective scores at nothing.
-
-The question is whether welfare should carry a compile-traffic term, and at
-what weight and satiation.
-
-**RECOMMENDATION: take the smaller variant — leave the weights alone and say
-in the script's own prose that compile traffic is deliberately outside the
-model.** The score already has four compile terms against three runtime
-dimensions, and adding a fifth to score the work of the week it was proposed
-is how an objective gets fitted to its history. A sentence in the script
-means the next person to find a silent 26% reads that it was a choice. The
-two veins already catch a deletion, which is the job the goldens do and
-welfare does not.
-
-One tangle worth naming: `compile_peak_bytes` DID move, 876,930 to 864,274.
-Welfare did not see it because welfare reads the golden rather than the
-compiler, and the band let the golden sit unmoved. The no-tolerance-bands
-gavel of 2026-08-24 settles that half; once the gate asserts equality this
-term reports live movement again, with no change here. Filed 2026-08-24.
-
 ### Riders under the err gavel (the three-combinator model, 2026-08-15)
 
 **Cited: gavel 1, archive 2026-08-15, listed six riders. Four have since
