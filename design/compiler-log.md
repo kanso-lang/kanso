@@ -3474,3 +3474,25 @@ change, recorded as a model correction.
 
 The entry leaves the ledger with this commit. Fifteen of the sweep's
 sixteen remain with Clay.
+
+## 2026-08-25 — gavel: an arm never sees its own err, and it was never advisory
+
+Clay ruled the sweep's own-origin entry, emphatically: "it has certainly
+never been 'advisory' whatever the hell that means." The doctrine — no
+arm may match an err born in its own hako — was ruled with gavel 24 and
+was never optional; the warning-only enforcement that ships today
+(src/provenance.rs raising advisory[license] while the program compiles
+and runs) is a defect against the ruling, not a design state.
+
+The ruling ratifies the committee's derivation from design/testing.md:
+clause 1 is dispatch semantics. At match time, an err whose origin hako
+equals the arm's hako does not match the arm — infectiousness carries it
+onward exactly as if the arm were absent. The pub self-seed retires; the
+static refusal stays for what provenance proves without it; when_failed
+and the blessed generic foreign rescuers keep working with no exemption
+written for them, because a foreign err still matches. Build it now:
+the advisory becomes the semantics, and a program that rescues its own
+failure stops being expressible.
+
+The entry leaves the ledger with this commit. Fourteen of the sweep's
+sixteen remain.
