@@ -529,8 +529,10 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      - name: record this commit
-        if: github.ref == 'refs/heads/main'
+      # NOT main-only. The row is what the numbers page charts, and building
+      # it is the only thing that checks it assembles — a PR that breaks a
+      # counter's key used to reach main before anything ran this.
+      - name: the row assembles, with every counter it extracted
         run: ./target/release/kanso run scripts/perf_record > /tmp/record.json
       - name: append to the history branch
         if: github.ref == 'refs/heads/main'
