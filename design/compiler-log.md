@@ -3351,10 +3351,11 @@ that is empty again by the time the statement ends.
 
 One vector per site now, cleared and reused.
 
-    compile_allocs        80,458 -> 77,249   -3,209
-    front_end_rounds          40 -> 40        flat
-    front_end_visits      17,786 -> 17,786    flat
-    compile_peak_bytes   864,274 -> 864,274   flat
+    compile_allocs        80,458 -> 77,249           -3,209
+    compile_instructions  64,175,885 -> 63,492,172   -683,713
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
 
 dhat agrees on where it went: `walk_children` falls from 5,768 blocks to
 4,237, and the rest of the difference is the `vec![e]` itself, which was
