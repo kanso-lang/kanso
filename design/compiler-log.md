@@ -3103,14 +3103,23 @@ until the fixpoint carries a type.
 in the plain-record table, so the lookup misses and the check stays quiet. The
 conservative direction falls out of the table rather than needing a rule.
 
-### It costs nothing
+### It costs no memory and 40,430 instructions
 
 `compile_allocs` is 64,950 either side — the same figure the previous increment
 landed on. The seeding reuses the map that was already being built per function
-body, so there is no new allocation anywhere; the loop over parameters is the
-whole of the addition. Rounds, visits and peak are identical too. Whatever the
-instruction count does is CI's to report, and it is a loop over a handful of
-parameters per declaration.
+body, so there is no new allocation anywhere. Rounds, visits and peak are
+identical too.
+
+`compile_instructions` is not: 59,732,726 to **59,773,156**, a rise of 40,430,
+or 0.068%. `check_merged` carries 31,147 of it and `memcmp` another 7,029,
+which is the parameter loop and the type names it compares.
+
+Worth saying plainly, because the first draft of this entry said the increment
+"costs nothing" on the strength of the counters this box can measure. Four of
+them did not move and the fifth is host-pinned, so a container cannot see it
+and CI can. A claim about cost that only covers the measurable half is the
+shape of the mistake made twice already today, once about stale benchmark
+binaries and once about a golden figure taken before twelve merges.
 
 ### Watched red
 
