@@ -246,18 +246,48 @@ impl<'a> Analysis<'a> {
                     (&args[2], self.folder_is_unique(&args[2], ctx, scoped))
                 {
                     let inner = params.first().map(|(n, _)| n.as_str());
+                    // `scoped` says the ACCUMULATOR is unique, which is the
+                    // fold's own contract. Everything else the folder captures
+                    // is still handed over once per element, so the folder's
+                    // body carries the same capture set any other consumer's
+                    // callback would — fusion writes `map` as a reducer applied
+                    // where it stands inside exactly this lambda, and without
+                    // the set the interpolation bug walks straight back in.
+                    let mut bound: HashSet<String> =
+                        lambda_bound.cloned().unwrap_or_else(HashSet::default);
+                    bound.extend(params.iter().map(|(n, _)| n.clone()));
+                    collect_bound_names(body, &mut bound);
                     return self.callsites_unique_in(ctx, &args[0], q, scoped, lambda_bound)
                         && self.callsites_unique_in(ctx, &args[1], q, scoped, lambda_bound)
-                        && self.callsites_unique_in(ctx, body, q, inner, lambda_bound);
+                        && self.callsites_unique_in(ctx, body, q, inner, Some(&bound));
                 }
             }
         }
-        // A lambda body runs when its consumer decides, and how many times is
-        // not a question this walk can answer. `list/map xs (n -> kept s n)`
-        // mentions `s` once and hands it over once per element, so the one-use
-        // count that licenses a hand-over is measuring the wrong thing.
-        // `walk_for_builder` already refuses to license a join site inside a
-        // lambda for the same reason.
+        // A lambda in HEAD position is applied where it stands — `a . (x -> b)`
+        // parses as `App { head: the lambda, args: [a] }` — so it runs exactly
+        // once per evaluation of this expression, which is what the use count
+        // already measures. The streaming-loop idiom this language is written
+        // in (`io/write "" . (_ -> go n acc)`) is all of these, and treating
+        // them as consumers' callbacks costs pendbench its in-place push and
+        // two per cent of its instructions for nothing.
+        //
+        // `lambda_bound` travels through unchanged rather than being cleared:
+        // fusion writes a map's reducer as an immediately-applied lambda inside
+        // a folder, and that folder IS a consumer's callback.
+        if let Expr::App { head, args, .. } = e {
+            if let Expr::Lambda { body, .. } = head.as_ref() {
+                return self.callsites_unique_in(ctx, body, q, scoped, lambda_bound)
+                    && args
+                        .iter()
+                        .all(|a| self.callsites_unique_in(ctx, a, q, scoped, lambda_bound));
+            }
+        }
+        // Anywhere else a lambda body runs when its consumer decides, and how
+        // many times is not a question this walk can answer. `list/map xs
+        // (n -> kept s n)` mentions `s` once and hands it over once per
+        // element, so the one-use count that licenses a hand-over is measuring
+        // the wrong thing. `walk_for_builder` already refuses to license a join
+        // site inside a lambda for the same reason.
         //
         // What survives is the call whose argument the lambda MAKES rather than
         // captures: `_ -> walk (built 500 []) 1` hands over a fresh `[]` every

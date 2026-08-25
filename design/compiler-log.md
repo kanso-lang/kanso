@@ -2834,3 +2834,66 @@ than proposed: the back ends and the interpreter print names, so a table has to
 be reachable at every print site. That is a different shape of question from
 the front end's, and counting it is the next thing anybody starting this should
 do rather than trusting the paragraph above to cover it.
+
+## 2026-08-25 — the interpolation fix was too broad, and the gates that said otherwise were stale
+
+CI caught what this box did not. Four goldens moved on the runner —
+`text_golden` (pendbench's machine code +784 bytes), `instructions_golden`
+(pendbench 988,706,559 to 1,008,534,326, **+2.01%**), `compile_instructions`
+(−1,526), and `cost_golden_pend` (its permanent buffer gone entirely,
+`perm_live_bytes` 629,328 to 0) — while the commit message said every counter
+gate was byte-identical.
+
+**The gates were reading benchmark binaries built before the fix.** The
+counter gates measure `./pendbench` and friends; they do not build them.
+`build_benchmarks.sh` had last run against the old compiler, so nine gates
+reported on code the change had not touched. This log already carries the same
+mistake in another shape — restoring a mutated source and reading the mutant's
+output — and the rule stands unchanged: after changing the compiler, rebuild
+what the gate measures before believing the gate.
+
+### What the cost actually was
+
+pendbench's output is `3798885` before and after, so nothing was miscompiled
+there. The 2% bought no correctness at all: the fix had withdrawn a licence
+that shape was entitled to.
+
+The probe found exactly one lost site, `bench.kso:40:12` — the `push acc
+(made n)` inside `gathered`, whose caller is
+
+    fn built n acc
+      io/write "" . (_ -> gathered n acc)
+
+That lambda is a continuation. It runs once, and `acc` reaching it is one
+hand-over, which is exactly what the use count measured.
+
+### The distinction the parser already draws
+
+`a . f` parses as `App { head: f, args: [a], piped: true }`, so a lambda on the
+right of a dot is the HEAD of its application — applied where it stands. A
+lambda handed to `list/map` is an ARGUMENT. The first runs once per evaluation
+of the expression it sits in; the second runs once per element. Only the second
+breaks the count, and the parser has been telling them apart all along.
+
+So the capture check applies to a lambda in argument position and not to one
+in head position. The streaming-loop idiom this language is written in is all
+head-position lambdas, which is why the first attempt was expensive.
+
+### The fold branch had to be closed too
+
+With that in place the miscompilation came straight back, because fusion
+writes a `map`'s reducer as an immediately-applied lambda *inside a folder*,
+and the folder branch descended into its body with no capture set at all. The
+`scoped` mechanism there says the accumulator is unique, which is the fold's
+own contract; everything else the folder captures is still handed over once per
+element. The branch now carries the capture set like any other consumer's
+callback.
+
+Both facts had to hold at once, and each hid the other: the narrow rule alone
+put the bug back, and the broad rule alone cost 2%. The reduced fixture and
+pendbench's counters together are what pinned them.
+
+Final state: the nine-line reproduction prints `["a" "b" "c"]` on both engines,
+every counter gate passes against freshly built benchmarks, welfare is 84.89
+against its floor, and `cost_golden_pend` is byte-identical to the row it held
+before any of this.
