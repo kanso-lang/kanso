@@ -2736,3 +2736,32 @@ should have been checked against the July ledger before being filed —
 "search the archive before calling an idea new" already says so — and
 re-asking a settled question cost Clay the tenth answering of it. The
 entry leaves the ledger; the blocking section is empty.
+
+## 2026-08-24 — gavel: a build hole is spelled `_`, and fills exactly once
+
+Filed by Clay in the developer chat, another ruling given many times
+and recorded nowhere — the shipping ch03 sample does the thing he
+rejected. His words: "build doesn't work this way, as i said many
+times. you don't supply 'none', you supply _
+
+    build
+      ada = person "ada" _
+      bob = person "bob" ada
+      ada.partner = bob
+
+then you can update with a real value exactly once."
+
+The ruling: inside `build`, a field whose value is not yet available
+is constructed with `_` — a hole, not a value. `none` keeps its one
+meaning, genuine absence, and never means "not wired yet"; a person
+with no partner and a person whose partner has not been wired are
+different things and now look different. A hole is filled by the field
+write with a real value exactly once: unfilled at the block's freeze
+is a refusal, and a second write to the same field is a refusal.
+
+The ratified build-blocks design (2026-07-19) never specified the
+placeholder, which is how `none` crept into
+docs/book/samples/ch03/knot.kso — the defect that surfaced this.
+Implementation is the implementer's: the `_` construction form, the
+exactly-once check, the sample, its golden, and the ch03 prose that
+teaches it.
