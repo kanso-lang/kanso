@@ -3336,3 +3336,90 @@ golden moved. The four callers that build a `bound` set — the shadow checks an
 the literal walk — went on passing with every set empty. Their coverage is
 thinner than it looks, and that is true of the code as it stood this morning
 rather than anything this change did.
+
+## 2026-08-25 — five worklists that were rebuilt for every statement
+
+The entry above found that `walk_children`'s 5,768 blocks in the allocation
+map belong to callers rather than to the walk. This is those callers.
+
+Five places in `check.rs` drive an explicit worklist instead of recursing —
+`let mut stack = vec![e]`, then pop and push the children. Three built that
+vector once per STATEMENT and two once per DECLARATION, and in every case it
+started empty and doubled its way up as the walk filled it. A vector per
+statement, across every statement of every declaration, for a scratch list
+that is empty again by the time the statement ends.
+
+One vector per site now, cleared and reused.
+
+    compile_allocs        80,458 -> 77,249           -3,209
+    compile_instructions  64,175,885 -> 63,492,172   -683,713
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+dhat agrees on where it went: `walk_children` falls from 5,768 blocks to
+4,237, and the rest of the difference is the `vec![e]` itself, which was
+attributed to the calling function rather than to the closure.
+
+The `clear()` is the part worth explaining, because the reuse does not need it
+to be correct. Every one of those loops drains its stack — `while let Some(cur)
+= stack.pop()` runs to empty, and none of the five has a `break`, `continue` or
+`return` inside it, which was checked rather than assumed. So the stack is
+already empty when the next statement starts.
+
+What the `clear()` buys is that nothing has to keep being true. The mutation
+was run: make one of those loops stop early, so it leaves items on the stack
+for the next statement to inherit, and the entire golden error corpus stays
+green. Ten golden tests, every diagnostic compared exactly, and not one of them
+can see a walk that carries expressions from one statement into the next. An
+invariant that load-bearing, with no spec under it, is not one to build a
+performance change on top of; a `clear()` on an empty vector costs a store and
+removes the question.
+
+That the corpus cannot see this is the finding, and it is about the corpus
+rather than about the worklists. It is recorded here rather than fixed because
+the fixture that would catch it — a leak that changes which file a diagnostic
+names — belongs to whoever next touches those checkers.
+
+### The map was blurred, and sharpening it moved the headline
+
+The map in the previous entry, and the one this entry started with, attributed
+every block to the innermost kanso frame valgrind reported. On an optimised
+build that frame is the ENCLOSING function: everything inlined into it collapses
+under its name. The `walk_children` row was one symptom, caught by reading the
+stacks. It was not the only one.
+
+`valgrind --tool=dhat --read-inline-info=yes` resolves the inlined frames, and
+the same 77,261 blocks sort quite differently:
+
+    25,966  33.6%  String::clone
+     5,885   7.6%  Vec::from_iter
+     5,236   6.8%  hashbrown table allocation
+     4,802   6.2%  infer::eval_expr
+     3,707   4.8%  String::from_iter(&char)
+     3,263   4.2%  Vec::clone
+     3,078   4.0%  lexer::lex_line
+
+A third of everything the front end allocates is copying a `String`. That did
+not appear anywhere in the coarse map, because each clone was charged to
+whichever pass had inlined it. `infer::eval_expr` shrank from 7,733 to 4,802
+for the same reason, and its 3-to-5-byte blocks — which no `HashMap<&str, u16>`
+clone could ever produce, since the smallest hashbrown table is over a hundred
+bytes — are the ones that moved out.
+
+Charging each `String::clone` to the first kanso frame beneath it gives the
+list worth working from:
+
+    3,807  Tok::clone                 1,628  inline::direct_aliases
+    2,916  for_each_child closure     1,192  check::declared_names
+    2,366  provenance::Walk::expr     1,046  trmc::rewrite
+    2,292  check::check_file_shadow     919  demand::analyze
+    2,105  compile_module_loaded        843  inline::rewrite
+    1,829  provenance::analyze          788  fuse_enumerable
+
+Provenance is the largest cluster outside the lexer at 4,195 across its two
+frames. Nothing here is acted on yet.
+
+The lesson is the same one the `walk_children` row taught, and it is worth
+stating once: a profile that names functions is naming the frames the compiler
+left behind, not the code that ran. Read the inline info, or read the stacks.
