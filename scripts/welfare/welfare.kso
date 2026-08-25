@@ -151,8 +151,13 @@ compile_counters = text/concat compile_speed_counters compile_memory_counters
 
 counter_names = text/concat run_counters compile_counters
 
+# A comment is not a counter, and one of them carries an `=`: the
+# compile-memory golden names its host as `# measured-on rustc=1.98.0`,
+# which parsed as a counter and died asking for the integer in "1.98.0".
+# Every golden here is commented, so the guard belongs on the shared
+# reader rather than on the one file that grew the line.
 fn pair? l
-  length (text/split l "=") == 2
+  length (text/split l "=") == 2 and text/slice l 1 1 != "#"
 
 fn named l
   (text/split l "=")[1]!

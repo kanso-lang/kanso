@@ -1808,6 +1808,102 @@ concluded to do.
 
 A third of `reserve_rehash` remains, in maps this change does not touch.
 
+## 2026-08-24 — gavel: no tolerance bands — a golden is exact, per platform
+
+Clay ruled the compile-memory entry: "that shouldn't be a tolerance. it
+should be a setting per platform. or a conversion now that you're
+running in the cloud instead of locally on my Mac."
+
+The band was the bug's whole habitat. Two per cent of 871,649 is 17,432
+bytes of slack for a host divergence documented at 56, and main drifted
+376 bytes greener inside it with CI green the entire time. The
+host-pinning that landed on 2026-08-23 already built the other half of
+the ruling: goldens carry a measured-on line and an off-reference host
+refuses to compare rather than fuzzing.
+
+The ruling, in three clauses:
+
+- `bench/compile_memory_golden.txt` holds an exact figure for its named
+  platform and the gate asserts equality — the two-per-cent band dies.
+- Platform is a setting, not a tolerance: the file's shape allows one
+  row per reference host (the CI runner is the reference now that the
+  work runs in the cloud rather than on Clay's Mac), and any host
+  without its row refuses, which the measured-on machinery already
+  does.
+- The stored figure corrects to the runner's true number (872,061,
+  measured twice), and the welfare floor moves with it via `--set`,
+  recorded as a data correction rather than a relaxation: the 84.85
+  floor was ratcheted against a figure the compiler had already left
+  behind, so the correction restores the term to measuring reality.
+
+The entry leaves the ledger with this commit. Implementation — the gate
+edit, the corrected figure, the floor `--set` with this entry cited —
+is the implementer's, in one PR so the red window never exists.
+
+## 2026-08-24 — gavel: a demanded knot counts, and the oracle moves
+
+Clay confirmed the recommendation ("it seems so obvious"), and it is the
+other half of the undemanded-knot gavel: `thunk_allocs` counts the
+program's own demanded work, identically on every engine. An undemanded
+knot is not demanded work, so it counts nowhere — ruled and built as
+#992. A demanded knot IS demanded work, so it counts everywhere: both
+engines report `thunk_allocs=1` for `x = [x]` that something reads. The
+engine that moves is the oracle, whose `knotted` builds its cell without
+touching the counter — bookkeeping brought into line, no semantic
+change anywhere. Unblocked: the fixture pinning a demanded knot's
+allocation shape; values and forces already agree. The entry leaves the
+ledger with this commit.
+
+## 2026-08-24 — `>>` stops at the first run-time failure, which was never open
+
+The ledger's last blocking entry asked whether `>>` accumulates
+run-time effect failures or stops at the first, and Clay's answer was
+that he had answered it — repeatedly. He had. The July B ruling is
+explicit: an err is a true exception, it short-circuits except where
+parallelism makes that impossible, and a parallel join accumulates only
+because every member is already running. `>>` is the sequential
+operator; a run-time failure on its left stops its right, and under the
+deferral gavels that is structural rather than special-cased — the
+right side is a description that never gets demanded. Build failures
+merging on both sides was settled separately and stands; the two
+behaviors differ because the failures happen at different times, which
+is the distinction the operator exists to express.
+
+Recorded as ruled by standing precedent, not as a new gavel. The entry
+should have been checked against the July ledger before being filed —
+"search the archive before calling an idea new" already says so — and
+re-asking a settled question cost Clay the tenth answering of it. The
+entry leaves the ledger; the blocking section is empty.
+
+## 2026-08-24 — gavel: a build hole is spelled `_`, and fills exactly once
+
+Filed by Clay in the developer chat, another ruling given many times
+and recorded nowhere — the shipping ch03 sample does the thing he
+rejected. His words: "build doesn't work this way, as i said many
+times. you don't supply 'none', you supply _
+
+    build
+      ada = person "ada" _
+      bob = person "bob" ada
+      ada.partner = bob
+
+then you can update with a real value exactly once."
+
+The ruling: inside `build`, a field whose value is not yet available
+is constructed with `_` — a hole, not a value. `none` keeps its one
+meaning, genuine absence, and never means "not wired yet"; a person
+with no partner and a person whose partner has not been wired are
+different things and now look different. A hole is filled by the field
+write with a real value exactly once: unfilled at the block's freeze
+is a refusal, and a second write to the same field is a refusal.
+
+The ratified build-blocks design (2026-07-19) never specified the
+placeholder, which is how `none` crept into
+docs/book/samples/ch03/knot.kso — the defect that surfaced this.
+Implementation is the implementer's: the `_` construction form, the
+exactly-once check, the sample, its golden, and the ch03 prose that
+teaches it.
+
 ## 2026-08-25 — the allocation map, and one throwaway vector it found
 
 Every allocation win so far was found by reading the instruction profile and
@@ -2226,3 +2322,594 @@ question about how much code moves rather than about whether the move pays.
 The probe is not in the tree. It was two functions behind an environment
 variable, run once, and reverted — a census is a thing to know, not a thing to
 carry.
+
+## 2026-08-25 — ruling archaeology: what was decided and never became record
+
+Clay: *"the goal here would be to not have anything left to gavel. I feel like
+I keep gathering things and then you ask me the same question 10 to 20 more
+times."* This is one sweep of the log, the archive and every `design/*.md` for
+rulings whose content is not reflected in the ledger, the gavels, or shipped
+behaviour. Seventy-nine attributed rulings across the two log files; four
+findings.
+
+### Gavel 1b, ruled, half built, and its marker lost twice
+
+`### 1b. Foreign structure access, gaveled — per-field pub` sits in the archive
+at 2026-08-14. Named structure reads cross packages, `pub` is granted per
+field, and the gavel explicitly "retires failure_position-style projections".
+
+The construction half was enforced on 2026-08-20 — *"yes 251 is mine"* — and
+that entry says plainly it is "1b implemented rather than a second decision".
+The read half is not built: `pub x` inside a type is still a syntax error, so
+the field-level fence the gavel grants has no way to be written.
+
+The marker has now fallen out of the ledger twice. The first loss was caught
+and written up in the archive under A TRAP WORTH THE SENTENCE — *"the index is
+maintained by hand and can lose a fact; the log is append-only and cannot. They
+disagree in one direction only, so when they do, the log wins"* — and the
+marker was restored in that same commit. It went again in `e3052383`, the
+rewrite that consolidated four files into the one ledger, and has been absent
+since.
+
+Three things follow, and none of them is a question for Clay:
+
+- The ledger's **Dot chains route around accessor privacy (Demeter)** entry
+  sits under "Open, not blocking" in a file whose charter is decisions
+  awaiting Clay. It is not awaiting Clay. It is awaiting an implementer, and
+  it says so itself — "the unbuilt half of per-field `pub`".
+- `failure_position` and `failure_reason` still ship in `lib/json/json.kso`,
+  four arms of them, though 1b retires exactly that shape.
+- kanso#985 is that migration. The 2026-08-17 entry scopes it — "the
+  projections, json_failure_door.kso, and the ch08 suite" — and rules the ch08
+  leg with it. It has sat as a draft since 2026-08-21.
+
+I had this one wrong earlier today and the correction is the point of the
+sweep: I told Clay #985 was a language-surface decision and therefore his. It
+is the implementation of a gavel he gave on 2026-08-14.
+
+### G — eta-reduction as canon — has its answer in a declined experiment
+
+The ledger asks whether to ban the forwarding lambda, `map (c -> fetch c)`
+becoming `map fetch`. The archive answers the premise on 2026-07-25 under
+BUILT, MEASURED, DECLINED: the rewrite is not semantics-preserving here,
+because an `err` records a hop for every function it passes through, so
+removing the lambda changes the provenance the trace prints and native stops
+agreeing with the oracle.
+
+Two forms that print different traces cannot be canonicalised into each other.
+That retires G's premise rather than G's question, which is why this one is a
+recommendation with the reason attached rather than a strike: one word closes
+it.
+
+### `--explain-copies` is part-superseded and the ledger does not say so
+
+The archive records it at 2026-07-27: part-superseded by the counter stack
+(`bytes_peak`, `cohort_kept`, `carry_dedup`, the trend gate, the welfare peak
+terms), with the unserved half — naming the source site of each evacuation
+copy — scoped and waiting on a CLI-surface ruling. The ledger entry describes
+only the unserved half without recording that the rest already landed, which
+reads as a larger open question than it is.
+
+### The assert hako is correctly filed, and this says so
+
+Its licence half was ruled on 2026-08-17 — assertions are ordinary foreign
+rescue — and the ledger entry already carries that sentence. Recorded here so
+the next sweep does not re-derive it.
+
+### What the sweep did not find
+
+`C` (pure/yield), `D` (what a succeeded effect yields), `Z` (errors without
+exceptions) and `AA` (newtype dispatch acceptance) have no prior ruling in
+either log file. They are genuinely open, and the ledger's own caveat about C
+and D — that they were asked before `>>` deferred its right side, so the
+question's shape may not have survived — still stands.
+
+## 2026-08-25 — the residual sweep: what is left to rule, and what never was
+
+The archaeology sweep earlier today asked which rulings never became record.
+This one asks the complement: of everything anybody ever wrote down as open,
+what is still genuinely un-ruled. The ledger now holds that list, each entry
+with a citation and a recommendation, so a sitting can be a yes or a no.
+
+Six candidates were answered already, and each is written here so it never
+reaches Clay a second time.
+
+**A lambda in a chain stage needs its parens, and the grammar says so.**
+design/enumerable.md §9.4 lists it as open and adds "needs a lexer rule". The
+rule is there. `list/map (x -> x * 2)` prints `[2 4 6]`; the same line without
+the parens dies at the arrow with `error[syntax]: expected )`. Both forms were
+run before this was written.
+
+**The `next` primitive has its signature.** §9.5 asks what the role method
+looks like and how consumers drive it. lib/list ships eleven `next` arms —
+`capped`, `bounded`, `cursor`, `counting`, `cycled`, `grown`, `mapped`,
+`paired` and the rest — as one dispatch group, which is the answer the item
+was waiting for.
+
+**Rendering and equality over cyclic values were settled at implementation
+time, exactly as the note predicted.** design/build-blocks.md defers them to
+"the book chapter's examples will force the answer"; archive 2026-07-23
+records the answer twice over — rendering carries a visited set and prints
+`<cycle>` at re-entry, with shared acyclic subtrees still rendering in full,
+and equality on two distinct cyclic values is bisimulation, pinned by
+examples/build_cyclic_eq.kso.
+
+**`run` and `play` separated themselves.** Archive 2026-07-29 left it for
+Clay as a CLI decision, noting his instinct that the two should be separate
+and that only one was documented. Today `play` has its own line in the usage
+text and `run` on a `pub play` file refuses by name: "is a library — nothing
+to run … or run its definitions beside their statements with `kanso play`".
+His instinct is what shipped.
+
+**The three small July spellings were ruled on 2026-08-19** — local imports
+wear the dot prefix, subtypes declare as `type post_body:string`, and
+into-subtype is the ctor form — and **the write-once field marker was ruled
+on 2026-08-24** as `_`, filling exactly once. Both were carried as riders in
+entries that never got a closing line, which is how they stayed findable only
+by reading the whole archive.
+
+### What the sweep changed in the ledger
+
+Gavel 1 of 2026-08-15 listed six riders. Four have closed since — the test
+surface, ch08's pedagogy, and the three July spellings — so the err entry now
+says which two remain and cites where the others went. The arm-based advisory
+migration is not a seventh question: it follows whatever spelling is chosen.
+
+The Demeter entry leaves. This morning's sweep established it is the unbuilt
+read half of gavel 1b and therefore an implementer's job, and a ledger whose
+charter is decisions awaiting Clay should not carry it. It moves to the task
+list.
+
+The July reification form — an err becoming an inert Failure record at the
+opacity and supervisory boundaries — is recorded in the `serve` parking note
+as dead. Gavel 1 replaced it with `rescue`, and the entry describing it
+(archive 2026-07-24) was the only place it ever appeared, so a `serve`
+campaign starting from the archive would have started from a design that no
+longer exists.
+
+design/err-migration.md is deleted. It plans gavel B's world, where an `err`
+is unhandleable and an `(err reason)` arm is a compile error. Gavel 1 replaced
+that absolute with the foreign-only rescue license, so the plan's first two
+compiler items would now be wrong, and none of its three ever shipped. Its one
+additive piece, a `valid_utf8` predicate for lib/json, was never built and is
+not part of what gavel 1 superseded; it goes to the task list rather than
+vanishing with the file.
+
+### Six entries filed, each with its search
+
+Own-origin err arms as dispatch semantics rather than the advisory that ships
+today (derived in design/testing.md with a veto window Clay never used); the
+bare-call cross-module tie, refused by an interim committee ruling that is
+still live in `check_bare_ambiguity` and still says "interim"; whether a
+dependency's render arms should join the root group, recorded once in a
+render-plan.md that no longer exists; `first coll n`; whether `std/` ships
+inside the toolchain binary; and block-born as a dataflow property, which
+widens what the checker admits.
+
+The charter gains a second rule to match the filing gate: an entry carries a
+recommendation. A question with no proposed answer makes a sitting into a
+design conversation, which is the thing that turns one question into ten.
+
+### A grep that lied, and the correction
+
+Half of this sweep's first pass ran `grep -rniE "a\|b"`, which under `-E`
+matches a literal pipe and finds nothing. Three phrases came back empty that
+were sitting in the archive — "dot-prefixed" is in design/hako.md line 45, and
+a direct grep found it a minute later. Every "the search found nothing" line
+in the ledger was re-run without the escapes before it was written down. A
+citation is only worth what the search behind it was worth, and an alternation
+that silently matches nothing is the failure mode a filing gate cannot catch
+by itself.
+
+## 2026-08-25 — a string built from a captured seed shared one buffer, and the history had been recording it
+
+`origin/perf-history` has rows like this in it, and has had for months:
+
+    "compile_alloc_bytescompile_allocscompile_peak_bytescompile_passes":5
+    "allocsalloc_bytesarena_blocksperm_allocsbeat_itersel_parses…":0
+
+Four counter names appended into one key with a single value under it. Five of
+the six groups perf_record writes came out that way, so `compile_peak_bytes`,
+`compile_allocs`, the decode counters, the encode counters, the oneshot
+counters and the basket counters have never been plotted. The row still looked
+like a row, the job stayed green, and the chart drew the dimensions that
+survived.
+
+### What it was
+
+Native miscompiled this, and the oracle did not:
+
+    fn kept prefix n
+      "{prefix}{n}"
+
+    fn go prefix
+      list/to_list (list/map ["a" "b" "c"] (n -> kept prefix n))
+
+    print (go "")
+
+    native  ["abc" "abc" "abc"]        oracle  ["a" "b" "c"]
+
+Every returned string aliased one buffer that each call had appended to. Three
+things are all required, found by bisection: the interpolated parameter is
+first (`"{n}{prefix}"` is correct), the interpolation is in a named function
+seeded by that function's own parameter (a literal at the call site is
+correct), and the call reaches it through `list/map` (a direct call is
+correct).
+
+### Why the analysis said yes
+
+`string_builders` in src/linear.rs licenses a join to write through its seed
+when the seed is finished: every mention of the parameter in the arm is inside
+the join, and `callers_hand_over` says every caller hands the value over. The
+second half was measured by counting mentions, and `go` mentions `prefix`
+once. `list/map` then hands it to `kept` once per element. One textual use,
+three hand-overs.
+
+`walk_for_builder` already knew the shape of this — "a lambda runs when
+somebody else decides", and it refuses to license a join site inside a lambda.
+The caller half had no such refusal.
+
+### The fix, and the one it had to keep
+
+Refusing every call inside a lambda was the first attempt and it was too
+broad: `tests/golden/mem/a_loop_invariant_capture_is_copied_every_rewind.kso`
+went from 2,012 allocations to 2,512 with `push_mut_fast` 496 to 0, because
+its `_ -> walk (built 500 []) 1` hands `built` a fresh `[]` on every run and
+that push is legitimately in place.
+
+So the capture is what the rule turns on, not the lambda. The names a lambda
+binds — its parameters and its own locals — travel down the walk, and a call
+inside it counts as a hand-over only when its argument is built entirely from
+them. `[]` qualifies. A parameter of the enclosing function does not.
+
+Every counter gate, the mem corpus and welfare are byte-identical across the
+fix: 84.87 before and after, floor untouched. The licence that went was one
+nothing sound was using.
+
+### The fixture, and the version of it that proved nothing
+
+tests/golden/micro/an_interpolation_seeded_by_a_capture_is_its_own_string.kso
+pins it on all three engines, and carries the in-place push beside the broken
+join so a future fix cannot buy one by losing the other.
+
+The first draft of that fixture passed on the unfixed compiler. It reached
+`go` through a module constant — `empty = ""` — and a shared constant is not a
+unique source, so the chain never formed and the bug never fired. Watching it
+go red first is what caught that; a fixture written after a fix and never seen
+red is a guess about what the code does.
+
+### What the history cannot get back
+
+The corrupt rows hold no numbers to recover — the values were never written,
+only one per group survived under a mangled key. The file is bounded to 500
+rows and appended on main, so it corrects itself as new commits land rather
+than by any edit here.
+
+## 2026-08-25 — the compile-memory band is gone, and the figure it hid was not the one the gavel named
+
+The no-tolerance-bands gavel of 2026-08-24 is built. Its three clauses, and
+what each turned out to cost:
+
+**The band dies.** `scripts/gates/compile_memory.sh` asserts equality on
+`compile_peak_bytes`. Rounds and visits are counts of the compiler's own
+algorithm, so they stay checked on every host; the peak is checked only where
+its measured-on line says it may be.
+
+**Platform is a setting.** `bench/compile_memory_golden.txt` carries
+`# measured-on rustc=1.98.0` and the gate runs `measured_on.sh` before the
+peak comparison, so an unlisted host refuses instead of measuring. rustc alone,
+for the reason the allocation vein gives: what the front end holds is counted
+by its own allocator, and a good part of the figure is the standard library's
+growth schedules.
+
+**The figure corrects — to 864,300, not the 872,061 the gavel recorded.**
+That number was measured on 2026-08-24 and twelve allocation PRs landed after
+it. Writing it would have shipped a gate red on arrival. The runner's current
+figure was read out of this PR's own CI log, where the gate prints it on every
+run including the green ones:
+
+    front end holds 864300 bytes; golden 871649, band 854217..889081
+
+A container on rustc 1.94.1 reads 864,274 against that 864,300 — twenty-six
+bytes apart, the scale the measured-on prose documents, and the reason the
+line exists. The stored 871,649 was 7,349 bytes above reality, which is what a
+two-per-cent band is for.
+
+Welfare rises 84.87 to 84.89 and is `--set` in the same commit. The move is a
+data correction rather than work: the term had been scoring a peak the compiler
+had already left behind.
+
+### The gate had no mutation, which is why it could rot
+
+The ratchet had rows for `compile_allocs`, `compile_allocs_host`, `compile_ir`
+and `compile_ir_host`, and nothing at all for compile memory. Both are added.
+
+`compile_memory_banded` puts 865,300 into the golden — 1,026 bytes off, 0.119%,
+comfortably inside the two per cent the old gate allowed. It was watched red
+against the new gate and priced against the old one, so the mutation says in
+one number what the ruling was about.
+
+`compile_memory_host_unpinned` moves the measured-on line to `rustc=0.0.0` and
+the gate refuses rather than printing a diff somebody would paste.
+
+Both were proved locally by pinning the golden to the container's own toolchain
+so the peak comparison could be reached at all; the committed file names the
+runner.
+
+### One more thing the line broke
+
+`# measured-on rustc=1.98.0` contains an `=`, and `scripts/welfare/welfare.kso`
+read every line with an `=` in it as a counter. It died on
+`"1.98.0" is not an integer`. Every golden in the tree is commented, so the
+guard went on the shared reader rather than on the one file that grew the line.
+
+## 2026-08-25 — `valid_utf8` has nothing left to do, and the reason is a gavel
+
+The err-arm migration plan was deleted earlier today because it describes gavel
+B's world. Its one additive item was carried forward rather than deleted with
+it: a `valid_utf8` predicate over bytes, "the test-validity-first predicate
+lib/json needs".
+
+It is not needed, and the same gavel that superseded the plan is why.
+
+Under gavel B an err was unhandleable — it rose to the endpoint and an
+`(err reason)` arm was a compile error — so a program that wanted to know
+whether some bytes were valid utf-8 had to ask before converting. Gavel 1
+(2026-08-15) replaced that absolute with the foreign-only rescue license, and
+`std/text` is foreign to every program that imports it. So the question can be
+put to the conversion:
+
+    fn told (err _)
+      "refused"
+
+    fn told _
+      "ok"
+
+    told (text/utf8 [104 105])   ok
+    told (text/utf8 [255])       refused
+
+Both engines agree. lib/json already relies on this shape — `text/utf8` raises
+on an invalid byte and the decoder lets it ride — so nothing in the library was
+waiting on a predicate either.
+
+`tests/golden/runtime/utf8_of_a_slice_names_the_wrapper.kso` pinned the refusal
+reaching the endpoint when nobody asks. Nothing pinned that somebody may ask,
+which is the fact this cancellation rests on, so a micro golden pins it on all
+three engines. Removing its err arm turns the program into an endpoint failure,
+so the fixture discriminates rather than passing on any compiler that happens
+to print two lines.
+
+## 2026-08-25 — BUILT, MEASURED, DECLINED: the lexer's names cannot move into the AST
+
+Recorded because nothing recorded it. The investigation ran, reached an answer,
+and the answer lived only in a session's task list — which is the shape of an
+idea that gets re-attempted in three weeks.
+
+### The map that started it
+
+A per-phase allocation probe, measured on the tree that read `compile_allocs`
+85,788, with 59,593 of it inside watched phases. The tree has since fallen to
+64,884, so read these as proportions of that sitting rather than as today's
+counts:
+
+    lex                       12,600   21.1%
+    load_dependencies         11,348   19.0%
+    check_merged               9,943   16.7%
+    infer                      9,565   16.1%
+    parse                      9,408   15.8%
+    infer/demand               2,813    4.7%
+    canonicalize_bare_aliases  2,107    3.5%
+    fuse_enumerable            1,362    2.3%
+    finish_program               330    0.6%
+
+`load_dependencies` is the unwatched orchestration of the nested compiles; the
+dependencies' own lex, parse, infer and check_merged are watched and already
+subtracted. Lex and parse together are 36.9%, and the reason is one habit:
+`Tok::Ident(String)` owns its identifier and the parser clones it into the AST,
+so every name in the program is allocated twice.
+
+### The idea, and the audit that passed
+
+Move the `String` out of the token rather than cloning it — the parser walks
+forward, so a consumed token's payload is dead.
+
+Inside one parser that holds. `self.pos` is monotonic: its single reassignment,
+`self.pos = arrow_end + 1`, is a forward jump. Of sixteen token reads only
+parser.rs:2317 looks backward, and `tolerated_before` reads a payload solely
+for `Tok::Op`, while `ends_an_atom` matches `Tok::Ident(_)` and `Tok::Str(_)`
+by kind — an emptied payload still answers correctly.
+
+### Where it dies
+
+`P` holds `toks: &'a [(Tok, Span)]`. It borrows the stream, and the same tokens
+are handed to several parsers over overlapping slices: parser.rs:555 and :682
+both build over `&header.tokens`, and :1445 parses a whole line before :1458
+and :1461 re-parse `[..i]` and `[i+1..]` of it. So "consumed" is not a property
+of a token, and emptying one robs a later parser of a name it still needs. The
+borrow checker says the same thing more bluntly, since `toks` is behind a `&`.
+
+Removing the double allocation for real means the AST borrows too —
+`ast::Expr::Ident` owns a `String` — which is a whole-compiler lifetime
+refactor rather than a local change. Measure the ceiling before anyone starts.
+
+### Two corrections to my own notes
+
+parser.rs:2127 does `match tok.clone()`, which I called waste. In the common
+case it is not: the clone happens once and the taken arm uses it, so nothing is
+thrown away unless the match falls through to the error arm. The double
+allocation across lex and parse is real; that site is not the evidence for it.
+
+And the probe disagreed with an earlier `ld/compile_dep` measurement of 2.65 ms
+until the configurations were compared: the probe tree carries no `ld/*`
+watches, so the two are consistent. I nearly filed the apparent disagreement as
+a finding, which would have been this log's own recurring error — evidence
+gathered under one configuration read as evidence about another.
+
+### The probe is not shipped, and the reason is task #20's question
+
+It costs 92,873 instructions on every compile, about one per allocation,
+because letting the library read the binary's counter makes that static's
+address escape. Three arrangements were measured: exporting the counter costs
+173,229, a bare extra atomic 254,029, the OnceLock reader 92,873. Spending
+0.14% of the compiler permanently on a diagnostic is exactly the trade welfare
+cannot see, which is the open ledger entry. It ships with that ruling or not at
+all.
+
+## 2026-08-25 — what the read half of 1b actually needs, measured rather than assumed
+
+The ledger said the fence "needs record-type inference the value sets do not
+do". That was written from reading the code; this is the same claim from
+running the compiler, because the sizing is what anyone starting the work needs
+and a guess about it would be worth nothing.
+
+**A field no type declares is refused before anything runs.** `p.z` where no
+record has a `z` gives `error[name]: no record type has a field 'z'`, pinned by
+tests/golden/errors/field_missing.
+
+**A field the wrong type declares is not.** Two types, one with `name`, and
+reading `p.name` off a `point` gives `error[runtime]: 'point' has no field
+'name'` — on both engines, pinned across all three by
+tests/cross_module_fields.rs. The static check asks whether ANY record has the
+field, never which record is in hand.
+
+**The value sets cannot answer the second question by construction.** `Set` in
+src/infer.rs is a `u16` of fourteen kind bits, and `REC` is one of them. It
+records that an expression may be a record and carries no identity, so there is
+nothing to consult at a field read.
+
+So the fence needs a new analysis: record-type identity per expression, sourced
+at constructors and carried through bindings, parameters and returns the way
+the value sets already are. Then a field read can be refused for the type in
+hand rather than for the program's whole vocabulary.
+
+### The gap is wider than privacy
+
+`error[runtime]: 'point' has no field 'name'` is a refusal this language's own
+doctrine says should not exist — it refuses before anything runs. That is a
+correctness hole, older than the privacy question and independent of it, and
+the same analysis closes both: knowing the type in hand turns the run-time
+refusal static, and knowing whether the field is `pub` for a foreign type is
+one more question asked at the same site.
+
+Worth stating because it changes what the work is for. The privacy fence looked
+like a low-priority nicety with a large prerequisite. The prerequisite is
+carrying a correctness gap of its own.
+
+## 2026-08-25 — the interner's other half: the churn is wide in count and narrow in kind
+
+The census above settled the economics — a few hundred entries standing in for
+eleven thousand copies — and left the churn explicitly unmeasured: "a question
+about how much code moves rather than about whether the move pays". Here is
+that count.
+
+**What holds a name.** 230 sites destructure `Expr::Ident(` across seventeen
+files, led by linear.rs at 34, lib.rs at 32, and check.rs and beat.rs at 31
+each. Beside `Ident` itself, ast.rs declares twenty-eight further String-typed
+name fields — parameters, type names, field names, parents, members, renames —
+which move with it or the compiler carries two representations of a name.
+
+**Most of it gets cheaper rather than harder.** 36 of those sites compare the
+name against something, and a comparison becomes a `u32` test. Of the nineteen
+that call a string method, most call `as_str()` only to index a
+`HashSet<&str>` — hash lookups that also get cheaper. `__memcmp_avx2_movbe`
+has sat in the gate's top fifteen at 1.3 million instructions, and that is
+names being compared.
+
+**The genuine text work is two questions.** "Is this name qualified?" is 21
+`contains('/')` sites, nineteen of them about a declaration or type name and
+two about a file path. "Make a qualified name" is 26 `format!("{qual}/{…}")`
+sites, 23 in lib.rs's module-qualification machinery and three elsewhere, two
+of which are beat.rs diagnostics rather than names. Splitting an identifier
+apart happens in exactly two places, infer.rs:750 and provenance.rs:47; the
+other four `split('/')` sites are splitting file paths.
+
+So the textual work is not scattered string handling. It is one concept —
+whether a name carries a module, and how it gets one — and a symbol that holds
+its module and its base answers the first with a null check and the second by
+construction. The eighty-odd sites collapse into the symbol type rather than
+spreading across it.
+
+**What this does not measure**, and the reason the idea stays recorded rather
+than proposed: the back ends and the interpreter print names, so a table has to
+be reachable at every print site. That is a different shape of question from
+the front end's, and counting it is the next thing anybody starting this should
+do rather than trusting the paragraph above to cover it.
+
+## 2026-08-25 — the interpolation fix was too broad, and the gates that said otherwise were stale
+
+CI caught what this box did not. Four goldens moved on the runner —
+`text_golden` (pendbench's machine code +784 bytes), `instructions_golden`
+(pendbench 988,706,559 to 1,008,534,326, **+2.01%**), `compile_instructions`
+(−1,526), and `cost_golden_pend` (its permanent buffer gone entirely,
+`perm_live_bytes` 629,328 to 0) — while the commit message said every counter
+gate was byte-identical.
+
+**The gates were reading benchmark binaries built before the fix.** The
+counter gates measure `./pendbench` and friends; they do not build them.
+`build_benchmarks.sh` had last run against the old compiler, so nine gates
+reported on code the change had not touched. This log already carries the same
+mistake in another shape — restoring a mutated source and reading the mutant's
+output — and the rule stands unchanged: after changing the compiler, rebuild
+what the gate measures before believing the gate.
+
+### What the cost actually was
+
+pendbench's output is `3798885` before and after, so nothing was miscompiled
+there. The 2% bought no correctness at all: the fix had withdrawn a licence
+that shape was entitled to.
+
+The probe found exactly one lost site, `bench.kso:40:12` — the `push acc
+(made n)` inside `gathered`, whose caller is
+
+    fn built n acc
+      io/write "" . (_ -> gathered n acc)
+
+That lambda is a continuation. It runs once, and `acc` reaching it is one
+hand-over, which is exactly what the use count measured.
+
+### The distinction the parser already draws
+
+`a . f` parses as `App { head: f, args: [a], piped: true }`, so a lambda on the
+right of a dot is the HEAD of its application — applied where it stands. A
+lambda handed to `list/map` is an ARGUMENT. The first runs once per evaluation
+of the expression it sits in; the second runs once per element. Only the second
+breaks the count, and the parser has been telling them apart all along.
+
+So the capture check applies to a lambda in argument position and not to one
+in head position. The streaming-loop idiom this language is written in is all
+head-position lambdas, which is why the first attempt was expensive.
+
+### The fold branch had to be closed too
+
+With that in place the miscompilation came straight back, because fusion
+writes a `map`'s reducer as an immediately-applied lambda *inside a folder*,
+and the folder branch descended into its body with no capture set at all. The
+`scoped` mechanism there says the accumulator is unique, which is the fold's
+own contract; everything else the folder captures is still handed over once per
+element. The branch now carries the capture set like any other consumer's
+callback.
+
+Both facts had to hold at once, and each hid the other: the narrow rule alone
+put the bug back, and the broad rule alone cost 2%. The reduced fixture and
+pendbench's counters together are what pinned them.
+
+Final state: the nine-line reproduction prints `["a" "b" "c"]` on both engines,
+every counter gate passes against freshly built benchmarks, welfare is 84.89
+against its floor, and `cost_golden_pend` is byte-identical to the row it held
+before any of this. `text_golden` and `instructions_golden` are back to their
+old rows too — pendbench's machine code and its billion instructions were the
+whole of the 2%.
+
+**What the fix costs, in the end: 727 instructions in the front end**,
+`compile_instructions` 59,527,334 to 59,528,061, or 0.0012%. That is the
+capture set being built and walked at the lambdas the analysis now looks
+through, measured on the runner and read out of the gate's own output because
+the row is host-pinned. A rise of a thousandth of a per cent to stop the
+compiler emitting three strings that are secretly one is not a trade worth
+arguing about; it is recorded because the rule is that a moved number gets a
+sentence.
+
+The corpus fixture carries the nested case as well as the flat one — a
+per-element `map` inside a once-only continuation, which is where both halves
+of the rule meet. Removing either half turns all three of its lines into
+`["abc" "abc" "abc"]`, so the fixture discriminates on both.

@@ -1,0 +1,52 @@
+# A named function whose interpolation starts with one of its own parameters is
+# the shape the string-builder analysis licenses to write through: `text_build
+# (n - 1) "{s}x"` reads `s` to make the new string and mentions it nowhere
+# else, so by the time the join runs `s` is finished and the join can extend
+# its buffer instead of allocating a fresh header.
+#
+# That licence rests on every caller handing the value over, which the analysis
+# checks by counting mentions. A call inside a lambda breaks the count: `go`
+# mentions `prefix` once and `list/map` hands it to `kept` once per element, so
+# three joins all held the one buffer and the answer read ["abc" "abc" "abc"] —
+# each pair aliasing a string the next call had already appended to. The oracle
+# said ["a" "b" "c"] throughout, which is how this was found: the perf-history
+# rows had been carrying counter names appended into one key for months.
+#
+# So the capture is what the fixture pins, not the lambda. `built` below is
+# called inside a lambda too and keeps its licence, because the argument it
+# hands over is made there rather than caught from outside.
+import "std/io"
+import "std/list"
+
+fn kept prefix n
+  "{prefix}{n}"
+
+fn go prefix
+  list/to_list (list/map ["a" "b" "c"] (n -> kept prefix n))
+
+fn built n acc
+  more n acc (n < 1)
+
+fn more _ acc true
+  acc
+
+fn more n acc false
+  built (n - 1) (push acc n)
+
+# A per-element lambda nested INSIDE a once-only continuation: both halves of
+# the rule at once. The map's callback still gets the capture check even though
+# the continuation around it does not, and this is the shape a future change is
+# most likely to break, because getting either half alone looks like it works —
+# the narrow rule alone put the miscompilation back, and the broad rule alone
+# cost pendbench its in-place push and two per cent of its instructions.
+fn nested p
+  print "{go p}"
+
+fn shown p
+  print "{go p}"
+
+pub play =
+  shown ""
+  >> shown "-"
+  >> io/write "" . (_ -> nested "+")
+  >> print "{length (built 4 [])}"

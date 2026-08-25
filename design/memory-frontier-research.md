@@ -419,7 +419,8 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
   fields of block-born nodes) instead of a syntactic one on the binding.
   That is scoped compiler work, not a research question, and it is what
   4.4 is waiting on. Clay's call, since it widens what the checker
-  admits.
+  admits — filed 2026-08-25 in design/pending-gavels.md as **Block-born
+  as a dataflow property**.
   (Interaction nets stay REFUTED: ~10x slower on numeric code — Asperti's own
   retrospective; no polynomial bookkeeping bound; flat-freeze kills the sharing.)
 - **e-graph fusion over pure IR — DECLINED for want of a customer
