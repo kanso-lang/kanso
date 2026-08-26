@@ -246,11 +246,11 @@
 # Update in place, rewriting the indirection at first evaluation so later reads
 # test nothing, would take these 64 bytes back. It stays the better shape and
 # this is the number it would have to beat.
-jsonbench text=79858
-encodebench text=97010
-oneshot text=97138
-basket text=88978
-widebench text=98098
-deepbench text=62802
-escapebench text=49490
-pendbench text=73362
+jsonbench text=79906
+encodebench text=97058
+oneshot text=97186
+basket text=89026
+widebench text=98146
+deepbench text=62850
+escapebench text=49538
+pendbench text=73410

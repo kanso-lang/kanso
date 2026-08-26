@@ -3918,3 +3918,13 @@ right by inspection, and inspection is what this entry can claim for it.
 divergence was one engine against two, which is the shape the differential law
 exists to surface — and it surfaced only because somebody went looking, since
 no fixture in the corpus merged a failure and then hopped it.
+
+### What the fix costs, to the byte
+
+Every emitted binary grows **48 bytes** — eight of eight, the same number each
+time, which is what a fix that adds one store to a constructor and two to a
+copy should look like. `kanso check lib/json` retires 664 more instructions
+(60,772,083 to 60,772,747), and none of that is front-end work: `src/runtime.c`
+is `include_str!`'d into the compiler, so a longer runtime moves a static in
+the binary and the code and data around it shift. The counter is exact and it
+moved, so it is regenerated and said out loud rather than waved at.
