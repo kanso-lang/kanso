@@ -43,9 +43,10 @@ pub struct Provenance<'a> {
 /// and `std/net/http` are two. A fetched hako is `owner/repo`, and a
 /// subdirectory inside it is its own package the same way.
 ///
-/// Everything a program compiles from its own tree stays the program's, which
-/// is the one place this departs from Go and the one place the older rule was
-/// never in question.
+/// It applies to a program's own modules too, uniformly, because that is what
+/// Go does and Clay named Go. It is also what makes the rule teachable: a
+/// decoder module and the module that reports its failures are two packages,
+/// so the reporting arm is licensed exactly where a reader would write it.
 ///
 /// The rule used to answer `std` for every shipped module. That reading was
 /// invisible until gavel 24 made an err's raiser part of dispatch, and then it
@@ -56,17 +57,12 @@ pub struct Provenance<'a> {
 /// about packages that are built in that aren't literally coming from
 /// different sources, but for the sake of our rule that makes sense."
 pub fn package_of(file: &str) -> &str {
-    if file.starts_with("std/") {
-        return match file.rfind('/') {
-            Some(at) => &file[..at],
-            None => file,
-        };
-    }
-    match file.split_once(".hako/") {
-        Some((_, rest)) => match rest.rfind('/') {
-            Some(at) => &rest[..at],
-            None => "",
-        },
+    let path = match file.split_once(".hako/") {
+        Some((_, rest)) => rest,
+        None => file,
+    };
+    match path.rfind('/') {
+        Some(at) => &path[..at],
         None => "",
     }
 }
@@ -237,36 +233,18 @@ pub fn analyze(program: &Program) -> Provenance<'_> {
         params: HashMap::default(),
         changed: true,
     };
-    // a pub group's callers are not all in view: the package raises errs and
-    // anyone may hand one back, so a published err parameter is assumed to
-    // see its own package's failures. Private groups are fed only by the call
-    // sites actually written. The candidates never change; only whether their
-    // package is known to raise yet.
-    let candidates: Vec<(Group<'_>, usize, Pkgs)> = program
-        .fns
-        .iter()
-        .filter(|d| d.is_pub && !d.synthetic)
-        .flat_map(|d| {
-            let pkg = bit(&table, package_of(&d.file));
-            let group = group_of(d);
-            d.params
-                .iter()
-                .enumerate()
-                .filter(|(_, p)| receives_err(p))
-                .map(move |(i, _)| (group, i, pkg))
-                .collect::<Vec<_>>()
-        })
-        .collect();
+    // The pub self-seed RETIRED on 2026-08-26 with gavel 24's match-time
+    // semantics. It assumed a published err parameter sees its own package's
+    // failures, because the callers are not all in view — which was the right
+    // guess while this pass was the only enforcement, and is the wrong one now
+    // that dispatch enforces the rule itself. Under the seed every pub bare-err
+    // arm was a violation, `std/testing`'s `when_failed` included, so the one
+    // generic foreign rescuer the design turns on could not exist. What
+    // survives is what the written call sites prove.
     let mut rounds = 0;
     while walk.changed && rounds < 200 {
         walk.changed = false;
         rounds += 1;
-        let raising: Pkgs = walk.returns.values().fold(0, |a, b| a | b);
-        for (group, i, pkg) in &candidates {
-            if raising & pkg != 0 {
-                walk.feed(*group, *i, *pkg);
-            }
-        }
         for decl in &program.fns {
             let pkg = bit(&table, package_of(&decl.file));
             let group = group_of(decl);
@@ -302,9 +280,14 @@ pub fn analyze(program: &Program) -> Provenance<'_> {
     Provenance { params: walk.params, table }
 }
 
-/// The rule: a group that may receive an err raised in its own package must
-/// return an err. `returns` is inference's value-set per declaration, which
-/// says whether this group hands back anything that is not a failure.
+/// The rule, and what it now means. Gavel 24 made it dispatch semantics: an
+/// err does not enter an arm its own hako raised, so an arm written for one is
+/// not merely unlicensed — it can never fire, and the failure passes as though
+/// it were not written. This reports the cases the written call sites PROVE,
+/// which is what is left once the pub self-seed retired.
+///
+/// `returns` is inference's value-set per declaration, which says whether this
+/// group hands back anything that is not a failure.
 pub fn violations(
     program: &Program,
     prov: &Provenance,
@@ -330,14 +313,19 @@ pub fn violations(
             .enumerate()
             .any(|(n, p)| receives_err(p) && arriving.get(n).is_some_and(|s| s & mask != 0));
         if own && seen.insert(decl.name.clone()) {
-            let whose = match pkg {
+            // The package is a path; a reader thinks in modules, so name the
+            // last segment — `json`, `testing`, `own_err` — and fall back to
+            // "this program" for a file at the root with no directory above it.
+            let module = pkg.rsplit('/').next().unwrap_or("");
+            let whose = match module {
                 "" => "this program".to_string(),
                 other => format!("`{other}`"),
             };
             out.push(format!(
-                "advisory[license]: `{}` rescues an err raised in {whose} — a \
-                 failure is handled by a package that did not raise it; return \
-                 an err, or let a caller elsewhere name the reason",
+                "error[license]: `{}` has an arm for an err raised in {whose}, and \
+                 that arm can never match — a failure does not enter an arm its own \
+                 hako raised, so it passes as though the arm were not written. Return \
+                 an err, or let a caller in another package name the reason",
                 decl.name
             ));
         }

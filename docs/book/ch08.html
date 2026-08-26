@@ -12,12 +12,13 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">using/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"./using"</span>
+<span class="k">import</span> <span class="s">"std/testing"</span>
 
 ok <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}</span>"</span>
 bad <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": nope}</span>"</span>
 <span class="f">print</span> (<span class="f">describe</span> ok)
 <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"recoded: <span class="i">{encode ok}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> bad told)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run using</div>
     <pre><code>decoded: { "name": "kanso" "tags": ["fast" "simple"] }

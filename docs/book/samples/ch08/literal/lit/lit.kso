@@ -1,7 +1,6 @@
-import "std/testing"
 import "std/text"
 
-type parse_failure
+pub type parse_failure
   position
   reason
 
@@ -11,33 +10,12 @@ bytes_null = [110 117 108 108]
 
 bytes_true = [116 114 117 101]
 
-fn decode_literal s
+pub fn decode_literal s
   cs = text/bytes s
   value_for cs[1] cs 1
 
 fn fail p reason
   err (parse_failure p reason)
-
-pub play =
-  print (show (decode_literal "true"))
-  >> print (show (decode_literal "null"))
-  >> print (show (decode_literal "nope"))
-  >> print (show (decode_literal "?"))
-
-# The reason reaches `told` through `std/testing`'s `when_failed`, which is
-# foreign to this module and so may separate it from the failure. An arm here
-# naming this module's own err would simply never match.
-fn told (parse_failure p reason)
-  "err at {p}: {reason}"
-
-fn show v
-  chosen v (testing/when_failed v told)
-
-fn chosen v false
-  "ok: {v}"
-
-fn chosen _ text
-  text
 
 fn value_for 102 cs p
   word cs p bytes_false false

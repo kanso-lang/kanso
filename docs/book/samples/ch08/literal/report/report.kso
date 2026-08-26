@@ -1,0 +1,12 @@
+import "../lit"
+
+# The err arm lives here rather than beside the decoder, and that it is a
+# DIFFERENT module is the whole reason it may exist: an arm cannot see an err
+# its own hako raised, so the reporting sits one package over from the raising.
+# A foreign reason is named, never destructured — membership crosses an import
+# where structure does not — so its fields are read by name.
+pub fn show (err r:lit/parse_failure)
+  "err at {r.position}: {r.reason}"
+
+pub fn show v
+  "ok: {v}"

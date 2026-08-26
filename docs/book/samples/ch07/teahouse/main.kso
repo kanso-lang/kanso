@@ -1,5 +1,7 @@
 import "./teahouse"
+import "std/testing"
 
 dango = price "dango"
 pocky = price "pocky"
-print (describe dango) >> print (describe pocky)
+print (describe dango)
+>> print (testing/when_failed pocky (r -> "gomen: {r}"))
