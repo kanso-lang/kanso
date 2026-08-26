@@ -3863,3 +3863,58 @@ deserve their own attributed record, and bundling them hides both.
 The instrument question this exposed — a library's compile golden charging its
 test file's dependencies to the library — does not return to the ledger. It
 folds into the already-ruled welfare rebuild, which is the next thing built.
+
+## 2026-08-26 — a merged err came out of a hop nested on native and flat everywhere else
+
+Three failures answer three reasons however they were grouped. That is the
+documented rule, written in a comment directly above the struct that breaks it.
+
+    merged = boom 1 + boom 2
+    three  = through merged + boom 3
+
+    interpreter   ["e1" "e2" "e3"]
+    native      [["e1" "e2"] "e3"]
+
+`through` has no err arm, so the middle failure only hops. `k_hop` rebuilds the
+err box, and it set four of the five fields — `merged` was left to whatever the
+arena had at that address. `k_alloc` bumps a pointer and does not zero, so the
+flag read as a fresh page's zero, the reason list stopped being a list OF
+reasons, and the next merge nested it instead of folding it.
+
+### Four constructors, three of them incomplete
+
+Reading the rest of the family found the same shape three more times:
+
+    k_err          reason origin hops cause merged      complete
+    k_b_wrap_err   reason origin hops cause             merged unset
+    k_hop          reason origin hops cause             merged unset
+    k_deep_copy    reason origin hops                   cause AND merged unset
+
+There is now one constructor, `k_err_box_new`, taking all five. The
+evacuation copy still allocates through the copy arena rather than the main
+one, so it assigns the two it was missing directly. A field added to `KErrBox`
+tomorrow can no longer be forgotten by three call sites at once.
+
+### What is proved and what is not
+
+The hop path has a reproduction, in `tests/golden/micro`, and it was watched
+red first: with the `merged` copy taken back out, native answers 2 where the
+interpreter answers 3. It reads the count through `std/testing`'s
+`when_failed`, which is foreign to the sample and is therefore the licensed
+party that separates the reason from the failure.
+
+The other three are fixed by reading. `k_b_wrap_err`'s omission needs the
+arena to hand back non-zero bytes at that offset to bite, which is not a thing
+a fixture can arrange on demand. The evacuation copy's dropped `cause` should
+lose a "caused by" line from the endpoint report, and the obvious shape — a
+qualified call returning a wrapped err — does not evacuate, so no reproduction
+exists for it yet. That gap is filed rather than papered over: the fix is
+right by inspection, and inspection is what this entry can claim for it.
+
+### Only native
+
+`wasm_rt`'s `rt_err_hop` calls the interpreter's own `hop`, which copies
+`merged` like every other field, so the browser engine was never wrong. The
+divergence was one engine against two, which is the shape the differential law
+exists to surface — and it surfaced only because somebody went looking, since
+no fixture in the corpus merged a failure and then hopped it.
