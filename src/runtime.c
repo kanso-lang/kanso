@@ -1432,6 +1432,11 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             k_copy_map_put(p, ne);
             ne->reason = k_deep_copy(e->reason, cp);
             ne->origin = e->origin;
+            /* the copy allocator does not zero either, and an err that
+               survives an evacuation keeps what it was told and what it
+               wrapped */
+            ne->cause = e->cause;
+            ne->merged = e->merged;
             KHop** tail = &ne->hops;
             KHop* h = e->hops;
             for (; h && !k_survives_x(h, cp->mark); h = h->prev) {
@@ -2008,14 +2013,28 @@ long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
 static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
 
-KValue k_err(KValue reason, const char* origin) {
-    if (!k_not_failure(reason)) return reason;
+/* Every field, every time. The arena bumps and does not zero, so a
+   construction that leaves a field out reads whatever the last user of those
+   bytes wrote. That is not theoretical: k_hop and k_b_wrap_err both skipped
+   `merged`, so a merged err that passed through a function came back claiming
+   its reason list was one reason rather than several, and three failures
+   printed as [["e1" "e2"] "e3"] on native against ["e1" "e2" "e3"] on the
+   interpreter. One constructor now, and a field added later cannot be
+   forgotten by three call sites at once. */
+static KErrBox* k_err_box_new(KValue reason, const char* origin, KHop* hops,
+                              KErrBox* cause, long long merged) {
     KErrBox* box = k_alloc(sizeof(KErrBox));
     box->reason = reason;
     box->origin = origin;
-    box->hops = NULL;
-    box->cause = NULL;
-    box->merged = 0;
+    box->hops = hops;
+    box->cause = cause;
+    box->merged = merged;
+    return box;
+}
+
+KValue k_err(KValue reason, const char* origin) {
+    if (!k_not_failure(reason)) return reason;
+    KErrBox* box = k_err_box_new(reason, origin, NULL, NULL, 0);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -2025,11 +2044,7 @@ KValue k_err(KValue reason, const char* origin) {
 KValue k_b_wrap_err(KValue reason, KValue original, const char* origin) {
     if (!k_not_failure(reason)) return reason;
     if (original.tag != K_ERR) k_die("wrap_err takes a reason and the err it wraps");
-    KErrBox* box = k_alloc(sizeof(KErrBox));
-    box->reason = reason;
-    box->origin = origin;
-    box->hops = NULL;
-    box->cause = k_err_box(original);
+    KErrBox* box = k_err_box_new(reason, origin, NULL, k_err_box(original), 0);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -2040,14 +2055,11 @@ KValue k_err_hop(KValue v, const char* fn) {
     // not theirs to see — the getter prefix no source can spell
     if (strncmp(fn, "Get_", 4) == 0) return v;
     KErrBox* old = k_err_box(v);
-    KErrBox* box = k_alloc(sizeof(KErrBox));
     KHop* hop = k_alloc(sizeof(KHop));
     hop->fn = fn;
     hop->prev = old->hops;
-    box->reason = old->reason;
-    box->origin = old->origin;
-    box->hops = hop;
-    box->cause = old->cause;
+    KErrBox* box =
+        k_err_box_new(old->reason, old->origin, hop, old->cause, old->merged);
     KValue out; out.tag = K_ERR; out.payload = k_ptr(box); return out;
 }
 
