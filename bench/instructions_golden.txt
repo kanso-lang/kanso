@@ -97,21 +97,21 @@
 # This is a language change and the cost is the language's. It is priced in
 # welfare, the floor moves with it and says why, and the log entry names the
 # gavel that permits the fall.
-jsonbench 2910241403
+jsonbench 2910241426
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
 encodebench 9866843910
-oneshot 47277078
-basket 57436155
+oneshot 47277057
+basket 57436178
 widebench 85209624
 deepbench 807094318
 escapebench 258574097
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
-pendbench 987907097
+pendbench 987907135
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around

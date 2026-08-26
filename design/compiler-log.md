@@ -4821,5 +4821,7 @@ and a map nested in a list, because a spec that covers one member of a family
 proves nothing about the others — which is the general form of what went
 wrong, not a detail of this function.
 
-Sixteen bytes of .text a binary, and no counter moved: the map render is not
-on any benchmark's path.
+Sixteen bytes of .text a binary, and the work vein moves by tens: jsonbench
++23, basket +23, pendbench +38, oneshot -21. The map render is on no
+benchmark's path, so what these are is the one comparison arriving at a
+slightly different address.
