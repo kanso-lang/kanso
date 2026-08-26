@@ -651,30 +651,6 @@ fn synthesize_getters(program: &mut ast::Program) {
 /// import wears `./` or `../`; ANY bare path is a hako name and is never tried
 /// as a local directory, whatever its shape, so neither a sibling nor a
 /// subtree called `owner/repo` can shadow one.
-/// A resolved module path with its `x/..` pairs folded away, lexically — the
-/// module may be reached through a directory that is only on the way there,
-/// and the filesystem has nothing to say about that. A leading `..` that
-/// nothing precedes stays, and a fold that would leave nothing keeps the path
-/// it was given.
-fn folded(path: std::path::PathBuf) -> std::path::PathBuf {
-    use std::path::Component;
-    let mut kept: Vec<Component> = Vec::new();
-    for part in path.components() {
-        match part {
-            Component::CurDir => {}
-            Component::ParentDir if matches!(kept.last(), Some(Component::Normal(_))) => {
-                kept.pop();
-            }
-            other => kept.push(other),
-        }
-    }
-    let out: std::path::PathBuf = kept.iter().collect();
-    match out.as_os_str().is_empty() {
-        true => path,
-        false => out,
-    }
-}
-
 fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathBuf, String> {
     if let Some(rest) = path.strip_prefix("std/") {
         let toolchain =
@@ -700,11 +676,23 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
         // the resolved path would put it in every diagnostic the module raises.
         // `../` is the same syntax and was NOT being taken back out: a module
         // reached as `../deep` from `mid/` named itself `mid/../deep` in every
-        // diagnostic it raised and in the hako its errs recorded. `folded`
-        // below takes the pairs out.
-        let bare = path.strip_prefix("./").unwrap_or(path);
-        let relative = base.join(bare);
-        let file = base.join(format!("{bare}.kso"));
+        // diagnostic it raised and in the hako its errs recorded.
+        // Each leading `../` is a step up taken here rather than left in the
+        // path: `base` loses a component and the name loses the prefix. A
+        // `..` with nothing above it stays, because there is nothing to fold
+        // it into. The walk is lexical on purpose — the directory a module is
+        // reached THROUGH need not be one it lives under, and asking the
+        // filesystem would also make every path absolute, into every
+        // diagnostic, which is the thing being fixed.
+        let mut here = base.to_path_buf();
+        let mut bare = path.strip_prefix("./").unwrap_or(path);
+        while let Some(above) = bare.strip_prefix("../") {
+            let Some(parent) = here.parent() else { break };
+            here = parent.to_path_buf();
+            bare = above;
+        }
+        let relative = here.join(bare);
+        let file = here.join(format!("{bare}.kso"));
         // one name, two spellings on disk, and both at once is a question the
         // spelling cannot answer
         if relative.is_dir() && file.is_file() {
@@ -714,10 +702,10 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
             ));
         }
         if relative.is_dir() {
-            return Ok(folded(relative));
+            return Ok(relative);
         }
         if file.is_file() {
-            return Ok(folded(file));
+            return Ok(file);
         }
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a dot-prefixed path names a \
