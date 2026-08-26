@@ -3446,7 +3446,114 @@ and "make a qualified name" (26 `format!` sites, 23 of them in lib.rs's
 qualification machinery). A name carrying its module and base answers both
 structurally, and it is a fraction of the conversion. Whoever returns to this
 should measure that, not the interner.
+## 2026-08-25 — gavel: welfare measures what compiling costs, not what it counts
 
+Clay ruled the sweep's first entry, and against its recommendation. Told
+that welfare's compile-speed terms are front_end_rounds, front_end_visits
+and emitted_lines — counts of what the compiler decided to do rather
+than what doing it cost — his words: "then you have a MASSIVE deficiency
+in your welfare metric. my god." The recommendation was to leave the
+model alone and note the gap in prose; the ruling is the opposite.
+
+The ruling: welfare's compile-cost model measures actual cost. The terms
+that stand in for compile speed become the measured ones — instructions
+retired and allocator traffic, the two deterministic host-pinned veins
+that already exist (bench/compile_instructions_golden.txt and
+bench/compile_allocs_golden.txt) — so that making the compiler genuinely
+faster or leaner always moves the score, and a 26% front-end improvement
+can never again land silent. compile_peak_bytes stays as the memory
+term; the no-tolerance-bands gavel already un-stales its reading. The
+proxy counters stay pinned in their goldens as regression tripwires;
+they stop being scored.
+
+Weights and satiation for the measured terms are the holder's to price
+from evidence, the way the 2026-08-01 weights session did — that is
+implementation under the ledger's own charter, and it does not come
+back here. The floor re-ratchets from the rescored model in the same
+change, recorded as a model correction.
+
+The entry leaves the ledger with this commit. Fifteen of the sweep's
+sixteen remain with Clay.
+
+## 2026-08-25 — gavel: an arm never sees its own err, and it was never advisory
+
+Clay ruled the sweep's own-origin entry, emphatically: "it has certainly
+never been 'advisory' whatever the hell that means." The doctrine — no
+arm may match an err born in its own hako — was ruled with gavel 24 and
+was never optional; the warning-only enforcement that ships today
+(src/provenance.rs raising advisory[license] while the program compiles
+and runs) is a defect against the ruling, not a design state.
+
+The ruling ratifies the committee's derivation from design/testing.md:
+clause 1 is dispatch semantics. At match time, an err whose origin hako
+equals the arm's hako does not match the arm — infectiousness carries it
+onward exactly as if the arm were absent. The pub self-seed retires; the
+static refusal stays for what provenance proves without it; when_failed
+and the blessed generic foreign rescuers keep working with no exemption
+written for them, because a foreign err still matches. Build it now:
+the advisory becomes the semantics, and a program that rescues its own
+failure stops being expressible.
+
+The entry leaves the ledger with this commit. Fourteen of the sweep's
+sixteen remain.
+
+## 2026-08-25 — gavel: the floor is absolute against refactorings, permeable to the language
+
+Clay ruled the blocking entry, and with a sharper principle than either
+framing on offer: "welfare can absolutely fall if you are considering
+language functionality as part of the welfare score. of course the more
+correct way of expressing this is just that welfare can fall in order to
+implement a language feature. it can't fall from a refactoring so to
+speak."
+
+The ruling: the welfare floor is absolute against behavior-preserving
+change — a refactoring that costs welfare is worse code and stays
+refused, no exceptions. A change to what the language IS — a feature, a
+doctrine-compelled migration — may move the floor down, with the fall
+recorded and attributed to the change that spent it, because the thing
+being measured changed. Hunting a compensating optimization in the same
+pull request to hold the number flat stays forbidden as gaming the
+index.
+
+Applied: kanso#1034 implements gavels 1b and 24, so it merges and the
+floor moves to 84.79, recorded as a language-change fall. The instrument
+question the entry raised — the library's compile golden charging the
+test file's dependencies to the library — folds into the already-ruled
+welfare rebuild ("welfare measures what compiling costs, not what it
+counts", this log, 2026-08-25): measure the thing the golden claims to
+measure. It does not return to the ledger as its own entry.
+
+The entry leaves the ledger with this commit.
+
+## 2026-08-25 — the floor gavel, stated precisely by Clay
+
+Clay refined the ruling within the hour, and the refinement replaces the
+word "refactoring" with what he meant: "technically they aren't
+refactorings necessarily — they can actually have real impacts on
+performance both in terms of compilation speed and resources and actual
+run time performance. but those are things that can be improved
+independently, where if one gets sufficiently better another can get a
+little bit worse as long as the overall welfare goes up. but you cannot
+just reject an actual language feature in the name of welfare score."
+
+Two clauses, precisely:
+
+- **Non-feature work trades freely inside the index.** A change that is
+  not a language feature — performance work, implementation work — may
+  worsen any individual dimension (compile speed, compile memory, run
+  time) if another improves enough that the AGGREGATE welfare rises.
+  The floor binds the composite, never a single term. This is what the
+  weighted index is for.
+- **A language feature is never hostage to the score.** A feature or
+  doctrine-compelled change cannot be rejected in the name of welfare.
+  When it costs, the floor moves down with the fall recorded and
+  attributed. The index measures the implementation; it does not govern
+  the language.
+
+The forbidden move stands: packaging a compensating optimization into a
+feature's own pull request to hide its cost is index-gaming either way —
+the feature's fall and the optimization's gain each deserve their own
+attributed record.
 ## 2026-08-26 — the error corpus had no ratchet row, and now has one
 
 The ratchet's rule is one row per CI job, and `specs (unit, golden,
@@ -3604,6 +3711,67 @@ the failure mode that had no business waiting for a nightly at all. A gate that
 stays green under its mutation still costs a build to detect, still runs at
 09:00, and still has no addressee.
 
+## 2026-08-26 — the floor is permeable to the language, and now the trend gate knows it
+
+Clay ruled on 2026-08-25 that the welfare floor is absolute against
+refactorings and permeable to the language: a feature or a doctrine-compelled
+change is never rejected for the score. It lands, the floor moves, and the fall
+is recorded against the change that spent it. Compensating-optimization
+bundling stays forbidden in both directions.
+
+The ruling landed in the log yesterday and one gate had not heard it.
+
+### The fixture is #1034
+
+Obeying gavels 1b and 24 costs lib/json four counters and improves none of
+them: `front_end_rounds` 40 -> 42, `front_end_visits` 17,786 -> 17,886,
+`compile_peak_bytes` 864,300 -> 870,289, `compile_instructions` 59,717,892 ->
+60,772,083. The welfare floor was moved by hand to 84.79 with the fall
+attributed in `bench/welfare_floor.json`'s history, which is what the ruling
+asks for. CI then said:
+
+    FAIL  a pure regression: something got worse and nothing got
+    better. that trade has no other side, and it is the one move
+    the gate refuses outright.
+
+A branch obeying a gavel could not merge. The gate was written before the
+ruling and was right for what it knew — the pure regression it refuses is a
+refactoring that quietly spends the score — but a language change spending the
+score is exactly the case the ruling carves out, and the gate had no way to
+tell the two apart.
+
+### What tells them apart
+
+The attribution itself. A pure regression now passes when the branch adds an
+entry to the history array in `bench/welfare_floor.json`; without one it is
+refused as before. That is the same posture the gate already takes toward the
+compiler log — it checks that a sentence exists, not that the sentence is
+right — and it puts the escape exactly where the ruling puts the record.
+
+It is not a hole a refactoring can crawl through by accident. To use it a
+change must move the floor and write down what it spent, in the ledger whose
+whole readership is Clay, beside fifty-odd entries that say what each earlier
+move bought. A refactoring that does that has not evaded the rule; it has
+signed its name to breaking it.
+
+The narrower reading — accept the fall only when the floor went DOWN — was
+considered and dropped. A rise cannot reach this code at all: welfare reads the
+same counters, so a branch that raised the number improved one of them, and
+`better` is non-empty before the refusal is reached. The extra condition would
+never fire, and a condition that cannot fire is a claim about the code that the
+code does not make.
+
+### Watched red, then green, on the same worsening
+
+    compile_peak_bytes=999999999, no history entry     exit 1, refused
+    compile_peak_bytes=999999999, history entry added  exit 0, attributed
+
+Same counter, same direction, same magnitude; only the record differs. The
+first of those is now a ratchet row — `a_counter_worsens_for_nothing` — because
+the trend gate had none. It is a step inside the cost-goldens job, and the
+ratchet's own coverage check is per JOB, so a step-level gate hides behind the
+rows its neighbours carry. That is a general gap and this closes one instance
+of it, not the gap.
 ## 2026-08-26 — json stops reading its own failure (written 2026-08-21, landed today)
 
 The work below was done on 2026-08-21 and sat in a draft pull request until
