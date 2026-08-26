@@ -64,86 +64,77 @@ July spellings"). These two are what remain.**
 
 - **Spelling**: names and syntax for annotate and rescue — combinator
   call vs marked arm on a chain — and whether the existing chain
-  err-arm syntax is annotate's surface (the chain's value arm and err
-  arm are bind's and annotate's callbacks already, spelled as dispatch
-  arms).
+  err-arm syntax is annotate's surface.
 
-  **What the rule already is, stated from the language's side.** A bare
-  parameter refuses a failure. `fn f x` does not match when the argument
-  is an err, so the body never runs and the err comes back out with a hop
-  recorded naming the group it did not enter. Closures, constructors and
-  builtins have no arms to select between and short-circuit before entry,
-  which lands in the same place. Those merge: two failing operands of `+`
-  come back as one err carrying both reasons
-  (tests/golden/micro/two_failures_in_one_operation_merge.out). A declared
-  group that no arm matches hands back the FIRST failing argument instead,
-  hopped. Worth knowing before the spelling is settled: the merge is a
-  property of operators and constructors, not of calls. (`wrap_err` is the
-  one hole in the refusal, because its second argument IS the err it
-  wraps.)
+  **The question is where err-handling LIVES, not how tightly it is
+  contained.** That is Clay's framing, 2026-08-26, and it reframes what
+  the two worlds below are about. Containment was settled by the
+  round-trip ruling: a foreign party may hand a reason back to its
+  raiser, "and if the caller wants to pass it back to you, so be it".
+  What is open is whether access to a wrapped value goes through
+  dispatch or through a named function.
 
-  An arm takes an err only by writing `err` in the parameter — `fn f (err
-  reason)`, or `fn f (e err)` for the whole failure. Such an arm matches
-  only a FOREIGN err, one raised in a hako other than the one the arm's
-  file sits in, and having matched it may return anything at all. An err
-  from your own package never enters your own arm: dispatch skips it and
-  the failure passes as though the arm were not written, which is why
-  `provenance.rs` reports such an arm with `error[license]` — it can
-  never fire. That pass states the rule in one line: *a group that may
-  receive an err raised in its own package must return an err.*
+  **What the rule is today, from the language's side.** A bare parameter
+  refuses a failure: `fn f x` does not match when the argument is an
+  err, so the body never runs and the err leaves with a hop. An arm
+  takes one only by writing `err` in the parameter, and such an arm
+  matches only a FOREIGN err. Your own package's err never enters your
+  own arm — dispatch skips it and the failure passes as though the arm
+  were not written, which is why `provenance.rs` reports it with
+  `error[license]`.
 
-  So: must a function that takes an err return an err? Inside your own
-  package, yes, and there is no way to write the function that swallows
-  your own failure. Outside it, no — a foreign function that asks for an
-  err at the parameter may return whatever it likes, and that is the
-  whole of rescue.
+  Verified on both engines rather than read off the passes: a bare
+  parameter passed the err through with a hop; `(err w:dep/woe)` in
+  another package matched and returned a string; the same arm inside the
+  raising package matched nothing, not even its own `_` fallback.
 
-  Run on both engines to check the paragraphs above rather than reason
-  them: a two-package program where `dep` raises and `app` reads. A bare
-  parameter in `app` passed the err through, hop recorded. An `app` arm
-  written `(err w:dep/woe)` matched and returned a string, identically on
-  native and the interpreter. The same arm written inside `dep` itself
-  matched nothing — not even its own `_` fallback, which refuses failures
-  too — and the err reached the entry having passed through the group.
+  **World A — err-handling lives in dispatch.** What ships. Every
+  pattern match asks whether its argument is a failure and whose. The
+  cost is not the rule, it is where the rule sits: `match_one` carries
+  an err case on every pattern shape, `match_params` and the dispatch
+  loop thread the arm's package through every match, `provenance.rs`
+  exists solely to answer "may this arm see its own err" by fixpoint
+  over the call graph, and native and wasm each carry a
+  `k_not_own_err` beside an interned package literal per declaration.
+  The failure mode is a silently dead arm: written, never fired, and
+  only a whole-program pass can tell you.
 
-  **World A — rescue is a keyword.** `err` may be named only inside a
-  `rescue` construct; a parameter may never spell it. The word is already
-  reserved and refused by the lexer (src/lexer.rs:481, beside try, catch
-  and except), so taking it breaks no program. What it buys: one grep
-  finds every place a package handles somebody else's failure, and there
-  is a single node for any later rule to hang off. What it costs: rescue
-  stops being a function. `when_failed` in design/testing.md is a two-arm
-  function that the harness partially applies and passes around; under a
-  keyword it cannot be written in kanso at all, and every generic
-  combinator over failure — bind and annotate included — needs a keyword
-  form or a builtin beside it. The construct also needs its own way to
-  select on the reason's shape, which is the arm selection the language
-  already has.
+  `_:some` swallowing a foreign failure (fixed 2026-08-26, #1052) is
+  this world's characteristic bug. It needed no `err` anywhere: an
+  annotation meaning "not none" reached an err because
+  `type_match_depth` had to know about errs at all.
 
-  **World B — rescue is an ordinary function, licensed by provenance.**
-  What ships today. What it buys: no second calling convention, and
-  rescue composes — it partially applies, it can be passed to `map`, it
-  can be wrapped. The license needs no annotation because it is computed,
-  which is the part a marker cannot do: a package can raise an err whose
-  reason type belongs to somebody else and then rescue its own failure
-  through the borrowed name. It is enforced twice, by dispatch refusing
-  the match and by the license check reporting the dead arm. What it
-  costs: the marking is per-parameter, so "every rescue in this package"
-  is a grep for `err` in parameter position rather than for one word. And
-  a package cannot declare its errs unrescuable by anybody — the only ban
-  is on rescuing your own, which is what the round-trip ruling settled:
-  "you ensured it would bubble up to the caller, and it did. if the
-  caller wants to pass it back to you, so be it."
+  **World B — err-handling lives in named functions.** `bind` unwraps,
+  hands the value to a continuation, re-wraps. `annotate` and `rescue`
+  hand out the err or its reason and enforce the package constraint
+  themselves, in one place, at the call. Dispatch goes back to being
+  dumb: a parameter is a parameter, and an err never reaches a user arm
+  because propagation short-circuits before dispatch. Everything in the
+  paragraph above is deleted. The refusal becomes a diagnostic at the
+  rescue site naming the raising package, rather than an arm that can
+  never match.
 
-  **RECOMMENDATION: World B, and the existing err arm is annotate's
-  surface.** This reverses the recommendation this entry carried before
-  the two worlds were written out, which was that rescue earns a keyword.
-  The keyword's price is that rescue can no longer be a value, and
-  `std/testing` is the standing proof the project needs it to be one: the
-  harness's `when_failed` is a plain function today and the whole test
-  surface rests on it being one. The visibility a keyword buys is real
-  but smaller than it looks, because an err-taking parameter is already
-  written at the declaration where a reader meets it.
+  No rule of the form "a function that takes an err in any argument
+  position must return an err" is needed, because a function cannot
+  receive one it did not ask a combinator for.
+
+  **What does not change either way.** Propagation stays implicit —
+  `f (g x)` is `f (g x)` whether or not `g` failed — so err-in/err-out
+  remains a FACT about calls; it stops being a rule anybody writes down
+  or a checker enforces. And the merge semantics are propagation rather
+  than access: the construction divergence of 2026-08-26 (native and
+  wasm returned the first failing field where the interpreter merged)
+  was three engines implementing propagation separately, and World B
+  does not collect that win.
+
+  The chain's err arm survives as surface in either world: desugar it to
+  `bind`/`annotate` calls rather than to dispatch arms, and the spelling
+  programs already use and the book already teaches is untouched.
+
+  **RECOMMENDATION: World B.** This is the second reversal in a day and
+  the reason is structural rather than about containment, which is what
+  the first two arguments got wrong. World A buys nothing World B
+  cannot state more directly, and it pays for it in every dispatch.
 
 - **Construction enforcement**: reason building module-private is
   stated by the doctrine, unnecessary for soundness now that provenance
