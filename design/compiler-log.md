@@ -3485,3 +3485,16 @@ The mutation was applied by hand first, `cargo build --release` came back
 clean, and `cargo test --release --test golden error_corpus` FAILED. Only then
 was it reverted and the row written. The row is therefore written against a
 mutation already known to work, rather than a mutation guessed at to fit a row.
+
+The filter is proven non-empty by the same run. A gate that matches no test
+passes forever, which is the failure this file is named after, and
+`cargo test --release --test golden error_corpus` reported "0 passed; 1 failed;
+9 filtered out" — exactly one test, and it went red.
+
+### A count in a comment, drifting
+
+`tests/errors_module.rs` opened by saying the corpus holds 161 fixtures. It
+holds 164. Nothing checks that number and it goes stale every time somebody
+adds a mistake to the corpus, so the sentence now says a fixture per mistake
+and names no figure. Where a count carries weight it belongs in a golden, where
+CI reads it.
