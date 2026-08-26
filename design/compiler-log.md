@@ -4109,6 +4109,84 @@ compiler's own path calls it.
 `module_differential` and `diagnostic_coverage` rowed only by their neighbours.
 They are the same debt this entry pays down, and they are OPEN.
 
+## 2026-08-26 — the trend gate could not read three runtime veins, one of them at all
+
+Searched this file and `log/compiler-log-archive.md` for `instructions_golden`,
+`text_golden` and `emitted_golden` beside the trend gate: the entry earlier
+today added the two MEASURED COMPILE veins and named no runtime one. This is
+that entry's argument applied one vein down, and the same fixture found it.
+
+`bench_goldens` held eight files. It did not hold
+`bench/instructions_golden.txt`, `bench/text_golden.txt` or
+`bench/emitted_golden.txt` — so the listing that exists to say WHICH WAY every
+counter went could not see what a program costs to run, how big its machine
+code is, or what the compiler wrote for the decoder.
+
+Four of `instructions_golden`'s eight rows are welfare's run-speed terms.
+Half the score's inputs were invisible to the gate meant to watch the score's
+inputs, which is word for word the case the compile veins were added on.
+
+### One of the three was not merely unlisted — it was unreadable
+
+The reader takes tokens containing exactly one `=`. `emitted_golden` is
+`calls=1777` and `text_golden` is `jsonbench text=80450`, so both would have
+parsed the moment they were listed. `instructions_golden` writes `jsonbench
+2912170881`, which contains no `=` at all, so every line yielded no pairs — and
+no pairs is indistinguishable from no movement. The file could have been
+listed and still read as empty.
+
+### Measured, not argued
+
+Same branch, `jsonbench` forced from 2,860,478,794 to 2,999,999,999, a rise of
+139,521,205:
+
+    the gate as it stands on main   exit 0, no output at all
+    the gate with the three veins   exit 1, names work_jsonbench, refuses
+
+The same forcing on the other two, with the reader fixed: `emitted_lines
+11,585 -> 99,999` and `text 647,120 -> 667,120`, both named as worsenings.
+
+### What the names are, and why text sums
+
+Direction is looked up on the counter with its FILE PREFIX STRIPPED, which the
+first draft of this change got wrong: `work_jsonbench` went in the table, the
+lookup asked about `jsonbench`, and a 139-million rise was reported as an
+improvement. Caught because the fixture was run rather than reasoned about — a
+gate that reports the wrong direction is worse than one that says nothing,
+because it tells you the thing you should be worried about is fine.
+
+`emitted_golden`'s four counters needed no table entry at all: `lines`,
+`calls`, `branches` and `defines` are there already for `compile_golden`. They
+do need the file prefix, so the decoder's IR line count and a compile sample's
+line count are two sums rather than one — otherwise a rise in either could hide
+a fall in the other.
+
+`text_golden`'s eight rows share the field name `text`, so it sums to a single
+number over the binaries. That is the treatment `compile_golden`'s five samples
+already get, and the per-golden exact diff is what says which binary moved.
+
+### A second row rather than a repointed one
+
+`a_counter_worsens_for_nothing` stays on `compile_instructions`.
+`a_runtime_counter_worsens_for_nothing` is new and worsens `jsonbench`. Two
+rows, because the two files are read by DIFFERENT CODE — one by the field
+reader that has always worked, one by the bare-pair reader added here — so a
+row proving the first proves nothing about the second. Both proved red in a
+worktree of HEAD and green on restore.
+
+### Three more, found by asking the question properly
+
+Listing `bench/*.txt` and subtracting the files this program names turned up
+three others nobody had listed: `cost_golden_escape.txt`, `cost_golden_scan.txt`
+and `cost_golden_wide.txt`. All three are `name=value` like their four listed
+siblings, so nothing had to be taught to read them and they go in here rather
+than into a note — the list was short by three, which is a plainer failure than
+the unreadable vein above and turned up the same way.
+
+`scan_allocs` forced from 3,977,890 to 4,977,890 is now named and refused; on
+main it was silent. Every file in `bench/` is read by this gate as of this
+entry, which is a property worth stating because it is the one that decays.
+
 ## 2026-08-26 — an arm cannot see an err its own hako raised, on all three engines
 
 Gavel 24, clause 1, built. Clay's words at the sitting: *it was never advisory.*
@@ -4265,9 +4343,13 @@ counters, because `bench/instructions_golden.txt`, `bench/text_golden.txt` and
 `bench/emitted_golden.txt` are not in `bench_goldens`. Only the per-golden
 exact diff caught them.
 
-That is the blindness the entry above this one closed for the two measured
-compile veins, still open one vein down — and it matters more here, because
-`instructions_golden` is where welfare's four run-speed terms come from. Half
-the score's inputs are invisible to the gate meant to watch the score's inputs,
-which was that entry's own argument. OPEN, filed as its own change rather than
-folded in, because it touches the gate this branch is being judged by.
+That was the blindness #1044 closed for the two measured compile veins, still
+open one vein down — and it mattered more here, because `instructions_golden`
+is where welfare's four run-speed terms come from, so half the score's inputs
+were invisible to the gate meant to watch the score's inputs.
+
+Filed as its own change rather than folded in, because it touches the gate this
+branch was being judged by, and closed by the entry directly above this one
+while this branch waited on CI. The finding stands as recorded: the numbers in
+this entry are the ones that went past the gate unnamed, and they are why that
+change exists.
