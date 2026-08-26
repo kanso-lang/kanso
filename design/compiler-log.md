@@ -4018,3 +4018,38 @@ program its header names, and both figures above are exact for theirs. It is a
 reason to say plainly what a move of this size means when the diff is bytes of
 embedded text: nothing about the front end's work, and the row is regenerated
 because it is exact, not because the compiler got slower or faster.
+
+## 2026-08-26 — the trend gate could not see two of the four compile veins
+
+The gate that exists to refuse silent counter movement read
+`bench/compile_golden.txt` and `bench/compile_memory_golden.txt` and neither of
+the two MEASURED compile veins. So `compile_instructions` and `compile_allocs`
+could move by any amount and the listing said nothing.
+
+That is not hypothetical. It happened twice today. #1034's instruction rise of
+1,054,191 never reached the gate, and #1040's runtime edit moved the same row
+three separate times with the gate silent each time. Only the per-golden exact
+diff caught them, which is a different job: the diff says a row moved, the
+listing says WHICH WAY every counter went and refuses a change where everything
+went the wrong way.
+
+The blindness mattered more from 2026-08-26, because those two veins became
+welfare's compile-speed terms that morning. The gate meant to watch the score's
+inputs could not see half of them.
+
+### Measured, not argued
+
+Same branch, same worsening — `compile_instructions` forced to 99,999,999, a
+rise of forty-three million:
+
+    the gate as it stands on main   exit 0, no output at all
+    the gate with the two veins in  exit 1, names the counter, refuses
+
+### The ratchet row moves to the vein that was blind
+
+`a_counter_worsens_for_nothing` used to worsen `compile_peak_bytes`. It worsens
+`compile_instructions` now. Each vein already has its own exact-diff gate with
+its own row; what this row proves is that a vein reaches the LISTING, and
+pointing it at the counter that was invisible is what keeps it from going
+invisible again. Proved red in a worktree of HEAD, not only in the working
+tree.

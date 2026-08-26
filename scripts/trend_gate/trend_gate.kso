@@ -55,11 +55,17 @@ lower_e = ["rounds" "visits"]
 
 lower_f = ["front_end_rounds" "front_end_visits" "compile_peak_bytes"]
 
+# The two MEASURED compile veins. They became welfare's compile-speed terms on
+# 2026-08-26 and this gate could not see either of them, so an instruction
+# count could move by a million with the listing silent — which is exactly what
+# it did while gavel 24 was being built, and only the per-golden diff caught it.
+lower_g = ["compile_instructions" "compile_allocs"]
+
 lower_ab = text/concat lower_a lower_b
 
 lower_cd = text/concat lower_c lower_d
 
-lower_ef = text/concat lower_e lower_f
+lower_ef = text/concat lower_e (text/concat lower_f lower_g)
 
 lower = text/concat lower_ab (text/concat lower_cd lower_ef)
 
@@ -83,13 +89,19 @@ bench_modules = [["bench/compile_golden_modules.txt" "module_"]]
 
 bench_memory = [["bench/compile_memory_golden.txt" ""]]
 
+bench_ir = [["bench/compile_instructions_golden.txt" ""]]
+
+bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
+
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
 
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_de = text/concat bench_memory bench_pend
+bench_compiled = text/concat bench_ir bench_traffic
+
+bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
 
 bench_goldens = text/concat bench_ab (text/concat bench_cd bench_de)
 
