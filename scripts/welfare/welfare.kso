@@ -137,7 +137,24 @@ held_and_scan = text/concat held_memory scan_memory
 
 run_memory_counters = text/concat codec_memory held_and_scan
 
-compile_speed_counters = ["front_end_rounds" "front_end_visits" "emitted_lines"]
+# What compiling COSTS, not what it counts. Rounds, visits and emitted lines
+# are the compiler's own bookkeeping — how many times a fixpoint went round,
+# how many expressions a pass looked at, how many lines came out. They are
+# proxies, and on 2026-08-24 a change took `kanso check lib/json` from 90.9
+# million retired instructions to 67.2 million with all three byte-identical.
+# A quarter of the work went away and the dimension measuring compile speed
+# scored the change at zero.
+#
+# So the measured veins carry it now: retired instructions and allocation
+# traffic, both counted rather than inferred. The three proxies keep their
+# goldens and keep failing CI when they move — a dropped fixpoint round is
+# still news — they simply stop being the thing the score is made of. A
+# tripwire and a term are different jobs, and the proxies were only ever good
+# at the first.
+#
+# Ruled by Clay 2026-08-25: "welfare measures what compiling costs, not what
+# it counts."
+compile_speed_counters = ["compile_instructions" "compile_allocs"]
 
 compile_memory_counters = ["compile_peak_bytes"]
 
@@ -224,7 +241,7 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"]! + m["held_peak_bytes"]! + m["perm_peak_bytes"]!
 
-fn measured decode encode oneshot basket comp held work scan
+fn measured decode encode oneshot basket comp held work scan ir traffic
   d = [["decode_allocs" decode["allocs"]!]]
   db = [["decode_arena_blocks" decode["arena_blocks"]!]]
   dp = [["decode_peak_bytes" (peak_of decode)]]
@@ -241,8 +258,11 @@ fn measured decode encode oneshot basket comp held work scan
   sb = [["scan_arena_blocks" scan["arena_blocks"]!]]
   sp = [["scan_peak_bytes" (peak_of scan)]]
   ins = worked work
+  ci = [["compile_instructions" ir["compile_instructions"]!]]
+  ca = [["compile_allocs" traffic["compile_allocs"]!]]
   rows = text/concat (text/concat l cm) (text/concat sb sp)
-  gathered d db dp e eb ep o b bp c v (text/concat rows ins)
+  built = text/concat rows (text/concat ci ca)
+  gathered d db dp e eb ep o b bp c v (text/concat built ins)
 
 fn worked work
   di = [["decode_instructions" work["jsonbench"]!]]
@@ -374,14 +394,16 @@ fn filled s width false
 fn asked path
   os/read_file path
 
-fn gauge d e o b c held w s
+fn gauge d e o b c held w s ir ca
   comp = compile_totals c
   cm = counters held
   work = work_of w
   dc = counters d
   ec = counters e
   scan = counters s
-  now = measured dc ec (counters o) (counters b) comp cm work scan
+  built = counters ir
+  traffic = counters ca
+  now = measured dc ec (counters o) (counters b) comp cm work scan built traffic
   os/read_file floor_path . (held -> against now (json/decode held))
 
 # A term new to the model enters where its dimension already stands, so its
@@ -636,10 +658,18 @@ fn with_basket d e o b
 fn with_compile d e o b c
   asked "bench/compile_memory_golden.txt" . (held -> with_held d e o b c held)
 
+fn with_ir d e o b c held w s ir
+  asked "bench/compile_allocs_golden.txt"
+    . (ca -> gauge d e o b c held w s ir ca)
+
 fn with_held d e o b c held
   asked "bench/instructions_golden.txt" . (w -> with_work d e o b c held w)
 
 fn with_work d e o b c held w
-  asked "bench/cost_golden_scan.txt" . (s -> gauge d e o b c held w s)
+  asked "bench/cost_golden_scan.txt" . (s -> with_scan d e o b c held w s)
+
+fn with_scan d e o b c held w s
+  asked "bench/compile_instructions_golden.txt"
+    . (ir -> with_ir d e o b c held w s ir)
 
 pub play = asked "bench/cost_golden.txt" . (d -> with_decode d)
