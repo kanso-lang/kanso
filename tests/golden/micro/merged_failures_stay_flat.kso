@@ -7,21 +7,32 @@
 # and what follows never speaks. Both rules are here because the sweep that
 # gave every operator the merge gave it to `>>` too, on one engine only, and
 # nothing said so.
+#
+# The reasons are read through `std/testing`'s `when_failed`: foreign to this
+# module, so it is licensed to separate a reason from a failure this module
+# raised. Under gavel 24 an arm here could not see these errs at all.
+import "std/testing"
+
 fn boom what
   err what
 
-fn shown (err reason)
+fn as_text reason
   "{reason}"
-
-fn shown _
-  "not a failure"
 
 # A reason that is genuinely a list is one reason, and merging must not open it.
 fn listed _
   err ["a" "b"]
 
+left = boom "a" + boom "b" + boom "c"
+
+right = boom "a" + (boom "b" + boom "c")
+
+nested = listed 0 + boom "c"
+
+walled = boom "a" >> boom "b"
+
 pub play =
-  print "left first: {shown (boom "a" + boom "b" + boom "c")}"
-  >> print "right first: {shown (boom "a" + (boom "b" + boom "c"))}"
-  >> print "list reason: {shown (listed 0 + boom "c")}"
-  >> print "the wall: {shown (boom "a" >> boom "b")}"
+  print "left first: {testing/when_failed left as_text}"
+  >> print "right first: {testing/when_failed right as_text}"
+  >> print "list reason: {testing/when_failed nested as_text}"
+  >> print "the wall: {testing/when_failed walled as_text}"

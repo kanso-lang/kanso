@@ -1,8 +1,5 @@
 import "std/text"
 
-type defect
-  reason
-
 pub type json_null
 
 pub type parse_failure
@@ -75,12 +72,6 @@ fn finish _ none
 fn finish cs (parsed p v)
   p2 = skip_ws cs p
   if (p2 > length cs) v (fail p2 "unexpected trailing characters")
-
-fn must (err reason)
-  err (defect "{reason}")
-
-fn must v
-  v
 
 fn pair_onto acc e
   entry_onto (text/append acc 44) e

@@ -1,6 +1,11 @@
-# an arm naming the reason type traps the err and reads its fields; the
-# most specific arm wins, the typeset root catches the rest, and a bare
-# reason arm re-raises
+# the most specific arm wins and the typeset root catches the rest: a leaf
+# reason type outranks a typeset that contains it.
+#
+# The reasons reach these arms through `std/testing`'s `when_failed`, which is
+# foreign to this module and therefore licensed to separate a reason from its
+# failure. Under gavel 24 a module cannot match an err it raised itself.
+import "std/testing"
+
 type quota_torn
   limit
 
@@ -18,16 +23,13 @@ fn fetch 2
 fn fetch n
   "plain {n}"
 
-fn handle (err q:quota_torn)
+fn named q:quota_torn
   "quota: limit {q.limit}"
 
-fn handle (err e:lane_err)
+fn named e:lane_err
   "lane trouble: {e}"
 
-fn handle v
-  "ok: {v}"
-
 pub play =
-  print (handle (fetch 1))
-  >> print (handle (fetch 2))
-  >> print (handle (fetch 3))
+  print (testing/when_failed (fetch 1) named)
+  >> print (testing/when_failed (fetch 2) named)
+  >> print "ok: {fetch 3}"

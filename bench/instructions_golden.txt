@@ -76,15 +76,36 @@
 # it no longer builds at startup — and oneshot pays 255 for the two new
 # jump-table arms its encode path now compares against. The other rows
 # are untouched.
-jsonbench 2860478794
+# 2026-08-26: five of eight rise, and the shape of the rise says where the
+# cost is.
+#
+#     jsonbench    2,860,478,794 -> 2,912,170,881   +51,692,087   +1.81%
+#     oneshot         46,596,968 ->    46,941,571      +344,603   +0.74%
+#     widebench       84,817,033 ->    85,113,625      +296,592   +0.35%
+#     basket          57,400,154 ->    57,408,155        +8,001   +0.01%
+#     encodebench  9,727,166,055 -> 9,727,535,960      +369,905   +0.004%
+#     deepbench, escapebench, pendbench unmoved
+#
+# An arm cannot see an err its own hako raised, and that is dispatch semantics
+# rather than a check — so an arm that could match its own hako's failure asks
+# before it matches, every time it runs. The decoder's inner loop is made of
+# such arms, which is why jsonbench pays 1.81% while the rows whose hot paths
+# hold none of them pay nothing at all. encodebench's rise is four thousandths
+# of a per cent across nine billion instructions: it renders, it does not
+# dispatch on err.
+#
+# This is a language change and the cost is the language's. It is priced in
+# welfare, the floor moves with it and says why, and the log entry names the
+# gavel that permits the fall.
+jsonbench 2912170881
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 9727166055
-oneshot 46596968
-basket 57400154
-widebench 84817033
+encodebench 9727535960
+oneshot 46941571
+basket 57408155
+widebench 85113625
 deepbench 807094292
 escapebench 258574070
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only

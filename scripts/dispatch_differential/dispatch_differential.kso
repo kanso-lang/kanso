@@ -141,7 +141,21 @@ decls9 = """
     "any"
 """
 
+# The err has to come from somewhere FOREIGN: gavel 24 means an arm cannot see
+# an err its own hako raised, so a probe raising its own err would take neither
+# arm and print nothing — which is a fact about provenance rather than about
+# arm order, and this sweep is about arm order. `text/utf8` raises in std/text.
 decls10 = """
+  import "std/text"
+
+  fn which (err _)
+    "failed"
+
+  fn which _
+    "fine"
+"""
+
+decls10_bare = """
   fn which (err _)
     "failed"
 
@@ -213,9 +227,13 @@ pp = arm
   "which (point 0 9)"
   "axis"
 
-pq = arm decls10 "an err arm beside a value arm" "which (err \"boom\")" "failed"
+bad_utf8 = "which (text/utf8 [255])"
 
-pr = arm decls10 "a value where an err arm waits" "which 1" "fine"
+pq = arm decls10 "an err arm beside a value arm" bad_utf8 "failed"
+
+# Same arms without the import, because a probe that never reaches std/text
+# would be refused for carrying an unused one.
+pr = arm decls10_bare "a value where an err arm waits" "which 1" "fine"
 
 ps = arm decls11 "a bool is not an int" "which true" "any"
 

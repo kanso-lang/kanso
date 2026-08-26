@@ -1,4 +1,4 @@
 error[endpoint]: unhandled err reached the entry: config_bad "app.conf"
-  born in relabel at wrap_err.kso:11
-  caused by: disk_torn "/etc/x"
-  born in low_read at wrap_err.kso:8
+  born in relabel at wrap_err.kso:10
+  caused by: "invalid utf-8"
+  born in text/utf8 at std/text/text.kso:92

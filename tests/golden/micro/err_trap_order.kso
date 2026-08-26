@@ -1,5 +1,11 @@
-# specificity, not declaration order, picks the err arm: the typeset root
-# is declared first and the leaf still wins
+# specificity, not declaration order, picks the arm: the typeset root is
+# declared first and the leaf still wins.
+#
+# The reason reaches these arms through `std/testing`'s `when_failed`, which is
+# foreign to this module and therefore licensed to separate a reason from its
+# failure. Under gavel 24 a module cannot match an err it raised itself.
+import "std/testing"
+
 type quota_torn
   limit
 
@@ -11,10 +17,10 @@ type lane_err quota_torn slow_lane
 fn fetch _
   err (quota_torn 99)
 
-fn handle (err e:lane_err)
+fn named e:lane_err
   "root: {e}"
 
-fn handle (err q:quota_torn)
+fn named q:quota_torn
   "leaf: limit {q.limit}"
 
-pub play = print (handle (fetch 0))
+pub play = print (testing/when_failed (fetch 0) named)
