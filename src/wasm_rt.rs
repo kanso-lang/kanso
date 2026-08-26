@@ -511,10 +511,9 @@ pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
 fn raised_at(origin_lit: u32) -> crate::eval::Raised {
     let both = lit_str(origin_lit);
     match both.split_once('\0') {
-        Some((hako, at)) => crate::eval::Raised {
-            at: Some(Rc::from(at)),
-            hako: Some(Rc::from(hako)),
-        },
+        Some((hako, at)) => {
+            crate::eval::Raised { at: Some(Rc::from(at)), hako: Some(Rc::from(hako)) }
+        }
         None => crate::eval::Raised { at: Some(both), hako: None },
     }
 }

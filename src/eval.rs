@@ -3032,7 +3032,11 @@ fn own_failure(arg: &Value, arm: Option<&str>) -> bool {
     }
 }
 
-fn match_params(params: &[Pattern], args: &[Value], arm: Option<&str>) -> Option<(Score, Bindings)> {
+fn match_params(
+    params: &[Pattern],
+    args: &[Value],
+    arm: Option<&str>,
+) -> Option<(Score, Bindings)> {
     let mut score = Vec::new();
     let mut binds = Vec::new();
     for (pattern, arg) in params.iter().zip(args) {
@@ -3058,7 +3062,12 @@ fn bind_whole(whole: &Option<Box<(String, crate::diag::Span)>>, arg: &Value, bin
     }
 }
 
-fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings, arm: Option<&str>) -> Option<u8> {
+fn match_one(
+    pattern: &Pattern,
+    arg: &Value,
+    binds: &mut Bindings,
+    arm: Option<&str>,
+) -> Option<u8> {
     match (pattern, arg) {
         (Pattern::IntLit(n, _), Value::Int(v)) if n == v => Some(0),
         (Pattern::StrLit(s, _), Value::Str(v)) if s == v => Some(0),
@@ -3987,7 +3996,9 @@ impl<'a> Interp<'a> {
                 Ok(Some(handle)) => Value::Int(handle.into()),
                 // Reached only outside a parallel group, where no other fiber
                 // could ever connect; step() yields instead of arriving here.
-                Ok(None) => err_value(Value::Str("nothing connected".to_string()), Raised::default()),
+                Ok(None) => {
+                    err_value(Value::Str("nothing connected".to_string()), Raised::default())
+                }
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Receive(conn) => Ok(match executor.receive(*conn) {

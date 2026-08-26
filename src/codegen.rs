@@ -1628,8 +1628,7 @@ impl<'a> Backend<'a> {
     /// one argument instead of a second threaded through nineteen runtime
     /// signatures to carry a package name.
     fn origin_arg(&mut self, f: &FnEmit, span: Span) -> String {
-        let (name, _) =
-            self.intern(&format!("{}\0{}:{}\0", f.hako, f.origin_prefix, span.line));
+        let (name, _) = self.intern(&format!("{}\0{}:{}\0", f.hako, f.origin_prefix, span.line));
         format!("ptr @{name}")
     }
 
@@ -2440,11 +2439,7 @@ impl<'a> Backend<'a> {
                 }
                 if self.admits_err(ty) {
                     let arm = self.arm_hako(f);
-                    check(
-                        self,
-                        f,
-                        format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"),
-                    );
+                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
                 }
                 let call = self.type_check_call(value, ty)?;
                 check(self, f, call);
@@ -2453,11 +2448,7 @@ impl<'a> Backend<'a> {
             Pattern::Ctor { ty, fields, whole } => {
                 if ty == "err" {
                     let arm = self.arm_hako(f);
-                    check(
-                        self,
-                        f,
-                        format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"),
-                    );
+                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
                     let inner = f.tmp();
                     f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
