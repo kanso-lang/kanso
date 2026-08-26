@@ -4054,6 +4054,61 @@ pointing it at the counter that was invisible is what keeps it from going
 invisible again. Proved red in a worktree of HEAD, not only in the working
 tree.
 
+## 2026-08-26 — three differential sweeps were covered by their neighbours
+
+Searched the log and `log/compiler-log-archive.md` for `render_differential`,
+`behaviour_differential` and `dispatch_differential`: each is recorded arriving,
+and none of the three is recorded gaining a row.
+
+The ratchet's `cover` check asks whether every JOB in ci.yml carries a mutation.
+The diagnostics differential job runs nine sweeps as nine steps, and two rows —
+`diagnostics` and `accumulator` — satisfied the check for all nine. So seven
+sweeps could have been deleted, or quietly reduced to nothing, and `cover`
+would still have said the job was proven.
+
+That is the same blindness the file was written to refuse, one level down. A
+gate nobody has watched fail has no evidence it works, and a step whose row
+belongs to its neighbour has never been watched at all.
+
+### Three rows, and what each was watched doing
+
+Each mutation was applied in a worktree, built, and its own sweep run. The
+sweep named the defect in its own words before it was restored:
+
+    native_renders_a_float_wider          9 of 68 values disagree
+      integral floats printed with two decimals in k_render only, so 1.0
+      reads as 1.00 on native. Reported as `0.0`, `1.0`, `-1.0`, `100.0`,
+      `1000000.0`, `-0.0`, `2.0 * 3.0`, and inside a list and a record.
+
+    native_rounds_a_half_to_even          2 of 66 calls disagree
+      llround to llrint, so `math/round 0.5` answers 0 against the oracle's
+      1 and `math/round 2.5` answers 2 against 3. Nothing complains, no
+      counter moves, and no golden prints a half.
+
+    a_literal_arm_ranks_below_a_wildcard  22 of 22 cases wrong
+      the emitter's arm ladder ranks a literal below a bare binder, so the
+      first case the sweep names — "a literal beats a later wildcard" — takes
+      the wildcard on native and the literal on the oracle.
+
+All three were green again on restore.
+
+### One mutation was replaced because it went red for the wrong reason
+
+The first attempt at the behaviour row broke `text/slice`'s ascii fast path by
+one character. The sweep did go red, and reported `the probes do not run:
+neither engine printed 1 for the sample` — its own canary, which trims a
+string and so slices one. A gate that goes red because the harness stopped
+working is not a gate that caught the defect, and a row credited for it would
+be proving the canary. `math/round` was chosen instead because nothing in the
+compiler's own path calls it.
+
+### The remaining six steps
+
+`trmc_differential` has the `accumulator` row and `diagnostic_differential` has
+`diagnostics`. That leaves `numeric_differential`, `effects_differential`,
+`module_differential` and `diagnostic_coverage` rowed only by their neighbours.
+They are the same debt this entry pays down, and they are OPEN.
+
 ## 2026-08-26 — the trend gate could not read three runtime veins, one of them at all
 
 Searched this file and `log/compiler-log-archive.md` for `instructions_golden`,

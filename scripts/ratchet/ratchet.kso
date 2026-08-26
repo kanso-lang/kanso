@@ -312,6 +312,30 @@ accumulator = row
   (breaking "accumulator_rewrite_deleted")
   release
 
+rendering = row
+  "the two renderers disagreeing on a value nobody thought to print"
+  true
+  "./target/release/kanso run scripts/render_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_renders_a_float_wider")
+  release
+
+behaviour = row
+  "a legal call answered differently at an edge, with nothing complaining"
+  true
+  "./target/release/kanso run scripts/behaviour_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_rounds_a_half_to_even")
+  release
+
+dispatch = row
+  "the two engines taking different arms for the same call"
+  true
+  "./target/release/kanso run scripts/dispatch_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_literal_arm_ranks_below_a_wildcard")
+  release
+
 itself = row
   "a gating job nobody said how to prove"
   true
@@ -340,7 +364,11 @@ rows_c1 = [welfare_floor grammar book_outputs error_corpus trend]
 
 rows_c1a = text/concat rows_c1 [perf_row trend_runtime]
 
-rows_c = text/concat rows_c1a [diagnostics accumulator itself]
+rows_c1b = text/concat rows_c1a [diagnostics accumulator]
+
+rows_c1c = text/concat rows_c1b [rendering behaviour]
+
+rows_c = text/concat rows_c1c [dispatch itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
