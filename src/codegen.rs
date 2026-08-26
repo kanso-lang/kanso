@@ -2430,6 +2430,16 @@ impl<'a> Backend<'a> {
                 f.record(value, known & !FAIL);
             }
             Pattern::Annotated { name, ty, .. } if self.typesets.contains_key(ty) => {
+                // A typeset naming err among its members is one of the three
+                // patterns that can hold a failure, so it carries the same
+                // guard the `:err` annotation below does. This arm returns
+                // without reaching that one, and the guard was missing here:
+                // a package could rescue its own failure by naming a typeset
+                // instead of naming err, on native but not on the oracle.
+                if self.admits_err(ty) {
+                    let arm = self.arm_hako(f);
+                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
+                }
                 // a typeset matches when any member does: OR the members'
                 // checks, then branch once
                 let members = self.typesets[ty].clone();

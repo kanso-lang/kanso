@@ -1,0 +1,38 @@
+# Gavel 24 names three patterns that can hold an err: `(err …)`, an `:err`
+# annotation, and a TYPESET with err among its members. The first two carried
+# the own-hako guard on every engine. The third did not, on native: the
+# typeset branch of `emit_pattern` comes before the annotated branch and
+# returns without ever asking `admits_err`, so the guard the third case was
+# promised was never emitted.
+#
+# What that bought a program: a package could rescue its own failure by
+# naming a typeset instead of naming err. `own` below answered "the typeset
+# arm took it" on native while the interpreter — the oracle — passed the
+# failure through, which is a two-universe hole and an engine divergence in
+# one shape.
+#
+# The value line is the other half: the arm still does its job on a member
+# that is not a failure, so the guard refuses errs rather than the typeset.
+import "std/testing"
+
+type maybe err int
+
+fn as_text reason
+  "{reason}"
+
+fn boom what
+  err what
+
+fn look _:maybe
+  "the typeset arm took it"
+
+fn look v
+  "a value: {v}"
+
+own = look (boom "a")
+
+fine = look 7
+
+pub play =
+  print "own: {testing/when_failed own as_text}"
+  >> print "value: {fine}"
