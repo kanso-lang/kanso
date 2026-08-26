@@ -4640,3 +4640,50 @@ read. The construction fixture needed the wasm engine rebuilt with the fix
 reverted to prove the corpus reaches it — the wasm corpus compares against
 native rather than against the `.out` file, so corrupting the golden proves
 nothing there. Worth knowing before the next person tries it.
+
+## 2026-08-26 — `../` was reaching the diagnostics, and the first fix
+cost 164,130 instructions that were not work
+
+`resolve_import` strips a leading `./` with a comment saying why: the dots are
+import syntax rather than part of the name, and carrying them into the
+resolved path would put them in every diagnostic the module raises. `../` is
+the same syntax and was never taken back out. A module reached as `../deep`
+from `mid/` named itself `mid/../deep` — in its diagnostics, in the origin its
+errs recorded, and in the hako `package_of` reads off that origin.
+
+It survived because both module-error goldens pinned the unfolded spelling.
+The corpus had been regenerated from whatever the code printed and nobody read
+the path. That is the third defect this week whose shape is the same: a golden
+regenerated without being read pins the bug instead of catching it. The
+counters have the trend gate for this; the text goldens have nothing.
+
+### The measurement that changed the implementation
+
+The first version joined `base` with `../deep` and walked the components
+afterwards taking `x/..` pairs out. CI charged the front end 164,130
+instructions, +0.29% — on a program that never calls it, because `lib/json`
+imports nothing relative. The container measured the same source 1,925
+instructions CHEAPER than main:
+
+    container   main 61,333,649   folded 61,331,724   -1,925
+    runner      main 57,490,136   folded 57,654,266   +164,130
+
+A change cheaper on one toolchain and 0.29% dearer on another is not doing
+more work; it is an inlining outcome. The deltas usually carry between the two
+hosts — oneshot's +335,459 matched to the instruction earlier the same day —
+so a delta that does NOT carry is itself the finding.
+
+So the fold is gone. Each leading `../` is now a step taken while resolving:
+`base` loses a component, the name loses the prefix, the path is built once
+from the result. No Vec, no second walk, no function to place. The runner
+charges 18 instructions for it — one `strip_prefix` test per relative
+import — and the container reads it 37 under main.
+
+### A pure regression, attributed
+
+Eighteen instructions worse and nothing better is what the trend gate refuses
+outright. The escape is the one the gavel of 2026-08-25 put there: the floor
+is permeable to the language, so the fall is recorded in
+`bench/welfare_floor.json`'s history against the change that spent it. The
+alternative was leaving import syntax in the language's own error messages to
+protect an eighteen-instruction counter.
