@@ -3710,3 +3710,65 @@ owner wants to be told, and this change does not answer it — it only removes
 the failure mode that had no business waiting for a nightly at all. A gate that
 stays green under its mutation still costs a build to detect, still runs at
 09:00, and still has no addressee.
+
+## 2026-08-26 — the floor is permeable to the language, and now the trend gate knows it
+
+Clay ruled on 2026-08-25 that the welfare floor is absolute against
+refactorings and permeable to the language: a feature or a doctrine-compelled
+change is never rejected for the score. It lands, the floor moves, and the fall
+is recorded against the change that spent it. Compensating-optimization
+bundling stays forbidden in both directions.
+
+The ruling landed in the log yesterday and one gate had not heard it.
+
+### The fixture is #1034
+
+Obeying gavels 1b and 24 costs lib/json four counters and improves none of
+them: `front_end_rounds` 40 -> 42, `front_end_visits` 17,786 -> 17,886,
+`compile_peak_bytes` 864,300 -> 870,289, `compile_instructions` 59,717,892 ->
+60,772,083. The welfare floor was moved by hand to 84.79 with the fall
+attributed in `bench/welfare_floor.json`'s history, which is what the ruling
+asks for. CI then said:
+
+    FAIL  a pure regression: something got worse and nothing got
+    better. that trade has no other side, and it is the one move
+    the gate refuses outright.
+
+A branch obeying a gavel could not merge. The gate was written before the
+ruling and was right for what it knew — the pure regression it refuses is a
+refactoring that quietly spends the score — but a language change spending the
+score is exactly the case the ruling carves out, and the gate had no way to
+tell the two apart.
+
+### What tells them apart
+
+The attribution itself. A pure regression now passes when the branch adds an
+entry to the history array in `bench/welfare_floor.json`; without one it is
+refused as before. That is the same posture the gate already takes toward the
+compiler log — it checks that a sentence exists, not that the sentence is
+right — and it puts the escape exactly where the ruling puts the record.
+
+It is not a hole a refactoring can crawl through by accident. To use it a
+change must move the floor and write down what it spent, in the ledger whose
+whole readership is Clay, beside fifty-odd entries that say what each earlier
+move bought. A refactoring that does that has not evaded the rule; it has
+signed its name to breaking it.
+
+The narrower reading — accept the fall only when the floor went DOWN — was
+considered and dropped. A rise cannot reach this code at all: welfare reads the
+same counters, so a branch that raised the number improved one of them, and
+`better` is non-empty before the refusal is reached. The extra condition would
+never fire, and a condition that cannot fire is a claim about the code that the
+code does not make.
+
+### Watched red, then green, on the same worsening
+
+    compile_peak_bytes=999999999, no history entry     exit 1, refused
+    compile_peak_bytes=999999999, history entry added  exit 0, attributed
+
+Same counter, same direction, same magnitude; only the record differs. The
+first of those is now a ratchet row — `a_counter_worsens_for_nothing` — because
+the trend gate had none. It is a step inside the cost-goldens job, and the
+ratchet's own coverage check is per JOB, so a step-level gate hides behind the
+rows its neighbours carry. That is a general gap and this closes one instance
+of it, not the gap.

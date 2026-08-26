@@ -21,6 +21,19 @@ import "std/text"
 # welfare scalar, which weighs the sides. The name-each-worsening listing stays
 # advisory: the sentence is reflection, not enforcement.
 #
+# One branch escapes the refusal, added 2026-08-26 under the gavel of the day
+# before — the floor is absolute against refactorings and permeable to the
+# language. A feature or a doctrine-compelled change is never rejected for the
+# score: it lands, the floor moves, and the fall is recorded against the change
+# that spent it. So a pure regression passes when this branch adds an entry to
+# the history in bench/welfare_floor.json, which is where that record is kept.
+# The gate checks that the attribution exists, the way the listing below checks
+# that a sentence exists; whether the change earns it is Clay's to say.
+#
+# gavel 24 cost lib/json four counters and improved none of them, and this gate
+# refused it while the ruling in the log said it must land. That is the fixture:
+# a branch obeying a gavel could not merge.
+#
 # A finding is the counter's name, which way it went, and the line to print.
 type move
   key
@@ -81,6 +94,12 @@ bench_de = text/concat bench_memory bench_pend
 bench_goldens = text/concat bench_ab (text/concat bench_cd bench_de)
 
 mem_dir = "tests/golden/mem"
+
+floor_file = "bench/welfare_floor.json"
+
+# One history entry per `{"floor":` — the key opens each record and appears
+# nowhere else in the file, the top-level floor being reached through a comma.
+marker = "\{\"floor\":"
 
 advice = "movement is fine; silence is not. say why in design/compiler-log.md."
 
@@ -210,6 +229,19 @@ fn answered _ _
 fn added? l
   text/slice l 1 1 == "+"
 
+# Did this branch record a fall against itself? An added history entry is the
+# attribution gavel 2026-08-25 asks for, and its absence is what the refusal
+# below is really about.
+fn recorded text
+  length (text/split text marker) - 1
+
+fn attributed? base
+  from_git base floor_file
+    . (theirs -> os/read_file floor_file . (ours -> grew? theirs ours))
+
+fn grew? theirs ours
+  recorded ours > recorded theirs
+
 fn log_delta base
   argv = ["diff" base "--" "design/compiler-log.md"]
   asked argv . (r -> plus_lines r.stdout)
@@ -316,16 +348,16 @@ fn gathered base names
   walked base (every_golden names) [] . (ms -> priced base ms)
 
 fn priced base ms
-  log_delta base . (added -> verdict ms added)
+  log_delta base . (added -> attributed? base . (att -> verdict ms added att))
 
-fn verdict moves added
+fn verdict moves added att
   worse = list/to_list (list/select moves (m -> m.worse))
   better = list/to_list (list/reject moves (m -> m.worse))
-  said moves . (_ -> weighed_up moves worse better added)
+  said moves . (_ -> weighed_up moves worse better added att)
 
-fn weighed_up moves worse better added
+fn weighed_up moves worse better added att
   quiet = list/to_list (list/select worse (m -> silent? added m))
-  unpriced quiet . (_ -> summary moves quiet . (_ -> ruling worse better))
+  unpriced quiet . (_ -> summary moves quiet . (_ -> ruling worse better att))
 
 # The summary only speaks when nothing went unpriced; a listing already said
 # more than it would.
@@ -376,18 +408,27 @@ fn listed quiet false
 fn key_line m
   "  {m.key}\n"
 
-fn ruling worse better
-  settled (length worse > 0 and length better == 0)
+fn ruling worse better att
+  settled (length worse > 0 and length better == 0) att
 
-fn settled true
+fn settled true true
+  banked 0
+
+fn settled true false
   refused 0 . (_ -> os/exit 1)
+
+fn settled false _
+  io/write ""
+
+fn banked _
+  io/write "\nA pure regression, attributed: welfare_floor.json gained a\n"
+  >> io/write "history entry, so the fall is recorded against the change that\n"
+  >> io/write "spent it. The floor is permeable to the language.\n"
 
 fn refused _
   io/write "\nFAIL  a pure regression: something got worse and nothing got\n"
   >> io/write "better. that trade has no other side, and it is the one move\n"
-  >> io/write "the gate refuses outright.\n"
-
-fn settled false
-  io/write ""
+  >> io/write "the gate refuses outright. A language change that must spend\n"
+  >> io/write "the score says so in bench/welfare_floor.json's history.\n"
 
 pub play = os/args . (a -> started (base_of a))
