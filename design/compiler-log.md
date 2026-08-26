@@ -4687,3 +4687,52 @@ is permeable to the language, so the fall is recorded in
 `bench/welfare_floor.json`'s history against the change that spent it. The
 alternative was leaving import syntax in the language's own error messages to
 protect an eighteen-instruction counter.
+
+## 2026-08-26 — the third pattern gavel 24 named never got its guard on native
+
+Gavel 24 names three patterns that can hold an err: `(err …)`, an `:err`
+annotation, and a typeset with err among its members. The first two carried the
+own-hako guard on every engine. The third did not, on native.
+
+`emit_pattern` splits `Pattern::Annotated` into two arms — a typeset arm and a
+general one — and only the general one asked `admits_err`. A typeset name never
+reaches it. So the guard the third case was promised was never emitted, and a
+package could rescue its own failure by naming a typeset instead of naming err:
+
+    type maybe err int
+
+    fn look _:maybe
+      "the typeset arm took it"
+
+    own = look (boom "a")
+
+    interp   own: a                          the oracle passes it through
+    native   own: false                      the arm took it
+
+`admits_err` was already right — it recurses through a typeset's members — and
+wasm was already right too, because `wasm_backend` handles typesets INSIDE the
+one annotated arm and calls `admits_err` before anything else. Native's split
+was the whole bug.
+
+So the fix is not the guard added to the second arm; it is the two arms made
+one, the way wasm has always had them. A plain annotation is a typeset with a
+single member, which is what `wasm_backend` writes and what native now writes.
+The shape that caused this cannot recur, because there is no longer a second
+arm for a guard to be missing from.
+
+The measurement said the same thing. Patching the typeset arm read +421,503
+instructions in the container against the runner's +2,562 — a delta that does
+not carry, which by the rule written the same day means layout rather than
+work, since `kanso check` never runs codegen at all. The merged arm reads 16
+BELOW main and the runner charges 456, down from 2,562.
+
+Nothing else moved: the guard is emitted only where a typeset admits err, no
+benchmark declares one, and emitted, text and every counter vein are
+byte-identical. Four hundred and fifty-six worse and nothing better is the
+pure regression the trend gate refuses outright, so the fall is attributed in
+`bench/welfare_floor.json`'s history under the rule that the floor is
+permeable to the language — the same escape #1053 used, for the same kind of
+reason.
+
+`a_typeset_arm_cannot_see_its_own_hakos_err` pins both halves: the failure
+passes through, and the arm still takes a member that is not a failure.
