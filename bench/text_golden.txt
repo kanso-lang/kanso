@@ -262,12 +262,17 @@
 # shrank by 47 lines and the machine code grew by 288, which is the shape of an
 # inlined merge replacing a second early return. It buys a correctness fix —
 # native and wasm handed back the FIRST failing field where the interpreter
-# merged both reasons.
+# merged both reasons. deepbench then moved again, 63,042 -> 63,122, when the
+# merge was pushed out of line: `k_rec` scans every field of every record it
+# builds, and folding the merge into that scan cost pendbench 3.2% for work
+# that only runs once a field has failed. The merge is `cold` and `noinline`
+# now, the scan keeps its early exit, and pendbench came out 0.08% BELOW where
+# it started.
 jsonbench text=80738
 encodebench text=97730
 oneshot text=97810
 basket text=89410
 widebench text=98818
-deepbench text=63042
+deepbench text=63122
 escapebench text=49618
 pendbench text=73762
