@@ -3993,3 +3993,85 @@ right by inspection, and inspection is what this entry can claim for it.
 divergence was one engine against two, which is the shape the differential law
 exists to surface — and it surfaced only because somebody went looking, since
 no fixture in the corpus merged a failure and then hopped it.
+
+## 2026-08-26 — an arm cannot see an err its own hako raised, on all three engines
+
+Gavel 24, clause 1, built. Clay's words at the sitting: *it was never advisory.*
+The rule is dispatch semantics now — at match time a failure does not enter an
+arm its own hako raised, and infectiousness carries it onward exactly as if the
+arm were not written. "Your own failures only bubble", executing itself instead
+of being warned about.
+
+### What an err carries, and what an arm knows
+
+An err records the package that RAISED it, beside the trace line it already
+carried. On all three engines the two are read off the same frame, so no
+construction site can set one and forget the other.
+
+Native and wasm take that further: codegen emits ONE literal per raise site,
+`"{hako}\0{fn} at {file}:{line}"`, and the runtime splits it — the match rule
+reads the first half, the endpoint report the second. Nineteen runtime
+signatures in `runtime.c` carry an origin and nine codegen sites emit one;
+threading a second argument through all of them to move a package name was not
+worth it, and one literal cannot drift apart from itself.
+
+The guard is emitted only where a pattern CAN hold an err — `(err …)`, an
+`:err` annotation, or a typeset with err among its members. Everything else
+refuses failures already, so a check there would cost a call per match on a hot
+path to learn nothing.
+
+### The granularity question the build exposed, and Clay's ruling
+
+`package_of` answered `std` for every shipped module. Invisible until an err's
+raiser became part of dispatch, and then wrong at once: `std/testing` and
+`std/json` came out the same package, so `when_failed` could not rescue a
+failure `decode` raised and the harness could not report a test failure.
+
+Clay ruled it the same day: **a package is a directory, and its import path
+names it** — Go's rule, named as Go's. `std/json` and `std/testing` differ;
+`std/json/json.kso` and `scan.kso` are one; `std/net` and `std/net/http` are
+two. It applies to a program's own modules too, and that is what makes the rule
+teachable rather than merely enforceable: a decoder module and the module that
+reports its failures are two packages, so the reporting arm is licensed exactly
+where a reader would put it.
+
+### What it cost the corpus and the book, which is the honest measure of it
+
+A package's own failure is now completely opaque to that package. A bare binder
+already refused failures; the two err-admitting patterns now refuse own-origin
+ones. So you cannot pass your own failure to your own function at all — every
+"render my own possibly-failed value" helper moves one package over.
+
+- **`lib/json` lost `must` and `defect`.** `must` converted json's own parse
+  failure into a defect, which json may not read. It had exactly one caller —
+  its own test — and its documented purpose in ch08 was the case that no longer
+  works. The caller writes it now, in their package, where json's failure is
+  foreign; ch08 says so and shows the panel as a caller's file.
+- **Nine corpus fixtures migrated.** Seven micro, the typeset entryfile fixture,
+  and `wrap_cause`, which now wraps `std/text`'s failure because wrapping is
+  something you do to somebody else's.
+- **Four book samples restructured.** ch07's teahouse moves its reporting to
+  the entry; ch08's `using` splits `describe` from `told`; `literal` and
+  `positions` become two-module programs — a decoder and a reporter — which is
+  how you would write them anyway and now the only way you can.
+- **The pub self-seed retired.** It assumed a published err parameter sees its
+  own package's failures because the callers are not all in view. Right while
+  this pass was the only enforcement; wrong now, and under it every pub
+  bare-err arm was a violation, `when_failed` included. What survives is what
+  the written call sites prove, and `kanso check` REFUSES it rather than
+  mentioning it: an arm that can never fire is dead code wearing the shape of
+  error handling.
+
+### Watched red on three engines at once
+
+`tests/golden/micro/an_arm_cannot_see_its_own_hakos_err.kso` prints three
+lines: the arm on a value, a foreign rescue, and the arm on an own err. With
+the rule taken back out of the interpreter, native and wasm together, the third
+line reads `false` instead of `foreign reads 99` — the arm matched, and
+`when_failed` on the resulting string answers false. Restored, all three agree.
+
+### The front end got cheaper doing it
+
+`lib/json` shed `must` and `defect`: expression visits 16,818 to 16,806,
+allocations 62,110 to 61,981, peak 825,664 to 822,004. Welfare rises, and the
+rise is banked in this change rather than left for the next one to spend.
