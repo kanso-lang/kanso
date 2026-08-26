@@ -2429,20 +2429,34 @@ impl<'a> Backend<'a> {
                 f.bind(name, value);
                 f.record(value, known & !FAIL);
             }
-            Pattern::Annotated { name, ty, .. } if self.typesets.contains_key(ty) => {
-                // A typeset naming err among its members is one of the three
-                // patterns that can hold a failure, so it carries the same
-                // guard the `:err` annotation below does. This arm returns
-                // without reaching that one, and the guard was missing here:
-                // a package could rescue its own failure by naming a typeset
-                // instead of naming err, on native but not on the oracle.
+            Pattern::Annotated { name, ty, .. } => {
+                if ty.ends_with("[]") {
+                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 9)"));
+                    f.bind(name, value);
+                    return Ok(());
+                }
+                if ty.contains('[') {
+                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 10)"));
+                    f.bind(name, value);
+                    return Ok(());
+                }
+                // One arm for every annotation, typeset or not, because two
+                // arms for one pattern kind is how the guard below went
+                // missing: the typeset arm returned before reaching it, so a
+                // typeset naming err let a package rescue its own failure on
+                // native where the oracle passed it through. `wasm_backend`
+                // has always had the one arm and has always been right.
                 if self.admits_err(ty) {
                     let arm = self.arm_hako(f);
                     check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
                 }
                 // a typeset matches when any member does: OR the members'
-                // checks, then branch once
-                let members = self.typesets[ty].clone();
+                // checks and branch once. A plain annotation is the same
+                // shape with one member.
+                let members = match self.typesets.get(ty) {
+                    Some(members) => members.clone(),
+                    None => vec![ty.clone()],
+                };
                 let mut acc: Option<String> = None;
                 for member in &members {
                     let call = self.type_check_call(value, member)?;
@@ -2457,29 +2471,10 @@ impl<'a> Backend<'a> {
                         }
                     });
                 }
-                let combined = acc.expect("a typeset has members");
+                let combined = acc.expect("an annotation names at least one type");
                 let b = f.tmp();
                 f.line(&format!("{b} = icmp ne i64 {combined}, 0"));
                 branch_i1(f, b);
-                f.bind(name, value);
-            }
-            Pattern::Annotated { name, ty, .. } => {
-                if ty.ends_with("[]") {
-                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 9)"));
-                    f.bind(name, value);
-                    return Ok(());
-                }
-                if ty.contains('[') {
-                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 10)"));
-                    f.bind(name, value);
-                    return Ok(());
-                }
-                if self.admits_err(ty) {
-                    let arm = self.arm_hako(f);
-                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
-                }
-                let call = self.type_check_call(value, ty)?;
-                check(self, f, call);
                 f.bind(name, value);
             }
             Pattern::Ctor { ty, fields, whole } => {

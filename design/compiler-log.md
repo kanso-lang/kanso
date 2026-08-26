@@ -4712,12 +4712,21 @@ package could rescue its own failure by naming a typeset instead of naming err:
 `admits_err` was already right — it recurses through a typeset's members — and
 wasm was already right too, because `wasm_backend` handles typesets INSIDE the
 one annotated arm and calls `admits_err` before anything else. Native's split
-was the whole bug, which is the shape worth remembering: two arms for one
-pattern kind, and a guard added to one of them.
+was the whole bug.
 
-Nothing moved. The guard is emitted only where a typeset admits err, and no
-benchmark declares one, so emitted, text, the counters and welfare are all
-byte-identical.
+So the fix is not the guard added to the second arm; it is the two arms made
+one, the way wasm has always had them. A plain annotation is a typeset with a
+single member, which is what `wasm_backend` writes and what native now writes.
+The shape that caused this cannot recur, because there is no longer a second
+arm for a guard to be missing from.
+
+The measurement said the same thing. Patching the typeset arm read +421,503
+instructions in the container against the runner's +2,562 — a delta that does
+not carry, which by the rule written the same day means layout rather than
+work, since `kanso check` never runs codegen at all. The merged arm reads 16
+BELOW main. Nothing else moved: the guard is emitted only where a typeset
+admits err, no benchmark declares one, and emitted, text, the counters and
+welfare are byte-identical.
 
 `a_typeset_arm_cannot_see_its_own_hakos_err` pins both halves: the failure
 passes through, and the arm still takes a member that is not a failure.
