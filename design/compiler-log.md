@@ -3508,9 +3508,7 @@ now reads `&(fn_name, arity, stmt_index)`. The mutation's `awk` found no match,
 exited 3, and the row has been unable to introduce its defect ever since.
 
 The `pend_counters` row was therefore green for a reason that had nothing to do
-with the gate working. Nothing caught it, because `cover` runs per PR and asks
-only whether a row exists, while `prove` — the half that applies the mutation —
-runs nightly.
+with the gate working.
 
 The anchor now matches the borrowed form, and the row was watched red by hand
 to be sure the fix restores the substance rather than the sed: applied, built,
@@ -3523,12 +3521,32 @@ and `scripts/gates/pend_counters.sh` exits 1 with the lazy tier gone —
 which is precisely what the mutation's own comment says it should do. Reverted,
 rebuilt, gate green again.
 
-**A mutation that anchors on source text is a gate of its own, and nothing
-watches it.** A rename or a borrow silently retires the row that depends on it,
-and the row keeps reporting green. Two ways to notice: run `prove` in CI rather
-than nightly, which costs a build per row, or have `prove`'s "proved nothing"
-count fail the build it already runs in. The second is the cheaper one and it
-already has the number.
+### The machinery worked. Nobody answered it.
+
+The first draft of this entry said nothing watched the mutations, and that was
+wrong in a way worth correcting rather than quietly fixing. `prove` exits 1 on
+a row that proves nothing — `told bad false` writes the count and calls
+`os/exit 1` — and `.github/workflows/ratchet.yml` runs it on a schedule every
+morning at 09:00 UTC.
+
+So the timeline is not a blind spot:
+
+    2026-08-24 22:52 UTC   #1015 lands, dropping the .to_string()
+    2026-08-25 09:27 UTC   nightly ratchet run 14 fires
+    2026-08-25 09:37 UTC   run 14 FAILS, naming this exact mutation
+    2026-08-26 00:50 UTC   still red, still unanswered
+
+The ratchet caught it the very next morning and said so precisely — `BROKE
+cost goldens … the mutation would not apply` — in the first red run that
+workflow has had in fourteen. It was found today only because `prove` was run
+by hand for an unrelated reason.
+
+That reframes the lesson. The gap is not instrumentation, which did its job on
+schedule; it is that a nightly nobody reads is a nightly that does not exist.
+A per-PR signal gets answered because it blocks a merge, and a scheduled one
+competes with whatever else the morning holds. Worth saying plainly because the
+obvious fix — build more watching — is the wrong one here. What this needed was
+for the red run to reach somebody.
 
 ### A count in a comment, drifting
 
