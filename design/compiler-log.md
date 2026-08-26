@@ -3587,3 +3587,21 @@ The ironclad rule, three clauses:
 
 This entry rides the oldest unfinished branch this session owns, which
 is the rule applied to itself.
+
+## 2026-08-26 — the branch rule, refined by Clay: parallel is fine, abandoned is not
+
+Clay refined the ironclad within the hour, and the refinement loosens
+the serial reading: "you can have multiple agents working at once, and
+if that is the case it's fine to have one agent working on a new issue
+as long as there's at least one agent currently working on closing off
+any existing issues. you should be checking for ensuring that nothing
+is abandoned before you commence something new."
+
+So the rule is not strict FIFO across the fleet. It is an abandonment
+check: before any agent commences new work, verify that every existing
+open item — branch, PR, task — is either actively being driven by some
+agent or explicitly closed out. Parallel streams are welcome; an item
+with no agent on it is the violation. The check runs at the moment of
+commencing, every time, and the earlier clauses stand: merged branches
+die at merge, the one-time purge proceeds, and every check-in audits
+the branch list.
