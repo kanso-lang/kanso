@@ -1,0 +1,47 @@
+# The co-occurrence refusal pools the fields read off one value and asks
+# whether any declared record holds them all. That is only sound for reads
+# that run whenever the body runs, and this fixture is the other three cases —
+# each of them a correct program the rule would refuse if it pooled too much.
+#
+# `describe` reads a span's field in one arm of an `if` and a node's in the
+# other. Only one arm is taken, so the value is one record either way; pooling
+# both would find no record holding `from` and `kind` and refuse a program that
+# works.
+#
+# `widths` shadows: the outer `m` is a node and the lambda's `m` is a span.
+# The lambda may never be called at all, and its parameter is a different value
+# from the one outside, so its reads belong to neither pool.
+#
+# `both` rebinds `p` from a span to a node. Reads before and after the binding
+# are of different values, and pooling across it would gather all four fields.
+#
+# Break any of the three and this fixture stops printing; that is what it is
+# here to catch.
+import "std/io"
+import "std/list"
+
+type span
+  from
+  to
+
+type node
+  kind
+  wanted
+
+fn describe x flag
+  if flag "{x.from}" "{x.kind}"
+
+fn widths m items
+  "{m.kind}:{list/to_list (list/map items (m -> m.from + m.to))}"
+
+both =
+  p = span 1 5
+  first = "{p.from} {p.to}"
+  p = node 2 3
+  "{first} {p.kind} {p.wanted}"
+
+pub play =
+  io/write "{describe (span 1 5) true}\n"
+  io/write "{describe (node 2 3) false}\n"
+  io/write "{widths (node 7 8) [(span 1 5) (span 2 6)]}\n"
+  io/write "{both}\n"

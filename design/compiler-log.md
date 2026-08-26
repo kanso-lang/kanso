@@ -3298,6 +3298,29 @@ the check it exits 2 with two diagnostics, one for the two-field message and
 one for the three-field message. That is the hole this closes: a language that
 refuses before anything runs was deferring this one to run time.
 
+### Watched red three more times, for the quiet cases
+
+A refusal that fires is half the behaviour; the other half is staying silent
+where a program is correct, and that half is where a false refusal would live.
+`tests/golden/micro/a_field_read_the_body_may_skip_is_not_pooled.kso` is three
+correct programs the rule would refuse if it pooled too much, and each clause
+was watched red by breaking its own guard:
+
+    the two arms of an `if` pooled     `x` is read for `from` and `kind`
+    a lambda body pooled with outside  `m` is read for `kind`, `from` and `to`
+    a rebinding did not end the run    `p` is read for `from`, `to`, `kind`
+                                       and `wanted`
+
+Each of the three is a program that runs and prints, so the fixture is a micro
+golden rather than an error golden — it pins the output, and any of the three
+guards going away turns the print into a refusal.
+
+The rebinding case took a second attempt to write at all. A body cannot rebind
+a name after a bare effect line — the grammar puts every binding before every
+effect — so the rebinding lives in a constant that returns a string and `play`
+prints it. That is worth knowing: the shape this guard exists for cannot be
+written in an effectful body in the first place.
+
 ### What it does not reach
 
 A value read for a single field, and the 6.2% of substitutions where some other
