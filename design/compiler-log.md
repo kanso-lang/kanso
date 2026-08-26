@@ -3998,8 +3998,19 @@ no fixture in the corpus merged a failure and then hopped it.
 
 Every emitted binary grows **48 bytes** — eight of eight, the same number each
 time, which is what a fix that adds one store to a constructor and two to a
-copy should look like. `kanso check lib/json` retires 664 more instructions
-(60,772,083 to 60,772,747), and none of that is front-end work: `src/runtime.c`
-is `include_str!`'d into the compiler, so a longer runtime moves a static in
-the binary and the code and data around it shift. The counter is exact and it
-moved, so it is regenerated and said out loud rather than waved at.
+copy should look like.
+
+`compile_instructions` also moves, and the way it moves is worth recording.
+`src/runtime.c` is `include_str!`'d into the compiler, so a longer runtime
+lengthens a static and shifts the code and data around it; `kanso check
+lib/json` never reads that string. The number is therefore pure layout, and it
+behaves like layout: on the runner, against the unstaged library, it ROSE 664
+(60,772,083 to 60,772,747); in a container, against the staged library, the
+same edit FALLS 6,763 (57,524,712 to 57,517,949). Same diff, opposite sign,
+two orders of magnitude apart.
+
+That is not a reason to distrust the row — it is exact for the host and the
+program its header names, and both figures above are exact for theirs. It is a
+reason to say plainly what a move of this size means when the diff is bytes of
+embedded text: nothing about the front end's work, and the row is regenerated
+because it is exact, not because the compiler got slower or faster.
