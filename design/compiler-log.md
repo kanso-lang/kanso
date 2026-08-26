@@ -3555,3 +3555,51 @@ holds 164. Nothing checks that number and it goes stale every time somebody
 adds a mistake to the corpus, so the sentence now says a fixture per mistake
 and names no figure. Where a count carries weight it belongs in a golden, where
 CI reads it.
+
+## 2026-08-26 — the cheap half of the ratchet moves to where it gets answered
+
+The entry above found `pending_cells_proven_strict` unable to apply since
+#1015, recorded that the nightly had caught it and that nobody answered, and
+said the fix — making a red nightly reach somebody — was a preference rather
+than a defect to settle alone. That was the wrong shape to leave it in.
+
+The two things `prove` does have different prices. **Applying a mutation costs
+a sed. Proving it reddens its gate costs a build.** Only the second needs a
+nightly. The failure that actually bit was the first kind, and the first kind
+is cheap enough to run on every change.
+
+So `cover` — the per-PR half — now creates one throwaway worktree of HEAD,
+applies each mutation in turn, restores between rows, and refuses any that no
+longer matches the source it patches. Twenty-nine mutations in **seven
+seconds**, against a job that already pays a compile.
+
+### Watched red, on the exact historical failure
+
+Not a synthetic defect: the anchor was set back to the pre-#1015 spelling,
+which is precisely what that commit invalidated.
+
+    ratchet: 1 mutations no longer apply
+      STALE cost goldens (deterministic ratchet, no clocks) — the pending-cell
+            shape erased from the corpus by a strictness change
+
+Exit 1. Restored, green again. #1015's own pull request would have gone red on
+this, and its author would have fixed the anchor in the same change rather than
+leaving a row proving nothing for two days.
+
+### What it reads, and what it therefore does not
+
+Like `prove`, this walks a worktree of HEAD rather than the working tree, so a
+mutation edited but not yet committed is not what it checks. That is right for
+CI, which checks out the commit, and it caught me out twice while building
+this: the first watched-red stayed green because the break was unstaged, and
+the reset that removed the break took the feature with it. The property is
+worth stating rather than discovering — the ratchet answers for what a commit
+carries, never for what is sitting unsaved beside it.
+
+### What is still not built
+
+Making a red NIGHTLY reach somebody. That remains a question about how the
+owner wants to be told, and this change does not answer it — it only removes
+the failure mode that had no business waiting for a nightly at all. A gate that
+stays green under its mutation still costs a build to detect, still runs at
+09:00, and still has no addressee.

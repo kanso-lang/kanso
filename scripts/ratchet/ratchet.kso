@@ -414,12 +414,66 @@ fn against declared
 
 fn verdict _ _ true
   io/write "ratchet: every ci job carries a mutation or a stated reason\n"
+    . (_ -> applies_all)
 
 fn verdict gaps ghosts false
   said = list/to_list (list/map gaps (n -> "  no row and no reason: {n}\n"))
   gone = list/to_list (list/map ghosts (n -> "  no such ci job: {n}\n"))
   body = text/join (text/concat said gone) ""
   saying = "ratchet: the table and ci.yml disagree\n{body}"
+  io/write_err saying . (_ -> os/exit 1)
+
+# APPLYING a mutation costs a sed; proving it reddens its gate costs a build.
+# Those are different prices, and only the second one needs the nightly. So the
+# cheap half runs here, on every change: a mutation that no longer matches the
+# source it patches is a row that has quietly stopped proving anything.
+#
+# This exists because pending_cells_proven_strict anchored on a line #1015
+# rewrote, and the nightly said so the next morning — correctly, precisely, and
+# to nobody. Fifteen hours later it was still red. A per-PR signal gets answered
+# because it blocks a merge, so the check that would have caught #1015 belongs
+# in #1015's own pull request.
+#
+# Like `prove`, this reads a worktree of HEAD rather than the working tree, so
+# it answers for what a pull request carries rather than for what is still
+# unsaved beside it.
+applies_all = borrowed "/tmp/kanso-ratchet-applies"
+
+fn borrowed dir
+  os/run "git" ["worktree" "add" "--detach" "--force" dir "HEAD"]
+    . (_ -> applying dir rows 1 [])
+
+fn applying dir list at acc
+  applied dir list at acc (at > length list)
+
+fn applied dir _ _ acc true
+  os/run "git" ["worktree" "remove" "--force" dir] . (_ -> intact acc)
+
+fn applied dir list at acc false
+  r = list[at]!
+  shell dir r.mutation . (m -> after_try dir list at acc r m.status)
+
+# The worktree is restored between rows so one stale mutation cannot make the
+# next one look stale too.
+fn after_try dir list at acc _ 0
+  restored dir . (_ -> applying dir list (at + 1) acc)
+
+fn after_try dir list at acc r _
+  restored dir . (_ -> applying dir list (at + 1) (push acc r))
+
+fn restored dir
+  shell dir "git checkout -- . && git clean -fdq"
+
+fn intact acc
+  standing acc (length acc == 0)
+
+fn standing _ true
+  io/write "ratchet: every mutation still matches the source it patches\n"
+
+fn standing acc false
+  said = list/to_list (list/map acc (r -> "  STALE {r.job} — {r.claim}\n"))
+  body = text/join said ""
+  saying = "ratchet: {length acc} mutations no longer apply\n{body}"
   io/write_err saying . (_ -> os/exit 1)
 
 # Each row runs in a worktree of HEAD, so a mutation cannot reach the tree the
