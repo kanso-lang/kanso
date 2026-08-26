@@ -3347,11 +3347,43 @@ the new bits, and measure.
     welfare                 84.89 -> 84.88
 
 So the room is nearly free, and the fixpoint's cost is entirely in the
-propagation rather than in the representation. That is one uncertainty removed
-from a decision that has not been taken: whether typing 46 more reads is worth
-threading a second value through every arm of `eval_expr`. The figures are the
-container host's, and only the peak is host-pinned, so the runner's own would
-need re-reading before any of this is banked.
+propagation rather than in the representation. The figures are the container
+host's, and only the peak is host-pinned, so the runner's own would need
+re-reading before any of this is banked.
+
+That also corrects the shape of the cost. The note left on this task said
+`eval_expr` returns a `Set`, so carrying a record identity means threading a
+SECOND value through every arm. It does not, if the identity rides in the high
+bits of the widened word: an arm that passes a set through unchanged needs no
+edit, and a kind test masks against a low-bit constant and still works.
+
+What a packed identity does break is the JOIN, because two identities cannot be
+bitwise-ORed into a third. That count comes off the compiler rather than a
+grep — a `Set` newtype that still masks and compares but implements no `BitOr`,
+which makes rustc report exactly the sites a packed design must rewrite:
+
+    Set | Set                             65
+    |= on a Set                           12
+    the same through a trait bound         7
+    integer |= Set                         2
+                                      ------
+    join sites                            86
+
+    expected `Set`, found integer         90    the empty set written as `0`
+    borrow and iterator shapes            11
+                                      ------
+    total errors                         187
+
+**86 join sites** across infer.rs, codegen.rs, beat.rs, check.rs, dispatch.rs
+and provenance.rs, each of them a place that would have to decide what joining
+`span` with `node` means — a record whose identity is unknown, which is a
+lattice question rather than a bitwise one. The other hundred are mechanical:
+a real implementation names the empty set instead of writing `0`.
+
+Against the interner's 365 for one AST field, 86 is a different order of thing,
+and the prize is a refusal rather than speed. This is priced, not declined, and
+not yet taken: 46 reads and 6.2% of confusions, for 86 lattice decisions and
+0.01 welfare of room.
 
 ## 2026-08-25 — the interned symbol is DECLINED, and the churn was counted by making the name opaque
 
