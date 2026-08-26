@@ -261,6 +261,17 @@ trend = row
   (breaking "a_counter_worsens_for_nothing")
   release
 
+# The same refusal in the other vein. Two rows, because the two goldens are
+# read by different code: one is `name=value` and the gate has always parsed
+# it, the other is `name value` and the gate saw nothing in it at all.
+trend_runtime = row
+  "the decoder's retired instructions rising with nothing traded for them"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_runtime_counter_worsens_for_nothing")
+  release
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -327,7 +338,7 @@ rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs error_corpus trend]
 
-rows_c1a = text/concat rows_c1 [perf_row]
+rows_c1a = text/concat rows_c1 [perf_row trend_runtime]
 
 rows_c = text/concat rows_c1a [diagnostics accumulator itself]
 
