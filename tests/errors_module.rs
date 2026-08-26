@@ -1,12 +1,12 @@
 //! Diagnostics raised inside a DEPENDENCY, not in the program the user named.
 //!
-//! tests/golden/errors holds 161 fixtures and every one of them is a single
-//! file, so the whole corpus asks the same question: does this program's own
-//! mistake get reported. Nothing asked whether a mistake in a library that a
-//! program merely imports gets reported, and that gap was found the way gaps
-//! usually are — by needing the answer. Removing the per-dependency
-//! `check_merged` pass turned on exactly this shape, and there was no fixture
-//! to run it against.
+//! tests/golden/errors holds a fixture per mistake and every one of them is a
+//! single file, so the whole corpus asks the same question: does this
+//! program's own mistake get reported. Nothing asked whether a mistake in a
+//! library that a program merely imports gets reported, and that gap was
+//! found the way gaps usually are — by needing the answer. Removing the
+//! per-dependency `check_merged` pass turned on exactly this shape, and there
+//! was no fixture to run it against.
 //!
 //! So this corpus is directory-shaped: each case is a module tree with a
 //! library at fault and an entry that imports it, checked whole, with its

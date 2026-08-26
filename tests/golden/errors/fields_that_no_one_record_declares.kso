@@ -1,0 +1,25 @@
+# A bare parameter answers nothing to the single-read fence: `m`'s type is a
+# question for whole-program inference, and `to`, `from` and `wanted` are each
+# declared on SOME record, so no read here is refused on its own.
+#
+# Together they refuse with no inference at all. The interpreter reads `.` off
+# a record and nothing else, so a value read for several fields is one record,
+# and a record this program declares. No declaration holds these together, so
+# the reads cannot all be of the same value.
+type span
+  from
+  to
+
+type node
+  kind
+  wanted
+
+fn width m
+  m.to - m.wanted
+
+fn depth n
+  n.kind + n.from + n.to
+
+pub play =
+  print (width (span 1 5))
+  print (depth (node 2 3))

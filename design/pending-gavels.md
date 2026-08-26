@@ -50,7 +50,50 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-Nothing. The section stays so the next entry has somewhere to land.
+### Obeying gavel 24 costs 0.10 welfare, and `--set` refuses a fall
+
+**Cited: the welfare doctrine in CLAUDE.md — "a fall means the change is
+worse by the project's own stated preferences... either the change goes, or
+the claim is that the weights are wrong." The search found no ruling on what
+happens when a change is compelled by a gavel and the index falls anyway.
+kanso#999 moved the floor once before, but for a corrected figure rather
+than a real fall.**
+
+kanso#1034 deletes `json/failure_position` and `json/failure_reason`, which
+gavel 1b and gavel 24 forbid between them, and reaches the same facts
+through `std/testing`'s `when_failed`. It cannot merge as it stands.
+
+    compile_allocs        64,950 -> 65,543
+    front_end_rounds          40 -> 42            welfare term
+    front_end_visits      17,786 -> 17,886        welfare term
+    compile_peak_bytes   864,300 -> 870,263       welfare term
+    compile_instructions  59,773,156 -> 60,818,284
+    welfare                84.89 -> 84.79         floor 84.89
+
+The cause was isolated rather than guessed: reverting `json.kso` alone and
+keeping the new test file gives 65,801 allocations and 42 rounds, so all of
+the rise is the test file and the deletion claws a little back. The test
+file's one new line is `import "std/testing"`, which pulls a whole module
+into the program the compile golden measures. The library itself shrank by
+two functions.
+
+Two framings:
+
+1. **Move the floor to 84.79 and record why.** The change is compelled by
+   two gavels and cannot go. The welfare model has no term for doctrine
+   compliance, and what a model leaves out it weights at zero. No weight is
+   wrong here — the model is silent, and this is the case that shows it.
+2. **Fix the instrument.** The compile golden measures `kanso check
+   lib/json`, which compiles lib/json's TEST file and so its test-only
+   dependencies. Charging test cost to the library's compile golden may be
+   the real defect. It already carried one test-only dependency (`std/text`),
+   so this is a difference of degree.
+
+**RECOMMENDATION: 1.** It is the smaller change and honest about why. Option
+2 moves the objective itself and deserves its own sitting rather than riding
+a doctrine fix. Not recommended either way: finding a compensating
+improvement in the same pull request to hold the number flat, which is
+gaming the index.
 
 ## Open, not blocking
 

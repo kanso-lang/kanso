@@ -511,11 +511,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      # Costs one compile and no builds: it only reads this file against the
-      # table. Proving each mutation actually reddens its gate is the nightly
-      # workflow, which is expensive; this is what makes a new job impossible
-      # to add without saying how it would be proven.
-      - name: every ci job carries a mutation or a stated reason
+      # Costs one compile and no builds: it reads this file against the table,
+      # then applies every mutation in a throwaway worktree to check it still
+      # matches the source it patches — a sed each, about seven seconds for the
+      # lot. Proving a mutation actually REDDENS its gate costs a build apiece
+      # and stays in the nightly workflow. Splitting the two put the half that
+      # caught #1015 where a pull request has to answer it.
+      - name: every ci job carries a mutation, and every mutation still applies
         run: ./target/release/kanso run scripts/ratchet
 
   perf-history:

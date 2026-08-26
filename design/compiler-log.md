@@ -3216,6 +3216,175 @@ pair. What it changes is the price of the 142: a walk of each body against the
 type table, rather than a second value threaded through every arm of
 `eval_expr`.
 
+## 2026-08-25 — a value read for fields no one record declares is refused, and no inference is behind it
+
+The measurement in the entry above said the fence types none of the fleet and
+that a rule with no inference in it reaches 93.8% of the same confusions. This
+is that rule.
+
+**The argument.** `Expr::Field` in `eval.rs` reads a field off `Value::Record`
+and errors on everything else, and a subtype reads through to its base record,
+so a value a body reads for two fields is one record and a record this program
+declares. When no declaration holds every field read off a value, those reads
+cannot all be of the same value, and the program is wrong whatever type it
+would have had. Nothing is inferred; the type table and one walk of the body
+answer it.
+
+    fn width m
+      m.to - m.wanted
+
+    error[name]: `m` is read for `to` and `wanted`, and no record type has both
+
+`to` is declared on `span` and `wanted` on `node`, so the fence shipped in
+#1029 — which asks only whether any record declares the name — passes both
+reads through and the program dies at run time.
+
+**Which reads may be pooled.** Only the ones that run whenever the body runs.
+Three shapes defer: a lambda, which may never be called; the two arms of an
+`if` or a guard, of which one is taken; and the right operand of `and` or `or`,
+which the left may already have decided. A binding of the same name ends the
+run, because the reads after it are of a different value, and a `build` block
+runs its statements so a binding inside one ends a run too. `set p.x = v` is
+counted as a read, since a build block runs its sets and the field must exist.
+
+The restriction is nearly free. Measured over the fleet before building this:
+the certain-only gather loses one base of the thirty that read two or more
+fields, and none of the refusals.
+
+**The odd one out.** When dropping exactly one field leaves the rest sitting on
+a record together, the diagnostic points at that read, because it is the one to
+change. `n.kind + n.from + n.to` points at `kind`, since `from` and `to` are a
+`span`.
+
+**Cost, and a second walk that CI caught.** `compile_allocs` on lib/json is
+64,950 before and after, byte for byte, and rounds and visits are unmoved. The
+first draft cost 157 allocations, all of them a set built per binding statement
+whether or not anything was open; a walk that carries the open bases and asks
+the pattern about each one allocates nothing until a body actually reads a
+field, and lib/json reads none.
+
+Allocations were the wrong dimension to stop at. The draft was a SECOND
+traversal of every body beside the one the #1029 fence already does, and the
+vein built for exactly this reported it: `compile_instructions` rose 59,773,156
+to 60,090,679 on the runner, **+317,523 for a module with no field reads in
+it**. Nothing else moved, because a walk that finds nothing allocates nothing
+and decides nothing.
+
+The fix is one walk. The two questions a field read raises — does this field
+exist at all, and can the fields read off this value belong to one record —
+differ only in where they may look: the first is asked wherever the read
+appears, the second only where the read certainly runs. So the walk carries
+`certain` and stops recording under the shapes that defer, rather than
+traversing twice.
+
+**The runner reads 59,717,892 against 59,773,156, a fall of 55,264.** So the
+refusal lands with the front end doing LESS work than before it existed: the
+gather rides a walk that was already there, and folding the two tightened the
+one that remains — `walk_children` 1,703,108 to 1,631,080, its recursive twin
+965,191 to 940,511, `check_merged` 1,793,255 to 1,771,785. The golden takes the
+new figure and this is the sentence beside it. `compile_peak_bytes` held at
+864,300 on the same run, and `compile_instructions` is not a welfare term, so
+the floor does not move.
+
+The container host agrees on direction and not on magnitude, which is why the
+row is host-pinned: 60,404,144 against 60,625,645 there, each repeated to the
+instruction.
+
+### Watched red
+
+`tests/golden/errors/fields_that_no_one_record_declares.kso` on the compiler as
+it stood exits **1** with `error[runtime]: `span` has no field `wanted``. With
+the check it exits 2 with two diagnostics, one for the two-field message and
+one for the three-field message. That is the hole this closes: a language that
+refuses before anything runs was deferring this one to run time.
+
+### Watched red three more times, for the quiet cases
+
+A refusal that fires is half the behaviour; the other half is staying silent
+where a program is correct, and that half is where a false refusal would live.
+`tests/golden/micro/a_field_read_the_body_may_skip_is_not_pooled.kso` is three
+correct programs the rule would refuse if it pooled too much, and each clause
+was watched red by breaking its own guard:
+
+    the two arms of an `if` pooled     `x` is read for `from` and `kind`
+    a lambda body pooled with outside  `m` is read for `kind`, `from` and `to`
+    a rebinding did not end the run    `p` is read for `from`, `to`, `kind`
+                                       and `wanted`
+
+Each of the three is a program that runs and prints, so the fixture is a micro
+golden rather than an error golden — it pins the output, and any of the three
+guards going away turns the print into a refusal.
+
+The rebinding case took a second attempt to write at all. A body cannot rebind
+a name after a bare effect line — the grammar puts every binding before every
+effect — so the rebinding lives in a constant that returns a string and `play`
+prints it. That is worth knowing: the shape this guard exists for cannot be
+written in an effectful body in the first place.
+
+### What it does not reach
+
+A value read for exactly one field, where that one name is the wrong one. The
+93.8% above is measured by ADDING a confused name to what a value is already
+read for, which is why single-read bases are mostly covered: a second, wrong
+read makes a two-set and the two-set is usually homeless. A *replacement* on a
+base read once leaves a one-set and nothing to compare. Thirty of the sixty
+bases are read for exactly one field, carrying 46 of the 142 reads, and that is
+the fixpoint's real prize — along with the 6.2% where some other record happens
+to hold the confused pair.
+
+### What the fixpoint's room costs, measured before building it
+
+`Set` in src/infer.rs is a `u16` with fourteen kind bits used, so bits 14 and
+15 are all that is spare and the fleet declares 143 record types. Carrying a
+type identity in the lattice means widening the word. That price can be read
+without spending any of it: change `pub type Set = u16` to `u32`, use none of
+the new bits, and measure.
+
+    compile_allocs         64,950 -> 64,950
+    front_end_rounds           40 -> 40
+    front_end_visits       17,786 -> 17,786
+    compile_peak_bytes    864,300 -> 866,908      +2,608
+    welfare                 84.89 -> 84.88
+
+So the room is nearly free, and the fixpoint's cost is entirely in the
+propagation rather than in the representation. The figures are the container
+host's, and only the peak is host-pinned, so the runner's own would need
+re-reading before any of this is banked.
+
+That also corrects the shape of the cost. The note left on this task said
+`eval_expr` returns a `Set`, so carrying a record identity means threading a
+SECOND value through every arm. It does not, if the identity rides in the high
+bits of the widened word: an arm that passes a set through unchanged needs no
+edit, and a kind test masks against a low-bit constant and still works.
+
+What a packed identity does break is the JOIN, because two identities cannot be
+bitwise-ORed into a third. That count comes off the compiler rather than a
+grep — a `Set` newtype that still masks and compares but implements no `BitOr`,
+which makes rustc report exactly the sites a packed design must rewrite:
+
+    Set | Set                             65
+    |= on a Set                           12
+    the same through a trait bound         7
+    integer |= Set                         2
+                                      ------
+    join sites                            86
+
+    expected `Set`, found integer         90    the empty set written as `0`
+    borrow and iterator shapes            11
+                                      ------
+    total errors                         187
+
+**86 join sites** across infer.rs, codegen.rs, beat.rs, check.rs, dispatch.rs
+and provenance.rs, each of them a place that would have to decide what joining
+`span` with `node` means — a record whose identity is unknown, which is a
+lattice question rather than a bitwise one. The other hundred are mechanical:
+a real implementation names the empty set instead of writing `0`.
+
+Against the interner's 365 for one AST field, 86 is a different order of thing,
+and the prize is a refusal rather than speed. This is priced, not declined, and
+not yet taken: 46 reads and 6.2% of confusions, for 86 lattice decisions and
+0.01 welfare of room.
+
 ## 2026-08-25 — the interned symbol is DECLINED, and the churn was counted by making the name opaque
 
 The economics have been settled since the "how big an interner would have to
@@ -3278,7 +3447,164 @@ qualification machinery). A name carrying its module and base answers both
 structurally, and it is a fraction of the conversion. Whoever returns to this
 should measure that, not the interner.
 
-## 2026-08-25 — json stops reading its own failure (written 2026-08-21, landed today)
+## 2026-08-26 — the error corpus had no ratchet row, and now has one
+
+The ratchet's rule is one row per CI job, and `specs (unit, golden,
+differential)` has carried one since the file existed. Which command that row
+actually runs is a different question from whether the rule is satisfied, and
+it was worth asking while claiming ratchet cover for a new error golden.
+
+Four rows run `cargo test --test golden`. Two point at
+`micro_corpus_agrees_across_engines`, one at
+`micro_corpus_survives_a_release_build`, one at
+`mem_corpus_pins_native_allocator_counters`. The error corpus — 164 fixtures
+pinning byte for byte every diagnostic the language emits — had none. Nothing
+in this tree had ever watched it fail.
+
+That is the file's own stated reason for existing, in its header: a gate nobody
+has watched fail has no evidence it works, and five checks went green in one
+day while checking nothing.
+
+**The row.** `error_corpus`, gate `cargo test --release --test golden
+error_corpus`, job `specs (unit, golden, differential)`, mutation
+`a_diagnostic_stops_being_raised`, setup `release` — the same shape as
+`thunk_walk`, which reads a golden through a release build.
+
+**The mutation** is the regression the corpus is for, which is a check that
+quietly stops firing rather than a golden that drifts. The none-in-a-list walk
+still runs and still visits every list, and finds nothing in any of them:
+
+    for item in items.iter().take(0).filter(|i| is_none_lit(i))
+
+It compiles without a warning, so no other gate in the tree objects to it, and
+the corpus is left to notice on its own.
+
+### Watched red before it was wired
+
+The mutation was applied by hand first, `cargo build --release` came back
+clean, and `cargo test --release --test golden error_corpus` FAILED. Only then
+was it reverted and the row written. The row is therefore written against a
+mutation already known to work, rather than a mutation guessed at to fit a row.
+
+The filter is proven non-empty by the same run. A gate that matches no test
+passes forever, which is the failure this file is named after, and
+`cargo test --release --test golden error_corpus` reported "0 passed; 1 failed;
+9 filtered out" — exactly one test, and it went red.
+
+### And the row that had been proving nothing since 2026-08-24
+
+Running `prove` for the new row turned up a second thing, which is the better
+find of the two. It reported **1 rows proved nothing**:
+
+    BROKE cost goldens — the pending-cell shape erased from a strictness
+    change: the mutation would not apply
+
+`pending_cells_proven_strict` anchors on an exact line of src/demand.rs:
+
+    self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
+
+#1015 made the demand pass borrow the names its keys are made of, so that line
+now reads `&(fn_name, arity, stmt_index)`. The mutation's `awk` found no match,
+exited 3, and the row has been unable to introduce its defect ever since.
+
+The `pend_counters` row was therefore green for a reason that had nothing to do
+with the gate working.
+
+The anchor now matches the borrowed form, and the row was watched red by hand
+to be sure the fix restores the substance rather than the sed: applied, built,
+and `scripts/gates/pend_counters.sh` exits 1 with the lazy tier gone —
+
+    thunk_allocs   200 -> 0
+    thunk_forces   100 -> 0
+    thunk_evals    100 -> 0
+
+which is precisely what the mutation's own comment says it should do. Reverted,
+rebuilt, gate green again.
+
+### The machinery worked. Nobody answered it.
+
+The first draft of this entry said nothing watched the mutations, and that was
+wrong in a way worth correcting rather than quietly fixing. `prove` exits 1 on
+a row that proves nothing — `told bad false` writes the count and calls
+`os/exit 1` — and `.github/workflows/ratchet.yml` runs it on a schedule every
+morning at 09:00 UTC.
+
+So the timeline is not a blind spot:
+
+    2026-08-24 22:52 UTC   #1015 lands, dropping the .to_string()
+    2026-08-25 09:27 UTC   nightly ratchet run 14 fires
+    2026-08-25 09:37 UTC   run 14 FAILS, naming this exact mutation
+    2026-08-26 00:50 UTC   still red, still unanswered
+
+The ratchet caught it the very next morning and said so precisely — `BROKE
+cost goldens … the mutation would not apply` — in the first red run that
+workflow has had in fourteen. It was found today only because `prove` was run
+by hand for an unrelated reason.
+
+That reframes the lesson. The gap is not instrumentation, which did its job on
+schedule; it is that a nightly nobody reads is a nightly that does not exist.
+A per-PR signal gets answered because it blocks a merge, and a scheduled one
+competes with whatever else the morning holds. Worth saying plainly because the
+obvious fix — build more watching — is the wrong one here. What this needed was
+for the red run to reach somebody.
+
+### A count in a comment, drifting
+
+`tests/errors_module.rs` opened by saying the corpus holds 161 fixtures. It
+holds 164. Nothing checks that number and it goes stale every time somebody
+adds a mistake to the corpus, so the sentence now says a fixture per mistake
+and names no figure. Where a count carries weight it belongs in a golden, where
+CI reads it.
+
+## 2026-08-26 — the cheap half of the ratchet moves to where it gets answered
+
+The entry above found `pending_cells_proven_strict` unable to apply since
+#1015, recorded that the nightly had caught it and that nobody answered, and
+said the fix — making a red nightly reach somebody — was a preference rather
+than a defect to settle alone. That was the wrong shape to leave it in.
+
+The two things `prove` does have different prices. **Applying a mutation costs
+a sed. Proving it reddens its gate costs a build.** Only the second needs a
+nightly. The failure that actually bit was the first kind, and the first kind
+is cheap enough to run on every change.
+
+So `cover` — the per-PR half — now creates one throwaway worktree of HEAD,
+applies each mutation in turn, restores between rows, and refuses any that no
+longer matches the source it patches. Twenty-nine mutations in **seven
+seconds**, against a job that already pays a compile.
+
+### Watched red, on the exact historical failure
+
+Not a synthetic defect: the anchor was set back to the pre-#1015 spelling,
+which is precisely what that commit invalidated.
+
+    ratchet: 1 mutations no longer apply
+      STALE cost goldens (deterministic ratchet, no clocks) — the pending-cell
+            shape erased from the corpus by a strictness change
+
+Exit 1. Restored, green again. #1015's own pull request would have gone red on
+this, and its author would have fixed the anchor in the same change rather than
+leaving a row proving nothing for two days.
+
+### What it reads, and what it therefore does not
+
+Like `prove`, this walks a worktree of HEAD rather than the working tree, so a
+mutation edited but not yet committed is not what it checks. That is right for
+CI, which checks out the commit, and it caught me out twice while building
+this: the first watched-red stayed green because the break was unstaged, and
+the reset that removed the break took the feature with it. The property is
+worth stating rather than discovering — the ratchet answers for what a commit
+carries, never for what is sitting unsaved beside it.
+
+### What is still not built
+
+Making a red NIGHTLY reach somebody. That remains a question about how the
+owner wants to be told, and this change does not answer it — it only removes
+the failure mode that had no business waiting for a nightly at all. A gate that
+stays green under its mutation still costs a build to detect, still runs at
+09:00, and still has no addressee.
+
+## 2026-08-26 — json stops reading its own failure (written 2026-08-21, landed today)
 
 The work below was done on 2026-08-21 and sat in a draft pull request until
 today. It is filed at the tail rather than at its own date, because this log
