@@ -1,23 +1,27 @@
 # Two arms of arity one, both matching this package's own err, and only one of
-# them is advised.
+# them is reported.
 #
-# `rescue` is pub, so provenance seeds it: a published err parameter is assumed
-# to see its own package's failures, because the callers are not all in view.
-# `quiet` is private and nobody calls it, so nothing ever feeds its parameter
-# and it stays silent.
+# `rescue` is fed by the written call site below. `quiet` is never called, so
+# nothing reaches its parameter and it stays silent. The two differ only in
+# their NAME: provenance keys its fixpoint on (name, arity), and if that key
+# ever stops distinguishing them — a collapsed group, a hash that ignores the
+# name — `quiet` inherits what `rescue` was fed and is reported for a rescue it
+# never made.
 #
-# The two differ only in their NAME. Provenance keys its fixpoint on
-# (name, arity), and if that key ever stops distinguishing them — a collapsed
-# group, a hash that ignores the name — `quiet` inherits what `rescue` was fed
-# and picks up an advisory it has not earned.
+# This used to lean on the pub self-seed, which retired with gavel 24. A call
+# site proves the same thing and proves it from the program rather than from an
+# assumption about callers nobody can see.
 type woe
   at
 
-pub fn boom _
+fn boom _
   err (woe 5)
 
-pub fn rescue (err w:woe)
+fn rescue (err w:woe)
   w.at
 
 fn quiet (err w:woe)
   w.at
+
+pub fn asked _
+  rescue (boom 0)

@@ -504,13 +504,39 @@ pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
     }
 }
 
+/// The raise site's literal holds both halves — the package that raises here,
+/// a NUL, then the trace line — so one argument carries what the match rule
+/// asks about and what the report prints. `origin_lit` in the backend builds
+/// it; native's `origin_arg` builds the same shape.
+fn raised_at(origin_lit: u32) -> crate::eval::Raised {
+    let both = lit_str(origin_lit);
+    match both.split_once('\0') {
+        Some((hako, at)) => {
+            crate::eval::Raised { at: Some(Rc::from(at)), hako: Some(Rc::from(hako)) }
+        }
+        None => crate::eval::Raised { at: Some(both), hako: None },
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_mkerr(h: u32, origin_lit: u32) -> u32 {
     let v = val(h);
     if is_failure(&v) {
         return h;
     }
-    push(Slot::V(err_value(v, Some(lit_str(origin_lit)))))
+    push(Slot::V(err_value(v, raised_at(origin_lit))))
+}
+
+/// An arm cannot see an err its own hako raised (gavel 24, clause 1, as
+/// dispatch semantics). Answers whether the match may proceed, so every
+/// non-err and every err from elsewhere passes.
+#[no_mangle]
+pub extern "C" fn rt_not_own_err(h: u32, arm_lit: u32) -> u32 {
+    let arm = lit_str(arm_lit);
+    match val(h) {
+        Value::ErrV(info) => u32::from(info.hako.as_deref() != Some(&*arm)),
+        _ => 1,
+    }
 }
 
 fn lit_str(h: u32) -> Rc<str> {
@@ -535,9 +561,11 @@ pub extern "C" fn rt_err_hop(h: u32, name_lit: u32) -> u32 {
 pub extern "C" fn rt_err_stamp(h: u32, origin_lit: u32) -> u32 {
     match slot(h) {
         Slot::V(Value::ErrV(info)) if info.origin.is_none() => {
+            let raised = raised_at(origin_lit);
             push(Slot::V(Value::ErrV(Rc::new(ErrInfo {
                 reason: info.reason.clone(),
-                origin: Some(lit_str(origin_lit)),
+                origin: raised.at,
+                hako: raised.hako,
                 hops: info.hops.clone(),
                 cause: info.cause.clone(),
                 merged: info.merged,
@@ -724,7 +752,7 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
     match index_value(val(base), idx.clone(), SPAN0) {
         Ok(Value::NoneV) => {
             let msg = format!("missing index {}", render_demanded(&idx, true));
-            push(Slot::V(err_value(Value::Str(msg), None)))
+            push(Slot::V(err_value(Value::Str(msg), crate::eval::Raised::default())))
         }
         Ok(v) => push(Slot::V(forced(v))),
         Err(rt) => die(rt.message),

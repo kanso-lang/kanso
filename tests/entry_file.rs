@@ -132,7 +132,14 @@ fn currying_survives_qualification() {
 
 /// A typeset's membership is a list of type names this module declares, and
 /// qualification renames those. The list has to move with them or the set
-/// matches nothing and an err walks past the arm written to catch it.
+/// matches nothing and the typeset arm never fires.
+///
+/// The reasons reach that arm through `std/testing`'s `when_failed`, which is
+/// foreign to the module and therefore licensed to separate a reason from its
+/// failure. The module dispatches on the bare reason record — under gavel 24
+/// it could not dispatch on its own err at all, and a fixture that pinned the
+/// typeset by rescuing an own-origin err would be pinning it through a shape
+/// the language refuses.
 #[test]
 fn a_typeset_keeps_its_members_across_an_import() {
     let fixture = "tests/golden/entryfile/a_typeset_across_the_import/main.kso";

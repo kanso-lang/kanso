@@ -55,7 +55,15 @@ tried() {
   return 1
 }
 
-if [ -n "$branch" ] && git ls-remote --exit-code --heads "$url" "$branch" >/dev/null 2>&1; then
+# `refs/heads/$branch`, not a bare `$branch`: git matches a ls-remote pattern
+# by whole path components from the RIGHT, so `own-origin-arm` matches
+# `refs/heads/claude/own-origin-arm`. The script then believed a coordinated
+# branch existed and cloned a name that did not, three times, and the gating
+# job went red on a sibling that had nothing to say about the change. Anchoring
+# the pattern makes the question the one it meant to ask: is there a branch
+# named exactly this?
+if [ -n "$branch" ] &&
+  git ls-remote --exit-code --heads "$url" "refs/heads/$branch" >/dev/null 2>&1; then
   tried --depth 1 --branch "$branch" "$url" "$into"
   if [ -f sibling-goldens-move ]; then
     set +e

@@ -246,11 +246,20 @@
 # Update in place, rewriting the indirection at first evaluation so later reads
 # test nothing, would take these 64 bytes back. It stays the better shape and
 # this is the number it would have to beat.
-jsonbench text=79906
-encodebench text=97058
-oneshot text=97186
-basket text=89026
-widebench text=98146
-deepbench text=62850
-escapebench text=49538
-pendbench text=73410
+# 2026-08-26: every binary grows, and by a different amount each — jsonbench
+# +544, encodebench +624, oneshot +592, basket +256, widebench +624, deepbench
+# +160, escapebench +80, pendbench +224. A rise, and one the change buys
+# outright: an arm that could match its own hako's err now asks before it
+# matches, so each such arm carries a call and a branch, and each raise site
+# carries its package name beside the file and line it already carried. Both
+# scale with the program rather than with the runtime, which is why the spread
+# runs from 80 bytes to 624 instead of landing on one number the way #1040's
+# constructor fix did.
+jsonbench text=80450
+encodebench text=97682
+oneshot text=97778
+basket text=89282
+widebench text=98770
+deepbench text=63010
+escapebench text=49618
+pendbench text=73634

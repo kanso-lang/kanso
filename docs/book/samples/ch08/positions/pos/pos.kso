@@ -1,10 +1,10 @@
 import "std/text"
 
-type parse_failure
+pub type parse_failure
   position
   reason
 
-fn decode_int s
+pub fn decode_int s
   cs = text/bytes s
   p = skip_ws cs 1
   q = digits_end cs p
@@ -40,17 +40,6 @@ fn is_ws? none
 
 fn is_ws? _
   false
-
-pub play =
-  print (show (decode_int "  42  "))
-  >> print (show (decode_int "1 x"))
-  >> print (show (decode_int "  7 ;"))
-
-fn show (err (parse_failure p reason))
-  "err at {p}: {reason}"
-
-fn show v
-  "ok: {v}"
 
 fn skip_ws cs p
   if (is_ws? cs[p]) (skip_ws cs (p + 1)) p

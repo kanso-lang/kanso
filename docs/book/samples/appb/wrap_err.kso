@@ -1,11 +1,10 @@
+import "std/text"
+
 type config_bad
   file
 
-type disk_torn
-  path
-
 fn low_read _
-  err (disk_torn "/etc/x")
+  text/utf8 [255]
 
 fn relabel e:err
   wrap_err (config_bad "app.conf") e
