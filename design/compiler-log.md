@@ -4157,3 +4157,62 @@ The spread was measured in the container, and the container reproduces main's
 whole `.text` table exactly, which is what makes it usable: `bench/text_golden`
 pins `clang=18.1.3` and nothing else, because what compiles the emitted IR is
 clang and what rustc built is only the program that wrote it.
+
+### What it costs to run, and what it costs to compile
+
+The runtime instruction vein, from the runner:
+
+    jsonbench    2,860,478,794 -> 2,912,170,881   +51,692,087   +1.81%
+    oneshot         46,596,968 ->    46,941,571      +344,603   +0.74%
+    widebench       84,817,033 ->    85,113,625      +296,592   +0.35%
+    basket          57,400,154 ->    57,408,155        +8,001   +0.01%
+    encodebench  9,727,166,055 -> 9,727,535,960      +369,905   +0.004%
+    deepbench, escapebench, pendbench unmoved
+
+Three rows do not move at all, and that is the finding rather than a footnote.
+The cost is paid per err-dispatching arm that runs, not per instruction
+executed, so the decoder's inner loop — which is made of such arms — pays 1.81%
+while the three programs whose hot paths hold none of them pay nothing.
+encodebench renders rather than dispatching on err, and its rise is four
+thousandths of a per cent across nine billion.
+
+`compile_instructions` rises 56,849,156 to 57,490,077, and that row is part
+work and part layout: the front end now carries a package name on every raise
+site and asks at every skippable arm, and `src/runtime.c` grew, which shifts
+the compiler's own code around a static it never reads. The entry above this
+one measured that same effect at +664, +393 and −6,763 on three sittings of a
+single diff, so the two halves are not separable from this row alone. What is
+separable is every counter that measures ONLY the front end's work, and all
+three of those fell: visits 16,818 to 16,806, allocations 62,110 to 61,981,
+peak 825,664 to 822,004 — the pub self-seed retired and `lib/json` shed `must`
+and `defect`.
+
+### The floor moves, by hand, because the tool refuses
+
+welfare goes 84.14 to 84.12. Gavel 24 clause 1 is a language change, and Clay's
+ruling of 2026-08-25 governs it: the floor is absolute against refactorings and
+permeable to the language, so a doctrine-compelled change lands, the floor
+moves, and the fall is recorded against the change that spent it. The 84.79
+entry has this exact shape and is the precedent.
+
+`welfare --set` refuses a fall of more than 0.01 and refused this one. That
+refusal is the design — its own comment names hand-editing
+`bench/welfare_floor.json` as the single override, precisely so the move
+appears in a diff a reviewer reads rather than behind a flag. So the floor was
+edited by hand and the entry carries the whole attribution. No compensating
+optimization was hunted, which the same ruling forbids.
+
+### The trend gate said nothing about any of the runtime rows
+
+It named four compile counters and refused the one whose sentence was missing.
+It did not mention jsonbench's 1.81%, or any `.text` row, or the three emitted
+counters, because `bench/instructions_golden.txt`, `bench/text_golden.txt` and
+`bench/emitted_golden.txt` are not in `bench_goldens`. Only the per-golden
+exact diff caught them.
+
+That is the blindness the entry above this one closed for the two measured
+compile veins, still open one vein down — and it matters more here, because
+`instructions_golden` is where welfare's four run-speed terms come from. Half
+the score's inputs are invisible to the gate meant to watch the score's inputs,
+which was that entry's own argument. OPEN, filed as its own change rather than
+folded in, because it touches the gate this branch is being judged by.
