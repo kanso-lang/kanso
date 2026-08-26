@@ -4825,3 +4825,34 @@ Sixteen bytes of .text a binary, and the work vein moves by tens: jsonbench
 +23, basket +23, pendbench +38, oneshot -21. The map render is on no
 benchmark's path, so what these are is the one comparison arriving at a
 slightly different address.
+
+## 2026-08-26 — what a failure does at every site, pinned
+
+The rule is one sentence: a failure reaching an operation carries past it. What
+that means differs by site, and each site is implemented separately in three
+engines. Asking one question of all three — what happens HERE — produced four
+divergences in an afternoon (#1052 twice, #1056, #1057 with #1058), every one
+a site where two engines agreed and the third did not.
+
+None of them was hard to find. What was missing was the question being asked
+of each site in turn, and a place to write the answer down. Twelve sites, one
+fixture:
+
+    merge      operator, comparison, constructor, `&` join
+    first      call with no matching arm, interpolation, `>>` sequence
+    holds      list literal, map literal — a container is not its contents
+    through    field read, index, builtin
+
+`what_a_failure_does_at_every_site` runs all twelve and pins what each answers.
+A site that drifts on any engine goes red; a site nobody has thought about is
+a line missing from the file, which is a thing a reader can notice.
+
+Worth naming because the same shape recurred four times: the right code was
+already written and something shadowed it. `type_match_depth` answered `some`
+before it answered `err`. Native's typeset arm returned before reaching the
+annotated arm's guard. `k_render` returned an err before reaching the case that
+renders one. And the map render sat outside the window an edit was applied
+over. In each the correct behaviour existed in the file and did not run — which
+is what a rule spread across pattern kinds, container kinds and three
+implementations costs, and it is the concrete form of the argument for putting
+err-handling in one named place.

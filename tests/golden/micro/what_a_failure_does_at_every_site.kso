@@ -1,0 +1,73 @@
+# What infectiousness DOES, site by site, on every engine.
+#
+# The rule is easy to state and was nowhere written down: a failure reaching
+# an operation carries past it. What that means in practice differs by site —
+# some merge two failures, some take the first, some build a container that
+# holds them — and each site is implemented separately in three engines. Four
+# divergences came out of asking this question in one afternoon (#1052 twice,
+# #1056, #1057/#1058), every one of them a site where two engines agreed and
+# the third did not.
+#
+# So the contract is a golden now. A site that drifts on any engine goes red
+# here, and a site nobody has thought about is a line missing from this file.
+#
+#   merge      two failures are two facts and neither caused the other
+#   first      the operation is ordered, so the first failure is the answer
+#   holds      a container holds what it was built from; it did not fail
+#   through    the failure passes and the operation does not happen
+import "std/testing"
+
+type couple
+  left
+  right
+
+fn as_text reason
+  "{reason}"
+
+fn boom what
+  err what
+
+fn joined a b
+  "{a}{b}"
+
+# merge: neither operand caused the other
+operated = boom "a" + boom "b"
+
+compared? = boom "a" < boom "b"
+
+built = couple (boom "a") (boom "b")
+
+grouped = boom "a" & boom "b"
+
+# first: the sites that are ordered
+called = joined (boom "a") (boom "b")
+
+woven = "{boom "a"} and {boom "b"}"
+
+sequenced = boom "a" >> boom "b"
+
+# holds: a container is not its contents
+listed = [(boom "a") 2]
+
+mapped = { "k":(boom "a") }
+
+# through: the operation does not happen
+reached = (boom "a").left
+
+indexed = [1 2 3][(boom "a")]!
+
+sized = length (boom "a")
+
+pub play =
+  print "operated:  {testing/when_failed operated as_text}"
+  >> print "compared:  {testing/when_failed compared? as_text}"
+  >> print "built:     {testing/when_failed built as_text}"
+  >> print "grouped:   {testing/when_failed grouped as_text}"
+  >> print "called:    {testing/when_failed called as_text}"
+  >> print "woven:     {testing/when_failed woven as_text}"
+  >> print "sequenced: {testing/when_failed sequenced as_text}"
+  >> print "listed:    {listed}"
+  >> print "mapped:    {mapped}"
+  >> print "reached:   {testing/when_failed reached as_text}"
+  >> print "indexed:   {testing/when_failed indexed as_text}"
+  >> print "sized:     {testing/when_failed sized as_text}"
