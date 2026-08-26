@@ -61,13 +61,30 @@ lower_f = ["front_end_rounds" "front_end_visits" "compile_peak_bytes"]
 # it did while gavel 24 was being built, and only the per-golden diff caught it.
 lower_g = ["compile_instructions" "compile_allocs"]
 
+# The runtime work vein, per benchmark. Four of these are welfare's run-speed
+# terms, so half the score's inputs were invisible to the gate that exists to
+# watch the score's inputs — the same argument the two compile veins above
+# were added on, one vein down. Named WITHOUT the file's prefix, because the
+# direction lookup strips it: what is classified is the counter, wherever it
+# was read from. `text` is the machine-code vein, summed over the binaries.
+lower_h = ["jsonbench" "encodebench" "oneshot" "basket" "widebench"]
+
+lower_i = ["deepbench" "escapebench" "pendbench" "text"]
+
 lower_ab = text/concat lower_a lower_b
 
 lower_cd = text/concat lower_c lower_d
 
 lower_ef = text/concat lower_e (text/concat lower_f lower_g)
 
-lower = text/concat lower_ab (text/concat lower_cd lower_ef)
+# emitted_golden's four counters need no entry: `lines`, `calls`, `branches`
+# and `defines` are in lower_d already, for compile_golden. The prefix on the
+# file keeps the two sums apart; the direction is the same question either way.
+lower_run = text/concat lower_h lower_i
+
+lower_efr = text/concat lower_ef lower_run
+
+lower = text/concat lower_ab (text/concat lower_cd lower_efr)
 
 higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
 
@@ -95,6 +112,30 @@ bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
 
+# The three RUNTIME veins, none of which this gate could read. `work_` and
+# `emitted_` are prefixed because the names collide otherwise: every benchmark
+# would clash with nothing, but `lines`, `calls`, `branches` and `defines`
+# belong to bench/compile_golden.txt already, and summing the decoder's IR
+# line count into a compile sample's would let a rise in one hide a fall in
+# the other. text_golden's rows share the field name `text`, so it sums to one
+# number across the eight binaries — the same treatment compile_golden's five
+# samples already get, and the per-golden diff is what says which binary.
+bench_work = [["bench/instructions_golden.txt" "work_"]]
+
+bench_emitted = [["bench/emitted_golden.txt" "emitted_"]]
+
+bench_text = [["bench/text_golden.txt" ""]]
+
+# Three cost goldens that were simply never listed. They are `name=value` like
+# their four listed siblings, so nothing had to be taught to read them — the
+# list was short by three, which is a different failure from the one above and
+# found the same way: by asking which files in bench/ this program names.
+bench_escape = [["bench/cost_golden_escape.txt" "escape_"]]
+
+bench_scan = [["bench/cost_golden_scan.txt" "scan_"]]
+
+bench_wide = [["bench/cost_golden_wide.txt" "wide_"]]
+
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
@@ -103,7 +144,15 @@ bench_compiled = text/concat bench_ir bench_traffic
 
 bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
 
-bench_goldens = text/concat bench_ab (text/concat bench_cd bench_de)
+bench_run = text/concat bench_work (text/concat bench_emitted bench_text)
+
+bench_rest = text/concat bench_escape (text/concat bench_scan bench_wide)
+
+bench_ce = text/concat bench_cd (text/concat bench_de bench_run)
+
+bench_cf = text/concat bench_ce bench_rest
+
+bench_goldens = text/concat bench_ab bench_cf
 
 mem_dir = "tests/golden/mem"
 
@@ -144,9 +193,33 @@ fn pair_of prefix f
 fn body? l
   text/slice l 1 1 != "#" and length l > 0
 
+fn said? t
+  length t > 0
+
+# Two shapes. Most goldens write `name=value`, one or several to a line, and a
+# leading word that is not a field is a sample name the reader drops so the
+# fields sum across samples. `bench/instructions_golden.txt` writes `name
+# value` instead, and the reader saw nothing at all in it — three benchmarks'
+# worth of a 1.81% decode regression went past this gate unnamed, because a
+# line with no `=` in it produced no pairs and no pairs is indistinguishable
+# from no movement.
 fn on_line prefix line
-  fields = list/select (text/split line " ") field?
-  list/to_list (list/map fields (f -> pair_of prefix f))
+  toks = list/to_list (list/select (text/split line " ") said?)
+  fields = list/to_list (list/select toks field?)
+  named = list/to_list (list/map fields (f -> pair_of prefix f))
+  shaped prefix toks named (length named)
+
+fn shaped prefix toks _ 0
+  lone prefix toks (length toks == 2)
+
+fn shaped _ _ named _
+  named
+
+fn lone prefix toks true
+  [["{prefix}{toks[1]!}" toks[2]!]]
+
+fn lone _ _ false
+  []
 
 fn joined acc more
   text/concat acc more
