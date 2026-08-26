@@ -3668,14 +3668,25 @@ to 11,585. The cost is the one line the test file gained. `kanso check
 lib/json` compiles lib/json's TEST file, so `import "std/testing"` pulls a
 whole module into the program the compile golden measures:
 
-    front_end_rounds        40 -> 42
-    front_end_visits    17,786 -> 17,886
-    compile_peak_bytes 864,300 -> 870,263
-    compile_allocs      64,950 -> 65,543
+    front_end_rounds              40 -> 42
+    front_end_visits          17,786 -> 17,886
+    compile_peak_bytes       864,300 -> 870,289
+    compile_allocs            64,950 -> 65,543
+    compile_instructions  59,717,892 -> 60,772,083
 
 Reverting `json.kso` alone and keeping the new test file gives 65,801
 allocations and 42 rounds, so all of the rise is the test file and the deletion
 claws a little back.
+
+**One of those figures was first written down wrong, and the error names its
+own cause.** The peak row went in at 870,263, which is the CONTAINER's reading;
+the runner reads 870,289. The gap is twenty-six bytes, and twenty-six bytes is
+exactly the container-runner divergence this golden's own header documents from
+2026-08-24 (864,274 against 864,300). Two hosts, both deterministic, a constant
+offset between them — and the row whose header says to read the runner's number
+out of the job log had the container's pasted into it. The measured-on line
+caught it on the next run, which is the second time that machinery has earned
+its place before a bad paste rather than after one.
 
 No compensating optimization was hunted for this pull request. The same ruling
 forbids it in both directions: a feature's fall and an optimization's gain each

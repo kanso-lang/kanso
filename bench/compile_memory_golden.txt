@@ -27,4 +27,4 @@
 # measured-on rustc=1.98.0
 front_end_rounds=42
 front_end_visits=17886
-compile_peak_bytes=870263
+compile_peak_bytes=870289
