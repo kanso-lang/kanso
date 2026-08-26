@@ -478,12 +478,6 @@ err at 5: unexpected trailing characters</code></pre>
   <pre><code><span class="k">type</span> <span class="t">defect</span>
   reason:<span class="t">string</span>
 
-<span class="k">fn</span> <span class="f">_failure_position</span> (<span class="t">err</span> (<span class="t">parse_failure</span> p <span class="o">_</span>))
-  p
-
-<span class="k">fn</span> <span class="f">_failure_position</span> <span class="o">_</span>
-  <span class="n">0</span>
-
 <span class="k">fn</span> <span class="f">must</span> (<span class="t">err</span> reason)
   <span class="t">err</span> (<span class="t">defect</span> <span class="s">"<span class="i">{reason}</span>"</span>)
 
@@ -491,25 +485,29 @@ err at 5: unexpected trailing characters</code></pre>
   v</code></pre>
 </div>
 
-<p>chapter 04 drew the line: an <code>err</code> a caller might reasonably handle is a value to dispatch on; an <code>err</code> nobody should handle rises to the endpoint. <code>decode</code> hands back the first kind, because malformed input is the caller's business—maybe it retries, maybe it reports byte 10 to a user. <code>must</code> converts to the second: wrap a decode of input you <em>control</em>—a config file baked into the program, a fixture—and a failure stops being data and becomes a <code>defect</code>, a bug with your name on it. same railway, different destination, chosen by the caller in one word. and <code>_failure_position</code> is nothing but a projection—dispatch reaching through <code>err</code> into the record to pull the position out, which is exactly how the suite pins error locations.</p>
+<p>chapter 04 drew the line: an <code>err</code> a caller might reasonably handle is a value to dispatch on; an <code>err</code> nobody should handle rises to the endpoint. <code>decode</code> hands back the first kind, because malformed input is the caller's business—maybe it retries, maybe it reports byte 10 to a user. <code>must</code> converts to the second: wrap a decode of input you <em>control</em>—a config file baked into the program, a fixture—and a failure stops being data and becomes a <code>defect</code>, a bug with your name on it. same railway, different destination, chosen by the caller in one word. what json cannot do is read its own failure back: your own failures only bubble, so no arm inside this library reaches through its own <code>err</code>. the suite gets at the position from outside, through <code>std/testing</code>, where json is the foreign package.</p>
 
 <h2>the suite</h2>
 
-<p>sixteen booleans pin the whole library—decoding every value kind, both escape directions, unicode, whitespace, error positions, <code>must</code>, and a round trip:</p>
+<p>twenty booleans pin the whole library—decoding every value kind, both escape directions, unicode, whitespace, error positions, <code>must</code>, and a round trip:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json_test.kso</div>
-  <pre><code><span class="f">test_decode_unicode</span> <span class="o">=</span> (<span class="f">decode</span> <span class="s">"\"\\u00e9\""</span>) <span class="o">==</span> <span class="s">"é"</span>
+  <pre><code><span class="f">test_decode_unicode</span> <span class="o">=</span> <span class="f">decode</span> <span class="s">"\"\\u00e9\""</span> <span class="o">==</span> <span class="s">"é"</span>
 
-<span class="f">test_error_position</span> <span class="o">=</span> (<span class="f">_failure_position</span> (<span class="f">decode</span> <span class="s">"[1, nope]"</span>)) <span class="o">==</span> <span class="n">5</span>
+<span class="f">test_error_position</span> <span class="o">=</span>
+  decoded <span class="o">=</span> <span class="f">decode</span> <span class="s">"[1, nope]"</span>
+  <span class="f">testing/when_failed</span> decoded (r <span class="o">-&gt;</span> r.position <span class="o">==</span> <span class="n">5</span>)
 
-<span class="f">test_error_trailing</span> <span class="o">=</span> (<span class="f">_failure_position</span> (<span class="f">decode</span> <span class="s">"1 x"</span>)) <span class="o">==</span> <span class="n">3</span>
+<span class="f">test_error_trailing</span> <span class="o">=</span>
+  decoded <span class="o">=</span> <span class="f">decode</span> <span class="s">"1 x"</span>
+  <span class="f">testing/when_failed</span> decoded (r <span class="o">-&gt;</span> r.position <span class="o">==</span> <span class="n">3</span>)
 
-<span class="f">test_must_wraps_defect</span> <span class="o">=</span> <span class="f">_is_defect</span> (<span class="f">must</span> (<span class="f">decode</span> <span class="s">"nope"</span>))
+<span class="f">test_must_wraps_defect</span> <span class="o">=</span> <span class="f">testing/when_failed</span> (<span class="f">must</span> (<span class="f">decode</span> <span class="s">"nope"</span>)) <span class="f">a_defect?</span>
 
 <span class="f">test_roundtrip</span> <span class="o">=</span>
   text <span class="o">=</span> <span class="s">"\{\"a\":[1,2.5,\"x\"],\"b\":null}"</span>
-  (<span class="f">encode</span> (<span class="f">decode</span> text)) <span class="o">==</span> text</code></pre>
+  <span class="f">encode</span> (<span class="f">decode</span> text) <span class="o">==</span> text</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test lib/json</div>
     <pre><code>test_decode_array ... ok
@@ -520,19 +518,23 @@ test_decode_int ... ok
 test_decode_nested ... ok
 test_decode_object ... ok
 test_decode_string ... ok
+test_decode_surrogate_pair ... ok
 test_decode_unicode ... ok
 test_decode_whitespace ... ok
+test_encode_empty_list ... ok
+test_encode_empty_map ... ok
 test_encode_escapes ... ok
+test_encode_shorthands ... ok
 test_encode_nested ... ok
 test_error_position ... ok
 test_error_trailing ... ok
 test_must_wraps_defect ... ok
 test_roundtrip ... ok
-16 passed, 0 failed</code></pre>
+20 passed, 0 failed</code></pre>
   </div>
 </div>
 
-<p>look at what each test costs. <code>test_error_position</code> asserts that decoding <code>[1, nope]</code> fails at byte 5—the whole failure model in one comparison, using the private <code>_failure_position</code> because one namespace means the suite reaches wherever it needs. <code>test_roundtrip</code> is the deepest assertion in the file: decode a document, encode the result, and demand the original text back. it holds because <code>encode</code> is canonical—no spaces, keys in map order—so a canonically-written input survives the loop byte for byte. and every one of them is a plain equality between values, which chapter 07 promised would be enough.</p>
+<p>look at what each test costs. <code>test_error_position</code> asserts that decoding <code>[1, nope]</code> fails at byte 5—the whole failure model in one comparison. it goes through <code>std/testing</code>, which hands the reason record to a continuation, because json may not reach into an <code>err</code> json raised. <code>test_roundtrip</code> is the deepest assertion in the file: decode a document, encode the result, and demand the original text back. it holds because <code>encode</code> is canonical—no spaces, keys in map order—so a canonically-written input survives the loop byte for byte. and every one of them is a plain equality between values, which chapter 07 promised would be enough.</p>
 
 <h2>encode and pretty-printing</h2>
 

@@ -253,6 +253,14 @@ perf_row = row
   (breaking "perf_row_loses_a_group")
   release
 
+trend = row
+  "a counter worsening with nothing traded and nothing attributed"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_counter_worsens_for_nothing")
+  release
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -317,7 +325,7 @@ rows_b1e = text/concat rows_b1d [compile_ir compile_ir_host]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
-rows_c1 = [welfare_floor grammar book_outputs error_corpus]
+rows_c1 = [welfare_floor grammar book_outputs error_corpus trend]
 
 rows_c1a = text/concat rows_c1 [perf_row]
 

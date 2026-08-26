@@ -43,4 +43,4 @@
 defines=154
 calls=1775
 branches=1175
-lines=11595
+lines=11585
