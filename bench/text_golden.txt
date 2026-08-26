@@ -268,11 +268,19 @@
 # that only runs once a field has failed. The merge is `cold` and `noinline`
 # now, the scan keeps its early exit, and pendbench came out 0.08% BELOW where
 # it started.
-jsonbench text=80738
-encodebench text=97730
-oneshot text=97810
-basket text=89410
-widebench text=98818
-deepbench text=63122
-escapebench text=49618
-pendbench text=73762
+# 2026-08-26 (last): every benchmark grew 128 to 144 bytes. `k_render` opened
+# by handing back any err it was given, which is right at the top of a render
+# and wrong inside one: an err held in a list is a thing the list holds, and
+# the switch twenty lines down already rendered it `err <reason>` — dead code
+# the early return shadowed. Native was alone in that; the interpreter and
+# wasm both answer through eval::render, which has only the nested case.
+# The first fix split the function in two and cost 1,424 bytes a binary. One
+# body with a `held` flag costs 128, and says the same thing.
+jsonbench text=80866
+encodebench text=97858
+oneshot text=97938
+basket text=89538
+widebench text=98946
+deepbench text=63250
+escapebench text=49746
+pendbench text=73874

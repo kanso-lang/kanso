@@ -4736,3 +4736,66 @@ reason.
 
 `a_typeset_arm_cannot_see_its_own_hakos_err` pins both halves: the failure
 passes through, and the arm still takes a member that is not a failure.
+
+## 2026-08-26 — a list can hold a failure, and native alone disagreed
+
+The access side of the err rule was swept three times today and gave up three
+bugs. This is the propagation side, and the sweep was the same: name every
+site where a failure can reach an operation, then ask all three engines.
+
+Five agreed — an operator merges two failures, a comparison merges, an
+interpolation with two failing holes takes the first, a call takes the first,
+a list literal builds rather than propagates. The sixth did not.
+
+    listed = [(boom "a") (boom "b") 3]
+
+    interp   length: 3   listed: [err "a" err "b" 3]
+    wasm     the same, through eval::render
+    native   error[endpoint]: unhandled err reached the executor: ["a" "b"]
+
+Both engines BUILD the list — `length` is 3 everywhere — so the divergence is
+rendering, which is one of the three surfaces this project already knows is
+divergence-prone. `k_render` opened with
+
+    if (v.tag == K_ERR) return v;
+
+which is right at the top of a render and wrong inside one. Twenty lines down
+the same function has `case K_ERR: return k_concat(k_str("err "), ...)` — the
+oracle's answer, and dead code, because the early return caught every err
+first. Two places deciding one thing, and the one that ran was not the one
+that was right. Third instance of that shape today, after the `some` arm and
+native's two annotated arms.
+
+Printing a list of results handed the merged failure to the endpoint and took
+the successes with it, which is the behaviour a program would notice.
+
+### What the fix cost, and the shape that made it cheap
+
+Splitting `k_render` into a top-level entry and a held-value body cost 1,424
+bytes of .text per binary — 1.76% on jsonbench — because two bodies is two
+bodies however the symbols are marked; `static` moved nothing. One body with a
+`held` flag says the same thing for 128 bytes. Eleven times cheaper, and the
+error message the reader sees is identical.
+
+### What it costs, measured rather than assumed
+
+The `held` flag is one comparison per render call, and the veins say so:
+
+    work_jsonbench     2,910,241,430 -> 2,910,241,403     -27
+    work_encodebench   9,866,843,909 -> 9,866,843,910      +1
+    work_oneshot          47,277,030 ->     47,277,078     +48
+    work_basket           57,416,154 ->     57,436,155 +20,001
+    work_deepbench       807,094,292 ->    807,094,318     +26
+    work_escapebench     258,574,070 ->    258,574,097     +27
+    work_pendbench       987,906,159 ->    987,907,097    +938
+    widebench                                          unchanged
+    compile_instructions  57,490,610 ->     57,492,931  +2,321
+    text, every binary                                    +128 to +144
+
+basket is the one worth reading: +20,001 is 0.035%, and the shape of the
+number says what it is — one comparison in a render that runs twenty thousand
+times. jsonbench came out 27 BELOW, so this is not a pure regression and the
+gate does not need the floor's escape, though the entry recording it stands.
+
+What it buys is the differential law holding on a surface where two engines
+already agreed and the third was alone.
