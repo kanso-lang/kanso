@@ -4234,3 +4234,64 @@ Most of what compiler.html quotes is narrative about a particular change, which
 is history and correctly left alone. Anything phrased about the present should
 carry the attribute; this entry fixes the one that was caught. A sweep of the
 page for other present-tense claims is OPEN.
+
+## 2026-08-26 — the last four differential steps get rows, and one of them found a hole
+
+Named OPEN in the entry three above this one, which rowed the first three. The
+diagnostics differential job runs nine sweeps as nine steps and `cover` is per
+JOB, so a row on any one satisfied it for all nine.
+
+All nine are rowed now. Each mutation was applied in a worktree, built, and its
+own sweep run, and each was green again on restore.
+
+    native_floors_a_negative_modulo          -1 % 2 -> 1, -1 % 7 -> 6
+      integer `%` floors on native where the oracle truncates. Both are a
+      language's defensible choice — C and Rust truncate, Python and Haskell
+      floor — and kanso may only have one. No diagnostic is raised, every
+      allocation counter is flat, and no golden prints a negative modulo.
+
+    native_sequences_two_effects_backwards   10 of 10 shapes disagree
+      `>>` runs its right side first, so `io/write "a" >> io/write "b"`
+      prints `ba`. The executor is written twice with no shared code, and
+      only this sweep asks what happens when two effects are SEQUENCED.
+
+    a_diagnostic_arrives_without_a_golden    1 newly unpinned
+      a `Diagnostic::new` with literal text and no golden, appended as a
+      function nobody calls so the tree still builds. What is under test is
+      whether the SCAN finds it, not whether the compiler can raise it.
+
+    a_private_name_crosses_an_import         1 no longer as recorded
+      the check that refuses a private name at an import looks itself up
+      under a key nothing declares, so `pub` stops meaning anything across a
+      module boundary.
+
+### The module mutation is in the shared front end, and that is the point
+
+It changes no engine's behaviour relative to the other — both go on agreeing
+perfectly, because both read the same front end. What moves is the VERDICT, and
+`module_differential` is the only gate that asks that question of a real
+directory on disk. Agreement alone cannot see a rule that is wrong in both
+engines, which the sweep's own header says it has had.
+
+### The hole it found
+
+It went red through the KNOWN-DEFECT ledger rather than the case list: `0
+wrong; 1 known defects, 1 no longer as recorded`. `w1` — a module's own pub
+shadowed by a dependency's name, filed against task #51 — is the only case in
+the sweep that exercises the import-privacy refusal at all, and it is currently
+recorded as a defect rather than passing.
+
+So the row is real and the gate does refuse, but its grip is on an entry that
+is meant to be deleted when task #51 is settled. A mutation whose red depends
+on a recorded defect stops proving anything the day the defect is fixed. What
+the sweep wants is an ordinary case that expects the private-name refusal —
+"only pub names cross an import" — and gets it. OPEN, and worth
+more than the row: it means the rule `pub` exists for has no passing test on
+this surface.
+
+### numeric's row carries the argument CI runs
+
+`-- 0`, no random rounds. Every random draw lands past the native ceiling, so
+the rounds spend ten minutes re-confirming what the 561 edge cases already say.
+A row whose gate string differed from the workflow's would be proving a
+different program.
