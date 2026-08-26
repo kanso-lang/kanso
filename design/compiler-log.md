@@ -4536,3 +4536,78 @@ decode, and every remaining figure is dated by its own sentence. The rule that
 falls out of doing this twice: a number about the present carries the
 attribute, and a number about a change carries a past-tense verb. The gate
 enforces the first; only reading enforces the second.
+
+## 2026-08-26 — two failures in a record merge, and `some` is not a failure
+
+Writing up the err spelling as two worlds (#1051) meant stating what the rule
+does from the language's side rather than from the pass that enforces it. Two
+programs written to check the write-up came back disagreeing with it.
+
+### A record's fields are one operation, and the compiled engines forgot
+
+Clay ruled on 2026-08-05 that two failures in one operation merge, the way a
+parallel group had always merged them. The interpreter does that for a record
+construction. Native and wasm returned the first failing field:
+
+    operated: ["a" "b"]     both engines
+    built:    a             native
+    built:    ["a" "b"]     the interpreter, which is the oracle
+
+Nothing in the corpus had ever built a record out of two failures, so three
+engines disagreed and every gate stayed green. `k_rec`, `k_rec_reuse` and
+`rt_mkrec` merge now. So does `emit_parsed_construction`, the
+register-returnable construction the codegen writes in tail position, which
+tested the first field, returned if it failed, and never evaluated the second
+— its own comment claimed it propagated "exactly as `k_rec` would have", which
+had quietly stopped being true.
+
+### `some` was an unmarked rescue
+
+`some` means a value that is not none, and `type_match_depth` answered
+`("some", _) => true`, which takes an err. So
+
+    pub fn caught _:some
+      "some-arm swallowed it"
+
+took a foreign failure and answered whatever it liked, with no `err` written
+anywhere and no destructuring form in sight. That is the one door the
+two-universe rule exists to watch, standing open in an annotation that names
+no failure. An err is not "some value" — it is the absence of one — and the
+arm refuses it now the way a bare parameter does, on all three engines.
+
+Native could not compile the annotation at all: `unknown type `some``, at
+build time, in a message about a backend, while `check` had already passed the
+program because `some` is in its built-in list. The `declare i64
+@k_check_some` sat in the codegen preamble with nothing behind it and nothing
+calling it. It is written and wired now.
+
+### The prices, and the one that had to be paid back
+
+`emitted_calls` 1,777 -> 1,785 and `module_calls` 748 -> 749: the merged bail
+is one call where the two early returns were none. Against them
+`emitted_branches` 1,176 -> 1,168 and `emitted_lines` 11,574 -> 11,527, because
+one bail block replaces two at eight decoder sites. `text` 650,224 -> 650,928:
+the merge inlines at each site.
+
+The vein that mattered was `work`, and only CI could see it. `k_rec` is 16.9%
+of pendbench — every record construction walks its fields — and the first
+version folded the merge into that walk. A/B on one host, so the container's
+glibc offset cancels:
+
+    pendbench   main 988,706,173   folded 1,020,722,638   +3.24%
+    oneshot     main  46,941,172   folded  47,374,597     +0.92%
+
+Three per cent of a benchmark for work that runs only when a field has already
+failed. The scan keeps its early exit now and hands off to a `cold`,
+`noinline` `k_merge_rest` from the index that failed: pendbench comes out at
+987,905,773, 0.08% BELOW where it started, and oneshot at 47,276,631, +0.71%
+that no function in the profile accounts for — the top fifteen are
+byte-identical to main's, so what is left is code layout rather than work.
+
+Both fixtures were watched red first, which is how the second one was caught
+at all: `some_is_a_value_not_a_failure` prints `failure: false` with the fix
+out, because the arm swallowed the err and `when_failed` found no failure to
+read. The construction fixture needed the wasm engine rebuilt with the fix
+reverted to prove the corpus reaches it — the wasm corpus compares against
+native rather than against the `.out` file, so corrupting the golden proves
+nothing there. Worth knowing before the next person tries it.
