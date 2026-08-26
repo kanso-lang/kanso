@@ -4777,6 +4777,25 @@ bodies however the symbols are marked; `static` moved nothing. One body with a
 `held` flag says the same thing for 128 bytes. Eleven times cheaper, and the
 error message the reader sees is identical.
 
-A pure regression by the counters, attributed in the floor's history: what it
-buys is the differential law holding on a surface where two engines already
-agreed and the third was alone.
+### What it costs, measured rather than assumed
+
+The `held` flag is one comparison per render call, and the veins say so:
+
+    work_jsonbench     2,910,241,430 -> 2,910,241,403     -27
+    work_encodebench   9,866,843,909 -> 9,866,843,910      +1
+    work_oneshot          47,277,030 ->     47,277,078     +48
+    work_basket           57,416,154 ->     57,436,155 +20,001
+    work_deepbench       807,094,292 ->    807,094,318     +26
+    work_escapebench     258,574,070 ->    258,574,097     +27
+    work_pendbench       987,906,159 ->    987,907,097    +938
+    widebench                                          unchanged
+    compile_instructions  57,490,610 ->     57,492,931  +2,321
+    text, every binary                                    +128 to +144
+
+basket is the one worth reading: +20,001 is 0.035%, and the shape of the
+number says what it is — one comparison in a render that runs twenty thousand
+times. jsonbench came out 27 BELOW, so this is not a pure regression and the
+gate does not need the floor's escape, though the entry recording it stands.
+
+What it buys is the differential law holding on a surface where two engines
+already agreed and the third was alone.
