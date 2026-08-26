@@ -5,7 +5,9 @@
 # and exactly — Clay ruled tolerance bands away on 2026-08-24.
 set -e
 golden=bench/compile_memory_golden.txt
-KANSO_COUNTERS=1 ./target/release/kanso check lib/json 2>counters_compile.txt >/dev/null
+sh scripts/gates/library_box.sh
+(cd /tmp/kanso-compile-ir && KANSO_COUNTERS=1 ./kanso check lib/json 2>&1 >/dev/null) \
+  > counters_compile.txt
 for k in rounds visits; do
   got=$(grep "^compile_${k}=" counters_compile.txt | cut -d= -f2)
   want=$(grep "^front_end_${k}=" "$golden" | cut -d= -f2)

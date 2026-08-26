@@ -45,5 +45,12 @@
 # A figure quoted elsewhere from a plain `kanso check lib/json` in a checkout
 # will differ slightly from this row, and should. This one is measured in the
 # box with the environment emptied; that one is not.
+#
+# WHAT IS COMPILED, from 2026-08-26: the library staged WITHOUT its test file.
+# `kanso check lib/json` compiles lib/json's TEST file too, so every dependency
+# the suite imports was entering the program this row measures — and a row that
+# moves when a test file changes its imports answers a question nobody asked.
+# scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
+# welfare rebuild: the library's compile golden measures the library.
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
-compile_instructions=60772083
+compile_instructions=56848763

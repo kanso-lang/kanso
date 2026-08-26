@@ -9,13 +9,10 @@
 # quarter of the work went away silently, and a quarter coming back would have
 # been just as quiet.
 #
-# THE ROW IS MEASURED IN A BOX, not in the checkout. The count moves with the
-# length of the directory the compiler runs in — about 160 instructions per
-# character, because the absolute path is copied and walked. A row read from
-# the checkout would pin the clone, which is why compile_alloc_bytes is absent
-# from its own golden rather than pinned in it. So the sources are copied to a
-# fixed path and the compile is run from there, and the number is then the
-# same from any clone.
+# THE ROW IS MEASURED IN A BOX, not in the checkout, and the box holds the
+# library without its tests — scripts/gates/library_box.sh says why for both.
+# The short version: the count moves with the length of the directory the
+# compiler runs in, and a test file's imports are not the library's cost.
 #
 # The environment is emptied for the same reason instructions.sh empties it:
 # the kernel copies the environment block onto the new process's stack and
@@ -25,11 +22,8 @@ set -e
 golden=bench/compile_instructions_golden.txt
 sh scripts/gates/measured_on.sh "$golden"
 
+sh scripts/gates/library_box.sh
 box=/tmp/kanso-compile-ir
-rm -rf "$box"
-mkdir -p "$box"
-cp -R lib "$box/lib"
-cp ./target/release/kanso "$box/kanso"
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin valgrind --tool=callgrind \

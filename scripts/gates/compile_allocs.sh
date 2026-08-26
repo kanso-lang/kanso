@@ -7,7 +7,9 @@
 set -e
 golden=bench/compile_allocs_golden.txt
 sh scripts/gates/measured_on.sh "$golden"
-KANSO_COUNTERS=1 ./target/release/kanso check lib/json 2>counters_allocs.txt >/dev/null
+sh scripts/gates/library_box.sh
+(cd /tmp/kanso-compile-ir && KANSO_COUNTERS=1 ./kanso check lib/json 2>&1 >/dev/null) \
+  > counters_allocs.txt
 grep -v '^#' "$golden" > allocs_want.txt
 for k in compile_allocs; do
   grep "^${k}=" counters_allocs.txt
