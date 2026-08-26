@@ -4736,3 +4736,47 @@ reason.
 
 `a_typeset_arm_cannot_see_its_own_hakos_err` pins both halves: the failure
 passes through, and the arm still takes a member that is not a failure.
+
+## 2026-08-26 — a list can hold a failure, and native alone disagreed
+
+The access side of the err rule was swept three times today and gave up three
+bugs. This is the propagation side, and the sweep was the same: name every
+site where a failure can reach an operation, then ask all three engines.
+
+Five agreed — an operator merges two failures, a comparison merges, an
+interpolation with two failing holes takes the first, a call takes the first,
+a list literal builds rather than propagates. The sixth did not.
+
+    listed = [(boom "a") (boom "b") 3]
+
+    interp   length: 3   listed: [err "a" err "b" 3]
+    wasm     the same, through eval::render
+    native   error[endpoint]: unhandled err reached the executor: ["a" "b"]
+
+Both engines BUILD the list — `length` is 3 everywhere — so the divergence is
+rendering, which is one of the three surfaces this project already knows is
+divergence-prone. `k_render` opened with
+
+    if (v.tag == K_ERR) return v;
+
+which is right at the top of a render and wrong inside one. Twenty lines down
+the same function has `case K_ERR: return k_concat(k_str("err "), ...)` — the
+oracle's answer, and dead code, because the early return caught every err
+first. Two places deciding one thing, and the one that ran was not the one
+that was right. Third instance of that shape today, after the `some` arm and
+native's two annotated arms.
+
+Printing a list of results handed the merged failure to the endpoint and took
+the successes with it, which is the behaviour a program would notice.
+
+### What the fix cost, and the shape that made it cheap
+
+Splitting `k_render` into a top-level entry and a held-value body cost 1,424
+bytes of .text per binary — 1.76% on jsonbench — because two bodies is two
+bodies however the symbols are marked; `static` moved nothing. One body with a
+`held` flag says the same thing for 128 bytes. Eleven times cheaper, and the
+error message the reader sees is identical.
+
+A pure regression by the counters, attributed in the floor's history: what it
+buys is the differential law holding on a surface where two engines already
+agreed and the third was alone.

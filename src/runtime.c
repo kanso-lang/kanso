@@ -204,6 +204,7 @@ KValue k_thunk_release_unless(KValue cell, KValue result) {
 }
 
 KValue k_render(KValue v, long long quote);
+static KValue k_render_at(KValue v, long long quote, int held);
 KValue k_b_render_value(KValue v) {
     return k_render(v, 0);
 }
@@ -2339,6 +2340,7 @@ static const char* k_lazy_hint(KValue v);
 extern long long k_type_field_count(long long type_id);
 extern const char* k_type_field_name(long long type_id, long long i);
 KValue k_render(KValue v, long long quote);
+static KValue k_render_at(KValue v, long long quote, int held);
 
 /* keyed reads: `{ author: writer title } = post` — fields resolve by name
    against the record's declared type */
@@ -3358,11 +3360,22 @@ long long k_render_dispatchable(KValue v) {
     return v.tag == K_REC || v.tag == K_NONE || v.tag == K_DESC || v.tag == K_SUB;
 }
 
-KValue k_render(KValue v, long long quote) {
-    // an err propagates through rendering (it is an exception); a none is a
-    // value and renders its sentinel below
-    if (v.tag == K_ERR) return v;
-    if (v.tag == K_SUB) return k_render(k_sub_base(v), quote);
+/* Rendering a value that IS a failure hands the failure back, because the
+   interpolation asked for a failing value and infectiousness carries it. That
+   is a property of the top of a render, not of every err it reaches: an err
+   held INSIDE a list or a record is a thing the container holds, and the
+   switch below renders it `err <reason>` the way the oracle does.
+
+   The two used to be one function, and the early return shadowed the switch
+   case, so printing a list of results handed the merged failure to the
+   endpoint and took the successes with it. Native was alone in that: the
+   interpreter and wasm both answer through `eval::render`, which has only the
+   nested case. */
+KValue k_render(KValue v, long long quote) { return k_render_at(v, quote, 0); }
+
+static KValue k_render_at(KValue v, long long quote, int held) {
+    if (v.tag == K_ERR && !held) return v;
+    if (v.tag == K_SUB) return k_render_at(k_sub_base(v), quote, held);
     /* Output is the demand, so rendering forces what it prints. The oracle
        answers the same way. */
     if (v.tag == K_THUNK) {
@@ -3372,7 +3385,7 @@ KValue k_render(KValue v, long long quote) {
         if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
         /* the wire is the demand: output forces what it prints, and the path
            above is what stops a knot walking round */
-        KValue out = k_render(k_force(v), quote);
+        KValue out = k_render_at(k_force(v), quote, held);
         if (k_render_depth > 0) k_render_depth--;
         return out;
     }
@@ -3406,7 +3419,7 @@ KValue k_render(KValue v, long long quote) {
         case K_TRUE: return k_str("true");
         case K_FALSE: return k_str("false");
         case K_NONE: return k_str("<none>");
-        case K_ERR: return k_concat(k_str("err "), k_render(k_err_inner(v), 1));
+        case K_ERR: return k_concat(k_str("err "), k_render_at(k_err_inner(v), 1, 1));
         case K_STR:
             if (!quote) return v;
             return k_concat(k_concat(k_str("\""), v), k_str("\""));
@@ -3419,7 +3432,7 @@ KValue k_render(KValue v, long long quote) {
                 KValue out = k_str(k_type_name(r->type_id));
                 for (long long i = 0; i < r->nfields; i++) {
                     out = k_concat(out, k_str(" "));
-                    out = k_concat(out, k_render(r->fields[i], 1));
+                    out = k_concat(out, k_render_at(r->fields[i], 1, 1));
                 }
                 k_render_depth--;
                 return out;
@@ -3438,7 +3451,7 @@ KValue k_render(KValue v, long long quote) {
             KValue out = k_str("[");
             for (long long i = 0; i < l->len; i++) {
                 if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render(l->items[i], 1));
+                out = k_concat(out, k_render_at(l->items[i], 1, 1));
             }
             if (k_render_depth > 0) k_render_depth--;
             return k_concat(out, k_str("]"));

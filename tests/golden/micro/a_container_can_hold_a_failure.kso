@@ -1,0 +1,26 @@
+# Infectiousness is about a value REACHING an operation, not about a value
+# holding one. A list built from two failures is a list of two failures: it
+# has a length, it can be indexed, and rendering it shows what it holds.
+#
+# Native disagreed, and only native. `k_render` opens with
+#
+#     if (v.tag == K_ERR) return v;
+#
+# which fires for an err ANYWHERE it is reached, including an element of the
+# list being rendered — so printing the list handed the merged failure to the
+# endpoint and the successes went with it. Twenty lines further down the same
+# function has `case K_ERR: return k_concat(k_str("err "), ...)`, which is the
+# oracle's answer and was dead code: the early return caught every err first.
+# Two places deciding one thing, and the one that ran was not the one that was
+# right.
+#
+# The interpreter and wasm both answer through `eval::render`, which has only
+# the nested case, so this is native alone.
+fn boom what
+  err what
+
+listed = [(boom "a") (boom "b") 3]
+
+pub play =
+  print "length: {length listed}"
+  >> print "listed: {listed}"
