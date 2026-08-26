@@ -3772,6 +3772,97 @@ the trend gate had none. It is a step inside the cost-goldens job, and the
 ratchet's own coverage check is per JOB, so a step-level gate hides behind the
 rows its neighbours carry. That is a general gap and this closes one instance
 of it, not the gap.
+## 2026-08-26 — json stops reading its own failure (written 2026-08-21, landed today)
+
+The work below was done on 2026-08-21 and sat in a draft pull request until
+today. It is filed at the tail rather than at its own date, because this log
+is append-only and the entries between were written first.
+
+Gavel 1b said only a type's owner constructs one; gavel 24 said your own
+failures only bubble. Between them, `json/failure_position` and
+`json/failure_reason` were arms inside lib/json matching an err lib/json
+had raised, which is the thing the second rule forbids. They are gone.
+
+The suite reaches the same facts from where the rule allows. `std/testing`
+is foreign to json, so `when_failed` may hold json's err, and it hands the
+bare reason record to a continuation:
+
+    test_error_position =
+      decoded = decode "[1, nope]"
+      testing/when_failed decoded (r -> r.position == 5)
+
+Watched red twice before it was believed, because one direction is not
+enough here. With the position wrong the example fails, which is the
+ordinary case. With the input CHANGED TO PARSE it also fails — `when_failed`
+answers false on a value, so a test that expected a failure and got an
+answer cannot pass quietly. That second failure is the one the old
+projection could not produce: `failure_position` answered 0 for a
+non-failure, and `0 == 5` is a perfectly good false that says nothing about
+why.
+
+`test_must_wraps_defect` needed the same door and a named local group, since
+a lambda carries no arms — `a_defect?` rather than the `defect_reason` the
+design note guessed at, because the naming rule wants the question mark on
+anything answering only true or false. The note now says what shipped.
+
+The example that demonstrated the old door demonstrates the new one, and it
+is a better example for having two branches instead of one: a consumer
+outside json writes an ordinary arm on `err r` and reads `r.position`,
+because json's failure is foreign there. Destructuring the reason in the
+pattern is refused — opacity, and rightly, since the record's shape does not
+cross an import — so the arm names the err and the field read does the rest.
+
+The book taught the rule this change contradicts. Chapter 04 said "no
+function gets to turn one back into a value. not a helper, not a library,
+not `main`", and its personified err said "nobody catches me". Both are
+about who raised the err rather than about nobody, and both now say so.
+Chapter 08's api panel showed the projection that no longer exists, its
+suite panel showed sixteen tests where there are twenty, and both used
+parentheses the grammar has since refused. Three surfaces, all moved.
+
+## 2026-08-26 — the floor moves for the language, and the fall is attributed
+
+Clay ruled the blocking entry: the welfare floor is absolute against work that
+leaves the language alone, and permeable to work that changes it. A feature or
+a doctrine-compelled migration is never rejected for the score — it lands, the
+floor moves, and the fall is recorded against the change that spent it.
+
+Applied here. #1034 implements gavels 1b and 24 — json may not match an err
+json raised — and the score falls **84.89 to 84.79**.
+
+**Where the cost is, isolated rather than guessed.** Not the deletion: the
+library shrank, and `bench/emitted_golden.txt` records it, 11,595 emitted lines
+to 11,585. The cost is the one line the test file gained. `kanso check
+lib/json` compiles lib/json's TEST file, so `import "std/testing"` pulls a
+whole module into the program the compile golden measures:
+
+    front_end_rounds              40 -> 42
+    front_end_visits          17,786 -> 17,886
+    compile_peak_bytes       864,300 -> 870,289
+    compile_allocs            64,950 -> 65,543
+    compile_instructions  59,717,892 -> 60,772,083
+
+Reverting `json.kso` alone and keeping the new test file gives 65,801
+allocations and 42 rounds, so all of the rise is the test file and the deletion
+claws a little back.
+
+**One of those figures was first written down wrong, and the error names its
+own cause.** The peak row went in at 870,263, which is the CONTAINER's reading;
+the runner reads 870,289. The gap is twenty-six bytes, and twenty-six bytes is
+exactly the container-runner divergence this golden's own header documents from
+2026-08-24 (864,274 against 864,300). Two hosts, both deterministic, a constant
+offset between them — and the row whose header says to read the runner's number
+out of the job log had the container's pasted into it. The measured-on line
+caught it on the next run, which is the second time that machinery has earned
+its place before a bad paste rather than after one.
+
+No compensating optimization was hunted for this pull request. The same ruling
+forbids it in both directions: a feature's fall and an optimization's gain each
+deserve their own attributed record, and bundling them hides both.
+
+The instrument question this exposed — a library's compile golden charging its
+test file's dependencies to the library — does not return to the ledger. It
+folds into the already-ruled welfare rebuild, which is the next thing built.
 
 ## 2026-08-26 — a merged err came out of a hop nested on native and flat everywhere else
 

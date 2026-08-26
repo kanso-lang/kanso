@@ -69,18 +69,6 @@ fn entry_onto acc (entry k v)
   keyed = encode_onto acc k
   encode_onto (text/append keyed 58) v
 
-pub fn failure_position (err (parse_failure p _))
-  p
-
-pub fn failure_position _
-  0
-
-pub fn failure_reason (err (parse_failure _ reason))
-  reason
-
-pub fn failure_reason _
-  ""
-
 fn finish _ none
   err (parse_failure 0 "unexpected end of input")
 

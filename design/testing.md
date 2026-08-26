@@ -117,9 +117,11 @@ closed and the shipped behaviour is an advisory rather than either.
 ## Refinement-phase stitches, logged while drafting
 
 - A lambda cannot carry arms, so type-dispatching a reason inside
-  `when_failed` needs a named local group (`defect_reason`) — two
-  lines of ceremony the arm-bundle syntax would erase if lambdas ever
-  learn patterns. Noted, not proposed.
+  `when_failed` needs a named local group — two lines of ceremony the
+  arm-bundle syntax would erase if lambdas ever learn patterns. Noted,
+  not proposed. json's suite spells it `a_defect?`: the naming rule
+  wants the question mark on anything answering only true or false, so
+  a bare `defect_reason` is refused.
 - `when_failed` answering false on success conflates "did not fail"
   with "failed the wrong way" in a suite's failure report. The
   harness prints the test's value either way, so the distinction is

@@ -1,4 +1,12 @@
 import "std/json"
 
-bad = json/decode "[1, 2"
-print "failed at {json/failure_position bad}: {json/failure_reason bad}"
+# json's failure is foreign here, so an ordinary arm may name it. The reason
+# arrives as a value and answers the questions its own type declares.
+fn told (err r)
+  "failed at {r.position}: {r.reason}"
+
+fn told v
+  "decoded {v}"
+
+print (told (json/decode "[1, 2"))
+print (told (json/decode "[1, 2]"))
