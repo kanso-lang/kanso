@@ -4604,6 +4604,35 @@ failed. The scan keeps its early exit now and hands off to a `cold`,
 that no function in the profile accounts for — the top fifteen are
 byte-identical to main's, so what is left is code layout rather than work.
 
+### What CI measured, and what it cost
+
+The runner's rows, which the container cannot produce — its glibc is
+2.39-0ubuntu8.7 against the runner's 8.8 — so they are copied from the gate's
+own diff:
+
+    work_jsonbench     2,912,170,881 -> 2,910,241,430   -0.066%
+    work_encodebench   9,727,535,960 -> 9,866,843,909   +1.43%
+    work_oneshot          46,941,571 ->     47,277,030   +0.71%
+    work_basket           57,408,155 ->     57,416,154   +0.014%
+    work_widebench        85,113,625 ->     85,209,624   +0.11%
+    work_pendbench       988,706,559 ->    987,906,159   -0.081%
+    compile_instructions  57,490,077 ->     57,490,136   +59
+
+deepbench and escapebench do not move. The container reproduces the deltas
+exactly where it was checked: oneshot measured 46,941,172 on main here and
+47,276,631 on the branch, +335,459, and the runner's two rows differ by
+335,459.
+
+`work_encodebench` is the one that costs anything, and it is not work the
+change added. Nothing in the encoder's profile moved: `k_b_append_mut` still
+holds 23.24% and `k_rec` does not appear in its top five at all. The scan that
+finds a failing field is the same instruction sequence it was, the merge is
+`cold` and out of line behind it, and marking `k_pair_failure` cold as well
+moved encodebench by fourteen thousand instructions out of nine billion. What
+is left is an inlining shift from two functions arriving in runtime.c, which
+is also why jsonbench and pendbench moved the other way. Welfare falls 0.00 —
+below the display's resolution — and the floor was re-set with that reason.
+
 Both fixtures were watched red first, which is how the second one was caught
 at all: `some_is_a_value_not_a_failure` prints `failure: false` with the fix
 out, because the arm swallowed the err and `when_failed` found no failure to
