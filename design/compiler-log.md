@@ -4500,3 +4500,39 @@ goes red through the case list where it belongs:
 the rounds spend ten minutes re-confirming what the 561 edge cases already say.
 A row whose gate string differed from the workflow's would be proving a
 different program.
+
+## 2026-08-26 — the rest of the page's present-tense claims
+
+The entry two above this one closed the class and left the sweep OPEN: which
+other figures on docs/compiler.html are stated about the PRESENT rather than
+about a particular change. Swept. Two, and only two.
+
+`§08`, the borrowed-names paragraph, said the json library's front end
+**allocates** 64,884 times and **retires** 59,527,334 instructions. Both verbs
+are present tense about the compiler in the tree, and both figures are what
+that change measured, not what the compiler does now: `compile_allocs` reads
+61,981 and `compile_instructions` 57,490,077. The sentence keeps 91,185 and
+66,961,255 as the before-figures they always were, puts the two after-figures
+in past tense as what that change reached, and carries the current pair as
+tagged numbers that move on their own.
+
+`§08`, the compile-memory band paragraph, said the runner **holds** 864,300.
+That one is narrative — the whole paragraph is the story of the band being
+ruled away — so the fix is the tense rather than a tag: it *held* 864,300, on
+the day the band came off. `compile_peak_bytes` is 822,004 now, and a reader
+who took "holds" for the present was forty thousand bytes out.
+
+### What is deliberately left alone
+
+Everything else the page quotes is narrative about a particular change, and
+correctly reads as history: the encode allocation chain (42,312,800 to
+68,640,508 to 26,327,708), the 1,874,992 allocations, 5.25 instructions per
+cycle against jq's 5.20, the 365 conversion sites the interned symbol would
+have cost, the 87/79/67 type counts. None of those claims anything about the
+compiler as it stands, and none has a golden to be pinned to.
+
+So the page now has five tagged numbers on the compile veins and three on
+decode, and every remaining figure is dated by its own sentence. The rule that
+falls out of doing this twice: a number about the present carries the
+attribute, and a number about a change carries a past-tense verb. The gate
+enforces the first; only reading enforces the second.
