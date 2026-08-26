@@ -53,4 +53,4 @@
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
-compile_instructions=56848763
+compile_instructions=56849156

@@ -1,0 +1,28 @@
+# Three failures answer three reasons however they were grouped — merging is a
+# fold. The middle one here passes through `through`, which has no err arm, so
+# it only hops; the hop rebuilds the err box, and native's rebuild used to
+# leave `merged` unset in an arena that does not zero. The reason list then
+# read as one reason that happens to be a list, and the next merge nested it:
+# [["e1" "e2"] "e3"] on native against ["e1" "e2" "e3"] on the interpreter.
+#
+# `when_failed` is std's, foreign to this program, so it is the licensed party
+# that separates the reason from the failure and lets the count be printed.
+import "std/testing"
+
+fn boom n
+  err "e{n}"
+
+fn through 0
+  "zero"
+
+fn through v
+  "v{v}"
+
+fn how_many r
+  length r
+
+merged = boom 1 + boom 2
+
+three = through merged + boom 3
+
+pub play = print "{testing/when_failed three how_many}"

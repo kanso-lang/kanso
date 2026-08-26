@@ -3939,3 +3939,82 @@ here.
 Of the 0.79 the swap cost on the old goldens, the instrument fix gave 0.14
 back before the floor was set, which is the honest order: fix what is measured
 first, then read the number.
+## 2026-08-26 — a merged err came out of a hop nested on native and flat everywhere else
+
+Three failures answer three reasons however they were grouped. That is the
+documented rule, written in a comment directly above the struct that breaks it.
+
+    merged = boom 1 + boom 2
+    three  = through merged + boom 3
+
+    interpreter   ["e1" "e2" "e3"]
+    native      [["e1" "e2"] "e3"]
+
+`through` has no err arm, so the middle failure only hops. `k_hop` rebuilds the
+err box, and it set four of the five fields — `merged` was left to whatever the
+arena had at that address. `k_alloc` bumps a pointer and does not zero, so the
+flag read as a fresh page's zero, the reason list stopped being a list OF
+reasons, and the next merge nested it instead of folding it.
+
+### Four constructors, three of them incomplete
+
+Reading the rest of the family found the same shape three more times:
+
+    k_err          reason origin hops cause merged      complete
+    k_b_wrap_err   reason origin hops cause             merged unset
+    k_hop          reason origin hops cause             merged unset
+    k_deep_copy    reason origin hops                   cause AND merged unset
+
+There is now one constructor, `k_err_box_new`, taking all five. The
+evacuation copy still allocates through the copy arena rather than the main
+one, so it assigns the two it was missing directly. A field added to `KErrBox`
+tomorrow can no longer be forgotten by three call sites at once.
+
+### What is proved and what is not
+
+The hop path has a reproduction, in `tests/golden/micro`, and it was watched
+red first: with the `merged` copy taken back out, native answers 2 where the
+interpreter answers 3. It reads the count through `std/testing`'s
+`when_failed`, which is foreign to the sample and is therefore the licensed
+party that separates the reason from the failure.
+
+The other three are fixed by reading. `k_b_wrap_err`'s omission needs the
+arena to hand back non-zero bytes at that offset to bite, which is not a thing
+a fixture can arrange on demand. The evacuation copy's dropped `cause` should
+lose a "caused by" line from the endpoint report, and the obvious shape — a
+qualified call returning a wrapped err — does not evacuate, so no reproduction
+exists for it yet. That gap is filed rather than papered over: the fix is
+right by inspection, and inspection is what this entry can claim for it.
+
+### Only native
+
+`wasm_rt`'s `rt_err_hop` calls the interpreter's own `hop`, which copies
+`merged` like every other field, so the browser engine was never wrong. The
+divergence was one engine against two, which is the shape the differential law
+exists to surface — and it surfaced only because somebody went looking, since
+no fixture in the corpus merged a failure and then hopped it.
+
+### What the fix costs, to the byte
+
+Every emitted binary grows **48 bytes** — eight of eight, the same number each
+time, which is what a fix that adds one store to a constructor and two to a
+copy should look like.
+
+`compile_instructions` also moves, and the way it moves is worth recording.
+`src/runtime.c` is `include_str!`'d into the compiler, so a longer runtime
+lengthens a static and shifts the code and data around it; `kanso check
+lib/json` never reads that string. The number is therefore pure layout, and it
+behaves like layout. Three measurements of one diff:
+
+    runner, unstaged library    60,772,083 -> 60,772,747     +664
+    runner, staged library      56,848,763 -> 56,849,156     +393
+    container, staged library   57,524,712 -> 57,517,949   -6,763
+
+Same edit, opposite signs, an order of magnitude between the two hosts that
+agree on direction.
+
+That is not a reason to distrust the row — it is exact for the host and the
+program its header names, and both figures above are exact for theirs. It is a
+reason to say plainly what a move of this size means when the diff is bytes of
+embedded text: nothing about the front end's work, and the row is regenerated
+because it is exact, not because the compiler got slower or faster.
