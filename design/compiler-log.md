@@ -3524,3 +3524,33 @@ counts", this log, 2026-08-25): measure the thing the golden claims to
 measure. It does not return to the ledger as its own entry.
 
 The entry leaves the ledger with this commit.
+
+## 2026-08-25 — the floor gavel, stated precisely by Clay
+
+Clay refined the ruling within the hour, and the refinement replaces the
+word "refactoring" with what he meant: "technically they aren't
+refactorings necessarily — they can actually have real impacts on
+performance both in terms of compilation speed and resources and actual
+run time performance. but those are things that can be improved
+independently, where if one gets sufficiently better another can get a
+little bit worse as long as the overall welfare goes up. but you cannot
+just reject an actual language feature in the name of welfare score."
+
+Two clauses, precisely:
+
+- **Non-feature work trades freely inside the index.** A change that is
+  not a language feature — performance work, implementation work — may
+  worsen any individual dimension (compile speed, compile memory, run
+  time) if another improves enough that the AGGREGATE welfare rises.
+  The floor binds the composite, never a single term. This is what the
+  weighted index is for.
+- **A language feature is never hostage to the score.** A feature or
+  doctrine-compelled change cannot be rejected in the name of welfare.
+  When it costs, the floor moves down with the fall recorded and
+  attributed. The index measures the implementation; it does not govern
+  the language.
+
+The forbidden move stands: packaging a compensating optimization into a
+feature's own pull request to hide its cost is index-gaming either way —
+the feature's fall and the optimization's gain each deserve their own
+attributed record.
