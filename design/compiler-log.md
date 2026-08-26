@@ -3323,10 +3323,35 @@ written in an effectful body in the first place.
 
 ### What it does not reach
 
-A value read for a single field, and the 6.2% of substitutions where some other
-record happens to hold the confused pair. Both need the whole-program fixpoint,
-which is still the next increment and is now worth less than it was this
-morning.
+A value read for exactly one field, where that one name is the wrong one. The
+93.8% above is measured by ADDING a confused name to what a value is already
+read for, which is why single-read bases are mostly covered: a second, wrong
+read makes a two-set and the two-set is usually homeless. A *replacement* on a
+base read once leaves a one-set and nothing to compare. Thirty of the sixty
+bases are read for exactly one field, carrying 46 of the 142 reads, and that is
+the fixpoint's real prize — along with the 6.2% where some other record happens
+to hold the confused pair.
+
+### What the fixpoint's room costs, measured before building it
+
+`Set` in src/infer.rs is a `u16` with fourteen kind bits used, so bits 14 and
+15 are all that is spare and the fleet declares 143 record types. Carrying a
+type identity in the lattice means widening the word. That price can be read
+without spending any of it: change `pub type Set = u16` to `u32`, use none of
+the new bits, and measure.
+
+    compile_allocs         64,950 -> 64,950
+    front_end_rounds           40 -> 40
+    front_end_visits       17,786 -> 17,786
+    compile_peak_bytes    864,300 -> 866,908      +2,608
+    welfare                 84.89 -> 84.88
+
+So the room is nearly free, and the fixpoint's cost is entirely in the
+propagation rather than in the representation. That is one uncertainty removed
+from a decision that has not been taken: whether typing 46 more reads is worth
+threading a second value through every arm of `eval_expr`. The figures are the
+container host's, and only the peak is host-pinned, so the runner's own would
+need re-reading before any of this is banked.
 
 ## 2026-08-25 — the interned symbol is DECLINED, and the churn was counted by making the name opaque
 
