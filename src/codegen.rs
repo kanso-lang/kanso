@@ -182,6 +182,7 @@ declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
+declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
@@ -1915,6 +1916,11 @@ impl<'a> Backend<'a> {
             "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
             "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
             "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
+            // `some` is any value that is not none, and a failure is not a
+            // value: without this arm the backend refused the annotation
+            // outright, where the interpreter took it and the checker had
+            // already passed the program.
+            "some" => format!("call i64 @k_check_some(%KValue {value})"),
             other => match self.type_ids.get(other) {
                 Some(id) if self.sub_parents.contains_key(other) => {
                     format!("call i64 @k_check_sub_id(%KValue {value}, i64 {id})")
@@ -2296,12 +2302,14 @@ impl<'a> Backend<'a> {
     /// `%parsed`. The two words hold `(value.tag | pos << 8, value.payload)` — a
     /// non-failure value's tag never collides with the failure tags 4/5, so the
     /// low byte of word 0 still tells success from failure. A failing field
-    /// propagates exactly as `k_rec` would have.
+    /// propagates exactly as `k_rec` would have — which means BOTH fields are
+    /// evaluated and two failures merge, the way two failing operands of an
+    /// operator do. Bailing on the first one skipped the second field
+    /// entirely and handed back one reason where the oracle carried two.
     fn emit_parsed_construction(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<(), String> {
         let pos = self.emit_expr(f, &args[0])?;
-        self.bail_on_failure(f, &pos);
         let value = self.emit_expr(f, &args[1])?;
-        self.bail_on_failure(f, &value);
+        self.bail_on_pair_failure(f, &pos, &value);
         let pos_payload = f.tmp();
         f.line(&format!("{pos_payload} = extractvalue %KValue {pos}, 1"));
         let shifted = f.tmp();
@@ -2318,6 +2326,25 @@ impl<'a> Backend<'a> {
         f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
         f.line(&format!("ret %parsed {p}"));
         Ok(())
+    }
+
+    /// If either field failed, return the merge of them in the current ABI
+    /// shape; otherwise fall through with both known good.
+    fn bail_on_pair_failure(&self, f: &mut FnEmit, left: &str, right: &str) {
+        let ok_left = inline_not_failure(f, left);
+        let ok_right = inline_not_failure(f, right);
+        let both = f.tmp();
+        f.line(&format!("{both} = and i1 {ok_left}, {ok_right}"));
+        let cont = f.label();
+        let bail = f.label();
+        f.line(&format!("br i1 {both}, label %{cont}, label %{bail}"));
+        f.start_block(&bail);
+        let merged = f.tmp();
+        f.line(&format!(
+            "{merged} = call %KValue @k_pair_failure(%KValue {left}, %KValue {right})"
+        ));
+        self.emit_ret(f, &merged);
+        f.start_block(&cont);
     }
 
     /// If `value` is a failure, return it in the current ABI shape; otherwise

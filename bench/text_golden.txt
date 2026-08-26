@@ -255,11 +255,19 @@
 # scale with the program rather than with the runtime, which is why the spread
 # runs from 80 bytes to 624 instead of landing on one number the way #1040's
 # constructor fix did.
-jsonbench text=80450
-encodebench text=97682
-oneshot text=97778
-basket text=89282
-widebench text=98770
-deepbench text=63010
+# 2026-08-26: every benchmark grew — jsonbench 80,450 -> 80,738, and 32 to 128
+# bytes elsewhere. The register-returnable construction stopped bailing on its
+# first failing field: it now evaluates both, and on the failing path calls
+# `k_pair_failure`, which the optimizer inlines at each of the sites. The IR
+# shrank by 47 lines and the machine code grew by 288, which is the shape of an
+# inlined merge replacing a second early return. It buys a correctness fix —
+# native and wasm handed back the FIRST failing field where the interpreter
+# merged both reasons.
+jsonbench text=80738
+encodebench text=97730
+oneshot text=97810
+basket text=89410
+widebench text=98818
+deepbench text=63042
 escapebench text=49618
-pendbench text=73634
+pendbench text=73762

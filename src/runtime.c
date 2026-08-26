@@ -2108,8 +2108,37 @@ static char k_marker_ready[K_MARKER_CACHE];
    to a fresh allocation. */
 KValue k_rec(long long type_id, long long n, KValue* args);
 
+/* A record's fields are one operation, so two failing fields merge the way
+   two failing operands of `+` do — neither caused the other and neither is
+   less true. Returns 1 and writes the merged failure when any field failed.
+   Native and wasm both used to hand back the FIRST failing field here, where
+   the interpreter merged; the corpus never built a record from two failures
+   and the three engines disagreed unwatched. */
+static int k_merged_field_failure(long long n, KValue* args, KValue* out) {
+    int any = 0;
+    for (long long i = 0; i < n; i++) {
+        if (k_not_failure(args[i])) continue;
+        *out = any ? k_accumulate_failures(*out, args[i]) : args[i];
+        any = 1;
+    }
+    return any;
+}
+
+/* The same merge for the register-returnable construction the codegen builds
+   in tail position, where the two fields are in registers rather than an
+   array. At least one of them failed; the caller tested that. */
+KValue k_pair_failure(KValue a, KValue b) {
+    KValue args[2];
+    args[0] = a;
+    args[1] = b;
+    KValue out = a;
+    k_merged_field_failure(2, args, &out);
+    return out;
+}
+
 KValue k_rec_reuse(long long type_id, long long n, KValue* args, KValue victim) {
-    for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
+    KValue failed;
+    if (k_merged_field_failure(n, args, &failed)) return failed;
     if (n > 0 && victim.tag == K_REC) {
         KRec* r = k_as_rec(victim);
         if (r->nfields == n) {
@@ -2122,7 +2151,8 @@ KValue k_rec_reuse(long long type_id, long long n, KValue* args, KValue victim) 
 }
 
 KValue k_rec(long long type_id, long long n, KValue* args) {
-    for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
+    KValue failed;
+    if (k_merged_field_failure(n, args, &failed)) return failed;
     if (n == 0 && type_id >= 0 && type_id < K_MARKER_CACHE) {
         if (!k_marker_ready[type_id]) {
             KRec* r = k_alloc_perm(sizeof(KRec));
@@ -2162,6 +2192,9 @@ KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
 /* pattern checks: nonzero on match */
 long long k_check_tag(KValue v, long long tag) { return v.tag == tag; }
+/* `some` is a value that is not none. A failure is neither, and answering
+   otherwise made an arm that names no err at all take a foreign failure. */
+long long k_check_some(KValue v) { return v.tag != K_NONE && v.tag != K_ERR; }
 long long k_check_int(KValue v, long long n) { return v.tag == K_INT && v.payload == n; }
 long long k_check_rec(KValue v, long long type_id, long long nfields) {
     /* A pattern naming a type takes a subtype of it, so the walk looks for

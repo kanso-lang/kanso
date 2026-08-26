@@ -1,0 +1,38 @@
+# Two failures in one operation merge, and Clay ruled on 2026-08-05 that an
+# operation does it the way a parallel group always had. A record's fields are
+# an operation by the same reading: neither field caused the other, so neither
+# is less true, and the constructor hands back both reasons as one err.
+#
+# A CALL is the case that does not merge. A declared group whose arms all
+# refuse failures hands back the first failing argument, hopped, because
+# nothing in the dispatch path accumulates — the arms simply do not match and
+# the argument leaves as itself.
+#
+# Native and wasm both returned the FIRST failing field from a construction
+# where the interpreter merged, so the three engines disagreed on `built` and
+# nothing in the corpus asked. The oracle's answer is the one pinned here.
+import "std/testing"
+
+type couple
+  left
+  right
+
+fn boom what
+  err what
+
+fn as_text reason
+  "{reason}"
+
+fn joined a b
+  "{a} and {b}"
+
+operated = boom "a" + boom "b"
+
+built = couple (boom "a") (boom "b")
+
+called = joined (boom "a") (boom "b")
+
+pub play =
+  print "operated: {testing/when_failed operated as_text}"
+  >> print "built: {testing/when_failed built as_text}"
+  >> print "called: {testing/when_failed called as_text}"

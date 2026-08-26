@@ -48,7 +48,17 @@
 # arm out of the field dispatch: six string constants and one call with it. The
 # defines count does not move, because `defect` was a type rather than a
 # function and `must` was already dead when #1034 stopped calling it.
+# 2026-08-26: calls 1777 -> 1785, branches 1176 -> 1168, lines 11574 -> 11527.
+# The register-returnable construction stopped bailing on its first failing
+# field. It used to test the position, return if that failed, then test the
+# value and return if THAT failed — two tests, two branches, two exits. It now
+# tests both and calls `k_pair_failure` once on the merged path, which is one
+# branch and one call where there were two branches. Eight sites in the
+# decoder: eight calls gained, eight branches shed, and the second bail block
+# at each site is gone, which is where the forty-seven lines went. The change
+# is a correctness fix — native and wasm handed back the FIRST failing field
+# where the interpreter merged both reasons — and the code came out smaller.
 defines=154
-calls=1777
-branches=1176
-lines=11574
+calls=1785
+branches=1168
+lines=11527

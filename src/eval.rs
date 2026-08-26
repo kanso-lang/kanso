@@ -3288,6 +3288,11 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
     }
     let ok = match (ty, arg) {
         ("some", Value::NoneV) => false,
+        // a failure is not "some value", it is the absence of one. Answering
+        // true here made `_:some` an unmarked rescue: an arm that names no
+        // err at all took a foreign failure and returned whatever it liked,
+        // which is the one door the two-universe rule exists to watch.
+        ("some", Value::ErrV(_)) => false,
         ("some", _) => true,
         ("int", Value::Int(_)) => true,
         ("float64", Value::Float(_)) => true,
@@ -3392,7 +3397,7 @@ fn merged_failures(args: &[Value]) -> Value {
         .expect("a caller checked that one argument fails")
 }
 
-fn accumulate_failures(left: Value, right: Value) -> Value {
+pub fn accumulate_failures(left: Value, right: Value) -> Value {
     match (&left, &right) {
         (Value::ErrV(a), Value::ErrV(b)) => {
             let mut reasons = reasons_of(a);

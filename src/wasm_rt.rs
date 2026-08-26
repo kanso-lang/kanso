@@ -311,7 +311,8 @@ pub extern "C" fn rt_check_type(h: u32, code: u32) -> u32 {
             5 => matches!(v, Value::Map(_)),
             6 => matches!(v, Value::ErrV(_)),
             7 => matches!(v, Value::NoneV),
-            8 => !matches!(v, Value::NoneV),
+            // `some` is a value that is not none; a failure is neither
+            8 => !matches!(v, Value::NoneV | Value::ErrV(_)),
             tid => match v {
                 Value::Record { ty, .. } => {
                     type_index(ty).is_some_and(|i| i == (tid - 100) as usize)
@@ -672,12 +673,23 @@ pub extern "C" fn rt_upcast(inner: u32, code: u32) -> u32 {
 pub extern "C" fn rt_mkrec(tid: u32, n: u32) -> u32 {
     let handles = pop_args(n);
     let mut fields = Vec::with_capacity(handles.len());
+    // A record's fields are one operation, so two failing fields merge the
+    // way two failing operands of `+` do. Returning the first failure here
+    // was a divergence from the oracle that no fixture built.
+    let mut failed: Option<Value> = None;
     for h in handles {
         let v = val(h);
         if is_failure(&v) {
-            return h;
+            failed = Some(match failed {
+                Some(seen) => crate::eval::accumulate_failures(seen, v),
+                None => v,
+            });
+            continue;
         }
         fields.push(v);
+    }
+    if let Some(v) = failed {
+        return push(Slot::V(v));
     }
     let name = TYPES.with(|t| t.borrow()[tid as usize].0.clone());
     push(Slot::V(Value::Record {
