@@ -276,11 +276,15 @@
 # wasm both answer through eval::render, which has only the nested case.
 # The first fix split the function in two and cost 1,424 bytes a binary. One
 # body with a `held` flag costs 128, and says the same thing.
-jsonbench text=80866
-encodebench text=97858
-oneshot text=97938
-basket text=89538
-widebench text=98946
-deepbench text=63250
+# 2026-08-26 (map): +16 a binary. The held-render fix reached lists and
+# records and missed the map beside them — the edit was applied over a fixed
+# window of the function and the map case fell outside it, and the fixture
+# held a list alone so it passed. Every container is in the fixture now.
+jsonbench text=80882
+encodebench text=97874
+oneshot text=97954
+basket text=89554
+widebench text=98962
+deepbench text=63266
 escapebench text=49746
-pendbench text=73874
+pendbench text=73890

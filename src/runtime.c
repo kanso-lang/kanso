@@ -3467,9 +3467,9 @@ static KValue k_render_at(KValue v, long long quote, int held) {
             KValue out = k_str("{ ");
             for (long long i = 0; i < n; i++) {
                 if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render(s[i * 2], 1));
+                out = k_concat(out, k_render_at(s[i * 2], 1, 1));
                 out = k_concat(out, k_str(":"));
-                out = k_concat(out, k_render(s[i * 2 + 1], 1));
+                out = k_concat(out, k_render_at(s[i * 2 + 1], 1, 1));
             }
             if (k_render_depth > 0) k_render_depth--;
             return k_concat(out, k_str(" }"));

@@ -1,2 +1,4 @@
 length: 3
 listed: [err "a" err "b" 3]
+mapped: { "k":err "v" "ok":7 }
+nested: [{ "inner":err "deep" }]
