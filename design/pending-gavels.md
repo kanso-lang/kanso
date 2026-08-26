@@ -289,3 +289,60 @@ closed:
 - Survivor cap 4× block threshold: the multiplier is a judgment call;
   the principle (the dance's transient stays at threshold scale) is in
   the log.
+
+## Is the standard library one hako, or one per module?
+
+**Search.** design/compiler-log.md and design/log/compiler-log-archive.md
+have no entry on package granularity; neither does any other design/*.md.
+The only statement anywhere is a doc comment in `src/provenance.rs`:
+"The shipped library is one package however many modules it spans; a
+fetched hako is its own; everything a program compiles from its own tree
+is the program's." That is implementation, written for the license
+advisory, and was never ruled.
+
+**What made it a question.** Building gavel 24's match-time semantics —
+an arm cannot see an err its own hako raised — turns the granularity into
+observable behaviour for the first time. Under the code as written,
+`std/testing` and `std/json` are both the package `std`, so
+`testing/when_failed` cannot rescue a failure `json/decode` raised:
+
+    error[endpoint]: unhandled err reached the executor: json/parse_failure 5
+      born in json/fail at std/json/scan.kso:13
+      passed through testing/failed? ← json/finish ← json/array_step
+
+That is the harness failing to report a test failure, and it takes
+design/testing.md's central example with it —
+`when_failed (decode "[1, nope]") (r -> r.position == 5)` cannot run.
+testing.md asserts the opposite in as many words: the testing hako "is an
+ordinary hako — every tested package's errs are foreign to it, so its arms
+are licensed by the rules as they stand." Both claims cannot hold.
+
+**Note what the current rule keys on.** For a fetched hako `package_of`
+returns the OWNER, not owner/repo — so two unrelated repositories by one
+author are one package today. The granularity question is the same
+question there, and answering it for std answers it for hakos.
+
+**Recommendation: a hako is a module-level unit, so `std/json` and
+`std/testing` are different hakos** (and a fetched hako is `owner/repo`,
+not `owner`). Three reasons.
+
+1. Clay's own wording in the sitting: "when_failed needs no exemption."
+   Under one-package-std it needs one, or it is broken. The requirement
+   names the answer.
+2. The doctrine is about who made the failure and therefore knows what it
+   meant. `std/testing` did not raise json's parse failure and has no
+   privileged reading of it; that it ships in the same tarball as json is
+   a packaging fact, not an authorship one.
+3. It is the reading under which the rule bites where it should. A
+   monolithic `std` makes the rule strongest exactly where the code is
+   most carefully separated, and a per-owner hako rule lets an author
+   evade it by publishing under a second name.
+
+**What it costs.** Widening the package set makes more errs foreign, which
+LOOSENS the static license rule as well as the match rule. That is a
+change beyond the gavel's own words, which is why it is here rather than
+decided in the log.
+
+**Proceeding provisionally** on the recommendation, so gavel 24's build is
+not blocked; it is one function (`provenance::package_of`) and flips in a
+line if the ruling goes the other way.
