@@ -34,13 +34,20 @@ fn licenses(dir: &str) -> Vec<String> {
     kanso::provenance::violations(&program, &prov, &inference.returns)
 }
 
+/// Gavel 24 made the two-universe rule dispatch semantics, so an arm written
+/// for an err its own hako raised is dead rather than merely unlicensed, and
+/// the message says so. The flow is proved by a written call site: the pub
+/// self-seed that used to stand in for callers out of view retired with the
+/// gavel, because under it every pub bare-err arm was a violation — including
+/// `std/testing`'s `when_failed`, which the whole testing design turns on.
 #[test]
-fn rescuing_an_err_this_package_raised_is_advised() {
+fn an_arm_for_this_packages_own_err_can_never_match() {
     assert_eq!(
         licenses("tests/golden/advisory/own_err"),
-        vec!["advisory[license]: `position` rescues an err raised in this program \
-             — a failure is handled by a package that did not raise it; return an \
-             err, or let a caller elsewhere name the reason"
+        vec!["error[license]: `position` has an arm for an err raised in `own_err`, \
+             and that arm can never match — a failure does not enter an arm its own \
+             hako raised, so it passes as though the arm were not written. Return an \
+             err, or let a caller in another package name the reason"
             .to_string()]
     );
 }
@@ -50,18 +57,19 @@ fn rescuing_an_err_this_package_raised_is_advised() {
 /// green and lib/json's three unchanged, so the pass could have been gutted
 /// without a spec noticing.
 ///
-/// `rescue` is pub, so provenance seeds it — a published err parameter is
-/// assumed to see its own package's failures, because its callers are not all
-/// in view. `quiet` is private and uncalled, so nothing feeds it. They differ
-/// only in their name, and if the key stops telling them apart `quiet`
-/// inherits what `rescue` was fed and is advised for a rescue it never made.
+/// `rescue` is fed by a written call site; `quiet` is never called, so nothing
+/// reaches it. They differ only in their name, and if the key stops telling
+/// them apart `quiet` inherits what `rescue` was fed and is reported for a
+/// rescue it never made.
 #[test]
 fn a_group_is_told_apart_by_its_name_and_not_only_its_arity() {
     assert_eq!(
         licenses("tests/golden/advisory/group_identity"),
-        vec!["advisory[license]: `rescue` rescues an err raised in this program \
-             — a failure is handled by a package that did not raise it; return an \
-             err, or let a caller elsewhere name the reason"
+        vec!["error[license]: `rescue` has an arm for an err raised in \
+             `group_identity`, and that arm can never match — a failure does not \
+             enter an arm its own hako raised, so it passes as though the arm were \
+             not written. Return an err, or let a caller in another package name \
+             the reason"
             .to_string()]
     );
 }

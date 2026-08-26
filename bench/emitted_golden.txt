@@ -40,7 +40,15 @@
 # std/text. Seven lines of module-level global for a function it never calls —
 # the same shape the os split measured in the other direction. defines, calls
 # and branches do not move.
+# 2026-08-26: calls 1775 -> 1777, branches 1175 -> 1176, lines 11585 -> 11574.
+# Two causes, pulling opposite ways. The own-origin guard puts one declare and
+# three `k_not_own_err` calls into the decoder — the arms that can now be
+# skipped ask before they match. Against that, `lib/json` shed the `defect`
+# record, and a record that goes takes its name out of the string table and its
+# arm out of the field dispatch: six string constants and one call with it. The
+# defines count does not move, because `defect` was a type rather than a
+# function and `must` was already dead when #1034 stopped calling it.
 defines=154
-calls=1775
-branches=1175
-lines=11585
+calls=1777
+branches=1176
+lines=11574

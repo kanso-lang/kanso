@@ -1,5 +1,13 @@
-# an arm naming the reason type traps the err and reads its fields; a
-# plain value takes the value arm untouched
+# an arm naming the reason type reads its fields; a plain value takes the
+# value path untouched.
+#
+# The reason reaches that arm through `std/testing`'s `when_failed`, which is
+# foreign to this module and therefore licensed to separate a reason from its
+# failure. Under gavel 24 a module cannot match an err it raised itself, so
+# the ladder this pins is over reason TYPES, which is the half that survives
+# inside one package.
+import "std/testing"
+
 type quota_torn
   limit
 
@@ -9,12 +17,9 @@ fn fetch 1
 fn fetch n
   "plain {n}"
 
-fn handle (err q:quota_torn)
+fn named q:quota_torn
   "quota: limit {q.limit}"
 
-fn handle v
-  "ok: {v}"
-
 pub play =
-  print (handle (fetch 1))
-  >> print (handle (fetch 3))
+  print (testing/when_failed (fetch 1) named)
+  >> print "ok: {fetch 3}"

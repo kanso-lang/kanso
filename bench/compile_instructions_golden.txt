@@ -53,4 +53,16 @@
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
-compile_instructions=56849156
+#
+# 2026-08-26: 56,849,156 -> 57,490,077, a rise of 640,921 (1.13%). The
+# own-origin rule is dispatch semantics, so the front end now carries a
+# package name on every raise site and asks, at every arm that could match its
+# own hako's err, whether it may. Some of the rise is that work and some is
+# layout: `src/runtime.c` is `include_str!`'d into the compiler and grew, and
+# the entry above this one records the same edit measuring +664, +393 and
+# -6,763 on three sittings of one diff. The two are not separable from this
+# row alone. What is separable is the direction of the counters that do only
+# measure the front end's work, and all three of those FELL: visits 16,818 to
+# 16,806, allocations 62,110 to 61,981, peak 825,664 to 822,004, because the
+# pub self-seed went and `lib/json` shed `must` and `defect`.
+compile_instructions=57490077

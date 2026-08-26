@@ -1,14 +1,27 @@
+# Two failures in one operation merge; one failure propagates as itself. The
+# comparison merges too, because neither side caused the other.
+#
+# The reasons are read through `std/testing`'s `when_failed`, foreign to this
+# module and therefore licensed to separate a reason from a failure this
+# module raised.
+import "std/testing"
+
 fn boom what
   err what
 
-fn shown (err reason)
+fn as_text reason
   "{reason}"
 
-fn shown _
-  "not a failure"
+both = boom "a" + boom "b"
+
+left = boom "a" + 1
+
+right = 1 + boom "b"
+
+compared? = boom "a" < boom "b"
 
 pub play =
-  print "both: {shown (boom "a" + boom "b")}"
-  >> print "left: {shown (boom "a" + 1)}"
-  >> print "right: {shown (1 + boom "b")}"
-  >> print "compared: {shown (boom "a" < boom "b")}"
+  print "both: {testing/when_failed both as_text}"
+  >> print "left: {testing/when_failed left as_text}"
+  >> print "right: {testing/when_failed right as_text}"
+  >> print "compared: {testing/when_failed compared? as_text}"

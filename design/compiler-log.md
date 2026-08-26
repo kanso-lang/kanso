@@ -4234,3 +4234,191 @@ Most of what compiler.html quotes is narrative about a particular change, which
 is history and correctly left alone. Anything phrased about the present should
 carry the attribute; this entry fixes the one that was caught. A sweep of the
 page for other present-tense claims is OPEN.
+
+## 2026-08-26 — an arm cannot see an err its own hako raised, on all three engines
+
+Gavel 24, clause 1, built. Clay's words at the sitting: *it was never advisory.*
+The rule is dispatch semantics now — at match time a failure does not enter an
+arm its own hako raised, and infectiousness carries it onward exactly as if the
+arm were not written. "Your own failures only bubble", executing itself instead
+of being warned about.
+
+### What an err carries, and what an arm knows
+
+An err records the package that RAISED it, beside the trace line it already
+carried. On all three engines the two are read off the same frame, so no
+construction site can set one and forget the other.
+
+Native and wasm take that further: codegen emits ONE literal per raise site,
+`"{hako}\0{fn} at {file}:{line}"`, and the runtime splits it — the match rule
+reads the first half, the endpoint report the second. Nineteen runtime
+signatures in `runtime.c` carry an origin and nine codegen sites emit one;
+threading a second argument through all of them to move a package name was not
+worth it, and one literal cannot drift apart from itself.
+
+The guard is emitted only where a pattern CAN hold an err — `(err …)`, an
+`:err` annotation, or a typeset with err among its members. Everything else
+refuses failures already, so a check there would cost a call per match on a hot
+path to learn nothing.
+
+### The granularity question the build exposed, and Clay's ruling
+
+`package_of` answered `std` for every shipped module. Invisible until an err's
+raiser became part of dispatch, and then wrong at once: `std/testing` and
+`std/json` came out the same package, so `when_failed` could not rescue a
+failure `decode` raised and the harness could not report a test failure.
+
+Clay ruled it the same day: **a package is a directory, and its import path
+names it** — Go's rule, named as Go's. `std/json` and `std/testing` differ;
+`std/json/json.kso` and `scan.kso` are one; `std/net` and `std/net/http` are
+two. It applies to a program's own modules too, and that is what makes the rule
+teachable rather than merely enforceable: a decoder module and the module that
+reports its failures are two packages, so the reporting arm is licensed exactly
+where a reader would put it.
+
+### What it cost the corpus and the book, which is the honest measure of it
+
+A package's own failure is now completely opaque to that package. A bare binder
+already refused failures; the two err-admitting patterns now refuse own-origin
+ones. So you cannot pass your own failure to your own function at all — every
+"render my own possibly-failed value" helper moves one package over.
+
+- **`lib/json` lost `must` and `defect`.** `must` converted json's own parse
+  failure into a defect, which json may not read. It had exactly one caller —
+  its own test — and its documented purpose in ch08 was the case that no longer
+  works. The caller writes it now, in their package, where json's failure is
+  foreign; ch08 says so and shows the panel as a caller's file.
+- **Nine corpus fixtures migrated.** Seven micro, the typeset entryfile fixture,
+  and `wrap_cause`, which now wraps `std/text`'s failure because wrapping is
+  something you do to somebody else's.
+- **Four book samples restructured.** ch07's teahouse moves its reporting to
+  the entry; ch08's `using` splits `describe` from `told`; `literal` and
+  `positions` become two-module programs — a decoder and a reporter — which is
+  how you would write them anyway and now the only way you can.
+- **The pub self-seed retired.** It assumed a published err parameter sees its
+  own package's failures because the callers are not all in view. Right while
+  this pass was the only enforcement; wrong now, and under it every pub
+  bare-err arm was a violation, `when_failed` included. What survives is what
+  the written call sites prove, and `kanso check` REFUSES it rather than
+  mentioning it: an arm that can never fire is dead code wearing the shape of
+  error handling.
+
+### Watched red on three engines at once
+
+`tests/golden/micro/an_arm_cannot_see_its_own_hakos_err.kso` prints three
+lines: the arm on a value, a foreign rescue, and the arm on an own err. With
+the rule taken back out of the interpreter, native and wasm together, the third
+line reads `false` instead of `foreign reads 99` — the arm matched, and
+`when_failed` on the resulting string answers false. Restored, all three agree.
+
+### The front end got cheaper doing it
+
+`lib/json` shed `must` and `defect`: expression visits 16,818 to 16,806,
+allocations 62,110 to 61,981, peak 825,664 to 822,004. Welfare rises, and the
+rise is banked in this change rather than left for the next one to spend.
+
+### What the arms cost, in the decoder and in the binary
+
+Two runtime veins move, and they move for the same reason from opposite
+directions. In the decoder's IR: calls 1775 to 1777, branches 1175 to 1176,
+lines 11585 to 11574. Three `k_not_own_err` calls and a declare go in — the
+arms that can now be skipped ask before they match — while `lib/json`'s
+`defect` record comes out, taking six string constants, one call and its arm in
+the field dispatch with it. `defines` does not move: `defect` was a type, and
+`must` had already been dead since #1034 stopped calling it.
+
+In the machine code every binary grows, and by a different amount each:
+jsonbench +544, encodebench +624, oneshot +592, basket +256, widebench +624,
+deepbench +160, escapebench +80, pendbench +224. Both costs scale with the
+program rather than with the runtime — a call and a branch per skippable arm, a
+package name per raise site — which is why the spread runs from 80 bytes to 624
+where #1040's constructor fix landed on 48 for all eight.
+
+The spread was measured in the container, and the container reproduces main's
+whole `.text` table exactly, which is what makes it usable: `bench/text_golden`
+pins `clang=18.1.3` and nothing else, because what compiles the emitted IR is
+clang and what rustc built is only the program that wrote it.
+
+### What it costs to run, and what it costs to compile
+
+The runtime instruction vein, from the runner:
+
+    jsonbench    2,860,478,794 -> 2,912,170,881   +51,692,087   +1.81%
+    oneshot         46,596,968 ->    46,941,571      +344,603   +0.74%
+    widebench       84,817,033 ->    85,113,625      +296,592   +0.35%
+    basket          57,400,154 ->    57,408,155        +8,001   +0.01%
+    encodebench  9,727,166,055 -> 9,727,535,960      +369,905   +0.004%
+    deepbench, escapebench, pendbench unmoved
+
+Three rows do not move at all, and that is the finding rather than a footnote.
+The cost is paid per err-dispatching arm that runs, not per instruction
+executed, so the decoder's inner loop — which is made of such arms — pays 1.81%
+while the three programs whose hot paths hold none of them pay nothing.
+encodebench renders rather than dispatching on err, and its rise is four
+thousandths of a per cent across nine billion.
+
+`compile_instructions` rises 56,849,156 to 57,490,077, and that row is part
+work and part layout: the front end now carries a package name on every raise
+site and asks at every skippable arm, and `src/runtime.c` grew, which shifts
+the compiler's own code around a static it never reads. The entry above this
+one measured that same effect at +664, +393 and −6,763 on three sittings of a
+single diff, so the two halves are not separable from this row alone. What is
+separable is every counter that measures ONLY the front end's work, and all
+three of those fell: visits 16,818 to 16,806, allocations 62,110 to 61,981,
+peak 825,664 to 822,004 — the pub self-seed retired and `lib/json` shed `must`
+and `defect`.
+
+### The floor moves, by hand, because the tool refuses
+
+welfare goes 84.14 to 84.12. Gavel 24 clause 1 is a language change, and Clay's
+ruling of 2026-08-25 governs it: the floor is absolute against refactorings and
+permeable to the language, so a doctrine-compelled change lands, the floor
+moves, and the fall is recorded against the change that spent it. The 84.79
+entry has this exact shape and is the precedent.
+
+`welfare --set` refuses a fall of more than 0.01 and refused this one. That
+refusal is the design — its own comment names hand-editing
+`bench/welfare_floor.json` as the single override, precisely so the move
+appears in a diff a reviewer reads rather than behind a flag. So the floor was
+edited by hand and the entry carries the whole attribution. No compensating
+optimization was hunted, which the same ruling forbids.
+
+### Each counter, by the name the gate prints
+
+`work_jsonbench` rises 51,692,087 and is the one that matters: the decoder's
+inner loop is made of arms that can hold an err, and each now asks before it
+matches. `work_oneshot` rises 344,603 and `work_widebench` 296,592 for the same
+reason at smaller volume. `work_encodebench` rises 369,905, four thousandths of
+a per cent across nine billion, and `work_basket` 8,001, a hundredth of one —
+both render rather than dispatching on err, and both are at the size where
+layout accounts for as much as work. `work_deepbench`, `work_escapebench` and
+`work_pendbench` do not move at all.
+
+`emitted_calls` rises 2 and `emitted_branches` 1: the guard's three calls into
+the decoder, less the one that went with `lib/json`'s `defect`. `emitted_lines`
+falls 11 against them, because a record that goes takes six string constants
+with it. `text` rises 3,104 over the eight binaries, spread from 80 to 624
+rather than uniform, since both costs scale with the program.
+
+Every one of these is bought by the same thing: an arm cannot see an err its
+own hako raised, and the ruling says that is dispatch rather than a check. The
+sum is priced in welfare and the floor moves with it.
+
+### The trend gate said nothing about any of the runtime rows
+
+It named four compile counters and refused the one whose sentence was missing.
+It did not mention jsonbench's 1.81%, or any `.text` row, or the three emitted
+counters, because `bench/instructions_golden.txt`, `bench/text_golden.txt` and
+`bench/emitted_golden.txt` are not in `bench_goldens`. Only the per-golden
+exact diff caught them.
+
+That was the blindness #1044 closed for the two measured compile veins, still
+open one vein down — and it mattered more here, because `instructions_golden`
+is where welfare's four run-speed terms come from, so half the score's inputs
+were invisible to the gate meant to watch the score's inputs.
+
+Filed as its own change rather than folded in, because it touches the gate this
+branch was being judged by, and closed by the entry directly above this one
+while this branch waited on CI. The finding stands as recorded: the numbers in
+this entry are the ones that went past the gate unnamed, and they are why that
+change exists.

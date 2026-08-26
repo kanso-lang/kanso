@@ -1,0 +1,6 @@
+import "./pos"
+import "./report"
+
+print (show (decode_int "  42  "))
+>> print (show (decode_int "1 x"))
+>> print (show (decode_int "  7 ;"))

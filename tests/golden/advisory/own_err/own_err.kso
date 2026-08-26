@@ -1,11 +1,17 @@
+# An arm for an err this package raised. Under gavel 24 it can never match —
+# the failure passes as though it were not written — and the written call site
+# below is what proves the flow, now that the pub self-seed has retired.
 type woe
   at
 
-pub fn boom _
+fn boom _
   err (woe 5)
 
-pub fn position (err w:woe)
+fn position (err w:woe)
   w.at
 
-pub fn position _
+fn position _
   0
+
+pub fn asked _
+  position (boom 0)

@@ -284,8 +284,16 @@ typedef struct KErrBox KErrBox;
 /* `merged` says the reason is a list *of reasons* rather than one reason
    that happens to be a list, so merging is a fold: three failures answer
    three reasons however they were grouped, and `err ["a" "b"]` stays one. */
-struct KErrBox { KValue reason; const char* origin; KHop* hops; KErrBox* cause;
-                 long long merged; };
+/* `hako` is the package that RAISED this err, which is what an arm asks
+   about: a group may not see a failure its own package made. It is not stored
+   separately — codegen hands one literal holding both halves, "<hako>\0<fn> at
+   <file>:<line>", so `hako` points at the literal and `origin` just past its
+   NUL. Nineteen runtime signatures carry an origin and nine codegen sites emit
+   one; threading a second argument through all of them to move four bytes of
+   information was not worth it. NULL for an err with no frame, which therefore
+   belongs to no package and matches every arm. */
+struct KErrBox { KValue reason; const char* origin; const char* hako;
+                 KHop* hops; KErrBox* cause; long long merged; };
 
 static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
@@ -1437,6 +1445,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
                wrapped */
             ne->cause = e->cause;
             ne->merged = e->merged;
+            ne->hako = e->hako;
             KHop** tail = &ne->hops;
             KHop* h = e->hops;
             for (; h && !k_survives_x(h, cp->mark); h = h->prev) {
@@ -2009,9 +2018,23 @@ static KValue k_both_or_either(KValue a, KValue b) {
 
 long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
+
 /* `any` is every value a slot may hold; the absence channel is disjoint */
 
 static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
+
+/* An arm cannot see an err its own package raised (gavel 24, clause 1, ruled
+   as dispatch semantics rather than as a check). Answers whether the match may
+   proceed, so every non-err and every err from elsewhere passes; an own-origin
+   err fails the arm and infectiousness carries it onward exactly as if the arm
+   were not written. Package names are one short string — "" for the program,
+   "std", or a hako owner — so the compare is a few bytes. */
+long long k_not_own_err(KValue v, const char* arm) {
+    if (v.tag != K_ERR) return 1;
+    const char* raiser = k_err_box(v)->hako;
+    if (!raiser) return 1;
+    return strcmp(raiser, arm) != 0;
+}
 
 /* Every field, every time. The arena bumps and does not zero, so a
    construction that leaves a field out reads whatever the last user of those
@@ -2021,20 +2044,26 @@ static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
    printed as [["e1" "e2"] "e3"] on native against ["e1" "e2" "e3"] on the
    interpreter. One constructor now, and a field added later cannot be
    forgotten by three call sites at once. */
-static KErrBox* k_err_box_new(KValue reason, const char* origin, KHop* hops,
-                              KErrBox* cause, long long merged) {
+static KErrBox* k_err_box_new(KValue reason, const char* origin, const char* hako,
+                              KHop* hops, KErrBox* cause, long long merged) {
     KErrBox* box = k_alloc(sizeof(KErrBox));
     box->reason = reason;
     box->origin = origin;
+    box->hako = hako;
     box->hops = hops;
     box->cause = cause;
     box->merged = merged;
     return box;
 }
 
+/* The trace half of a raise site's literal: past the package name's NUL. */
+static const char* k_origin_text(const char* both) {
+    return both ? both + strlen(both) + 1 : NULL;
+}
+
 KValue k_err(KValue reason, const char* origin) {
     if (!k_not_failure(reason)) return reason;
-    KErrBox* box = k_err_box_new(reason, origin, NULL, NULL, 0);
+    KErrBox* box = k_err_box_new(reason, k_origin_text(origin), origin, NULL, NULL, 0);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -2044,7 +2073,8 @@ KValue k_err(KValue reason, const char* origin) {
 KValue k_b_wrap_err(KValue reason, KValue original, const char* origin) {
     if (!k_not_failure(reason)) return reason;
     if (original.tag != K_ERR) k_die("wrap_err takes a reason and the err it wraps");
-    KErrBox* box = k_err_box_new(reason, origin, NULL, k_err_box(original), 0);
+    KErrBox* box =
+        k_err_box_new(reason, k_origin_text(origin), origin, NULL, k_err_box(original), 0);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -2058,8 +2088,8 @@ KValue k_err_hop(KValue v, const char* fn) {
     KHop* hop = k_alloc(sizeof(KHop));
     hop->fn = fn;
     hop->prev = old->hops;
-    KErrBox* box =
-        k_err_box_new(old->reason, old->origin, hop, old->cause, old->merged);
+    KErrBox* box = k_err_box_new(old->reason, old->origin, old->hako, hop, old->cause,
+                                 old->merged);
     KValue out; out.tag = K_ERR; out.payload = k_ptr(box); return out;
 }
 
