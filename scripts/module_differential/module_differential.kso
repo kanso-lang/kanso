@@ -264,7 +264,38 @@ c16l = "a module reading a field of its own record, imported"
 
 c16 = kase c16l [c16a c16m] "app" "prints" "3\n"
 
-cases = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
+# The rule `pub` exists for, with nothing else going on: a plain private name
+# reached across a plain import. Every other case here either uses a pub name,
+# stays inside the module, or is the SHADOWED variant below, which is a known
+# defect — so until this arrived the refusal that is the whole point of the
+# visibility system had no passing case on this surface. A mutation that
+# switches the check off went red only through the known-defect ledger, whose
+# entry is meant to be deleted the day task #51 is settled.
+c17a = filed "dep/dep.kso" """
+  fn secret _
+    41
+
+  pub fn open _
+    1
+"""
+
+c17m = filed "app/main.kso" """
+  import "../dep"
+
+  print "\{dep/secret 0}"
+"""
+
+c17head = "error[opacity]: `secret` is private to module `dep`"
+
+c17said = "{c17head} — only pub names cross an import"
+
+c17l = "a private name reached across an import"
+
+c17 = kase c17l [c17a c17m] "app" "check refuses" c17said
+
+cases_a = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
+
+cases = text/concat cases_a [c17]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written
