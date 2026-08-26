@@ -3909,10 +3909,19 @@ fixed path the instruction count already needed for its own reason, and all
 three compile gates now read the same staged program rather than two of them
 reading the checkout:
 
-    compile_allocs      65,543 -> 62,110
-    front_end_visits    17,886 -> 16,818
-    front_end_rounds        42 -> 40
-    compile_peak_bytes 870,289 -> 825,664   (container figures; CI's are the row)
+    compile_allocs           65,543 -> 62,110
+    front_end_visits         17,886 -> 16,818
+    front_end_rounds             42 -> 40
+    compile_peak_bytes      870,289 -> 825,664
+    compile_instructions 60,772,083 -> 56,848,763
+
+Two of those the container and the runner agreed on to the digit, which is
+worth recording because the host gate refuses the comparison rather than
+making it: `compile_allocs` and `compile_peak_bytes` came out identical on
+both. `compile_instructions` did not — 57,524,712 here against the runner's
+56,848,763, a bit over one per cent — so the row and its welfare BASELINE both
+carry the runner's figure. A baseline holding a number no CI host will ever
+measure would have the term entering at a ratio against a fiction.
 
 The visits fall is nine hundred more than #1034 added, because json_test.kso
 was always in the measured program — #1034 only made the charge large enough
