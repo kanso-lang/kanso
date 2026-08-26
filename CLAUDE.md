@@ -231,6 +231,13 @@ Only Clay arms, disarms or retimes it.
   than a question being asked, and the lever is the permission MODE: the
   allow list is not what gates it, because tools already listed there still
   prompt.
+- **No open pull request ages past a day.** Clay, 2026-08-26, verbatim: "make
+  sure that any of my PRs older than a day get merged promptly." So every
+  check-in sweeps ALL open PRs in kanso and kq — mine, another session's, his —
+  and drives each to one of three ends: merged on green, superseded, or closed
+  with the reason recorded. A PR I cannot push to is superseded from a branch I
+  own, never parked. The sweep is the whole list every time, because the one
+  that ages is always the one nobody's task list mentions.
 - **Never blanket-resolve conflicts** (`checkout --ours`/`--theirs`) on
   runtime.c or any load-bearing file — resolve hunk by hunk.
 - **No fire-and-forget merges.** Do not arm auto-merge and move on: wait
