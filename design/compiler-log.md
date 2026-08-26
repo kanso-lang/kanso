@@ -3994,6 +3994,31 @@ divergence was one engine against two, which is the shape the differential law
 exists to surface — and it surfaced only because somebody went looking, since
 no fixture in the corpus merged a failure and then hopped it.
 
+### What the fix costs, to the byte
+
+Every emitted binary grows **48 bytes** — eight of eight, the same number each
+time, which is what a fix that adds one store to a constructor and two to a
+copy should look like.
+
+`compile_instructions` also moves, and the way it moves is worth recording.
+`src/runtime.c` is `include_str!`'d into the compiler, so a longer runtime
+lengthens a static and shifts the code and data around it; `kanso check
+lib/json` never reads that string. The number is therefore pure layout, and it
+behaves like layout. Three measurements of one diff:
+
+    runner, unstaged library    60,772,083 -> 60,772,747     +664
+    runner, staged library      56,848,763 -> 56,849,156     +393
+    container, staged library   57,524,712 -> 57,517,949   -6,763
+
+Same edit, opposite signs, an order of magnitude between the two hosts that
+agree on direction.
+
+That is not a reason to distrust the row — it is exact for the host and the
+program its header names, and both figures above are exact for theirs. It is a
+reason to say plainly what a move of this size means when the diff is bytes of
+embedded text: nothing about the front end's work, and the row is regenerated
+because it is exact, not because the compiler got slower or faster.
+
 ## 2026-08-26 — an arm cannot see an err its own hako raised, on all three engines
 
 Gavel 24, clause 1, built. Clay's words at the sitting: *it was never advisory.*
@@ -4075,3 +4100,25 @@ line reads `false` instead of `foreign reads 99` — the arm matched, and
 `lib/json` shed `must` and `defect`: expression visits 16,818 to 16,806,
 allocations 62,110 to 61,981, peak 825,664 to 822,004. Welfare rises, and the
 rise is banked in this change rather than left for the next one to spend.
+
+### What the arms cost, in the decoder and in the binary
+
+Two runtime veins move, and they move for the same reason from opposite
+directions. In the decoder's IR: calls 1775 to 1777, branches 1175 to 1176,
+lines 11585 to 11574. Three `k_not_own_err` calls and a declare go in — the
+arms that can now be skipped ask before they match — while `lib/json`'s
+`defect` record comes out, taking six string constants, one call and its arm in
+the field dispatch with it. `defines` does not move: `defect` was a type, and
+`must` had already been dead since #1034 stopped calling it.
+
+In the machine code every binary grows, and by a different amount each:
+jsonbench +544, encodebench +624, oneshot +592, basket +256, widebench +624,
+deepbench +160, escapebench +80, pendbench +224. Both costs scale with the
+program rather than with the runtime — a call and a branch per skippable arm, a
+package name per raise site — which is why the spread runs from 80 bytes to 624
+where #1040's constructor fix landed on 48 for all eight.
+
+The spread was measured in the container, and the container reproduces main's
+whole `.text` table exactly, which is what makes it usable: `bench/text_golden`
+pins `clang=18.1.3` and nothing else, because what compiles the emitted IR is
+clang and what rustc built is only the program that wrote it.
