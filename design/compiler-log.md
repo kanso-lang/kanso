@@ -3651,3 +3651,36 @@ about who raised the err rather than about nobody, and both now say so.
 Chapter 08's api panel showed the projection that no longer exists, its
 suite panel showed sixteen tests where there are twenty, and both used
 parentheses the grammar has since refused. Three surfaces, all moved.
+
+## 2026-08-26 — the floor moves for the language, and the fall is attributed
+
+Clay ruled the blocking entry: the welfare floor is absolute against work that
+leaves the language alone, and permeable to work that changes it. A feature or
+a doctrine-compelled migration is never rejected for the score — it lands, the
+floor moves, and the fall is recorded against the change that spent it.
+
+Applied here. #1034 implements gavels 1b and 24 — json may not match an err
+json raised — and the score falls **84.89 to 84.79**.
+
+**Where the cost is, isolated rather than guessed.** Not the deletion: the
+library shrank, and `bench/emitted_golden.txt` records it, 11,595 emitted lines
+to 11,585. The cost is the one line the test file gained. `kanso check
+lib/json` compiles lib/json's TEST file, so `import "std/testing"` pulls a
+whole module into the program the compile golden measures:
+
+    front_end_rounds        40 -> 42
+    front_end_visits    17,786 -> 17,886
+    compile_peak_bytes 864,300 -> 870,263
+    compile_allocs      64,950 -> 65,543
+
+Reverting `json.kso` alone and keeping the new test file gives 65,801
+allocations and 42 rounds, so all of the rise is the test file and the deletion
+claws a little back.
+
+No compensating optimization was hunted for this pull request. The same ruling
+forbids it in both directions: a feature's fall and an optimization's gain each
+deserve their own attributed record, and bundling them hides both.
+
+The instrument question this exposed — a library's compile golden charging its
+test file's dependencies to the library — does not return to the ledger. It
+folds into the already-ruled welfare rebuild, which is the next thing built.

@@ -25,6 +25,6 @@
 # 864,300 on the same sources, and pasting the container's number in is exactly
 # what the measured-on machinery exists to stop.
 # measured-on rustc=1.98.0
-front_end_rounds=40
-front_end_visits=17786
-compile_peak_bytes=864300
+front_end_rounds=42
+front_end_visits=17886
+compile_peak_bytes=870263
