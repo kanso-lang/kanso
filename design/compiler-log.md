@@ -4724,9 +4724,15 @@ The measurement said the same thing. Patching the typeset arm read +421,503
 instructions in the container against the runner's +2,562 — a delta that does
 not carry, which by the rule written the same day means layout rather than
 work, since `kanso check` never runs codegen at all. The merged arm reads 16
-BELOW main. Nothing else moved: the guard is emitted only where a typeset
-admits err, no benchmark declares one, and emitted, text, the counters and
-welfare are byte-identical.
+BELOW main and the runner charges 456, down from 2,562.
+
+Nothing else moved: the guard is emitted only where a typeset admits err, no
+benchmark declares one, and emitted, text and every counter vein are
+byte-identical. Four hundred and fifty-six worse and nothing better is the
+pure regression the trend gate refuses outright, so the fall is attributed in
+`bench/welfare_floor.json`'s history under the rule that the floor is
+permeable to the language — the same escape #1053 used, for the same kind of
+reason.
 
 `a_typeset_arm_cannot_see_its_own_hakos_err` pins both halves: the failure
 passes through, and the arm still takes a member that is not a failure.

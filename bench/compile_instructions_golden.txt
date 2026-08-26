@@ -65,4 +65,4 @@
 # measure the front end's work, and all three of those FELL: visits 16,818 to
 # 16,806, allocations 62,110 to 61,981, peak 825,664 to 822,004, because the
 # pub self-seed went and `lib/json` shed `must` and `defect`.
-compile_instructions=57490154
+compile_instructions=57490610
