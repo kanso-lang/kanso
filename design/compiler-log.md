@@ -4004,10 +4004,14 @@ copy should look like.
 `src/runtime.c` is `include_str!`'d into the compiler, so a longer runtime
 lengthens a static and shifts the code and data around it; `kanso check
 lib/json` never reads that string. The number is therefore pure layout, and it
-behaves like layout: on the runner, against the unstaged library, it ROSE 664
-(60,772,083 to 60,772,747); in a container, against the staged library, the
-same edit FALLS 6,763 (57,524,712 to 57,517,949). Same diff, opposite sign,
-two orders of magnitude apart.
+behaves like layout. Three measurements of one diff:
+
+    runner, unstaged library    60,772,083 -> 60,772,747     +664
+    runner, staged library      56,848,763 -> 56,849,156     +393
+    container, staged library   57,524,712 -> 57,517,949   -6,763
+
+Same edit, opposite signs, an order of magnitude between the two hosts that
+agree on direction.
 
 That is not a reason to distrust the row — it is exact for the host and the
 program its header names, and both figures above are exact for theirs. It is a
