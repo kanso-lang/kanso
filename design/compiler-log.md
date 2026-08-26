@@ -4799,3 +4799,29 @@ gate does not need the floor's escape, though the entry recording it stands.
 
 What it buys is the differential law holding on a surface where two engines
 already agreed and the third was alone.
+
+## 2026-08-26 — the same fix, missing the map, and why the fixture let it
+
+#1057 gave `k_render` a `held` flag so a failure inside a container renders
+rather than propagating. It reached lists and records. It missed the map
+beside them.
+
+Two mistakes stacked. The edit was applied over a fixed-size window of the
+function, and the map's key and value renders sit past the end of that window,
+so they kept calling the top-level entry. And the fixture held a list alone,
+so the corpus agreed with the half-fixed compiler and CI went green on it.
+
+    mapped = { "k":(boom "v") }
+
+    interp   mapped: { "k":err "v" }
+    native   error[endpoint]: unhandled err reached the entry: "v"
+
+Live on main for the length of one merge. The fixture now holds a list, a map,
+and a map nested in a list, because a spec that covers one member of a family
+proves nothing about the others — which is the general form of what went
+wrong, not a detail of this function.
+
+Sixteen bytes of .text a binary, and the work vein moves by tens: jsonbench
++23, basket +23, pendbench +38, oneshot -21. The map render is on no
+benchmark's path, so what these are is the one comparison arriving at a
+slightly different address.
