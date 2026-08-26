@@ -6,7 +6,7 @@
 # read zero this way and looked like broken fixtures rather than a working
 # analyser.
 set -e
-A='        self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))' \
+A='        self.lazy_binds.contains(&(fn_name, arity, stmt_index))' \
 awk '
   !hit && $0 == ENVIRON["A"] {
     print "        let _ = (fn_name, arity, stmt_index);"

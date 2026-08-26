@@ -3491,6 +3491,45 @@ passes forever, which is the failure this file is named after, and
 `cargo test --release --test golden error_corpus` reported "0 passed; 1 failed;
 9 filtered out" — exactly one test, and it went red.
 
+### And the row that had been proving nothing since 2026-08-24
+
+Running `prove` for the new row turned up a second thing, which is the better
+find of the two. It reported **1 rows proved nothing**:
+
+    BROKE cost goldens — the pending-cell shape erased from a strictness
+    change: the mutation would not apply
+
+`pending_cells_proven_strict` anchors on an exact line of src/demand.rs:
+
+    self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
+
+#1015 made the demand pass borrow the names its keys are made of, so that line
+now reads `&(fn_name, arity, stmt_index)`. The mutation's `awk` found no match,
+exited 3, and the row has been unable to introduce its defect ever since.
+
+The `pend_counters` row was therefore green for a reason that had nothing to do
+with the gate working. Nothing caught it, because `cover` runs per PR and asks
+only whether a row exists, while `prove` — the half that applies the mutation —
+runs nightly.
+
+The anchor now matches the borrowed form, and the row was watched red by hand
+to be sure the fix restores the substance rather than the sed: applied, built,
+and `scripts/gates/pend_counters.sh` exits 1 with the lazy tier gone —
+
+    thunk_allocs   200 -> 0
+    thunk_forces   100 -> 0
+    thunk_evals    100 -> 0
+
+which is precisely what the mutation's own comment says it should do. Reverted,
+rebuilt, gate green again.
+
+**A mutation that anchors on source text is a gate of its own, and nothing
+watches it.** A rename or a borrow silently retires the row that depends on it,
+and the row keeps reporting green. Two ways to notice: run `prove` in CI rather
+than nightly, which costs a build per row, or have `prove`'s "proved nothing"
+count fail the build it already runs in. The second is the cheaper one and it
+already has the number.
+
 ### A count in a comment, drifting
 
 `tests/errors_module.rs` opened by saying the corpus holds 161 fixtures. It
