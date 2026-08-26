@@ -1,3 +1,4 @@
+import "std/testing"
 import "std/text"
 
 type parse_failure
@@ -46,11 +47,20 @@ pub play =
   >> print (show (decode_int "1 x"))
   >> print (show (decode_int "  7 ;"))
 
-fn show (err (parse_failure p reason))
+# The reason reaches `told` through `std/testing`'s `when_failed`, which is
+# foreign to this module and so may separate it from the failure. An arm here
+# naming this module's own err would simply never match.
+fn told (parse_failure p reason)
   "err at {p}: {reason}"
 
 fn show v
+  chosen v (testing/when_failed v told)
+
+fn chosen v false
   "ok: {v}"
+
+fn chosen _ text
+  text
 
 fn skip_ws cs p
   if (is_ws? cs[p]) (skip_ws cs (p + 1)) p

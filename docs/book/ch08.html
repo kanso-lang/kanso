@@ -112,7 +112,8 @@ parse failed at byte 10: invalid literal</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">literal.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/testing"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">type</span> parse_failure
   <span class="f">position</span>
@@ -137,11 +138,20 @@ bytes_true <span class="o">=</span> [<span class="n">116</span> <span class="n">
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>))
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>))
 
-<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> (<span class="f">parse_failure</span> p reason))
+<span class="c"># The reason reaches `told` through `std/testing`'s `when_failed`, which is</span>
+<span class="c"># foreign to this module and so may separate it from the failure. An arm here</span>
+<span class="c"># naming this module's own err would simply never match.</span>
+<span class="k">fn</span> <span class="f">told</span> (<span class="f">parse_failure</span> p reason)
   <span class="s">"err at <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
 
 <span class="k">fn</span> <span class="f">show</span> v
+  <span class="f">chosen</span> v (<span class="f">testing/when_failed</span> v told)
+
+<span class="k">fn</span> <span class="f">chosen</span> v false
   <span class="s">"ok: <span class="i">{v}</span>"</span>
+
+<span class="k">fn</span> <span class="f">chosen</span> _ text
+  <span class="f">text</span>
 
 <span class="k">fn</span> <span class="f">value_for</span> <span class="n">102</span> cs p
   <span class="f">word</span> cs p bytes_false false
@@ -404,7 +414,8 @@ err at 1: unexpected character `?`</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">positions.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/testing"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">type</span> parse_failure
   <span class="f">position</span>
@@ -452,11 +463,20 @@ err at 1: unexpected character `?`</code></pre>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>))
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>))
 
-<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> (<span class="f">parse_failure</span> p reason))
+<span class="c"># The reason reaches `told` through `std/testing`'s `when_failed`, which is</span>
+<span class="c"># foreign to this module and so may separate it from the failure. An arm here</span>
+<span class="c"># naming this module's own err would simply never match.</span>
+<span class="k">fn</span> <span class="f">told</span> (<span class="f">parse_failure</span> p reason)
   <span class="s">"err at <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
 
 <span class="k">fn</span> <span class="f">show</span> v
+  <span class="f">chosen</span> v (<span class="f">testing/when_failed</span> v told)
+
+<span class="k">fn</span> <span class="f">chosen</span> v false
   <span class="s">"ok: <span class="i">{v}</span>"</span>
+
+<span class="k">fn</span> <span class="f">chosen</span> _ text
+  <span class="f">text</span>
 
 <span class="k">fn</span> <span class="f">skip_ws</span> cs p
   <span class="f">if</span> (<span class="f">is_ws?</span> cs[p]) (<span class="f">skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
