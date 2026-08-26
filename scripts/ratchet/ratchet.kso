@@ -336,6 +336,38 @@ dispatch = row
   (breaking "a_literal_arm_ranks_below_a_wildcard")
   release
 
+numeric = row
+  "the two engines answering one arithmetic operator differently"
+  true
+  "./target/release/kanso run scripts/numeric_differential -- 0"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_floors_a_negative_modulo")
+  release
+
+effects = row
+  "two effects running in the wrong order on one engine"
+  true
+  "./target/release/kanso run scripts/effects_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_sequences_two_effects_backwards")
+  release
+
+modules = row
+  "a name a module keeps private crossing an import anyway"
+  true
+  "./target/release/kanso run scripts/module_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_private_name_crosses_an_import")
+  release
+
+coverage = row
+  "a diagnostic arriving with no golden pinning its text"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_diagnostic_arrives_without_a_golden")
+  release
+
 itself = row
   "a gating job nobody said how to prove"
   true
@@ -368,7 +400,11 @@ rows_c1b = text/concat rows_c1a [diagnostics accumulator]
 
 rows_c1c = text/concat rows_c1b [rendering behaviour]
 
-rows_c = text/concat rows_c1c [dispatch itself]
+rows_c1d = text/concat rows_c1c [numeric effects]
+
+rows_c1e = text/concat rows_c1d [modules coverage]
+
+rows_c = text/concat rows_c1e [dispatch itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
