@@ -4273,21 +4273,38 @@ perfectly, because both read the same front end. What moves is the VERDICT, and
 directory on disk. Agreement alone cannot see a rule that is wrong in both
 engines, which the sweep's own header says it has had.
 
-### The hole it found
+### The hole it found, and the case that closes it
 
-It went red through the KNOWN-DEFECT ledger rather than the case list: `0
-wrong; 1 known defects, 1 no longer as recorded`. `w1` — a module's own pub
-shadowed by a dependency's name, filed against task #51 — is the only case in
-the sweep that exercises the import-privacy refusal at all, and it is currently
-recorded as a defect rather than passing.
+The first time it was proved, it went red through the KNOWN-DEFECT ledger
+rather than the case list: `0 wrong; 1 known defects, 1 no longer as recorded`.
+`w1` — a module's own pub shadowed by a dependency's name, filed against task
+#51 — was the ONLY case in the sweep touching the import-privacy refusal at
+all, and it is recorded as a defect rather than passing.
 
-So the row is real and the gate does refuse, but its grip is on an entry that
-is meant to be deleted when task #51 is settled. A mutation whose red depends
-on a recorded defect stops proving anything the day the defect is fixed. What
-the sweep wants is an ordinary case that expects the private-name refusal —
-"only pub names cross an import" — and gets it. OPEN, and worth
-more than the row: it means the rule `pub` exists for has no passing test on
-this surface.
+So the row worked and its grip was on an entry meant to be deleted the day task
+#51 is settled. A mutation whose red depends on a recorded defect stops proving
+anything the moment the defect is fixed.
+
+The rule itself is fine. Asked directly, the compiler refuses exactly as it
+should:
+
+    error[opacity]: `secret` is private to module `dep`
+                    — only pub names cross an import
+
+What was missing was a case asking. Every other module in the sweep uses a pub
+name, stays inside the module, or is `w1`. So the rule `pub` exists for — a
+plain private name reached across a plain import, nothing else going on — had
+no passing test on the one surface that runs whole modules from disk.
+
+`c17` is that case. With it the sweep reads 17 modules, and the mutation now
+goes red through the case list where it belongs:
+
+    17 modules, 1 wrong; 1 known defects, 1 no longer as recorded
+      a private name reached across an import
+        expected a refusal saying 'error[opacity]: `secret` is private
+        to module `dep` — only pub names cross an import', but it compiled
+
+`w1` stays exactly as it is, recorded as it behaves.
 
 ### numeric's row carries the argument CI runs
 
