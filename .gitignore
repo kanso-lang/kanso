@@ -64,3 +64,4 @@ bench/history_series.jsonl
 /deepbench
 /counters_escape.txt
 /counters_scan.txt
+.claude/settings.local.json
