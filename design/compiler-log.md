@@ -3496,3 +3496,31 @@ failure stops being expressible.
 
 The entry leaves the ledger with this commit. Fourteen of the sweep's
 sixteen remain.
+
+## 2026-08-25 — gavel: the floor is absolute against refactorings, permeable to the language
+
+Clay ruled the blocking entry, and with a sharper principle than either
+framing on offer: "welfare can absolutely fall if you are considering
+language functionality as part of the welfare score. of course the more
+correct way of expressing this is just that welfare can fall in order to
+implement a language feature. it can't fall from a refactoring so to
+speak."
+
+The ruling: the welfare floor is absolute against behavior-preserving
+change — a refactoring that costs welfare is worse code and stays
+refused, no exceptions. A change to what the language IS — a feature, a
+doctrine-compelled migration — may move the floor down, with the fall
+recorded and attributed to the change that spent it, because the thing
+being measured changed. Hunting a compensating optimization in the same
+pull request to hold the number flat stays forbidden as gaming the
+index.
+
+Applied: kanso#1034 implements gavels 1b and 24, so it merges and the
+floor moves to 84.79, recorded as a language-change fall. The instrument
+question the entry raised — the library's compile golden charging the
+test file's dependencies to the library — folds into the already-ruled
+welfare rebuild ("welfare measures what compiling costs, not what it
+counts", this log, 2026-08-25): measure the thing the golden claims to
+measure. It does not return to the ledger as its own entry.
+
+The entry leaves the ledger with this commit.
