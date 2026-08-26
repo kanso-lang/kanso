@@ -3216,6 +3216,175 @@ pair. What it changes is the price of the 142: a walk of each body against the
 type table, rather than a second value threaded through every arm of
 `eval_expr`.
 
+## 2026-08-25 — a value read for fields no one record declares is refused, and no inference is behind it
+
+The measurement in the entry above said the fence types none of the fleet and
+that a rule with no inference in it reaches 93.8% of the same confusions. This
+is that rule.
+
+**The argument.** `Expr::Field` in `eval.rs` reads a field off `Value::Record`
+and errors on everything else, and a subtype reads through to its base record,
+so a value a body reads for two fields is one record and a record this program
+declares. When no declaration holds every field read off a value, those reads
+cannot all be of the same value, and the program is wrong whatever type it
+would have had. Nothing is inferred; the type table and one walk of the body
+answer it.
+
+    fn width m
+      m.to - m.wanted
+
+    error[name]: `m` is read for `to` and `wanted`, and no record type has both
+
+`to` is declared on `span` and `wanted` on `node`, so the fence shipped in
+#1029 — which asks only whether any record declares the name — passes both
+reads through and the program dies at run time.
+
+**Which reads may be pooled.** Only the ones that run whenever the body runs.
+Three shapes defer: a lambda, which may never be called; the two arms of an
+`if` or a guard, of which one is taken; and the right operand of `and` or `or`,
+which the left may already have decided. A binding of the same name ends the
+run, because the reads after it are of a different value, and a `build` block
+runs its statements so a binding inside one ends a run too. `set p.x = v` is
+counted as a read, since a build block runs its sets and the field must exist.
+
+The restriction is nearly free. Measured over the fleet before building this:
+the certain-only gather loses one base of the thirty that read two or more
+fields, and none of the refusals.
+
+**The odd one out.** When dropping exactly one field leaves the rest sitting on
+a record together, the diagnostic points at that read, because it is the one to
+change. `n.kind + n.from + n.to` points at `kind`, since `from` and `to` are a
+`span`.
+
+**Cost, and a second walk that CI caught.** `compile_allocs` on lib/json is
+64,950 before and after, byte for byte, and rounds and visits are unmoved. The
+first draft cost 157 allocations, all of them a set built per binding statement
+whether or not anything was open; a walk that carries the open bases and asks
+the pattern about each one allocates nothing until a body actually reads a
+field, and lib/json reads none.
+
+Allocations were the wrong dimension to stop at. The draft was a SECOND
+traversal of every body beside the one the #1029 fence already does, and the
+vein built for exactly this reported it: `compile_instructions` rose 59,773,156
+to 60,090,679 on the runner, **+317,523 for a module with no field reads in
+it**. Nothing else moved, because a walk that finds nothing allocates nothing
+and decides nothing.
+
+The fix is one walk. The two questions a field read raises — does this field
+exist at all, and can the fields read off this value belong to one record —
+differ only in where they may look: the first is asked wherever the read
+appears, the second only where the read certainly runs. So the walk carries
+`certain` and stops recording under the shapes that defer, rather than
+traversing twice.
+
+**The runner reads 59,717,892 against 59,773,156, a fall of 55,264.** So the
+refusal lands with the front end doing LESS work than before it existed: the
+gather rides a walk that was already there, and folding the two tightened the
+one that remains — `walk_children` 1,703,108 to 1,631,080, its recursive twin
+965,191 to 940,511, `check_merged` 1,793,255 to 1,771,785. The golden takes the
+new figure and this is the sentence beside it. `compile_peak_bytes` held at
+864,300 on the same run, and `compile_instructions` is not a welfare term, so
+the floor does not move.
+
+The container host agrees on direction and not on magnitude, which is why the
+row is host-pinned: 60,404,144 against 60,625,645 there, each repeated to the
+instruction.
+
+### Watched red
+
+`tests/golden/errors/fields_that_no_one_record_declares.kso` on the compiler as
+it stood exits **1** with `error[runtime]: `span` has no field `wanted``. With
+the check it exits 2 with two diagnostics, one for the two-field message and
+one for the three-field message. That is the hole this closes: a language that
+refuses before anything runs was deferring this one to run time.
+
+### Watched red three more times, for the quiet cases
+
+A refusal that fires is half the behaviour; the other half is staying silent
+where a program is correct, and that half is where a false refusal would live.
+`tests/golden/micro/a_field_read_the_body_may_skip_is_not_pooled.kso` is three
+correct programs the rule would refuse if it pooled too much, and each clause
+was watched red by breaking its own guard:
+
+    the two arms of an `if` pooled     `x` is read for `from` and `kind`
+    a lambda body pooled with outside  `m` is read for `kind`, `from` and `to`
+    a rebinding did not end the run    `p` is read for `from`, `to`, `kind`
+                                       and `wanted`
+
+Each of the three is a program that runs and prints, so the fixture is a micro
+golden rather than an error golden — it pins the output, and any of the three
+guards going away turns the print into a refusal.
+
+The rebinding case took a second attempt to write at all. A body cannot rebind
+a name after a bare effect line — the grammar puts every binding before every
+effect — so the rebinding lives in a constant that returns a string and `play`
+prints it. That is worth knowing: the shape this guard exists for cannot be
+written in an effectful body in the first place.
+
+### What it does not reach
+
+A value read for exactly one field, where that one name is the wrong one. The
+93.8% above is measured by ADDING a confused name to what a value is already
+read for, which is why single-read bases are mostly covered: a second, wrong
+read makes a two-set and the two-set is usually homeless. A *replacement* on a
+base read once leaves a one-set and nothing to compare. Thirty of the sixty
+bases are read for exactly one field, carrying 46 of the 142 reads, and that is
+the fixpoint's real prize — along with the 6.2% where some other record happens
+to hold the confused pair.
+
+### What the fixpoint's room costs, measured before building it
+
+`Set` in src/infer.rs is a `u16` with fourteen kind bits used, so bits 14 and
+15 are all that is spare and the fleet declares 143 record types. Carrying a
+type identity in the lattice means widening the word. That price can be read
+without spending any of it: change `pub type Set = u16` to `u32`, use none of
+the new bits, and measure.
+
+    compile_allocs         64,950 -> 64,950
+    front_end_rounds           40 -> 40
+    front_end_visits       17,786 -> 17,786
+    compile_peak_bytes    864,300 -> 866,908      +2,608
+    welfare                 84.89 -> 84.88
+
+So the room is nearly free, and the fixpoint's cost is entirely in the
+propagation rather than in the representation. The figures are the container
+host's, and only the peak is host-pinned, so the runner's own would need
+re-reading before any of this is banked.
+
+That also corrects the shape of the cost. The note left on this task said
+`eval_expr` returns a `Set`, so carrying a record identity means threading a
+SECOND value through every arm. It does not, if the identity rides in the high
+bits of the widened word: an arm that passes a set through unchanged needs no
+edit, and a kind test masks against a low-bit constant and still works.
+
+What a packed identity does break is the JOIN, because two identities cannot be
+bitwise-ORed into a third. That count comes off the compiler rather than a
+grep — a `Set` newtype that still masks and compares but implements no `BitOr`,
+which makes rustc report exactly the sites a packed design must rewrite:
+
+    Set | Set                             65
+    |= on a Set                           12
+    the same through a trait bound         7
+    integer |= Set                         2
+                                      ------
+    join sites                            86
+
+    expected `Set`, found integer         90    the empty set written as `0`
+    borrow and iterator shapes            11
+                                      ------
+    total errors                         187
+
+**86 join sites** across infer.rs, codegen.rs, beat.rs, check.rs, dispatch.rs
+and provenance.rs, each of them a place that would have to decide what joining
+`span` with `node` means — a record whose identity is unknown, which is a
+lattice question rather than a bitwise one. The other hundred are mechanical:
+a real implementation names the empty set instead of writing `0`.
+
+Against the interner's 365 for one AST field, 86 is a different order of thing,
+and the prize is a refusal rather than speed. This is priced, not declined, and
+not yet taken: 46 reads and 6.2% of confusions, for 86 lattice decisions and
+0.01 welfare of room.
+
 ## 2026-08-25 — the interned symbol is DECLINED, and the churn was counted by making the name opaque
 
 The economics have been settled since the "how big an interner would have to
