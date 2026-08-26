@@ -269,6 +269,18 @@ welfare_floor = row
   (breaking "welfare_term_worsens")
   release
 
+# The other step in that job. `welfare_floor` above satisfied `cover` for both
+# of them, so this one had never been watched fail — and it had a live failure
+# to be watched at: a number stated as a fact about the present went stale
+# three times over with the gate reporting no drift.
+published_numbers = row
+  "a number the page states about the present drifting from its golden"
+  true
+  "./target/release/kanso run scripts/golden_prose"
+  "welfare (one number over runtime and compile cost, ratcheted)"
+  (breaking "a_published_number_drifts")
+  release
+
 grammar = row
   "an editor grammar that stops naming a string a string"
   true
@@ -351,7 +363,7 @@ rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs error_corpus trend]
 
-rows_c1a = text/concat rows_c1 [perf_row]
+rows_c1a = text/concat rows_c1 [perf_row published_numbers]
 
 rows_c1b = text/concat rows_c1a [diagnostics accumulator]
 

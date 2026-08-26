@@ -22,6 +22,7 @@ import "std/text"
 #
 # What the walk carries down and never changes.
 type job
+  compile
   decode
   encode
   write
@@ -43,6 +44,23 @@ marker = "data-golden=\""
 decode_golden = "bench/cost_golden.txt"
 
 encode_golden = "bench/cost_golden_encode.txt"
+
+# `compile.` reads all three compile veins as one family. Their key names do
+# not collide — front_end_rounds, front_end_visits, compile_peak_bytes,
+# compile_allocs, compile_instructions — so which file a counter came from is
+# a fact the page has no reason to carry.
+#
+# They were unreachable until now, and that is not a gap somebody imagined.
+# compiler.html said the library's front end DOES 17,786 expression visits,
+# in the present tense, while the golden went 17,886, then 16,818, then 16,806
+# under it. This gate reported `0 golden-quoting number(s) drifted` through
+# every one of those, and it was right by its own lights: six numbers in the
+# whole site carry data-golden and all six are decode counters.
+memory_golden = "bench/compile_memory_golden.txt"
+
+allocs_golden = "bench/compile_allocs_golden.txt"
+
+ir_golden = "bench/compile_instructions_golden.txt"
 
 fn counters src
   lines = text/split src "\n"
@@ -100,12 +118,15 @@ fn comma_or_not true
 fn comma_or_not false
   ""
 
-# The attribute names a family and a counter within it; only these two exist.
+# The attribute names a family and a counter within it; only these three exist.
 fn golden_for j "decode"
   j.decode
 
 fn golden_for j "encode"
   j.encode
+
+fn golden_for j "compile"
+  j.compile
 
 fn golden_for _ _
   []
@@ -127,7 +148,19 @@ fn loaded write
   os/read_file decode_golden . (d -> with_decode write (counters d))
 
 fn with_decode write decode
-  os/read_file encode_golden . (e -> started (job decode (counters e) write))
+  os/read_file encode_golden . (e -> with_encode write decode (counters e))
+
+fn with_encode write decode encode
+  os/read_file memory_golden . (m -> with_memory write decode encode m)
+
+fn with_memory write decode encode m
+  os/read_file allocs_golden . (a -> with_allocs write decode encode "{m}\n{a}")
+
+fn with_allocs write decode encode so_far
+  os/read_file ir_golden . (i -> whole write decode encode "{so_far}\n{i}")
+
+fn whole write decode encode compile
+  started (job (counters compile) decode encode write)
 
 fn started j
   os/list_dir "docs" . (names -> walked j "docs" (list/to_list names) 0)

@@ -4108,3 +4108,51 @@ compiler's own path calls it.
 `diagnostics`. That leaves `numeric_differential`, `effects_differential`,
 `module_differential` and `diagnostic_coverage` rowed only by their neighbours.
 They are the same debt this entry pays down, and they are OPEN.
+
+## 2026-08-26 — a number the page stated about the present had been wrong for three changes
+
+Searched this file and `log/compiler-log-archive.md` for `golden_prose` and for
+`data-golden`: the gate is recorded arriving, to close the class where "the
+landing page and the compiler page each quoted an allocation count the ratchet
+had long since moved past". Nothing records which goldens it can reach.
+
+It reaches two. `decode.` keys read `bench/cost_golden.txt` and `encode.` keys
+read `bench/cost_golden_encode.txt`, and there is no third family. Six numbers
+in the whole site carry the attribute — three on compiler.html, three on
+index.html — and all six are decode counters.
+
+So compiler.html said, in the present tense, that the library's front end
+**does 17,786 expression visits**, while `front_end_visits` went to 17,886
+(#1034's test-file import), then 16,818 (#1041 staging the library without its
+test file), then 16,806 (#1043 shedding `must` and `defect`). The gate reported
+`0 golden-quoting number(s) drifted` on every run through all three, and it was
+right about the question it was asked.
+
+### The class, not the instance
+
+`compile.` now reads all three compile veins as one family —
+`compile_memory_golden`, `compile_allocs_golden` and
+`compile_instructions_golden`, whose key names do not collide, so which file a
+counter came from is a fact the page has no reason to carry.
+
+The sentence is fixed as history rather than restated: 17,786 and 23,224 were
+both true when the reader-index change was measured, so they read as past
+tense, and the current figure sits beside them as a tagged number that moves
+on its own. `--write` was run in both directions to check the rewrite
+round-trips and keeps the comma style.
+
+### The gate had no row either
+
+`golden_prose` runs as the second step of the welfare job, and `welfare_floor`
+satisfied `cover` for both steps — the same shape as the differential sweeps
+two entries above, and with a live failure attached rather than a hypothetical
+one. `a_published_number_drifts` anchors on the attribute rather than the
+value, because the counter moves whenever the front end does. Proved red in a
+worktree of HEAD and green on restore.
+
+### What is still untagged
+
+Most of what compiler.html quotes is narrative about a particular change, which
+is history and correctly left alone. Anything phrased about the present should
+carry the attribute; this entry fixes the one that was caught. A sweep of the
+page for other present-tense claims is OPEN.
