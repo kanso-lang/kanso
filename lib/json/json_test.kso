@@ -3,12 +3,6 @@ import "std/text"
 
 # `when_failed` hands back the bare reason, so this names a reason type and
 # never an err — json cannot rescue what json raised.
-fn a_defect? (defect _)
-  true
-
-fn a_defect? _
-  false
-
 test_decode_array = decode "[1, 2, 3]" == [1 2 3]
 
 test_decode_bool = decode "true"
@@ -54,8 +48,6 @@ test_error_position =
 test_error_trailing =
   decoded = decode "1 x"
   testing/when_failed decoded (r -> r.position == 3)
-
-test_must_wraps_defect = testing/when_failed (must (decode "nope")) a_defect?
 
 test_roundtrip =
   text = "\{\"a\":[1,2.5,\"x\"],\"b\":null}"

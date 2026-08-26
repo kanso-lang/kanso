@@ -35,21 +35,38 @@ pub struct Provenance<'a> {
     table: Vec<String>,
 }
 
-/// The package a declaration belongs to. The shipped library is one package
-/// however many modules it spans; a fetched hako is its own; everything a
-/// program compiles from its own tree is the program's.
+/// The hako a declaration belongs to.
+///
+/// Go's rule, which Clay named on 2026-08-26: a package is a DIRECTORY, and
+/// its import path is its name. `std/json` and `std/testing` are different
+/// packages; `std/json/json.kso` and `std/json/scan.kso` are one; `std/net`
+/// and `std/net/http` are two. A fetched hako is `owner/repo`, and a
+/// subdirectory inside it is its own package the same way.
+///
+/// Everything a program compiles from its own tree stays the program's, which
+/// is the one place this departs from Go and the one place the older rule was
+/// never in question.
+///
+/// The rule used to answer `std` for every shipped module. That reading was
+/// invisible until gavel 24 made an err's raiser part of dispatch, and then it
+/// failed at once: `std/testing` and `std/json` came out the same package, so
+/// `when_failed` could not rescue a failure `decode` raised and the harness
+/// could not report a test failure. Clay: "testing should be its own hako
+/// then... this becomes somewhat of a virtual concept when you're talking
+/// about packages that are built in that aren't literally coming from
+/// different sources, but for the sake of our rule that makes sense."
 pub fn package_of(file: &str) -> &str {
     if file.starts_with("std/") {
-        return "std";
+        return match file.rfind('/') {
+            Some(at) => &file[..at],
+            None => file,
+        };
     }
     match file.split_once(".hako/") {
-        Some((_, rest)) => {
-            let mut parts = rest.split('/');
-            match (parts.next(), parts.next()) {
-                (Some(owner), Some(_)) => owner,
-                _ => "",
-            }
-        }
+        Some((_, rest)) => match rest.rfind('/') {
+            Some(at) => &rest[..at],
+            None => "",
+        },
         None => "",
     }
 }

@@ -1,16 +1,28 @@
 # The bytes gavel's second rider: the constructor ships with the coercion's
 # removal, so byte data stays writable, and it refuses loudly outside 0-255
 # rather than keeping the low byte the way `append` does for a single number.
+#
+# A builtin's failure is attributed to the code that CALLED it — both engines
+# say "born in play" here, not "born in std/text" — so under gavel 24 this
+# module cannot match these errs itself. `when_failed` is std's and foreign,
+# and reads the reason out.
+import "std/testing"
 import "std/text"
 
-fn shown (err reason)
+fn as_text reason
   "{reason}"
 
-fn shown other
-  "{other}"
+fn shown v
+  "{v}"
+
+over = text/to_bytes [104 300]
+
+under = text/to_bytes [-1]
+
+wrong = text/to_bytes ["a"]
 
 pub play =
   print "in range: {shown (text/to_bytes [104 105])}"
-  >> print "out of range: {shown (text/to_bytes [104 300])}"
-  >> print "negative: {shown (text/to_bytes [-1])}"
-  >> print "not a number: {shown (text/to_bytes ["a"])}"
+  >> print "out of range: {testing/when_failed over as_text}"
+  >> print "negative: {testing/when_failed under as_text}"
+  >> print "not a number: {testing/when_failed wrong as_text}"
