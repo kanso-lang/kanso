@@ -4335,6 +4335,27 @@ appears in a diff a reviewer reads rather than behind a flag. So the floor was
 edited by hand and the entry carries the whole attribution. No compensating
 optimization was hunted, which the same ruling forbids.
 
+### Each counter, by the name the gate prints
+
+`work_jsonbench` rises 51,692,087 and is the one that matters: the decoder's
+inner loop is made of arms that can hold an err, and each now asks before it
+matches. `work_oneshot` rises 344,603 and `work_widebench` 296,592 for the same
+reason at smaller volume. `work_encodebench` rises 369,905, four thousandths of
+a per cent across nine billion, and `work_basket` 8,001, a hundredth of one —
+both render rather than dispatching on err, and both are at the size where
+layout accounts for as much as work. `work_deepbench`, `work_escapebench` and
+`work_pendbench` do not move at all.
+
+`emitted_calls` rises 2 and `emitted_branches` 1: the guard's three calls into
+the decoder, less the one that went with `lib/json`'s `defect`. `emitted_lines`
+falls 11 against them, because a record that goes takes six string constants
+with it. `text` rises 3,104 over the eight binaries, spread from 80 to 624
+rather than uniform, since both costs scale with the program.
+
+Every one of these is bought by the same thing: an arm cannot see an err its
+own hako raised, and the ruling says that is dispatch rather than a check. The
+sum is priced in welfare and the floor moves with it.
+
 ### The trend gate said nothing about any of the runtime rows
 
 It named four compile counters and refused the one whose sentence was missing.
