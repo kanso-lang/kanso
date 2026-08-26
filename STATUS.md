@@ -16,10 +16,9 @@ gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**Eleven open, not blocking** — welfare's blindness to compile traffic; the two
+**Nine open, not blocking** — the two
 surviving err-gavel riders (the annotate/rescue spelling, and construction
-enforcement); whether an own-origin err arm is dispatch semantics or the
-advisory that ships today; `--explain-copies`; the assert hako's surface; the
+enforcement); `--explain-copies`; the assert hako's surface; the
 bare-call cross-module tie whose interim ruling is still live and still called
 interim; whether a dependency's render arms join the root group; `first coll n`;
 where `std/` comes from; block-born as a dataflow property; and the

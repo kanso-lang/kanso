@@ -50,99 +50,9 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### Obeying gavel 24 costs 0.10 welfare, and `--set` refuses a fall
-
-**Cited: the welfare doctrine in CLAUDE.md — "a fall means the change is
-worse by the project's own stated preferences... either the change goes, or
-the claim is that the weights are wrong." The search found no ruling on what
-happens when a change is compelled by a gavel and the index falls anyway.
-kanso#999 moved the floor once before, but for a corrected figure rather
-than a real fall.**
-
-kanso#1034 deletes `json/failure_position` and `json/failure_reason`, which
-gavel 1b and gavel 24 forbid between them, and reaches the same facts
-through `std/testing`'s `when_failed`. It cannot merge as it stands.
-
-    compile_allocs        64,950 -> 65,543
-    front_end_rounds          40 -> 42            welfare term
-    front_end_visits      17,786 -> 17,886        welfare term
-    compile_peak_bytes   864,300 -> 870,263       welfare term
-    compile_instructions  59,773,156 -> 60,818,284
-    welfare                84.89 -> 84.79         floor 84.89
-
-The cause was isolated rather than guessed: reverting `json.kso` alone and
-keeping the new test file gives 65,801 allocations and 42 rounds, so all of
-the rise is the test file and the deletion claws a little back. The test
-file's one new line is `import "std/testing"`, which pulls a whole module
-into the program the compile golden measures. The library itself shrank by
-two functions.
-
-Two framings:
-
-1. **Move the floor to 84.79 and record why.** The change is compelled by
-   two gavels and cannot go. The welfare model has no term for doctrine
-   compliance, and what a model leaves out it weights at zero. No weight is
-   wrong here — the model is silent, and this is the case that shows it.
-2. **Fix the instrument.** The compile golden measures `kanso check
-   lib/json`, which compiles lib/json's TEST file and so its test-only
-   dependencies. Charging test cost to the library's compile golden may be
-   the real defect. It already carried one test-only dependency (`std/text`),
-   so this is a difference of degree.
-
-**RECOMMENDATION: 1.** It is the smaller change and honest about why. Option
-2 moves the objective itself and deserves its own sitting rather than riding
-a doctrine fix. Not recommended either way: finding a compensating
-improvement in the same pull request to hold the number flat, which is
-gaming the index.
+Nothing. The section stays so the next entry has somewhere to land.
 
 ## Open, not blocking
-
-### Welfare cannot see what the compiler costs to run
-
-**Cited: the weights and satiations were argued once with reasons — archive
-2026-08-01 "the four weights, decided from evidence" and archive 2026-07-26 "a
-second of compile time is not a second of runtime". Nothing since revisits
-them, and no entry anywhere proposes a compile-traffic term.**
-
-Four merges on 2026-08-24 took `compile_allocs` from 148,073 to 87,290 and
-the front end's retired instructions down about a quarter, and the welfare
-score did not move: 84.87 before, 84.87 after, floor untouched.
-
-That is not a bug in the script. Its model of compile cost is four counters,
-and every one of them is flat across those changes:
-
-    compile_speed_counters = ["front_end_rounds" "front_end_visits" "emitted_lines"]
-    compile_memory_counters = ["compile_peak_bytes"]
-
-    front_end_rounds        40 -> 40
-    front_end_visits    17,786 -> 17,786
-    emitted_lines        1,534 -> 1,534
-    compile_peak_bytes 871,649 -> 871,649   (the golden welfare reads)
-
-Rounds and visits count the work the compiler decided to do. Emitted lines
-count what it wrote. Peak counts what it held. None of them counts what it
-does — the allocator traffic, or the instructions retired getting there. What
-a model leaves out it weights at zero, and the tree now has two veins,
-`bench/compile_allocs_golden.txt` and `bench/compile_instructions_golden.txt`,
-watching a dimension the objective scores at nothing.
-
-The question is whether welfare should carry a compile-traffic term, and at
-what weight and satiation.
-
-**RECOMMENDATION: take the smaller variant — leave the weights alone and say
-in the script's own prose that compile traffic is deliberately outside the
-model.** The score already has four compile terms against three runtime
-dimensions, and adding a fifth to score the work of the week it was proposed
-is how an objective gets fitted to its history. A sentence in the script
-means the next person to find a silent 26% reads that it was a choice. The
-two veins already catch a deletion, which is the job the goldens do and
-welfare does not.
-
-One tangle worth naming: `compile_peak_bytes` DID move, 876,930 to 864,274.
-Welfare did not see it because welfare reads the golden rather than the
-compiler, and the band let the golden sit unmoved. The no-tolerance-bands
-gavel of 2026-08-24 settles that half; once the gate asserts equality this
-term reports live movement again, with no change here. Filed 2026-08-24.
 
 ### Riders under the err gavel (the three-combinator model, 2026-08-15)
 
@@ -176,34 +86,6 @@ July spellings"). These two are what remain.**
 
 - Downstream of the spelling, not a separate question: the arm-based
   advisory migrates onto whatever surface is chosen. Implementation.
-
-### An arm cannot see an own-origin err — semantics, or an advisory?
-
-**Cited: derived by the committee in design/testing.md (2026-08-19), with a
-veto window offered to Clay that never closed. The search found no ruling
-either way, and the code answers a third way: src/provenance.rs raises
-`advisory[license]` and nothing refuses.**
-
-Gavel 24's clause 1 says no arm may match an own-origin err. The July record
-also seeds every pub dispatch group's receivable set with its own hako, and
-the committee found the two cannot both stand: the seeding would statically
-refuse every pub bare-err arm, `when_failed`'s included, and with it the
-generic foreign rescuers Clay blessed by name.
-
-The derivation was that clause 1 is dispatch semantics rather than a static
-check alone — at match time, an err whose origin hako equals the arm's hako
-does not match, infectiousness carries it onward, and the doctrine executes
-itself. The pub seed retires; the static refusal stays for what provenance
-proves without self-seeding.
-
-None of that is built. Today the case is an advisory, so a program that
-rescues its own failure compiles and runs.
-
-**RECOMMENDATION: ratify the derivation and build it.** An advisory is the
-one shape the err thesis cannot afford, because the whole claim is that the
-discipline is structural rather than advisory, and try/catch's failure is
-named in the gavel as exactly this. Match-time skipping also keeps
-`when_failed` working with no exemption written for it.
 
 ### `--explain-copies`
 
