@@ -651,6 +651,30 @@ fn synthesize_getters(program: &mut ast::Program) {
 /// import wears `./` or `../`; ANY bare path is a hako name and is never tried
 /// as a local directory, whatever its shape, so neither a sibling nor a
 /// subtree called `owner/repo` can shadow one.
+/// A resolved module path with its `x/..` pairs folded away, lexically — the
+/// module may be reached through a directory that is only on the way there,
+/// and the filesystem has nothing to say about that. A leading `..` that
+/// nothing precedes stays, and a fold that would leave nothing keeps the path
+/// it was given.
+fn folded(path: std::path::PathBuf) -> std::path::PathBuf {
+    use std::path::Component;
+    let mut kept: Vec<Component> = Vec::new();
+    for part in path.components() {
+        match part {
+            Component::CurDir => {}
+            Component::ParentDir if matches!(kept.last(), Some(Component::Normal(_))) => {
+                kept.pop();
+            }
+            other => kept.push(other),
+        }
+    }
+    let out: std::path::PathBuf = kept.iter().collect();
+    match out.as_os_str().is_empty() {
+        true => path,
+        false => out,
+    }
+}
+
 fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathBuf, String> {
     if let Some(rest) = path.strip_prefix("std/") {
         let toolchain =
@@ -674,6 +698,10 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     if path.starts_with("./") || path.starts_with("../") {
         // `./` is import syntax rather than part of the name — carrying it into
         // the resolved path would put it in every diagnostic the module raises.
+        // `../` is the same syntax and was NOT being taken back out: a module
+        // reached as `../deep` from `mid/` named itself `mid/../deep` in every
+        // diagnostic it raised and in the hako its errs recorded. `folded`
+        // below takes the pairs out.
         let bare = path.strip_prefix("./").unwrap_or(path);
         let relative = base.join(bare);
         let file = base.join(format!("{bare}.kso"));
@@ -686,10 +714,10 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
             ));
         }
         if relative.is_dir() {
-            return Ok(relative);
+            return Ok(folded(relative));
         }
         if file.is_file() {
-            return Ok(file);
+            return Ok(folded(file));
         }
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a dot-prefixed path names a \
