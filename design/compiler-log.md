@@ -3446,3 +3446,112 @@ and "make a qualified name" (26 `format!` sites, 23 of them in lib.rs's
 qualification machinery). A name carrying its module and base answers both
 structurally, and it is a fraction of the conversion. Whoever returns to this
 should measure that, not the interner.
+
+## 2026-08-26 — the error corpus had no ratchet row, and now has one
+
+The ratchet's rule is one row per CI job, and `specs (unit, golden,
+differential)` has carried one since the file existed. Which command that row
+actually runs is a different question from whether the rule is satisfied, and
+it was worth asking while claiming ratchet cover for a new error golden.
+
+Four rows run `cargo test --test golden`. Two point at
+`micro_corpus_agrees_across_engines`, one at
+`micro_corpus_survives_a_release_build`, one at
+`mem_corpus_pins_native_allocator_counters`. The error corpus — 164 fixtures
+pinning byte for byte every diagnostic the language emits — had none. Nothing
+in this tree had ever watched it fail.
+
+That is the file's own stated reason for existing, in its header: a gate nobody
+has watched fail has no evidence it works, and five checks went green in one
+day while checking nothing.
+
+**The row.** `error_corpus`, gate `cargo test --release --test golden
+error_corpus`, job `specs (unit, golden, differential)`, mutation
+`a_diagnostic_stops_being_raised`, setup `release` — the same shape as
+`thunk_walk`, which reads a golden through a release build.
+
+**The mutation** is the regression the corpus is for, which is a check that
+quietly stops firing rather than a golden that drifts. The none-in-a-list walk
+still runs and still visits every list, and finds nothing in any of them:
+
+    for item in items.iter().take(0).filter(|i| is_none_lit(i))
+
+It compiles without a warning, so no other gate in the tree objects to it, and
+the corpus is left to notice on its own.
+
+### Watched red before it was wired
+
+The mutation was applied by hand first, `cargo build --release` came back
+clean, and `cargo test --release --test golden error_corpus` FAILED. Only then
+was it reverted and the row written. The row is therefore written against a
+mutation already known to work, rather than a mutation guessed at to fit a row.
+
+The filter is proven non-empty by the same run. A gate that matches no test
+passes forever, which is the failure this file is named after, and
+`cargo test --release --test golden error_corpus` reported "0 passed; 1 failed;
+9 filtered out" — exactly one test, and it went red.
+
+### And the row that had been proving nothing since 2026-08-24
+
+Running `prove` for the new row turned up a second thing, which is the better
+find of the two. It reported **1 rows proved nothing**:
+
+    BROKE cost goldens — the pending-cell shape erased from a strictness
+    change: the mutation would not apply
+
+`pending_cells_proven_strict` anchors on an exact line of src/demand.rs:
+
+    self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
+
+#1015 made the demand pass borrow the names its keys are made of, so that line
+now reads `&(fn_name, arity, stmt_index)`. The mutation's `awk` found no match,
+exited 3, and the row has been unable to introduce its defect ever since.
+
+The `pend_counters` row was therefore green for a reason that had nothing to do
+with the gate working.
+
+The anchor now matches the borrowed form, and the row was watched red by hand
+to be sure the fix restores the substance rather than the sed: applied, built,
+and `scripts/gates/pend_counters.sh` exits 1 with the lazy tier gone —
+
+    thunk_allocs   200 -> 0
+    thunk_forces   100 -> 0
+    thunk_evals    100 -> 0
+
+which is precisely what the mutation's own comment says it should do. Reverted,
+rebuilt, gate green again.
+
+### The machinery worked. Nobody answered it.
+
+The first draft of this entry said nothing watched the mutations, and that was
+wrong in a way worth correcting rather than quietly fixing. `prove` exits 1 on
+a row that proves nothing — `told bad false` writes the count and calls
+`os/exit 1` — and `.github/workflows/ratchet.yml` runs it on a schedule every
+morning at 09:00 UTC.
+
+So the timeline is not a blind spot:
+
+    2026-08-24 22:52 UTC   #1015 lands, dropping the .to_string()
+    2026-08-25 09:27 UTC   nightly ratchet run 14 fires
+    2026-08-25 09:37 UTC   run 14 FAILS, naming this exact mutation
+    2026-08-26 00:50 UTC   still red, still unanswered
+
+The ratchet caught it the very next morning and said so precisely — `BROKE
+cost goldens … the mutation would not apply` — in the first red run that
+workflow has had in fourteen. It was found today only because `prove` was run
+by hand for an unrelated reason.
+
+That reframes the lesson. The gap is not instrumentation, which did its job on
+schedule; it is that a nightly nobody reads is a nightly that does not exist.
+A per-PR signal gets answered because it blocks a merge, and a scheduled one
+competes with whatever else the morning holds. Worth saying plainly because the
+obvious fix — build more watching — is the wrong one here. What this needed was
+for the red run to reach somebody.
+
+### A count in a comment, drifting
+
+`tests/errors_module.rs` opened by saying the corpus holds 161 fixtures. It
+holds 164. Nothing checks that number and it goes stale every time somebody
+adds a mistake to the corpus, so the sentence now says a fixture per mistake
+and names no figure. Where a count carries weight it belongs in a golden, where
+CI reads it.
