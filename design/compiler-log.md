@@ -3554,3 +3554,36 @@ The forbidden move stands: packaging a compensating optimization into a
 feature's own pull request to hide its cost is index-gaming either way —
 the feature's fall and the optimization's gain each deserve their own
 attributed record.
+
+## 2026-08-26 — ironclad: branches do not hang out, and old work finishes first
+
+Clay, verbatim, after finding a day-old and a four-day-old branch
+sitting on origin: "there needs to be an ironclad rule that prevents
+branches from just hanging out... what the fuck is any process doing
+making a new PR when there's an existing one there that clearly is
+older." An inventory taken on the spot found roughly 250 branches on
+origin, the oldest from July 13 — most of them squash-merge litter
+whose PRs landed weeks ago and whose head branches nobody deleted, and
+on top of that the genuinely unfinished ones aging in place.
+
+The ironclad rule, three clauses:
+
+- **FIFO, corrected from the earlier 24-hour misstatement.** The rule
+  was never an age limit: no session starts a new branch or a new PR
+  while an older open PR or unfinished pushed branch of its own
+  remains. Oldest first, driven to merged-on-green, superseded, or
+  closed with the reason recorded — then the next thing begins.
+- **A merged branch dies at merge.** Turn on the repository's
+  delete-branch-on-merge setting (gh api -X PATCH repos/kanso-lang/kanso
+  -f delete_branch_on_merge=true, and the same for kq) so the litter
+  class cannot recur, and run the one-time purge: every branch whose PR
+  is merged or closed is deleted; a branch with no PR and no unlanded
+  content is deleted; a branch with real unlanded content either gets
+  its PR opened now or its salvage recorded as a task — nothing stays
+  parked.
+- **Every check-in audits the branch list**, not just the PR list. A
+  branch on origin is either main, or actively being driven to done by
+  the FIFO. There is no third state.
+
+This entry rides the oldest unfinished branch this session owns, which
+is the rule applied to itself.
