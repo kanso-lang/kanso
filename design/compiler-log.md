@@ -3863,3 +3863,79 @@ deserve their own attributed record, and bundling them hides both.
 The instrument question this exposed — a library's compile golden charging its
 test file's dependencies to the library — does not return to the ledger. It
 folds into the already-ruled welfare rebuild, which is the next thing built.
+
+## 2026-08-26 — welfare measures what compiling costs, and the goldens stop charging the library for its tests
+
+Building the gavel of 2026-08-25. Compile speed was `front_end_rounds`,
+`front_end_visits` and `emitted_lines` — how many times a fixpoint went round,
+how many expressions a pass looked at, how many lines came out. All three are
+the compiler's bookkeeping about itself, and the case against them is already
+in the tree: on 2026-08-24 a change took `kanso check lib/json` from 90.9
+million retired instructions to 67.2 million with every one of them
+byte-identical. A quarter of the front end's work went away and the dimension
+whose job is compile speed scored the change at zero.
+
+It reads `compile_instructions` and `compile_allocs` now, both counted rather
+than inferred.
+
+### The proxies stay, as tripwires
+
+They keep their goldens and still turn CI red when they move. A dropped
+fixpoint round is news whatever the score thinks, and `emitted_lines` is the
+only vein that watches what the compiler WROTE rather than what it allocated —
+the decoder gained twenty per cent more calls over a fortnight with every
+allocation counter identical. A tripwire and a term are different jobs, and
+these three were only ever good at the first.
+
+### The weights did not move, and that is the argument
+
+0.28 and 0.5 stand. They were priced for the DIMENSION — what teams shipping
+software pay for, with 45% of the people who stopped using rust naming compile
+times among their reasons — and the dimension has not moved. A better
+thermometer is not a change of mind about the temperature. Repricing here
+would have smuggled a preference change in behind an instrument change, which
+is the move the ledger exists to make visible.
+
+### The instrument fix, folded in
+
+`kanso check lib/json` compiles lib/json's TEST file, so every dependency the
+suite imports enters the program the compile goldens measure. #1034 is how
+that surfaced: moving json's assertions onto `std/testing` cost the LIBRARY's
+golden two rounds, a hundred visits, 5,989 peak bytes and a million retired
+instructions, none of it the library getting more expensive to compile.
+
+`scripts/gates/library_box.sh` stages the library without its tests, at the
+fixed path the instruction count already needed for its own reason, and all
+three compile gates now read the same staged program rather than two of them
+reading the checkout:
+
+    compile_allocs           65,543 -> 62,110
+    front_end_visits         17,886 -> 16,818
+    front_end_rounds             42 -> 40
+    compile_peak_bytes      870,289 -> 825,664
+    compile_instructions 60,772,083 -> 56,848,763
+
+Two of those the container and the runner agreed on to the digit, which is
+worth recording because the host gate refuses the comparison rather than
+making it: `compile_allocs` and `compile_peak_bytes` came out identical on
+both. `compile_instructions` did not — 57,524,712 here against the runner's
+56,848,763, a bit over one per cent — so the row and its welfare BASELINE both
+carry the runner's figure. A baseline holding a number no CI host will ever
+measure would have the term entering at a ratio against a fiction.
+
+The visits fall is nine hundred more than #1034 added, because json_test.kso
+was always in the measured program — #1034 only made the charge large enough
+to notice.
+
+### The floor is re-set, not lowered
+
+84.79 to 84.14. The precedent is the 66.6 entry, where run speed stopped being
+three allocation counters: a term with no baseline is filled from the present
+and enters where its dimension already stands, so compile speed gives up the
+credit its proxies had banked. Nothing got slower. Scores either side of this
+entry are not comparable, and the entry says so in the file rather than only
+here.
+
+Of the 0.79 the swap cost on the old goldens, the instrument fix gave 0.14
+back before the floor was set, which is the honest order: fix what is measured
+first, then read the number.
