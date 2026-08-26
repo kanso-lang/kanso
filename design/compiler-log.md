@@ -3605,3 +3605,19 @@ with no agent on it is the violation. The check runs at the moment of
 commencing, every time, and the earlier clauses stand: merged branches
 die at merge, the one-time purge proceeds, and every check-in audits
 the branch list.
+
+## 2026-08-26 — directive: no more trigger calls from the running session
+
+Clay, seeing yet another Update Trigger prompt from the kanso cloud
+session: "fucking stop." Effective on reading this: the running cloud
+session makes no further claude-code-remote tool calls of any kind —
+no create, update, fire, or delete. Self-scheduled check-ins move to
+Monitor with an until-loop, or to simply continuing the turn. Every
+such call prompts Clay's phone, because the running session predates
+the checked-in allowlist and cannot load it.
+
+The permanent fix: at the next natural boundary — current PR queue
+drained — the running session hands off to a successor. A session
+started now inherits the merged .claude/settings.json and autoMode
+policy and runs silent. Write the handoff into STATUS.md as usual;
+nothing else transfers, because the repo already carries everything.
