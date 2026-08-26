@@ -4422,3 +4422,81 @@ branch was being judged by, and closed by the entry directly above this one
 while this branch waited on CI. The finding stands as recorded: the numbers in
 this entry are the ones that went past the gate unnamed, and they are why that
 change exists.
+
+## 2026-08-26 — the last four differential steps get rows, and one of them found a hole
+
+Named OPEN in the entry three above this one, which rowed the first three. The
+diagnostics differential job runs nine sweeps as nine steps and `cover` is per
+JOB, so a row on any one satisfied it for all nine.
+
+All nine are rowed now. Each mutation was applied in a worktree, built, and its
+own sweep run, and each was green again on restore.
+
+    native_floors_a_negative_modulo          -1 % 2 -> 1, -1 % 7 -> 6
+      integer `%` floors on native where the oracle truncates. Both are a
+      language's defensible choice — C and Rust truncate, Python and Haskell
+      floor — and kanso may only have one. No diagnostic is raised, every
+      allocation counter is flat, and no golden prints a negative modulo.
+
+    native_sequences_two_effects_backwards   10 of 10 shapes disagree
+      `>>` runs its right side first, so `io/write "a" >> io/write "b"`
+      prints `ba`. The executor is written twice with no shared code, and
+      only this sweep asks what happens when two effects are SEQUENCED.
+
+    a_diagnostic_arrives_without_a_golden    1 newly unpinned
+      a `Diagnostic::new` with literal text and no golden, appended as a
+      function nobody calls so the tree still builds. What is under test is
+      whether the SCAN finds it, not whether the compiler can raise it.
+
+    a_private_name_crosses_an_import         1 no longer as recorded
+      the check that refuses a private name at an import looks itself up
+      under a key nothing declares, so `pub` stops meaning anything across a
+      module boundary.
+
+### The module mutation is in the shared front end, and that is the point
+
+It changes no engine's behaviour relative to the other — both go on agreeing
+perfectly, because both read the same front end. What moves is the VERDICT, and
+`module_differential` is the only gate that asks that question of a real
+directory on disk. Agreement alone cannot see a rule that is wrong in both
+engines, which the sweep's own header says it has had.
+
+### The hole it found, and the case that closes it
+
+The first time it was proved, it went red through the KNOWN-DEFECT ledger
+rather than the case list: `0 wrong; 1 known defects, 1 no longer as recorded`.
+`w1` — a module's own pub shadowed by a dependency's name, filed against task
+#51 — was the ONLY case in the sweep touching the import-privacy refusal at
+all, and it is recorded as a defect rather than passing.
+
+So the row worked and its grip was on an entry meant to be deleted the day task
+#51 is settled. A mutation whose red depends on a recorded defect stops proving
+anything the moment the defect is fixed.
+
+The rule itself is fine. Asked directly, the compiler refuses exactly as it
+should:
+
+    error[opacity]: `secret` is private to module `dep`
+                    — only pub names cross an import
+
+What was missing was a case asking. Every other module in the sweep uses a pub
+name, stays inside the module, or is `w1`. So the rule `pub` exists for — a
+plain private name reached across a plain import, nothing else going on — had
+no passing test on the one surface that runs whole modules from disk.
+
+`c17` is that case. With it the sweep reads 17 modules, and the mutation now
+goes red through the case list where it belongs:
+
+    17 modules, 1 wrong; 1 known defects, 1 no longer as recorded
+      a private name reached across an import
+        expected a refusal saying 'error[opacity]: `secret` is private
+        to module `dep` — only pub names cross an import', but it compiled
+
+`w1` stays exactly as it is, recorded as it behaves.
+
+### numeric's row carries the argument CI runs
+
+`-- 0`, no random rounds. Every random draw lands past the native ceiling, so
+the rounds spend ten minutes re-confirming what the 561 edge cases already say.
+A row whose gate string differed from the workflow's would be proving a
+different program.
