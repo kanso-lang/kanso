@@ -2920,3 +2920,86 @@ call chain, restructure the module to thread one buffer, or make the digest a
 builtin after all — and it is filed in design/pending-gavels.md with this
 table.
 
+## 2026-08-27 — a file that is there, readable, and not text
+
+Three bytes: `a`, `0xFF`, `b`. Native reads them and writes them back exactly.
+The interpreter refuses, and until today it said this:
+
+    cannot read /tmp/bad.bin: no such file or unreadable
+
+About a file three bytes long that is sitting right there. `read_file_text` in
+src/eval.rs threw the reason away — `map_err(|_| ...)` — so the one thing the
+message needed to say was the one thing it could not. The `|_|` was written to
+CLOSE a divergence, and the comment above it says so: the interpreter used to
+leak libc's `No such file or directory (os error 2)` where native said its own
+fixed sentence. Fixing that by discarding the error kind traded a divergence
+for a falsehood.
+
+The two engines genuinely differ here and the difference is structural.
+`runtime.c` opens the file `"rb"`, takes the bytes and hands them back;
+`std::fs::read_to_string` gives Rust a `String`, which cannot hold bytes that
+are not utf-8. The interpreter cannot follow native there without changing what
+a kanso string is on that engine.
+
+The differential law allows an engine to speak less than another only when the
+quieter one REFUSES with a clear diagnostic. So the refusal now names the real
+cause, and `ErrorKind::InvalidData` is Rust's own classification rather than a
+host string, so the wording stays fixed for the reason the original comment
+gives.
+
+    cannot read /tmp/bad.bin: the bytes are not text
+
+FOUND SIDEWAYS. `scripts/fingerprint` reads `docs/kanso.wasm`, and running it
+under `--interp` reported that file as missing while native hashed it. That was
+a detour off the memory measurement in the entry above, and it is the second
+time today that running a shipped script by hand turned up something no gate
+watched.
+
+WHERE THE FIXTURE LIVES, and why not in the corpus. `tests/golden/runtime/`
+pins a diagnostic by its stderr, and there is no diagnostic to pin: on native
+the program SUCCEEDS. A corpus entry asserts one answer, and the whole finding
+is that there are two. `tests/a_file_that_is_not_text.rs` holds both, asserts
+each engine's own answer, and says in its own comment that it pins what the
+engines DO rather than what they should — so whichever way the design question
+below is ruled, one of its two assertions goes red and asks to be rewritten.
+
+AND THE SPEC FAILED ON THE OTHER HOST, for a reason worth keeping. It wrote
+its program with the fixture's ABSOLUTE path interpolated into the source, so
+the length of a line of kanso became a property of the host's temp directory.
+`/tmp/...` on linux fits inside the eighty characters the language allows;
+macOS hands out `/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/...` and the
+line came to 99, so the run died on a formatting refusal before it reached
+anything the spec meant to test. Reproduced here by pointing `TMPDIR` at a path
+of the same length — 91 characters, and red. The fixture uses a relative path
+and runs from its own directory now, and passes under that `TMPDIR`.
+
+Swept for others rather than assumed unique. Six tests write generated kanso
+source; the other five interpolate expressions and numbers, whose length does
+not move with the host, and the ten path interpolations elsewhere in `tests/`
+are environment variables, panic messages and one stderr rewrite — none of them
+reaches a line the compiler will measure. So this was the only one, and there
+is no gate here worth building.
+
+WHAT IT COST, and the vein that keeps moving without work. `compile_instructions`
+rose 1,954 (57,486,215 -> 57,488,169), and it is layout rather than work —
+provably, this time, rather than by resemblance. `read_file_text` has exactly
+one caller, the executor's `read_file`, which is an EFFECT; `kanso check
+lib/json` compiles a library and runs no program, so the measured path cannot
+reach the edited function at all. The counters that do measure the front end's
+work are identical, allocations 61,981 and peak 822,004, and the profile's own
+rows moved the way layout moves them — `__memcmp_avx2_movbe` fell 327 while the
+total rose.
+
+That makes three movements of this vein in two days from an untouched call
+graph: +167, -251, +1,954. The trend gate refuses a pure regression, so this
+one is attributed in `bench/welfare_floor.json` under the branch the gate
+documents for a doctrine-compelled change — the differential law requires an
+engine that speaks less to refuse with a CLEAR diagnostic, which is what made
+this a fix rather than a preference. The attribution says plainly that nothing
+was spent: welfare reads 84.12 before and after.
+
+The design question — whether `read_file` is byte-transparent on every engine,
+or text-only with a bytes reader beside it — is filed in
+design/pending-gavels.md. Today the library has one reader and no way to say
+which you meant.
+
