@@ -3513,3 +3513,196 @@ constantly. It is the ENDPOINT around the call: what the exit code carries,
 which stream the bytes land on, which sentence names the fault. Coverage of the
 surface would not have found any of them, which is worth knowing before the
 next sitting spends a morning building it.
+
+## 2026-08-27 — the bare name at a wall, refused at compile time after all
+
+The entry recording this as refuted was right about the naive version and
+wrong about the conclusion. The one-line extension does refuse a working
+program; a set of the names a declaration binds is enough to fix that, and
+costs one walk of each body.
+
+WHAT THE NAIVE VERSION DOES, shown rather than argued. With
+`Expr::Ident(name, _) => returns.get(&(name, 0))...` added to
+`never_describes` and nothing else, this program is refused:
+
+    naturals = io/write "one\n"
+    first = io/write "two\n"
+    naturals >> first
+
+It prints `one` then `two` and exits 0 on both engines. `list/naturals` and
+`list/first` are bare-enrolled and answer plain values, so the lookup finds the
+stdlib rows; the locals are invisible to it. That was watched happening — the
+compiler was built with the arm and run on the program — rather than read out
+of the source.
+
+WHAT FIXES IT. `never_describes` now takes the set of names its declaration
+binds: the parameters, the patterns of every `Stmt::Bind` at any depth, and
+every lambda parameter under it. A name the declaration binds belongs to the
+local, whatever the fixpoint says about a top-level constant sharing it.
+
+The set is deliberately over-wide and does NOT model scope — a name bound
+anywhere in a declaration shields it everywhere in that declaration. The cost
+of being loose this way is a refusal not made rather than one made wrongly,
+which is the side to be loose on: the run still names the fault, and since
+#1090 it names it identically on all three engines.
+
+WHERE THE LINE FALLS NOW:
+
+    io/write "one" >> x        x = 2 at top level     compile error, with a span
+    io/write "one" >> twice    twice is a fn, arity 1  runtime, as before
+    naturals >> first          both are locals         runs
+
+The middle row is why #1090's runtime guard is still load-bearing and why
+a_wall_whose_right_side_is_a_function stays in the runtime corpus: `returns` is
+keyed by (name, arity) and a bare `twice` is arity zero, which that map has no
+row for. The first row's fixture moves to the error corpus, which is what
+catching it earlier means.
+
+The guard program is at tests/golden/micro/a_wall_whose_name_is_a_local, with a
+shadowed stdlib name on each side of the wall. It was written and watched
+refused before the fix existed, which is the only order in which it proves
+anything.
+
+AND THE WALK MISSED A THIRD BINDER, which the whole suite was green over.
+Reading the new code against the `Expr` enum rather than against itself: three
+variants bind names — `Lambda` its parameters, `Block` and `Build` their
+statements — and a fourth, `Guard`, carries a statement list of its own in
+`rest`. A binding that follows a `return` line lives there rather than in a
+block, so this was refused:
+
+    pub fn go n
+      return io/write "early\n" if n < 0
+      naturals = io/write "one\n"
+      naturals >> io/write "two\n"
+
+73 test binaries passed with that gap in place, because no fixture in the tree
+binds a shadowing name inside a guard. The corpus cannot catch what it does not
+contain, and the enum can: a walk that collects binders is complete or it is
+not, and the way to find out is to read it against the list of things that
+bind. The fixture covers all three forms now, and was watched red with the
+`Guard` arm removed — `left: ""` where the golden wants four lines, because the
+program no longer compiles.
+
+## 2026-08-27 — welfare refused the wall check, and it was right to
+
+The bare-name refusal shipped in a form that cost more than it was worth, and
+the objective said so before any reviewer could.
+
+    compile_allocs        61,981 -> 62,518    +537   (+0.87%)
+    compile_instructions  57,489,753 -> 58,148,592  +658,839  (+1.15%)
+    compile_peak_bytes    822,004 -> 822,004        0
+    welfare               84.12 -> 84.06, against a floor of 84.12
+
+The rise was real work and it was measured as such rather than guessed: main
+was built and measured on THIS host beside the branch, because the golden was
+taken on a different rustc and a branch-versus-golden delta would have mixed
+the change with the toolchain. Allocations moved because the walk collected the
+names every declaration binds; peak did not, because each set is transient.
+
+WHAT THE FLOOR IS FOR. `welfare --set` cannot lower it — ruled 2026-08-03 —
+and the file's own rule is that a fall means the change is worse by the
+project's stated preferences, so either the change goes or the argument is
+about the WEIGHTS. There is a third answer when the price is avoidable, and
+here it was. The walk collected names for every declaration; most hold no wall
+at all. The set is built on the first `Seq` the existing walk meets now, so a
+body with no wall pays nothing and the traversal is the one that was already
+happening.
+
+    compile_allocs        61,981   identical to main
+    compile_peak_bytes    822,004  identical to main
+    welfare               84.12, exactly the floor
+
+The refusal still fires and the shadowing programs still run — all three were
+re-checked after the change, not assumed to survive it.
+
+The reading worth keeping is what the number did. A 0.06 fall is far below what
+anyone would notice by eye, on a change whose behaviour is plainly an
+improvement, and the honest first move was to write the attribution and bank
+it. The floor made the cheaper implementation the thing to look for instead.
+That is the whole of what a single scalar over runtime and compile cost is for.
+
+## 2026-08-27 — a docs check silenced the allocations vein
+
+Found while reading the cost-goldens job log for the number above, and it is a
+gap of the kind the project's own rule names: movement is fine, silence is not.
+
+`compile allocations` was the ONE counter step in that job without
+`if: always()`. Every sibling has it — one-shot, basket, compile instructions,
+compile memory, encode. So when an earlier step fails the job outright, that
+step alone is skipped, and the summary loop at the end fails only on `failure`
+and reads `skipped` as nothing to report.
+
+The chain on this run, from the log rather than from reasoning:
+
+    page_drift FAILED       the log was 4 entries ahead of a budget of 3
+    one-shot   if: always   ran
+    basket     if: always   ran
+    compile allocations     SKIPPED
+    compile instructions    ran, failed, reported its number
+
+So a docs-freshness budget took down the gate whose golden header calls it
+"the traffic the front end makes, which no other gate can see". Allocations
+rose 537 on that run and the job said nothing about it. The step has
+`if: always()` now, with the reason written beside it.
+
+## 2026-08-27 — the layout reading was right this time, and measured twice
+
+The entry above predicted the wall check's instruction rise would be REAL WORK
+and said so in the pull request. For the first implementation that held. For
+the one that shipped it does not, and the correction matters because it changes
+the attribution.
+
+    the runner        57,489,753 -> 57,571,608     +81,855   (+0.14%)
+    this container    58,158,740 -> 58,162,339      +3,599   (+0.006%)
+
+Both binaries profiled under callgrind side by side on one host for the second
+row. A change that does more work moves both hosts by a similar amount. A delta
+that is twenty-three times larger on one of them is layout, and the golden's own
+header already records the shape: one diff measuring +664, +393 and -6,763 on
+three sittings.
+
+The reachability argument agrees and is the stronger one. `lib/json` — the
+library this vein measures — contains no `>>` at all. Zero. So
+`never_describes` is never called on the measured path, the bound-name set is
+never built, and none of the new code runs. `compile_allocs` at 61,981,
+`compile_peak_bytes` at 822,004 and visits at 16,806 are identical for that
+reason, and their agreement is evidence of unreachability rather than of thrift.
+
+WHAT THE VEIN CANNOT SEE. A program that sequences effects pays one set per
+wall-bearing declaration, and `kanso check lib/json` compiles a pure library
+that never asks. So this row is silent on the feature's real cost, and saying
+the feature is free would be reading its silence as an answer.
+
+THE FLOOR MOVED, ON THE RULING'S AUTHORITY. Clay's ruling of 2026-08-25 — the
+floor is absolute against refactorings and permeable to the language — governs
+it, and this is a language change, since a program that used to run partway and
+die is now refused before it starts. The 84.79 and 84.12 entries in
+bench/welfare_floor.json have this shape. 84.12 -> 84.11, with the two-host
+measurement in the reason.
+
+THE MECHANISM DIFFERED FROM PRECEDENT, and the first two versions of this
+paragraph were both wrong about why. The first said `--set` accepting the fall
+was the sanctioned path. The second called the guard's prose and its code
+contradictory and flagged it for Clay. Searching the log rather than reading
+the source settled it: the 2026-08-25 entry above already read the same code
+correctly — "welfare --set refuses a fall of more than 0.01 and refused this
+one. That refusal is the design — its own comment names hand-editing
+bench/welfare_floor.json as the single override, precisely so the move appears
+in a diff a reviewer reads rather than behind a flag."
+
+So there is no contradiction, and nothing here for Clay. The prose describes
+the REFUSAL, and a fall of 0.00 does not reach it. The established practice for
+a language-change fall is the hand edit; `--set` wrote this one, which puts the
+same line in the same diff, so a reviewer sees it either way. Worth naming
+because a third sitting will meet a sub-threshold fall and should not have to
+rediscover which of the two paths precedent uses.
+
+THE LESSON IS THE FILE'S OWN RULE, applied to me. An entry cites its search or
+it is invalid, and I wrote two paragraphs about this guard before searching for
+what the log already said about it. Both were confident and both were wrong,
+and the search that fixed them took one grep.
+
+The order of operations is the part worth keeping. The expensive version fell
+0.06 and the first instinct was to bank it — goldens edited, page figures
+moved, paragraph drafted. The floor is what sent me looking for the cheaper
+implementation instead, and the cheaper one costs nothing measurable at all.

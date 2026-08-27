@@ -279,8 +279,17 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/basket_counters.sh
+      # `if: always()` because every sibling has it and this one did not, so
+      # it alone was skipped once the job had already failed — and a SKIPPED
+      # vein is invisible to the summary below, which fails only on `failure`.
+      # On 2026-08-27 page_drift went red over a docs budget and took this
+      # gate down with it: allocations rose 537 that run and nothing said so.
+      # The header of its golden calls this "the traffic the front end makes,
+      # which no other gate can see", which is exactly why it must not be the
+      # one that goes quiet when something else breaks.
       - name: compile allocations
         id: compile_allocs
+        if: always()
         continue-on-error: true
         run: sh scripts/gates/compile_allocs.sh
 

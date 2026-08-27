@@ -56,12 +56,13 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso#1091** — a micro program's stderr is part of what it does. `golden.rs`
-read `"out"` for the micro corpus and never `"err"`, so `io/write_err`'s success
-case was pinned on no engine. It also carries two negative results, below.
+**kanso#1092** — a bare name at a wall, refused at compile time. The one idea
+of the two below that did not stay dead: the refutation ruled out the naive
+version and not the idea, and a set of the names a declaration binds fixes it.
 
 ## What landed on 2026-08-27
 
+    kanso 54914c40  #1091  a micro program's stderr is part of what it does
     kanso 7be1ed9c  #1090  two ways the page's endpoint got an err wrong
     kanso 36dcd74e  #1089  clang is installed, and that was never the question
     kanso 0d293915  #1088  the excuse with no reason, and the sitting it cost
@@ -92,35 +93,32 @@ is the blocking question above.
 
 ## Next
 
-**Two ideas died by measurement today, and both are recorded** so they stay
-dead. Neither was a guess that looked wrong; each was a recommendation about to
-be written down.
+**One of the two ideas that died by measurement came back.** Both are in the
+log with their programs; this is where each ended up.
 
-**The bare-name wall check.** `never_describes` refuses a literal or a direct
-call on either side of `>>` and not a bare name, so `io/write "one" >> x`
-reaches the run. `tests/wall_takes_effects.rs` made this same extension once
-before, from literals to calls, and the lookup for a name is the same one at
-arity zero — so it read as a line of code. It is not. A local shadowing a
-BARE-ENROLLED import is legal, and this prints `one` then `shadowed` and exits
-0 today:
+**The bare-name wall check SHIPPED, in #1092.** The refutation was real — the
+one-line version refuses a working program, because a local may shadow a
+bare-enrolled import and `returns` is built from all of `program.fns`,
+synthetic clones included. What it ruled out was that version. `never_describes`
+takes the set of names its declaration binds now: parameters, every
+`Stmt::Bind` pattern at any depth, every lambda parameter, and `Guard`'s own
+`rest` list. Over-wide on purpose — no scope model, so a name bound anywhere in
+a declaration shields it everywhere there, which costs a refusal not made
+rather than one made wrongly.
 
-    naturals = io/write "shadowed\n"
-    io/write "one\n" >> naturals
+Two things from building it are worth carrying forward. **A corpus only speaks
+about what it contains**: 73 test binaries were green over a walk that missed
+`Guard`, because no fixture in the tree binds a shadowing name inside one. The
+`Expr` enum is the check the corpus could not be — four variants bind names,
+and reading the walk against that list is decidable where running the suite is
+not. And **a golden that checks only THAT something failed is nearly
+worthless**: with the bare-`Ident` arm removed the fixture's program still
+fails, later and on the runtime path with a different sentence, so only the
+exact text makes the spec speak.
 
-`returns` is built from all of `program.fns`, synthetic clones included, so the
-lookup finds `list/naturals` and the local is invisible to it. check.rs:1085
-states the rule that breaks: "the enrollment must never make every stdlib
-export a forbidden binding name." The open question is whether to give
-`never_describes` and its sibling `refused` a set of the names bound in the
-function they are walking — cheaper than full scope and possibly enough. That
-program is the case that must not be refused, and belongs in the corpus either
-way. The runtime guard shipped in #1090 covers the behaviour meanwhile.
-
-**A coverage gate over the std surface.** `the_wasm_engine_complains_the_way_the_others_do`
-walks every `pub fn` in `lib/` and hands each the wrong arguments; nothing walks
-the surface the other way, so gating the success half looked like the obvious
-build. There is nothing to gate: 100 of 100 exports are reached. The first
-answer was 24, and the arithmetic of being wrong is worth keeping —
+**A coverage gate over the std surface stays dead.** There is nothing to gate —
+100 of 100 exports are reached. The first answer was 24, and the arithmetic of
+being wrong is the part worth keeping:
 
     qualified name only, across the corpus dirs     24 uncovered
     plus the bare-enrolled form                      1 uncovered
@@ -131,8 +129,10 @@ twelve-character floor hid three reachable diagnostics, and this hid eight
 reachable exports. A name here has two written forms, and a search that knows
 one is measuring its own blind spot.
 
-**What today's bugs actually shared** was never an uncalled function. All three
-lived in a function the corpus calls constantly, and what was wrong was the
-ENDPOINT around the call: what the exit code carries, which stream the bytes
-land on, which sentence names the fault. That is where to look next, and
-surface coverage would have found none of them.
+**Where to look next.** Four bugs today shared a shape, and none was in an
+uncalled function — all four were in the ENDPOINT around a function the corpus
+calls constantly: what the exit code carries, which stream the bytes land on,
+which sentence names the fault, and which side of a wall was judged. The
+`tests/golden/runtime` fixture names read as a list of failures, and a fourth
+sweep of them for a construct whose SUCCESS case is pinned nowhere is the
+cheapest place to find the fifth.

@@ -132,4 +132,27 @@
 # graph: +167, -251, +1,954, and now -159. That count is what the pending
 # question about instructions-only attributions is about; a FALL costs nothing
 # to bank, so it is banked and nothing is claimed for it.
-compile_instructions=57489753
+#
+# 2026-08-27: 57,489,753 -> 57,571,608, a rise of 81,855 (0.14%). LAYOUT, and
+# the prediction that it would be work was wrong in a way worth recording.
+#
+# `never_describes` refuses a bare name at a wall now, which needs to know what
+# the declaration binds. The first shape collected that for EVERY declaration
+# and was work here: +537 allocations, +658,839 instructions, welfare 0.06
+# under its floor. The set is built on the first `Seq` the walk meets now, and
+# lib/json — the library this row measures — contains no `>>` at all. Zero. So
+# `never_describes` is never called on the measured path, the set is never
+# built, and none of the new code runs. What moved is the binary around it.
+#
+# THE VEIN CANNOT SEE THIS FEATURE'S COST, and that is the honest thing to say
+# rather than that the feature is free. A program that sequences effects pays
+# one set per wall-bearing declaration; `kanso check lib/json` compiles a pure
+# library and never asks. The counters that would show the work — allocations
+# at 61,981, peak at 822,004, visits at 16,806 — are identical for the same
+# reason, so their agreement here is evidence of unreachability rather than of
+# thrift.
+#
+# Sixth movement of this vein in two days from an untouched measured path:
+# +167, -251, +1,954, -159, and now +81,855. This one is larger than the rest
+# because the function it lives in was restructured rather than nudged.
+compile_instructions=57571608

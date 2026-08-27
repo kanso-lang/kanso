@@ -3116,7 +3116,7 @@ fn check_wall_operands(
     // when a side fails — so only a side that can be neither an effect nor a
     // failure is refused. A literal qualifies by its shape; a call qualifies
     // when every arm of its group answers without either.
-    let never_describes = |e: &Expr| -> bool {
+    let never_describes = |e: &Expr, bound: &crate::hash::Set<&str>| -> bool {
         match e {
             Expr::Int(..)
             | Expr::Float(..)
@@ -3130,9 +3130,57 @@ fn check_wall_operands(
                     .is_some_and(|set| set & (DESC | ERR) == 0),
                 _ => false,
             },
+            // A bare NAME is the same case one step further out than a call,
+            // and the fixpoint answers it at arity zero. `bound` is what makes
+            // that safe: a name the declaration binds belongs to the local,
+            // whatever the fixpoint says about a top-level constant sharing it.
+            Expr::Ident(name, _) => {
+                !bound.contains(name.as_str())
+                    && returns.get(&(name.as_str(), 0)).is_some_and(|set| set & (DESC | ERR) == 0)
+            }
             _ => false,
         }
     };
+
+    // Every name a declaration binds, at any depth: its parameters, the
+    // patterns of its bindings, and every lambda parameter under it.
+    //
+    // Without this the check refuses a working program. `list/naturals` and
+    // `list/first` are bare-enrolled and answer plain values, so asking the
+    // fixpoint what the NAME `naturals` returns finds the stdlib row — and
+    // check.rs's own rule is that "the enrollment must never make every stdlib
+    // export a forbidden binding name". The micro corpus keeps that program at
+    // a_wall_whose_name_is_a_local; it was written and watched refused before
+    // this set existed.
+    //
+    // The set is deliberately over-wide. It does not model scope, so a name
+    // bound anywhere in a declaration shields it everywhere in that
+    // declaration. The cost is a refusal not made rather than one made
+    // wrongly, which is the safe side to be loose on: the run still names the
+    // fault, and since #1090 it names it the same way on all three engines.
+    fn bound_under<'a>(e: &'a Expr, into: &mut crate::hash::Set<&'a str>) {
+        match e {
+            Expr::Lambda { params, .. } => {
+                into.extend(params.iter().map(|(name, _)| name.as_str()));
+            }
+            // Guard carries its own statement list. Leaving it out refused
+            // a working program: a binding after a `return` line is in `rest`
+            // rather than in a Block, so the name looked like the stdlib
+            // constant it shadows. Found by reading this walk against the Expr
+            // enum and then writing the program, which is the only order that
+            // settles it — the whole suite was green with the gap in place,
+            // because no fixture bound a shadowing name inside a guard.
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) | Expr::Guard { rest: stmts, .. } => {
+                for stmt in stmts {
+                    if let Stmt::Bind { pattern, .. } = stmt {
+                        collect_pattern_names(pattern, into);
+                    }
+                }
+            }
+            _ => {}
+        }
+        crate::for_each_child(e, |c| bound_under(c, into));
+    }
 
     // One worklist for the whole program rather than one per statement; the
     // loop below drains it every time, so the capacity carries forward.
@@ -3141,6 +3189,14 @@ fn check_wall_operands(
         if decl.synthetic {
             continue;
         }
+        // Built on the first wall this declaration holds, and not at all for
+        // the many that hold none. Collecting for every declaration cost 537
+        // allocations and 659k instructions on `kanso check lib/json`, which
+        // took welfare 0.06 UNDER its floor — the objective saying the change
+        // was not worth its price as written. Deferring it is the answer, and
+        // it costs nothing extra: the walk below already looks for the wall,
+        // so the set is built exactly where the question is first asked.
+        let mut bound: Option<crate::hash::Set<&str>> = None;
         for stmt in &decl.body {
             let root = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -3149,7 +3205,24 @@ fn check_wall_operands(
             stack.push(root);
             while let Some(cur) = stack.pop() {
                 if let Expr::Seq(lhs, rhs, span) = cur {
-                    if never_describes(lhs) || never_describes(rhs) {
+                    let bound = bound.get_or_insert_with(|| {
+                        let mut names: crate::hash::Set<&str> = Default::default();
+                        for param in &decl.params {
+                            collect_pattern_names(param, &mut names);
+                        }
+                        for stmt in &decl.body {
+                            if let Stmt::Bind { pattern, .. } = stmt {
+                                collect_pattern_names(pattern, &mut names);
+                            }
+                            match stmt {
+                                Stmt::Bind { expr, .. }
+                                | Stmt::Expr(expr)
+                                | Stmt::Set { value: expr, .. } => bound_under(expr, &mut names),
+                            }
+                        }
+                        names
+                    });
+                    if never_describes(lhs, bound) || never_describes(rhs, bound) {
                         diags.push(Diagnostic::new(
                             "type",
                             "`>>` sequences two effects, and this side answers a \

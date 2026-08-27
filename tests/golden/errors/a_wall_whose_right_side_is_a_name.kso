@@ -1,0 +1,10 @@
+import "std/io"
+
+# `never_describes` refuses a literal or a direct call on either side of a
+# wall. A bare NAME is neither, so this used to reach the run — and the page
+# named a different fault when it got there, which is why the runtime guard in
+# exec_slot exists. The fixpoint answers a name at arity zero, so the reader
+# gets a span now instead of a program that prints one line and dies.
+x = 2
+
+pub play = io/write "one" >> x
