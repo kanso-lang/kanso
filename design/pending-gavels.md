@@ -197,6 +197,49 @@ tell them to rename someone else's import.
 
 Whichever way it goes, `w1` leaves the known-defect ledger in the same commit.
 
+### What a record prints as, when its module is imported
+
+**Cited: archive 2026-08-02, "an err's reason renders with the compiler's
+spelling, not the program's", which ends "That is a gavel." The search found no
+entry for it in this ledger, and the 2026-08-25 residual sweep did not carry it
+over. `tests/entry_file.rs` holds the spec, ignored, and it is the one ignored
+test in the tree that still fails.**
+
+Qualification renames a module's declarations to keep them unique across a
+merge, and that spelling reaches render:
+
+    run the file directly     trouble: slow_lane 7
+    import it                 trouble: lane/slow_lane 7
+
+Same program, same value, two answers, and which one you get depends on how the
+program was entered rather than on anything the program says.
+
+The obvious fix was built and reverted, and the corpus is why. A bare-name
+render turned two deliberate pins red: `cross_module_fields` asserts the
+diagnostic `` `geo/label` has no field `x` `` and asserts `lib/pair 6 "v"` as
+rendered output. Both are right for an IMPORTED type — `lib/pair` is what that
+program wrote, and a diagnostic saying `label` where two modules declare one
+tells the reader nothing. So the rule wanted is "render the name the asking
+module would write", and render is called from the runtime with no idea who is
+asking.
+
+Two ways out, as the archive framed them. Either rendering carries the asking
+module — wider than it sounds, since the context would have to reach every
+runtime render site — or the qualified spelling is simply what a record prints
+everywhere, and the fixture is wrong to expect otherwise.
+
+**RECOMMENDATION: qualified everywhere.** Go's package rule is already ruled
+here, and Go prints `main.T` for a root package's own type rather than `T`, so
+the precedent this project has already taken says the name does not depend on
+who is looking. It also fixes the actual defect, which is that entering the
+same code two ways prints two things. The cost is real and should be said
+plainly: every program that prints a record of its own type gains a prefix, the
+root module needs a name for that prefix to exist, and the fixture's
+expectation flips from `slow_lane 7` to the qualified form.
+
+Whichever way it goes, `tests/entry_file.rs` stops being ignored — either its
+expectation changes or it starts passing.
+
 ### `--explain-copies`
 
 **Cited: part-superseded, archive 2026-07-27 — the counter stack
