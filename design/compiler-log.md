@@ -3955,6 +3955,7 @@ export search, and the twelve-character floor before them. The pattern is
 stable enough to state as a rule: a scan over a corpus must enumerate the
 corpus's file types from the harness that reads it, not from the ones that
 came to mind.
+
 ## 2026-08-27 — the ratchet reads the C now, and twelve messages have reasons
 
 The half-the-runtime's-diagnostics entry, earlier today, found that
@@ -4030,3 +4031,86 @@ THE GATE HAS A MUTATION, like the three openers before it. `k_b_sum`'s refusal
 is the bait, chosen because no kanso program can reach it: the mutation cannot
 change what any fixture prints while it is applied. Applied, the gate exits 1
 and names the message; restored, it exits 0 and runtime.c diffs clean.
+
+## 2026-08-27 — a seventh divergence, on THREE engines, and native was the poorer one
+
+A destructuring bind whose value is the wrong shape. `point a b = opaque
+"hello"`, where the type is `point x y`:
+
+    native  cannot destructure value as `m/point`
+    interp  cannot destructure "hello" as `m/point`; bindings are irrefutable,
+            so handle other types by dispatch first
+
+Both speak, so the differential law is broken the same way the six socket
+refusals broke it earlier today. What differs is the direction of the fix. There the interpreter interpolated an internal socket handle that kanso
+hands out and the program never wrote, so dropping it was right. Here `"hello"`
+is a value the reader's own program produced, which is exactly what the house
+style names — `length takes a list, string, or map, not 7` — and the clause
+after the semicolon is the only place the language says why a bind cannot fail
+over to another arm. So native gains both halves.
+
+SEARCHED FIRST: the log and archive for `destructure`, `irrefutable` and
+`k_check_rec`. The bind's irrefutability is recorded at its introduction and in
+the dispatch entries; no entry compares the two engines' wording for it.
+
+FOUND WHILE PROBING SOMETHING ELSE, and two earlier probes missed it because
+the syntax is not what it looks like. A Ctor bind target is written WITHOUT
+parens — `point a b = v` — and `(point a b) = v` is a syntax error, so the
+first two attempts got `expected a binding name or type` and read as though the
+form did not exist. `parse_bind_target` at parser.rs:1901 is where it is
+decided.
+
+THE FIX HAS A PRECEDENT IN THE SAME FILE. The KEYED destructuring form,
+`{ author: writer } = post`, already renders the value: `k_keyed_check` calls
+`k_render` and prints what it got. The positional form baked a sentence at
+codegen time through `format!` and interned it, so it had nothing to render.
+`k_die_destructure` is the sibling it was missing, beside `k_die_overload` and
+`k_die_arity`, which are the two other die helpers that take runtime data.
+
+IT IS THREE ENGINES, NOT TWO, AND THE FIRST FIX ONLY MOVED ONE. The page has
+its OWN emit path — `wasm_backend.rs:639` baked the same sentence native did,
+and `RT_DIE` takes a message pointer with nowhere to put a value. Fixing native
+alone left the page saying the old words, which the corpus walk caught and no
+amount of native-vs-interpreter probing would have. The page gains
+`rt_die_destructure` (import 40, two parameters like `rt_no_field` beside it),
+and the backend passes the value the `local_tee` already held.
+
+So the count of places one sentence lives is three: eval.rs for the
+interpreter, runtime.c reached from codegen.rs for native, and wasm_rt.rs
+reached from wasm_backend.rs for the page. The socket entry above says three
+engines walk tests/golden/runtime; this says the same thing about where a
+message is WRITTEN, which is a different list and had to be learned separately.
+
+THE FIXTURE HOLDS A STRING, AND THE FIRST ONE HELD AN INT. Unquoted rendering
+agrees with the interpreter on `7`, on `[1 2 3]` and on `1.5`, and diverges
+only on a string, because the interpreter renders quoted — `render(self,
+&value, true)` at eval.rs:1283. An int fixture would have gone green over the
+bug it was written to catch. Four shapes were run before the fixture was
+chosen, which is the only reason the quoting was found at all.
+
+WATCHED RED TWICE ON NATIVE, one axis each: the quoting reverted to
+`k_render(v, 0)`, and the call site put back to the baked sentence. Each
+reddens the fixture with exactly its own difference, and both files diff clean
+afterwards. The page's half was watched red by accident and more convincingly —
+it was still red after native was fixed, which is how the third site was found
+at all.
+
+COST: 146 instructions on the front end, and nothing else. Every RUNTIME
+counter vein is byte-identical and welfare holds at 84.11, machine code
+included — and that reason is checkable rather than lucky. No benchmark writes
+a Ctor destructuring bind, so the linker drops `k_die_destructure` from all
+eight binaries; `nm jsonbench` finds neither it nor `k_die_overload`, which has
+always been dropped the same way.
+
+compile_instructions rose 57,568,244 -> 57,568,390 on the runner. The measured
+path is untouched: `kanso check lib/json` compiles a library and never emits,
+so neither changed call site runs. What grew is the binary around it —
+src/runtime.c is embedded whole by `include_str!` at main.rs:722 and gained a
+function, and src/wasm_rt.rs is an unconditional `pub mod` that gained one too.
+
+ONE MECHANISM WAS RULED OUT RATHER THAN ASSUMED. main.rs:855 hashes that
+embedded runtime.c, and hashing a longer file would be a real cost the check
+path pays. But the hash sits in `cached_program_binary`, called only from the
+RUN path at main.rs:810, and `check` never reaches it. So this is layout, like
+the five movements before it in that golden, and not the plausible thing it
+turned out not to be.

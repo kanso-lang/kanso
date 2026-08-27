@@ -164,4 +164,18 @@
 # moved is the binary around the measured path, the same way the +81,855 above
 # did, and in the same direction the deleted code went. Measured on the runner
 # and copied out of the job log, which is the only place this vein may be read.
-compile_instructions=57568244
+#
+# 2026-08-27 (destructure): 57,568,244 -> 57,568,390, a rise of 146. The
+# measured path is untouched: `kanso check lib/json` compiles a library and
+# never emits, so codegen.rs's changed call site and wasm_backend.rs's do not
+# run. What grew is the binary around it — src/runtime.c is embedded whole by
+# `include_str!` at main.rs:722 and gained a function, and src/wasm_rt.rs is an
+# unconditional `pub mod` that gained one too.
+#
+# ONE MECHANISM WAS RULED OUT RATHER THAN ASSUMED. main.rs:855 hashes the
+# embedded runtime.c, and hashing a longer file would be a real cost the check
+# path pays — but that hash lives in `cached_program_binary`, called only from
+# the RUN path at main.rs:810. `check` never reaches it. So this is layout,
+# like the +167, -251, +1,954, -159, +81,855 and -3,364 before it, and not the
+# hash it might plausibly have been.
+compile_instructions=57568390

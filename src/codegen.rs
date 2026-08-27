@@ -214,6 +214,7 @@ declare %KValue @k_seq(%KValue, %KValue)
 declare void @k_die(ptr) noreturn
 declare void @k_die_arity(i64, i64) noreturn
 declare void @k_die_overload(ptr) noreturn
+declare void @k_die_destructure(%KValue, ptr) noreturn
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
@@ -2646,9 +2647,14 @@ impl<'a> Backend<'a> {
                             let bad = f.label();
                             f.line(&format!("br i1 {b}, label %{ok}, label %{bad}"));
                             f.start_block(&bad);
-                            let msg = format!("cannot destructure value as `{ty}`\0");
-                            let (m, _) = self.intern(&msg);
-                            f.line(&format!("call void @k_die(ptr @{m})"));
+                            // The value goes to the runtime rather than a baked
+                            // sentence: the reader wants to see what they bound,
+                            // and only the runtime knows it. Its keyed sibling
+                            // `k_keyed_check` has always worked this way.
+                            let (m, _) = self.intern(&format!("{ty}\0"));
+                            f.line(&format!(
+                                "call void @k_die_destructure(%KValue {value}, ptr @{m})"
+                            ));
                             f.line("unreachable");
                             f.start_block(&ok);
                             for (i, field) in fields.iter().enumerate() {
