@@ -2876,13 +2876,38 @@ impl Resolver<'_> {
             // which is the whole of how a construction leaves the site.
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 let from = self.locals.len();
-                for stmt in stmts {
+                let last = stmts.len().saturating_sub(1);
+                for (i, stmt) in stmts.iter().enumerate() {
                     match stmt {
                         Stmt::Bind { pattern, expr } => {
                             self.resolve_expr(expr);
                             self.bind_pattern(pattern);
                         }
-                        Stmt::Expr(expr) => self.resolve_expr(expr),
+                        // A nested `build` is exempt for the same reason the
+                        // outer walk exempts one: it has no value to go
+                        // unused, and what it built is in scope after it.
+                        // `build_nested_cohort` in the micro corpus is that
+                        // shape, and it caught this the first time the check
+                        // went in without the arm.
+                        Stmt::Expr(expr @ Expr::Build(..)) => self.resolve_expr(expr),
+                        // The same rule the outer walk applies, applied here
+                        // too. A non-final line whose value goes nowhere is a
+                        // description nobody joined, and in a `build` body it
+                        // was being dropped in silence: three `io/write` lines
+                        // in a build ran the last one and lost the other two,
+                        // with nothing said.
+                        Stmt::Expr(expr) => {
+                            self.resolve_expr(expr);
+                            if i != last {
+                                self.diags.push(Diagnostic::new(
+                                    "unused",
+                                    "unused expression: every non-final line binds a name \
+                                     (sequence effects with `>>`)"
+                                        .to_string(),
+                                    expr.span(),
+                                ));
+                            }
+                        }
                         Stmt::Set { target, value, span, .. } => {
                             self.resolve_name(target, *span);
                             self.resolve_expr(value);

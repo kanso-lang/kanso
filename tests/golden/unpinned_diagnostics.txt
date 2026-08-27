@@ -49,12 +49,20 @@ expected a constant name
 # more argument. So `parse_block_construct` is only ever handed a head it
 # already accepts, and `else` is taken by its callers first.
 #
-# The unused-expression rule cannot fire because the parser handles both
-# halves of it. `reject_never_effect` refuses a non-final literal, list, map,
-# lambda or binary operation with its own message, and consecutive expression
-# statements are folded into one `Seq`, so a body never holds a non-final
-# `Stmt::Expr` for the checker to complain about.
-unused expression: every non-final line binds a name (sequence
+# The unused-expression rule left this list on 2026-08-27, and its excuse is
+# the third here to be shown wrong by a program. The reasoning above it —
+# `reject_never_effect` refuses a non-final literal, list, map, lambda or
+# binary operation, and consecutive expression statements fold into one `Seq`
+# — is true of the walk over a function body, and there are TWO walks. The one
+# that handles `build` and block bodies had no such check, so an effect line in
+# a build was neither run nor complained about: three `io/write` lines ran the
+# last and lost the other two, in silence, on both engines. The check is in
+# that walker now and the case is pinned at
+# tests/golden/errors/a_build_body_line_goes_nowhere.
+#
+# The lesson is the one the top of this file already states, sharpened: an
+# excuse that reasons about which check speaks first has to name WHICH walk it
+# is reasoning about, because a second one may not have the rule at all.
 
 # The inline-constant message left this list on 2026-08-20: the claim that
 # the lexer's folding made it unreachable missed heads that OPEN blocks —
