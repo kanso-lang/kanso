@@ -568,11 +568,37 @@ coverage_native = row
   (breaking "a_native_runtime_refusal_arrives_without_a_golden")
   release
 
+# A FIFTH opener, on the engine the differential law calls the truth. eval.rs
+# raises `RuntimeError { message: ... }` — a bare struct field none of the four
+# above match — so all 97 of the oracle's refusals were rewordable in silence.
+#
+# Two rows because the extraction differs: `message: "` carries its own opening
+# quote and the literal is the first piece of a split on it, where
+# `message: format!(` may put the string on the next line and the literal is
+# the second. One mutation would leave the other path untested.
+coverage_oracle = row
+  "a refusal the interpreter raises, and no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "an_oracle_refusal_arrives_without_a_golden")
+  release
+
+coverage_oracle_format = row
+  "a refusal the interpreter formats, and no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "an_oracle_format_refusal_arrives_without_a_golden")
+  release
+
 rows_c1i = text/concat rows_c1h [coverage_printed kq_specs asset_digests]
 
 rows_c1j = text/concat rows_c1i [coverage_native]
 
-rows_c = text/concat rows_c1j [itself]
+rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
+
+rows_c = text/concat rows_c1k [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

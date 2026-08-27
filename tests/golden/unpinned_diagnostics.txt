@@ -98,20 +98,20 @@ expected a constant name
 # module_differential case) and #1078 had already pinned two more there. The
 # rest are below, each with what was actually tried.
 #
-# TWO ARE PINNED BY A RUST TEST, which the driver corpus deliberately excludes:
+# ONE IS PINNED BY A RUST TEST, which the driver corpus deliberately excludes:
 # a Rust file's doc comments and its own assert! messages are not pins of a
 # compiler message, and four of the six that read as pinned there were false.
 # The precedent is `an_empty_branch_is_refused.rs`, already cited above.
 this build is named `
-main is not an io; there is no plan to show
 #
 #   this build is named `   tests/build_names_collide.rs asserts it:
 #                           assert!(said.contains("this build is named `greeter`,
 #                           and a directory of that name is here"))
-#   main is not an io       tests/a_plan_needs_an_io.rs asserts it. Reached by
-#                           `kanso run <file> --plan` where main is a value —
-#                           `x = 2` then `x` answers it — and no golden corpus
-#                           reads the stderr of a --plan run.
+#
+# `main is not an io; there is no plan to show` sat here beside it until the
+# scan learned to read the book's samples. docs/book/samples/ch05/quiet_plan.out
+# is that whole sentence and nothing else, executed and diffed by the
+# book-samples job, so the entry is gone rather than reworded.
 #
 # THREE FIRE ON AN IO ERROR FROM THE HOST, not on anything a program says. A
 # fixture cannot portably cause one: the container runs as root, so an
@@ -195,9 +195,23 @@ sort takes a list
 sum takes a list
 sum takes a list of int
 #
-# `list/select`'s predicate goes through `if`, so a predicate returning a
-# string is refused by `an if condition is true or false, got 1` — the `if`
-# message, not the filter's.
+# THE SAME DEAD ARM ON NATIVE. runtime.c's `k_b_filter` carries this sentence
+# without the `, got` the interpreter's version has, so it is a second message
+# and needs a second row — the list matches on equality, so neither excuses the
+# other.
+#
+# It is dead for the reason its sibling below is: `filter` is not one of the 55
+# names in check.rs's BUILTINS, so `filter xs p` is `unknown name `filter``,
+# `builtin_filter` by hand is `` `builtin_filter` is internal to the standard
+# library ``, and `k_b_filter` is called from nowhere in runtime.c. The emitter
+# knows the name (codegen.rs lists it with arity 2) and no program can reach
+# the emitter with it.
+#
+# An earlier excuse here said the mechanism was `list/select`'s own `if`. That
+# is what a program meets for a non-bool predicate, and it is not what shadows
+# THIS message: `list/select` is a fold written in kanso and never calls the
+# builtin, so the `if` refusal and this arm are on different paths. The same
+# mistake stood against the interpreter's copy and was corrected below.
 a filter predicate returns true or false
 #
 # PRINT RENDERS ANYTHING, so this cannot be reached. `print 7`, `print [1 2]`,
@@ -226,14 +240,63 @@ string too long
 too many sockets open at once
 parallel group exceeds the scheduler's fiber cap
 #
-# PINNED, BUT NOT WHERE THIS SCAN LOOKS. docs/book/samples/ch02/overflow.out
-# holds this text exactly, and the book samples are executed and diffed in CI.
-# The scan's corpus takes `.stderr` files only, so it cannot see a `.out`.
-# Widening it to `.out` would also admit every micro golden and needs its own
-# look at false pins — the header above records four the tests/*.rs corpus
-# produced — so the citation stands here instead.
+# `integer overflow (int64 native build; spec int is arbitrary precision)` was
+# the last entry here, excused as pinned somewhere the scan could not look. The
+# excuse named the extension and the barrier was the extension AND the
+# directory: docs/book/samples/ch02/overflow.out is outside the corpus root as
+# well as outside the file type, and each change alone pinned nothing. The scan
+# reads both now and the entry is gone.
 #
-# The divergence it names is the sanctioned kind: native refuses at int64 and
-# says why, the interpreter answers 9223372036854775808 because the spec int
-# is arbitrary precision. The quieter engine refuses with a clear diagnostic.
-integer overflow (int64 native build; spec int is arbitrary precision)
+# SEVEN OF THE ORACLE'S OWN, each shadowed by a check that answers first. Every
+# mechanism below is a program that was run, not a reading of the source, and
+# the sentence the run produced is quoted.
+#
+# TWO `set` REFUSALS, both shadowed by check_build_blocks. A field write lives
+# in a `build` block and its target must be a construction made in that same
+# block — `x = opaque 7` then `x.n = 2` is refused at compile time with ``x.n =
+# ... writes only block-born values``. So the target is bound, which is the
+# first message, and it is a construction. Constructor arity is checked too
+# (`cell` with one of two fields is `has 2 field(s), got 1`), so the
+# construction is a record rather than a partial application — which is the
+# second. A constructor handed a failure hands the failure back, and that arm
+# `continue`s before either check.
+`set` target `
+`set` writes a record field, not
+#
+# THE BIND PATTERN CATCH-ALL. `destructure` has arms for a name, a constructor
+# and a keyed read, and this is the `_`. All three call sites pass a
+# `Stmt::Bind` pattern, and `parse_bind_target` builds only those three: `_ =
+# opaque 7` and `7 = opaque 7` are both `expected a binding name or type` from
+# the parser. A literal or a wildcard never reaches the evaluator.
+binding patterns are irrefutable: names and constructor
+#
+# THE FILTER PREDICATE, in an arm no program reaches. `filter` is not one of
+# the 55 names in check.rs's BUILTINS, `lib/list` writes `select` as a fold in
+# kanso rather than calling a builtin, and `builtin_filter` written by hand is
+# `` `builtin_filter` is internal to the standard library ``. So this arm is
+# dead for the same reason `unknown builtin` below it is.
+#
+# What a program DOES meet for a non-bool predicate is `list/select`'s own
+# `if`: `list/select (opaque [1 2]) (x -> "{x}")` answers `an if condition is
+# true or false, got 1`, which a golden pins. That is the sentence this one
+# was mistaken for.
+a filter predicate returns true or false, got
+#
+# SORT'S ELEMENT CHECK, shadowed by the comparison it performs. `list/sort
+# (opaque [1 "a"])` answers `comparison requires two values of one comparable
+# type` — the pairwise compare refuses before the sort can conclude anything
+# about the list as a whole.
+sort requires comparable elements of one type
+#
+# THE UNKNOWN BUILTIN, shadowed by the name check. `builtin_nope 1` in a user
+# program is `` `builtin_nope` is internal to the standard library — import its
+# module``. Reaching this arm means a stdlib module naming a builtin that does
+# not exist, which is a compiler-internal invariant rather than something a
+# program can express.
+unknown builtin `
+#
+# THE ESCAPED CLOSURE, unreachable by construction. `Value::TableFn` is built
+# in `src/wasm_rt.rs` and nowhere else, and that module calls
+# `eval::set_foreign_call` at init — so a handle exists only where the way back
+# is already installed, and this arm answers a `None` that cannot occur.
+a compiled closure escaped the engine that owns it
