@@ -3886,9 +3886,28 @@ ONE SITE IS CHANGED WITHOUT A FIXTURE. `finished` in eval.rs — the wait half o
 handle, so no program can hand it a bad one. It is aligned rather than pinned,
 and this sentence is the record that it is unpinned on purpose.
 
-WHAT THIS COST: 48 bytes of .text on each of the eight benchmarks, uniform,
-and nothing else. The allocation, arena and instruction veins are byte-identical
-to main; eval.rs alone moves .text by zero, measured with runtime.c reverted
-and eval.rs kept, so the whole 48 belongs to the accept check. welfare does not
-weigh .text and is unmoved. bench/text_golden.txt is regenerated here, on a
-host whose clang matches its measured-on line.
+WHAT THIS COST, AND THE GAIN THAT PAYS FOR IT. 48 bytes of .text on each of the
+eight benchmarks, uniform. eval.rs alone moves .text by zero — measured with
+runtime.c reverted and eval.rs kept — so the whole 48 belongs to the accept
+check. bench/text_golden.txt is regenerated here, on a host whose clang matches
+its measured-on line.
+
+Against that, compile_instructions FELL 3,364: 57,571,608 to 57,568,244. The
+socket executor stopped interpolating its handle, so five `format!("{conn} is
+not a connection")` became a constant `&str` and the formatting machinery those
+calls pulled in is no longer in the binary. `kanso check lib/json` opens no
+sockets and runs none of that code; what moved is the binary around the
+measured path, the same way the +81,855 in that golden's last note did.
+
+THE FIRST PUSH CARRIED THE RISE AND NOT THE FALL. bench/text_golden.txt was
+regenerated and bench/compile_instructions_golden.txt was not — a vein this
+host may not measure at all, because its numbers have to be copied out of the
+runner's job log. The trend gate read the pair and refused: "a pure regression:
+something got worse and nothing got better." It was right about the files and
+wrong about the change, which is what a half-regenerated pair of veins looks
+like from the outside. The rule the log already carries — counters changed,
+regenerate every vein in the same PR — covers exactly this, and the vein I
+missed is the one I could not measure locally.
+
+The allocation and arena veins are byte-identical to main, and welfare does not
+weigh .text, so it is unmoved at 84.11.
