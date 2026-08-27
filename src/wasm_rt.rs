@@ -785,7 +785,9 @@ pub extern "C" fn rt_truthy(h: u32) -> u32 {
     match val(h) {
         Value::True => 1,
         Value::False => 0,
-        other => die(format!("if takes a bool condition (got {})", render_demanded(&other, true))),
+        other => {
+            die(format!("an if condition is true or false, got {}", render_demanded(&other, false)))
+        }
     }
 }
 

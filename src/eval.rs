@@ -1541,7 +1541,7 @@ impl<'a> Interp<'a> {
                     bad if is_failure(&bad) => Ok(bad),
                     other => Err(RuntimeError {
                         message: format!(
-                            "a return condition is true or false, got {}",
+                            "an if condition is true or false, got {}",
                             render(self, &other, false)
                         ),
                         span: *span,

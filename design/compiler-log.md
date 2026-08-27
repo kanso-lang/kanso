@@ -4114,3 +4114,42 @@ path pays. But the hash sits in `cached_program_binary`, called only from the
 RUN path at main.rs:810, and `check` never reaches it. So this is layout, like
 the five movements before it in that golden, and not the plausible thing it
 turned out not to be.
+
+## 2026-08-27 — one question, three answers: `if` and the guard
+
+`return x if cond` and `if c a b` ask the same thing of a value, and the three
+engines answered it three ways:
+
+    interpreter, guard   a return condition is true or false, got 7
+    native, both forms   an if condition is true or false, got 7
+    the page, both forms if takes a bool condition (got "7")
+
+Nothing pinned any of them. The runtime corpus had no program whose condition
+was neither true nor false, so all three could be reworded, and one already
+had been.
+
+WHERE EACH COMES FROM. Native lowers a guard to `k_truthy`, the same call the
+`if` builtin makes, and runtime.c says why in a comment at `k_truthy_bad`: the
+die message lives in exactly one place. The page does the same — `rt_truthy`
+serves `Expr::Guard` at wasm_backend.rs:787 and `if` at 1300 — so its one wrong
+sentence covered both constructs. Only the interpreter splits them, and only on
+the guard: eval.rs has three condition sites and two of them already said `an
+if condition`.
+
+THE CONVERGENCE GOES TO NATIVE'S SENTENCE, on both counts. The wording, because
+the `if` token is in the source either way and a second wording would mean a
+second entry point into `k_truthy` — which #1094 measured at 128 bytes of
+`.text` in every binary, for two characters. And the rendering, because
+`render_demanded(&value, true)` quotes a string where the two native engines do
+not: `got "x"` against `got x`.
+
+TWO FIXTURES, BECAUSE ONE DIMENSION EACH. The guard fixture carries an int and
+pins the wording; the `if` fixture carries a STRING, because an int reads `7`
+on all three engines and would have shown the wording alone. Both went red
+first — the corpus walk on the interpreter, the wasm walk on the page — and the
+`if` fixture had to be run with the guard fixture moved aside to see its own
+failure, since the walk stops at the first disagreement.
+
+COST: nothing measurable. `kanso check lib/json` never evaluates a condition,
+so the compile veins do not move, and the strings live in the driver rather
+than in emitted code, so `.text` per benchmark is byte-identical.
