@@ -4891,3 +4891,31 @@ Adding a pattern form to the language adds a row here. A form with no row is
 one the question was never asked of.
 
 Fixture only — no counter moves.
+
+## 2026-08-27 — the fourth container, and a sentence that was wrong about it
+
+`a_container_can_hold_a_failure` opened by naming three containers and a
+record. It then tested three. The header even says why that matters — "a spec
+that covers one member of a family proves nothing about the others" — which
+is how #1058 got found.
+
+The record takes a step to reach, and the sentence describing it was wrong.
+"A record's field once the record exists" cannot happen: a constructor merges
+its arguments' failures, so `held (boom "a") 2` is a failure and not a record
+holding one, which #1059 pins as the `built` row. What a record can hold is a
+field that is a list or a map holding one — the constructor sees a container,
+and the failure is inside it.
+
+    fielded: held [err "f"] 2
+    keyed:   held { "k":err "g" } 3
+    buried:  [held [err "h"] 1]
+
+Byte-identical on the interpreter, native and wasm.
+
+What these lines do NOT pin is the `held` flag on `k_render`'s record branch.
+Reverting that one argument to 0 changes none of them, because the field is a
+container and the container branch sets the flag again for its own items. The
+flag is load-bearing only for a field that is itself an err, and no program can
+build one. So the lines pin routing — that a record's fields reach rendering by
+the same road its items do — and the comment now says so rather than claiming a
+mutation they would catch.
