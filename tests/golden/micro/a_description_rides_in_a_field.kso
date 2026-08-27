@@ -1,0 +1,18 @@
+# The fourth and last of the per-element sites: a record field written inside
+# a build block. The block's names outlive it, so the field is read back after
+# the close and answered as `play`'s description, which the runner executes.
+import "std/io"
+
+type cell
+  n
+
+fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play =
+  build
+    c = cell 1
+    c.n = opaque d
+  c.n

@@ -425,7 +425,9 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
         Value::Str(s) => s,
         _ => die("field name must be a string".to_string()),
     };
-    let new = val(value_h);
+    // The fourth storing position, and the last one that read through `val`.
+    // See a_description_rides_in_a_field.
+    let new = value_of(value_h);
     // a constructor given a failure handed the failure back, so there is
     // no record to write to
     if is_failure(&val(h)) {
@@ -599,7 +601,11 @@ pub extern "C" fn rt_mklist(n: u32) -> u32 {
     let handles = pop_args(n);
     let mut items = Vec::with_capacity(handles.len());
     for h in handles {
-        items.push(val(h));
+        // `value_of` rather than `val`: a description is data in a container
+        // on the other two engines, and `val` refuses every slot shape that
+        // is not a value or a closure, so `[d]` died here where native and
+        // the interpreter carried it. See a_description_rides_in_a_list.
+        items.push(value_of(h));
     }
     push(Slot::V(Value::List(Rc::new(items))))
 }
@@ -608,8 +614,15 @@ pub extern "C" fn rt_mklist(n: u32) -> u32 {
 pub extern "C" fn rt_mkmap(n: u32) -> u32 {
     let handles = pop_args(n * 2);
     let mut values = Vec::with_capacity(handles.len());
-    for h in &handles {
-        values.push(val(*h));
+    for (at, h) in handles.iter().enumerate() {
+        // The values ride like a list's items; the keys do not. A key is an
+        // int or a string, checked just below, so reading one through
+        // `value_of` would only change which of two refusals a description
+        // key gets. See a_description_rides_in_a_map.
+        values.push(match at % 2 {
+            0 => val(*h),
+            _ => value_of(*h),
+        });
     }
     let mut map = std::collections::BTreeMap::new();
     for pair in values.chunks(2) {
@@ -819,7 +832,10 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
     }
     let mut args = Vec::with_capacity(handles.len());
     for h in handles {
-        args.push(val(h));
+        // A builtin takes a description like any other argument — `push [] d`
+        // hands back a list still holding it. See
+        // a_description_rides_through_a_builtin.
+        args.push(value_of(h));
     }
     let result = with_interp(|interp| interp.call_builtin(&name, args, SPAN0, &None));
     match result {
