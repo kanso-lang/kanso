@@ -4271,3 +4271,67 @@ pin. The four false pins on record all came from tests/*.rs — doc comments and
 `assert!` strings — which is a different kind of file from a program's output.
 
 COST: none. No `.rs` and no `.c`; the scan is a kanso program CI runs.
+
+## 2026-08-27 — the page said "this value" about something that was not one
+
+The entry above added twelve excuses and closed a scan's blind spot. The same
+sweep, run over `src/wasm_rt.rs` rather than eval.rs, found twelve of the
+PAGE's twenty-five refusals pinned by nothing — and one of them was a sentence
+worth reading twice:
+
+    rt_keyed_check:  cannot read fields of this value; keyed reads take a record
+
+It sat behind `let Slot::V(value) = slot(h) else { ... }`, so it fires exactly
+when the handle is NOT a value: a closure, which the page keeps in a table
+rather than in the value register. A sentence about a value, said about the one
+case that is not one.
+
+REACHABLE, AND A DIVERGENCE. `{ x y } = opaque helper`, where `helper` is a
+function:
+
+    native       cannot read fields of <fn>; keyed reads take a record
+    interpreter  cannot read fields of <fn>; keyed reads take a record
+    the page     cannot read fields of this value; keyed reads take a record
+
+THE GUARD COVERED TWO HANDLES, and the fix has to cover both. `Slot::V` is
+false for a closure AND for a description, so that one sentence was said about
+each of them. A closure goes through `val`, which is how a closure is data on
+this engine everywhere else — `val` maps a `Slot::C` to a `TableFn` precisely
+so it can ride in records, lists and maps. A description cannot: `val`'s own
+fallthrough is `a bound description cannot be used as data here`, which is the
+same fault as before wearing different words.
+
+THE SECOND ARM WAS FOUND BY WRITING THE FIRST. Routing everything through `val`
+made `{ x y } = opaque (io/write "a\n" >> io/write "b\n")` answer the
+data sentence where both native engines say `<io>`, so the fix as first written
+traded one divergence for another. The page keeps a `>>` of two descriptions as
+a `Slot::Seq`, which is neither a value nor a closure.
+
+So the slot answers for a description rather than `val`, and it answers without
+building the `Desc`: every description renders `<io>` whatever it holds, and
+`as_desc` on a `Slot::Seq` demands the deferred right side — an effect a
+refusal must not have.
+
+THREE FIXTURES FOR ONE CALL, one per handle. The string pins the quoting, which
+is what `cannot destructure` diverged on earlier today; the function pins the
+closure arm; the sequenced description pins the arm that is neither, and it is
+in the corpus because the first draft of this fix broke it.
+
+A SECOND CANDIDATE DID NOT REPRODUCE, and the negative is recorded rather than
+dropped. `this value is not callable` sits beside `` `{}` is not callable `` in
+the same function and fires when the callee is neither a closure nor a value —
+a description, say. But `f = opaque (io/write "hi")` then `f 1` answers
+`` `<io>` is not callable `` on all three engines, so this program reaches the
+sibling arm. The program is in the corpus anyway, as
+calling_a_description_names_it: the three fixtures already there call a number,
+a `none` and a plain value, and a description is a value kind none of them
+covers.
+
+TEN MORE ARE STILL UNPINNED on the page, and they are the next thing:
+`filter needs a bool (got {})` where the interpreter says `a filter predicate
+returns true or false, got {}`, `map keys are ints or strings, not {}`,
+`bad environment access`, and seven others.
+
+COST: no compile vein moves — wasm_rt.rs is not read by `kanso check`, and the
+emitted code is unchanged because the fix removes a branch rather than adding
+one.
