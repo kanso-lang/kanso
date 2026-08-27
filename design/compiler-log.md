@@ -2980,6 +2980,24 @@ are environment variables, panic messages and one stderr rewrite — none of the
 reaches a line the compiler will measure. So this was the only one, and there
 is no gate here worth building.
 
+WHAT IT COST, and the vein that keeps moving without work. `compile_instructions`
+rose 1,954 (57,486,215 -> 57,488,169), and it is layout rather than work —
+provably, this time, rather than by resemblance. `read_file_text` has exactly
+one caller, the executor's `read_file`, which is an EFFECT; `kanso check
+lib/json` compiles a library and runs no program, so the measured path cannot
+reach the edited function at all. The counters that do measure the front end's
+work are identical, allocations 61,981 and peak 822,004, and the profile's own
+rows moved the way layout moves them — `__memcmp_avx2_movbe` fell 327 while the
+total rose.
+
+That makes three movements of this vein in two days from an untouched call
+graph: +167, -251, +1,954. The trend gate refuses a pure regression, so this
+one is attributed in `bench/welfare_floor.json` under the branch the gate
+documents for a doctrine-compelled change — the differential law requires an
+engine that speaks less to refuse with a CLEAR diagnostic, which is what made
+this a fix rather than a preference. The attribution says plainly that nothing
+was spent: welfare reads 84.12 before and after.
+
 The design question — whether `read_file` is byte-transparent on every engine,
 or text-only with a bytes reader beside it — is filed in
 design/pending-gavels.md. Today the library has one reader and no way to say
