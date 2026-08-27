@@ -1,0 +1,5 @@
+import "std/text"
+
+pub play =
+  joined = text/concat "a" "b"
+  print "{joined}"

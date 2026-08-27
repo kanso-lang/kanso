@@ -3706,3 +3706,92 @@ The order of operations is the part worth keeping. The expensive version fell
 0.06 and the first instinct was to bank it — goldens edited, page figures
 moved, paragraph drafted. The floor is what sent me looking for the cheaper
 implementation instead, and the cheaper one costs nothing measurable at all.
+
+## 2026-08-27 — half the native runtime's diagnostics were pinned by nothing
+
+`scripts/diagnostic_coverage` is the ratchet that keeps a compiler message from
+being reworded, weakened or lost with nothing going red. It walks `src`, and
+`source?` admits a file only when its last three characters are `.rs`. So it
+has never read `src/runtime.c`, and `src/runtime.c` is where a compiled binary
+gets its runtime messages.
+
+There are 66 distinct `k_die("...")` texts in that file. Thirty-three are
+pinned by no golden and no Rust test. The gate that exists to prevent exactly
+this could not see any of them.
+
+SEARCHED FIRST: the log and the archive for `diagnostic_coverage`, `runtime.c`
+and `k_die`. #1079 widened the same scan twice — from `Diagnostic::new(` to
+`"error: ` (the driver's plain-text writes) and then to `"error[` (a rendered
+diagnostic written as plain text). Both widenings stayed inside `.rs`, and
+neither entry asks what other file extensions carry messages. Nothing in either
+vein covers the C.
+
+THE ARITHMETIC FAMILY IS THE CLEAREST CASE. `+` on two values that have no `+`
+is pinned twice, by `none_no_arm` and by `a_constant_that_names_itself_is_
+demanded`. `-`, `*`, `/` and `%` are pinned nowhere, and all four are reachable
+from a program anybody could write: `xs[9] - 1` on a two-element list, which is
+the same idiom `none_no_arm` already uses for `+`. One of five.
+
+Eight are pinned here, each run through the library entry the harness builds
+and each byte-identical on both engines with exit 1:
+
+    `-` `*` `/` `%` is not defined for these values   none_{minus,times,over,modulo}_one
+    concat takes two lists                            text/concat "a" "b"
+    join takes a list of strings and a separator      text/join 7 ","
+    put takes a map, a key, and a value               put (opaque 7) "k" 1
+    entries takes a map                               entries (opaque 7)
+
+The last two need `opaque` and the first two do not, which is worth keeping.
+`put 7 "k" 1` and `entries 7` are refused by the type checker at compile time;
+the runtime message is the backstop for a value whose type the checker cannot
+narrow, and it is reached by passing the argument through a function that
+returns what it is given. `text/concat "a" "b"` and `text/join 7 ","` reach the
+runtime with a plain literal. Both routes are worth a fixture, because a change
+that made the checker stricter would silently retire two of them.
+
+WATCHED RED, ONE AT A TIME. `concat takes two lists` reworded to `two
+sequences` in runtime.c reddens `concat_takes_two_lists` and nothing else;
+restored, `entries takes a map` reworded to `a mapping` reddens
+`entries_takes_a_map` and nothing else. runtime.c is byte-identical to its
+starting state after both.
+
+WHAT IS NOT DONE HERE. Widening the scan to read `k_die("` needs every
+remaining message either pinned or excused with a named mechanism, and
+`tests/golden/unpinned_diagnostics.txt` sets that bar deliberately high — its
+own header records a sitting spent for want of four missing reasons. Probing
+the remaining twenty-five is the work, and it is its own change.
+
+Two findings from the probing that are also their own changes:
+
+SIX SOCKET FAILURES DIVERGE between the engines. A look-alike record — a type
+with a `handle` field, holding an int — through each net builtin:
+
+    net/port            native "that is not an open socket"  interp "that is not an open listener"
+    net/accept          native "nothing connected"           interp "7 is not a listener"
+    net/read            native "that is not a connection"    interp "7 is not a connection"
+    net/write           native "that is not a connection"    interp "7 is not a connection"
+    net/close_listener  native "that is not an open socket"  interp "7 is not an open socket"
+    net/close_conn      native "that is not an open socket"  interp "7 is not an open socket"
+
+Both engines speak, so the differential law is broken rather than satisfied by
+a refusal. `net/accept` is the bad one: "nothing connected" describes a
+successful accept with no pending connection, and native says it for a handle
+that is not a listener at all.
+
+A FOURTH WAY THE COMPILER WRITES A MESSAGE, after #1079's three. `codegen.rs`
+bakes text into the emitted binary through `format!` — `cannot destructure
+value as \`{ty}\`` and `field \`{field}\` of \`{name}\` takes {}` are pinned
+nowhere, and neither matches any of the scan's three openers. Widening to
+`format!` in general would match every format string in the compiler, so this
+one needs a narrower key than the other three did.
+
+THE SHAPE IS THE ONE §25 NAMES, for the fifth and sixth time in a day: a
+construct's failure is pinned and its success is not, or a family's first
+member is pinned and its siblings are not. `+` had two goldens; its four
+siblings had none. The way to find these is to enumerate what the source can
+say and subtract what the corpus holds — and to check what the enumeration
+cannot see, because both of my own first passes at that subtraction had blind
+spots. Matching message tails against the Rust sources reported thirteen
+messages "no Rust engine can produce"; three of them are `format!("{name} takes
+a string")`, which the tail search cannot match and the interpreter says every
+day.
