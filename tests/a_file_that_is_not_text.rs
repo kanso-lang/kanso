@@ -25,12 +25,15 @@ const BYTES: [u8; 3] = [b'a', 0xFF, b'b'];
 fn fixture() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join("kanso-not-text");
     std::fs::create_dir_all(&dir).expect("a directory to run in");
-    let blob = dir.join("three.bin");
-    std::fs::write(&blob, BYTES).expect("the fixture writes");
-    let program = format!(
-        "import \"std/io\"\nimport \"std/os\"\n\nos/read_file \"{}\" . io/write\n",
-        blob.display()
-    );
+    std::fs::write(dir.join("three.bin"), BYTES).expect("the fixture writes");
+    // The path is RELATIVE and the program is run from the directory holding
+    // it. An absolute one was interpolated here first, and it made the source
+    // line's length a property of the host's temp directory: `/tmp/...` on
+    // linux fits, and macOS's
+    // `/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/...` took the line to
+    // 99 characters, where kanso allows 80. So the spec failed on the other
+    // host with a formatting refusal and never reached what it meant to test.
+    let program = "import \"std/io\"\nimport \"std/os\"\n\nos/read_file \"three.bin\" . io/write\n";
     std::fs::write(dir.join("run.kso"), program).expect("the program writes");
     dir
 }
@@ -38,7 +41,7 @@ fn fixture() -> std::path::PathBuf {
 fn run(interp: bool) -> (String, Vec<u8>) {
     let dir = fixture();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_kanso"));
-    cmd.arg("run").arg(dir.join("run.kso"));
+    cmd.arg("run").arg("run.kso").current_dir(&dir);
     if interp {
         cmd.arg("--interp");
     }

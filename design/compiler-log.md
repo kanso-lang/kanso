@@ -2867,6 +2867,16 @@ each engine's own answer, and says in its own comment that it pins what the
 engines DO rather than what they should — so whichever way the design question
 below is ruled, one of its two assertions goes red and asks to be rewritten.
 
+AND THE SPEC FAILED ON THE OTHER HOST, for a reason worth keeping. It wrote
+its program with the fixture's ABSOLUTE path interpolated into the source, so
+the length of a line of kanso became a property of the host's temp directory.
+`/tmp/...` on linux fits inside the eighty characters the language allows;
+macOS hands out `/var/folders/df/djsxfhc17x95674wsm_g8s980000gn/T/...` and the
+line came to 99, so the run died on a formatting refusal before it reached
+anything the spec meant to test. Reproduced here by pointing `TMPDIR` at a path
+of the same length — 91 characters, and red. The fixture uses a relative path
+and runs from its own directory now, and passes under that `TMPDIR`.
+
 The design question — whether `read_file` is byte-transparent on every engine,
 or text-only with a bytes reader beside it — is filed in
 design/pending-gavels.md. Today the library has one reader and no way to say
