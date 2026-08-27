@@ -4919,3 +4919,32 @@ flag is load-bearing only for a field that is itself an err, and no program can
 build one. So the lines pin routing — that a record's fields reach rendering by
 the same road its items do — and the comment now says so rather than claiming a
 mutation they would catch.
+
+## 2026-08-27 — the render differential had never rendered a failure
+
+The project names rendering divergence-prone and gave it a harness for that
+reason. Two rendering divergences shipped this week anyway — #1057 and #1058,
+both `k_render` answering differently from the oracle for a container holding
+a failure — and the harness could not have caught either, because not one of
+its 68 values was a failure.
+
+Eighteen more, built the way the rest of the corpus is built: a failure in a
+list, in a map, in a map beside a value, nested twice, with a reason that is
+an int, a float, `none`, `true`, a list, a map, an escaped string, an empty
+string, and a constructor whose merged failure renders in a list.
+
+    68 values rendered, 0 disagree      before
+    86 values rendered, 0 disagree      after
+
+Watched red for the right reason. With #1057's `held` flag reverted — the
+early `if (v.tag == K_ERR) return v;` restored — the sweep answers
+
+    86 values rendered, 16 disagree
+
+and names each one: native hands the failure to the endpoint where the oracle
+prints the container. The two that still agree under the bug are the two whose
+value is a bare failure, which both engines propagate.
+
+This harness compares native against the oracle. wasm's rendering is covered
+by the browser differential over the golden corpora, where #1059 and the
+container fixture live.

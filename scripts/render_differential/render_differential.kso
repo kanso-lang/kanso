@@ -59,7 +59,32 @@ texts = text/concat (text/concat strings escaped) (text/concat foreign nullary)
 
 boxes = text/concat (text/concat lists mixed) (text/concat maps more_maps)
 
-values = text/concat (text/concat numbers decimals) (text/concat texts boxes)
+# Rendering a failure is the half of this surface that has actually diverged.
+# #1057 and #1058 were both `k_render` answering differently from the oracle
+# for a container holding one, and neither could have been found here: nothing
+# in this corpus was a failure. A reason is an ordinary value, so it gets the
+# same treatment the rest of the corpus gets.
+failures = ["err \"a\"" "[(err \"a\")]" "[(err \"a\") 2]"]
+
+in_a_map = ["\{ \"k\":(err \"v\") }" "\{ \"a\":(err \"x\") \"b\":2 }"]
+
+deep = ["[\{ \"in\":(err \"d\") }]" "[[(err \"n\")]]"]
+
+reasons = ["[(err 1)]" "[(err 0.5)]" "[(err none)]" "[(err true)]"]
+
+list_reason = ["[(err [1 2])]" "[(err \{ \"a\":1 })]"]
+
+escapes = ["[(err \"quote\\\"in\")]" "[(err \"tab\\there\")]" "[(err \"\")]"]
+
+shallow = text/concat (text/concat failures in_a_map) deep
+
+odd = text/concat (text/concat reasons list_reason) escapes
+
+broken = text/concat shallow odd
+
+held = text/concat boxes broken
+
+values = text/concat (text/concat numbers decimals) (text/concat texts held)
 
 # A record prints through the same path and carries its type's name, so the
 # same probe runs again with a type declared in front of it.
@@ -67,7 +92,12 @@ records = ["point 1 2" "point \"a\" \"b\"" "point (point 1 2) 3"]
 
 more_records = ["[(point 1 2)]" "point none 1" "point 0.5 1.0"]
 
-shaped = text/concat records more_records
+# A constructor MERGES its arguments' failures rather than holding them, so
+# this renders the merged failure and not a record — which is a rendering the
+# corpus should pin too.
+broken_records = ["[(point (err \"x\") 1)]" "point (err \"x\") (err \"y\")"]
+
+shaped = text/concat (text/concat records more_records) broken_records
 
 prelude = """
   type point
