@@ -58,13 +58,25 @@ this), and every design/*.md (none mention it). The rationale below is quoted
 from that archive entry; nothing has revisited it since.**
 
 `sha256/hex` holds the whole message. Peak arena is linear in the input at
-about seven thousand bytes per byte hashed, deterministic to the byte:
+about six and a half thousand bytes per byte hashed, deterministic to the byte:
 
     message   arena_peak_bytes   per byte
       1,024          7,340,032      7,168
       2,048         14,680,064      7,168
       4,096         27,262,976      6,656
       8,192         54,525,952      6,656
+     16,384         108,003,328      6,592
+     32,768         216,006,672      6,592
+     65,536         428,867,600      6,544
+
+The per-byte figure falls slowly and converges near 6,544, which is what a
+fixed per-block overhead amortising against a growing message looks like — one
+more piece of evidence that the cost is per-block retention rather than
+anything quadratic. At that rate `docs/kanso.wasm`, 1,604,098 bytes, predicts
+about 10.5 GB for the hash ALONE. The kernel's out-of-memory report for the
+whole `scripts/fingerprint` run read 13,954,684 kB, and the difference is the
+rest of that run — the byte list, the padded copy, the other assets, the site's
+pages. The two figures corroborate.
 
 A hash reads 64 bytes at a time and carries eight words of state, so peak
 should be flat. `cohort_frees=0` and `alloc_bytes` within half a per cent of

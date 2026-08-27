@@ -565,9 +565,23 @@ rows = text/concat rows_a (text/concat rows_b rows_c)
 # A job with no row and no reason is the thing this refuses. A reason is a
 # sentence, not a flag: it has to say what would prove the job, so the debt is
 # readable rather than a name on a list.
+# The one job that keeps a reason, and the reason is not the one it had.
+#
+# It read "the mutations are `specs`'s; what this adds is a second machine".
+# The second half holds. The first half stopped holding on 2026-08-27, when
+# this job caught a defect `specs` passed on linux: a fixture interpolated its
+# own absolute path into generated kanso source, so the source line's length
+# became a property of the host's temp directory. Eighty characters is the
+# limit; macOS's `/var/folders/...` took it to ninety-nine, and the run died on
+# a formatting refusal before reaching what it meant to test. A defect class
+# only the second machine can see is not `specs`'s mutation.
+#
+# What keeps the job unproven is the harness rather than the mutations. `prove`
+# is authoritative on linux — this file says so in its own header — and it
+# cannot run a macOS gate at all.
 no_row_a = unproven
   "the other host (macos, arm)"
-  "the mutations are `specs`'s; what this adds is a second machine"
+  "prove runs on linux and cannot reach a second machine's gate at all"
 
 unproven_jobs = [no_row_a]
 

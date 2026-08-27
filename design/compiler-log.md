@@ -3060,3 +3060,43 @@ at all. That is about the harness's reach rather than about the mutations, and
 it is a separate change from this one.
 
 
+
+## 2026-08-27 — the last excuse, and a ratio measured further out
+
+Two small corrections to things this log already holds.
+
+THE RATCHET'S LAST EXCUSE said the wrong thing, which makes three for three:
+every excuse in `scripts/ratchet/ratchet.kso` that has been looked at closely
+turned out to describe something other than what kept its job unproven. The kq
+one described the job's dependencies (#1081), the digest one described the
+job's build step (#1084), and this one described the mutations:
+
+    "the mutations are `specs`'s; what this adds is a second machine"
+
+The second half holds. The first half stopped holding on the day it was read,
+because the macOS job caught a defect `specs` passed on linux — a fixture that
+interpolated its own absolute path into generated kanso source, so the length
+of a line of kanso became a property of the host's temp directory. That is a
+defect class only the second machine can see, and it is not `specs`'s mutation.
+
+The excuse survives on the true reason, which is about the harness rather than
+the mutations: `prove` is authoritative on linux, this file says so in its own
+header, and it cannot run a macOS gate at all. Three excuses examined, three
+rewritten or replaced, and none of them was lying — each described a real
+obstacle that was not the one in the way.
+
+THE DIGEST'S RATIO goes further out. The entry above measured `sha256/hex` to
+8,192 bytes and read the per-byte cost as about seven thousand. Three more
+sizes show it converging rather than holding:
+
+     16,384         108,003,328      6,592
+     32,768         216,006,672      6,592
+     65,536         428,867,600      6,544
+
+A per-byte figure that falls slowly with size is a fixed per-block overhead
+amortising against a growing message, which is one more piece of evidence for
+per-block retention and against anything quadratic. At 6,544 the real blob —
+1,604,098 bytes — predicts about 10.5 GB for the hash alone, against the
+kernel's 13,954,684 kB for the whole `scripts/fingerprint` run. The gap is the
+rest of that run, and the two corroborate rather than disagree. The gavel entry
+carries the full table now, so the number Clay rules on is the measured one.
