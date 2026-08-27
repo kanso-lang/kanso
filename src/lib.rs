@@ -3449,8 +3449,7 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
-    let mut diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
-    check::check_unused_private(&merged, &used, &mut diags);
+    let diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
     finish_program(&mut merged);
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));

@@ -10,7 +10,6 @@
 # neither pinned nor listed here, and fails again when a listed one becomes
 # pinned, so the line gets deleted rather than left lying.
 expected a constant name
-private type `
 
 # Widening the gate found these. The scan it replaced stopped a message at the
 # first comma a lowercase word followed, which for a message that holds such a
@@ -20,14 +19,15 @@ private type `
 # another sitting writing programs for them. Neither is deleted, because both
 # arms are the safe side of a fork — see task #69.
 #
-# The other four are each answered first by a check added later, verified by
-# trying them rather than by reading. An inline constant never reaches the
-# parser carrying a block: the lexer folds an indented line into its head
-# unless that head opens one, and a `>>` or `.` continuation is legal, so the
-# shape does not exist. A non-identifier in a constant's name position is
-# refused first by "a top-level line must begin with `fn`, `type`, or a
-# constant binding". And the private-type message fires on a leading
-# underscore, which the naming rule retired.
+# The other four were each said to be answered first by a check added later.
+# An inline constant never reaches the parser carrying a block: the lexer folds
+# an indented line into its head unless that head opens one, and a `>>` or `.`
+# continuation is legal, so the shape does not exist. A non-identifier in a
+# constant's name position is refused first by "a top-level line must begin
+# with `fn`, `type`, or a constant binding". The private-type message fired on
+# a leading underscore, which the naming rule retired — and the check behind it
+# was deleted once that was checked by running a program rather than by reading
+# the source, so the line is gone from here too.
 #
 # That is the pattern worth naming: a diagnostic can be shadowed by a better
 # one added later, and nobody notices, because it simply stops appearing.
