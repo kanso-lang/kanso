@@ -280,11 +280,21 @@
 # records and missed the map beside them — the edit was applied over a fixed
 # window of the function and the map case fell outside it, and the fixture
 # held a list alone so it passed. Every container is in the fixture now.
-jsonbench text=80882
-encodebench text=97874
-oneshot text=97954
-basket text=89554
-widebench text=98962
-deepbench text=63266
-escapebench text=49746
-pendbench text=73890
+#
+# 2026-08-27 (accept): +48 a binary, uniform. `net/accept` outside a parallel
+# group never looked at its handle — it answered "nothing connected", which is
+# true of a listener nobody has dialled and was said for a value that is not a
+# listener at all. The check is one call and one branch, and it reuses the
+# string k_step already carries for that fault. A distinct string would have
+# cost 128 more: while two arms share one string pointer clang folds their
+# `return k_err(k_str(<ptr>), NULL)` tails into one block, and a distinct one
+# breaks the fold. Measured both ways, and it is distinctness rather than
+# length — a same-length distinct string costs the same 128.
+jsonbench text=80930
+encodebench text=97922
+oneshot text=98002
+basket text=89602
+widebench text=99010
+deepbench text=63314
+escapebench text=49794
+pendbench text=73938

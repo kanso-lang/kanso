@@ -4257,7 +4257,18 @@ static KValue k_exec(KDesc* d) {
         }
         case 21: {
             /* Only reached outside a parallel group, where nothing else could
-               ever connect; k_step yields instead of arriving here. */
+               ever connect; k_step yields instead of arriving here.
+
+               The handle is checked first because this arm used to answer
+               "nothing connected" whatever it was given — a true statement
+               about a listener nobody has dialled, said about a value that is
+               not a listener at all. The interpreter refused it; native
+               described the world instead of the argument. The string is the
+               one k_step already uses for the same fault, which is worth
+               keeping identical: clang folds the two returns together, and a
+               distinct wording costs 128 bytes of .text in every binary. */
+            if (k_socket_of(d->x.payload) < 0)
+                return k_err(k_str("that is not a listener"), NULL);
             return k_err(k_str("nothing connected"), NULL);
         }
         case 22: {

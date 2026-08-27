@@ -594,7 +594,7 @@ impl Executor for RealExecutor {
         KIDS.with(|k| {
             let mut k = k.borrow_mut();
             let Some(mut child) = k.running.remove(&handle) else {
-                return Err(format!("{handle} is not a running process"));
+                return Err("that is not a running process".to_string());
             };
             let _ = child.kill();
             child.wait().map_err(|e| e.to_string())?;
@@ -607,7 +607,7 @@ impl Executor for RealExecutor {
         KIDS.with(|k| {
             let mut k = k.borrow_mut();
             let Some(child) = k.running.get_mut(&handle) else {
-                return Err(format!("{handle} is not a running process"));
+                return Err("that is not a running process".to_string());
             };
             let status = child.try_wait().map_err(|e| e.to_string())?;
             let Some(status) = status else { return Ok(None) };
@@ -647,7 +647,7 @@ impl Executor for RealExecutor {
             let found = s
                 .listeners
                 .get(&listener)
-                .ok_or_else(|| "that is not an open listener".to_string())?;
+                .ok_or_else(|| "that is not an open socket".to_string())?;
             let addr = found
                 .local_addr()
                 .map_err(|e| format!("cannot read the port of that listener: {e}"))?;
@@ -662,7 +662,7 @@ impl Executor for RealExecutor {
             found.map(|l| l.try_clone()).transpose().map_err(|e| e.to_string())
         })?;
         let Some(socket) = socket else {
-            return Err(format!("{listener} is not a listener"));
+            return Err("that is not a listener".to_string());
         };
         socket.set_nonblocking(true).map_err(|e| e.to_string())?;
         let taken = match socket.accept() {
@@ -691,7 +691,7 @@ impl Executor for RealExecutor {
             found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
         })?;
         let Some(stream) = stream.as_mut() else {
-            return Err(format!("{conn} is not a connection"));
+            return Err("that is not a connection".to_string());
         };
         let mut buffer = [0u8; 65536];
         let read = stream.read(&mut buffer).map_err(|e| format!("cannot read: {e}"))?;
@@ -706,7 +706,7 @@ impl Executor for RealExecutor {
             found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
         })?;
         let Some(stream) = stream.as_mut() else {
-            return Err(format!("{conn} is not a connection"));
+            return Err("that is not a connection".to_string());
         };
         stream.write_all(text.as_bytes()).map_err(|e| format!("cannot write: {e}"))?;
         stream.flush().map_err(|e| format!("cannot write: {e}"))
@@ -718,7 +718,7 @@ impl Executor for RealExecutor {
             let closed = s.conns.remove(&handle).is_some() || s.listeners.remove(&handle).is_some();
             match closed {
                 true => Ok(()),
-                false => Err(format!("{handle} is not an open socket")),
+                false => Err("that is not an open socket".to_string()),
             }
         })
     }

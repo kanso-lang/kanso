@@ -3795,3 +3795,100 @@ spots. Matching message tails against the Rust sources reported thirteen
 messages "no Rust engine can produce"; three of them are `format!("{name} takes
 a string")`, which the tail search cannot match and the interpreter says every
 day.
+
+## 2026-08-27 — six socket failures said seven different things
+
+Found by the probe sweep in the entry above, running each net builtin against
+a look-alike record: a type with a `handle` field holding an int, passed
+through a function that returns what it is given so the checker cannot narrow
+it. Both engines reach the builtin, both speak, and they said this:
+
+    net/port            native "that is not an open socket"  interp "that is not an open listener"
+    net/accept          native "nothing connected"           interp "7 is not a listener"
+    net/read            native "that is not a connection"    interp "7 is not a connection"
+    net/write           native "that is not a connection"    interp "7 is not a connection"
+    net/close_listener  native "that is not an open socket"  interp "7 is not an open socket"
+    net/close_conn      native "that is not an open socket"  interp "7 is not an open socket"
+    os/kill             native "that is not a running process"  interp "999 is not a running process"
+
+The differential law allows an engine to speak less than another only when the
+quieter one refuses with a clear diagnostic. Here neither refuses. None of the
+seven was pinned by a golden, which is why they drifted.
+
+SEARCHED FIRST: log and archive for `socket`, `listener`, `net/accept` and
+`nothing connected`. The sockets work is recorded at its introduction and in
+the fiber-scheduler entries; no entry compares the two engines' socket
+messages, and no golden holds any of these texts.
+
+THE INTERPOLATED HANDLE GOES. `7` is a slot number kanso hands out; the program
+never wrote it and cannot look it up, so it reads as though the user supplied a
+7. The house style that names a value — `length takes a list, string, or map,
+not 7` — names a value the user WROTE, which is a different thing. The
+interpreter converges on native's `that`.
+
+THE NOUN ON `net/port` WENT THE OTHER WAY FIRST, AND THE GOLDEN OVERRULED IT.
+Its argument is a listener, the interpreter has always said `listener`, and
+native reached for `socket` — the right umbrella only for close, which accepts
+either kind. Changing native to `listener` cost 128 bytes of .text in every
+compiled binary, on all eight benchmarks.
+
+For a two-character string. The cause is not length: a distinct string of the
+SAME length costs the same 128. Section-by-section, the port change moves
+.rodata by 32 (the string, at 32-byte granularity) and .text by 128 (code).
+While case 28 and case 24 shared one string pointer, clang folded their two
+`return k_err(k_str(<ptr>), NULL)` tails into one block; a distinct string
+breaks the fold and the sequence is emitted twice.
+
+Both words are accurate — a listening socket is a socket — and native's is
+already what close says for either kind. So `port` converges on `socket`, the
+interpreter changes instead of native, and the 128 bytes are not spent. The
+gate is what turned a wording preference into a measurement.
+
+The accept check reuses the string `k_step` already carries for the same fault,
+for the same reason, and costs 48 bytes: one call and one branch.
+
+`net/accept` was not a wording difference. Native's arm never looked at the
+handle at all:
+
+    case 21: {
+        /* Only reached outside a parallel group, where nothing else could
+           ever connect; k_step yields instead of arriving here. */
+        return k_err(k_str("nothing connected"), NULL);
+    }
+
+"nothing connected" is a true statement about a listener nobody has dialled,
+and it was said for a value that is not a listener. The comment is right about
+when the arm runs and says nothing about what it was handed. It now checks
+`k_socket_of` first.
+
+WATCHED RED, three separate mutations, each reddening exactly one fixture and
+nothing else: the accept check removed (native says "nothing connected"), the
+port noun put back to "socket", and the interpreter's connection sites restored
+to `format!("{conn} is not a connection")`. Both files diff clean against the
+fixed state afterwards.
+
+THE FIXTURES DO NOT LIVE IN THE RUNTIME CORPUS, and finding out why cost a
+red suite. That corpus is walked by a THIRD engine — the in-process
+interpreter in tests/oracle.rs — whose executor has no sockets and refuses
+with "this engine has no sockets". The refusal is correct under the law and it
+is a different sentence, so one shared .stderr cannot hold both. The corpus
+asserts one text for every engine that walks it, and these two engines are
+asserted in tests/sockets_say_one_thing.rs instead, the way
+tests/a_file_that_is_not_text.rs already handles a capability difference.
+
+Worth naming because the corpus looked like the obvious home right up to the
+moment `cargo test` said otherwise, and the number of engines walking a given
+corpus is not written anywhere a reader would look. There are three for
+tests/golden/runtime, not two.
+
+ONE SITE IS CHANGED WITHOUT A FIXTURE. `finished` in eval.rs — the wait half of
+`os/run` — carried the same interpolated handle, and `os/run` builds its own
+handle, so no program can hand it a bad one. It is aligned rather than pinned,
+and this sentence is the record that it is unpinned on purpose.
+
+WHAT THIS COST: 48 bytes of .text on each of the eight benchmarks, uniform,
+and nothing else. The allocation, arena and instruction veins are byte-identical
+to main; eval.rs alone moves .text by zero, measured with runtime.c reverted
+and eval.rs kept, so the whole 48 belongs to the accept check. welfare does not
+weigh .text and is unmoved. bench/text_golden.txt is regenerated here, on a
+host whose clang matches its measured-on line.
