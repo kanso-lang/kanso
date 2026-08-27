@@ -2760,3 +2760,9 @@ ledger doing its job.
     7 passed                                   (tests/wasm_engine.rs)
 
 The gap count fell by one, which is the whole visible effect: 327/10 -> 328/9.
+
+The compile vein moved by 251 instructions, downward, and it is layout rather
+than work: `call_builtin` is the interpreter's door and `kanso check lib/json`
+never enters it. Allocations and peak are identical at 61,981 and 822,004.
+Banked in `bench/compile_instructions_golden.txt` with that reading written
+beside it, the same way the +167 of the previous day was.
