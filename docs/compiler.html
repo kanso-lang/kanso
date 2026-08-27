@@ -1089,6 +1089,41 @@ text/to_bytes [104 300]               # err "to_bytes takes byte values (0-255)"
 
 <p>rendering is the one place the two still look alike, and deliberately: bytes print as their numbers between brackets, because that is what a reader wants to see. what changed is what a function will accept.</p>
 
+<h2 id="failuretables"><span class="sec-num">22</span>the err rules are two tables</h2>
+
+<p>a failure that reaches an operation carries past it. an arm cannot see an err its own hako raised. two sentences, and between them they govern a few dozen places in the language, each written separately in three engines. asking the same question at each of those places in turn—what happens <em>here</em>—turned up five disagreements in one afternoon, every one a site where two engines agreed and the third did not.</p>
+
+<p>none of them was hard to find. what was missing was the question being asked site by site, and somewhere to write the answer down. both sentences are tables now, and both tables are fixtures that run on every engine.</p>
+
+<p>the first says what an operation does with a failure that arrives at it, and the answer is not the same everywhere. an operator, a comparison, a constructor and a <code>&amp;</code> join MERGE—neither operand caused the other, so both reasons survive. a call with no matching arm, an interpolation and a <code>&gt;&gt;</code> sequence take the FIRST, because those are ordered. a list literal and a map literal HOLD it, because a container is not its contents: the list has a length, it can be indexed, and printing it shows the failure sitting inside. a field read, an index and a builtin pass it THROUGH, because the operation does not happen at all.</p>
+
+<pre><code>operated:  ["a" "b"]      compared:  ["a" "b"]
+built:     ["a" "b"]      grouped:   ["a" "b"]
+called:    a              woven:     a
+sequenced: a              listed:    [err "a" 2]
+mapped:    { "k":err "a" } reached:  a
+indexed:   a              sized:     a</code></pre>
+
+<p>the second says which patterns can hold an err at all. three can—the <code>(err …)</code> destructure, an <code>:err</code> annotation, and a typeset with err among its members—and none of the three holds an err raised by the package it is written in. that is ten pattern forms against two origins, and the column on the left is what "your own failures only bubble" means when you write it out.</p>
+
+<pre><code>pattern   own   foreign
+_         past  past
+v         past  past
+v:err     past  took
+(err r)   past  took
+v:maybe   past  took
+v:some    past  past
+v:int     past  past
+v:string  past  past
+v:none    past  past
+1         past  past</code></pre>
+
+<p><code>took</code> means the arm fired; <code>past</code> means the failure went by as though the arm were not written. two of the five disagreements were cells of this table. <code>_:some</code> took a foreign failure on two engines and was refused outright at build time on the third, which made an arm that names no err anywhere into an unmarked rescue. a typeset arm took its own package's failure on native alone, because the typeset branch of the emitter returned before it asked whether the annotation admitted err.</p>
+
+<p>the other three were rendering, and rendering had a differential harness already—the project names it divergence-prone alongside float formatting and utf-8. the harness could not have caught any of them, because not one value in its corpus was a failure. it has eighteen now.</p>
+
+<p>what the tables buy is narrow and worth saying plainly. a site that drifts on any engine goes red. a site nobody has thought about is a line missing from a file, which is a thing a reader can notice. and adding a pattern form to the language adds a row.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
