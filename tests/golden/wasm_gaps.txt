@@ -28,3 +28,39 @@ tests/golden/runtime/read_missing_file.kso	the playground has no filesystem
 # no filesystem to ask — so the golden's first answer differs there.
 tests/golden/micro/is_dir.kso	false
 tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
+
+# A page has no stdin to read, so a program that reads one cannot run there.
+# Native and the interpreter both answer zero bytes when nothing is piped in,
+# which is what this program pins on those two.
+#
+# THE PLAYGROUND ANSWERS THE WRONG THING, and this entry records what it does
+# rather than what it should. The other two capabilities say so by name — "the
+# playground has no filesystem", "the playground cannot start processes" — and
+# src/wasm.rs and src/wasm_rt.rs each carry `Err("the playground has no
+# stdin")` meant to do the same. Neither fires. The engine gets as far as
+# `unknown builtin`, so it reports a missing BUILTIN where every other declined
+# capability reports a missing capability, and the sentence written for this
+# case has never been reached by anything.
+#
+# Recorded as it behaves. When the message is made to fire this line goes red,
+# which is the point: an entry that stopped matching is the reminder.
+tests/golden/micro/stdin_reads_what_it_is_given.kso	error[runtime]: unknown builtin `stdin`
+
+# THE SAME DEFECT AS STDIN, on the other side of the library. `os/args` is
+# declared `pub args = builtin_args`, exactly as `stdin` is, and answers the
+# same way in a page: not the empty list a page honestly has, and not a
+# refusal naming the capability, but a report that the BUILTIN is unknown.
+tests/golden/micro/args_are_empty_without_any.kso	error[runtime]: unknown builtin `args`
+
+# A page has no clock the differential could agree on, so it reads zero. That
+# is DESIGNED, and said so in a comment in both engines since they were
+# written — it is here because saying it in a comment is not the same as
+# having a program that shows it, and until now no program in any corpus read
+# the clock at all. Native is past the epoch; a page is not.
+#
+# `now` is declared `pub now = builtin_now`, the same shape as `args` and
+# `stdin`, and unlike those two it REACHES the executor and gets the designed
+# zero. So whatever routes the other two into `unknown builtin` is narrower
+# than "every zero-argument builtin", which is what the first reading of this
+# said and what this line disproves.
+tests/golden/micro/the_clock_answers_something.kso	the clock is past the epoch: false
