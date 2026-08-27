@@ -438,6 +438,14 @@ coverage_floor = row
   (breaking "a_ten_character_diagnostic_arrives_without_a_golden")
   release
 
+coverage_driver = row
+  "a refusal the driver prints as plain text, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_driver_refusal_arrives_without_a_golden")
+  release
+
 itself = row
   "a gating job nobody said how to prove"
   true
@@ -478,7 +486,19 @@ rows_c1f = text/concat rows_c1e [coverage_floor decoder validator]
 
 rows_c1g = text/concat rows_c1f [landing in_the_page shop_window]
 
-rows_c = text/concat rows_c1g [dispatch itself]
+coverage_printed = row
+  "an `error[kind]:` refusal printed as plain text, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_printed_error_kind_arrives_without_a_golden")
+  release
+
+rows_c1h = text/concat rows_c1g [dispatch coverage_driver]
+
+rows_c1i = text/concat rows_c1h [coverage_printed]
+
+rows_c = text/concat rows_c1i [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

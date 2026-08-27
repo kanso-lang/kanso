@@ -2485,3 +2485,176 @@ driver messages a corpus of programs cannot express. Widening the scan to a
 second opener would say which is which; that is a separate change, and it wants
 the answer written down rather than guessed, the way the excused list's four
 claims did.
+
+## 2026-08-27 — the driver's refusals are diagnostics too
+
+The coverage gate keys on `Diagnostic::new(`. The loader and the driver write
+`error: …` as plain text, print it and exit — thirty-one sites in src/ — and
+the scan walked past every one of them. #1078 pinned four of the module ones on
+the module_differential surface because the gate could not see them; this makes
+the gate see them.
+
+A second opener, `"error: `, read the same way as the first: cut the literal at
+its closing quote, take the leading run before the first interpolation, keep it
+if it is ten characters or more. The count goes 84 to 98, and the eight newly
+unpinned matched the hand measurement exactly.
+
+**Then the false-pin trap.** Six of the fourteen read as pinned and four were
+false. `no .kso files in` matched tests/golden.rs's own `assert!` message,
+`clang failed on` a doc comment, `cannot write` the oracle's unrelated refusal,
+`cannot execute` a panic the wasm spec writes for itself. Every one came from
+tests/*.rs, and every one runs long — fourteen to sixteen characters — so the
+length floor was never the mechanism. The corpus was.
+
+So the corpora split. A Diagnostic's text is pinned by a .stderr file or, for
+the handful a corpus of single programs cannot express, by a Rust test, so
+tests/*.rs stays in its corpus. The driver's corpus is .stderr plus
+module_differential — a loader refusal needs a tree on disk, which the error
+corpus cannot express. `known?` dispatches on the site's kind. That dropped
+`cannot resolve import` and `import cycle through` off the unpinned list, since
+#1078's cases are now visible to the gate that motivated them.
+
+Six of the fourteen end up with a real pin. Two already had one, from #1078's
+module_differential cases — pinned by hand days earlier for exactly the reason
+this change removes. Four are new. `a_module_that_moved` is the first driver
+message ever in the error corpus: `std/random` moved to `std/math`, and the
+loader keeps the old path answering with the new one named.
+module_differential gained c23, a directory holding only a README, and c24
+and c25 below.
+
+Eight excused, each with what was tried. Two are pinned by a Rust test, and one
+of those tests did not exist when I wrote the citation for it —
+`tests/a_plan_needs_an_io.rs` is written now, watched red against a shortened
+message and green against the real one. Five fire on an io error the container
+cannot produce, running as root with clang installed. One fires when clang
+rejects the emitted C.
+
+**The tenth was going to be an excuse and turned out to be a bug in my
+reading.** `a module cannot import itself` had survived three constructions,
+each taken first by a different check, and the honest thing to write looked
+like "unreachable, or I have not found the shape". Asking a fourth time was
+cheaper than writing that: the guard tests `!ENTRY_COMPILE`, and that flag is
+set around the WHOLE of `compile_entry`, dependencies included. No `kanso run`
+can reach it, whatever the shape. `kanso check <directory>` can — the same door
+`an_empty_branch_is_refused` uses — and both arms answer there, the embedded one
+for a directory named `list` importing `std/list`, the filesystem one for a
+member reaching back through `../`. Both are module_differential cases now, both
+watched red on a perturbed expectation. 25 modules, 0 wrong.
+
+So the driver's excused list is eight, not nine, and the count of things I
+claimed from reading the source and got wrong today is four.
+
+The ratchet gains a row for the new arm, proven by hand first: an unpinned
+`error:` write in src/main.rs takes the gate to `1 newly unpinned`, exit 1.
+
+## 2026-08-27 — a third way the compiler writes an error
+
+The same question one level out, asked because the second opener had just paid
+off: what else writes to stderr that neither opener catches? Forty-two
+`eprintln!`/`eprint!` sites in src/. Most are trace output behind a flag. The
+rest are a third family, and the one that hid longest: `error[kind]: …`
+written as plain text.
+
+That is what a rendered Diagnostic looks like on a terminal. So these read to a
+user exactly like a message the corpus pins, and the scan — keyed on
+`Diagnostic::new(`, then on `"error: ` — saw none of them. Twenty-odd sites:
+the runtime's endpoints, the stack-depth refusal, the exit-code refusals, the
+repl's name lookups, the license advisory. **98 to 108 literal diagnostics.**
+
+**This family reads the WIDE corpus, and that is measured rather than assumed.**
+The driver's four false pins were short generic phrases — `cannot write`,
+`cannot execute` — that a Rust test holds for a hundred unrelated reasons. An
+`error[kind]:` string is a rendered diagnostic, so a test holding one is
+asserting output. Six matched .stderr files (every one checked: deep_recursion,
+endpoint_none, endpoint_trace, run_cannot_start and the rest); three more
+matched Rust tests, and all three were checked by hand and all three were true.
+
+Four had no pin. Two do now, and each lives where it does because the corpus it
+belongs to cannot hold it:
+
+- `error[name]: nothing named ` — the repl's `:delete` and `:show`, both doors,
+  which build the message separately. tests/repl.rs; there is no repl corpus.
+- `error[runtime]: the program was ended by signal 15` —
+  tests/a_program_the_system_killed.rs. NOT the runtime corpus: that harness
+  asserts native and `--interp` write identical stderr and both exit 1, and a
+  signalled program does neither, because under `--interp` there is no second
+  process to signal.
+
+Both watched red by perturbing the SOURCE rather than the expectation, and the
+repl perturbation reddened the coverage gate too, which is what proves the third
+arm reads src/repl.rs at all.
+
+`error[license]: ` was already pinned by tests/advisory.rs and is excused naming
+it. The last is excused as unreachable on unix, and unlike the excuses this week
+kept getting wrong, that is a claim about control flow: `ended_by_signal` is
+called only from the `None` arm of `code.code()`; on unix `code()` answers None
+exactly when a signal ended the process; in exactly that case `signal()` answers
+Some. So the `None` arm inside `ended_by_signal` cannot be taken. It stays
+because a match on an Option must be exhaustive, and its `cfg(not(unix))` twin
+returns the same sentence on Windows, which CI does not run.
+
+Third ratchet row on the job, proven by hand before it was written.
+
+**What the widening costs.** The gate reads the same forty-two files three ways
+now. Three runs each, same box, same build: 915/923/960 ms on the one-opener
+version against 1086/1028/1041 ms on this one — about 119 ms, or 13%. Wall
+clock, so indicative rather than pinned, and it buys twenty-five diagnostics the
+gate could not see. Stated because a number that moves without a sentence is the
+thing to catch.
+
+**And one message no opener could ever see — built, measured, declined.** The
+scan matches on the LEADING literal run, so a message opening with an
+interpolation has none, whatever openers get added. Exactly one in src/ is in
+that position: `kanso test` on a file declaring none answers `{file}: no tests
+found (a test is a constant named `test_*`)`. That opening also makes it the
+only driver refusal a reader cannot recognise as one; every other starts
+`error: `.
+
+Spelling it `error: no tests found in {file} ...` fixes both, and I built it —
+message, `tests/a_file_with_no_tests.rs` watched red on a perturbed source, the
+excused-list entry, the lot. Then the trend gate priced it:
+
+    worsened: compile_instructions 57,486,466 -> 57,486,633
+    FAIL  a pure regression: something got worse and nothing got better
+
+**That is the correct answer and the change is reverted.** The counters cannot
+see message consistency, and a change whose entire gain is invisible to them
+does not get to spend them. Arguing the model is a real move and it is Clay's,
+not something to do inline to unblock a pull request.
+
+Recorded so it stays declined, and so the next person who notices the
+inconsistency finds the measurement rather than repeating it.
+
+**The measurement that killed it, and two wrong answers on the way.** The
+reword is the only compiled change and it sits on a path no compile executes, so
+`compile_instructions` should not move. Measured rather than assumed, under
+callgrind in the fixed box, deterministic on repeat:
+
+    this container, reword reverted   58,154,705   (= its origin/main build)
+    this container, with the reword   58,154,668   — a FALL of 37
+    the CI runner, with the reword    57,486,633   — a RISE of 167
+
+**The two hosts move in opposite directions**, which settles what it is: work
+that genuinely went away would go away on both. What changed is the binary's
+size, and the count is of a process, so it includes what runs before `main`. A
+move of a few hundred on 57.5 million can be one string literal — that is the
+floor of this vein's sensitivity, and the reason to read a small move before
+calling it anything.
+
+Getting there took two wrong answers, both worth writing down because the trap
+is easy and either would have banked a fake result.
+
+The first was comparing against a build in a DIFFERENT DIRECTORY. `library_box`
+already warns that the count tracks the length of the directory the compiler
+RUNS in — about 160 instructions per character — so a build directory sounded
+like the same hazard, and 37 sounded like the size of it. It is not: the same
+tree built at `/tmp/samehead` and at `/home/user/kanso` gives the identical
+58,154,668. The hypothesis was plausible, cheap to test, and false.
+
+The second was measuring a binary I had not confirmed was fresh. The revert
+build reported 1.49s, which read as "cargo did nothing", and the number came
+back equal to this branch — which looked like proof the reword was free. Redone
+with `md5sum` on the binary at each step, the reverted build is a different
+binary and answers 58,154,705. The 1.49s was real: `main.rs` is a thin crate
+over the library, so relinking it is fast. **A build time that looks too short
+is a thing to check, not a thing to conclude from.**

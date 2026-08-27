@@ -63,3 +63,61 @@ unused expression: every non-final line binds a name (sequence
 # replaced the panic beside it is reachable only through `kanso check` on a
 # library file, which the run/play corpus cannot express, so its pin lives
 # at tests/an_empty_branch_is_refused.rs rather than in the corpus.
+
+# THE DRIVER'S MESSAGES. The loader and the driver write `error: …` as plain
+# text, print it and exit — thirty-one sites in src/, and the scan could not
+# see one of them until it learned a second opener. Two were pinned in the same
+# change (`a_module_that_moved` in the error corpus, `no .kso files in` as a
+# module_differential case) and #1078 had already pinned two more there. The
+# rest are below, each with what was actually tried.
+#
+# TWO ARE PINNED BY A RUST TEST, which the driver corpus deliberately excludes:
+# a Rust file's doc comments and its own assert! messages are not pins of a
+# compiler message, and four of the six that read as pinned there were false.
+# The precedent is `an_empty_branch_is_refused.rs`, already cited above.
+this build is named `
+main is not an io; there is no plan to show
+#
+#   this build is named `   tests/build_names_collide.rs asserts it:
+#                           assert!(said.contains("this build is named `greeter`,
+#                           and a directory of that name is here"))
+#   main is not an io       tests/a_plan_needs_an_io.rs asserts it. Reached by
+#                           `kanso run <file> --plan` where main is a value —
+#                           `x = 2` then `x` answers it — and no golden corpus
+#                           reads the stderr of a --plan run.
+#
+# FIVE FIRE ON AN IO ERROR FROM THE HOST, not on anything a program says. A
+# fixture cannot portably cause one: the container runs as root, so an
+# unwritable directory is not unwritable, and clang is installed. What each
+# needs is stated so nobody writes the program twice.
+cannot build:
+cannot execute
+cannot invoke clang:
+cannot open the terminal:
+cannot write
+#
+#   cannot build:            spawn of the build command fails
+#   cannot execute           spawn of the built binary fails
+#   cannot invoke clang:     clang absent from PATH
+#   cannot open the terminal: the repl with no tty
+#   cannot write             the .ll cannot be written
+#
+# ONE FIRES WHEN CLANG REJECTS WHAT THE COMPILER EMITTED, which is a compiler
+# defect rather than a program a user can write. tests/build_names_collide.rs
+# names it in a doc comment, which is not a pin.
+clang failed on
+#
+# THE PRINTED FAMILY. `error[kind]: …` written as plain text is what a rendered
+# Diagnostic looks like on a terminal, so these read to a user exactly like a
+# message the corpus pins. The scan learned this third opener after the second;
+# ten sites, and one of them is excused.
+#
+# ONE IS UNREACHABLE ON UNIX, and this is a claim about control flow rather
+# than a reading of what looks unlikely. src/main.rs calls `ended_by_signal`
+# only from the `None` arm of `code.code()`. On unix, `ExitStatus::code()`
+# answers None exactly when a signal ended the process, and in exactly that
+# case `ExitStatusExt::signal()` answers Some — so the `None` arm INSIDE
+# `ended_by_signal` cannot be reached. It stays because the match on an Option
+# must be exhaustive. The `#[cfg(not(unix))]` body returns the same sentence
+# unconditionally and is reachable on Windows, which CI does not run.
+error[runtime]: the program ended without an exit code
