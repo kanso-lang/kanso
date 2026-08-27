@@ -4095,8 +4095,22 @@ afterwards. The page's half was watched red by accident and more convincingly �
 it was still red after native was fixed, which is how the third site was found
 at all.
 
-COST: nothing measurable. Every counter vein is byte-identical and welfare
-holds at 84.11, machine code included — and the reason is checkable rather
-than lucky. No benchmark writes a Ctor destructuring bind, so the linker drops
-`k_die_destructure` from all eight binaries; `nm jsonbench` finds neither it
-nor `k_die_overload`, which has always been dropped the same way.
+COST: 146 instructions on the front end, and nothing else. Every RUNTIME
+counter vein is byte-identical and welfare holds at 84.11, machine code
+included — and that reason is checkable rather than lucky. No benchmark writes
+a Ctor destructuring bind, so the linker drops `k_die_destructure` from all
+eight binaries; `nm jsonbench` finds neither it nor `k_die_overload`, which has
+always been dropped the same way.
+
+compile_instructions rose 57,568,244 -> 57,568,390 on the runner. The measured
+path is untouched: `kanso check lib/json` compiles a library and never emits,
+so neither changed call site runs. What grew is the binary around it —
+src/runtime.c is embedded whole by `include_str!` at main.rs:722 and gained a
+function, and src/wasm_rt.rs is an unconditional `pub mod` that gained one too.
+
+ONE MECHANISM WAS RULED OUT RATHER THAN ASSUMED. main.rs:855 hashes that
+embedded runtime.c, and hashing a longer file would be a real cost the check
+path pays. But the hash sits in `cached_program_binary`, called only from the
+RUN path at main.rs:810, and `check` never reaches it. So this is layout, like
+the five movements before it in that golden, and not the plausible thing it
+turned out not to be.
