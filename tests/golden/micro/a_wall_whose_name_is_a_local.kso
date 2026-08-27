@@ -1,0 +1,13 @@
+import "std/io"
+import "std/list"
+
+# The case a bare-name refusal must not take, on BOTH sides of the wall.
+# `list/naturals` and `list/first` are bare-enrolled and both answer plain
+# values, so a check that asked the fixpoint what the NAME returns would refuse
+# this — and it is a working program. The locals shadow the imports, which
+# check.rs:1085 allows on purpose: "the enrollment must never make every stdlib
+# export a forbidden binding name."
+pub play =
+  naturals = io/write "one\n"
+  first = io/write "two\n"
+  naturals >> first

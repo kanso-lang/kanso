@@ -3381,3 +3381,52 @@ for the reader and a change to what the language refuses, so it is filed rather
 than folded in here. The runtime guard is needed either way — a piped call, a
 non-`Ident` head and a parameter all reach the wall with the check unable to
 say.
+
+## 2026-08-27 — the bare name at a wall, refused at compile time after all
+
+The entry recording this as refuted was right about the naive version and
+wrong about the conclusion. The one-line extension does refuse a working
+program; a set of the names a declaration binds is enough to fix that, and
+costs one walk of each body.
+
+WHAT THE NAIVE VERSION DOES, shown rather than argued. With
+`Expr::Ident(name, _) => returns.get(&(name, 0))...` added to
+`never_describes` and nothing else, this program is refused:
+
+    naturals = io/write "one\n"
+    first = io/write "two\n"
+    naturals >> first
+
+It prints `one` then `two` and exits 0 on both engines. `list/naturals` and
+`list/first` are bare-enrolled and answer plain values, so the lookup finds the
+stdlib rows; the locals are invisible to it. That was watched happening — the
+compiler was built with the arm and run on the program — rather than read out
+of the source.
+
+WHAT FIXES IT. `never_describes` now takes the set of names its declaration
+binds: the parameters, the patterns of every `Stmt::Bind` at any depth, and
+every lambda parameter under it. A name the declaration binds belongs to the
+local, whatever the fixpoint says about a top-level constant sharing it.
+
+The set is deliberately over-wide and does NOT model scope — a name bound
+anywhere in a declaration shields it everywhere in that declaration. The cost
+of being loose this way is a refusal not made rather than one made wrongly,
+which is the side to be loose on: the run still names the fault, and since
+#1090 it names it identically on all three engines.
+
+WHERE THE LINE FALLS NOW:
+
+    io/write "one" >> x        x = 2 at top level     compile error, with a span
+    io/write "one" >> twice    twice is a fn, arity 1  runtime, as before
+    naturals >> first          both are locals         runs
+
+The middle row is why #1090's runtime guard is still load-bearing and why
+a_wall_whose_right_side_is_a_function stays in the runtime corpus: `returns` is
+keyed by (name, arity) and a bare `twice` is arity zero, which that map has no
+row for. The first row's fixture moves to the error corpus, which is what
+catching it earlier means.
+
+The guard program is at tests/golden/micro/a_wall_whose_name_is_a_local, with a
+shadowed stdlib name on each side of the wall. It was written and watched
+refused before the fix existed, which is the only order in which it proves
+anything.
