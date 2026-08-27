@@ -49,52 +49,52 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso #1027 — the history row is checked on the way out, and before a merge.**
-The second half of the interpolation miscompilation: `docs/numbers.html` had
-two trend series and two panel sections empty for months because five groups of
-counter keys were being run together into one key each, and `site_smoke` could
-not see it because its fixture is hand-written and supplies the keys itself.
-`perf_record` now checks its output against the same lists it checks its inputs
-against, and the step that builds the row runs on every pull request instead of
-only after a merge. That promotes the perf-history job out of the ratchet's
-unproven list.
+**A stack of three, bottom to top: #1077, #1078, #1079.** Each merges on green
+and the two above it are rebased; /tmp/restack.sh and task #71 hold the
+procedure and the traps.
 
-## What landed on 2026-08-25
+They are one arc, and it is about a gate that could not see what it was gating.
+The diagnostic-coverage scan keyed on `Diagnostic::new(`. The compiler writes
+errors three ways, and the other two were outside it entirely: the loader and
+driver's plain `error: ` text, and `error[kind]: ` written as plain text, which
+is what a RENDERED diagnostic looks like. **84 → 109 literal
+diagnostics.** #1077 turned two ratchet excuses into mutations; #1078 pinned
+four loader refusals by hand on the module surface, because the gate could not
+reach them; #1079 makes the gate reach them.
 
-    kanso ca5dc614  #1026  four gavels, the archaeology, the residual list,
-                           a miscompilation, and the band gavel built
+## What landed on 2026-08-26 and 27
 
-**Four gavels reached the record** — no tolerance bands, a demanded knot counts,
-a build hole is spelled `_`, and `>>` stops at the first run-time failure
-(which was never open; July's B ruling had answered it).
+    kanso 32d29a05  #1075  two of the ratchet's excuses were to-do notes
+    kanso 82a90a07  #1074  the page owes an entry: a gate's exceptions are claims
+    kanso 56fd2ef9  #1072  the check a retired convention left behind
+    kanso 480ab566  #1071  three diagnostics the coverage gate could not see
 
-**The band gavel is built.** `bench/compile_memory_golden.txt` is exact for the
-host its `measured-on` line names, and the figure corrected to the runner's
-864,300 — not the 872,061 the ruling recorded, which predated twelve merges.
-Welfare 84.87 to 84.89, banked. The gate had carried no ratchet mutation at
-all, which is how it could rot; it has two now.
+**The through-line is a claim written from reading the source and never
+tested**, and four of them were wrong. The coverage gate's twelve-character
+floor hid three reachable, unpinned messages. An excuse claiming an indented
+top-level line is always taken by another rule holds only when a declaration
+precedes it. `check_unused_private` walked every declared function and type on
+every compile asking whether the name began with an underscore, which the lexer
+had stopped allowing — it could not answer yes, and the deletion cost 7,495
+front-end instructions. Three ratchet excuses were readings rather than
+measurements; running the browser sweep in a detached worktree refuted two of
+them, and `tests/playground.rs` reading `docs/play.js` refuted the third.
 
-**A miscompilation, found from a symptom.** An interpolation seeded by a
-captured parameter shared one buffer across map iterations, so native printed
-`["abc" "abc" "abc"]` where the oracle printed `["a" "b" "c"]`. The first fix
-was too broad and cost pendbench 2% for no correctness; the parser already drew
-the distinction, between a lambda applied where it stands and one handed to a
-consumer. Final cost 727 front-end instructions.
-
-**Three results recorded so they stay recorded**: the lexer's names cannot move
-into the AST (declined, with the reason, on the compiler page); `valid_utf8` is
-cancelled by the gavel that superseded the plan carrying it; and the interner's
-churn is measured — wide in count, narrow in kind.
+**Also landed**: the qualified-name clone measured (#1063), eight programs'
+emitted code counted (#1064), one cell of five with two wrong answers on the way
+(#1066), four acceptance tests that had quietly started passing (#1067), a file
+module that could be imported and could never import (#1068), and two questions
+the residual sweep could not see because each lived in a test (#1069).
 
 ## Next
 
-**The read half of gavel 1b** is the largest remaining piece, and it is sized
-rather than guessed: a field the WRONG type declares is caught at run time, not
-before, because `Set` in src/infer.rs is fourteen kind bits with no type
-identity. The work is a per-expression record-type set, sourced at constructors
-and carried by the fixpoint the value sets already use. It closes a correctness
-gap older than the privacy question — the doctrine says this language refuses
-before anything runs, and `has no field` does not.
+**The wasm engine's own refusals are pinned nowhere** (task #77), found by the
+same method one surface further out: it writes `Err("...")` strings, which none
+of the three openers reaches. `the playground has no stdin` and the wasm twin of
+`main is not an io` appear nowhere but inside the compiled `docs/kanso.wasm`.
+Whether the answer is a fourth opener or spelling them like the others is an
+open question the build should settle by looking at what the browser shows.
 
-**kanso#985** is the implementation of gavel 1b's json half, not a decision.
-One log conflict from ready; `merge-tree` says everything else applies cleanly.
+**The read half of gavel 1b has shipped** — a field the wrong type declares is
+refused at compile time now (`src/check.rs:1449`), not left to run time. This
+file called it the largest remaining piece for two days after it landed.
