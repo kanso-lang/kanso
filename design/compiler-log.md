@@ -3430,3 +3430,23 @@ The guard program is at tests/golden/micro/a_wall_whose_name_is_a_local, with a
 shadowed stdlib name on each side of the wall. It was written and watched
 refused before the fix existed, which is the only order in which it proves
 anything.
+
+AND THE WALK MISSED A THIRD BINDER, which the whole suite was green over.
+Reading the new code against the `Expr` enum rather than against itself: three
+variants bind names — `Lambda` its parameters, `Block` and `Build` their
+statements — and a fourth, `Guard`, carries a statement list of its own in
+`rest`. A binding that follows a `return` line lives there rather than in a
+block, so this was refused:
+
+    pub fn go n
+      return io/write "early\n" if n < 0
+      naturals = io/write "one\n"
+      naturals >> io/write "two\n"
+
+73 test binaries passed with that gap in place, because no fixture in the tree
+binds a shadowing name inside a guard. The corpus cannot catch what it does not
+contain, and the enum can: a walk that collects binders is complete or it is
+not, and the way to find out is to read it against the list of things that
+bind. The fixture covers all three forms now, and was watched red with the
+`Guard` arm removed — `left: ""` where the golden wants four lines, because the
+program no longer compiles.

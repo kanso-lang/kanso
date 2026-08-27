@@ -1,13 +1,22 @@
 import "std/io"
 import "std/list"
 
-# The case a bare-name refusal must not take, on BOTH sides of the wall.
-# `list/naturals` and `list/first` are bare-enrolled and both answer plain
+# The case a bare-name refusal must not take, in the three places a name can
+# be bound. `list/naturals` and `list/first` are bare-enrolled and answer plain
 # values, so a check that asked the fixpoint what the NAME returns would refuse
-# this — and it is a working program. The locals shadow the imports, which
-# check.rs:1085 allows on purpose: "the enrollment must never make every stdlib
-# export a forbidden binding name."
+# every line below — and this is a working program. The locals shadow the
+# imports, which check.rs:1085 allows on purpose: "the enrollment must never
+# make every stdlib export a forbidden binding name."
+#
+# The third arm is why this fixture has a guard in it. A binding that follows a
+# `return` line lives in `Expr::Guard`'s own statement list rather than in a
+# block, and a walk that knew only blocks refused this program.
+pub fn guarded n
+  return io/write "never\n" if n < 0
+  naturals = io/write "three\n"
+  naturals >> io/write "four\n"
+
 pub play =
   naturals = io/write "one\n"
   first = io/write "two\n"
-  naturals >> first
+  naturals >> first >> guarded 1

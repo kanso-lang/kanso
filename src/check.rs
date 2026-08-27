@@ -3163,7 +3163,14 @@ fn check_wall_operands(
             Expr::Lambda { params, .. } => {
                 into.extend(params.iter().map(|(name, _)| name.as_str()));
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            // Guard carries its own statement list. Leaving it out refused
+            // a working program: a binding after a `return` line is in `rest`
+            // rather than in a Block, so the name looked like the stdlib
+            // constant it shadows. Found by reading this walk against the Expr
+            // enum and then writing the program, which is the only order that
+            // settles it — the whole suite was green with the gap in place,
+            // because no fixture bound a shadowing name inside a guard.
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) | Expr::Guard { rest: stmts, .. } => {
                 for stmt in stmts {
                     if let Stmt::Bind { pattern, .. } = stmt {
                         collect_pattern_names(pattern, into);
