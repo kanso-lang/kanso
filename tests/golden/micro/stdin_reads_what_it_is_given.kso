@@ -1,0 +1,6 @@
+import "std/io"
+
+pub play = io/stdin . announce
+
+pub fn announce text
+  print "stdin reads {length text} bytes"

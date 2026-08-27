@@ -2677,6 +2677,50 @@ binary and answers 58,154,705. The 1.49s was real: `main.rs` is a thin crate
 over the library, so relinking it is fast. **A build time that looks too short
 is a thing to check, not a thing to conclude from.**
 
+## 2026-08-27 — three things a page does that no program ever asked it to do
+
+`tests/golden/wasm_gaps.txt` is where a page's divergences are stated once and
+checked twice — tests/wasm_engine.rs under the embedded interpreter, and
+scripts/browser_differential_run under headless Chrome. It covered the
+filesystem and the process families, each with programs naming them.
+
+Three capabilities had no program at all, on either harness: `io/stdin`,
+`os/args`, `time/now`. Nothing in the micro or runtime corpus read any of them.
+So three things a page does went unchecked, and writing the programs found that
+all three do something other than what the source says.
+
+**`io/stdin`.** src/wasm.rs and src/wasm_rt.rs each carry `Err("the playground
+has no stdin")`, written separately, meant to decline by name the way the
+filesystem and process refusals do. Neither fires. A page answers
+`error[runtime]: unknown builtin `stdin``, so it reports a missing BUILTIN
+where every other declined capability reports a missing capability, and the
+sentence written for the case has never been reached by anything.
+
+**`os/args`.** Declared `pub args = builtin_args`, exactly the shape `stdin`
+has, and it answers the same way: `error[runtime]: unknown builtin `args``.
+Native and the interpreter both answer the empty list. A page honestly has no
+arguments and could say so; it says something else.
+
+**`time/now` is not a defect, and checking that is what kept the finding
+honest.** A page reads zero deliberately — "no clock the differential could
+agree on", said in a comment in both engines since they were written. My first
+reading of the other two was that every zero-argument builtin descriptor is
+routed through `call_builtin` in the compiled runtime and so cannot reach the
+executor. `now` disproves it: same declaration shape, and it REACHES the
+executor and gets the designed zero. Whatever routes `stdin` and `args` into
+`unknown builtin` is narrower than the class, and finding it is the next step
+rather than a thing to assert here.
+
+What ships is three micro fixtures and three ledger entries, each recording what
+the engine does rather than what it should — the file's own rule, and the reason
+a fix turns the line red. `io/stdin` at EOF and `os/args` with none are both
+deterministic and identical on native and `--interp`, which is what those
+fixtures pin for the two engines that work.
+
+    PASS  327 agree, 10 known gaps, 0 disagree   (browser, headless chrome)
+    7 passed                                     (tests/wasm_engine.rs)
+    micro corpus green on native and --interp
+
 ## 2026-08-27 — the kq row's excuse was wrong about the mechanism
 
 The ratchet's rule is that every CI job carries a mutation that turns it red,
@@ -2732,3 +2776,4 @@ The mutation is written with `sed` rather than a heredoc because
 `scripts/gates/python_free.sh` exists precisely to catch python creeping back
 in through mutation heredocs, and it names that as the history. I wrote the
 python version first and the gate would have caught it.
+
