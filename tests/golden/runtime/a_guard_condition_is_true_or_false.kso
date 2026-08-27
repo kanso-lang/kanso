@@ -1,0 +1,14 @@
+# `return x if cond` and `if c a b` are one question — whether a value is true
+# or false — and for a while they were three answers. The interpreter said `a
+# return condition`, native said `an if condition` because a guard lowers to
+# the same `k_truthy`, and the page said `if takes a bool condition (got "7")`,
+# quoted. The `if` token is in the source either way, so the guard borrows the
+# sentence the other three sites already share.
+pub fn opaque v
+  v
+
+pub fn pick n
+  return "early" if opaque n
+  "late"
+
+pub play = print "{pick 7}"
