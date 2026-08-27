@@ -4215,7 +4215,10 @@ than read:
     excuse. A `set` target must be a construction born in the same `build`
     block, so it is bound and it is a record. `_ = ...` and `7 = ...` are both
     `expected a binding name or type`, so the bind-pattern catch-all is
-    unreachable. `list/select` routes its predicate through `if`. A mixed-type
+    unreachable. The `filter` builtin has no caller: it is not one of
+    check.rs's 55 BUILTINS, `lib/list` writes `select` as a fold in kanso, and
+    `builtin_filter` by hand is refused by name — what a program meets for a
+    non-bool predicate is `list/select`'s own `if`. A mixed-type
     `sort` is refused by `comparison requires two values of one comparable
     type`. `builtin_nope` outside the standard library is refused by name. And
     `Value::TableFn` is built only in wasm_rt.rs, which installs the way back
@@ -4232,3 +4235,39 @@ fixtures, an excuse list and this entry — so the compiler binary is identical
 and no vein has anything to move. The entry above is why that sentence is
 written this way: it claimed "nothing measurable" about a change that DID edit
 Rust, and the front end moved 138 instructions on string alignment alone.
+
+## 2026-08-27 — the excuse named one barrier and there were two
+
+The last entry left the scan reading five openers over four file types, and one
+excuse on the list still said a message was pinned somewhere the scan could not
+look:
+
+    PINNED, BUT NOT WHERE THIS SCAN LOOKS. docs/book/samples/ch02/overflow.out
+    holds this text exactly ... The scan's corpus takes `.stderr` files only,
+    so it cannot see a `.out`. Widening it to `.out` would also admit every
+    micro golden and needs its own look at false pins.
+
+The look was taken, on each axis alone, because the excuse names one and there
+are two. The corpus walk starts at `tests/golden`, and the file it cites is
+under `docs/`.
+
+    admit `.out`, root still tests/golden      0 now pinned
+    walk docs/book/samples, `.stderr` only     0 now pinned
+    both                                       2 now pinned, 0 false
+
+Neither change does anything alone, which is the whole finding: the extension
+was half the barrier and the directory was the other half, and an excuse that
+named only the first would have kept the citation forever.
+
+THE SECOND PIN WAS NOT LOOKED FOR. `main is not an io; there is no plan to
+show` was excused a few lines up as pinned only by a Rust test — and
+docs/book/samples/ch05/quiet_plan.out is that whole sentence and nothing else.
+Two entries left the list for one change.
+
+THE WORRY WAS MEASURED AND IS EMPTY. `.out` does drag in all 153 micro goldens,
+and they pin nothing: those files hold what a program PRINTS, and a printed
+line would have to match ten characters of a diagnostic exactly to read as a
+pin. The four false pins on record all came from tests/*.rs — doc comments and
+`assert!` strings — which is a different kind of file from a program's output.
+
+COST: none. No `.rs` and no `.c`; the scan is a kanso program CI runs.

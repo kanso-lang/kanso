@@ -392,8 +392,26 @@ fn source? name
 fn c_source? name
   text/slice name (length name - 1) (length name) == ".c"
 
+# TWO CHANGES THAT DO NOTHING APART AND SOMETHING TOGETHER. `integer overflow`
+# and `main is not an io` are each pinned exactly — a whole diagnostic, alone in
+# its file, in a book sample the CI job executes and diffs. The excuse list said
+# the barrier was the extension. It was the extension AND the directory, and
+# each was measured alone before both went in: admitting `.out` while the walk
+# still started at tests/golden pinned nothing, because the 153 `.out` files
+# there hold program stdout rather than diagnostics; walking docs/book/samples
+# while `pinned_file?` still took `.stderr` pinned nothing either, because the
+# samples write theirs to `.out`. Both together pin exactly those two, and no
+# third.
+#
+# The worry on record was that admitting `.out` would drag in every micro
+# golden. It does, and that costs nothing: those files are what a program
+# PRINTS, and a printed line that happens to read as a diagnostic would have to
+# match ten characters of one exactly.
 fn pinned_file? name
-  text/slice name (length name - 6) (length name) == ".stderr"
+  text/slice name (length name - 6) (length name) == ".stderr" or out_file? name
+
+fn out_file? name
+  text/slice name (length name - 3) (length name) == ".out"
 
 fn kind_of pair
   (text/split pair "\n")[1]!
@@ -437,7 +455,13 @@ fn more_sources rest found src
 
 fn gathered found
   every = deduped (list/to_list (list/sort found))
-  corpus_of "tests/golden" [] . (parts -> with_tests every parts)
+  corpus_of "tests/golden" [] . (parts -> with_samples every parts)
+
+# The book's samples are a corpus too: every panel is executed and its output
+# diffed by the book-samples job, so a diagnostic pinned there is pinned as
+# hard as one in tests/golden.
+fn with_samples every parts
+  corpus_of "docs/book/samples" parts . (grown -> with_tests every grown)
 
 # TWO corpora, because the two openers are pinned in different places and a
 # substring search cannot tell an assertion from a mention.
