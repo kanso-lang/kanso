@@ -2877,6 +2877,13 @@ anything the spec meant to test. Reproduced here by pointing `TMPDIR` at a path
 of the same length — 91 characters, and red. The fixture uses a relative path
 and runs from its own directory now, and passes under that `TMPDIR`.
 
+Swept for others rather than assumed unique. Six tests write generated kanso
+source; the other five interpolate expressions and numbers, whose length does
+not move with the host, and the ten path interpolations elsewhere in `tests/`
+are environment variables, panic messages and one stderr rewrite — none of them
+reaches a line the compiler will measure. So this was the only one, and there
+is no gate here worth building.
+
 The design question — whether `read_file` is byte-transparent on every engine,
 or text-only with a bytes reader beside it — is filed in
 design/pending-gavels.md. Today the library has one reader and no way to say
