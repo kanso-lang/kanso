@@ -255,6 +255,21 @@ counters already say how much is copied and when the number moves, and
 nobody has yet asked which line did it. Span plumbing through the carry
 machinery is a fortnight of work for a question that has not come up.
 
+### The book teaches the boundary language (queued P1, Clay 2026-08-26)
+
+Clay's directive after re-deriving the no-explicit-bind design from
+the log a second time: the call-site story must live in the book, high
+priority. Half one is DONE (ch04 "nothing is asked of the signature",
+2026-08-26): the err half, present tense — short-circuit at the call,
+nothing forced on signatures, one function for both call sites. Half
+two is GATED on the elaborator build: teaching signature-directed
+lifting for effects (`retry (fetch url)` unmarked, binds inserted at
+value-demanding positions, collapse at io) — the book speaks in the
+present tense, so this half lands with the elaborator, not before.
+The assembled argument for why the combinator words stay off the
+surface is compiler.html entry 23; the open dispatch-vs-elaborator
+question above decides only the machinery, not this surface.
+
 ### An assert hako
 
 **Cited: the licence half is ruled — archive 2026-08-17, assertions are

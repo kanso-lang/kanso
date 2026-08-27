@@ -63,6 +63,37 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 
 <p>the err built the report as it traveled. the first line is the reason. the second is the birthplace—function, file, line—baked in at the moment of failure. the third is the trace: every function the err rode past, newest on the left, so <code>receipt ← with_tip</code> reads "past <code>with_tip</code> first, then past <code>receipt</code>." in a language where failure never unwinds a stack, the trace is how the stack story survives—carried on the value itself, printed only if the err makes it all the way out.</p>
 
+<h2>nothing is asked of the signature</h2>
+
+<p>readers arriving from languages with checked exceptions or result types usually ask the same question here: if a failure can show up in an argument, doesn't the function's signature have to say so? if i pass an err as one of five arguments, is the function now forced to return one? the answer is no, and the reason is where the accommodation happens. the call short-circuits before the body runs, so the function never receives the failure&#8212;and a function that never receives one has no signature to infect. err-in, err-out is a fact about calls, not a contract anybody writes or a checker enforces.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">unasked.kso</div>
+  <pre><code><span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> (<span class="f">price</span> <span class="s">"soup"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> (<span class="f">price</span> <span class="s">"flan"</span>))
+
+<span class="k">fn</span> <span class="f">price</span> <span class="s">"flan"</span>
+  <span class="f">err</span> <span class="s">"flan is seasonal"</span>
+
+<span class="k">fn</span> <span class="f">price</span> _
+  <span class="n">450</span>
+
+<span class="k">fn</span> <span class="f">label</span> dish cents
+  <span class="s">"<span class="i">{dish}</span>: <span class="i">{cents}</span> cents"</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso play unasked.kso</div>
+  <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "flan is seasonal"
+  born in price at unasked.kso:5
+  passed through label
+soup: 450 cents</code></pre>
+</div>
+
+<p><code>label</code> takes two arguments. on the first line both are values and it runs; on the second, one of the two is a failure, so the call answers the failure and the body never starts&#8212;the trace says <code>passed through label</code>, which is the language reporting exactly that. one function, compiled once, serving both lines. nothing about <code>label</code> changed to make the second line legal, and nothing could: there is no annotation to add, no wrapper type to return, no <code>?</code> to sprinkle. the plumbing that other languages ask every signature to carry is done once, at every call site, by the rule itself.</p>
+
+<p>when more than one argument fails, a call keeps the first failure; an operator keeps both, because neither operand caused the other. the full accounting of what each construct does with an arriving failure&#8212;which merge, which take the first, which hold, which pass through&#8212;is a pinned table on the compiler page, and every row of it is a fixture that runs on all three engines.</p>
+
 <h2>no arm can catch it</h2>
 
 <p>chapter 03 taught you that dispatch is the only switch, so your first instinct is to write an arm for the err. that instinct is exactly what kanso refuses. an err is not one more shape for dispatch to consider—it rides past the entire overload group, including the catch-all arm that answers for everything else in the language:</p>
