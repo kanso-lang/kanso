@@ -3621,3 +3621,48 @@ drained — the running session hands off to a successor. A session
 started now inherits the merged .claude/settings.json and autoMode
 policy and runs silent. Write the handoff into STATUS.md as usual;
 nothing else transfers, because the repo already carries everything.
+
+## 2026-08-26 — gavel: three explicit forms, and the err travels whole
+
+Clay ruled the spelling rider in dialog, and went past the
+recommendation. The recommendation kept the chain err-arm as annotate's
+surface; his insight killed it: "since you want to be able to handle an
+error in two different ways, you need the explicit rescue either way —
+and that kind of makes me think we should just be symmetrical and have
+all three forms explicit. which certainly simplifies things drastically
+despite requiring a bit more verbiage." And the refinement: "annotate
+and rescue should just pass the actual error, so that you can still use
+polymorphic dispatch."
+
+The ruling:
+
+- **Three explicit forms.** `.` stays bind — it is the gaveled monad
+  and already unambiguous. `annotate` and `rescue` become explicit
+  chain steps, and the chain err-arm retires: the failure channel is
+  fully spelled, never inferred from an arm's shape.
+
+      io/read_file path
+      . (text -> json/parse text)
+      annotate (e -> "config: {e.reason}")
+      rescue when_failed
+
+- **The callback receives the err itself**, not an unwrapped reason —
+  so a dispatch group is a legal callback and its arms match reason
+  types polymorphically, subtype rung and all. `rescue when_failed` is
+  the whole generic-rescuer story; nothing special is written for it.
+- **Annotate cannot resurrect, by construction.** Its result is always
+  re-wrapped as err with the original as cause, whatever the callback
+  returns. The old "an err arm must answer an err" rule is not checked;
+  it is unspellable.
+- **Rescue is the sole door**, and the foreign-only license is checked
+  at the word — the site enumeration gavel 1 wanted, made trivial by
+  the explicit spelling. Own-origin errs skip its arms at match time
+  per the enforcement gavel of 2026-08-25.
+- **Migration is mechanical**: every chain err-arm in the fleet becomes
+  an `annotate` step; the book's ch08 teaching moves with it.
+
+The rider leaves the ledger with this commit; the construction-
+enforcement rider beneath it was already recommended struck and falls
+with the same reasoning — provenance is computed, the doctrine line
+retires. The assert hako's design pass unblocks: failures now have
+their spelled surface.

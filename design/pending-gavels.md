@@ -54,39 +54,6 @@ Nothing. The section stays so the next entry has somewhere to land.
 
 ## Open, not blocking
 
-### Riders under the err gavel (the three-combinator model, 2026-08-15)
-
-**Cited: gavel 1, archive 2026-08-15, listed six riders. Four have since
-closed — the test surface (archive 2026-08-17, assertions are ordinary
-foreign rescue), ch08's pedagogy (scoped into the 1b migration, archive
-2026-08-17), and the three small July spellings (archive 2026-08-19, "the
-July spellings"). These two are what remain.**
-
-- **Spelling**: names and syntax for annotate and rescue — combinator
-  call vs marked arm on a chain — and whether the existing chain
-  err-arm syntax is annotate's surface (the chain's value arm and err
-  arm are bind's and annotate's callbacks already, spelled as dispatch
-  arms).
-
-  **RECOMMENDATION: the existing err arm IS annotate's surface, and
-  `rescue` gets the one new word.** Two of the three combinators already
-  have a spelling that programs use and the book teaches; minting names
-  for them would be a migration that buys a symmetry nobody asked for.
-  Rescue is the licensed door and the only one a reader needs to
-  recognise on sight, so it earns a keyword of its own.
-
-- **Construction enforcement**: reason building module-private is
-  stated by the doctrine, unnecessary for soundness now that provenance
-  is computed, and unenforced.
-
-  **RECOMMENDATION: strike it.** It was the proxy for provenance, and
-  provenance is computed (archive 2026-07-28, "Clay: build it
-  correctly"). A rule that buys nothing and costs a fleet migration is
-  doctrine the code has outgrown.
-
-- Downstream of the spelling, not a separate question: the arm-based
-  advisory migrates onto whatever surface is chosen. Implementation.
-
 ### `--explain-copies`
 
 **Cited: part-superseded, archive 2026-07-27 — the counter stack
