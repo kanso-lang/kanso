@@ -1,0 +1,11 @@
+print (label "soup" (price "soup"))
+>> print (label "flan" (price "flan"))
+
+fn price "flan"
+  err "flan is seasonal"
+
+fn price _
+  450
+
+fn label dish cents
+  "{dish}: {cents} cents"

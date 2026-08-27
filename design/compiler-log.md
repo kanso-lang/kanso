@@ -2486,6 +2486,24 @@ second opener would say which is which; that is a separate change, and it wants
 the answer written down rather than guessed, the way the excused list's four
 claims did.
 
+## 2026-08-26 — the book answers the signature question
+
+Clay asked the question every checked-exceptions reader asks — pass a
+failure as one of many arguments, is the function forced to return an
+err? — and on hearing the answer again ruled it book-worthy at high
+priority. ch04 gains "nothing is asked of the signature", between the
+railway and the arm rule: the call short-circuits, so the callee never
+receives the failure and has no signature to infect; err-in err-out is
+a fact about calls, not a contract; one compiled function serves the
+failing and the clean call site alike. The panel is a new sample,
+unasked.kso, whose own trace line — "passed through label" — is the
+language testifying that label never ran. The multi-failure sentence
+points at the compiler page's pinned table rather than re-teaching
+it. The effect half of the same story — call-site lifting by the
+elaborator — stays out of the book until the elaborator exists,
+because the book speaks in the present tense; the queued story
+carries both halves.
+
 ## 2026-08-27 — the driver's refusals are diagnostics too
 
 The coverage gate keys on `Diagnostic::new(`. The loader and the driver write
