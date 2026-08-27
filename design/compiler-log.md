@@ -3582,3 +3582,65 @@ not, and the way to find out is to read it against the list of things that
 bind. The fixture covers all three forms now, and was watched red with the
 `Guard` arm removed — `left: ""` where the golden wants four lines, because the
 program no longer compiles.
+
+## 2026-08-27 — welfare refused the wall check, and it was right to
+
+The bare-name refusal shipped in a form that cost more than it was worth, and
+the objective said so before any reviewer could.
+
+    compile_allocs        61,981 -> 62,518    +537   (+0.87%)
+    compile_instructions  57,489,753 -> 58,148,592  +658,839  (+1.15%)
+    compile_peak_bytes    822,004 -> 822,004        0
+    welfare               84.12 -> 84.06, against a floor of 84.12
+
+The rise was real work and it was measured as such rather than guessed: main
+was built and measured on THIS host beside the branch, because the golden was
+taken on a different rustc and a branch-versus-golden delta would have mixed
+the change with the toolchain. Allocations moved because the walk collected the
+names every declaration binds; peak did not, because each set is transient.
+
+WHAT THE FLOOR IS FOR. `welfare --set` cannot lower it — ruled 2026-08-03 —
+and the file's own rule is that a fall means the change is worse by the
+project's stated preferences, so either the change goes or the argument is
+about the WEIGHTS. There is a third answer when the price is avoidable, and
+here it was. The walk collected names for every declaration; most hold no wall
+at all. The set is built on the first `Seq` the existing walk meets now, so a
+body with no wall pays nothing and the traversal is the one that was already
+happening.
+
+    compile_allocs        61,981   identical to main
+    compile_peak_bytes    822,004  identical to main
+    welfare               84.12, exactly the floor
+
+The refusal still fires and the shadowing programs still run — all three were
+re-checked after the change, not assumed to survive it.
+
+The reading worth keeping is what the number did. A 0.06 fall is far below what
+anyone would notice by eye, on a change whose behaviour is plainly an
+improvement, and the honest first move was to write the attribution and bank
+it. The floor made the cheaper implementation the thing to look for instead.
+That is the whole of what a single scalar over runtime and compile cost is for.
+
+## 2026-08-27 — a docs check silenced the allocations vein
+
+Found while reading the cost-goldens job log for the number above, and it is a
+gap of the kind the project's own rule names: movement is fine, silence is not.
+
+`compile allocations` was the ONE counter step in that job without
+`if: always()`. Every sibling has it — one-shot, basket, compile instructions,
+compile memory, encode. So when an earlier step fails the job outright, that
+step alone is skipped, and the summary loop at the end fails only on `failure`
+and reads `skipped` as nothing to report.
+
+The chain on this run, from the log rather than from reasoning:
+
+    page_drift FAILED       the log was 4 entries ahead of a budget of 3
+    one-shot   if: always   ran
+    basket     if: always   ran
+    compile allocations     SKIPPED
+    compile instructions    ran, failed, reported its number
+
+So a docs-freshness budget took down the gate whose golden header calls it
+"the traffic the front end makes, which no other gate can see". Allocations
+rose 537 on that run and the job said nothing about it. The step has
+`if: always()` now, with the reason written beside it.

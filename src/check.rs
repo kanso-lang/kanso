@@ -3189,20 +3189,14 @@ fn check_wall_operands(
         if decl.synthetic {
             continue;
         }
-        let mut bound: crate::hash::Set<&str> = Default::default();
-        for param in &decl.params {
-            collect_pattern_names(param, &mut bound);
-        }
-        for stmt in &decl.body {
-            if let Stmt::Bind { pattern, .. } = stmt {
-                collect_pattern_names(pattern, &mut bound);
-            }
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    bound_under(expr, &mut bound)
-                }
-            }
-        }
+        // Built on the first wall this declaration holds, and not at all for
+        // the many that hold none. Collecting for every declaration cost 537
+        // allocations and 659k instructions on `kanso check lib/json`, which
+        // took welfare 0.06 UNDER its floor — the objective saying the change
+        // was not worth its price as written. Deferring it is the answer, and
+        // it costs nothing extra: the walk below already looks for the wall,
+        // so the set is built exactly where the question is first asked.
+        let mut bound: Option<crate::hash::Set<&str>> = None;
         for stmt in &decl.body {
             let root = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -3211,7 +3205,24 @@ fn check_wall_operands(
             stack.push(root);
             while let Some(cur) = stack.pop() {
                 if let Expr::Seq(lhs, rhs, span) = cur {
-                    if never_describes(lhs, &bound) || never_describes(rhs, &bound) {
+                    let bound = bound.get_or_insert_with(|| {
+                        let mut names: crate::hash::Set<&str> = Default::default();
+                        for param in &decl.params {
+                            collect_pattern_names(param, &mut names);
+                        }
+                        for stmt in &decl.body {
+                            if let Stmt::Bind { pattern, .. } = stmt {
+                                collect_pattern_names(pattern, &mut names);
+                            }
+                            match stmt {
+                                Stmt::Bind { expr, .. }
+                                | Stmt::Expr(expr)
+                                | Stmt::Set { value: expr, .. } => bound_under(expr, &mut names),
+                            }
+                        }
+                        names
+                    });
+                    if never_describes(lhs, bound) || never_describes(rhs, bound) {
                         diags.push(Diagnostic::new(
                             "type",
                             "`>>` sequences two effects, and this side answers a \

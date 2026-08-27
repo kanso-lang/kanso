@@ -1192,6 +1192,32 @@ v:none    past  past
 
 <p>an exception in a gate is a claim about the program, and a claim here gets a program written to break it.</p>
 
+<h2 id="greensuite"><span class="sec-num">25</span>what a green suite is evidence of</h2>
+
+<p>four bugs in one day shared a shape, and none of them was in code nobody ran. every one sat in a function the corpus exercises on almost every test: <code>os/exit</code>, <code>io/write_err</code>, the wall. what was wrong in each case was the endpoint around the call &#8212; what the exit code carries, which stream the bytes land on, which sentence names the fault, which side of a wall was judged &#8212; and in each case a golden pinned the FAILURE and nothing pinned the success.</p>
+
+<p><code>os/exit</code> is the clearest. one fixture in the tree touches it, and it hands the function something that is not a status, so the corpus pins the refusal. what a deliberate exit does &#8212; carry its code out and say nothing &#8212; was pinned on no engine, and the page&#8217;s endpoint had never learned to read one. a program calling <code>os/exit 3</code> printed <code>unhandled err reached the executor</code> at its reader and answered 1. three of the four endpoints already knew better; the fourth was the only one nobody had written a program for.</p>
+
+<p>the corpus walk would have caught it on the first run. it compares text and exit code against native for every program in three directories, and so does the browser harness. there was no program to run. that is the whole of the explanation, and it generalises: a corpus is evidence about the programs it contains and about nothing else.</p>
+
+<p><code>io/write_err</code> is the same shape one turn quieter. its fixture writes to the diagnostic stream between two writes to the ordinary one, and carries a golden for stdout only. the stdout golden does prove the diagnostic line never went to stdout, and the differential does prove the engines agree on the two streams concatenated. neither holds the bytes. drop the write on all four writers at once and both facts still hold. agreement between engines is a weaker thing than a pin, and the difference only shows up in the case where every engine is wrong together.</p>
+
+<p>the reflex after three of these was to gate the other direction. one harness already walks every <code>pub fn</code> in the library and hands each one arguments of the wrong type, on all three engines; nothing walks the surface asking what a correct call does. finding the exports no program calls looked like the obvious next build. there are none &#8212; a hundred of a hundred are reached. the first answer was twenty-four.</p>
+
+<pre><code>qualified name only, across the corpus dirs     24 uncovered
+plus the bare-enrolled form                      1 uncovered
+plus intra-library calls                         0 uncovered</code></pre>
+
+<p>eight of the nine survivors of the second pass are written by their bare name after an <code>import "std/list"</code>, which is how a program normally writes them. the ninth runs on every string a json encode touches. a name here has two written forms, and the twelve-character floor of the previous section was the same mistake in a different dress: both searches were measuring their own reach rather than the tree.</p>
+
+<p>the fourth bug is where a green suite failed most completely. a bare name on either side of a wall reaches the run, because the check refuses literals and direct calls and a name is neither. teaching it about names is one line &#8212; the fixpoint answers a name at arity zero exactly as it answers a call &#8212; and that line refuses a working program, because a local may shadow a bare-enrolled import and the fixpoint&#8217;s row is the import&#8217;s. so the check takes the set of names the declaration binds, and asks the fixpoint only about names nothing nearer owns.</p>
+
+<p>that walk shipped with three of the four binding forms. <code>Lambda</code> binds its parameters, <code>Block</code> and <code>Build</code> bind through their statements, and <code>Guard</code> carries a statement list of its own, so a binding written after a <code>return</code> line was invisible and its program was refused. seventy-three test binaries passed over it. no fixture in the tree binds a shadowing name inside a guard, so no amount of running the suite could have said anything about the case.</p>
+
+<p>reading the walk against the <code>Expr</code> enum said it in a minute. the enum is a finite list of the things that bind, and checking a collector against that list is a question with an answer, where running a suite is a sample. the suite is worth more on almost every other question; on this one it was worth nothing, and it was green.</p>
+
+<p>a golden earns its place by pinning text rather than outcome, and the same day showed why. removing the arm that refuses a bare name does not make the fixture&#8217;s program compile &#8212; it fails later, at run time, with a different sentence. a spec asserting that the program failed would have stayed green through the whole change.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
