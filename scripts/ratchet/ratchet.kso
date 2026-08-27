@@ -390,6 +390,22 @@ coverage = row
   (breaking "a_diagnostic_arrives_without_a_golden")
   release
 
+decoder = row
+  "a json decoder that reads something other than the document"
+  true
+  "sh scripts/gates/native_checksum.sh"
+  "json decoder end-to-end (native, 150 decodes)"
+  (breaking "a_decoder_that_answers_a_wrong_checksum")
+  release
+
+validator = row
+  "a utf-8 validator the independent reference disagrees with"
+  true
+  "./target/release/kanso run scripts/utf8_differential"
+  "utf-8 validator (differential vs an independent reference)"
+  (breaking "a_validator_the_reference_disagrees_with")
+  release
+
 coverage_floor = row
   "a diagnostic whose literal run is the shortest the scan will keep"
   true
@@ -434,7 +450,7 @@ rows_c1d = text/concat rows_c1c [numeric effects]
 
 rows_c1e = text/concat rows_c1d [modules coverage]
 
-rows_c1f = text/concat rows_c1e [coverage_floor]
+rows_c1f = text/concat rows_c1e [coverage_floor decoder validator]
 
 rows_c = text/concat rows_c1f [dispatch itself]
 
@@ -450,14 +466,6 @@ no_row_a = unproven
 no_row_b = unproven
   "playground examples (every engine)"
   "the same corpus and engines as `specs`, so a row proves the corpus"
-
-no_row_c = unproven
-  "json decoder end-to-end (native, 150 decodes)"
-  "wants a decoder answering a wrong checksum, so a mutation to lib/json"
-
-no_row_d = unproven
-  "utf-8 validator (differential vs an independent reference)"
-  "wants a validator the independent reference disagrees with"
 
 no_row_e = unproven
   "asset digests (every reference rewritten, site still runs)"
@@ -475,13 +483,11 @@ no_row_h = unproven
   "browser differential (three engines, byte-identical, headless chrome)"
   "needs headless chrome in the scratch worktree"
 
-unproven_a = [no_row_a no_row_b no_row_c]
+unproven_a = [no_row_a no_row_b no_row_e]
 
-unproven_b = [no_row_d no_row_e no_row_f]
+unproven_b = [no_row_f no_row_g no_row_h]
 
-unproven_c = [no_row_g no_row_h]
-
-unproven_jobs = text/concat unproven_a (text/concat unproven_b unproven_c)
+unproven_jobs = text/concat unproven_a unproven_b
 
 workflow = ".github/workflows/ci.yml"
 

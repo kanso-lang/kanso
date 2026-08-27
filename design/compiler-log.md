@@ -2357,3 +2357,36 @@ trend gate, and carried forward a "0 drifted" from a run taken before the
 regeneration. The entry above this one records the same check catching the same
 omission on the same figure four hours earlier. Checking the surfaces from
 memory is the failure; the checklist exists because recall does not work here.
+
+## 2026-08-27 — two of the ratchet's excuses were to-do notes
+
+Every gating CI job carries either a mutation that turns it red or a written
+reason it has none. Eight jobs carried reasons. Six of them name something the
+scratch worktree does not have — headless chrome, a jekyll build, a checkout of
+kq, a second machine. Two named the mutation that had not been written:
+
+    json decoder end-to-end   "wants a decoder answering a wrong checksum,
+                               so a mutation to lib/json"
+    utf-8 validator           "wants a validator the independent reference
+                               disagrees with"
+
+Both are written now, and both were watched red.
+
+The decoder's array accumulator pushes each element twice. Every array in the
+tree doubles, the top level answers three hundred and twenty rather than a
+hundred and sixty, and the checksum reads 48000 where the gate wants 24000. The
+element stays used, so the tree still compiles and the gate fails on the number
+rather than on the build. `lib/json` is what `make_jsonbench` copies, so
+patching the library reaches the built binary.
+
+The validator's ascii prologue walks while the bytes are under 0x80 and answers
+valid if that reaches the end. The bound is what makes it an ascii test.
+Raising it by one admits 0x80 itself, a continuation byte with nothing in front
+of it. The sweep is exhaustive under four bytes, so it reports on the first
+length: `MISMATCH len=1 bytes=80 got=1 want=0`, 330,442 mismatches over
+36,843,009 strings. The mutation sits in the scalar prologue rather than in
+either vector body, so it reads the same on x86 and on arm — a ratchet that
+depends on its host proves less than it claims.
+
+Six excuses remain, and every one of them is a capability the worktree lacks
+rather than work nobody has done.
