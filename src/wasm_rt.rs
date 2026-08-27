@@ -794,6 +794,9 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
 /// Strict indexing: a miss is an err (unlike `at`, whose miss is none).
 #[no_mangle]
 pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
+    if descish(&slot(base)) || descish(&slot(index)) {
+        desc_refusal(INDEXING_TAKES);
+    }
     let idx = val(index);
     match index_value(val(base), idx.clone(), SPAN0) {
         Ok(Value::NoneV) => {
@@ -808,14 +811,50 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
 /// Lenient indexing: a miss is none — the plain `xs[i]` form.
 #[no_mangle]
 pub extern "C" fn rt_at(base: u32, index: u32) -> u32 {
+    if descish(&slot(base)) || descish(&slot(index)) {
+        desc_refusal(INDEXING_TAKES);
+    }
     match index_value(val(base), val(index), SPAN0) {
         Ok(v) => push(Slot::V(forced(v))),
         Err(rt) => die(rt.message),
     }
 }
 
+/// The sentence a site owes when it is handed a description instead of a value.
+///
+/// `val` refuses every slot that is neither a value nor a closure, and it does
+/// so with its own words — so a site that opens with `match val(h)` never
+/// reaches the message it wrote for exactly this case. Three sites did that,
+/// and one of them was `an if condition is true or false`, converged across
+/// all three engines the same morning it was found unreachable here.
+///
+/// The sentence is COPIED from the interpreter rather than produced by handing
+/// it a real `Value::Desc`, and that is deliberate. Building the Desc means
+/// `as_desc`, which demands a deferred right side — and native does not:
+///
+///     xs = [1]
+///     boom = io/write "{opaque xs[5]!}"    # errors if ever evaluated
+///     d = io/write "a\n" >> boom
+///     pub play = print "{(opaque d)[1]}"
+///
+/// answers the index refusal on both native engines, not the out-of-bounds
+/// error, so `boom` is never evaluated. Demanding it here to build a value we
+/// are about to refuse would do strictly more than the oracle does.
+///
+/// The cost is a sentence living in two files. `scripts/diagnostic_coverage`
+/// reads both now, so a drift between the copies is a thing a gate catches.
+const INDEXING_TAKES: &str =
+    "indexing takes a list or string with a 1-based position, or a map with a key";
+
+fn desc_refusal(said: &str) -> ! {
+    die(said.to_string())
+}
+
 #[no_mangle]
 pub extern "C" fn rt_truthy(h: u32) -> u32 {
+    if descish(&slot(h)) {
+        desc_refusal("an if condition is true or false, got <io>");
+    }
     match val(h) {
         Value::True => 1,
         Value::False => 0,
