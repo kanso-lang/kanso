@@ -78,6 +78,10 @@ const RT_FORCE: u32 = 38;
 /// Whether a match may proceed: false only for an err this arm's own hako
 /// raised (gavel 24, clause 1, as dispatch semantics).
 const RT_NOT_OWN_ERR: u32 = 39;
+/// A positional destructuring bind whose value is the wrong shape. It takes
+/// the VALUE as well as the type name, because the sentence names what the
+/// reader bound and only the runtime knows it.
+const RT_DIE_DESTRUCTURE: u32 = 40;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -121,6 +125,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_const", params: 1, returns: true },
         Import { name: "rt_force", params: 1, returns: true },
         Import { name: "rt_not_own_err", params: 2, returns: true },
+        Import { name: "rt_die_destructure", params: 2, returns: false },
     ]
 }
 
@@ -636,9 +641,13 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_CHECK_REC);
                 ctx.body.eqz();
                 ctx.body.if_void();
-                let msg = self.str_lit(&format!("cannot destructure value as `{ty}`"));
+                // The value goes to the runtime rather than a baked sentence,
+                // matching codegen.rs and the interpreter. `v` still holds it:
+                // the local_tee above kept it past the check.
+                let msg = self.str_lit(ty);
+                ctx.body.local_get(v);
                 ctx.body.i32_const(msg as i64);
-                ctx.body.call(RT_DIE);
+                ctx.body.call(RT_DIE_DESTRUCTURE);
                 ctx.body.unreachable();
                 ctx.body.end();
                 for (i, field) in fields.iter().enumerate() {

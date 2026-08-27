@@ -2356,6 +2356,29 @@ KValue k_keyed_check(KValue v, long long entries) {
     return v;
 }
 
+/* The POSITIONAL destructuring bind — `point a b = v` — where `v` is not a
+   `point`. Its keyed sibling above has always rendered the value; this form
+   said `cannot destructure value as ...` and named neither the value nor what
+   to do instead, so the two engines printed different sentences for the same
+   program until 2026-08-27.
+
+   The interpreter's wording is the one kept, because both halves native was
+   missing are worth having: `7` is a value the reader's own program produced,
+   unlike the socket handles in kanso#1094 that kanso hands out, and the clause
+   after the semicolon is the only place the language says why a bind cannot
+   simply fail over to another arm. */
+void k_die_destructure(KValue v, const char* ty) {
+    /* QUOTED, matching `render(self, &value, true)` at eval.rs:1283. Unquoted
+       agrees for an int, a float and a list and diverges on a string — which a
+       fixture holding one int would never have shown. */
+    KValue shown = k_render(v, 1);
+    fprintf(stderr,
+            "%serror[runtime]:%s cannot destructure %s as `%s`; bindings are irrefutable, "
+            "so handle other types by dispatch first\n",
+            k_c_err(), k_c_off(), k_as_str(shown)->data, ty);
+    exit(1);
+}
+
 /* `.` field access: failures ride through; a non-record dies loudly. */
 // A getter group that matched nothing. The reader wrote `x.name`, so the
 // failure is a field error in their words, not a dispatch error in ours.

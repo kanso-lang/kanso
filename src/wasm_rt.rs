@@ -1001,6 +1001,23 @@ pub extern "C" fn rt_die(msg_lit: u32) {
     die(msg);
 }
 
+/// The positional destructuring bind's refusal. It renders the value QUOTED,
+/// the way `render(.., true)` does at eval.rs:1283 and `k_render(v, 1)` does in
+/// runtime.c — unquoted agrees on an int, a list and a float and diverges on a
+/// string, which is the whole reason the fixture holds one.
+#[no_mangle]
+pub extern "C" fn rt_die_destructure(value: u32, ty_lit: u32) {
+    let ty = match val(ty_lit) {
+        Value::Str(s) => s,
+        _ => "that type".to_string(),
+    };
+    let shown = with_interp(|interp| render(interp, &val(value), true));
+    die(format!(
+        "cannot destructure {shown} as `{ty}`; bindings are irrefutable, so handle other \
+         types by dispatch first"
+    ));
+}
+
 #[no_mangle]
 pub extern "C" fn rt_list_len(h: u32) -> u32 {
     match slot(h) {
