@@ -173,6 +173,16 @@ emitted_code = row
   (breaking "emitted_lines_moved")
   benchmarks
 
+# The same gate, the other file. One mutation per golden, because a gate that
+# reads two files and is only ever proved against one is proved for one.
+emitted_others = row
+  "another benchmark's emitted line count moving"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_others_moved")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -394,7 +404,7 @@ rows_b1a = [decode_counters escape_counters pend_counters]
 
 rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
-rows_b1b = text/concat rows_b1 [emitted_code machine_code]
+rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
 
 rows_b1c = text/concat rows_b1b [instructions_host text_host]
 
