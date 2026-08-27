@@ -4347,6 +4347,84 @@ returns true or false, got {}`, `map keys are ints or strings, not {}`,
 COST: no compile vein moves — wasm_rt.rs is not read by `kanso check`, and the
 emitted code is unchanged because the fix removes a branch rather than adding
 one.
+
+## 2026-08-27 — a description was data on two engines and not on the third
+
+`val(h)` answers a value for a value and a handle for a closure, and refuses
+everything else:
+
+    _ => die("a bound description cannot be used as data here")
+
+Four sites read their elements through it, and every one of them was a storing
+position — a list literal, a map literal's values, a builtin's argument pack, a
+record field written in a `build` block. So a description put into any
+container died on the page and rode through on the other two:
+
+    d = io/write "a\n" >> io/write "b\n"
+    xs = [(opaque d)]
+    pub play = xs[1]!
+
+    native / interpreter   a
+                           b
+    the page               error[runtime]: a bound description cannot be
+                           used as data here
+
+Not a wording mismatch. The program succeeds on the oracle and dies on the
+page, which is the divergence the differential law exists to catch.
+
+`value_of` was already in the file and already does the right thing —
+`as_desc` first, `val` otherwise — so the fix is four calls, not four
+mechanisms. It is a strict widening: a value and a closure take the same route
+they took before, and only the slot shapes `val` refused answer differently.
+The map's KEYS stay on `val`, because a key is an int or a string and reading
+one through `value_of` would only change which of two refusals a description
+key gets.
+
+THE FOURTH SITE WAS NOT EVIDENCE UNTIL IT WAS MEASURED TWICE. The first probe
+of `rt_setfield` put the `build` block at the top level of a library and
+invoked it with `kanso run`, which answered `is a library — nothing to run`.
+The wasm walk then reported no disagreement, and that silence proved nothing:
+the fixture never ran on either side. Reshaped to the form the corpus actually
+uses — a `build` inside `pub play`, reached through a generated entry — it
+passed `micro_corpus_agrees_across_engines` and the walk failed on it. Four
+sites, four measurements.
+
+WHY THE CORPUS DID NOT ALREADY SAY. `micro_corpus_agrees_across_engines` runs
+native and the interpreter, and all five programs here pass on both. The walk
+in tests/wasm_engine.rs is what covers the third, and nothing in the corpus
+had put a description in a container.
+
+FIVE FIXTURES, AND THE FIFTH IS THE ONE AT RISK FROM THE FIX. Four pin the
+sites. The fifth pins ORDER: `as_desc` on a `Slot::Seq` calls `demanded` on the
+right side, so materializing the description runs the cell that produces it,
+and a fix that ran the description at construction time instead of at the
+answer would leave the other four green. `built` prints before either write on
+all three engines, and a_container_does_not_run_what_it_holds says so.
+
+FOUR WAS NOT THE NUMBER, and finding that out is worth more than the fix.
+Sweeping all 33 `val(` sites in the file rather than the four found by
+following one bug turned up two more, both confirmed the same way:
+
+    b = box (opaque d)        native/interp  a        the page  dies
+    pub play = b.it                          b
+
+    print "{opaque d}"        native/interp  <io>     the page  dies
+
+A record CONSTRUCTOR is a fifth storing position. An interpolation is a sixth,
+and it READS rather than stores — it is also the most ordinary thing a program
+does with a value, which makes it the one a reader was most likely to meet.
+Both are the same one-call fix and both ship here.
+
+The first pass found four because it followed a single failing program into the
+code around it. The sweep found six because it started from the accessor and
+asked which of its callers a program can hand a deferred shape. The second
+method is the one to use first next time.
+
+COST: none. wasm_rt.rs is not read by `kanso check` and is not in the native
+runtime, so no compile vein and no cost golden can move. `docs/kanso.wasm` is
+rebuilt in the same commit because the walk refuses to run against a blob older
+than its source — a guard worth naming, since it turns a stale artifact into a
+red test rather than a green one that proves nothing.
 ## 2026-08-27 — two refusals named each other, and a reader had nowhere to go
 
 A file holding `pub play` is refused by both verbs, and each refusal prescribed

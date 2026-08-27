@@ -1218,6 +1218,33 @@ plus intra-library calls                         0 uncovered</code></pre>
 
 <p>a golden earns its place by pinning text rather than outcome, and the same day showed why. removing the arm that refuses a bare name does not make the fixture&#8217;s program compile &#8212; it fails later, at run time, with a different sentence. a spec asserting that the program failed would have stayed green through the whole change.</p>
 
+<h2 id="unread"><span class="sec-num">26</span>the sentences nobody was reading</h2>
+
+<p>the previous section ends on a corpus being evidence about the programs it contains. the next week said the same thing about the diagnostics themselves. a gate walks the tree collecting every error message the compiler can write and fails when one of them is pinned by nothing, and it knew four ways to write one. there are six. a <code>RuntimeError</code> in the interpreter is a struct literal with a bare <code>message:</code> field, matching none of the four, so all ninety-seven of the interpreter&#8217;s refusals could have been reworded, weakened or deleted with nothing going red &#8212; on the engine the differential law calls the oracle.</p>
+
+<p>teaching it the two missing forms took the count from 175 literal diagnostics to 242. fourteen of the new ones were pinned by nothing at all. each was run rather than read: four earned fixtures, one was already pinned by another day&#8217;s work, one turned out to be a divergence, and seven are shadowed by a check that answers first.</p>
+
+<p>those seven are the interesting ones, because each excuse is a claim about why a program cannot reach an arm, and a claim is a thing that can be wrong. one said a non-bool filter predicate is refused by <code>list/select</code>. it is not: <code>select</code> is a fold written in kanso and never calls the builtin, and what actually stops the arm is that <code>filter</code> cannot be named at all &#8212; it is not one of the fifty-five builtins the checker knows, and the hand-written internal spelling is refused by name. the same wrong mechanism had been written twice, against the two engines&#8217; two spellings of the sentence, and the second copy was found only by re-running the probe that was supposed to have established the first.</p>
+
+<p>the same sweep over the browser engine found the other half. twelve of the page&#8217;s twenty-five refusals were pinned by nothing, and one of them was a sentence worth reading twice: <code>cannot read fields of this value</code>, sitting behind a guard that fires exactly when the handle is <em>not</em> a value. the two engines that could be asked said <code>&lt;fn&gt;</code> and <code>&lt;io&gt;</code>. writing the fix produced the second half of the bug: routing everything through the value accessor named the closure correctly and broke the description, which is a deferred shape rather than a value, so the first draft traded one divergence for another.</p>
+
+<p>then the sharper case. a description put into a list, a map, a builtin call or a record field is data on native and on the interpreter, and the page refused it:</p>
+
+<pre><code>d = io/write "a\n" &gt;&gt; io/write "b\n"
+xs = [(opaque d)]
+pub play = xs[1]!
+
+native, interpreter    a
+                       b
+the page               error[runtime]: a bound description cannot be
+                       used as data here</code></pre>
+
+<p>four sites read their elements through an accessor that answers a value for a value and a handle for a closure and refuses everything else, and all four are storing positions. the fix is four calls to a function already in the file. what makes this different from a wording mismatch is that the program <em>succeeds</em> on the oracle: the same source, run three ways, prints two lines twice and dies once.</p>
+
+<p>the reason it went unseen for so long is worth stating plainly. the corpus test that compares engines on these programs runs native and the interpreter. a second walk covers the browser, and nothing in the corpus had ever put a description in a container. every instrument was working; none of them had been pointed at the case. that is the same finding as the section above, one level further in &#8212; there the missing thing was a program, here it is a program nobody thought to write because all three engines were assumed to agree about it.</p>
+
+<p>one of the four fixtures pins something none of the others can. materializing a deferred description demands the right side of its sequence, so a fix that performed the effects at construction time instead of when the program asks for them would leave the other three green. the fixture prints a word before the description runs, and the word has to come first on all three engines.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

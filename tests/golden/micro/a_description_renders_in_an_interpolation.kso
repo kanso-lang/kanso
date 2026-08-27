@@ -1,0 +1,11 @@
+# An interpolation reads rather than stores, and it is the most ordinary thing
+# a program can do with a value. Every description renders `<io>` whatever it
+# holds; the page refused to render one at all.
+import "std/io"
+
+fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{opaque d}"
