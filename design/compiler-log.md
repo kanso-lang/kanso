@@ -3477,3 +3477,39 @@ be refused, in the role tests/wall_takes_effects.rs already keeps for its own
 third example, and it belongs in the corpus whichever way the question falls.
 
 The runtime guard that shipped alongside it is needed either way.
+
+## 2026-08-27 — the std surface has no coverage gap, and the naive search says 24
+
+Three bugs in one day shared a shape: a construct's failure case pinned, its
+success case pinned nowhere. `the_wasm_engine_complains_the_way_the_others_do`
+in tests/wasm_engine.rs is that shape written down as a harness — it walks
+every `pub fn` in lib/ and hands each one arguments of the wrong type, on all
+three engines. Nothing walks the surface the other way. So the obvious next
+move was to find which exports no program ever calls successfully, and gate it.
+
+There are none. The measurement is recorded because the FIRST answer was 24 and
+it was wrong, in a way anybody repeating the search would repeat.
+
+    grep for `list/argmax` across examples, tests/golden, book   ->  24 uncovered
+    also grep for the bare-enrolled `argmax`                     ->   1 uncovered
+    also count intra-library calls                               ->   0 uncovered
+
+Eight of the nine survivors of the second pass are called by their bare name
+after an `import "std/list"` or `import "std/path"`, which is how a program
+normally writes them. The last, `json/escape_onto`, is `pub fn` in
+lib/json/text.kso and called from lib/json/json.kso:52 on every string a JSON
+encode touches — covered by the busiest path in the tree, and invisible to a
+search that reads only the corpus directories.
+
+Two searches this month have now been wrong in exactly this way: the coverage
+scan's twelve-character floor hid three reachable diagnostics, and this one hid
+eight reachable exports. The rule they share is that a name in kanso has two
+written forms and a search that knows one of them is measuring its own blind
+spot rather than the tree.
+
+So no gate, and no finding. What today's three bugs have in common is not an
+uncalled function — every one of them was in a function the corpus calls
+constantly. It is the ENDPOINT around the call: what the exit code carries,
+which stream the bytes land on, which sentence names the fault. Coverage of the
+surface would not have found any of them, which is worth knowing before the
+next sitting spends a morning building it.
