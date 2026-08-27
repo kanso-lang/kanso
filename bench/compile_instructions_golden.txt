@@ -83,4 +83,14 @@
 # went away is the walk. The counters that measure only the front end's work do
 # not move: allocations 61,981 and peak 822,004, both identical, which is what
 # a deletion of work that allocates nothing should read as.
-compile_instructions=57486466
+#
+# 2026-08-27: 57,486,466 -> 57,486,215, a fall of 251 (0.0004%), banked. The
+# change is two match arms in `call_builtin` for `args` and `stdin`, and
+# `call_builtin` is the INTERPRETER's door — `kanso check lib/json` never
+# enters it. So this is layout, not front-end work, the same way the +167 of
+# 2026-08-26 was: the compiler's own binary moved under an edit to a function
+# the measured path does not call. The counters that measure only the front
+# end's work are identical: allocations 61,981 and peak 822,004. A fall this
+# small with an untouched call graph is banked as layout and claimed as
+# nothing else.
+compile_instructions=57486215

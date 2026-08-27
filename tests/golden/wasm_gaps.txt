@@ -33,24 +33,14 @@ tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
 # Native and the interpreter both answer zero bytes when nothing is piped in,
 # which is what this program pins on those two.
 #
-# THE PLAYGROUND ANSWERS THE WRONG THING, and this entry records what it does
-# rather than what it should. The other two capabilities say so by name — "the
-# playground has no filesystem", "the playground cannot start processes" — and
-# src/wasm.rs and src/wasm_rt.rs each carry `Err("the playground has no
-# stdin")` meant to do the same. Neither fires. The engine gets as far as
-# `unknown builtin`, so it reports a missing BUILTIN where every other declined
-# capability reports a missing capability, and the sentence written for this
-# case has never been reached by anything.
-#
-# Recorded as it behaves. When the message is made to fire this line goes red,
-# which is the point: an entry that stopped matching is the reminder.
-tests/golden/micro/stdin_reads_what_it_is_given.kso	error[runtime]: unknown builtin `stdin`
-
-# THE SAME DEFECT AS STDIN, on the other side of the library. `os/args` is
-# declared `pub args = builtin_args`, exactly as `stdin` is, and answers the
-# same way in a page: not the empty list a page honestly has, and not a
-# refusal naming the capability, but a report that the BUILTIN is unknown.
-tests/golden/micro/args_are_empty_without_any.kso	error[runtime]: unknown builtin `args`
+# The refusal below is what the playground has always MEANT to say — src/wasm.rs
+# and src/wasm_rt.rs have each carried `Err("the playground has no stdin")`
+# since they were written — and until the two arms landed in `call_builtin` it
+# could not be reached, because the engine stopped short at `unknown builtin`
+# and reported a missing BUILTIN where the other declined capabilities report a
+# missing capability. This line now records the capability refusal, which puts
+# stdin in the same family as "the playground has no filesystem" above.
+tests/golden/micro/stdin_reads_what_it_is_given.kso	the playground has no stdin
 
 # A page has no clock the differential could agree on, so it reads zero. That
 # is DESIGNED, and said so in a comment in both engines since they were
@@ -59,8 +49,10 @@ tests/golden/micro/args_are_empty_without_any.kso	error[runtime]: unknown builti
 # the clock at all. Native is past the epoch; a page is not.
 #
 # `now` is declared `pub now = builtin_now`, the same shape as `args` and
-# `stdin`, and unlike those two it REACHES the executor and gets the designed
-# zero. So whatever routes the other two into `unknown builtin` is narrower
-# than "every zero-argument builtin", which is what the first reading of this
-# said and what this line disproves.
+# `stdin`, and it was the only one of the three `call_builtin` knew — so it
+# reached the executor while the other two stopped at `unknown builtin`. That
+# was a coincidence of coverage rather than a design, and it is the reason the
+# first reading of this, "every zero-argument builtin is broken on wasm", was
+# wrong. All three reach the executor now; this one still answers zero because
+# a page genuinely has no clock.
 tests/golden/micro/the_clock_answers_something.kso	the clock is past the epoch: false
