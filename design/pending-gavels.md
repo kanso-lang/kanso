@@ -68,9 +68,16 @@ about seven thousand bytes per byte hashed, deterministic to the byte:
 
 A hash reads 64 bytes at a time and carries eight words of state, so peak
 should be flat. `cohort_frees=0` and `alloc_bytes` within half a per cent of
-`arena_peak_bytes` say why: nothing is reclaimed for the length of the call,
-and 89% of the peak is grown list buffers. The in-place append is not the
-cause — 93.8% of appends already take the fast path.
+`arena_peak_bytes` say what is happening: nothing is reclaimed for the length
+of the call. Eight candidate causes have been built as small programs and
+measured, and all eight hold the arena at the one-block floor — the in-place
+append (93.8% of appends already take the fast path), the module boundary, a
+list read while appended to, a long-lived indexed message, per-iteration list
+literals, and, tested inside the module itself, both forcing the state
+accumulator and removing the per-block thunk entirely. That last one takes
+`thunk_live_exit` from one-per-block to zero and moves peak by nothing. The log
+entry carries the full table. So the leak needs the real combination, and
+whoever takes this on has eight fewer places to look.
 
 WHY IT BLOCKS. `scripts/fingerprint` digests `docs/kanso.wasm`, now 1,604,098
 bytes, in the asset-digests CI job. That run was OOM-killed in a container at
@@ -89,17 +96,23 @@ THREE ANSWERS, and this is the choice:
 
 1. **Reclaim inside a long call chain.** The most general, and it would pay
    everywhere rather than here. Also the largest, and it touches the collector.
-2. **Thread one buffer through the block loop** in `lib/sha256/sha256.kso`.
-   Contained, and it keeps the module in kanso, which is the property the
-   original entry was protecting. Whether the language can express it without
-   the arena holding each round's intermediates anyway is unmeasured.
+2. **Restructure the block loop** in `lib/sha256/sha256.kso`. Contained, and it
+   keeps the module in kanso, which is the property the original entry was
+   protecting. TRIED, TWICE, AND IT MOVES NOTHING — see the recommendation.
 3. **Make the digest a builtin.** Smallest and surest, and it spends the thing
    the archive entry declined to spend.
 
-RECOMMENDATION: 2 first, because it tests whether the original claim — that
-this is expressible in kanso at a sane cost — survives contact with the
-measurement, and it is cheap to try. If threading the buffer does not move the
-peak, that result is itself the argument for 1 or 3, and it says which.
+RECOMMENDATION CHANGED, and the change is the point. It was 2, on the reasoning
+that a contained fix inside the module was cheap to try. Two versions of 2 have
+now been tried and both moved the peak by zero digits, which is what the eight
+killed hypotheses above amount to: the cost is not in a shape the module
+chooses, so rewriting the module is unlikely to reach it.
+
+So: **1**, and 3 only if 1 is judged too large to be worth one digest. The
+question that decides it is whether the arena's failure to rewind here is
+specific to this call or general, and nothing in the tree answers that today —
+which is itself an argument for looking, because a general answer is worth much
+more than a hash.
 
 
 ## Open, not blocking

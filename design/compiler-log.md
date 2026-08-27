@@ -2815,8 +2815,45 @@ fast path and the optimisation is not the story.
 What the counters do say: `cohort_frees=0`, and `alloc_bytes` (246,642,065)
 lands within half a per cent of `arena_peak_bytes` (247,463,936). That is one
 fact said twice — every byte allocated is still live when the program ends. Of
-that peak, `sh_buf=220,980,512` is 89% buffer, so it is the grown list buffers
-of each block's schedule and working state, accumulated for the whole message.
+`sh_buf` reads 220,980,512 against that peak and it is TEMPTING to call that
+89% of the live set. It is not: `sh_*` count bytes allocated by shape over the
+whole run, and a loop whose arena stays at the one-block floor still runs
+`sh_buf` up linearly. The reading that survives is the first one — nothing is
+reclaimed — and the shape counters say only where the bytes went, not what is
+still holding them.
+
+EIGHT HYPOTHESES, EACH KILLED BY MEASUREMENT. Every one of these was built as a
+small program and measured over three sizes, and every one holds the arena at
+the one-block floor while `alloc_bytes` runs to several hundred kilobytes — so
+the rewind works in all of them and none of them is the cause:
+
+  - building the byte list at all (9 allocations, one copy)
+  - a 64-element list built and discarded once per iteration
+  - a list read by index while being appended to, which is `schedule`'s shape
+  - a long-lived message list that every iteration indexes into
+  - the same work moved behind a module boundary
+  - sixty-four eight-element list literals per iteration, `compress`'s shape
+
+Two more were tested inside `lib/sha256/sha256.kso` itself, by editing it and
+rebuilding — the module is `include_str!`'d into the compiler, so a measurement
+taken without a rebuild measures the old text, and the first attempt at both of
+these did exactly that:
+
+  - FORCING THE STATE ACCUMULATOR. `blocked` was given a fourth argument and
+    two literal arms to dispatch on, so the folded state is demanded once per
+    block rather than handed on unforced. Peak, allocations and digest all
+    byte-identical. A wildcard arm does not force, which cost one more rebuild
+    to learn.
+  - REMOVING THE PER-BLOCK THUNK. `thunk_allocs` and `thunk_live_exit` both
+    read exactly one per 64-byte block, never freed, which looked like the
+    answer. Passing the schedule as a parameter instead of binding it takes
+    both counters to ZERO — and peak stays at 14,680,064 and allocations at
+    59,044, unchanged to the digit. The thunk-per-block was one let-binding per
+    block being counted, not the memory being held.
+
+So the cause is not any of these constructs on its own. That is worth having:
+it is eight fewer places for the next person to look, and it says the leak
+needs the real combination rather than any single shape in it.
 
 The archive's entry for this module (`A digest, and the import path that broke
 it`) states the design rationale: "a builtin would buy speed on a path that
