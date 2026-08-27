@@ -4401,6 +4401,25 @@ and a fix that ran the description at construction time instead of at the
 answer would leave the other four green. `built` prints before either write on
 all three engines, and a_container_does_not_run_what_it_holds says so.
 
+FOUR WAS NOT THE NUMBER, and finding that out is worth more than the fix.
+Sweeping all 33 `val(` sites in the file rather than the four found by
+following one bug turned up two more, both confirmed the same way:
+
+    b = box (opaque d)        native/interp  a        the page  dies
+    pub play = b.it                          b
+
+    print "{opaque d}"        native/interp  <io>     the page  dies
+
+A record CONSTRUCTOR is a fifth storing position. An interpolation is a sixth,
+and it READS rather than stores — it is also the most ordinary thing a program
+does with a value, which makes it the one a reader was most likely to meet.
+Both are the same one-call fix and both ship here.
+
+The first pass found four because it followed a single failing program into the
+code around it. The sweep found six because it started from the accessor and
+asked which of its callers a program can hand a deferred shape. The second
+method is the one to use first next time.
+
 COST: none. wasm_rt.rs is not read by `kanso check` and is not in the native
 runtime, so no compile vein and no cost golden can move. `docs/kanso.wasm` is
 rebuilt in the same commit because the walk refuses to run against a blob older

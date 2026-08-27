@@ -704,7 +704,11 @@ pub extern "C" fn rt_mkrec(tid: u32, n: u32) -> u32 {
     // was a divergence from the oracle that no fixture built.
     let mut failed: Option<Value> = None;
     for h in handles {
-        let v = val(h);
+        // A record's field is the fifth storing position, and it was missed on
+        // the first pass over this file: `box (opaque d)` then `b.it` runs the
+        // description on native and died here. See
+        // a_description_rides_in_a_constructor.
+        let v = value_of(h);
         if is_failure(&v) {
             failed = Some(match failed {
                 Some(seen) => crate::eval::accumulate_failures(seen, v),
@@ -729,7 +733,11 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
     let handles = pop_args(n);
     let mut out = String::new();
     for h in handles {
-        let v = val(h);
+        // An interpolation READS rather than stores, and it is the most
+        // ordinary thing a program does with a value. `"{d}"` renders `<io>`
+        // on the other two engines and died here. See
+        // a_description_renders_in_an_interpolation.
+        let v = value_of(h);
         // only an err propagates; none renders its sentinel via the group —
         // the same rule as the other engines, through the same helper
         if matches!(v, Value::ErrV(_)) {
