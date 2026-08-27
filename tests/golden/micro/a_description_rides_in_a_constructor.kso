@@ -1,0 +1,17 @@
+# The fifth storing position, and the one the first pass over this file missed.
+# A record CONSTRUCTOR takes its fields through the same per-element read the
+# four container sites did, so a description handed to `box` died on the page
+# while native and the interpreter held it and ran it.
+import "std/io"
+
+type box
+  it
+
+fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+b = box (opaque d)
+
+pub play = b.it

@@ -1,0 +1,21 @@
+# Putting a description in a container must not perform it. The page reads
+# one out of a list through `as_desc`, which DEMANDS a deferred right side to
+# materialize the `>>` — `lazy` here is exactly that cell — so this is the
+# property the materialization could quietly break while the other four
+# fixtures stayed green.
+#
+# `built` prints first on all three engines, and the writes follow only when
+# `play` answers the description and the runner performs it.
+import "std/io"
+
+fn opaque v
+  v
+
+lazy = io/write "second\n"
+
+d = io/write "first\n" >> lazy
+
+pub play =
+  xs = [(opaque d)]
+  print "built"
+  >> xs[1]!

@@ -1,0 +1,19 @@
+# A description put in a list comes back out able to run. The page used to
+# refuse this: `val` answers a value for a value and a handle for a closure,
+# and refuses everything else, so the deferred shape `a >> b` builds died at
+# the list literal with `a bound description cannot be used as data here`
+# while native and the interpreter carried it through and ran it.
+#
+# `opaque` is what stops the compiler from seeing a description go in: the
+# parameter has no annotation, so the list literal is handed something the
+# emitter knows nothing about, which is the shape a program actually writes.
+import "std/io"
+
+fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+xs = [(opaque d)]
+
+pub play = xs[1]!
