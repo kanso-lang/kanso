@@ -4176,3 +4176,56 @@ trend gate refuses outright, and the escape is the gavel of 2026-08-25: the
 floor is absolute against refactorings and permeable to the language. Three
 engines disagreeing about one question is the differential law's business, so
 the change lands and welfare_floor.json records the 81 against it.
+
+## 2026-08-27 — two refusals named each other, and a reader had nowhere to go
+
+A file holding `pub play` is refused by both verbs, and each refusal prescribed
+the other:
+
+    $ kanso play wrong_verb.kso
+    error[syntax]: `pub play` is a library's export — `kanso run` runs this
+    file; `kanso play` takes bare statements
+
+    $ kanso run wrong_verb.kso
+    error: `wrong_verb.kso` is a library — nothing to run. give the module a
+    main.kso entry, or run its definitions beside their statements with
+    `kanso play`
+
+Follow either sentence and you land on the other's refusal. Both refusals are
+correct — `run` because the module has no entry, `play` because the form takes
+bare statements — so the fault is entirely in the advice.
+
+FOUND WHILE BUILDING SOMETHING ELSE. The description-in-a-container fixtures
+needed a library run by hand, and the two messages sent me round the loop. The
+file that demonstrates it was already in the corpus: `tests/golden/play/
+wrong_verb.kso` is one line, `pub play = print "hi"`, and its golden pinned the
+sentence that names a verb refusing that same file.
+
+BOTH CLAUSES WERE WRONG, and each is wrong about a different thing. `play`
+said `kanso run` runs the file; `run` answers it `is a library`. `run` offered
+`kanso play`; `play` answers it with the sentence above. Neither message named
+the route that works, which is to import the module from an entry file and name
+its `play` — the shape `run_kanso_as_library` in tests/golden.rs has generated
+for the micro corpus all along.
+
+WHAT MOVED. `play`'s message names the import instead of `run`. `run`'s message
+splits: a module exporting `play` gets the import route, and everything else
+keeps the old sentence, because `kanso play` is a true suggestion for a file of
+definitions beside bare statements. `exports_play` reads the parsed program
+rather than a line prefix, so `pub play` inside a string or a comment is not
+mistaken for the export.
+
+THE SPEC ASSERTS WHAT A USER READS. `the_two_verbs_do_not_point_at_each_other`
+runs both verbs on the one file, checks that neither prescribes a verb that
+refuses it, pins both sentences exactly, and then — the part that would have
+caught a message that was merely non-circular and still useless — stages the
+module beside a generated entry and asserts the advised route prints `hi`.
+
+Watched red: the negative assertion first, and then each exact assertion in
+turn by mutating the message it pins. Green on restore.
+
+`docs/kanso.wasm` is rebuilt here. The blob carries these sentences, so a page
+compiled against the old one would say the old thing while native said the new
+— the divergence this repo exists to refuse. The freshness guard in
+tests/wasm_engine.rs compares the blob against every `.rs` under `src/`, so CI
+catches a forgotten rebuild rather than shipping the split.
