@@ -3180,6 +3180,43 @@ than implying a fall.
 The question filed earlier today, whether a vein move that CANNOT be work needs
 a spend attribution, does not cover this one. This move can be work and is.
 
+## 2026-08-27 — the excuse with no reason, and the sitting it cost
+
+`expected a constant name` sat at the top of
+tests/golden/unpinned_diagnostics.txt with no reason beside it — one of the
+ones that "had accumulated when the gate was written". Every other entry in
+that file names a mechanism, because the file says a mechanism should be named
+"so nobody spends another sitting writing programs for them".
+
+A sitting was spent today for want of four lines. The message is unreachable,
+and the argument is control flow rather than a reading of what looks unlikely.
+`parse_constant` has one caller, src/parser.rs:303, under a guard that has
+already matched `Tok::Ident(_)` at `head_idx`. Inside, the `let ... else` that
+raises this reads `header.tokens.get(off)`, and `off` is computed exactly as
+`head_idx` is — one if `pub` leads the line, zero otherwise. The token it tests
+is the token the guard just matched. The `else` is dead and stays because a
+`let ... else` must have one.
+
+Three programs confirm the shadowing rather than assuming it. `2 = 3`,
+`pub 2 = 3` and `pub "x" = 3`, each in a library read by `kanso check`, all
+land on "a top-level line must begin with `fn`, `type`, or a constant binding"
+— the catch-all, reached because a non-identifier at `head_idx` matches neither
+the constant arm nor the re-export arm. In a `play` file they land somewhere
+else again, on "expected a binding name or type", which is worth knowing
+because it is the wrong place to go looking.
+
+The reason is written down now. Nothing else changed: the entry stays, the
+count stays at ten, and the gate is unmoved.
+
+WHAT THE DAY'S AUDITS ADD UP TO. Four excuses were examined across two lists.
+Three named the wrong obstacle — the kq row's dependencies, the digest job's
+build step, the macOS job's mutations — and one, `unused expression`, reasoned
+correctly about one walker when there were two, which is how an effect written
+in a build body came to be dropped in silence. This fifth had no reason at all
+and turns out to be sound. The score is one real bug, three rewritten
+sentences, and one reason supplied; and the only way any of it was learned was
+by writing the program.
+
 ## 2026-08-27 — clang is installed, and that was never the question
 
 Two of the five host-io excuses on tests/golden/unpinned_diagnostics.txt were

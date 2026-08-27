@@ -9,6 +9,25 @@
 # tests/golden/errors — the coverage scan fails on any message that is
 # neither pinned nor listed here, and fails again when a listed one becomes
 # pinned, so the line gets deleted rather than left lying.
+#
+# THE ONE BELOW HAD NO REASON WRITTEN, and this file's own rule is that a
+# mechanism is named "so nobody spends another sitting writing programs for
+# them". A sitting was spent on 2026-08-27 for want of these four lines.
+#
+# It cannot be reached, and the argument is control flow rather than a reading
+# of what looks unlikely. `parse_constant` is called from one place,
+# src/parser.rs:303, under a guard that has already matched `Tok::Ident(_)` at
+# `head_idx`. Inside, the `let ... else` that raises this reads
+# `header.tokens.get(off)`, and `off` is computed the same way `head_idx` is —
+# one if `pub` leads the line, zero otherwise. So the token it tests is the
+# token the guard just matched as an identifier, and the `else` is dead. It
+# stays because a `let ... else` must have one.
+#
+# Three programs confirm the shadowing rather than assuming it. `2 = 3`,
+# `pub 2 = 3` and `pub "x" = 3`, each in a library read by `kanso check`, are
+# all refused by "a top-level line must begin with `fn`, `type`, or a constant
+# binding" — the catch-all arm, reached because a non-identifier at `head_idx`
+# matches neither the constant arm nor the re-export arm.
 expected a constant name
 
 # Widening the gate found these. The scan it replaced stopped a message at the
