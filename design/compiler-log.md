@@ -4150,6 +4150,29 @@ first — the corpus walk on the interpreter, the wasm walk on the page — and 
 `if` fixture had to be run with the guard fixture moved aside to see its own
 failure, since the walk stops at the first disagreement.
 
-COST: nothing measurable. `kanso check lib/json` never evaluates a condition,
-so the compile veins do not move, and the strings live in the driver rather
-than in emitted code, so `.text` per benchmark is byte-identical.
+COST: 57,568,390 -> 57,568,471, a rise of 81, and how that number was arrived
+at is the finding.
+
+Measured against the base before #1098, this same diff FELL 138: 57,568,244 ->
+57,568,106. Rebased onto main with #1098 in it, it RISES 81. Nothing in the
+diff changed between those two measurements — two string literals, neither of
+which `kanso check lib/json` ever reads, because the front end evaluates no
+conditions. What changed underneath it was #1098's two new runtime entry
+points, which moved `.rodata`.
+
+`__memcmp_avx2_movbe` tracks it both times: 1,371,161 on #1098's run and
+1,371,229 here, +68 of the +81. That is the front end comparing interned names
+with a vectorised load, and where a string starts decides how many loads it
+takes.
+
+So this vein answers to the linker as well as to the code, and the honest
+reading of a small movement in it is that the bytes moved, not that the
+compiler does more work. It is still worth having — it is the counter that
+caught a quarter of the front end going away in silence — but eighty-one is
+noise with a mechanism, and the mechanism is layout.
+
+ATTRIBUTED RATHER THAN ARGUED. A rise with nothing improved is the one move the
+trend gate refuses outright, and the escape is the gavel of 2026-08-25: the
+floor is absolute against refactorings and permeable to the language. Three
+engines disagreeing about one question is the differential law's business, so
+the change lands and welfare_floor.json records the 81 against it.
