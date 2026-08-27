@@ -2026,9 +2026,23 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Write(content))))
             }
-            "now" => {
+            // `args`, `stdin` and `now` are the three builtins a program names
+            // without calling, so `eval_ident` answers all three and this
+            // function only ever needed `now` — which is how it came to know
+            // that one and neither of the others. The wasm backend routes
+            // every builtin through here (`wasm_backend.rs` emits a
+            // `RT_BUILTIN` call, `wasm_rt.rs` lands it on `call_builtin`), so
+            // a page that asked for `stdin` got `unknown builtin` where the
+            // same program run natively got a descriptor. `now` reaching the
+            // executor on that engine was a coincidence of coverage, not a
+            // design; these two arms make the coincidence a rule.
+            "args" | "stdin" | "now" => {
                 let [] = arity(args, name, span)?;
-                Ok(Value::Desc(Rc::new(Desc::Now)))
+                Ok(Value::Desc(Rc::new(match name {
+                    "args" => Desc::Args,
+                    "stdin" => Desc::Stdin,
+                    _ => Desc::Now,
+                })))
             }
             "exists" | "is_dir" | "list_dir" => {
                 let [path] = arity(args, name, span)?;

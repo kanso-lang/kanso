@@ -2777,6 +2777,52 @@ The mutation is written with `sed` rather than a heredoc because
 in through mutation heredocs, and it names that as the history. I wrote the
 python version first and the gate would have caught it.
 
+## 2026-08-27 — the page can read its own arguments now
+
+#1080 pinned what a page does with `args`, `stdin` and `now`, and two of the
+three answered `error[runtime]: unknown builtin`. The mechanism, traced end to
+end: the wasm backend emits every builtin as a `RT_BUILTIN` call
+(`src/wasm_backend.rs:947` handles the three identically), `src/wasm_rt.rs:809`
+lands that on `call_builtin`, and `call_builtin` had an arm for `now` and none
+for the other two. Native and `--interp` never went through that door — they
+reach all three through `eval_ident`, which has had the arms since the
+builtins were written.
+
+So `now` working on wasm was a coincidence of coverage. That is worth saying
+plainly because the first reading of this was "every zero-argument builtin is
+broken on wasm", and `now` disproved it; the rule is narrower and duller.
+
+The fix is one match arm covering all three, returning the descriptors
+`eval_ident` already returns. What it changed:
+
+    args    error[runtime]: unknown builtin `args`  ->  args holds 0 of them
+    stdin   error[runtime]: unknown builtin `stdin` ->  the playground has no stdin
+    now     the clock is past the epoch: false      ->  unchanged
+
+`args` is fully closed: a page and native now agree byte for byte, and the
+entry left `tests/golden/wasm_gaps.txt`. `stdin` stays a gap, because a page
+genuinely has no stdin — but it is now the honest capability refusal that
+`src/wasm.rs` and `src/wasm_rt.rs` have each carried since they were written
+and that nothing had ever reached. It sits in the same family as "the
+playground has no filesystem" instead of reporting a missing builtin.
+
+Watched red first, which is the point of recording the before-state in its own
+PR: with the arms in and the old entries still in place, `wasm_engine` failed
+with `args_are_empty_without_any.kso is a known gap answering ... and it now
+answers `args holds 0 of them` — close it or restate it`. That message is the
+ledger doing its job.
+
+    PASS  328 agree, 9 known gaps, 0 disagree   (browser, headless chrome)
+    7 passed                                   (tests/wasm_engine.rs)
+
+The gap count fell by one, which is the whole visible effect: 327/10 -> 328/9.
+
+The compile vein moved by 251 instructions, downward, and it is layout rather
+than work: `call_builtin` is the interpreter's door and `kanso check lib/json`
+never enters it. Allocations and peak are identical at 61,981 and 822,004.
+Banked in `bench/compile_instructions_golden.txt` with that reading written
+beside it, the same way the +167 of the previous day was.
+
 
 ## 2026-08-27 — a hash that remembers every block it has read
 
@@ -2873,3 +2919,4 @@ What to do about it is a decision rather than a patch — reclaim inside a long
 call chain, restructure the module to thread one buffer, or make the digest a
 builtin after all — and it is filed in design/pending-gavels.md with this
 table.
+
