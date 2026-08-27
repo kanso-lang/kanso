@@ -94,21 +94,39 @@ main is not an io; there is no plan to show
 #                           `x = 2` then `x` answers it — and no golden corpus
 #                           reads the stderr of a --plan run.
 #
-# FIVE FIRE ON AN IO ERROR FROM THE HOST, not on anything a program says. A
+# THREE FIRE ON AN IO ERROR FROM THE HOST, not on anything a program says. A
 # fixture cannot portably cause one: the container runs as root, so an
-# unwritable directory is not unwritable, and clang is installed. What each
-# needs is stated so nobody writes the program twice.
-cannot build:
+# unwritable directory is not unwritable — measured on 2026-08-27, root writes
+# into a mode-000 directory without complaint. What each needs is stated so
+# nobody writes the program twice.
 cannot execute
-cannot invoke clang:
 cannot open the terminal:
 cannot write
 #
-#   cannot build:            spawn of the build command fails
 #   cannot execute           spawn of the built binary fails
-#   cannot invoke clang:     clang absent from PATH
 #   cannot open the terminal: the repl with no tty
 #   cannot write             the .ll cannot be written
+#
+# TWO MORE ARE PINNED BY A RUST TEST as of 2026-08-27, and stay listed for the
+# reason the two above them do: the driver family's corpus search deliberately
+# excludes Rust tests, so a message pinned only there still reads as unpinned
+# and its line has to say where the pin lives.
+cannot build:
+cannot invoke clang:
+#
+# The excuse that had covered these was wrong, in a way worth keeping. It read
+# "clang is installed", which treats installation as the question. What the
+# compiler asks is whether PATH resolves it, and PATH is a per-process variable
+# rather than a fact about the box:
+#
+#   env PATH=/nonexistent kanso build <dir>  ->  cannot invoke clang: ...
+#   env PATH=/nonexistent kanso run <dir>    ->  cannot build: ...
+#
+# One absence, two sentences, because `build` spawns clang itself and `run`
+# reaches it through the cached-binary path. Both are asserted in
+# tests/a_toolchain_the_path_cannot_reach.rs, on the compiler's own prefix and
+# not the host's io text — that part moves with the libc, which is the reason
+# src/eval.rs gives for never pinning one.
 #
 # ONE FIRES WHEN CLANG REJECTS WHAT THE COMPILER EMITTED, which is a compiler
 # defect rather than a program a user can write. tests/build_names_collide.rs
