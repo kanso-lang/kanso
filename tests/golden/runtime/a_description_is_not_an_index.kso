@@ -1,0 +1,12 @@
+# The index POSITION, not the base — a description used as a key reaches the
+# same check and owes the same sentence.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+xs = [1 2 3]
+
+pub play = print "{xs[(opaque d)]}"

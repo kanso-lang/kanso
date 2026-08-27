@@ -1,0 +1,11 @@
+# The index POSITION of the `!` form, the fourth of the four guard clauses.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+xs = [1 2 3]
+
+pub play = print "{xs[(opaque d)]!}"

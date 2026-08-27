@@ -1,0 +1,11 @@
+# The same preemption one site over: indexing opens with `val(base)` and so
+# answered the data sentence where the other two engines say what indexing
+# takes. `!` is the strict form and shares the check.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{(opaque d)[1]}"
