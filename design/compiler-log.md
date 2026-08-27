@@ -5347,4 +5347,23 @@ The floor is a number the gate now depends on, so it gets a mutation:
 is `unpinned ` and a backtick, exactly ten characters. It stops being seen the
 moment the floor moves back up.
 
+Then the excused list itself, which carries four messages and a paragraph
+saying why each cannot be reached. Those paragraphs are readings of the source.
+One had already been wrong once: the inline-constant claim missed heads that
+open blocks and left the list on 2026-08-20. Writing the program is cheap, so I
+wrote one for each of the remaining claims.
+
+    expected a top-level declaration    REACHABLE
+    expected a constant name            holds — the top-level line rule speaks first
+    unused expression: …                holds — consecutive expressions fold into one Seq
+    private type `                      holds — see the next entry
+
+The indented-line excuse said the indentation rule or the blank-line rule
+always takes the line first. Both do when a declaration precedes it. Put the
+indented line at the top of the file and nothing precedes it, so it reaches the
+top-level loop with a non-zero indent and is refused there by name. Pinned at
+`an_indented_first_line`; the line leaves the list. The gate reports the other
+direction too — with the line still there it says "now pinned, delete its
+line" — and I watched it do so.
+
 Goldens and two scripts — no counter moves.

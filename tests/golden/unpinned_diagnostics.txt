@@ -10,7 +10,6 @@
 # neither pinned nor listed here, and fails again when a listed one becomes
 # pinned, so the line gets deleted rather than left lying.
 expected a constant name
-expected a top-level declaration (`fn` or `type`)
 private type `
 
 # Widening the gate found these. The scan it replaced stopped a message at the
@@ -27,12 +26,21 @@ private type `
 # unless that head opens one, and a `>>` or `.` continuation is legal, so the
 # shape does not exist. A non-identifier in a constant's name position is
 # refused first by "a top-level line must begin with `fn`, `type`, or a
-# constant binding". An indented line at the top level is refused first by the
-# indentation rule or the blank-line rule. And the private-type message fires
-# on a leading underscore, which the naming rule retired.
+# constant binding". And the private-type message fires on a leading
+# underscore, which the naming rule retired.
 #
 # That is the pattern worth naming: a diagnostic can be shadowed by a better
 # one added later, and nobody notices, because it simply stops appearing.
+#
+# The reading it is not safe to do is the one that says which check speaks
+# first. Two of the excuses written here were wrong. The inline-constant claim
+# missed heads that OPEN blocks and left on 2026-08-20. The claim that an
+# indented top-level line is always taken by the indentation rule or the
+# blank-line rule held only where a declaration precedes it: put the indented
+# line first in the file and there is nothing above it for either rule to work
+# against, so the top-level loop refuses it and says so. That one is pinned at
+# an_indented_first_line and has left this list too. An excuse is worth what
+# the program written to test it is worth.
 #
 # The indented-block rule cannot fire because the lexer decides, before the
 # parser sees anything, which indented lines stay lines. `is_block_header`

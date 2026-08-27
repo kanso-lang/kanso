@@ -1,0 +1,11 @@
+# The first line of a file, indented. There is no declaration above it for the
+# lexer to fold it into and none for the blank-line rule to place it inside, so
+# it arrives at the top-level loop with a non-zero indent and is refused there.
+#
+# tests/golden/unpinned_diagnostics.txt excused this message as unreachable,
+# on the reading that the indentation rule or the blank-line rule always speaks
+# first. Both do when a declaration precedes the line. Nothing precedes this
+# one.
+  stray
+
+pub play = print "x"
