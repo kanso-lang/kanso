@@ -3673,28 +3673,34 @@ wall-bearing declaration, and `kanso check lib/json` compiles a pure library
 that never asks. So this row is silent on the feature's real cost, and saying
 the feature is free would be reading its silence as an answer.
 
-THE FLOOR MOVED, AND THE AUTHORITY FOR IT IS THE RULING, NOT THE TOLERANCE.
-`welfare --set` accepted this, and the first version of this paragraph said
-that was the sanctioned path. It is not the argument to make. The tool's own
-refusal text reads "--set is lowering the objective, and --set cannot do that
-... this is Clay's call to make, in conversation — not a flag's", and the
-comment above it records two earlier loosenings, each of which "looked
-reasonable and each was an escape". `fall > 0.01` is a float-noise allowance;
-this fall is a real computed one, from a golden that moved by 81,855.
+THE FLOOR MOVED, ON THE RULING'S AUTHORITY. Clay's ruling of 2026-08-25 — the
+floor is absolute against refactorings and permeable to the language — governs
+it, and this is a language change, since a program that used to run partway and
+die is now refused before it starts. The 84.79 and 84.12 entries in
+bench/welfare_floor.json have this shape. 84.12 -> 84.11, with the two-host
+measurement in the reason.
 
-What authorises the move is Clay's ruling of 2026-08-25 — the floor is absolute
-against refactorings and permeable to the language — and this is a language
-change, since a program that used to run partway and die is now refused before
-it starts. The 84.79 and 84.12 entries in bench/welfare_floor.json have exactly
-this shape. Floor 84.12 -> 84.11 with the two-host measurement in the reason.
+THE MECHANISM DIFFERED FROM PRECEDENT, and the first two versions of this
+paragraph were both wrong about why. The first said `--set` accepting the fall
+was the sanctioned path. The second called the guard's prose and its code
+contradictory and flagged it for Clay. Searching the log rather than reading
+the source settled it: the 2026-08-25 entry above already read the same code
+correctly — "welfare --set refuses a fall of more than 0.01 and refused this
+one. That refusal is the design — its own comment names hand-editing
+bench/welfare_floor.json as the single override, precisely so the move appears
+in a diff a reviewer reads rather than behind a flag."
 
-AND THE DISCREPANCY IS ITSELF A FINDING, of the shape this file has been
-collecting all day: the guard's prose says one thing and its code allows
-another, and reading only the prose or only the code gives a different answer.
-A gate's exception is a claim. This one is CLAY'S to settle — whether the 0.01
-is meant as float noise, in which case a real fall under it should still be
-refused, or whether it is a deliberate small-change allowance, in which case
-the refusal text overstates.
+So there is no contradiction, and nothing here for Clay. The prose describes
+the REFUSAL, and a fall of 0.00 does not reach it. The established practice for
+a language-change fall is the hand edit; `--set` wrote this one, which puts the
+same line in the same diff, so a reviewer sees it either way. Worth naming
+because a third sitting will meet a sub-threshold fall and should not have to
+rediscover which of the two paths precedent uses.
+
+THE LESSON IS THE FILE'S OWN RULE, applied to me. An entry cites its search or
+it is invalid, and I wrote two paragraphs about this guard before searching for
+what the log already said about it. Both were confident and both were wrong,
+and the search that fixed them took one grep.
 
 The order of operations is the part worth keeping. The expensive version fell
 0.06 and the first instinct was to bank it — goldens edited, page figures
