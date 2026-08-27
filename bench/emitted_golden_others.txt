@@ -1,0 +1,26 @@
+# What the compiler wrote for every benchmark BUT the decoder, counted from
+# each .ll before the linker touches it — so this is deterministic and, unlike
+# a timing, blind to code layout.
+#
+# bench/emitted_golden.txt beside this one watches the decoder alone, and it
+# exists because 7.6% of decode speed leaked away between 2026-07-27 and
+# 2026-08-07 while every allocation counter stayed byte-identical: the decoder
+# gained 20% more calls and 23% more branches for the same work, one or two
+# per cent at a time, and nothing was watching the dimension that moved.
+#
+# Eight other programs are built by the same step and have cost goldens of
+# their own. None of them was watched on this dimension, so the leak that was
+# found once in the decoder could still happen in any of them, in silence.
+# scanbench is the largest at 20,023 lines and is not in bench/text_golden.txt
+# either.
+#
+# A rise here is a regression to explain; a fall is a win to bank. Either way
+# say which in the PR and regenerate. The per-line diff names the program.
+encodebench defines=153 calls=1663 branches=1014 lines=10466
+oneshot defines=154 calls=1779 branches=1159 lines=11469
+basket defines=118 calls=1324 branches=726 lines=7181
+widebench defines=169 calls=1884 branches=1116 lines=11507
+deepbench defines=92 calls=840 branches=520 lines=5046
+escapebench defines=29 calls=97 branches=48 lines=708
+pendbench defines=106 calls=1250 branches=611 lines=6169
+scanbench defines=307 calls=3745 branches=2216 lines=20023

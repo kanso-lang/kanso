@@ -4948,3 +4948,63 @@ value is a bare failure, which both engines propagate.
 This harness compares native against the oracle. wasm's rendering is covered
 by the browser differential over the golden corpora, where #1059 and the
 container fixture live.
+
+## 2026-08-27 — eight programs emitted code nobody counted
+
+`bench/emitted_golden.txt` exists because 7.6% of decode speed leaked away
+between 2026-07-27 and 2026-08-07 with every allocation counter
+byte-identical: the decoder gained 20% more calls and 23% more branches for
+the same work, and nothing watched the dimension that moved.
+
+It watches the decoder. `scripts/gates/build_benchmarks.sh` builds nine
+programs, and the machine-code gate beside it reads eight. So the leak that
+was found once could have happened in any of the other eight, in silence,
+including `scanbench` — the largest at 20,023 lines, and absent from
+bench/text_golden.txt as well.
+
+    encodebench defines=153 calls=1663 branches=1014 lines=10466
+    oneshot     defines=154 calls=1779 branches=1159 lines=11469
+    basket      defines=118 calls=1324 branches=726  lines=7181
+    widebench   defines=169 calls=1884 branches=1116 lines=11507
+    deepbench   defines=92  calls=840  branches=520  lines=5046
+    escapebench defines=29  calls=97   branches=48   lines=708
+    pendbench   defines=106 calls=1250 branches=611  lines=6169
+    scanbench   defines=307 calls=3745 branches=2216 lines=20023
+
+A second file rather than eight more lines in the first, for two reasons. The
+decoder's golden IS its history — eleven dated entries explaining every move —
+and summing eight programs into it would let a rise in one hide a fall in
+another. And the counters are read from kanso's own IR before any linker runs,
+so they are host-independent: `sh scripts/gates/emitted_code.sh` reproduces
+the committed jsonbench numbers exactly in this container, which is how these
+eight could be generated here at all.
+
+Two ratchet mutations now, one per golden. A gate that reads two files and is
+only ever proved against one is proved for one.
+
+### The trend gate cannot tell a wider vein from a worse program
+
+Found while deciding whether `scanbench` could join bench/text_golden.txt in
+the same change. It cannot:
+
+    worsened: text 652,128 -> 777,794  (bench/text_golden.txt)
+    FAIL  a pure regression: something got worse and nothing got better.
+
+Nothing got worse. Those 125,666 bytes are scanbench's `.text` counted for the
+first time.
+
+The first guess was that `judged` reads a name missing from the base as zero,
+and a fix for that was written. It changes nothing here, and measuring said so
+before it shipped: `text` is not a missing name. The gate sums a golden's
+counters BY FIELD NAME across samples, deliberately — the file's own comment
+says `text` is "one number across the eight binaries" and the per-golden diff
+is what names which. So a ninth binary raises the sum, and a rise is a rise.
+Wider and worse are the same shape to a sum.
+
+The emitted counters above escaped only because a golden with no copy on main
+is skipped outright, which is the second reason the eight went into a file of
+their own rather than beside the decoder.
+
+Whether a summed vein should be compared per sample is a question about what
+this gate is for, not a bug in how it reads. Left open here rather than
+answered in a change about emitted code.

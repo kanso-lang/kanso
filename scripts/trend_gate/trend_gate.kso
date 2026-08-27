@@ -124,6 +124,12 @@ bench_work = [["bench/instructions_golden.txt" "work_"]]
 
 bench_emitted = [["bench/emitted_golden.txt" "emitted_"]]
 
+# The eight programs the emitted gate did not watch until 2026-08-27. A second
+# prefix rather than a second entry under `emitted_`, so a rise in a benchmark
+# cannot be hidden by a fall in the decoder — they are separate questions and
+# the decoder's series is the one with eleven entries of history behind it.
+bench_emitted_others = [["bench/emitted_golden_others.txt" "emitted_other_"]]
+
 bench_text = [["bench/text_golden.txt" ""]]
 
 # Three cost goldens that were simply never listed. They are `name=value` like
@@ -144,7 +150,9 @@ bench_compiled = text/concat bench_ir bench_traffic
 
 bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
 
-bench_run = text/concat bench_work (text/concat bench_emitted bench_text)
+bench_emits = text/concat bench_emitted bench_emitted_others
+
+bench_run = text/concat bench_work (text/concat bench_emits bench_text)
 
 bench_rest = text/concat bench_escape (text/concat bench_scan bench_wide)
 
