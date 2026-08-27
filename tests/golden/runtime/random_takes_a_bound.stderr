@@ -1,0 +1,1 @@
+error[runtime]: random takes a bound (an int), got x

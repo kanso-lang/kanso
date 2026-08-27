@@ -1,0 +1,14 @@
+# A keyed read of something that is not a record. The value is a STRING because
+# the interpreter renders it quoted here — `render(self, &value, true)` — where
+# the sibling `cannot destructure` needed the same choice pinned for the same
+# reason: an int agrees under either rule and proves nothing.
+pub type point
+  x
+  y
+
+pub fn opaque v
+  v
+
+pub play =
+  { x y } = opaque "hello"
+  print "{x} {y}"

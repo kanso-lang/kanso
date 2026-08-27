@@ -1,0 +1,8 @@
+# `time/sleep` forwards to the `sleep` builtin, which wants an int. Nothing in
+# the corpus had ever handed it anything else.
+import "std/time"
+
+pub fn opaque v
+  v
+
+pub play = time/sleep (opaque "x")

@@ -4176,3 +4176,110 @@ trend gate refuses outright, and the escape is the gavel of 2026-08-25: the
 floor is absolute against refactorings and permeable to the language. Three
 engines disagreeing about one question is the differential law's business, so
 the change lands and welfare_floor.json records the 81 against it.
+
+## 2026-08-27 — a fifth file, and it is the oracle's
+
+`scripts/diagnostic_coverage` reads four openers, and `src/eval.rs` matches
+none of them. A `RuntimeError` is a struct literal with a bare `message:`
+field, so all 97 of the interpreter's refusals could be reworded, weakened or
+lost with nothing going red — on the engine the differential law calls the
+truth.
+
+THE OPENERS ARE TWO, not one, and the difference is where the literal sits.
+`message: "` carries its own opening quote, so the chunk starts inside the
+string exactly as the driver's `"error: ` does, and the message is the first
+piece of a split on the quote. `message: format!(` does not: the string may sit
+on the next line, so the message is the SECOND piece. 49 sites take the first
+form and 47 the second.
+
+THE 97TH IS A `match` with three arms, and it is why there is no third opener:
+all three of its messages are already pinned — `` `.` reads a field of a
+record, not `` by field_non_record, the other two by over_applied_group. A key
+for that shape would buy nothing.
+
+RUNNING BOTH OVER EVERY SOURCE IS SAFE, and it found something. `message: "`
+appears nowhere else in src/. `message: format!(` appears once more, at
+lib.rs:2169 — the ONE Diagnostic in the tree built as a struct literal rather
+than through `Diagnostic::new`, which is why the scan could not see it either.
+It is pinned twice over, by render_ownership and sub_render_ownership, so this
+is a blind spot rather than a gap.
+
+242 LITERAL DIAGNOSTICS, up from 175. Of the 72 eval.rs messages with enough
+literal text to match, 14 were pinned by nothing, and every one was RUN rather
+than read:
+
+  - five reachable, both native engines agreeing, so each gets a fixture: the
+    keyed read of a non-record, `if`'s non-bool condition (pinned by the entry
+    above), `sleep`, `random` and `round` on the wrong type;
+  - seven shadowed, each by a check that answers first, and the probe is the
+    excuse. A `set` target must be a construction born in the same `build`
+    block, so it is bound and it is a record. `_ = ...` and `7 = ...` are both
+    `expected a binding name or type`, so the bind-pattern catch-all is
+    unreachable. The `filter` builtin has no caller: it is not one of
+    check.rs's 55 BUILTINS, `lib/list` writes `select` as a fold in kanso, and
+    `builtin_filter` by hand is refused by name — what a program meets for a
+    non-bool predicate is `list/select`'s own `if`. A mixed-type
+    `sort` is refused by `comparison requires two values of one comparable
+    type`. `builtin_nope` outside the standard library is refused by name. And
+    `Value::TableFn` is built only in wasm_rt.rs, which installs the way back
+    at init, so the escaped-closure arm answers a `None` that cannot occur;
+  - and one was the divergence in the entry above.
+
+THE SAME WRONG MECHANISM STOOD TWICE, and only one copy was caught before the
+first push. `a filter predicate returns true or false` is TWO messages —
+runtime.c's without the `, got`, eval.rs's with it — so the list carries two
+rows, and it matches on equality, so neither excuses the other. The older row,
+against native, said the shadow was `list/select`'s own `if`. That is what a
+program meets for a non-bool predicate and it is not what makes this arm
+unreachable: `list/select` is a fold written in kanso and never calls the
+builtin, so the two sit on different paths. Native's arm is dead for the reason
+the interpreter's is — `filter` is `unknown name`, `builtin_filter` is refused
+by name, and `k_b_filter` is called from nowhere in runtime.c. Both rows now
+say so.
+
+TWO MUTATIONS, one per opener, both watched red and green. The baits are two of
+the seven shadowed messages, chosen for exactly that reason: a mutation that
+cannot change what any fixture prints.
+
+COST: none, and this one can be asserted rather than measured. The change
+touches no `.rs` and no `.c` — it is a kanso script, two shell mutations, four
+fixtures, an excuse list and this entry — so the compiler binary is identical
+and no vein has anything to move. The entry above is why that sentence is
+written this way: it claimed "nothing measurable" about a change that DID edit
+Rust, and the front end moved 138 instructions on string alignment alone.
+
+## 2026-08-27 — the excuse named one barrier and there were two
+
+The last entry left the scan reading five openers over four file types, and one
+excuse on the list still said a message was pinned somewhere the scan could not
+look:
+
+    PINNED, BUT NOT WHERE THIS SCAN LOOKS. docs/book/samples/ch02/overflow.out
+    holds this text exactly ... The scan's corpus takes `.stderr` files only,
+    so it cannot see a `.out`. Widening it to `.out` would also admit every
+    micro golden and needs its own look at false pins.
+
+The look was taken, on each axis alone, because the excuse names one and there
+are two. The corpus walk starts at `tests/golden`, and the file it cites is
+under `docs/`.
+
+    admit `.out`, root still tests/golden      0 now pinned
+    walk docs/book/samples, `.stderr` only     0 now pinned
+    both                                       2 now pinned, 0 false
+
+Neither change does anything alone, which is the whole finding: the extension
+was half the barrier and the directory was the other half, and an excuse that
+named only the first would have kept the citation forever.
+
+THE SECOND PIN WAS NOT LOOKED FOR. `main is not an io; there is no plan to
+show` was excused a few lines up as pinned only by a Rust test — and
+docs/book/samples/ch05/quiet_plan.out is that whole sentence and nothing else.
+Two entries left the list for one change.
+
+THE WORRY WAS MEASURED AND IS EMPTY. `.out` does drag in all 153 micro goldens,
+and they pin nothing: those files hold what a program PRINTS, and a printed
+line would have to match ten characters of a diagnostic exactly to read as a
+pin. The four false pins on record all came from tests/*.rs — doc comments and
+`assert!` strings — which is a different kind of file from a program's output.
+
+COST: none. No `.rs` and no `.c`; the scan is a kanso program CI runs.
