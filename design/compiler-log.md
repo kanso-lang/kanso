@@ -3666,3 +3666,27 @@ enforcement rider beneath it was already recommended struck and falls
 with the same reasoning — provenance is computed, the doctrine line
 retires. The assert hako's design pass unblocks: failures now have
 their spelled surface.
+
+## 2026-08-26 — amendment: bind is a word too
+
+Clay, immediately after the three-forms gavel: "i think bind should
+stay parallel with rescue and annotate. be consistent." That reverses
+the one clause the recommendation had kept — `.` as the bind step —
+and completes the symmetry the ruling was already reaching for. All
+three chain combinators are words:
+
+    io/read_file path
+    bind (text -> json/parse text)
+    annotate (e -> "config: {e.reason}")
+    rescue when_failed
+
+- **The word is `bind`**, spelled as Clay named it. `.` retires from
+  chain-step position; a chain is a stack of worded steps and nothing
+  else. Field access (`e.reason`) is untouched — that dot was never
+  the monad.
+- Everything else in the three-forms gavel stands unchanged: the
+  callback receives the err itself, annotate always re-wraps, rescue
+  is the sole door with the foreign-only license at the word.
+- Migration widens accordingly: every `.` chain step in the fleet
+  respells as `bind`, in the same mechanical pass that respells the
+  err-arms as `annotate`.
