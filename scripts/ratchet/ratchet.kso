@@ -60,6 +60,33 @@ kq_run = "KANSO=$K KQ_STORED=report sh spec.sh"
 
 kq_gate = "{kq_clone} && K=$PWD/target/release/kanso && cd /tmp/kq && {kq_run}"
 
+# The asset-digests job builds the site with a jekyll ACTION, which a shell gate
+# cannot run — which is what the excuse this replaces said, and it was reading
+# the job rather than the assertion. What the job asserts is
+# `scripts/gates/undigested_references.sh`, two greps over a built `_site`, and
+# a plain copy of `docs/` reproduces both states: green once fingerprint has
+# rewritten the references, red before it has. Measured both ways.
+#
+# `kanso.wasm` is stood in for. The assertion counts surviving references and
+# says nothing about any digest, so the size of one asset cannot change the
+# answer — and the real blob costs about fourteen gigabytes of live arena to
+# hash, which is filed as a blocking decision in design/pending-gavels.md. A
+# second CI job holding that much every run is not a cost to add while the
+# question is open.
+ag_dir = "rm -rf /tmp/agsite && mkdir -p /tmp/agsite"
+
+ag_site = "{ag_dir} && cp -r docs /tmp/agsite/_site"
+
+ag_stub = "printf 'stand-in\\n' > /tmp/agsite/_site/kanso.wasm"
+
+ag_run = "$W/target/release/kanso run $W/scripts/fingerprint -- ./_site"
+
+ag_check = "sh $W/scripts/gates/undigested_references.sh"
+
+ag_made = "{ag_site} && {ag_stub} && W=$PWD"
+
+ag_gate = "{ag_made} && cd /tmp/agsite && {ag_run} && {ag_check}"
+
 benchmarks = "sh scripts/gates/build_benchmarks.sh"
 
 fn breaking name
@@ -503,6 +530,14 @@ rows_c1g = text/concat rows_c1f [landing in_the_page shop_window]
 # checkout, which is what the excuse this replaces claimed it needed. The clone
 # directory must be named `kq`: `kanso build <dir>` names the binary for the
 # directory and spec.sh invokes `./kq`.
+asset_digests = row
+  "a page that keeps its undigested reference while every asset is digested"
+  true
+  "{ag_gate}"
+  "asset digests (every reference rewritten, site still runs)"
+  (breaking "a_page_keeps_its_undigested_reference")
+  release
+
 kq_specs = row
   "a byte builder that writes the right length and the wrong bytes"
   true
@@ -521,7 +556,7 @@ coverage_printed = row
 
 rows_c1h = text/concat rows_c1g [dispatch coverage_driver]
 
-rows_c1i = text/concat rows_c1h [coverage_printed kq_specs]
+rows_c1i = text/concat rows_c1h [coverage_printed kq_specs asset_digests]
 
 rows_c = text/concat rows_c1i [itself]
 
@@ -534,11 +569,7 @@ no_row_a = unproven
   "the other host (macos, arm)"
   "the mutations are `specs`'s; what this adds is a second machine"
 
-no_row_e = unproven
-  "asset digests (every reference rewritten, site still runs)"
-  "needs a jekyll build the scratch worktree does not have"
-
-unproven_jobs = [no_row_a no_row_e]
+unproven_jobs = [no_row_a]
 
 workflow = ".github/workflows/ci.yml"
 

@@ -3003,3 +3003,60 @@ or text-only with a bytes reader beside it — is filed in
 design/pending-gavels.md. Today the library has one reader and no way to say
 which you meant.
 
+## 2026-08-27 — the digest gate's excuse was wrong the same way
+
+Two ratchet excuses were left. This is one, and it fails the same test the kq
+one did: it describes the JOB rather than the assertion.
+
+    "needs a jekyll build the scratch worktree does not have"
+
+The job builds the site with `actions/jekyll-build-pages`, which a shell gate
+cannot run, and that much is true. What the job ASSERTS is
+`scripts/gates/undigested_references.sh` — two greps over a built `_site`, for
+a page still naming `/kanso-engine.js` and for a script still fetching
+`kanso.wasm` by its bare name. A plain `cp -r docs _site` gives that gate both
+of its answers:
+
+    without fingerprint   exit 1, naming five surviving references
+    after fingerprint     exit 0
+
+So no jekyll. The row is written, and the mutation is
+`a_page_keeps_its_undigested_reference`.
+
+THE FIRST MUTATION PROVED THE WRONG THING. It deleted the `regexp/replace_all`
+call outright, which leaves `pattern` bound and unused, which the compiler
+refuses — so the gate went red because the harness would not build. A gate that
+reddens on a broken harness has told you the harness is broken and nothing
+about the site. The mutation that ships swaps the replacement text for the
+asset's OWN name instead: the program compiles, runs, reports every asset
+digested, and rewrites each reference to exactly what it already said.
+
+`kanso.wasm` is stood in for by a line of text. The assertion counts surviving
+references and says nothing about any digest, so one asset's size cannot change
+the answer — and the real blob costs about fourteen gigabytes of live arena to
+hash, which the entry above this one measures and files as a blocking decision.
+Adding a second CI job that holds that much on every run, while the question of
+whether it should cost that at all is open, is a trade nobody asked for.
+
+PROVEN BY THE HARNESS, not only by hand. A full `kanso run scripts/ratchet --
+prove` on this branch reports `red   asset digests` and closes with `ratchet:
+every row turned its gate red`.
+
+An earlier prove run had called the row BROKE — "the mutation would not apply"
+— and that was an artifact of the operator rather than the row. `prove` builds
+a fresh worktree of HEAD for each row, and HEAD was reset mid-run while the
+row was being moved onto its own branch, so by the time the row came up the
+worktree of HEAD no longer contained its mutation script. Worth writing down:
+a prove result is only about the tree it ran against, and moving a branch under
+a running prove invalidates every row it has not reached yet.
+
+One excuse left: `the other host (macos, arm)`, whose reason is that the
+mutations are `specs`'s and what the job adds is a second machine. The second
+half is right and the first half stopped being true today — the macOS job
+caught a fixture whose generated source line was as long as the host's temp
+path, which `specs` on linux passed. The reason wants rewriting to say what
+actually holds: `prove` is authoritative on linux and cannot run a macOS gate
+at all. That is about the harness's reach rather than about the mutations, and
+it is a separate change from this one.
+
+
