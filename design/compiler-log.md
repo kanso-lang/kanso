@@ -2390,3 +2390,62 @@ depends on its host proves less than it claims.
 
 Six excuses remain, and every one of them is a capability the worktree lacks
 rather than work nobody has done.
+
+## 2026-08-27 — the scratch worktree has chrome
+
+Two more of the ratchet's excuses said the same thing: `site` and `browser
+differential` have no mutation because the scratch worktree the ratchet builds
+lacks headless chrome.
+
+Nothing about a worktree can lack a browser. `git worktree add` makes a
+directory of tracked files on the machine that already has one, the ratchet's
+prove job runs on ubuntu-latest where `/usr/bin/google-chrome` sits — a path
+`browser_differential_run` already searches, alongside `KANSO_CHROME` — and the
+harness drives the browser itself, with no node and no `node_modules` anywhere
+in the tree. So the claim was about the worktree and the obstacle it named
+belongs to the machine.
+
+Measured rather than argued: a detached worktree of HEAD, built, wasm made, and
+the sweep run inside it.
+
+    334 programs: library 211 play 76 run 47
+    the tab: 334 answers, { "wasm":334 }
+    PASS  327 agree, 7 known gaps, 0 disagree
+
+Both jobs have mutations now.
+
+`kanso_exec_main` is behind `#[cfg(target_arch = "wasm32")]`, so appending one
+byte to what it hands back reaches the engine in the page and no other, which
+is what makes it a divergence rather than a change of behaviour everywhere:
+`FAIL 276 disagree (51 agree, 7 known gaps)`. The gate reads the corpus byte
+for byte, so a defect that reaches every program is reported for every program.
+
+docs/index.html shows an editable sample and, beside it, the output the page
+promises. The two are written by hand and only a browser can compare them.
+Changing the greeting leaves the promise standing and makes it false:
+`FAIL the landing sample did not run: {"out":"goodbye, kanso\n"}`. Each was
+watched alone, with the other reverted and the wasm rebuilt between them,
+because two mutations at once prove one thing about two gates.
+
+Adding the rows exposed a way the prove job could have lied. Both gates rebuild
+`docs/kanso.wasm`, `build_wasm.sh` needs the `wasm32-unknown-unknown` target,
+and the nightly job installs no targets — so the gate would have gone red on
+the build rather than on the defect, and a red gate is what the ratchet reads
+as proof. The job installs the target now, the way every ci.yml job that needs
+it already does, and the browser row carries `release` as setup so a Rust build
+failure is UNBUILT rather than red. The rule was already written down for the
+ten rows that carry `release`; a new row is where it gets forgotten.
+
+The third excuse fell to the same question. `playground examples` was excused
+as "the same corpus and engines as `specs`, so a row proves the corpus", and
+tests/playground.rs reads its programs out of `docs/play.js` — the EXAMPLES
+object the browser tab offers a visitor — rather than from tests/golden. Two
+different sets of programs, and `specs` never opens play.js. Pointing the
+`hello` example at a name nothing declares gives `the interpreter failed on the
+hello example: error[name]: unknown name `nobody``, with the browser-backend
+test failing beside it and the golden corpus untouched.
+
+Three excuses remain, and none of them is now a claim about which corpus is
+which. The macos host runs `specs`'s own suite on another machine, so its
+mutations are `specs`'s. The jekyll build is a docker action a shell in a
+worktree cannot invoke. kq is not checked out beside the repository.

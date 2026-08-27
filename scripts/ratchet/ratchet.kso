@@ -406,6 +406,30 @@ validator = row
   (breaking "a_validator_the_reference_disagrees_with")
   release
 
+landing = row
+  "a landing sample and the output the page prints under it disagreeing"
+  true
+  "./target/release/kanso run scripts/site_smoke"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_landing_sample_that_breaks_its_promise")
+  release
+
+in_the_page = row
+  "the engine in the page answering what no other engine answers"
+  true
+  "bash scripts/browser_differential.sh"
+  "browser differential (three engines, byte-identical, headless chrome)"
+  (breaking "the_wasm_engine_answers_something_else")
+  release
+
+shop_window = row
+  "a playground example the language will not run"
+  true
+  "cargo test --test playground"
+  "playground examples (every engine)"
+  (breaking "a_playground_example_the_engine_refuses")
+  release
+
 coverage_floor = row
   "a diagnostic whose literal run is the shortest the scan will keep"
   true
@@ -452,7 +476,9 @@ rows_c1e = text/concat rows_c1d [modules coverage]
 
 rows_c1f = text/concat rows_c1e [coverage_floor decoder validator]
 
-rows_c = text/concat rows_c1f [dispatch itself]
+rows_c1g = text/concat rows_c1f [landing in_the_page shop_window]
+
+rows_c = text/concat rows_c1g [dispatch itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
@@ -463,10 +489,6 @@ no_row_a = unproven
   "the other host (macos, arm)"
   "the mutations are `specs`'s; what this adds is a second machine"
 
-no_row_b = unproven
-  "playground examples (every engine)"
-  "the same corpus and engines as `specs`, so a row proves the corpus"
-
 no_row_e = unproven
   "asset digests (every reference rewritten, site still runs)"
   "needs a jekyll build the scratch worktree does not have"
@@ -475,17 +497,9 @@ no_row_f = unproven
   "kq specs (a real program, gating)"
   "needs kq checked out beside this repository"
 
-no_row_g = unproven
-  "site (landing sample and playground run in a browser)"
-  "needs headless chrome in the scratch worktree"
+unproven_a = [no_row_a no_row_e]
 
-no_row_h = unproven
-  "browser differential (three engines, byte-identical, headless chrome)"
-  "needs headless chrome in the scratch worktree"
-
-unproven_a = [no_row_a no_row_b no_row_e]
-
-unproven_b = [no_row_f no_row_g no_row_h]
+unproven_b = [no_row_f]
 
 unproven_jobs = text/concat unproven_a unproven_b
 

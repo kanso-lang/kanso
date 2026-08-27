@@ -25,6 +25,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      # The browser rows' gates rebuild docs/kanso.wasm, and a prove job that
+      # cannot reach the wasm target would fail them on the build rather than
+      # on the defect — which the ratchet would read as proof. ci.yml installs
+      # the target in each job that needs it; this job needs it too.
+      - run: rustup target add wasm32-unknown-unknown
       - run: cargo build --release
       - name: apply each mutation and read the gate
         run: ./target/release/kanso run scripts/ratchet -- prove
