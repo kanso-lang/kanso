@@ -1,0 +1,8 @@
+# The same shape one module over: `math/random` forwards to a builtin that
+# wants an int for its upper bound.
+import "std/math"
+
+pub fn opaque v
+  v
+
+pub play = print "{math/random (opaque "x")}"

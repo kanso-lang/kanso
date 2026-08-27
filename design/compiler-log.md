@@ -4176,3 +4176,59 @@ trend gate refuses outright, and the escape is the gavel of 2026-08-25: the
 floor is absolute against refactorings and permeable to the language. Three
 engines disagreeing about one question is the differential law's business, so
 the change lands and welfare_floor.json records the 81 against it.
+
+## 2026-08-27 — a fifth file, and it is the oracle's
+
+`scripts/diagnostic_coverage` reads four openers, and `src/eval.rs` matches
+none of them. A `RuntimeError` is a struct literal with a bare `message:`
+field, so all 97 of the interpreter's refusals could be reworded, weakened or
+lost with nothing going red — on the engine the differential law calls the
+truth.
+
+THE OPENERS ARE TWO, not one, and the difference is where the literal sits.
+`message: "` carries its own opening quote, so the chunk starts inside the
+string exactly as the driver's `"error: ` does, and the message is the first
+piece of a split on the quote. `message: format!(` does not: the string may sit
+on the next line, so the message is the SECOND piece. 49 sites take the first
+form and 47 the second.
+
+THE 97TH IS A `match` with three arms, and it is why there is no third opener:
+all three of its messages are already pinned — `` `.` reads a field of a
+record, not `` by field_non_record, the other two by over_applied_group. A key
+for that shape would buy nothing.
+
+RUNNING BOTH OVER EVERY SOURCE IS SAFE, and it found something. `message: "`
+appears nowhere else in src/. `message: format!(` appears once more, at
+lib.rs:2169 — the ONE Diagnostic in the tree built as a struct literal rather
+than through `Diagnostic::new`, which is why the scan could not see it either.
+It is pinned twice over, by render_ownership and sub_render_ownership, so this
+is a blind spot rather than a gap.
+
+242 LITERAL DIAGNOSTICS, up from 175. Of the 72 eval.rs messages with enough
+literal text to match, 14 were pinned by nothing, and every one was RUN rather
+than read:
+
+  - five reachable, both native engines agreeing, so each gets a fixture: the
+    keyed read of a non-record, `if`'s non-bool condition (pinned by the entry
+    above), `sleep`, `random` and `round` on the wrong type;
+  - seven shadowed, each by a check that answers first, and the probe is the
+    excuse. A `set` target must be a construction born in the same `build`
+    block, so it is bound and it is a record. `_ = ...` and `7 = ...` are both
+    `expected a binding name or type`, so the bind-pattern catch-all is
+    unreachable. `list/select` routes its predicate through `if`. A mixed-type
+    `sort` is refused by `comparison requires two values of one comparable
+    type`. `builtin_nope` outside the standard library is refused by name. And
+    `Value::TableFn` is built only in wasm_rt.rs, which installs the way back
+    at init, so the escaped-closure arm answers a `None` that cannot occur;
+  - and one was the divergence in the entry above.
+
+TWO MUTATIONS, one per opener, both watched red and green. The baits are two of
+the seven shadowed messages, chosen for exactly that reason: a mutation that
+cannot change what any fixture prints.
+
+COST: none, and this one can be asserted rather than measured. The change
+touches no `.rs` and no `.c` — it is a kanso script, two shell mutations, four
+fixtures, an excuse list and this entry — so the compiler binary is identical
+and no vein has anything to move. The entry above is why that sentence is
+written this way: it claimed "nothing measurable" about a change that DID edit
+Rust, and the front end moved 138 instructions on string alignment alone.

@@ -237,3 +237,52 @@ parallel group exceeds the scheduler's fiber cap
 # says why, the interpreter answers 9223372036854775808 because the spec int
 # is arbitrary precision. The quieter engine refuses with a clear diagnostic.
 integer overflow (int64 native build; spec int is arbitrary precision)
+#
+# SEVEN OF THE ORACLE'S OWN, each shadowed by a check that answers first. Every
+# mechanism below is a program that was run, not a reading of the source, and
+# the sentence the run produced is quoted.
+#
+# TWO `set` REFUSALS, both shadowed by check_build_blocks. A field write lives
+# in a `build` block and its target must be a construction made in that same
+# block — `x = opaque 7` then `x.n = 2` is refused at compile time with ``x.n =
+# ... writes only block-born values``. So the target is bound, which is the
+# first message, and it is a construction. Constructor arity is checked too
+# (`cell` with one of two fields is `has 2 field(s), got 1`), so the
+# construction is a record rather than a partial application — which is the
+# second. A constructor handed a failure hands the failure back, and that arm
+# `continue`s before either check.
+`set` target `
+`set` writes a record field, not
+#
+# THE BIND PATTERN CATCH-ALL. `destructure` has arms for a name, a constructor
+# and a keyed read, and this is the `_`. All three call sites pass a
+# `Stmt::Bind` pattern, and `parse_bind_target` builds only those three: `_ =
+# opaque 7` and `7 = opaque 7` are both `expected a binding name or type` from
+# the parser. A literal or a wildcard never reaches the evaluator.
+binding patterns are irrefutable: names and constructor
+#
+# THE FILTER PREDICATE, shadowed by `if`. The only route a program has to the
+# `filter` builtin is `list/select`, whose body puts the predicate's answer
+# through `if` — so a predicate returning a string is refused by `an if
+# condition is true or false, got 1`, which a golden pins, before `filter`'s
+# own check sees it.
+a filter predicate returns true or false, got
+#
+# SORT'S ELEMENT CHECK, shadowed by the comparison it performs. `list/sort
+# (opaque [1 "a"])` answers `comparison requires two values of one comparable
+# type` — the pairwise compare refuses before the sort can conclude anything
+# about the list as a whole.
+sort requires comparable elements of one type
+#
+# THE UNKNOWN BUILTIN, shadowed by the name check. `builtin_nope 1` in a user
+# program is `` `builtin_nope` is internal to the standard library — import its
+# module``. Reaching this arm means a stdlib module naming a builtin that does
+# not exist, which is a compiler-internal invariant rather than something a
+# program can express.
+unknown builtin `
+#
+# THE ESCAPED CLOSURE, unreachable by construction. `Value::TableFn` is built
+# in `src/wasm_rt.rs` and nowhere else, and that module calls
+# `eval::set_foreign_call` at init — so a handle exists only where the way back
+# is already installed, and this arm answers a `None` that cannot occur.
+a compiled closure escaped the engine that owns it

@@ -31,6 +31,10 @@ kinded_opener = "\"error["
 
 native_opener = "k_die(\""
 
+oracle_opener = "message: \""
+
+oracle_format_opener = "message: format!("
+
 listed_path = "tests/golden/unpinned_diagnostics.txt"
 
 lower = "abcdefghijklmnopqrstuvwxyz"
@@ -305,6 +309,64 @@ fn worth_native _ false
 fn worth_native msg true
   "native\n{msg}"
 
+# A FIFTH, and it is the oracle's own. `src/eval.rs` raises 97 `RuntimeError`s
+# and a `RuntimeError` is a struct literal with a bare `message:` field, which
+# matches none of the four openers above. So the engine the differential law
+# calls the truth could reword any of its refusals with nothing going red.
+#
+# Two openers cover 96 of the 97. `message: "` carries its own opening quote,
+# so the chunk starts inside the literal exactly as the driver's does.
+# `message: format!(` does not: the string may sit on the next line, so the
+# message is the SECOND piece of a split on the quote rather than the first.
+#
+# The 97th is a `message: match (...)` with three arms, and it is the reason
+# there is no third opener: all three of its messages are already pinned —
+# ``.` reads a field of a record, not` by field_non_record, and the other two
+# by over_applied_group — so a key for that shape would buy nothing.
+#
+# Both run over every source, like `k_die("`. `message: "` appears nowhere
+# else in src/. `message: format!(` appears once more, at lib.rs:2169, and that
+# is a real find rather than a false pin: it is the ONE Diagnostic in the tree
+# built as a struct literal instead of through `Diagnostic::new`, so the scan
+# could not see it either. It happens to be pinned twice over, by
+# render_ownership and sub_render_ownership.
+fn oracle_in src
+  chunks = list/to_list (list/drop (text/split src oracle_opener) 1)
+  found = list/to_list (list/map chunks oracle_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn oracle_site chunk
+  told_oracle (head_of (text/split chunk "\"")[1]!)
+
+fn oracle_format_in src
+  chunks = list/to_list (list/drop (text/split src oracle_format_opener) 1)
+  found = list/to_list (list/map chunks oracle_format_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn oracle_format_site chunk
+  quoted (text/split chunk "\"")
+
+fn quoted pieces
+  told_oracle (opening pieces (length pieces < 2))
+
+fn opening _ true
+  ""
+
+fn opening pieces false
+  head_of pieces[2]!
+
+fn told_oracle ""
+  ""
+
+fn told_oracle msg
+  worth_oracle msg (length msg >= 10)
+
+fn worth_oracle _ false
+  ""
+
+fn worth_oracle msg true
+  "runtime\n{msg}"
+
 fn raised_in src
   chunks = list/to_list (list/drop (text/split src opener) 1)
   found = list/to_list (list/map chunks site_of)
@@ -368,7 +430,9 @@ fn read_src name true rest found
 fn more_sources rest found src
   plain = text/concat (driver_in src) (kinded_in src)
   spoken = text/concat (native_in src) plain
-  both = text/concat (raised_in src) spoken
+  oracle = text/concat (oracle_in src) (oracle_format_in src)
+  heard = text/concat oracle spoken
+  both = text/concat (raised_in src) heard
   over_sources rest (text/concat found both)
 
 fn gathered found

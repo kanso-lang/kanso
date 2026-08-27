@@ -1,0 +1,9 @@
+# `round` accepts an int or a float and refuses everything else. The refusal
+# renders UNQUOTED — `got x`, not `got "x"` — which is what both native engines
+# do for this family and is the half a fixture holding an int cannot pin.
+import "std/math"
+
+pub fn opaque v
+  v
+
+pub play = print "{math/round (opaque "x")}"
