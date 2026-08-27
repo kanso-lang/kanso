@@ -25,6 +25,10 @@ type scan
 
 opener = "Diagnostic::new("
 
+driver_opener = "\"error: "
+
+kinded_opener = "\"error["
+
 listed_path = "tests/golden/unpinned_diagnostics.txt"
 
 lower = "abcdefghijklmnopqrstuvwxyz"
@@ -211,6 +215,62 @@ fn worth _ _ false
 fn worth kind msg true
   "{kind}\n{msg}"
 
+# The loader and the driver do not build a Diagnostic. They write `error: …`
+# as plain text, print it, and exit — thirty-one sites in src/, and until this
+# the scan walked past every one of them, so a message a user meets before
+# anything is compiled could be reworded or lost with nothing going red.
+#
+# The chunk after the opener runs to the end of the file, so the literal is cut
+# at its closing quote first and only then handed to `head_of`. An escaped
+# quote truncates the head early, which costs specificity and never invents it.
+fn driver_in src
+  chunks = list/to_list (list/drop (text/split src driver_opener) 1)
+  found = list/to_list (list/map chunks driver_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn driver_site chunk
+  told_driver (head_of (text/split chunk "\"")[1]!)
+
+fn told_driver ""
+  ""
+
+fn told_driver msg
+  worth_driver msg (length msg >= 10)
+
+fn worth_driver _ false
+  ""
+
+fn worth_driver msg true
+  "driver\n{msg}"
+
+# A THIRD way the compiler writes an error, and the one that hid longest.
+# `error[kind]: …` is what a rendered Diagnostic looks like, so a message
+# written that way as plain text reads on a terminal exactly like one the
+# corpus pins — and the scan, keyed on the constructor and then on `error: `,
+# saw neither. Twenty-odd sites: the runtime's endpoints, the stack-depth
+# refusal, the exit-code refusals, the repl's name lookups.
+#
+# `error[` goes back on the front, because the corpus holds what a user sees.
+fn kinded_in src
+  chunks = list/to_list (list/drop (text/split src kinded_opener) 1)
+  found = list/to_list (list/map chunks kinded_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn kinded_site chunk
+  told_kinded (head_of (text/split chunk "\"")[1]!)
+
+fn told_kinded ""
+  ""
+
+fn told_kinded msg
+  worth_kinded "error[{msg}" (length msg >= 10)
+
+fn worth_kinded _ false
+  ""
+
+fn worth_kinded msg true
+  "printed\n{msg}"
+
 fn raised_in src
   chunks = list/to_list (list/drop (text/split src opener) 1)
   found = list/to_list (list/map chunks site_of)
@@ -267,15 +327,40 @@ fn read_src name true rest found
   os/read_file "src/{name}" . (src -> more_sources rest found src)
 
 fn more_sources rest found src
-  over_sources rest (text/concat found (raised_in src))
+  plain = text/concat (driver_in src) (kinded_in src)
+  both = text/concat (raised_in src) plain
+  over_sources rest (text/concat found both)
 
 fn gathered found
   every = deduped (list/to_list (list/sort found))
   corpus_of "tests/golden" [] . (parts -> with_tests every parts)
 
+# TWO corpora, because the two openers are pinned in different places and a
+# substring search cannot tell an assertion from a mention.
+#
+# A Diagnostic's text is pinned by a .stderr file or, for the handful a corpus
+# of programs cannot express, by a Rust test — so tests/*.rs belongs in its
+# corpus. For the driver's messages that same file set is mostly noise: of the
+# six that read as pinned there, four were false, and every one of the four
+# came from tests/*.rs. `no .kso files in` matched tests/golden.rs's own
+# `assert!` message, `clang failed on` a doc comment, `cannot write` the
+# oracle's unrelated refusal, `cannot execute` a panic the wasm spec writes for
+# itself. None of those checks a compiler message; all four read as coverage.
+#
+# So the driver corpus is .stderr plus module_differential, which is where a
+# module refusal is legitimately pinned — it needs a tree on disk, which the
+# error corpus cannot express. A driver message pinned only by a Rust test goes
+# on the excused list naming that test, the way `an_empty_branch_is_refused.rs`
+# already is.
+module_pins = "scripts/module_differential/module_differential.kso"
+
 fn with_tests every parts
-  os/list_dir "tests" . (names -> test_sources (list/to_list names) parts)
-    . (all -> with_corpus every (text/join all ""))
+  os/list_dir "tests" . (names -> test_sources (list/to_list names) [])
+    . (rs -> with_module every (text/join parts "") (text/join rs ""))
+
+fn with_module every stderrs rs
+  wide = "{stderrs}{rs}"
+  os/read_file module_pins . (m -> with_corpus every wide "{stderrs}{m}")
 
 fn test_sources names parts
   onward_test names parts (length names == 0)
@@ -320,8 +405,9 @@ fn take_stderr _ false dir rest parts
 fn take_stderr here true dir rest parts
   os/read_file here . (t -> in_dir dir rest (push parts t))
 
-fn with_corpus every corpus
-  os/read_file listed_path . (t -> judged every corpus (allowances t))
+fn with_corpus every corpus driver_corpus
+  os/read_file listed_path
+    . (t -> judged every corpus driver_corpus (allowances t))
 
 fn allowances t
   lines = list/to_list (list/map (text/split t "\n") squeezed)
@@ -331,15 +417,32 @@ fn allowances t
 fn in_corpus? corpus msg
   length (text/split corpus msg) > 1
 
-fn judged every corpus excused
-  pinned = list/to_list (list/select every (e -> known? corpus e))
-  loose = list/to_list (list/reject every (e -> known? corpus e))
+fn judged every corpus driver_corpus excused
+  seen = (e -> known? corpus driver_corpus e)
+  pinned = list/to_list (list/select every seen)
+  loose = list/to_list (list/reject every seen)
   healed = list/to_list (list/select pinned (e -> listed? excused e))
   missing = list/to_list (list/reject loose (e -> listed? excused e))
   reported every excused missing healed
 
-fn known? corpus e
-  in_corpus? corpus (message_of e)
+fn known? corpus driver_corpus e
+  which = looked_in corpus driver_corpus (kind_of e)
+  in_corpus? which (message_of e)
+
+fn looked_in _ driver_corpus "driver"
+  driver_corpus
+
+# The printed family reads the WIDE corpus, where the driver's does not, and
+# the difference is measured rather than assumed. The driver's four false pins
+# were short generic phrases — `cannot write`, `cannot execute` — that a Rust
+# test can hold for a hundred unrelated reasons. An `error[kind]: …` string is
+# the RENDERED form of a diagnostic, so a test holding one is asserting output.
+# All three that matched here were checked by hand and all three were true.
+fn looked_in corpus _ "printed"
+  corpus
+
+fn looked_in corpus _ _
+  corpus
 
 fn listed? excused e
   list/any? excused (l -> l == message_of e)

@@ -381,11 +381,64 @@ c22said = "error: cannot resolve import \"./nope\""
 
 c22 = kase c22l [c22m] "" "check refuses" c22said
 
+# A directory that holds no kanso at all. The loader answers before anything is
+# compiled, and the message is driver text rather than a Diagnostic, so until
+# the coverage scan learned its second opener nothing could see it go missing.
+c23a = filed "husk/README.md" "nothing to compile here\n"
+
+c23m = filed "main.kso" "import \"./husk\"\n\nprint \"x\"\n"
+
+c23l = "a directory with no kanso in it"
+
+c23said = "error: no .kso files in "
+
+c23 = kase c23l [c23a c23m] "" "check refuses" c23said
+
 cases_a = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
 
 cases_b = text/concat cases_a [c17 c18]
 
-cases = text/concat cases_b [c19 c20 c21 c22]
+# Both arms of the self-import guard. The message was on the excused list as
+# unreachable, written from three tries that each landed somewhere else: a
+# directory importing `./itself` is taken first by the cycle check (c20), a
+# hako member importing its bare name is taken by "a bare path names a hako",
+# and an entry file importing a module beside it is the ordinary case.
+#
+# The reason all three missed: the guard asks `!ENTRY_COMPILE`, and that flag
+# stays true for the whole of an entry compile, dependencies included. So no
+# `kanso run` can reach it. Checking the MODULE ROOT can — the same door
+# `an_empty_branch_is_refused` uses — and both arms answer there.
+c24a = filed "list/a.kso" """
+  import "std/list"
+
+  pub fn twice xs
+    list/to_list (list/map xs (x -> x + x))
+"""
+
+c24l = "a module named for a shipped one, importing it"
+
+c24said = "error: a module cannot import itself — `std/list` is this module"
+
+c24 = kase c24l [c24a] "list" "check refuses" c24said
+
+c25a = filed "mine/a.kso" """
+  import "../mine"
+
+  pub fn f x
+    x + 1
+"""
+
+c25l = "a module reaching itself back through its parent"
+
+c25said = "error: a module cannot import itself — `../mine` resolves to this"
+
+c25 = kase c25l [c25a] "mine" "check refuses" c25said
+
+cases_c = text/concat cases_b [c19 c20 c21 c22]
+
+cases_d = text/concat cases_c [c23]
+
+cases = text/concat cases_d [c24 c25]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written
