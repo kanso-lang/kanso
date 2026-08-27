@@ -801,8 +801,27 @@ impl Executor for RealExecutor {
 /// does not change with the host's libc or this compiler's version, which a
 /// reproducible diagnostic cannot afford.
 pub fn read_file_text(path: &str) -> Result<String, String> {
-    std::fs::read_to_string(path)
-        .map_err(|_| format!("cannot read {path}: no such file or unreadable"))
+    std::fs::read_to_string(path).map_err(|why| match why.kind() {
+        // A file that is THERE and READABLE and simply is not text was being
+        // reported as absent, because the reason was thrown away. `kanso.wasm`
+        // is the example that found it: the interpreter said the file did not
+        // exist while native read it and printed its bytes back unchanged.
+        //
+        // The two still differ, and the differential law allows that only for
+        // an engine that refuses with a clear diagnostic — which is what this
+        // makes it. Native reads any file; a Rust `String` cannot hold bytes
+        // that are not utf-8, so the interpreter cannot follow it there, and
+        // saying so is the most it can do. Whether `read_file` should be
+        // byte-transparent on every engine is a design question, filed.
+        //
+        // The wording stays fixed rather than interpolating the OS's own
+        // message, for the reason the comment above gives: `ErrorKind` is
+        // Rust's classification and does not move with the host's libc.
+        std::io::ErrorKind::InvalidData => {
+            format!("cannot read {path}: the bytes are not text")
+        }
+        _ => format!("cannot read {path}: no such file or unreadable"),
+    })
 }
 
 #[derive(Default)]

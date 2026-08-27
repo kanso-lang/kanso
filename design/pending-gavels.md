@@ -117,6 +117,89 @@ more than a hash.
 
 ## Open, not blocking
 
+### Whether a compile_instructions move that cannot be work needs an attribution
+
+**Cited: searched design/compiler-log.md and the archive for
+`compile_instructions`. The vein's own header in
+bench/compile_instructions_golden.txt is the record of why it exists and is
+quoted below; nothing has revisited the question this entry asks.**
+
+The vein moved three times in two days from an untouched call graph:
+
+    2026-08-26   +167     a reworded driver message in src/main.rs
+    2026-08-27   -251     two match arms in the interpreter's call_builtin
+    2026-08-27   +1,954   one ErrorKind match in read_file_text
+
+In each case the edited function is unreachable from the measured path —
+`kanso check lib/json` compiles a library and runs no program — and the
+counters that measure the front end's work are identical across all three:
+allocations 61,981 and peak 822,004. The compiler's own binary is being
+rearranged by edits elsewhere in the crate, and the vein reads that as the
+front end's work changing.
+
+THE VEIN EARNS ITS PLACE and this is not a proposal to remove it. Its header
+records the case: a change took the front end from 90.9M retired instructions
+to 67.2M with every other gate reporting nothing. That is exactly what it is
+for.
+
+The question is narrower. A RISE with allocations, rounds, visits and peak all
+identical, in a diff that does not touch the measured path, currently costs a
+golden update, a page-figure update, a log paragraph, and — because the trend
+gate calls it a pure regression — an entry in `bench/welfare_floor.json`
+attributing a spend. Today's attribution had to say in its own text that
+nothing was spent, which is an odd thing for a ledger of spends to contain.
+
+TWO ANSWERS:
+
+1. **Leave it.** The ritual is cheap per occurrence and the alternative is a
+   rule that could be leaned on. Silence is the thing the vein exists to
+   refuse, and three paragraphs in two days is not a crisis.
+2. **Let the trend gate treat an instructions-only move as priced by the log
+   sentence alone**, when every other compile counter is identical. The golden
+   still moves and the sentence is still required; only the welfare_floor
+   attribution is dropped, because there is nothing to attribute.
+
+RECOMMENDATION: 2, narrowly — conditioned on the other three compile counters
+being byte-identical, so it cannot cover a change that did real work. If that
+condition feels like a crack, 1 is honest and the cost is small; what should
+not stand is a spend ledger whose entries say no spend occurred.
+
+### Whether `read_file` is text or bytes
+
+**Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
+for `read_file` and for `text/bytes`. The archive's `A digest, and the import
+path that broke it` is the only entry that touches this and it asserts the
+opposite of what is true today — "`io/read_file` carries binary content intact
+and `text/bytes` exposes it" — which holds on native and not on the
+interpreter. No design/*.md mentions it. Nothing has ruled on it.**
+
+`lib/os/os.kso` has one reader, `read_file`, and it does not say what it reads.
+On native it reads any file and preserves the bytes; on the interpreter a file
+whose bytes are not utf-8 is refused, because the value it reads into is a Rust
+`String`. As of today that refusal at least names the reason rather than
+claiming the file is absent, which is what the differential law needs from an
+engine that speaks less — but the two still answer differently for the same
+program, and a caller has no way to say which behaviour it wanted.
+
+THREE ANSWERS:
+
+1. **Text-only, everywhere, and a separate bytes reader beside it.** Go's
+   shape. Native would begin refusing files it reads today, which is a
+   behaviour change to `scripts/fingerprint` among others, so it needs the
+   bytes reader in the same change.
+2. **Byte-transparent everywhere.** Needs the interpreter to hold a non-utf-8
+   payload, which is a change to what a kanso string is on that engine, and
+   the archive records a ruling that a bytes value is real and a list is never
+   bytes — so the machinery may be closer than it looks.
+3. **Leave it.** Native reads everything, the interpreter refuses clearly, and
+   the law is satisfied. The cost is that the oracle cannot run every program
+   native can, which is the thing the oracle is for.
+
+RECOMMENDATION: 1. It is the only one where the library says what it does. It
+is also the only one that makes `read_file`'s name true on both engines, and
+the bytes reader it needs is the same surface `text/bytes` already implies.
+
+
 ### Riders under the err gavel (the three-combinator model, 2026-08-15)
 
 **Cited: gavel 1, archive 2026-08-15, listed six riders. Four have since
