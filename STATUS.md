@@ -56,12 +56,18 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso#1092** — a bare name at a wall, refused at compile time. The one idea
-of the two below that did not stay dead: the refutation ruled out the naive
-version and not the idea, and a set of the names a declaration binds fixes it.
+**kanso#1098** — a destructuring bind of the wrong shape said three different
+things on three engines, and native's was the poorest: it dropped both the
+value the reader bound and the sentence saying why a bind cannot fail over to
+another arm. Native and the page gain them.
 
 ## What landed on 2026-08-27
 
+    kanso f1aecf5d  #1095  the ratchet reads the C now, and twelve have reasons
+    kanso 43526dc7  #1097  the wasm gap list pinned a prefix
+    kanso c0b1d066  #1094  six socket failures said seven different things
+    kanso 080deb09  #1093  eight native runtime messages that nothing pinned
+    kanso fe52d516  #1092  a bare name at a wall, refused at compile time
     kanso 54914c40  #1091  a micro program's stderr is part of what it does
     kanso 7be1ed9c  #1090  two ways the page's endpoint got an err wrong
     kanso 36dcd74e  #1089  clang is installed, and that was never the question
@@ -91,48 +97,107 @@ declared identically, reached the executor (#1082). And a digest's peak arena
 turned out linear in the input at about 6.5 kB per byte hashed (#1083), which
 is the blocking question above.
 
+## The sweep this file asked for, and what it found
+
+The last version of this section proposed one more pass over
+`tests/golden/runtime` for a construct whose SUCCESS case is pinned nowhere.
+The pass ran. The answer was not a fifth instance — it was a gate that could
+not see a whole file.
+
+`scripts/diagnostic_coverage` is the ratchet that stops a compiler message
+being reworded, weakened or lost with nothing going red. Its `source?` admits a
+file only when its last three characters are `.rs`, so it had never read
+`src/runtime.c` — where a COMPILED BINARY gets its runtime messages. **Thirty-
+three of the sixty-six `k_die` texts there were pinned by nothing.**
+
+The arithmetic family is the shape in miniature: `+` on two values that have no
+`+` is pinned twice, and `-`, `*`, `/`, `%` were pinned nowhere, all four
+reachable by the idiom the `+` fixture already uses. One of five.
+
+Twenty-one are pinned now across #1093 and #1095, the scan reads `.c`, and the
+twelve that remain carry a mechanism apiece rather than a shrug.
+
 ## Next
 
-**One of the two ideas that died by measurement came back.** Both are in the
-log with their programs; this is where each ended up.
+**Four findings from the sweep are still open, each its own change.**
 
-**The bare-name wall check SHIPPED, in #1092.** The refutation was real — the
-one-line version refuses a working program, because a local may shadow a
-bare-enrolled import and `returns` is built from all of `program.fns`,
-synthetic clones included. What it ruled out was that version. `never_describes`
-takes the set of names its declaration binds now: parameters, every
-`Stmt::Bind` pattern at any depth, every lambda parameter, and `Guard`'s own
-`rest` list. Over-wide on purpose — no scope model, so a name bound anywhere in
-a declaration shields it everywhere there, which costs a refusal not made
-rather than one made wrongly.
+A FIFTH FILE THE RATCHET CANNOT SEE, and it is the oracle's. `src/eval.rs`
+raises 98 `RuntimeError`s, and a `RuntimeError` carries a bare `message:`
+field — none of the scan's four openers. Reading the 72 with enough literal
+text to match against the goldens leaves 14 that nothing pins. Every one was
+then run rather than read, which sorted them:
 
-Two things from building it are worth carrying forward. **A corpus only speaks
-about what it contains**: 73 test binaries were green over a walk that missed
-`Guard`, because no fixture in the tree binds a shadowing name inside one. The
-`Expr` enum is the check the corpus could not be — four variants bind names,
-and reading the walk against that list is decidable where running the suite is
-not. And **a golden that checks only THAT something failed is nearly
-worthless**: with the bare-`Ident` arm removed the fixture's program still
-fails, later and on the runtime path with a different sentence, so only the
-exact text makes the spec speak.
+  - five are reachable and the two native engines agree on them, so each wants
+    a fixture: the keyed read of a non-record, `if`'s non-bool condition,
+    `sleep`, `random` and `round` on a value of the wrong type;
+  - seven are shadowed, each by a check that fires first, and the probe that
+    established it is the excuse: a `set` target must be a construction born
+    in the same `build` block, so it is bound and it is a record; a bind
+    pattern is only ever a name, a constructor or a keyed read, because
+    `_ = ...` and `7 = ...` are `expected a binding name or type`;
+    `list/select` routes its predicate through `if`; a mixed-type `sort` is
+    refused by `comparison requires two values of one comparable type`;
+    `builtin_nope` outside the standard library is refused by name; and a
+    foreign closure handle is built only by `wasm_rt.rs`, which installs the
+    way back at init;
+  - and one is a DIVERGENCE. `return x if cond` on a non-bool says three
+    different things: the interpreter's `a return condition is true or false,
+    got 7`, native's `an if condition is true or false, got 7`, and the page's
+    `if takes a bool condition (got "7")` — a third wording, and quoted where
+    the other two are not. The plain `if` builtin agrees across native and the
+    interpreter, so it is the guard alone. Converging on native's sentence
+    keeps `k_truthy` in one place, which is what runtime.c says it is for, and
+    #1094 measured what a second wording costs: 128 bytes of `.text` in every
+    binary, for two characters.
 
-**A coverage gate over the std surface stays dead.** There is nothing to gate —
-100 of 100 exports are reached. The first answer was 24, and the arithmetic of
-being wrong is the part worth keeping:
+A FOURTH WAY THE COMPILER WRITES A MESSAGE, after the three #1079 found.
+`codegen.rs` bakes text into the emitted binary through `format!`. #1098 fixed
+one of the two — destructuring a value as a named type — and the other, the
+one naming which types a field takes, turns out to be DEAD: `check_field_annotations`
+refuses every field annotation, so nothing reaches the emitter's half. Deleting
+it is not obviously right, because it is the emitter half of a feature the
+checker currently declines rather than a mistake. Widening the scan to `format!`
+in general would match every format string in the compiler, so a key for this
+family still needs finding.
 
-    qualified name only, across the corpus dirs     24 uncovered
-    plus the bare-enrolled form                      1 uncovered
-    plus intra-library calls                         0 uncovered
+THE SCAN'S CORPUS TAKES `.stderr` ONLY. `integer overflow` is pinned exactly,
+by `docs/book/samples/ch02/overflow.out`, and the gate cannot see it. Admitting
+`.out` would also admit every micro golden, and the tests/*.rs corpus has
+already produced four false pins, so it needs its own look before it lands.
 
-Two searches this month have failed the same way: the coverage scan's
-twelve-character floor hid three reachable diagnostics, and this hid eight
-reachable exports. A name here has two written forms, and a search that knows
-one is measuring its own blind spot.
+THE OTHER ENGINES HAVE THE SAME FILE PROBLEM, and #1097 answers half of it.
+The scan reads `.rs` and `.c` now, and `src/wasm_rt.rs`'s refusals are
+`Err(String)` rather than any of the four openers, so it sees none of them.
+What pins them instead is tests/golden/wasm_gaps.txt — which listed a PREFIX
+where the page writes a sentence, leaving the half that names what the page
+could not do free to be reworded. #1097 tightened every row to the whole
+sentence, measured both ways: reword `cannot read` in wasm_rt.rs and the old
+list passes while the new one fails. Whether the scan should read wasm_rt.rs
+as well is still open.
 
-**Where to look next.** Four bugs today shared a shape, and none was in an
-uncalled function — all four were in the ENDPOINT around a function the corpus
-calls constantly: what the exit code carries, which stream the bytes land on,
-which sentence names the fault, and which side of a wall was judged. The
-`tests/golden/runtime` fixture names read as a list of failures, and a fourth
-sweep of them for a construct whose SUCCESS case is pinned nowhere is the
-cheapest place to find the fifth.
+AND THE PAGE WRITES MESSAGES OF ITS OWN, which #1098 found the hard way. It has
+a whole emit path — wasm_backend.rs into wasm_rt.rs — parallel to codegen.rs
+into runtime.c, so a sentence can live in THREE places and drift in any of
+them. Fixing native's `cannot destructure` left the page saying the old words,
+and only the corpus walk caught it.
+
+**And the method is worth carrying forward more than the findings are.** Every
+mechanism in the excuse list was established by running a program, because
+three separate readings of the source were wrong on the way:
+
+  - matching message tails against the Rust sources reported thirteen messages
+    "no Rust engine can produce"; three were `format!("{name} takes a string")`,
+    which the interpreter says every day;
+  - the six `net_*` refusals looked shadowed by the wrappers' `.handle` read,
+    and a record whose handle is a STRING reaches every one of them;
+  - the runtime corpus looked like the obvious home for the socket specs until
+    `cargo test` named a THIRD engine walking it, whose executor has no sockets
+    and refuses differently.
+
+  - the scan that found the wasm gap read `.stderr`, `.out` and `.rs`, and
+    wasm_gaps.txt is a `.txt`, so it called two pinned messages unpinned.
+
+A search that knows one written form of a thing is measuring its own blind
+spot, and four of them did it in one day. The rule that follows: a scan over a
+corpus enumerates the corpus's file types from the harness that reads it,
+never from the ones that came to mind.
