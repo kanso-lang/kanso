@@ -5217,3 +5217,57 @@ down. Both `view_cache_is_returned` tests ask for 20,000 maps, cargo runs them
 on separate threads, and `views` named its scratch directory for the size
 alone — so one test removed the other's program mid-run. They never collided
 while both were ignored. The directory is unique per call now.
+
+## 2026-08-27 — a file module could be imported and could never import
+
+Found while trying to repair the one `#[ignore]`d test that still fails. Its
+fixture needed a third module, the third module would not resolve, and the
+refusal was wrong about the facts:
+
+    error: cannot resolve import "./helper" — a dot-prefixed path names a
+    module beside the importing one, and there is no such directory or `.kso`
+    file there
+
+`helper.kso` sat beside it. Reduced to three files:
+
+    main.kso    import "./a"          a/play
+    a.kso       import "./b"          pub play = print "{b/v}"
+    b.kso                             pub v = 1
+
+`main.kso` imports the file module `a.kso` and that works. `a.kso` importing
+the file module beside it does not. The same shape as directories — `a/a.kso`
+doing `import "../b"` against `b/b.kso` — has always worked.
+
+WHY. `compile_module_loaded` hands `load_dependencies` its own `dir` as the
+base for resolving imports, and for a file module `dir` is the FILE. So
+`resolve_import` looked for `a.kso/b` and `a.kso/b.kso`, neither of which can
+exist, and reported the sibling missing while it sat there. One line:
+
+    let base = match dir.is_file() {
+        true => dir.parent().unwrap_or(dir),
+        false => dir,
+    };
+
+The self-import guard behaves the same either way afterwards — a file module
+importing itself and a directory module importing itself both answer
+`import cycle through …`, where before this the file form could not get far
+enough to say anything.
+
+`module_differential` gains the case, which is the corpus for whole modules on
+disk. It reads 18 modules now, and with the fix reverted it goes red naming
+the case and quoting the diagnostic rather than through the known-defect
+ledger:
+
+    18 modules, 1 wrong; 1 known defects, 0 no longer as recorded
+      a file module importing the file module beside it
+        expected it to compile: error: cannot resolve import "./helper" …
+
+WHAT IT COSTS. `compile_instructions` 57,492,931 -> 57,493,961, a rise of
+1,030 on 57.5 million — 0.0018%, and it is the stat calls: one `is_file` per
+module load. The counters that measure only the front end's work do not move
+at all, `compile_allocs` at 61,981 and `compile_peak_bytes` at 822,004 both
+identical, and no runtime vein is touched. The trend gate refuses a rise that
+buys nothing, so this change takes the language escape and records itself in
+bench/welfare_floor.json's history. The floor does not move: welfare reads
+84.12 either way, because a thousand instructions in fifty-seven million is
+below the hundredth the gate can see.
