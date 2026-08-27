@@ -3382,6 +3382,138 @@ than folded in here. The runtime guard is needed either way — a piped call, a
 non-`Ident` head and a parameter all reach the wall with the check unable to
 say.
 
+## 2026-08-27 — the micro corpus never read a stderr golden
+
+Third instance of one shape in one day. A construct's FAILURE case is pinned
+and its success case is pinned nowhere:
+
+    os/exit         exit_needs_a_status         the success case: nowhere
+    >> two effects  sequencing_takes_two_...    the runtime path: diverged
+    io/write_err    write_err_takes_a_string    the success case: nowhere
+
+The first two were fixed this morning. This is the third.
+
+`tests/golden/micro/write_err_stream.kso` writes `err one\n` to the diagnostic
+stream between two writes to the ordinary one. Its `.out` golden holds the two
+ordinary lines, and there was no other golden — `golden.rs` reads `"out"` for
+this corpus and never `"err"`.
+
+WHAT THAT LEFT UNPINNED, precisely. The `.out` golden does prove `err one` did
+not go to stdout, and the wasm walk in tests/wasm_engine.rs compares native's
+`stdout + stderr` against the page's, so the ENGINES are held to each other on
+both streams. What nothing held was the bytes themselves: a change that dropped
+the write on all four writers at once — the interpreter, the compiled binary,
+the wasm runtime, the browser — leaves `.out` unchanged and both concatenations
+equal, and turns nothing red. Agreement is not a pin.
+
+WHAT IT ASSERTS NOW. Every micro program was run as a library and its stderr
+collected before the rule was written, rather than after: 136 programs export
+`play` and exactly one of them says anything on that stream. So the rule can be
+the strict one. A program with no `.err` beside it must be silent there, which
+is a new assertion for 135 of them; the one that speaks carries a golden saying
+exactly what it says. Both the library path and the release-built binary check
+it, because the compiled binary is a fourth writer of those bytes and the
+stream it chooses is as much a fact about the program as the bytes are.
+
+WATCHED RED AT THE IMPLEMENTATION, not at the fixture. Deleting the write from
+the .kso would have proved only that a golden matches a file. Two perturbations
+of `RealExecutor::write_err` in src/eval.rs instead:
+
+    eprint! -> print!    caught at golden.rs:384, the STDOUT assertion:
+                         left "out one\nerr one\nout two\n"
+    the write dropped    caught at golden.rs:389, the new one:
+                         left "" right "err one\n"
+
+The first is worth keeping in the record: a stream swap is caught by the
+assertion that was already there, so only the second shows the new one doing
+work. A perturbation that reddens an existing assertion proves nothing about
+the one just added.
+
+NO COMPILED CODE CHANGED. `src/eval.rs` is byte-identical to main, edited and
+restored twice. The corpus gained one file and tests/golden.rs gained two
+assertions, so no vein can move.
+
+## 2026-08-27 — the bare-name wall check is refuted by a program
+
+The entry above this one's sibling filed a question and recommended nothing,
+which was right: the recommendation it would have carried is wrong, and one
+program says so.
+
+`never_describes` refuses a literal or a direct call on either side of a wall
+and not a bare name, which is how `io/write "one" >> x` reaches the run. The
+obvious extension is one line — src/parser.rs:624 makes a constant an `FnDecl`
+with zero params, so `returns.get(&(name, 0))` is the same lookup the pass
+already does for calls, and tests/wall_takes_effects.rs made exactly this
+extension once before, from literals to calls, calling a call "the same case
+one step out".
+
+TWO SHADOWING CASES, and reading found only the first.
+
+A local shadowing an OWN top-level declaration cannot happen: the compiler
+already refuses it with "`x` is already a declaration; rename the binding".
+
+A local shadowing a BARE-ENROLLED IMPORT is legal, and this program runs
+correctly today — it prints `one` then `shadowed` and exits 0:
+
+    import "std/io"
+    import "std/list"
+
+    pub play =
+      naturals = io/write "shadowed\n"
+      io/write "one\n" >> naturals
+
+`list/naturals` is one of exactly four zero-arity stdlib constants — with
+`io/stdin`, `os/args` and `time/now` — and it answers a plain value. `returns`
+is built from ALL of `program.fns`, synthetic clones included, so the lookup
+finds the stdlib row and the local is invisible to it. The one-line extension
+refuses this program, and check.rs:1085 states the rule that would break: "the
+enrollment must never make every stdlib export a forbidden binding name".
+
+So the extension needs locals in scope, which neither `never_describes` nor
+its sibling `refused` tracks. That is a real cost against a real benefit and
+the question stays open; what has changed is that it is now a question about
+scope rather than about one line. The program above is the case that must not
+be refused, in the role tests/wall_takes_effects.rs already keeps for its own
+third example, and it belongs in the corpus whichever way the question falls.
+
+The runtime guard that shipped alongside it is needed either way.
+
+## 2026-08-27 — the std surface has no coverage gap, and the naive search says 24
+
+Three bugs in one day shared a shape: a construct's failure case pinned, its
+success case pinned nowhere. `the_wasm_engine_complains_the_way_the_others_do`
+in tests/wasm_engine.rs is that shape written down as a harness — it walks
+every `pub fn` in lib/ and hands each one arguments of the wrong type, on all
+three engines. Nothing walks the surface the other way. So the obvious next
+move was to find which exports no program ever calls successfully, and gate it.
+
+There are none. The measurement is recorded because the FIRST answer was 24 and
+it was wrong, in a way anybody repeating the search would repeat.
+
+    grep for `list/argmax` across examples, tests/golden, book   ->  24 uncovered
+    also grep for the bare-enrolled `argmax`                     ->   1 uncovered
+    also count intra-library calls                               ->   0 uncovered
+
+Eight of the nine survivors of the second pass are called by their bare name
+after an `import "std/list"` or `import "std/path"`, which is how a program
+normally writes them. The last, `json/escape_onto`, is `pub fn` in
+lib/json/text.kso and called from lib/json/json.kso:52 on every string a JSON
+encode touches — covered by the busiest path in the tree, and invisible to a
+search that reads only the corpus directories.
+
+Two searches this month have now been wrong in exactly this way: the coverage
+scan's twelve-character floor hid three reachable diagnostics, and this one hid
+eight reachable exports. The rule they share is that a name in kanso has two
+written forms and a search that knows one of them is measuring its own blind
+spot rather than the tree.
+
+So no gate, and no finding. What today's three bugs have in common is not an
+uncalled function — every one of them was in a function the corpus calls
+constantly. It is the ENDPOINT around the call: what the exit code carries,
+which stream the bytes land on, which sentence names the fault. Coverage of the
+surface would not have found any of them, which is worth knowing before the
+next sitting spends a morning building it.
+
 ## 2026-08-27 — the bare name at a wall, refused at compile time after all
 
 The entry recording this as refuted was right about the naive version and
