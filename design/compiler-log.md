@@ -3155,3 +3155,27 @@ Pinned at tests/golden/errors/a_build_body_line_goes_nowhere, watched red with
 the check removed, and the excuse is deleted — the coverage gate refuses to let
 a pinned message stay listed, so the file shrank from eleven to ten on its own
 insistence.
+
+WHAT IT COST, and this one is not layout. `compile_instructions` rose 1,743
+(57,488,169 -> 57,489,912). Three moves of this vein earlier today were layout,
+each in a function `kanso check lib/json` cannot reach, and the reflex on the
+fourth was to reach for the same reading. It does not hold: `resolve_expr`'s
+walk over block and build bodies runs on every compile, and it gained an
+`enumerate` and one index comparison per statement. That is the rise.
+
+Allocations and peak are identical at 61,981 and 822,004, and that agreement is
+evidence about the SHAPE of the work rather than evidence there is none — an
+index comparison allocates nothing. Saying so matters, because "the other
+counters did not move" was the layout argument three times running and it does
+not carry here.
+
+The trend gate refuses a pure regression, so this is attributed in
+bench/welfare_floor.json. Unlike the attribution written for #1085, this one
+records a real spend: the front end does a little more work on every compile,
+and what it buys is that an effect written in a build body can no longer vanish
+without a word. Welfare reads 84.12 before and after — the rise is 0.003% of
+the term — so the floor does not move, and the entry says that plainly rather
+than implying a fall.
+
+The question filed earlier today, whether a vein move that CANNOT be work needs
+a spend attribution, does not cover this one. This move can be work and is.

@@ -104,4 +104,19 @@
 # moved the way layout moves them: `__memcmp_avx2_movbe` fell 327 while the
 # total rose. Third movement of this vein in two days with an untouched call
 # graph: +167, -251, +1,954.
-compile_instructions=57488169
+#
+# 2026-08-27: 57,488,169 -> 57,489,912, a rise of 1,743 (0.003%). REAL WORK,
+# and the first of today's four moves that is. The other three were layout —
+# each edited a function `kanso check lib/json` cannot reach — and the reflex
+# by the fourth was to reach for the same reading. It does not hold here.
+# `resolve_expr`'s walk over block and build bodies runs on every compile, and
+# it gained an `enumerate` and one index comparison per statement, which is
+# what these instructions are.
+#
+# What they buy: an effect line written in a `build` body used to be neither
+# run nor complained about. Three `io/write` lines ran the last and lost the
+# other two, in silence, on both engines. That walk had no unused-expression
+# check at all. Allocations and peak do not move (61,981 and 822,004) because
+# an index comparison allocates nothing, so the counters agreeing here is
+# evidence about the SHAPE of the work rather than evidence that there is none.
+compile_instructions=57489912
