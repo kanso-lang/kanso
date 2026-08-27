@@ -61,11 +61,13 @@ green on 19 checks, then #1088 landed and made it conflict on the log and the
 excused list; main is merged in, the log entries reordered by merge date, and
 CI is running again on the merge commit.
 
-**a-deliberate-exit-in-a-page** — the page's endpoint could not read an
-`os/exit_status`, so a program that exited deliberately printed
-`unhandled err reached the executor` at its reader and answered 1 whatever
-code it named. Three of the four endpoints already knew better. Pinned on all
-three engines and on both sides of the code; awaiting the local suite.
+**kanso#1090** — two ways the page's endpoint got an err wrong. It could not
+read an `os/exit_status`, so a program that exited deliberately printed
+`unhandled err reached the executor` at its reader and answered 1 whatever code
+it named; and a wall whose right side answered a plain value made it say "main
+is not an io" where the other two engines say "`>>` sequences two effect
+descriptions". Both pinned on all three engines, both watched red at their own
+sources.
 
 ## What landed on 2026-08-27
 
@@ -103,12 +105,22 @@ asserts every program in it exits 0, so any behaviour whose observable end is
 some other status has no home and is invisible to the three-engine walk. Worth
 knowing what else is in that shadow.
 
-**`main is not an io` at src/wasm_rt.rs:1132** is pinned nowhere, and it is NOT
-the wasm twin of the driver message #1079 pinned in `tests/a_plan_needs_an_io.rs`
-— this file said so for two days and the two are different messages on
-different paths. The driver's fires on `--plan` when main is a value; this one
-is `exec_slot`'s catch-all, on the execution path, with no native counterpart
-at all. Whether a program can reach it is unsettled: `>>` with a plain value on
-either side is refused at compile time by `\`>>\` sequences two effects`, and
-the remaining candidate is a deferred right-hand side that answers a non-effect
-at run time.
+**`main is not an io` at src/wasm_rt.rs:1132 is answered.** It was never the
+wasm twin of the driver message #1079 pinned in `tests/a_plan_needs_an_io.rs` —
+this file said so for two days and the two are different messages on different
+paths. It is `exec_slot`'s catch-all, and a program CAN reach it: a bare name
+on the right of a wall (`x = 2` then `io/write "one" >> x`) slips past
+`never_describes`, which refuses a literal or a direct call and not a name.
+Native and the oracle said "`>>` sequences two effect descriptions"; the page
+said "main is not an io". Fixed and pinned in the same PR as the deliberate
+exit.
+
+**Whether the CHECK should catch that instead** is the live question.
+`tests/wall_takes_effects.rs` already extended this refusal from literals to
+calls, on the stated ground that "a call to a function that can never answer an
+effect is the same case one step out, and the fixpoint already knows which
+calls those are". A bare name is that case one step further out, and the
+fixpoint is keyed by (name, arity) so arity zero is the same lookup. Measure it
+before writing it down: it changes what the language refuses, and the runtime
+guard is needed either way for a piped call, a non-`Ident` head and a
+parameter.

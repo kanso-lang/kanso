@@ -1119,6 +1119,15 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                     return Ok(right);
                 }
             }
+            // GAVEL 15 defers the right side, so what it answers is not known
+            // until here — and `never_describes` in check.rs only refuses a
+            // literal or a direct call, which leaves a bare name to reach the
+            // run. `rt_seq` says this when both sides arrive as values; the
+            // deferred side has to say the same thing or the page names a
+            // different fault from the one the other two engines name.
+            if !descish(&slot(right)) {
+                return Err("`>>` sequences two effect descriptions".to_string());
+            }
             exec_slot(right)
         }
         Slot::Bind(inner, closure) => {
@@ -1129,6 +1138,13 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                 _ => Ok(next),
             }
         }
+        // Unreachable, and the argument is construction rather than a reading
+        // of what looks unlikely. Every handle this function is handed is
+        // descish: `exec_main` tests before it calls, `rt_seq` builds a
+        // `Slot::Seq` only when its left side is descish, `rt_maybe_bind`
+        // builds a `Slot::Bind` only when what is piped in is, and the one
+        // side that was not decided at construction — a deferred right — is
+        // tested above. The arm stays because the match must be exhaustive.
         _ => Err("main is not an io".to_string()),
     }
 }

@@ -3276,3 +3276,57 @@ at a new address.
 PERF. Nothing on the compile path calls it, and the veins are host-divergent
 here so CI measures them. Welfare reads 84.12 against a floor of 84.12, with
 the compile terms unmoved.
+
+AND THE SECOND ONE, FOUND BY ASKING WHETHER THE FIRST HAD A SIBLING. STATUS.md
+had said for two days that `main is not an io` at src/wasm_rt.rs:1132 was the
+wasm twin of the driver's `main is not an io; there is no plan to show`. It is
+a different message on a different path: the driver's fires on `--plan` when
+main is a value, and this one is the catch-all of `exec_slot`, on the execution
+path, with no native counterpart at all. The file also left open whether any
+program could reach it.
+
+One can.
+
+    x = 2
+
+    io/write "one" >> x
+
+`never_describes` in check.rs refuses a literal, a list, a map, a lambda or a
+direct non-piped call on either side of a wall. A bare NAME is none of those,
+so the check lets it through and the wall meets a plain value at run time.
+Native and the oracle both say
+
+    error[runtime]: `>>` sequences two effect descriptions
+
+and exit 1. The page said `error[runtime]: main is not an io` and exited 1. Two
+engines naming one fault and a third naming a different one is the divergence
+the law forbids, and the page's sentence is also simply wrong: main IS an io.
+Its right-hand side is not.
+
+WHY THE PAGE TAKES A DIFFERENT PATH. GAVEL 15 defers a wall's right side, so
+`rt_seq` builds a `Slot::Seq` holding a cell rather than deciding anything, and
+what that cell answers is unknown until `exec_slot` demands it. `rt_seq`'s own
+non-deferred arm already says the right sentence; the deferred one fell through
+to the catch-all. The guard is in `exec_slot` now, at the demand, and it
+returns the same string.
+
+That makes the catch-all unreachable, and the argument is construction rather
+than a reading of what looks unlikely: `exec_main` tests before it calls,
+`rt_seq` builds a Seq only when its LEFT side is descish, `rt_maybe_bind`
+builds a Bind only when what is piped in is, and the one side not decided at
+construction is tested at the demand. The arm stays because the match must be
+exhaustive, and the comment above it says all of that.
+
+The pin is tests/golden/runtime/a_wall_whose_right_side_is_a_name.kso, which
+fits that corpus exactly — it exits 1 with a message, which is the corpus's
+definition. Watched red by removing the guard and rebuilding the blob:
+`left: "oneerror[runtime]: main is not an io\n"`.
+
+STILL OPEN, AND MEASURED RATHER THAN GUESSED: whether the CHECK should catch
+this instead, so the reader gets a span at compile time rather than a partial
+run. `never_describes` already asks the inference fixpoint what a call returns;
+a bare name would be the same question at arity zero. That is a better answer
+for the reader and a change to what the language refuses, so it is filed rather
+than folded in here. The runtime guard is needed either way — a piped call, a
+non-`Ident` head and a parameter all reach the wall with the check unable to
+say.
