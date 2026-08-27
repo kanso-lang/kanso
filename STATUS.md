@@ -9,16 +9,18 @@ is stale — say so.
 The decisions live in design/pending-gavels.md — the single ledger; this file
 only indexes it. **Blocking right now: nothing.**
 
-**Sixteen questions are ready to rule, and every one of them carries a
+**Seventeen questions are ready to rule, and every one of them carries a
 recommendation.** That is the point of the 2026-08-25 sweep: Clay's ask was
 *"the goal here would be to not have anything left to gavel. I feel like I keep
 gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**Nine open, not blocking** — the two
+**Ten open, not blocking** — the two
 surviving err-gavel riders (the annotate/rescue spelling, and construction
-enforcement); `--explain-copies`; the assert hako's surface; the
+enforcement); which claim owns a qualified name when a module declares one of
+its imports' names, whose filing pointed at a gavel that has since fallen;
+`--explain-copies`; the assert hako's surface; the
 bare-call cross-module tie whose interim ruling is still live and still called
 interim; whether a dependency's render arms join the root group; `first coll n`;
 where `std/` comes from; block-born as a dataflow property; and the

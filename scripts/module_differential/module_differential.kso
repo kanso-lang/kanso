@@ -270,7 +270,7 @@ c16 = kase c16l [c16a c16m] "app" "prints" "3\n"
 # defect — so until this arrived the refusal that is the whole point of the
 # visibility system had no passing case on this surface. A mutation that
 # switches the check off went red only through the known-defect ledger, whose
-# entry is meant to be deleted the day task #51 is settled.
+# entry is meant to be deleted the day the ledger question is settled.
 c17a = filed "dep/dep.kso" """
   fn secret _
     41
@@ -323,7 +323,7 @@ w1d = filed "dep/dep.kso" dep_src
 
 w1a = filed "app/main.kso" app_src
 
-w1l = "a module's own pub, shadowed by a dependency's name (task #51)"
+w1l = "a module's own pub, shadowed by a dependency's name (ledger)"
 
 w1said = "an import of `dep` exports `join` too and took the name"
 

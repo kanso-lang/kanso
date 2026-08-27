@@ -148,6 +148,55 @@ July spellings"). These two are what remain.**
 - Downstream of the spelling, not a separate question: the arm-based
   advisory migrates onto whatever surface is chosen. Implementation.
 
+### Which claim owns `dep/join` — the bare-enrollment clone, or `dep`
+
+**Cited: archive 2026-07-27 filed this against "the question task #51 holds
+a gavel over". Task #51 was RULED on 2026-08-17 as gavel 51, one module —
+identity is the canonical path, one dispatch group per name — and built the
+same day. The search found no revisit of this case after that ruling, and
+gavel 51 does not settle it: gavel 51 is about ONE module reached by two
+paths, and this is TWO modules whose names collide inside one namespace.
+`module_differential`'s known-defect entry `w1` still records the behaviour,
+still pointing at a gavel that has fallen.**
+
+A module declares `pub fn join` and also imports `std/text`, which exports
+`join`. From outside, `dep/join` is refused: "`dep` declares `join` pub, but
+an import of `dep` exports `join` too and took the name."
+
+Measured this session, which the ledger did not have:
+
+  - `dep/join` is claimed FIRST by a bare-enrollment clone of a NON-PUB ARM
+    of std/text's `join` group, carried into `dep` under the file
+    `std/text/text.kso`. The exports map is first-writer-wins, so `dep`'s own
+    `pub` reads as private.
+  - The clone survives only when the importing module declares the same name.
+    Otherwise `canonicalize_bare_aliases` folds it away, and `dep/join` is
+    an ordinary unknown name. So the collision is the condition, not the
+    enrollment.
+  - Letting `dep`'s own `pub` win the flag — one line — makes the refusal go
+    away and makes `dep/join` reach std/text's arm. With `pub fn join a:int
+    b:int` in `dep` so that `dep`'s arm cannot match, `dep/join ["x" "y"] "-"`
+    answers `x-y` on BOTH engines. `dep` never exported that function. The
+    refusal is the only thing standing between a program and a silent
+    re-export of a dependency under a name its author never wrote.
+
+So the flag and the dispatch are one question. Making `dep/join` mean `dep`'s
+declaration requires the enrolled clones to stop living in `dep`'s qualified
+namespace — and `dep`'s own bare `join` call sites are rewritten INTO that
+namespace during qualification, which is what puts them there. The bare
+overload space would need a spelling of its own, per module, that a consumer
+cannot write.
+
+**RECOMMENDATION: rule that a qualified name is its module's declaration and
+nothing else, and give the bare overload space its own namespace.** Go's rule
+is already ruled here (a package is a directory named by its import path), and
+under it `dep/join` can only mean `dep`'s. The alternative — keep the refusal
+— costs an author the right to declare a name any of their imports happens to
+export, which no other language charges for, and the diagnostic already has to
+tell them to rename someone else's import.
+
+Whichever way it goes, `w1` leaves the known-defect ledger in the same commit.
+
 ### `--explain-copies`
 
 **Cited: part-superseded, archive 2026-07-27 — the counter stack
