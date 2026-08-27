@@ -1,0 +1,9 @@
+import "std/net"
+
+pub type stand_in
+  handle
+
+pub fn opaque x
+  x
+
+pub play = net/write (opaque (stand_in "x")) "hi" . (r -> print "{r}")

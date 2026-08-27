@@ -29,6 +29,8 @@ driver_opener = "\"error: "
 
 kinded_opener = "\"error["
 
+native_opener = "k_die(\""
+
 listed_path = "tests/golden/unpinned_diagnostics.txt"
 
 lower = "abcdefghijklmnopqrstuvwxyz"
@@ -271,6 +273,38 @@ fn worth_kinded _ false
 fn worth_kinded msg true
   "printed\n{msg}"
 
+# A FOURTH, and the one that hid longest of all: src/runtime.c. `source?`
+# admitted a file only when its last three characters were `.rs`, so the scan
+# has never read the C at all — and the C is where a COMPILED BINARY gets its
+# runtime messages. Sixty-six distinct `k_die` texts, and on 2026-08-27 half of
+# them were pinned by nothing.
+#
+# `k_die("` is the whole key. The declaration is `k_die(const char* msg` and
+# the one runtime-valued call is `k_die(said`, neither of which carries the
+# quote, so both fall out without a rule. The seven `k_die(` in src/*.rs are
+# all `call void @k_die(ptr @{m})` in the emitter, likewise quoteless. Running
+# this extractor over every source is therefore safe, and simpler than teaching
+# read_src which opener belongs to which extension.
+fn native_in src
+  chunks = list/to_list (list/drop (text/split src native_opener) 1)
+  found = list/to_list (list/map chunks native_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn native_site chunk
+  told_native (head_of (text/split chunk "\"")[1]!)
+
+fn told_native ""
+  ""
+
+fn told_native msg
+  worth_native msg (length msg >= 10)
+
+fn worth_native _ false
+  ""
+
+fn worth_native msg true
+  "native\n{msg}"
+
 fn raised_in src
   chunks = list/to_list (list/drop (text/split src opener) 1)
   found = list/to_list (list/map chunks site_of)
@@ -288,8 +322,13 @@ fn fresh acc e true
 fn fresh acc _ false
   acc
 
+# `.c` joins `.rs` here: runtime.c is a source the compiler ships and a user
+# meets, and leaving it out is what hid thirty-three messages.
 fn source? name
-  text/slice name (length name - 2) (length name) == ".rs"
+  text/slice name (length name - 2) (length name) == ".rs" or c_source? name
+
+fn c_source? name
+  text/slice name (length name - 1) (length name) == ".c"
 
 fn pinned_file? name
   text/slice name (length name - 6) (length name) == ".stderr"
@@ -328,7 +367,8 @@ fn read_src name true rest found
 
 fn more_sources rest found src
   plain = text/concat (driver_in src) (kinded_in src)
-  both = text/concat (raised_in src) plain
+  spoken = text/concat (native_in src) plain
+  both = text/concat (raised_in src) spoken
   over_sources rest (text/concat found both)
 
 fn gathered found

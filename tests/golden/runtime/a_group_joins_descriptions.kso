@@ -1,0 +1,8 @@
+import "std/io"
+
+pub fn opaque x
+  x
+
+pub play =
+  io/write "a"
+  opaque 7
