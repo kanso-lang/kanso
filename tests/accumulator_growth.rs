@@ -43,16 +43,15 @@ fn peak_at(iterations: u64) -> (u64, u64) {
     (read("arena_peak_bytes"), read("allocs"))
 }
 
-/// The live set does not grow, so neither should the arena. What grows today
-/// is the garbage the loop cannot reclaim, because the cluster carries no beat
-/// bracket and therefore has no rewind point anywhere in it.
-/// Ignored because it fails: it is the acceptance criterion for the rewind
-/// that does not exist yet, not a regression guard for one that does. Run it
-/// with `cargo test -- --ignored` to see the current curve, and delete this
-/// attribute in the change that makes a threaded container's storage outlive
-/// the region the loop rewinds.
+/// The live set does not grow, so neither should the arena.
+///
+/// Written to fail, and ignored, as the acceptance criterion for a rewind that
+/// did not exist. It exists: this loop is self-recursive and threads a map,
+/// which `is_scalar_map_chain` licenses, so the group brackets and rewinds
+/// every iteration. The arena peak holds at 1,048,576 bytes from five thousand
+/// iterations to 1,280,000 — flat across 256x — with `beat_iters` tracking the
+/// iteration count all the way. A regression guard now.
 #[test]
-#[ignore = "the rewind this asserts is not built; see design/compiler-log.md"]
 fn a_longer_loop_over_the_same_live_set_does_not_need_more_memory() {
     let (small_peak, small_allocs) = peak_at(5_000);
     let (large_peak, large_allocs) = peak_at(80_000);

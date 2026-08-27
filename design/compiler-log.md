@@ -5167,3 +5167,53 @@ make a map threadable the way a list is, which returns to the sorted-view
 hazard the threadable set was drawn to avoid; or make the carried-slot refusal
 read the size of what it would copy. Both are licensing changes rather than bug
 fixes, which is why this entry stops at naming them.
+
+## 2026-08-27 — four acceptance tests had started passing, and nothing said so
+
+Five tests in the tree carry `#[ignore]`. Each was written to fail, as the
+acceptance criterion for something not built, and each says in as many words:
+delete this attribute in the change that builds it. `cargo test -- --ignored`
+says four of the five now pass.
+
+    a_bare_list_is_or_is_not_bytes   the bytes ruling landed; four sites agree
+    accumulator_growth               the rewind is built for this shape
+    view_cache_is_returned  (x2)     the view has an owner
+
+None is vacuous, and each was checked rather than trusted.
+
+`view_cache_is_returned` guards a leak measured at 76,800,048 bytes over 1.6
+million iterations — forty-eight bytes a map, unbounded in the iteration count,
+and invisible to every arena counter because the view is malloc'd. It reads
+`view_allocs` against `view_frees`:
+
+    20,000 transient maps      view_allocs=20000   view_frees=20000
+
+The gap is zero, where the test allows a small constant. The leak is closed.
+
+`accumulator_growth` asserts a hard equality on arena peak across a sixteenfold
+change in iterations. Measured at 256x instead:
+
+    n           arena_peak_bytes    beat_iters
+    5,000              1,048,576         5,000
+    80,000             1,048,576        80,000
+    1,280,000          1,048,576     1,280,000
+
+Flat. That loop is self-recursive, threads a map, `put`s into it every
+iteration and reads it with both `m["k1"]!` and `entries` — so the map is
+re-derived, not merely passed along, and it brackets anyway. `beat.rs` has a
+rule for exactly this, `is_scalar_map_chain`. What the cluster path lacks is a
+counterpart to that rule, which is the finding recorded in the entry above.
+
+`a_bare_list_is_or_is_not_bytes` was ignored pending "the ruling on whether
+bytes are a type or a convention". The ruling landed — the interpreter has a
+real bytes value and a list of small integers is never quietly one — and all
+four sites answer identically on both engines.
+
+`entry_file`'s remains ignored and remains red, which is the point of the
+check: one of the five is still a live defect.
+
+UN-IGNORING TWO OF THEM MADE A THIRD FAIL, which is a thing worth writing
+down. Both `view_cache_is_returned` tests ask for 20,000 maps, cargo runs them
+on separate threads, and `views` named its scratch directory for the size
+alone — so one test removed the other's program mid-run. They never collided
+while both were ignored. The directory is unique per call now.
