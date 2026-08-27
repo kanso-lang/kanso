@@ -3259,3 +3259,54 @@ interpreter in fifty minutes where native takes seconds — exit 124, twice, at
 two different budgets. That is slowness rather than divergence, and the first
 run's empty output nearly went into the log as a finding before the second run
 settled it.
+
+## 2026-08-27 — the micro corpus never read a stderr golden
+
+Third instance of one shape in one day. A construct's FAILURE case is pinned
+and its success case is pinned nowhere:
+
+    os/exit         exit_needs_a_status         the success case: nowhere
+    >> two effects  sequencing_takes_two_...    the runtime path: diverged
+    io/write_err    write_err_takes_a_string    the success case: nowhere
+
+The first two were fixed this morning. This is the third.
+
+`tests/golden/micro/write_err_stream.kso` writes `err one\n` to the diagnostic
+stream between two writes to the ordinary one. Its `.out` golden holds the two
+ordinary lines, and there was no other golden — `golden.rs` reads `"out"` for
+this corpus and never `"err"`.
+
+WHAT THAT LEFT UNPINNED, precisely. The `.out` golden does prove `err one` did
+not go to stdout, and the wasm walk in tests/wasm_engine.rs compares native's
+`stdout + stderr` against the page's, so the ENGINES are held to each other on
+both streams. What nothing held was the bytes themselves: a change that dropped
+the write on all four writers at once — the interpreter, the compiled binary,
+the wasm runtime, the browser — leaves `.out` unchanged and both concatenations
+equal, and turns nothing red. Agreement is not a pin.
+
+WHAT IT ASSERTS NOW. Every micro program was run as a library and its stderr
+collected before the rule was written, rather than after: 136 programs export
+`play` and exactly one of them says anything on that stream. So the rule can be
+the strict one. A program with no `.err` beside it must be silent there, which
+is a new assertion for 135 of them; the one that speaks carries a golden saying
+exactly what it says. Both the library path and the release-built binary check
+it, because the compiled binary is a fourth writer of those bytes and the
+stream it chooses is as much a fact about the program as the bytes are.
+
+WATCHED RED AT THE IMPLEMENTATION, not at the fixture. Deleting the write from
+the .kso would have proved only that a golden matches a file. Two perturbations
+of `RealExecutor::write_err` in src/eval.rs instead:
+
+    eprint! -> print!    caught at golden.rs:384, the STDOUT assertion:
+                         left "out one\nerr one\nout two\n"
+    the write dropped    caught at golden.rs:389, the new one:
+                         left "" right "err one\n"
+
+The first is worth keeping in the record: a stream swap is caught by the
+assertion that was already there, so only the second shows the new one doing
+work. A perturbation that reddens an existing assertion proves nothing about
+the one just added.
+
+NO COMPILED CODE CHANGED. `src/eval.rs` is byte-identical to main, edited and
+restored twice. The corpus gained one file and tests/golden.rs gained two
+assertions, so no vein can move.
