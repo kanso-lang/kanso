@@ -1,0 +1,18 @@
+# `_` in each of the three name positions a declaration has. The lexer gives
+# it back as the wildcard rather than as a word, so `type`, `fn` and the
+# top-level line rule each turn it away with their own message.
+#
+# leading_underscore covers the other half: any word longer than one character
+# that starts with `_` is refused at lex time. Between the two, no declared
+# name in a kanso program can begin with an underscore — which is what let the
+# unused-private check go on being compiled after the convention it was written
+# for was retired.
+type _
+  n
+
+fn _ x
+  x
+
+_ = 1
+
+pub play = print "x"

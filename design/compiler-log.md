@@ -5367,3 +5367,52 @@ direction too — with the line still there it says "now pinned, delete its
 line" — and I watched it do so.
 
 Goldens and two scripts — no counter moves.
+
+## 2026-08-27 — the check a retired convention left behind
+
+`check_unused_private` reported a `_`-prefixed declaration that nothing in its
+module used. Leading underscores were retired from the language, and the check
+stayed.
+
+Both its loops test `name.starts_with('_')`. The lexer refuses any word longer
+than one character that begins with `_`, before the parser sees it; `_` alone
+comes back as the wildcard rather than as a word, so each of the three name
+positions turns it away with its own message:
+
+    type _      expected a type name
+    fn _ x      expected a function name
+    _ = 1       a top-level line must begin with `fn`, `type`, or a constant binding
+
+No declared name in a kanso program can begin with an underscore, so neither
+loop could fire and neither of its two diagnostics could be raised. The
+type-side one has been on the excused list since the coverage gate was turned
+on, listed as unreachable — correctly, and for a reason that made the check
+itself unreachable, which nobody drew out. The fn-side one was never on any
+list: its literal run is nine characters, under even the floor of ten that
+today's earlier entry set, so the gate has never seen it.
+
+The premise is pinned on both halves now. `leading_underscore` covers the long
+words; `an_underscore_is_the_wildcard_not_a_name` covers the three name
+positions and the message each raises. The check is deleted, its two call sites
+with it, and the excused line goes.
+
+That leaves the shape worth naming. A convention can be retired in the lexer
+and leave its enforcement standing three passes away, and the thing that ought
+to have noticed — a gate whose whole job is to find diagnostics nobody can
+reach — had one of the two on a list of tolerated exceptions and could not see
+the other at all.
+
+The veins, from the runner's log: `compile_instructions` 57,493,961 ->
+57,486,466, a fall of 7,495 (0.013%), banked. What went away is the walk —
+both loops visited every declared function and every declared type on every
+compile to ask a question the lexer had already made unanswerable.
+`compile_allocs` holds at 61,981 and `compile_peak_bytes` at 822,004, which is
+what a deletion of work that allocates nothing should read as. Welfare rises
+from 84.11750548393506 to 84.11785353572103 and the floor moves with it.
+
+The page's tagged figure moves with the golden, and it took `golden_prose`
+going red on CI to say so: I regenerated the golden, re-ran welfare and the
+trend gate, and carried forward a "0 drifted" from a run taken before the
+regeneration. The entry above this one records the same check catching the same
+omission on the same figure four hours earlier. Checking the surfaces from
+memory is the failure; the checklist exists because recall does not work here.

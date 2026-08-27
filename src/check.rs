@@ -75,7 +75,6 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     if require_entry {
         check_entry(program, &mut diags);
     }
-    check_unused_private(program, &used, &mut diags);
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
 }
@@ -1134,37 +1133,6 @@ pub fn check_file_shadow(
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
-}
-
-/// A `_`-prefixed declaration is module-private and must be used somewhere
-/// in the module; public names are API surface and exempt.
-pub fn check_unused_private(
-    program: &Program,
-    used_globals: &HashSet<String>,
-    diags: &mut Vec<Diagnostic>,
-) {
-    let mut reported: HashSet<&str> = HashSet::default();
-    for decl in &program.fns {
-        if decl.name.starts_with('_')
-            && !used_globals.contains(&decl.name)
-            && reported.insert(&decl.name)
-        {
-            diags.push(Diagnostic::new(
-                "unused",
-                format!("private `{}` is never used in its module", decl.name),
-                decl.span,
-            ));
-        }
-    }
-    for ty in &program.types {
-        if ty.name.starts_with('_') && !used_globals.contains(&ty.name) {
-            diags.push(Diagnostic::new(
-                "unused",
-                format!("private type `{}` is never used in its module", ty.name),
-                ty.span,
-            ));
-        }
-    }
 }
 
 /// Merged-namespace coherence for a directory module.
