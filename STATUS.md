@@ -16,7 +16,9 @@ gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**Eleven open, not blocking** — the two
+**Twelve open, not blocking** — whether `read_file` is text or bytes, which
+is one reader with no way to say which you meant and two engines that answer
+differently; the two
 surviving err-gavel riders (the annotate/rescue spelling, and construction
 enforcement); which claim owns a qualified name when a module declares one of
 its imports' names, whose filing pointed at a gavel that has since fallen; what
