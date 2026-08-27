@@ -5023,3 +5023,52 @@ fences the genuinely open half — whether the failure machinery lives
 in dispatch or in the elaborator — as the design ledger's question,
 not the page's. The reconstruction-from-log episode is named in the
 entry itself as the reason it exists.
+
+## 2026-08-27 — the clone that owns a qualified name, measured at last
+
+`module_differential`'s known defect `w1` — a module's own `pub` reading as
+private because one of its imports exports the same name — was filed on
+2026-07-27 against "the question task #51 holds a gavel over". Task #51 was
+ruled on 2026-08-17 as gavel 51 and built the same day. The defect was never
+revisited, and gavel 51 does not settle it: gavel 51 is one module reached by
+two paths, and this is two modules colliding inside one namespace.
+
+Three things the ledger did not have.
+
+**Who claims the name.** An instrumented `qualify` says it plainly:
+
+    PROBE key=dep/join taken=None       is_pub=false synthetic=true  file=std/text/text.kso
+    PROBE key=dep/join taken=Some(false) is_pub=true  synthetic=false file=.../dep/dep.kso
+
+The first writer is a bare-enrollment clone of a NON-PUB ARM of std/text's
+`join` group. The map is first-writer-wins, so `dep`'s own `pub` never gets to
+set the flag.
+
+**When the clone survives.** Only when the importing module declares the same
+name. With no `join` in `dep`, `canonicalize_bare_aliases` folds the clone
+away and `dep/join` is an ordinary unknown name. The collision is the
+condition for the bug, not the enrollment.
+
+**What the one-line fix costs.** Letting `dep`'s `pub` win the flag makes the
+refusal go away and makes `dep/join` reach std/text's arm. Written so that
+`dep`'s own arm cannot match —
+
+    pub fn join a:int b:int          in dep
+    print "{dep/join ["x" "y"] "-"}" in app
+
+    x-y        native
+    x-y        interpreter
+
+`dep` never exported that function. The archive recorded this hazard in
+2026-07-27 without a case; here is the case, on both engines. The refusal is
+the only thing between a program and a silent re-export of a dependency under
+a name its author never wrote.
+
+So the flag and the dispatch are one question, and it is a design question:
+making `dep/join` mean `dep`'s declaration requires the enrolled clones out of
+`dep`'s qualified namespace, and `dep`'s own bare call sites are rewritten
+INTO that namespace during qualification. The bare overload space would need a
+spelling of its own that a consumer cannot write. Filed in
+design/pending-gavels.md under "Which claim owns `dep/join`", with a
+recommendation. `w1` stays recorded as it behaves; its label stops citing a
+gavel that has fallen.
