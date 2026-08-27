@@ -3216,3 +3216,46 @@ in a build body came to be dropped in silence. This fifth had no reason at all
 and turns out to be sound. The score is one real bug, three rewritten
 sentences, and one reason supplied; and the only way any of it was learned was
 by writing the program.
+
+## 2026-08-27 — clang is installed, and that was never the question
+
+Two of the five host-io excuses on tests/golden/unpinned_diagnostics.txt were
+covered by one sentence: "A fixture cannot portably cause one: the container
+runs as root, so an unwritable directory is not unwritable, and clang is
+installed."
+
+The first clause holds and was measured rather than assumed — root writes into
+a mode-000 directory without complaint, which covers the three write cases. The
+second treats installation as the question. What the compiler asks is whether
+PATH resolves clang, and PATH belongs to a process rather than to the box:
+
+    env PATH=/nonexistent kanso build <dir>   ->  cannot invoke clang: ...
+    env PATH=/nonexistent kanso run <dir>     ->  cannot build: ...
+
+One absence, two sentences, because `build` spawns clang itself while `run`
+reaches it through the cached-binary path. Neither had a pin.
+
+Both are asserted now in tests/a_toolchain_the_path_cannot_reach.rs, on the
+compiler's own prefix and not the host's io text — `No such file or directory
+(os error 2)` here, and src/eval.rs already carries the reason a host string
+must never be pinned. Watched red by rewording both messages at the source:
+`clang could not be started` and `the build did not happen`, each caught by its
+own assertion, then restored.
+
+THE GATE CORRECTED THE FIRST ATTEMPT, which is worth recording. Having pinned
+them, the obvious move was to delete both lines. The coverage scan answered
+`2 newly unpinned`: the driver family's corpus search deliberately excludes
+Rust tests, so a message pinned only there still reads as unpinned. The two
+entries above these — `this build is named` and `main is not an io` — already
+sit on the list for exactly that reason, each citing its test. These two now do
+the same. The list stays at ten and every line on it says where its pin lives.
+
+AND A NEGATIVE RESULT, so nobody spends the time again. The differential law
+makes `--interp` the oracle, and running `scripts/fingerprint` under it earlier
+today found a real divergence, so the other shipped scripts were swept the same
+way. `page_drift`, `golden_prose`, `diagnostic_coverage` and `grammar_check`
+all answer identically on both engines. `prose_check` does not finish under the
+interpreter in fifty minutes where native takes seconds — exit 124, twice, at
+two different budgets. That is slowness rather than divergence, and the first
+run's empty output nearly went into the log as a finding before the second run
+settled it.
