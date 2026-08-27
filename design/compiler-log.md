@@ -3259,3 +3259,125 @@ interpreter in fifty minutes where native takes seconds — exit 124, twice, at
 two different budgets. That is slowness rather than divergence, and the first
 run's empty output nearly went into the log as a finding before the second run
 settled it.
+
+## 2026-08-27 — four endpoints read a deliberate exit, and one of them did not
+
+`os/exit 3` yields an err whose reason is an `os/exit_status` record. That is
+the one err an endpoint reads instead of reporting, because the program said
+what it meant rather than failing to say it. Three endpoints already knew:
+`k_exit_status` at src/runtime.c:7511 for the compiled binary,
+`deliberate_exit` in src/main.rs for the driver and the oracle, and the repl,
+which never reaches an endpoint at all — it renders the err as the value you
+typed, `err os/exit_status 3`, and that is the right answer for a prompt.
+
+The fourth is the page. `exec_main` in src/wasm_rt.rs had neither arm, so a
+program that called `os/exit` printed at its reader
+
+    error[endpoint]: unhandled err reached the executor: os/exit_status 3
+      born in os/exit at std/os/os.kso:39
+
+and answered 1 whatever code the program named. A silent divergence, which the
+differential law does not allow: an engine may speak fewer features only where
+it refuses them plainly.
+
+HOW IT STAYED HIDDEN. The corpus walk in tests/wasm_engine.rs compares text AND
+exit code against native for every program in examples, tests/golden/runtime
+and tests/golden/micro. It would have caught this on the first run. There was
+no program to run: the only fixture in the tree that touches `os/exit` is
+`exit_needs_a_status`, which hands it a record that is not a status and pins
+the failure. The success case — a program that exits deliberately and says
+nothing about it — was pinned on no engine.
+
+WHERE THE PIN LIVES, AND WHY IT IS IN THREE PIECES. Neither corpus can carry a
+nonzero deliberate exit. `runtime_corpus_reports_endpoint_violations` asserts
+every program in tests/golden/runtime exits 1, which is its definition of the
+corpus; the two micro-corpus tests assert every program in tests/golden/micro
+exits 0. A deliberate three is neither, so:
+
+  - tests/golden/micro/a_deliberate_exit_says_nothing.kso holds the ZERO case
+    and rides the whole differential walk — native, `--interp`, release-built,
+    the wasm engine under wasmi, and Chrome. It also pins that the line after
+    the exit does not run.
+  - tests/a_deliberate_exit_carries_its_code.rs pins the code passing through
+    on native and on the oracle. `== 3`, not `!= 0`.
+  - a_deliberate_exit_carries_its_code_out_of_the_page in tests/wasm_engine.rs
+    pins the same three on the engine that was wrong.
+
+Each was watched red at its own source, and the sources turned out to be
+different ones. Breaking `eval::deliberate_exit` reddens the oracle and leaves
+NATIVE GREEN, because `kanso run` compiles to a binary and that binary reads
+the status in C: the native half only goes red when `k_exit_status` is broken.
+Two halves of one test, two mechanisms, and reading either one would have
+missed the other.
+
+WHAT MOVED IN THE SOURCE. `deliberate_exit` is in src/eval.rs now rather than
+src/main.rs, because main.rs is the binary and the page never compiles it. The
+page's endpoint gained the two arms the native endpoint has had all along. No
+behaviour changed on native or on the oracle — the function is the same text
+at a new address.
+
+PERF. Nothing on the compile path calls either function, and the veins are
+host-divergent here, so CI measured them. `compile_instructions` fell 159, from
+57,489,912 to 57,489,753 — 0.0003% — and is banked. Layout rather than work,
+by the same argument the -251 and the +1,954 above it carry: `kanso check
+lib/json` compiles a library and runs no program, so it reaches neither the
+driver's endpoint in main.rs nor the page's in wasm_rt.rs, and eval.rs only
+HOLDS the moved function. The counters that measure the front end's work are
+identical, allocations 61,981 and peak 822,004. Fifth movement of this vein in
+two days with an untouched call graph: +167, -251, +1,954, -159. Welfare reads
+84.12 against a floor of 84.12 — a fall this small cannot move a two-decimal
+score, so there is nothing to ratchet.
+
+AND THE SECOND ONE, FOUND BY ASKING WHETHER THE FIRST HAD A SIBLING. STATUS.md
+had said for two days that `main is not an io` at src/wasm_rt.rs:1132 was the
+wasm twin of the driver's `main is not an io; there is no plan to show`. It is
+a different message on a different path: the driver's fires on `--plan` when
+main is a value, and this one is the catch-all of `exec_slot`, on the execution
+path, with no native counterpart at all. The file also left open whether any
+program could reach it.
+
+One can.
+
+    x = 2
+
+    io/write "one" >> x
+
+`never_describes` in check.rs refuses a literal, a list, a map, a lambda or a
+direct non-piped call on either side of a wall. A bare NAME is none of those,
+so the check lets it through and the wall meets a plain value at run time.
+Native and the oracle both say
+
+    error[runtime]: `>>` sequences two effect descriptions
+
+and exit 1. The page said `error[runtime]: main is not an io` and exited 1. Two
+engines naming one fault and a third naming a different one is the divergence
+the law forbids, and the page's sentence is also simply wrong: main IS an io.
+Its right-hand side is not.
+
+WHY THE PAGE TAKES A DIFFERENT PATH. GAVEL 15 defers a wall's right side, so
+`rt_seq` builds a `Slot::Seq` holding a cell rather than deciding anything, and
+what that cell answers is unknown until `exec_slot` demands it. `rt_seq`'s own
+non-deferred arm already says the right sentence; the deferred one fell through
+to the catch-all. The guard is in `exec_slot` now, at the demand, and it
+returns the same string.
+
+That makes the catch-all unreachable, and the argument is construction rather
+than a reading of what looks unlikely: `exec_main` tests before it calls,
+`rt_seq` builds a Seq only when its LEFT side is descish, `rt_maybe_bind`
+builds a Bind only when what is piped in is, and the one side not decided at
+construction is tested at the demand. The arm stays because the match must be
+exhaustive, and the comment above it says all of that.
+
+The pin is tests/golden/runtime/a_wall_whose_right_side_is_a_name.kso, which
+fits that corpus exactly — it exits 1 with a message, which is the corpus's
+definition. Watched red by removing the guard and rebuilding the blob:
+`left: "oneerror[runtime]: main is not an io\n"`.
+
+STILL OPEN, AND MEASURED RATHER THAN GUESSED: whether the CHECK should catch
+this instead, so the reader gets a span at compile time rather than a partial
+run. `never_describes` already asks the inference fixpoint what a call returns;
+a bare name would be the same question at arity zero. That is a better answer
+for the reader and a change to what the language refuses, so it is filed rather
+than folded in here. The runtime guard is needed either way — a piped call, a
+non-`Ident` head and a parameter all reach the wall with the check unable to
+say.

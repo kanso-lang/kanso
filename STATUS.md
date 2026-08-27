@@ -56,54 +56,71 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso#1076** — another session's ch04 chapter, "nothing is asked of the
-signature". It sat green but un-mergeable for three hours: six merges behind,
-`mergeable_state: dirty`. Resolved by merging main into it twice (never rebase
-someone else's branch), and the second time its page-drift failure cleared on
-its own the moment #1079 moved `docs/compiler.html`. Merge on green.
+**kanso#1089** — clang is installed, and that was never the question. Went
+green on 19 checks, then #1088 landed and made it conflict on the log and the
+excused list; main is merged in, the log entries reordered by merge date, and
+CI is running again on the merge commit.
 
-**kanso#1080** — three things a page does that no program ever asked it to.
+**kanso#1090** — two ways the page's endpoint got an err wrong. It could not
+read an `os/exit_status`, so a program that exited deliberately printed
+`unhandled err reached the executor` at its reader and answered 1 whatever code
+it named; and a wall whose right side answered a plain value made it say "main
+is not an io" where the other two engines say "`>>` sequences two effect
+descriptions". Both pinned on all three engines, both watched red at their own
+sources.
 
-**Two branches pushed with no pull request**, so they cost no CI until the
-queue is free: `the-kq-row-can-be-proven`, and whatever follows it.
+## What landed on 2026-08-27
 
-## What landed on 2026-08-26 and 27
+    kanso 0d293915  #1088  the excuse with no reason, and the sitting it cost
+    kanso f5a721b5  #1087  a build body dropped the effects written in it
+    kanso dc353927  #1086  the last excuse, and a ratio measured further out
+    kanso 7a9cf9a9  #1085  a file that is there, readable, and not text
+    kanso 7479b308  #1084  the digest gate's excuse was wrong the same way
+    kanso 04e93b07  #1083  what a digest costs, measured
+    kanso e90d13e0  #1082  the page can read its own arguments now
+    kanso 2d22ad11  #1081  the kq row's excuse was wrong about the mechanism
+    kanso 6f9ad496  #1080  three things a page does that no program asked it to
 
-    kanso 32d29a05  #1075  two of the ratchet's excuses were to-do notes
-    kanso 82a90a07  #1074  the page owes an entry: a gate's exceptions are claims
-    kanso 56fd2ef9  #1072  the check a retired convention left behind
-    kanso 480ab566  #1071  three diagnostics the coverage gate could not see
+**The through-line is a claim written from reading and never tested.** Six
+excuses were audited across two lists. Four described the wrong obstacle — the
+kq row's dependencies (#1081), the digest job's build step (#1084), the macOS
+job's mutations (#1086), clang's installation (#1089). One reasoned correctly
+about one walker when there were two, which is how an effect written in a
+`build` body came to be dropped in silence on both engines (#1087) — the day's
+one real bug from that seam. One was sound and had simply never been written
+down (#1088).
 
-**The through-line is a claim written from reading the source and never
-tested**, and four of them were wrong. The coverage gate's twelve-character
-floor hid three reachable, unpinned messages. An excuse claiming an indented
-top-level line is always taken by another rule holds only when a declaration
-precedes it. `check_unused_private` walked every declared function and type on
-every compile asking whether the name began with an underscore, which the lexer
-had stopped allowing — it could not answer yes, and the deletion cost 7,495
-front-end instructions. Three ratchet excuses were readings rather than
-measurements; running the browser sweep in a detached worktree refuted two of
-them, and `tests/playground.rs` reading `docs/play.js` refuted the third.
-
-**Also landed**: the qualified-name clone measured (#1063), eight programs'
-emitted code counted (#1064), one cell of five with two wrong answers on the way
-(#1066), four acceptance tests that had quietly started passing (#1067), a file
-module that could be imported and could never import (#1068), and two questions
-the residual sweep could not see because each lived in a test (#1069).
+The same shape produced the rest. `read_file` reported a file that was there
+and readable as absent, because the ErrorKind was thrown away (#1085). The page
+answered `unknown builtin` for `io/stdin` and `os/args` while `time/now`,
+declared identically, reached the executor (#1082). And a digest's peak arena
+turned out linear in the input at about 6.5 kB per byte hashed (#1083), which
+is the blocking question above.
 
 ## Next
 
-**The mechanism behind the playground's two broken builtins** (#1080 records
-the behaviour, not the cause). `io/stdin` and `os/args` answer `unknown
-builtin` in a page; `time/now`, declared the same way, reaches the executor and
-gets its designed zero. Something routes the first two into `call_builtin`
-(src/wasm_rt.rs:809) where the third resolves on the identifier path
-(src/eval.rs:1534). Find that before changing any message.
+**A deliberate exit is not the only thing no corpus can express.**
+tests/golden/runtime asserts every program in it exits 1 and tests/golden/micro
+asserts every program in it exits 0, so any behaviour whose observable end is
+some other status has no home and is invisible to the three-engine walk. Worth
+knowing what else is in that shadow.
 
-**`main is not an io` at src/wasm_rt.rs:1132** is still pinned nowhere — the
-wasm twin of the driver message #1079 pinned in `tests/a_plan_needs_an_io.rs`.
-Not a capability gap, so `wasm_gaps.txt` is the wrong home for it.
+**`main is not an io` at src/wasm_rt.rs:1132 is answered.** It was never the
+wasm twin of the driver message #1079 pinned in `tests/a_plan_needs_an_io.rs` —
+this file said so for two days and the two are different messages on different
+paths. It is `exec_slot`'s catch-all, and a program CAN reach it: a bare name
+on the right of a wall (`x = 2` then `io/write "one" >> x`) slips past
+`never_describes`, which refuses a literal or a direct call and not a name.
+Native and the oracle said "`>>` sequences two effect descriptions"; the page
+said "main is not an io". Fixed and pinned in the same PR as the deliberate
+exit.
 
-**The read half of gavel 1b has shipped** — a field the wrong type declares is
-refused at compile time now (`src/check.rs:1449`), not left to run time. This
-file called it the largest remaining piece for two days after it landed.
+**Whether the CHECK should catch that instead** is the live question.
+`tests/wall_takes_effects.rs` already extended this refusal from literals to
+calls, on the stated ground that "a call to a function that can never answer an
+effect is the same case one step out, and the fixpoint already knows which
+calls those are". A bare name is that case one step further out, and the
+fixpoint is keyed by (name, arity) so arity zero is the same lookup. Measure it
+before writing it down: it changes what the language refuses, and the runtime
+guard is needed either way for a piped call, a non-`Ident` head and a
+parameter.

@@ -187,6 +187,30 @@ pub fn hop(failure: Value, name: &str) -> Value {
     }
 }
 
+/// A deliberate exit is an err whose reason is `os/exit_status`. The endpoint
+/// reads its code rather than reporting it, because the program did not fail
+/// to say what it meant — it said it.
+///
+/// This lives here rather than beside the native endpoint because there are
+/// three endpoints and only one of them was in `main.rs`. The page's endpoint
+/// (`wasm_rt::exec_main`) could not see this function at all, so a program
+/// that exited deliberately was reported to the reader as an unhandled err.
+pub fn deliberate_exit(reason: &Value) -> Option<u8> {
+    let Value::Record { ty, fields } = reason else { return None };
+    // the type spells its module chain at whatever depth the import graph
+    // qualified it: os/exit_status directly, hako/os/exit_status one hop in
+    if !(ty.as_ref() == "os/exit_status" || ty.ends_with("/os/exit_status")) {
+        return None;
+    }
+    match fields.borrow().first() {
+        Some(Value::Int(code)) => Some(u8::try_from(code.clone()).unwrap_or(1)),
+        // an exit_status carrying something that is not a status is not a
+        // program saying what it meant — it is one that went wrong computing
+        // the code, and the reader is owed that rather than a silent 1
+        _ => None,
+    }
+}
+
 /// The endpoint report's trace lines, newest pass-through first, pointing
 /// back toward the birth site. Byte-identical across all three engines.
 pub fn trace_lines(interp: &Interp, info: &ErrInfo) -> String {

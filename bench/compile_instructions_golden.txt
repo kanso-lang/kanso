@@ -119,4 +119,17 @@
 # check at all. Allocations and peak do not move (61,981 and 822,004) because
 # an index comparison allocates nothing, so the counters agreeing here is
 # evidence about the SHAPE of the work rather than evidence that there is none.
-compile_instructions=57489912
+#
+# 2026-08-27: 57,489,912 -> 57,489,753, a fall of 159 (0.0003%), banked. The
+# change is `deliberate_exit` moving from src/main.rs to src/eval.rs, and two
+# guards added to the page's endpoint in src/wasm_rt.rs. `kanso check
+# lib/json` compiles a library and runs no program, so it reaches none of the
+# three: main.rs is the driver's endpoint, wasm_rt.rs is the page's, and eval
+# only holds the function now — nothing on the measured path calls it. Layout,
+# by the same argument as the -251 and the +1,954 above, and the counters that
+# do measure the front end's work are identical: allocations 61,981 and peak
+# 822,004. Fifth movement of this vein in two days with an untouched call
+# graph: +167, -251, +1,954, and now -159. That count is what the pending
+# question about instructions-only attributions is about; a FALL costs nothing
+# to bank, so it is banked and nothing is claimed for it.
+compile_instructions=57489753
