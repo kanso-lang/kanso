@@ -421,6 +421,19 @@ fn declares_tests(source: &str) -> bool {
     program.fns.iter().any(|d| d.name.starts_with("test_") && d.params.is_empty())
 }
 
+/// Whether the module exports `play`, which decides which of two refusals a
+/// non-entry file gets. `kanso play` accepts a file of definitions beside bare
+/// statements and refuses one holding `pub play`, so the advice to reach for
+/// it is true for the first and a dead end for the second.
+///
+/// Read from the parsed program rather than a line prefix, so `pub play`
+/// inside a string or a comment is not mistaken for the export.
+fn exports_play(source: &str) -> bool {
+    let Ok(lexed) = lexer::lex(source) else { return false };
+    let Ok(program) = parser::parse(&lexed) else { return false };
+    program.fns.iter().any(|d| d.name == "play" && d.is_pub)
+}
+
 /// The CLI and the browser share this so the engines never diverge on which
 /// compile a file gets.
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
@@ -443,6 +456,15 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
         (_, true) if !library_verb && declares_tests(source) => {
             Err(format!("error: `{file}` holds tests — `kanso test {file}` runs them\n"))
         }
+        // `kanso play` refuses a file holding `pub play` — it takes bare
+        // statements — so offering it here sent a reader to a refusal that
+        // sent them back. A pub-play module is meant to be imported, and
+        // that is what this says instead.
+        (_, true) if !library_verb && exports_play(source) => Err(format!(
+            "error: `{file}` is a library — nothing to run. it exports \
+             `play`: import the module from an entry file, or give the \
+             module a main.kso entry\n"
+        )),
         (_, true) if !library_verb => Err(format!(
             "error: `{file}` is a library — nothing to run. give the module a \
              main.kso entry, or run its definitions beside their statements \
