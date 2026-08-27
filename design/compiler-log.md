@@ -5008,3 +5008,18 @@ their own rather than beside the decoder.
 Whether a summed vein should be compared per sample is a question about what
 this gate is for, not a bug in how it reads. Left open here rather than
 answered in a change about emitted code.
+
+## 2026-08-26 — the argument gets a page: why there is no bind
+
+Clay lost the thread and asked for it back: he remembered devising a
+way to avoid explicit combinator keywords and could not reconstruct
+it. The device was gavel 24's three moves — own errs unreceivable,
+foreign handling as ordinary arms, signature-directed elaboration —
+and it lived only in this log's archive, which is exactly how it got
+lost. compiler.html gains entry 23, "why there is no bind", stating
+the assembled argument as settled surface: the combinator words stay
+off the surface in every variant under consideration, and the entry
+fences the genuinely open half — whether the failure machinery lives
+in dispatch or in the elaborator — as the design ledger's question,
+not the page's. The reconstruction-from-log episode is named in the
+entry itself as the reason it exists.
