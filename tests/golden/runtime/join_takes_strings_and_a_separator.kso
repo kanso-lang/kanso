@@ -1,0 +1,5 @@
+import "std/text"
+
+pub play =
+  joined = text/join 7 ","
+  print "{joined}"

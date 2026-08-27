@@ -1,0 +1,6 @@
+pub fn opaque x
+  x
+
+pub play =
+  m = put (opaque 7) "k" 1
+  print "{m}"
