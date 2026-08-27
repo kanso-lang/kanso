@@ -2823,3 +2823,51 @@ never enters it. Allocations and peak are identical at 61,981 and 822,004.
 Banked in `bench/compile_instructions_golden.txt` with that reading written
 beside it, the same way the +167 of the previous day was.
 
+
+## 2026-08-27 — a file that is there, readable, and not text
+
+Three bytes: `a`, `0xFF`, `b`. Native reads them and writes them back exactly.
+The interpreter refuses, and until today it said this:
+
+    cannot read /tmp/bad.bin: no such file or unreadable
+
+About a file three bytes long that is sitting right there. `read_file_text` in
+src/eval.rs threw the reason away — `map_err(|_| ...)` — so the one thing the
+message needed to say was the one thing it could not. The `|_|` was written to
+CLOSE a divergence, and the comment above it says so: the interpreter used to
+leak libc's `No such file or directory (os error 2)` where native said its own
+fixed sentence. Fixing that by discarding the error kind traded a divergence
+for a falsehood.
+
+The two engines genuinely differ here and the difference is structural.
+`runtime.c` opens the file `"rb"`, takes the bytes and hands them back;
+`std::fs::read_to_string` gives Rust a `String`, which cannot hold bytes that
+are not utf-8. The interpreter cannot follow native there without changing what
+a kanso string is on that engine.
+
+The differential law allows an engine to speak less than another only when the
+quieter one REFUSES with a clear diagnostic. So the refusal now names the real
+cause, and `ErrorKind::InvalidData` is Rust's own classification rather than a
+host string, so the wording stays fixed for the reason the original comment
+gives.
+
+    cannot read /tmp/bad.bin: the bytes are not text
+
+FOUND SIDEWAYS. `scripts/fingerprint` reads `docs/kanso.wasm`, and running it
+under `--interp` reported that file as missing while native hashed it. That was
+a detour off the memory measurement in the entry above, and it is the second
+time today that running a shipped script by hand turned up something no gate
+watched.
+
+WHERE THE FIXTURE LIVES, and why not in the corpus. `tests/golden/runtime/`
+pins a diagnostic by its stderr, and there is no diagnostic to pin: on native
+the program SUCCEEDS. A corpus entry asserts one answer, and the whole finding
+is that there are two. `tests/a_file_that_is_not_text.rs` holds both, asserts
+each engine's own answer, and says in its own comment that it pins what the
+engines DO rather than what they should — so whichever way the design question
+below is ruled, one of its two assertions goes red and asks to be rewritten.
+
+The design question — whether `read_file` is byte-transparent on every engine,
+or text-only with a bytes reader beside it — is filed in
+design/pending-gavels.md. Today the library has one reader and no way to say
+which you meant.

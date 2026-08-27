@@ -54,6 +54,42 @@ Nothing. The section stays so the next entry has somewhere to land.
 
 ## Open, not blocking
 
+### Whether `read_file` is text or bytes
+
+**Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
+for `read_file` and for `text/bytes`. The archive's `A digest, and the import
+path that broke it` is the only entry that touches this and it asserts the
+opposite of what is true today — "`io/read_file` carries binary content intact
+and `text/bytes` exposes it" — which holds on native and not on the
+interpreter. No design/*.md mentions it. Nothing has ruled on it.**
+
+`lib/os/os.kso` has one reader, `read_file`, and it does not say what it reads.
+On native it reads any file and preserves the bytes; on the interpreter a file
+whose bytes are not utf-8 is refused, because the value it reads into is a Rust
+`String`. As of today that refusal at least names the reason rather than
+claiming the file is absent, which is what the differential law needs from an
+engine that speaks less — but the two still answer differently for the same
+program, and a caller has no way to say which behaviour it wanted.
+
+THREE ANSWERS:
+
+1. **Text-only, everywhere, and a separate bytes reader beside it.** Go's
+   shape. Native would begin refusing files it reads today, which is a
+   behaviour change to `scripts/fingerprint` among others, so it needs the
+   bytes reader in the same change.
+2. **Byte-transparent everywhere.** Needs the interpreter to hold a non-utf-8
+   payload, which is a change to what a kanso string is on that engine, and
+   the archive records a ruling that a bytes value is real and a list is never
+   bytes — so the machinery may be closer than it looks.
+3. **Leave it.** Native reads everything, the interpreter refuses clearly, and
+   the law is satisfied. The cost is that the oracle cannot run every program
+   native can, which is the thing the oracle is for.
+
+RECOMMENDATION: 1. It is the only one where the library says what it does. It
+is also the only one that makes `read_file`'s name true on both engines, and
+the bytes reader it needs is the same surface `text/bytes` already implies.
+
+
 ### Riders under the err gavel (the three-combinator model, 2026-08-15)
 
 **Cited: gavel 1, archive 2026-08-15, listed six riders. Four have since
