@@ -1,0 +1,13 @@
+# The same as a_description_rides_in_a_list, one container over: a map's
+# VALUES went through the same per-element `val` and died the same way. The
+# keys did not — a map key is an int or a string, checked before this.
+import "std/io"
+
+fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+m = { "k":(opaque d) }
+
+pub play = m["k"]!
