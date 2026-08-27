@@ -50,7 +50,57 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-Nothing. The section stays so the next entry has somewhere to land.
+### What a digest costs, and whether it stays written in kanso
+
+**Cited: searched design/compiler-log.md (no sha256 entry), the archive (five
+entries, `A digest, and the import path that broke it` is the one that rules on
+this), and every design/*.md (none mention it). The rationale below is quoted
+from that archive entry; nothing has revisited it since.**
+
+`sha256/hex` holds the whole message. Peak arena is linear in the input at
+about seven thousand bytes per byte hashed, deterministic to the byte:
+
+    message   arena_peak_bytes   per byte
+      1,024          7,340,032      7,168
+      2,048         14,680,064      7,168
+      4,096         27,262,976      6,656
+      8,192         54,525,952      6,656
+
+A hash reads 64 bytes at a time and carries eight words of state, so peak
+should be flat. `cohort_frees=0` and `alloc_bytes` within half a per cent of
+`arena_peak_bytes` say why: nothing is reclaimed for the length of the call,
+and 89% of the peak is grown list buffers. The in-place append is not the
+cause — 93.8% of appends already take the fast path.
+
+WHY IT BLOCKS. `scripts/fingerprint` digests `docs/kanso.wasm`, now 1,604,098
+bytes, in the asset-digests CI job. That run was OOM-killed in a container at
+anon-rss 13,954,684 kB. It passes on the runner, so the runner has more
+headroom — but the headroom falls by about seven kilobytes for every byte added
+to the blob, and the blob has grown 23% since the archive entry was written.
+`tests/sha256_peak.rs` pins the figures so the next move is visible; it does
+not buy any headroom back.
+
+THE RATIONALE ON THE RECORD, verbatim from the archive: "a builtin would buy
+speed on a path that runs once per built file and nothing else." That entry
+measured the wall clock at 2.6 seconds and did not measure memory. The claim is
+sound about speed and silent about the dimension that turned out to bind.
+
+THREE ANSWERS, and this is the choice:
+
+1. **Reclaim inside a long call chain.** The most general, and it would pay
+   everywhere rather than here. Also the largest, and it touches the collector.
+2. **Thread one buffer through the block loop** in `lib/sha256/sha256.kso`.
+   Contained, and it keeps the module in kanso, which is the property the
+   original entry was protecting. Whether the language can express it without
+   the arena holding each round's intermediates anyway is unmeasured.
+3. **Make the digest a builtin.** Smallest and surest, and it spends the thing
+   the archive entry declined to spend.
+
+RECOMMENDATION: 2 first, because it tests whether the original claim — that
+this is expressible in kanso at a sane cost — survives contact with the
+measurement, and it is cheap to try. If threading the buffer does not move the
+peak, that result is itself the argument for 1 or 3, and it says which.
+
 
 ## Open, not blocking
 

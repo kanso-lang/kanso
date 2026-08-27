@@ -2777,3 +2777,62 @@ The mutation is written with `sed` rather than a heredoc because
 in through mutation heredocs, and it names that as the history. I wrote the
 python version first and the gate would have caught it.
 
+
+## 2026-08-27 — a hash that remembers every block it has read
+
+`scripts/fingerprint` was OOM-killed digesting the site. The kernel's report
+names the cost exactly: anon-rss 13,954,684 kB for a run whose largest input is
+`docs/kanso.wasm` at 1,604,098 bytes. Ten thousand bytes of live memory for
+every byte hashed.
+
+The cost is `sha256/hex`, and nothing else on that path. Measured with
+`KANSO_COUNTERS=1`, deterministic to the byte across three runs of each size:
+
+    message   arena_peak_bytes   per byte
+      1,024          7,340,032      7,168
+      2,048         14,680,064      7,168
+      4,096         27,262,976      6,656
+      8,192         54,525,952      6,656
+
+Twice the message is twice the peak, exactly. `text/bytes`, `text/split` and
+`os/read_file` were each measured separately over the same range and are all
+linear with a small constant — `text/bytes` is 9 allocations and one copy.
+
+A hash consumes 64 bytes at a time and carries eight words of state, so its
+peak should be flat in the message length. Per 64-byte block this holds a
+constant 633 kilobytes and never gives any of it back.
+
+TWO WRONG READINGS ON THE WAY, both worth recording. The first was that
+`sha256/hex raw` — the string form — was cheap and flat, so the byte-list form
+was the problem. There is no string form: `sha256/hex` takes a byte list, the
+program errored, and a program that fails allocates nothing. The counters were
+measuring a failure. The second was that the in-place append never fires, read
+off `put_mut_fast=0` and `put_mut_grow=0`. Those are a different counter pair.
+The ones that answer for `push` read `push_mut_fast=1,904,531` against
+`push_mut_slow=125,541` at 25,000 bytes, so 93.8% of appends already take the
+fast path and the optimisation is not the story.
+
+What the counters do say: `cohort_frees=0`, and `alloc_bytes` (246,642,065)
+lands within half a per cent of `arena_peak_bytes` (247,463,936). That is one
+fact said twice — every byte allocated is still live when the program ends. Of
+that peak, `sh_buf=220,980,512` is 89% buffer, so it is the grown list buffers
+of each block's schedule and working state, accumulated for the whole message.
+
+The archive's entry for this module (`A digest, and the import path that broke
+it`) states the design rationale: "a builtin would buy speed on a path that
+runs once per built file and nothing else." That entry measured the wall clock
+— 2.6 seconds — and did not measure memory. The premise is not wrong about
+speed; it is silent about the dimension that turned out to matter. The same
+entry records `docs/kanso.wasm` at 1,299,484 bytes, so the blob has grown 23%
+since, and at seven kilobytes of arena per byte that growth cost about two
+gigabytes.
+
+The asset-digests job passes on CI, so the runner has headroom this container
+did not. Nothing in the tree was watching that headroom. `tests/sha256_peak.rs`
+watches it now, pinning both figures exactly and asserting the doubling; it was
+watched red against a padding change before it was believed.
+
+What to do about it is a decision rather than a patch — reclaim inside a long
+call chain, restructure the module to thread one buffer, or make the digest a
+builtin after all — and it is filed in design/pending-gavels.md with this
+table.
