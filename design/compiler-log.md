@@ -5072,3 +5072,98 @@ spelling of its own that a consumer cannot write. Filed in
 design/pending-gavels.md under "Which claim owns `dep/join`", with a
 recommendation. `w1` stays recorded as it behaves; its label stops citing a
 gavel that has fallen.
+
+## 2026-08-27 — one cell of five, and two wrong answers on the way to it
+
+§18 of docs/compiler.html named an open item: a loop threading a map retains
+71.9 MB where the scalar form holds 1.5 MB, "and the fix is to give a threaded
+container storage outside the rewound region the way a byte builder already
+has."
+
+`git log -S` dates that sentence to 2026-08-01, in #664. The archive holds four
+entries from 2026-08-02 that build exactly it and revert it three times, every
+attempt moving the arena counter and none moving the process — the best got the
+counter down 69x while peak RSS went 71.8 MB to 75.2 MB. The page has carried a
+declined fix as its plan for twenty-five days, which is what "negative results
+are recorded on the compiler page so ideas stay declined" exists to prevent.
+
+Then measuring it took three goes, and the two wrong answers are the useful
+part of this entry.
+
+FIRST WRONG ANSWER. A loop threading a map beside a scalar brackets and holds
+1.7 MB, where the map-only loop I wrote held 69.7 MB. I concluded the scalar
+parameter was the difference and wrote it up. It was not: my map-only loop
+recursed through a helper group and the other did not, so the comparison
+carried two changes at once.
+
+SECOND WRONG ANSWER. Controlling for that — a self-recursive, map-only,
+two-argument loop — brackets, at 1.7 MB. So the container is not the axis
+either, and the page's "a map or a list" was wrong in both directions.
+
+WHAT IS ACTUALLY TRUE, at 1.6 million iterations with the same string built and
+dropped each time round (`sh_str` reads 72,282,272 in all five):
+
+    carried    recursion         beat_iters    arena peak    peak RSS
+    scalar     self              1,600,000      1,048,576      1.7 MB
+    map        self              1,600,000      1,048,576      1.7 MB
+    scalar     through a helper  3,200,000      1,048,576      1.7 MB
+    list       through a helper  3,200,000      1,048,576      1.7 MB
+    map        through a helper          0     72,351,744     69.7 MB
+
+One cell of five: a map carried by a loop that recurses through a second group,
+and nothing else. A list through the same helper brackets, and the same map in
+a self-recursive loop brackets. The refused group draws no line from
+KANSO_BEAT_REPORT at all, so the analysis never reaches it.
+
+That is why the storage fix could not have paid — it aimed at what the loop
+carries, and carrying a map is not the problem.
+
+WHY MAPS ARE OUT, from `beat.rs` itself:
+
+    /// Maps stay out: the first read caches a freshly allocated sorted view —
+    /// an above-the-mark pointer — into the below-mark header. Instant dangle.
+    const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC | LIST;
+
+So the exclusion is deliberate and the hazard is real. What the table adds is
+that four of the five shapes bracket anyway, the map-under-self-recursion among
+them. Crossing is not what separates them: a probe on the crossing test answers
+`loop/go/2 pos1 not_crossing=false` for exactly the self-recursive loop that
+brackets, so the map crosses the iteration boundary there too and the loop
+still rewinds. The narrowed question is why a helper hop changes the answer.
+
+A program can have the forty-fold win today by writing the loop so it calls
+itself, which nothing in the tree said.
+
+WHERE IT HAPPENS, and it is a priced refusal rather than an oversight.
+Instrumenting `eligible_clusters` on both loops:
+
+    map  through a helper   entries=1  edges_ok=true  carried=[go[1], onward[1]]
+    list through a helper   entries=1  edges_ok=true  carried=[]
+
+`cluster_edges_ok` SUCCEEDS in both, so the edge check is not what refuses the
+map. What differs is what becomes of the slot. LIST is in THREADED, so the list
+slot is threaded and nothing is carried. MAP is not:
+
+    const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC | LIST;
+
+so the map slot falls through to `carried` — a slot the loop evacuates at every
+rewind — and then this fires:
+
+    // A demoted entry buys a plain beat and nothing more. A carried
+    // slot is evacuated at every rewind, and a cluster reached only
+    // by a tail call is one whose cost nobody has measured — the
+    // json string scanner pays 8 GB of copies for the licence.
+    if !entries.is_empty() && !carried.is_empty() { continue; }
+
+So the forty-fold difference is a trade somebody already priced, on a different
+program. A draft of this entry called it a missing licence, by reading the type
+sets and never the selector; the probe above is what corrected it, and that is
+the fourth reading of this loop a measurement has overturned.
+
+WHAT IS ACTUALLY OPEN is whether the price is right for THIS program. A loop
+carrying a one-key map evacuates a handful of bytes per rewind where the string
+scanner evacuates a buffer, and the rule cannot tell them apart. Two ways out:
+make a map threadable the way a list is, which returns to the sorted-view
+hazard the threadable set was drawn to avoid; or make the carried-slot refusal
+read the size of what it would copy. Both are licensing changes rather than bug
+fixes, which is why this entry stops at naming them.
