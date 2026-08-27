@@ -1,0 +1,20 @@
+# A keyed read whose value is a FUNCTION, which on the page is not a value slot
+# at all but a table entry. `rt_keyed_check` guarded on `Slot::V` and said
+# "cannot read fields of this value" — a sentence about a value, said about a
+# handle that is not one — where both native engines render it as `<fn>`.
+#
+# The keyed read of a non-record sibling carries a string and pins the quoting;
+# this one carries a function and pins the arm the string never reaches.
+pub type point
+  x
+  y
+
+pub fn opaque v
+  v
+
+pub fn helper n
+  n
+
+pub play =
+  { x y } = opaque helper
+  print "{x} {y}"
