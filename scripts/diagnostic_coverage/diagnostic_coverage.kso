@@ -194,8 +194,16 @@ fn headed kind group true
 fn told _ ""
   ""
 
+# The head has to be specific enough that finding it in the corpus means
+# finding this message and not another one, which is why there is a floor at
+# all. It sat at twelve and hid three reachable diagnostics: `function `,
+# `constant ` and `the name `, each ten characters with its opening backtick,
+# each raised by a program anybody could write, and none of them pinned. Ten
+# admits four sites. Three were those gaps. The fourth, `no arm of `, was
+# already pinned by literal_arg_type — a true match, not a coincidence — so
+# the widening cost no false pins.
 fn told kind msg
-  worth kind msg (length msg >= 12)
+  worth kind msg (length msg >= 10)
 
 fn worth _ _ false
   ""

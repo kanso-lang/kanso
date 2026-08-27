@@ -1,0 +1,8 @@
+error[name]: the name `err` is already taken
+  --> a_name_the_language_already_owns.kso:9:6
+   9 | type err
+            ^
+error[name]: the name `shape` is already taken
+  --> a_name_the_language_already_owns.kso:15:4
+  15 | fn shape x
+          ^

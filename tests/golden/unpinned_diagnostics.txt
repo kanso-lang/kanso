@@ -6,9 +6,9 @@
 # tolerated so the gate could be turned on at all.
 #
 # The list only shrinks. Adding a diagnostic means adding a golden under
-# tests/golden/errors — scripts/diagnostic_coverage.py fails on any message
-# that is neither pinned nor listed here, and fails again when a listed one
-# becomes pinned, so the line gets deleted rather than left lying.
+# tests/golden/errors — the coverage scan fails on any message that is
+# neither pinned nor listed here, and fails again when a listed one becomes
+# pinned, so the line gets deleted rather than left lying.
 expected a constant name
 expected a top-level declaration (`fn` or `type`)
 private type `

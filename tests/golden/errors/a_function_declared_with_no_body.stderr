@@ -1,0 +1,4 @@
+error[syntax]: function `nobody` has no body
+  --> a_function_declared_with_no_body.kso:10:4
+  10 | fn nobody x
+          ^
