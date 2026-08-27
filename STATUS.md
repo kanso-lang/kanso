@@ -56,21 +56,14 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso#1089** — clang is installed, and that was never the question. Went
-green on 19 checks, then #1088 landed and made it conflict on the log and the
-excused list; main is merged in, the log entries reordered by merge date, and
-CI is running again on the merge commit.
-
-**kanso#1090** — two ways the page's endpoint got an err wrong. It could not
-read an `os/exit_status`, so a program that exited deliberately printed
-`unhandled err reached the executor` at its reader and answered 1 whatever code
-it named; and a wall whose right side answered a plain value made it say "main
-is not an io" where the other two engines say "`>>` sequences two effect
-descriptions". Both pinned on all three engines, both watched red at their own
-sources.
+**kanso#1091** — a micro program's stderr is part of what it does. `golden.rs`
+read `"out"` for the micro corpus and never `"err"`, so `io/write_err`'s success
+case was pinned on no engine. It also carries two negative results, below.
 
 ## What landed on 2026-08-27
 
+    kanso 7be1ed9c  #1090  two ways the page's endpoint got an err wrong
+    kanso 36dcd74e  #1089  clang is installed, and that was never the question
     kanso 0d293915  #1088  the excuse with no reason, and the sitting it cost
     kanso f5a721b5  #1087  a build body dropped the effects written in it
     kanso dc353927  #1086  the last excuse, and a ratio measured further out
@@ -99,28 +92,47 @@ is the blocking question above.
 
 ## Next
 
-**A deliberate exit is not the only thing no corpus can express.**
-tests/golden/runtime asserts every program in it exits 1 and tests/golden/micro
-asserts every program in it exits 0, so any behaviour whose observable end is
-some other status has no home and is invisible to the three-engine walk. Worth
-knowing what else is in that shadow.
+**Two ideas died by measurement today, and both are recorded** so they stay
+dead. Neither was a guess that looked wrong; each was a recommendation about to
+be written down.
 
-**`main is not an io` at src/wasm_rt.rs:1132 is answered.** It was never the
-wasm twin of the driver message #1079 pinned in `tests/a_plan_needs_an_io.rs` —
-this file said so for two days and the two are different messages on different
-paths. It is `exec_slot`'s catch-all, and a program CAN reach it: a bare name
-on the right of a wall (`x = 2` then `io/write "one" >> x`) slips past
-`never_describes`, which refuses a literal or a direct call and not a name.
-Native and the oracle said "`>>` sequences two effect descriptions"; the page
-said "main is not an io". Fixed and pinned in the same PR as the deliberate
-exit.
+**The bare-name wall check.** `never_describes` refuses a literal or a direct
+call on either side of `>>` and not a bare name, so `io/write "one" >> x`
+reaches the run. `tests/wall_takes_effects.rs` made this same extension once
+before, from literals to calls, and the lookup for a name is the same one at
+arity zero — so it read as a line of code. It is not. A local shadowing a
+BARE-ENROLLED import is legal, and this prints `one` then `shadowed` and exits
+0 today:
 
-**Whether the CHECK should catch that instead** is the live question.
-`tests/wall_takes_effects.rs` already extended this refusal from literals to
-calls, on the stated ground that "a call to a function that can never answer an
-effect is the same case one step out, and the fixpoint already knows which
-calls those are". A bare name is that case one step further out, and the
-fixpoint is keyed by (name, arity) so arity zero is the same lookup. Measure it
-before writing it down: it changes what the language refuses, and the runtime
-guard is needed either way for a piped call, a non-`Ident` head and a
-parameter.
+    naturals = io/write "shadowed\n"
+    io/write "one\n" >> naturals
+
+`returns` is built from all of `program.fns`, synthetic clones included, so the
+lookup finds `list/naturals` and the local is invisible to it. check.rs:1085
+states the rule that breaks: "the enrollment must never make every stdlib
+export a forbidden binding name." The open question is whether to give
+`never_describes` and its sibling `refused` a set of the names bound in the
+function they are walking — cheaper than full scope and possibly enough. That
+program is the case that must not be refused, and belongs in the corpus either
+way. The runtime guard shipped in #1090 covers the behaviour meanwhile.
+
+**A coverage gate over the std surface.** `the_wasm_engine_complains_the_way_the_others_do`
+walks every `pub fn` in `lib/` and hands each the wrong arguments; nothing walks
+the surface the other way, so gating the success half looked like the obvious
+build. There is nothing to gate: 100 of 100 exports are reached. The first
+answer was 24, and the arithmetic of being wrong is worth keeping —
+
+    qualified name only, across the corpus dirs     24 uncovered
+    plus the bare-enrolled form                      1 uncovered
+    plus intra-library calls                         0 uncovered
+
+Two searches this month have failed the same way: the coverage scan's
+twelve-character floor hid three reachable diagnostics, and this hid eight
+reachable exports. A name here has two written forms, and a search that knows
+one is measuring its own blind spot.
+
+**What today's bugs actually shared** was never an uncalled function. All three
+lived in a function the corpus calls constantly, and what was wrong was the
+ENDPOINT around the call: what the exit code carries, which stream the bytes
+land on, which sentence names the fault. That is where to look next, and
+surface coverage would have found none of them.
