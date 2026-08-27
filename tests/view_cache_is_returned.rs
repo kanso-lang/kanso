@@ -22,7 +22,13 @@ use std::process::Command;
 /// Views allocated and views returned, for a program that builds `n` transient
 /// maps and reads each one.
 fn views(n: u64) -> (u64, u64) {
-    let dir = std::env::temp_dir().join(format!("kanso-view-{n}"));
+    // Unique per call, not per size: two tests here ask for 20,000 maps, cargo
+    // runs them on separate threads, and a directory named for the size alone
+    // means one removes the other's program mid-run. They never collided while
+    // both were ignored.
+    static NTH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let nth = NTH.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("kanso-view-{n}-{nth}"));
     std::fs::create_dir_all(&dir).expect("a directory to run in");
     // A map literal's keys must be literals, so a transient map is built with
     // `put`. Reading its length is what forces the view.
@@ -56,12 +62,11 @@ fn views(n: u64) -> (u64, u64) {
 /// live at exit — the maps still reachable from the answer — so the assertion
 /// is a small constant, not equality.
 ///
-/// Ignored because it fails: it is the acceptance criterion for an ownership
-/// rule that does not exist yet, not a regression guard for one that does. Run
-/// it with `cargo test -- --ignored` to see the current gap, and delete this
-/// attribute in the change that gives the view an owner.
+/// Written to fail, and ignored, as the acceptance criterion for an ownership
+/// rule that did not exist. It exists: twenty thousand transient maps build
+/// twenty thousand views and return twenty thousand, so the gap is zero rather
+/// than the small constant this allows.
 #[test]
-#[ignore = "the view has no owner yet; see design/compiler-log.md"]
 fn a_transient_maps_view_goes_back_to_the_allocator() {
     let (built, returned) = views(20_000);
 
@@ -77,7 +82,6 @@ fn a_transient_maps_view_goes_back_to_the_allocator() {
 /// leave ten times the views outstanding. This is the one that catches a leak
 /// growing with the workload, which is how the 76.8 MB arose.
 #[test]
-#[ignore = "the view has no owner yet; see design/compiler-log.md"]
 fn what_is_never_returned_does_not_grow_with_the_loop() {
     let (small_built, small_back) = views(2_000);
     let (large_built, large_back) = views(20_000);
