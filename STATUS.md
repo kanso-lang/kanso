@@ -56,10 +56,6 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso#1095** — the diagnostic ratchet reads src/runtime.c now, thirteen more
-messages are pinned, and the twelve that remain carry a measured mechanism
-apiece.
-
 **kanso#1098** — a destructuring bind of the wrong shape said three different
 things on three engines, and native's was the poorest: it dropped both the
 value the reader bound and the sentence saying why a bind cannot fail over to
@@ -67,6 +63,7 @@ another arm. Native and the page gain them.
 
 ## What landed on 2026-08-27
 
+    kanso f1aecf5d  #1095  the ratchet reads the C now, and twelve have reasons
     kanso 43526dc7  #1097  the wasm gap list pinned a prefix
     kanso c0b1d066  #1094  six socket failures said seven different things
     kanso 080deb09  #1093  eight native runtime messages that nothing pinned
@@ -122,15 +119,46 @@ twelve that remain carry a mechanism apiece rather than a shrug.
 
 ## Next
 
-**Three findings from the sweep are still open, each its own change.**
+**Four findings from the sweep are still open, each its own change.**
+
+A FIFTH FILE THE RATCHET CANNOT SEE, and it is the oracle's. `src/eval.rs`
+raises 98 `RuntimeError`s, and a `RuntimeError` carries a bare `message:`
+field — none of the scan's four openers. Reading the 72 with enough literal
+text to match against the goldens leaves 14 that nothing pins. Every one was
+then run rather than read, which sorted them:
+
+  - five are reachable and the two native engines agree on them, so each wants
+    a fixture: the keyed read of a non-record, `if`'s non-bool condition,
+    `sleep`, `random` and `round` on a value of the wrong type;
+  - seven are shadowed, each by a check that fires first, and the probe that
+    established it is the excuse: a `set` target must be a construction born
+    in the same `build` block, so it is bound and it is a record; a bind
+    pattern is only ever a name, a constructor or a keyed read, because
+    `_ = ...` and `7 = ...` are `expected a binding name or type`;
+    `list/select` routes its predicate through `if`; a mixed-type `sort` is
+    refused by `comparison requires two values of one comparable type`;
+    `builtin_nope` outside the standard library is refused by name; and a
+    foreign closure handle is built only by `wasm_rt.rs`, which installs the
+    way back at init;
+  - and one is a DIVERGENCE. `return x if cond` on a non-bool says three
+    different things: the interpreter's `a return condition is true or false,
+    got 7`, native's `an if condition is true or false, got 7`, and the page's
+    `if takes a bool condition (got "7")` — a third wording, and quoted where
+    the other two are not. The plain `if` builtin agrees across native and the
+    interpreter, so it is the guard alone. Converging on native's sentence
+    keeps `k_truthy` in one place, which is what runtime.c says it is for, and
+    #1094 measured what a second wording costs: 128 bytes of `.text` in every
+    binary, for two characters.
 
 A FOURTH WAY THE COMPILER WRITES A MESSAGE, after the three #1079 found.
-`codegen.rs` bakes text into the emitted binary through `format!`. Two of the
-three it writes — the one about destructuring a value as a named type, and the
-one about which types a field takes — are pinned nowhere, and they match none
-of the scan's four openers. Widening to `format!`
-in general would match every format string in the compiler, so this one needs a
-narrower key than the others did.
+`codegen.rs` bakes text into the emitted binary through `format!`. #1098 fixed
+one of the two — destructuring a value as a named type — and the other, the
+one naming which types a field takes, turns out to be DEAD: `check_field_annotations`
+refuses every field annotation, so nothing reaches the emitter's half. Deleting
+it is not obviously right, because it is the emitter half of a feature the
+checker currently declines rather than a mistake. Widening the scan to `format!`
+in general would match every format string in the compiler, so a key for this
+family still needs finding.
 
 THE SCAN'S CORPUS TAKES `.stderr` ONLY. `integer overflow` is pinned exactly,
 by `docs/book/samples/ch02/overflow.out`, and the gate cannot see it. Admitting
