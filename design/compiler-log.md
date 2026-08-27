@@ -2449,3 +2449,39 @@ Three excuses remain, and none of them is now a claim about which corpus is
 which. The macos host runs `specs`'s own suite on another machine, so its
 mutations are `specs`'s. The jekyll build is a docker action a shell in a
 worktree cannot invoke. kq is not checked out beside the repository.
+
+Four excuses remain. Two are arguments about redundancy — the macos host and
+the playground corpus both run what `specs` already proves, on another machine
+or through another engine. Two are genuine absences: the jekyll build is a
+docker action a shell in a worktree cannot invoke, and kq is not checked out
+beside the repository.
+
+## 2026-08-27 — the loader's refusals are not diagnostics, so nothing pinned them
+
+The coverage gate keys on `Diagnostic::new(`. The module loader and the driver
+write `error: …` as plain text, print it and exit, so the scan walks past every
+one of them. There are thirty-one such sites in `src/`.
+
+Four of them are module refusals, reached by trees anybody could build:
+
+    a.kso beside a/          import "./a" names both a directory and a `.kso` file
+    a module importing itself  import cycle through …/m/m.kso
+    two modules in a cycle     import cycle through …/p
+    an import naming nothing   cannot resolve import "./nope" — a dot-prefixed path …
+
+They belong on the module surface rather than in the error corpus, because the
+corpus compiles one file and each of these needs a tree. `module_differential`
+reads 22 modules now. Each was watched red by perturbing its expected text: the
+sweep names the case and quotes what the loader actually said, so the case
+cannot pass by asserting nothing.
+
+The self-import and the mutual cycle answer the same sentence with different
+tails — a file path for the first, a directory for the second — which is why
+both are here rather than one standing for the pair.
+
+Twenty-seven sites remain unseen by the gate. Some cannot be reached from a
+test at all (`cannot invoke clang`, `cannot open the terminal`), and some are
+driver messages a corpus of programs cannot express. Widening the scan to a
+second opener would say which is which; that is a separate change, and it wants
+the answer written down rather than guessed, the way the excused list's four
+claims did.
