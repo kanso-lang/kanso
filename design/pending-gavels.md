@@ -117,6 +117,53 @@ more than a hash.
 
 ## Open, not blocking
 
+### Whether a compile_instructions move that cannot be work needs an attribution
+
+**Cited: searched design/compiler-log.md and the archive for
+`compile_instructions`. The vein's own header in
+bench/compile_instructions_golden.txt is the record of why it exists and is
+quoted below; nothing has revisited the question this entry asks.**
+
+The vein moved three times in two days from an untouched call graph:
+
+    2026-08-26   +167     a reworded driver message in src/main.rs
+    2026-08-27   -251     two match arms in the interpreter's call_builtin
+    2026-08-27   +1,954   one ErrorKind match in read_file_text
+
+In each case the edited function is unreachable from the measured path —
+`kanso check lib/json` compiles a library and runs no program — and the
+counters that measure the front end's work are identical across all three:
+allocations 61,981 and peak 822,004. The compiler's own binary is being
+rearranged by edits elsewhere in the crate, and the vein reads that as the
+front end's work changing.
+
+THE VEIN EARNS ITS PLACE and this is not a proposal to remove it. Its header
+records the case: a change took the front end from 90.9M retired instructions
+to 67.2M with every other gate reporting nothing. That is exactly what it is
+for.
+
+The question is narrower. A RISE with allocations, rounds, visits and peak all
+identical, in a diff that does not touch the measured path, currently costs a
+golden update, a page-figure update, a log paragraph, and — because the trend
+gate calls it a pure regression — an entry in `bench/welfare_floor.json`
+attributing a spend. Today's attribution had to say in its own text that
+nothing was spent, which is an odd thing for a ledger of spends to contain.
+
+TWO ANSWERS:
+
+1. **Leave it.** The ritual is cheap per occurrence and the alternative is a
+   rule that could be leaned on. Silence is the thing the vein exists to
+   refuse, and three paragraphs in two days is not a crisis.
+2. **Let the trend gate treat an instructions-only move as priced by the log
+   sentence alone**, when every other compile counter is identical. The golden
+   still moves and the sentence is still required; only the welfare_floor
+   attribution is dropped, because there is nothing to attribute.
+
+RECOMMENDATION: 2, narrowly — conditioned on the other three compile counters
+being byte-identical, so it cannot cover a change that did real work. If that
+condition feels like a crack, 1 is honest and the cost is small; what should
+not stand is a spend ledger whose entries say no spend occurred.
+
 ### Whether `read_file` is text or bytes
 
 **Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
