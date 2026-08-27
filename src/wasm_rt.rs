@@ -753,16 +753,46 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
     push(Slot::V(Value::Str(out)))
 }
 
+/// A slot as a value the interpreter can read: an operator's side, an index,
+/// the thing being indexed, an `if` condition — every place a site reads a
+/// slot as data it may turn out to refuse.
+///
+/// A closure is data here the same way it is data in a list: `val` turns it
+/// into the handle-carrying function value, and the interpreter refuses that
+/// by name. A description is not data, and nothing that reads one this way
+/// succeeds — arithmetic and comparison have no arm that takes one, equality
+/// refuses it in so many words, indexing has no arm for it either, and `if`
+/// wants true or false. Every arm that reports one renders it `<io>`. So any
+/// description stands in for the real one, and the site's sentence still
+/// comes out of the code that owns it rather than being copied here.
+///
+/// Standing one in is also what keeps a refusal from running anything.
+/// `as_desc`, which builds the true description, forces a deferred right
+/// side — and native does not:
+///
+///     xs = [1]
+///     boom = io/write "{opaque xs[5]!}"    # errors if ever evaluated
+///     d = io/write "a\n" >> boom
+///     pub play = print "{1 + opaque d}"
+///
+/// answers `+` is not defined for these values on both native engines, not
+/// the out-of-bounds error, so `boom` never runs. Demanding it to build a
+/// value about to be refused would do strictly more than the oracle does.
+///
+/// Handing the operand's own handle back — what `rt_binop` used to do for
+/// every slot that was not a plain value — made `1 + d` answer `d`, so the
+/// page printed `<io>` where both other engines refused.
+fn operand(h: u32) -> Value {
+    match slot(h) {
+        Slot::V(v) => v,
+        s if descish(&s) => Value::Desc(Rc::new(Desc::Args)),
+        _ => val(h),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
-    let a = {
-        let Slot::V(v) = slot(a) else { return a };
-        push(Slot::V(crate::eval::sub_base(v)))
-    };
-    let b = {
-        let Slot::V(v) = slot(b) else { return b };
-        push(Slot::V(crate::eval::sub_base(v)))
-    };
+    let (a, b) = (crate::eval::sub_base(operand(a)), crate::eval::sub_base(operand(b)));
     let op = match op {
         0 => "+",
         1 => "-",
@@ -785,7 +815,7 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
     // The browser forces through its own door; equality reaches a cell the
     // same way any demand does.
     let cells = Cells { id: &cell_handle, force: &|v| Ok(forced(v)) };
-    match eval_binop(op, val(a), val(b), SPAN0, &cells) {
+    match eval_binop(op, a, b, SPAN0, &cells) {
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }
@@ -794,11 +824,8 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
 /// Strict indexing: a miss is an err (unlike `at`, whose miss is none).
 #[no_mangle]
 pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
-    if descish(&slot(base)) || descish(&slot(index)) {
-        desc_refusal(INDEXING_TAKES);
-    }
-    let idx = val(index);
-    match index_value(val(base), idx.clone(), SPAN0) {
+    let idx = operand(index);
+    match index_value(operand(base), idx.clone(), SPAN0) {
         Ok(Value::NoneV) => {
             let msg = format!("missing index {}", render_demanded(&idx, true));
             push(Slot::V(err_value(Value::Str(msg), crate::eval::Raised::default())))
@@ -811,51 +838,15 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
 /// Lenient indexing: a miss is none — the plain `xs[i]` form.
 #[no_mangle]
 pub extern "C" fn rt_at(base: u32, index: u32) -> u32 {
-    if descish(&slot(base)) || descish(&slot(index)) {
-        desc_refusal(INDEXING_TAKES);
-    }
-    match index_value(val(base), val(index), SPAN0) {
+    match index_value(operand(base), operand(index), SPAN0) {
         Ok(v) => push(Slot::V(forced(v))),
         Err(rt) => die(rt.message),
     }
 }
 
-/// The sentence a site owes when it is handed a description instead of a value.
-///
-/// `val` refuses every slot that is neither a value nor a closure, and it does
-/// so with its own words — so a site that opens with `match val(h)` never
-/// reaches the message it wrote for exactly this case. Three sites did that,
-/// and one of them was `an if condition is true or false`, converged across
-/// all three engines the same morning it was found unreachable here.
-///
-/// The sentence is COPIED from the interpreter rather than produced by handing
-/// it a real `Value::Desc`, and that is deliberate. Building the Desc means
-/// `as_desc`, which demands a deferred right side — and native does not:
-///
-///     xs = [1]
-///     boom = io/write "{opaque xs[5]!}"    # errors if ever evaluated
-///     d = io/write "a\n" >> boom
-///     pub play = print "{(opaque d)[1]}"
-///
-/// answers the index refusal on both native engines, not the out-of-bounds
-/// error, so `boom` is never evaluated. Demanding it here to build a value we
-/// are about to refuse would do strictly more than the oracle does.
-///
-/// The cost is a sentence living in two files. `scripts/diagnostic_coverage`
-/// reads both now, so a drift between the copies is a thing a gate catches.
-const INDEXING_TAKES: &str =
-    "indexing takes a list or string with a 1-based position, or a map with a key";
-
-fn desc_refusal(said: &str) -> ! {
-    die(said.to_string())
-}
-
 #[no_mangle]
 pub extern "C" fn rt_truthy(h: u32) -> u32 {
-    if descish(&slot(h)) {
-        desc_refusal("an if condition is true or false, got <io>");
-    }
-    match val(h) {
+    match operand(h) {
         Value::True => 1,
         Value::False => 0,
         other => {

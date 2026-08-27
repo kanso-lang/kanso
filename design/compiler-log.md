@@ -4537,3 +4537,56 @@ family rather than this one, and the entry below may already cover it.
 
 COST: none. wasm_rt.rs is not read by `kanso check` and is not in the native
 runtime.
+
+## 2026-08-27 — the page answered `1 + d` with `d`
+
+`rt_binop` read each side with
+
+    let Slot::V(v) = slot(a) else { return a };
+
+so any slot that was not a plain value ended the operation by handing its own
+handle back. `1 + d`, with `d` a description, ANSWERED `d`, and the page
+printed `<io>` where both native engines say ``+` is not defined for these
+values`.
+
+That shape is why nothing had caught it. The diagnostics differential compares
+refusals and this program does not refuse; the error corpus pins stderr and
+this program writes to stdout. Only the three-engine walk, which compares what
+each engine PRINTS, could see it — the walk #1104 taught to say how much it had
+walked.
+
+The fix hands the interpreter a placeholder `Value::Desc` instead. Two
+measurements stand behind that:
+
+  - No operator succeeds on a description. Equality was the one that could
+    have, since it reaches its own arm before the type table, and it names
+    them: `equality is not defined on a function or an effect`. Ordering has a
+    second sentence, the bitwise family a third, and everything else falls to
+    the catch-all. Three new runtime fixtures, one per arm.
+  - Every description renders `<io>`, so an error path that names the operand
+    cannot tell the placeholder from the real one.
+
+The sentence therefore still comes out of `eval_binop`, for every operator,
+with nothing copied.
+
+That dissolves the copies the entry above had to make. #1105 kept
+`INDEXING_TAKES` and the `if` sentence as literals in wasm_rt.rs because
+building a real description means `as_desc`, which forces a deferred right
+side, and native does not evaluate one before refusing. A placeholder never
+calls `as_desc`, so `rt_index`, `rt_at` and `rt_truthy` reach their own arms
+now and both literals are gone. Two corrections to that entry while the ground
+is fresh:
+
+  - It said `scripts/diagnostic_coverage` watched the two copies for drift. It
+    did not. The scan has six openers and a bare `die("` is not among them, so
+    nothing anywhere was comparing them. (Task #102's branch adds that opener;
+    it is still unpushed.)
+  - It said `map_or_filter` succeeds on native, citing `list/map` over a list
+    holding a description. `list/map` is the lazy library function and never
+    enters that builtin — it answers `list/mapped <fn> list/cursor 1 <io>` —
+    and bare `map` and `filter` are unnameable. So the reachability of
+    `map_or_filter`'s two `val` sites is still open, and it is filed that way.
+
+COST: the three compile veins are pinned to the runner's glibc and rustc and
+refuse to compare in this container, so CI measures them. Locally welfare
+reads 84.11 against a floor of 84.11 and the trend gate is silent.
