@@ -1,0 +1,13 @@
+# The `!` form is a different runtime entry from the bare one — `rt_index`
+# rather than `rt_at` — and a guard on one says nothing about the other. This
+# fixture exists because a mutation that removed only `rt_index`'s guard left
+# every other fixture green, which is what a clause nothing exercises looks
+# like.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{(opaque d)[1]!}"

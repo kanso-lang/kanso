@@ -1,0 +1,12 @@
+# `val` refuses every slot that is neither a value nor a closure, and it does so
+# with its own words — so `rt_truthy`, which opens with `match val(h)`, never
+# reached the sentence it wrote for exactly this case. That sentence had been
+# converged across all three engines the same morning this was found.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{if (opaque d) 1 2}"

@@ -4479,3 +4479,61 @@ counting it. The first two fail on the skip list, the third on the accounting,
 and the third's message names all four numbers.
 
 COST: none. tests/wasm_engine.rs is a test.
+
+## 2026-08-27 — the page refused before three sites could explain themselves
+
+The entry above moved six storing positions off `val` so the page could CARRY a
+description. This is the other half of the same accessor: three sites that call
+`val` to get a value, where its refusal preempts the sentence they wrote for
+exactly this case.
+
+    print "{if (opaque d) 1 2}"
+      native / interpreter  an if condition is true or false, got <io>
+      the page              a bound description cannot be used as data here
+
+    print "{(opaque d)[1]}"
+      native / interpreter  indexing takes a list or string with a 1-based
+                            position, or a map with a key
+      the page              a bound description cannot be used as data here
+
+The `if` one is the sharper. That sentence was converged across all three
+engines this morning, and on the page it was unreachable at the one input it
+was written to describe.
+
+THE TEMPTING FIX IS WRONG, and one fixture says so. `rt_index` and `rt_at`
+delegate to the interpreter's own `index_value`, so handing them a real
+`Value::Desc` through `value_of` would make the page agree by CONSTRUCTION
+rather than by a copied string. But `value_of` calls `as_desc`, which demands a
+deferred right side — and native does not:
+
+    xs = [1]
+    boom = io/write "{opaque xs[5]!}"     # errors if ever evaluated
+    d = io/write "a\n" >> boom
+    pub play = print "{(opaque d)[1]}"
+
+answers the index refusal on both native engines. The out-of-bounds error never
+appears, so `boom` is never evaluated. Demanding it to build a value we are
+about to refuse would do strictly more than the oracle does. So the sentence is
+copied, and the cost — one string living in two files — is now a thing a gate
+can catch, because the diagnostic scan reads wasm_rt.rs as of the entry below.
+
+FOUR CLAUSES, AND THE FIRST MUTATION WAS INCONCLUSIVE. `xs[i]` and `xs[i]!` are
+different runtime entries — `rt_at` and `rt_index` — so a guard on one says
+nothing about the other. Removing the index-position clause from `rt_index`
+alone left every fixture green, which reads exactly like dead code; removing it
+from BOTH turned `a_description_is_not_an_index` red, and removing `rt_index`'s
+whole guard turned `a_description_is_not_a_strict_index` red. Both functions'
+guards are live. Two fixtures were added for the `!` forms precisely because the
+first mutation could not tell.
+
+WHAT IS NOT CLAIMED: that each of the four clauses is individually necessary.
+Two mutations proved two of them; the other two ride on the same line and have
+not been isolated.
+
+STILL OPEN: `rt_binop` answers `` `+` is not defined for these values `` on
+native and has not been probed on the page. `map_or_filter` succeeds on native
+(`list/map` over a list holding a description answers 1), so it is the carrying
+family rather than this one, and the entry below may already cover it.
+
+COST: none. wasm_rt.rs is not read by `kanso check` and is not in the native
+runtime.
