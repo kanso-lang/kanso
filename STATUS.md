@@ -7,7 +7,10 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: nothing.**
+only indexes it. **Blocking right now: one — "What a digest costs, and whether it stays
+written in kanso".** `sha256/hex` holds the whole message; peak arena is linear
+in the input at about seven thousand bytes per byte hashed, and the
+asset-digests job's headroom falls as `docs/kanso.wasm` grows.
 
 **Eighteen questions are ready to rule, and every one of them carries a
 recommendation.** That is the point of the 2026-08-25 sweep: Clay's ask was
