@@ -3673,11 +3673,28 @@ wall-bearing declaration, and `kanso check lib/json` compiles a pure library
 that never asks. So this row is silent on the feature's real cost, and saying
 the feature is free would be reading its silence as an answer.
 
-THE FLOOR MOVED, AND BY THE TOOL RATHER THAN BY HAND. `welfare --set` refuses a
-fall greater than 0.01 and accepts one at or under it; this fall reads 0.00.
-That threshold is what a rounding-scale move is for, so this is the sanctioned
-path rather than the hand edit the 84.12 entry describes. Floor 84.12 -> 84.11,
-with the two-host measurement in the reason.
+THE FLOOR MOVED, AND THE AUTHORITY FOR IT IS THE RULING, NOT THE TOLERANCE.
+`welfare --set` accepted this, and the first version of this paragraph said
+that was the sanctioned path. It is not the argument to make. The tool's own
+refusal text reads "--set is lowering the objective, and --set cannot do that
+... this is Clay's call to make, in conversation — not a flag's", and the
+comment above it records two earlier loosenings, each of which "looked
+reasonable and each was an escape". `fall > 0.01` is a float-noise allowance;
+this fall is a real computed one, from a golden that moved by 81,855.
+
+What authorises the move is Clay's ruling of 2026-08-25 — the floor is absolute
+against refactorings and permeable to the language — and this is a language
+change, since a program that used to run partway and die is now refused before
+it starts. The 84.79 and 84.12 entries in bench/welfare_floor.json have exactly
+this shape. Floor 84.12 -> 84.11 with the two-host measurement in the reason.
+
+AND THE DISCREPANCY IS ITSELF A FINDING, of the shape this file has been
+collecting all day: the guard's prose says one thing and its code allows
+another, and reading only the prose or only the code gives a different answer.
+A gate's exception is a claim. This one is CLAY'S to settle — whether the 0.01
+is meant as float noise, in which case a real fall under it should still be
+refused, or whether it is a deliberate small-change allowance, in which case
+the refusal text overstates.
 
 The order of operations is the part worth keeping. The expensive version fell
 0.06 and the first instinct was to bank it — goldens edited, page figures
