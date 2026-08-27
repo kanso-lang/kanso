@@ -5271,3 +5271,40 @@ buys nothing, so this change takes the language escape and records itself in
 bench/welfare_floor.json's history. The floor does not move: welfare reads
 84.12 either way, because a thousand instructions in fifty-seven million is
 below the hundredth the gate can see.
+
+## 2026-08-27 — two questions the residual sweep could not see
+
+The 2026-08-25 sweep walked the log, the archive and every design doc for
+questions asked and never answered, and said so: "The intent is that this is
+the whole of it." Today turned up two it missed, and both were missed the same
+way — each was recorded in a TEST rather than in prose.
+
+The first is `w1` in `module_differential`'s known-defect ledger: which claim
+owns a qualified spelling when a module declares a name one of its imports
+also exports. Filed today with its measurement.
+
+The second is `tests/entry_file.rs`, whose `#[ignore]` reason reads "the two
+conventions collide; the rule is a gavel, not a fix". The archive entry behind
+it — "an err's reason renders with the compiler's spelling, not the program's",
+2026-08-02 — ends with the sentence "That is a gavel." It never reached the
+ledger either.
+
+    run the file directly     trouble: slow_lane 7
+    import it                 trouble: lane/slow_lane 7
+
+Same program, same value, and which spelling you get depends on how the program
+was entered. The bare-name fix was built and reverted because two deliberate
+pins went red — `cross_module_fields` asserts `` `geo/label` `` in a diagnostic
+and `lib/pair 6 "v"` as output, both correct for an imported type. So the rule
+wanted is "render the name the asking module would write", and render has no
+idea who is asking.
+
+Filed with a recommendation: qualified everywhere, on the grounds that Go's
+package rule is already ruled here and Go prints `main.T` rather than `T`, and
+that the defect is entering the same code two ways and reading two things. The
+cost is stated in the entry rather than glossed.
+
+THE RULE THAT CHANGES. STATUS.md's filing gate said an entry cites its search
+of the log, the archive and every design doc. It now says the tests too. A
+sweep that reads only prose cannot see a question a spec is carrying, and two
+of them were sitting in specs the whole time.

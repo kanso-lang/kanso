@@ -9,17 +9,18 @@ is stale — say so.
 The decisions live in design/pending-gavels.md — the single ledger; this file
 only indexes it. **Blocking right now: nothing.**
 
-**Seventeen questions are ready to rule, and every one of them carries a
+**Eighteen questions are ready to rule, and every one of them carries a
 recommendation.** That is the point of the 2026-08-25 sweep: Clay's ask was
 *"the goal here would be to not have anything left to gavel. I feel like I keep
 gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**Ten open, not blocking** — the two
+**Eleven open, not blocking** — the two
 surviving err-gavel riders (the annotate/rescue spelling, and construction
 enforcement); which claim owns a qualified name when a module declares one of
-its imports' names, whose filing pointed at a gavel that has since fallen;
+its imports' names, whose filing pointed at a gavel that has since fallen; what
+a record prints as when its module is imported;
 `--explain-copies`; the assert hako's surface; the
 bare-call cross-module tie whose interim ruling is still live and still called
 interim; whether a dependency's render arms join the root group; `first coll n`;
@@ -36,10 +37,15 @@ and went to the log rather than the ledger, so they cannot reach him again: the
 lambda-parens rule, `next`'s signature, cyclic rendering and equality, `run`
 versus `play`, the three small July spellings, and the write-once marker.
 
-Two rules now guard the file. An entry **cites its search** of the log, the
-archive and every design doc, or it is invalid — an unsearched question does
-not go to Clay. And an entry **carries a recommendation**, because a question
-with no proposed answer turns one sitting into ten.
+Three rules now guard the file. An entry **cites its search** of the log, the
+archive, every design doc **and the tests**, or it is invalid — an unsearched
+question does not go to Clay. The third source was added on 2026-08-27, after
+two questions turned up that the 2026-08-25 sweep had missed because each was
+recorded only in a spec: `module_differential`'s known-defect ledger carried
+one, and an `#[ignore]` reason in `tests/entry_file.rs` carried the other,
+whose log entry ends "That is a gavel." A sweep that reads only prose cannot
+see a question a test is holding. And an entry **carries a recommendation**,
+because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
