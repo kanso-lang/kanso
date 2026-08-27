@@ -11,23 +11,23 @@
 # A page has no filesystem, so a program that lists a directory cannot run
 # there. The capability is missing, not the agreement: `exists` still answers
 # (false, for everything), and every other engine matches.
-tests/golden/micro/dir_listing_is_sorted.kso	the playground has no filesystem
+tests/golden/micro/dir_listing_is_sorted.kso	the playground has no filesystem: cannot list listing
 
 # A tab cannot start a process, so a program that runs one cannot run there.
 # The capability is missing, not the agreement — the playground says so by
 # name, which is what the differential law asks of an engine that declines.
-tests/golden/micro/a_command_that_answers_127.kso	the playground cannot start processes
-tests/golden/micro/process_run.kso	the playground cannot start processes
-tests/golden/runtime/run_cannot_start.kso	the playground cannot start processes
+tests/golden/micro/a_command_that_answers_127.kso	the playground cannot start processes: cannot run sh
+tests/golden/micro/process_run.kso	the playground cannot start processes: cannot run printf
+tests/golden/runtime/run_cannot_start.kso	the playground cannot start processes: cannot run kanso_no_such_binary
 
 # The same missing filesystem, on the read side: a page cannot open a file to
 # find it absent, so it says why rather than reporting the absence.
-tests/golden/runtime/read_missing_file.kso	the playground has no filesystem
+tests/golden/runtime/read_missing_file.kso	the playground has no filesystem: cannot read /no/such/file
 
 # `is_dir` reads false in a page for the same reason `exists` does — there is
 # no filesystem to ask — so the golden's first answer differs there.
 tests/golden/micro/is_dir.kso	false
-tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
+tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem: cannot make .
 
 # A page has no stdin to read, so a program that reads one cannot run there.
 # Native and the interpreter both answer zero bytes when nothing is piped in,

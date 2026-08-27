@@ -3911,3 +3911,47 @@ missed is the one I could not measure locally.
 
 The allocation and arena veins are byte-identical to main, and welfare does not
 weigh .text, so it is unmoved at 84.11.
+
+## 2026-08-27 — the wasm gap list pinned a prefix
+
+tests/golden/wasm_gaps.txt records what the page answers where it cannot speak
+a feature — the differential law's sanctioned case, an engine refusing plainly
+rather than diverging. Both harnesses read it, and both compare with a
+CONTAINS: tests/wasm_engine.rs at 423 and 451 with `text.contains(answer)`,
+scripts/browser_differential_run with `length (text/split text wanted) > 1`.
+
+The listed answers were prefixes. wasm_rt writes longer sentences:
+
+    listed                                 written
+    the playground has no filesystem       ...: cannot read {path}
+                                           ...: cannot write {path}
+                                           ...: cannot make {path}
+                                           ...: cannot list {path}
+    the playground cannot start processes  ...: cannot run {cmd}
+
+So the half that tells a reader WHAT the page could not do was pinned by
+nothing. Five of the eight refusals wasm_rt writes had an unpinned tail.
+
+MEASURED BOTH WAYS, which is what makes this worth doing rather than tidy.
+`cannot read` reworded to `unable to read` in wasm_rt.rs, blob rebuilt:
+
+    old list (prefix)     test passes           the gap this closes
+    new list (sentence)   test fails, naming
+                          the exact text
+
+The path in each sentence is fixed by its fixture — read_missing_file reads
+`/no/such/file`, make_dir_is_idempotent makes `.` — so the whole sentence is a
+constant per row and nothing here needs a tolerance.
+
+SEARCHED FIRST: the log and archive for `wasm_gaps`, `known gap` and
+`playground has no`. The list's introduction and its two widenings are
+recorded; no entry asks what the listed answer omits.
+
+AND THE SCAN THAT FOUND IT WAS WRONG FIRST. It reported six of eight unpinned,
+because it read `.stderr`, `.out` and `.rs` and wasm_gaps.txt is a `.txt`. Two
+of the six are pinned there exactly. That is the fourth scan today to measure
+its own blind spot — after the message-tail search, the qualified-name-only
+export search, and the twelve-character floor before them. The pattern is
+stable enough to state as a rule: a scan over a corpus must enumerate the
+corpus's file types from the harness that reads it, not from the ones that
+came to mind.
