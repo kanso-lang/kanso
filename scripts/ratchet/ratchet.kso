@@ -556,9 +556,23 @@ coverage_printed = row
 
 rows_c1h = text/concat rows_c1g [dispatch coverage_driver]
 
+# A FOURTH opener, and the file the scan could not see. `source?` took `.rs`
+# only, so src/runtime.c — where a compiled binary gets its runtime messages —
+# had never been read. Thirty-three of its sixty-six k_die texts were pinned by
+# nothing.
+coverage_native = row
+  "a refusal the native runtime dies with, and no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_native_runtime_refusal_arrives_without_a_golden")
+  release
+
 rows_c1i = text/concat rows_c1h [coverage_printed kq_specs asset_digests]
 
-rows_c = text/concat rows_c1i [itself]
+rows_c1j = text/concat rows_c1i [coverage_native]
+
+rows_c = text/concat rows_c1j [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

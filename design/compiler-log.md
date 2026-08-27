@@ -3955,3 +3955,78 @@ export search, and the twelve-character floor before them. The pattern is
 stable enough to state as a rule: a scan over a corpus must enumerate the
 corpus's file types from the harness that reads it, not from the ones that
 came to mind.
+## 2026-08-27 — the ratchet reads the C now, and twelve messages have reasons
+
+The half-the-runtime's-diagnostics entry, earlier today, found that
+`scripts/diagnostic_coverage` had never read src/runtime.c, because `source?`
+admits a file only when its last three characters are `.rs`. This closes it. `.c` joins `.rs`, a fourth extractor
+keyed on `k_die("` runs beside the three the scan already carried, and the
+count of literal diagnostics it can see goes from 109 to 175.
+
+`k_die("` is the whole key, and it needs no rule about which extension gets
+which extractor. The declaration is `k_die(const char* msg`, the one
+runtime-valued call is `k_die(said`, and the seven `k_die(` in src/*.rs are all
+`call void @k_die(ptr @{m})` in the emitter. None carries the quote, so running
+every extractor over every source is both safe and simpler than teaching
+read_src which opener belongs where.
+
+THIRTEEN MORE ARE PINNED HERE, taking the unpinned count from 33 to 12:
+
+    to_bytes takes a list of byte values          text/to_bytes (opaque 7)
+    slice takes 1-based inclusive positions       text/slice "hello" (opaque "a") 2
+    make_dir takes a path string                  os/make_dir (opaque 7)
+    start takes a command string                  os/start (opaque 7) []
+    start takes a list of argument strings        os/start "echo" (opaque 7)
+    kill takes a started process                  os/kill (opaque "x")
+    a group joins descriptions                    two adjacent statements, one not a description
+    listen takes a port number                    net/listen (opaque "80")
+    port takes a listener                         net/port (opaque (stand_in "x"))
+    accept takes a listener                       net/accept (opaque (stand_in "x"))
+    net_read takes a connection                   net/read (opaque (stand_in "x"))
+    net_write takes a connection and a string     net/write (opaque (stand_in "x")) "hi"
+    net_close takes a listener or a connection    net/close_conn (opaque (stand_in "x"))
+
+THE SIX SOCKET ONES WERE NEARLY EXCUSED FROM READING, and the excuse would
+have been wrong. Every wrapper in lib/net reads `l.handle` before calling the
+builtin, so a non-record is refused by `` `.` reads a field of a record `` and a
+record holding an INT handle reaches the executor rather than the argument
+check — which is the divergence the entry above fixes. Both readings are true
+and neither is the whole story: a record whose handle is a STRING passes the
+field read, fails the builtin's own type check, and prints all six. One probe
+found what two careful readings of lib/net had missed.
+
+WHICH BUILTINS A PROGRAM CAN EVEN CALL, measured rather than assumed, because
+half the remaining excuses turn on it. Of the fifty-eight names in check.rs's
+BUILTINS, exactly seven answer to a bare call: `entries`, `length`, `print`,
+`push`, `put`, `if` and `wrap_err`. Every other one — `map`, `filter`, `sort`,
+`sum`, `concat`, `slice`, `join`, all the io and os and net names — answers
+`unknown name`. So the only route to those builtins is a stdlib wrapper, and a
+wrapper that guards first shadows the builtin's own refusal for good.
+
+THE TWELVE THAT REMAIN, each with the mechanism written beside it in
+tests/golden/unpinned_diagnostics.txt:
+
+  - `map`, `filter`, `sort`, `sum takes a list`, `sum takes a list of int` and
+    `a filter predicate returns true or false`: lib/list's wrappers call
+    `length` on the collection and `if` on the predicate first, so a program
+    meets `length takes a list, string, or map, not 7` or `an if condition is
+    true or false, got 1` instead. `list/sum` is a fold over `+`.
+  - `print takes a string; interpolate instead`: the renderer does not enforce
+    it. `print 7`, `print [1 2]`, `print <a function>` and `print <an effect>`
+    all succeed, writing `7`, `[1 2]`, `<fn>` and `<io>`.
+  - the two string-builder checks: behind `bytes takes a string`, which is
+    pinned.
+  - three resource caps, each reachable and each fixture costing more than it
+    proves: 2 GB for `string too long`, 64 bound ports for `too many sockets`
+    (the wedged-suite day in sockets_serve.rs's header), 257 adjacent
+    statements for the fiber cap at runtime.c:4822.
+  - `integer overflow`: pinned exactly, by docs/book/samples/ch02/overflow.out,
+    which the scan's corpus cannot see because it takes `.stderr` files only.
+    A citation rather than a widening — admitting `.out` would also admit every
+    micro golden and needs its own look at false pins, of which the tests/*.rs
+    corpus already produced four.
+
+THE GATE HAS A MUTATION, like the three openers before it. `k_b_sum`'s refusal
+is the bait, chosen because no kanso program can reach it: the mutation cannot
+change what any fixture prints while it is applied. Applied, the gate exits 1
+and names the message; restored, it exits 0 and runtime.c diffs clean.

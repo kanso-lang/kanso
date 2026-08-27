@@ -1,0 +1,9 @@
+import "std/net"
+
+pub type stand_in
+  handle
+
+pub fn opaque x
+  x
+
+pub play = net/close_conn (opaque (stand_in "x")) . (r -> print "{r}")
