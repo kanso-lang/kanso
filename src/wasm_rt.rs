@@ -383,16 +383,29 @@ pub extern "C" fn rt_err_inner(h: u32) -> u32 {
     push(Slot::V(info.reason.clone()))
 }
 
+/// One sentence, two callers: a keyed read names what it was handed.
+fn keyed_refusal(shown: &str) -> String {
+    format!("cannot read fields of {shown}; keyed reads take a record")
+}
+
 #[no_mangle]
 pub extern "C" fn rt_keyed_check(h: u32, entries: u32) -> u32 {
-    let Slot::V(value) = slot(h) else {
-        die("cannot read fields of this value; keyed reads take a record".to_string());
-    };
+    // The guard here used to be `let Slot::V(value) = slot(h)`, which fired on
+    // exactly the two handles that are not values — a closure and a
+    // description — and said "cannot read fields of this value" about both.
+    // The other two engines name what they were given, `<fn>` and `<io>`.
+    //
+    // A closure goes through `val`, which is how a closure is data everywhere
+    // else on this engine. A description does not: `val` refuses it, so the
+    // slot answers instead. Every description renders `<io>` whatever it
+    // holds, and building the Desc to render it would mean demanding a
+    // deferred right side — an effect a refusal must not have.
+    if descish(&slot(h)) {
+        die(keyed_refusal("<io>"));
+    }
+    let value = val(h);
     let Value::Record { ty, .. } = &value else {
-        die(format!(
-            "cannot read fields of {}; keyed reads take a record",
-            render_demanded(&value, true)
-        ));
+        die(keyed_refusal(&render_demanded(&value, true)));
     };
     let declared = TYPES.with(|t| {
         let types = t.borrow();
