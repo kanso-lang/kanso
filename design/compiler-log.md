@@ -3316,9 +3316,17 @@ page's endpoint gained the two arms the native endpoint has had all along. No
 behaviour changed on native or on the oracle — the function is the same text
 at a new address.
 
-PERF. Nothing on the compile path calls it, and the veins are host-divergent
-here so CI measures them. Welfare reads 84.12 against a floor of 84.12, with
-the compile terms unmoved.
+PERF. Nothing on the compile path calls either function, and the veins are
+host-divergent here, so CI measured them. `compile_instructions` fell 159, from
+57,489,912 to 57,489,753 — 0.0003% — and is banked. Layout rather than work,
+by the same argument the -251 and the +1,954 above it carry: `kanso check
+lib/json` compiles a library and runs no program, so it reaches neither the
+driver's endpoint in main.rs nor the page's in wasm_rt.rs, and eval.rs only
+HOLDS the moved function. The counters that measure the front end's work are
+identical, allocations 61,981 and peak 822,004. Fifth movement of this vein in
+two days with an untouched call graph: +167, -251, +1,954, -159. Welfare reads
+84.12 against a floor of 84.12 — a fall this small cannot move a two-decimal
+score, so there is nothing to ratchet.
 
 AND THE SECOND ONE, FOUND BY ASKING WHETHER THE FIRST HAD A SIBLING. STATUS.md
 had said for two days that `main is not an io` at src/wasm_rt.rs:1132 was the
