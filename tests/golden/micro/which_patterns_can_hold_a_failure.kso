@@ -1,0 +1,128 @@
+# Gavel 24 names three patterns that can hold an err — `(err …)`, an `:err`
+# annotation, and a typeset with err among its members — and says none of them
+# holds an err its own hako raised. That is a table with two columns, and it
+# lived in three scattered fixtures covering three of its cells.
+#
+# Two divergences this afternoon were cells of it. `_:some` took a foreign
+# failure on two engines and was refused outright at build time on the third
+# (#1052). A typeset arm took its own hako's failure on native alone, because
+# the typeset branch of `emit_pattern` returned before it asked `admits_err`
+# (#1056). In both cases the row existed in somebody's head and nowhere in the
+# tree.
+#
+# So: every pattern form a parameter can take, against a failure this module
+# raised and a failure std/json raised. `took` means the arm fired. `past`
+# means the failure went by as though the arm were not written.
+#
+# The foreign column is the rule about which patterns admit err: three do, and
+# the other seven are ordinary patterns that a failure declines to match. The
+# own column is `past` in every row — a package cannot rescue itself under any
+# spelling, and adding a spelling to the language means adding a row here.
+#
+# `when_failed` hands the reason to its callback and answers `false` when
+# there was no failure, so `outcome` reads that `false` as `took`. It has to
+# be std's arm that reads the err: an `(err …)` arm written in this module
+# could not see this module's own failure, which is the rule being pinned.
+import "std/json"
+import "std/testing"
+
+type maybe err int
+
+fn slipped _
+  "past"
+
+fn outcome false
+  "took"
+
+fn outcome v
+  v
+
+fn boom what
+  err what
+
+fn wildcard _
+  "took"
+
+fn variable v
+  "took {v}"
+
+fn annotated _:err
+  "took"
+
+fn reason (err r)
+  "took {r}"
+
+fn member _:maybe
+  "took"
+
+fn anything _:some
+  "took"
+
+fn whole _:int
+  "took"
+
+fn text _:string
+  "took"
+
+fn absent _:none
+  "took"
+
+fn exact 1
+  "took"
+
+own = boom "own"
+
+far = json/decode "[1, 2"
+
+wildcard_own = outcome (testing/when_failed (wildcard own) slipped)
+
+wildcard_far = outcome (testing/when_failed (wildcard far) slipped)
+
+variable_own = outcome (testing/when_failed (variable own) slipped)
+
+variable_far = outcome (testing/when_failed (variable far) slipped)
+
+annotated_own = outcome (testing/when_failed (annotated own) slipped)
+
+annotated_far = outcome (testing/when_failed (annotated far) slipped)
+
+reason_own = outcome (testing/when_failed (reason own) slipped)
+
+reason_far = outcome (testing/when_failed (reason far) slipped)
+
+member_own = outcome (testing/when_failed (member own) slipped)
+
+member_far = outcome (testing/when_failed (member far) slipped)
+
+anything_own = outcome (testing/when_failed (anything own) slipped)
+
+anything_far = outcome (testing/when_failed (anything far) slipped)
+
+whole_own = outcome (testing/when_failed (whole own) slipped)
+
+whole_far = outcome (testing/when_failed (whole far) slipped)
+
+text_own = outcome (testing/when_failed (text own) slipped)
+
+text_far = outcome (testing/when_failed (text far) slipped)
+
+absent_own = outcome (testing/when_failed (absent own) slipped)
+
+absent_far = outcome (testing/when_failed (absent far) slipped)
+
+exact_own = outcome (testing/when_failed (exact own) slipped)
+
+exact_far = outcome (testing/when_failed (exact far) slipped)
+
+pub play =
+  print "pattern   own   foreign"
+  >> print "_         {wildcard_own}  {wildcard_far}"
+  >> print "v         {variable_own}  {variable_far}"
+  >> print "v:err     {annotated_own}  {annotated_far}"
+  >> print "(err r)   {reason_own}  {reason_far}"
+  >> print "v:maybe   {member_own}  {member_far}"
+  >> print "v:some    {anything_own}  {anything_far}"
+  >> print "v:int     {whole_own}  {whole_far}"
+  >> print "v:string  {text_own}  {text_far}"
+  >> print "v:none    {absent_own}  {absent_far}"
+  >> print "1         {exact_own}  {exact_far}"
