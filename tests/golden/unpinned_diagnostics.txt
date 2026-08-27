@@ -195,9 +195,23 @@ sort takes a list
 sum takes a list
 sum takes a list of int
 #
-# `list/select`'s predicate goes through `if`, so a predicate returning a
-# string is refused by `an if condition is true or false, got 1` — the `if`
-# message, not the filter's.
+# THE SAME DEAD ARM ON NATIVE. runtime.c's `k_b_filter` carries this sentence
+# without the `, got` the interpreter's version has, so it is a second message
+# and needs a second row — the list matches on equality, so neither excuses the
+# other.
+#
+# It is dead for the reason its sibling below is: `filter` is not one of the 55
+# names in check.rs's BUILTINS, so `filter xs p` is `unknown name `filter``,
+# `builtin_filter` by hand is `` `builtin_filter` is internal to the standard
+# library ``, and `k_b_filter` is called from nowhere in runtime.c. The emitter
+# knows the name (codegen.rs lists it with arity 2) and no program can reach
+# the emitter with it.
+#
+# An earlier excuse here said the mechanism was `list/select`'s own `if`. That
+# is what a program meets for a non-bool predicate, and it is not what shadows
+# THIS message: `list/select` is a fold written in kanso and never calls the
+# builtin, so the `if` refusal and this arm are on different paths. The same
+# mistake stood against the interpreter's copy and was corrected below.
 a filter predicate returns true or false
 #
 # PRINT RENDERS ANYTHING, so this cannot be reached. `print 7`, `print [1 2]`,

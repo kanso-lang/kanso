@@ -4225,6 +4225,18 @@ than read:
     at init, so the escaped-closure arm answers a `None` that cannot occur;
   - and one was the divergence in the entry above.
 
+THE SAME WRONG MECHANISM STOOD TWICE, and only one copy was caught before the
+first push. `a filter predicate returns true or false` is TWO messages —
+runtime.c's without the `, got`, eval.rs's with it — so the list carries two
+rows, and it matches on equality, so neither excuses the other. The older row,
+against native, said the shadow was `list/select`'s own `if`. That is what a
+program meets for a non-bool predicate and it is not what makes this arm
+unreachable: `list/select` is a fold written in kanso and never calls the
+builtin, so the two sit on different paths. Native's arm is dead for the reason
+the interpreter's is — `filter` is `unknown name`, `builtin_filter` is refused
+by name, and `k_b_filter` is called from nowhere in runtime.c. Both rows now
+say so.
+
 TWO MUTATIONS, one per opener, both watched red and green. The baits are two of
 the seven shadowed messages, chosen for exactly that reason: a mutation that
 cannot change what any fixture prints.
