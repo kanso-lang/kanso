@@ -5308,3 +5308,62 @@ THE RULE THAT CHANGES. STATUS.md's filing gate said an entry cites its search
 of the log, the archive and every design doc. It now says the tests too. A
 sweep that reads only prose cannot see a question a spec is carrying, and two
 of them were sitting in specs the whole time.
+
+## 2026-08-27 — three diagnostics the coverage gate could not see
+
+The scan that pins every diagnostic to a golden matches a message by its
+leading literal run: the text before the first interpolation, which is the only
+part a golden can match on. It required twelve characters of that run.
+
+Three messages have exactly ten.
+
+    function `{name}` has no body          src/parser.rs:581
+    constant `{name}` has no value         src/parser.rs:614, 648
+    the name `{}` is already taken         src/check.rs:2229, 2240
+
+Each is raised by a program anybody could write: `fn nobody x` with nothing
+under it, `answer =` with nothing under it, `type err`, a function named after
+a type in the same module. None had a golden, and the gate read 81 diagnostics
+and called the corpus complete.
+
+Lowering the floor to ten admits four sites. Three are those. The fourth is
+`no arm of `, which literal_arg_type already pins — I read the golden to check
+the match was the message itself and not a coincidence — so the widening cost
+no false pins. The gate reads 85 now, with three new fixtures under
+tests/golden/errors and both arms of the already-taken message in one of them.
+
+Nine characters is still invisible, and one message sits there: `private `{}`
+is never used in its module`. No program reaches it. Both loops in
+`check_unused_private` test `starts_with('_')`, the lexer refuses a leading
+underscore before the parser sees the word — `leading_underscore` in the corpus
+pins that refusal — and `_` alone lexes as the wildcard rather than a name, so
+`type _` is turned away with "expected a type name". Its type-side sibling has
+been on the excused list since the gate was turned on, which is how the check
+went on being compiled after the convention it serves was retired. Deleting it
+moves the compile veins, so it is a separate change.
+
+The floor is a number the gate now depends on, so it gets a mutation:
+`a_ten_character_diagnostic_arrives_without_a_golden` appends a bait whose run
+is `unpinned ` and a backtick, exactly ten characters. It stops being seen the
+moment the floor moves back up.
+
+Then the excused list itself, which carries four messages and a paragraph
+saying why each cannot be reached. Those paragraphs are readings of the source.
+One had already been wrong once: the inline-constant claim missed heads that
+open blocks and left the list on 2026-08-20. Writing the program is cheap, so I
+wrote one for each of the remaining claims.
+
+    expected a top-level declaration    REACHABLE
+    expected a constant name            holds — the top-level line rule speaks first
+    unused expression: …                holds — consecutive expressions fold into one Seq
+    private type `                      holds — see the next entry
+
+The indented-line excuse said the indentation rule or the blank-line rule
+always takes the line first. Both do when a declaration precedes it. Put the
+indented line at the top of the file and nothing precedes it, so it reaches the
+top-level loop with a non-zero indent and is refused there by name. Pinned at
+`an_indented_first_line`; the line leaves the list. The gate reports the other
+direction too — with the line still there it says "now pinned, delete its
+line" — and I watched it do so.
+
+Goldens and two scripts — no counter moves.

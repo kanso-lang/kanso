@@ -390,6 +390,14 @@ coverage = row
   (breaking "a_diagnostic_arrives_without_a_golden")
   release
 
+coverage_floor = row
+  "a diagnostic whose literal run is the shortest the scan will keep"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_ten_character_diagnostic_arrives_without_a_golden")
+  release
+
 itself = row
   "a gating job nobody said how to prove"
   true
@@ -426,7 +434,9 @@ rows_c1d = text/concat rows_c1c [numeric effects]
 
 rows_c1e = text/concat rows_c1d [modules coverage]
 
-rows_c = text/concat rows_c1e [dispatch itself]
+rows_c1f = text/concat rows_c1e [coverage_floor]
+
+rows_c = text/concat rows_c1f [dispatch itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

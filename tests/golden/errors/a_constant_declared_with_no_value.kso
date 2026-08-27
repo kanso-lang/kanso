@@ -1,0 +1,6 @@
+# `name =` with nothing under it. The same refusal as the empty function,
+# from the constant side, and unpinned for the same reason: `constant ` plus
+# the backtick is ten characters, under the coverage scan's old floor.
+answer =
+
+pub play = print "x"

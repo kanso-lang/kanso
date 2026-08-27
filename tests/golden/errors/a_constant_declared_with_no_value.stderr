@@ -1,0 +1,4 @@
+error[syntax]: constant `answer` has no value
+  --> a_constant_declared_with_no_value.kso:4:1
+   4 | answer =
+       ^

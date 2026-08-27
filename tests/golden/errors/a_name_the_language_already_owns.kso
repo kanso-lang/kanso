@@ -1,0 +1,18 @@
+# Two ways to take a name that is spoken for. `err` is ambient, so a type
+# cannot be called that; and a function cannot be called what a type in the
+# same module is already called, because a call site would not say which one
+# it meant.
+#
+# Both arms raise one message, and no golden held it. Its leading literal run
+# is `the name ` and a backtick — ten characters, under the coverage scan's
+# old floor of twelve, so the scan never reached either site.
+type err
+  reason
+
+type shape
+  n
+
+fn shape x
+  x
+
+pub play = print "x"
