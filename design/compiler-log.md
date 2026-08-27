@@ -4425,6 +4425,60 @@ runtime, so no compile vein and no cost golden can move. `docs/kanso.wasm` is
 rebuilt in the same commit because the walk refuses to run against a blob older
 than its source — a guard worth naming, since it turns a stale artifact into a
 red test rather than a green one that proves nothing.
+## 2026-08-27 — the walk could not say how much it had walked
+
+The test that catches every three-engine divergence — the one that caught the
+keyed-read wording this morning and the description-in-a-container this
+afternoon — ended on this:
+
+    assert!(ran > 0, "nothing in the corpus ran on wasm");
+
+One surviving program satisfies it. Two hundred and seventy could stop running
+and the walk would stay green, which is the shape of a silent truncation
+reading as full coverage.
+
+The gaps side of the same function is exemplary and worth saying so:
+
+    assert_eq!(met + unrunnable, gaps.len(), "a program in wasm_gaps.txt was never reached")
+
+Every row of the gap list must be reached, exactly. So this is one loose number
+beside a tight one rather than a broken test.
+
+A PROGRAM WAS ALREADY MISSING, and looking for the loose number is how it
+turned up. `wants_a_filesystem` decided what the page cannot run by reading the
+START of an import line:
+
+    line.starts_with("import ") && !line.starts_with("import \"std/")
+
+`examples/imports.kso` imports `"std/list"` and `t { slice:cut } "std/text"`.
+The second names the stdlib and does not begin with `import "std/`, so the
+example demonstrating aliased and selective imports was held out of the
+differential — a program the page runs correctly, and the one form of import
+no three-engine comparison covered. Reading the QUOTED path instead takes the
+walk from 271 agreeing programs to 272.
+
+WHAT REPLACED THE FLOOR is an accounting rather than a count, because a count
+would need editing every time the corpus grows:
+
+    ran + met + skipped.len() == corpus().len()
+
+Every program was run, met as a listed gap, or held out for a reason on the
+list, and none fell off it quietly. Beside it the skip list is pinned by NAME,
+because a widening predicate is exactly how this goes wrong and a count cannot
+see which program left. And each of the three walked directories must still
+contribute, since `corpus()` shrinking would leave the accounting balanced.
+
+THE SKIP REASONS WERE ONE SENTENCE FOR TWO PREDICATES. Both printed as
+`relative import — neither host has a filesystem`, so the one program held out
+for outrunning the runner's stack was described as something it is not. A skip
+is a hole in the differential and the line recording it has to say which hole.
+
+Watched red three ways: widening a skip predicate, reverting the import
+predicate to the prefix check, and dropping a program from the walk without
+counting it. The first two fail on the skip list, the third on the accounting,
+and the third's message names all four numbers.
+
+COST: none. tests/wasm_engine.rs is a test.
 ## 2026-08-27 — two refusals named each other, and a reader had nowhere to go
 
 A file holding `pub play` is refused by both verbs, and each refusal prescribed
