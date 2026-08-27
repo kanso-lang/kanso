@@ -1,0 +1,11 @@
+# `random` lived in `std/random` and moved to `std/math`. The loader keeps the
+# old path answering, with the new one named, because a rename a user meets as
+# "no such module" costs them a search.
+#
+# This is a DRIVER message: written as plain `error:` text and printed, not
+# built with `Diagnostic::new`. The coverage scan learned to read those in the
+# same change that added this fixture, and until then none of the thirty-one
+# such sites in src/ was visible to it.
+import "std/random"
+
+pub play = print "x"
