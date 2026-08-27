@@ -649,3 +649,31 @@ fn a_program_that_dies_leaves_the_engine_usable() {
         "a program run after one that died answered {after:?}"
     );
 }
+
+/// A deliberate exit is the one err an endpoint reads rather than reports:
+/// `os/exit 3` yields an err carrying `os/exit_status 3`, and the program
+/// said what it meant. Three of the four endpoints already knew this —
+/// `k_exit_status` in the emitted C runtime, and `eval::deliberate_exit`
+/// from the driver — but `exec_main` here did not, so a page that called
+/// `os/exit` printed `unhandled err reached the executor` at its reader and
+/// answered 1 whatever code the program named.
+///
+/// The corpus walk holds the zero case
+/// (`tests/golden/micro/a_deliberate_exit_says_nothing.kso`) against native.
+/// Neither corpus can carry a NONZERO one — micro asserts every program in
+/// it exits 0 and the runtime corpus asserts every program in it exits 1 —
+/// so the code passing through is pinned here for this engine and in
+/// tests/a_deliberate_exit_carries_its_code.rs for the other two.
+#[test]
+fn a_deliberate_exit_carries_its_code_out_of_the_page() {
+    let mut toolchain = Toolchain::load();
+    let source = "import \"std/io\"\nimport \"std/os\"\n\n\
+                  pub play = io/write \"before\" >> os/exit 3\n";
+
+    let answer = toolchain.run("a_deliberate_exit.kso", source);
+
+    assert!(
+        matches!(&answer, Answer::Ran(3, text) if text == "before"),
+        "the page lost the code the program named: {answer:?}"
+    );
+}
