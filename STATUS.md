@@ -49,18 +49,16 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**A stack of three, bottom to top: #1077, #1078, #1079.** Each merges on green
-and the two above it are rebased; /tmp/restack.sh and task #71 hold the
-procedure and the traps.
+**kanso#1076** — another session's ch04 chapter, "nothing is asked of the
+signature". It sat green but un-mergeable for three hours: six merges behind,
+`mergeable_state: dirty`. Resolved by merging main into it twice (never rebase
+someone else's branch), and the second time its page-drift failure cleared on
+its own the moment #1079 moved `docs/compiler.html`. Merge on green.
 
-They are one arc, and it is about a gate that could not see what it was gating.
-The diagnostic-coverage scan keyed on `Diagnostic::new(`. The compiler writes
-errors three ways, and the other two were outside it entirely: the loader and
-driver's plain `error: ` text, and `error[kind]: ` written as plain text, which
-is what a RENDERED diagnostic looks like. **84 → 109 literal
-diagnostics.** #1077 turned two ratchet excuses into mutations; #1078 pinned
-four loader refusals by hand on the module surface, because the gate could not
-reach them; #1079 makes the gate reach them.
+**kanso#1080** — three things a page does that no program ever asked it to.
+
+**Two branches pushed with no pull request**, so they cost no CI until the
+queue is free: `the-kq-row-can-be-proven`, and whatever follows it.
 
 ## What landed on 2026-08-26 and 27
 
@@ -88,12 +86,16 @@ the residual sweep could not see because each lived in a test (#1069).
 
 ## Next
 
-**The wasm engine's own refusals are pinned nowhere** (task #77), found by the
-same method one surface further out: it writes `Err("...")` strings, which none
-of the three openers reaches. `the playground has no stdin` and the wasm twin of
-`main is not an io` appear nowhere but inside the compiled `docs/kanso.wasm`.
-Whether the answer is a fourth opener or spelling them like the others is an
-open question the build should settle by looking at what the browser shows.
+**The mechanism behind the playground's two broken builtins** (#1080 records
+the behaviour, not the cause). `io/stdin` and `os/args` answer `unknown
+builtin` in a page; `time/now`, declared the same way, reaches the executor and
+gets its designed zero. Something routes the first two into `call_builtin`
+(src/wasm_rt.rs:809) where the third resolves on the identifier path
+(src/eval.rs:1534). Find that before changing any message.
+
+**`main is not an io` at src/wasm_rt.rs:1132** is still pinned nowhere — the
+wasm twin of the driver message #1079 pinned in `tests/a_plan_needs_an_io.rs`.
+Not a capability gap, so `wasm_gaps.txt` is the wrong home for it.
 
 **The read half of gavel 1b has shipped** — a field the wrong type declares is
 refused at compile time now (`src/check.rs:1449`), not left to run time. This

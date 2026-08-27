@@ -52,6 +52,14 @@ no_setup = "true"
 
 release = "cargo build --release"
 
+# One line because a gate is a shell string. `$PWD` is read before the `cd`,
+# so KANSO names the worktree's own binary rather than anything on the host.
+kq_clone = "rm -rf /tmp/kq && sh .github/clone-sibling.sh kq /tmp/kq"
+
+kq_run = "KANSO=$K KQ_STORED=report sh spec.sh"
+
+kq_gate = "{kq_clone} && K=$PWD/target/release/kanso && cd /tmp/kq && {kq_run}"
+
 benchmarks = "sh scripts/gates/build_benchmarks.sh"
 
 fn breaking name
@@ -486,6 +494,23 @@ rows_c1f = text/concat rows_c1e [coverage_floor decoder validator]
 
 rows_c1g = text/concat rows_c1f [landing in_the_page shop_window]
 
+# kq is a real program with its own JSON, and its own text goes through
+# `text/append` seventy times, so a runtime that corrupts an in-place append
+# reaches it. That is the row's mutation, and the shape ci.yml names as the
+# reason this job gates at all.
+#
+# The gate clones kq the way the job does rather than expecting one beside the
+# checkout, which is what the excuse this replaces claimed it needed. The clone
+# directory must be named `kq`: `kanso build <dir>` names the binary for the
+# directory and spec.sh invokes `./kq`.
+kq_specs = row
+  "a byte builder that writes the right length and the wrong bytes"
+  true
+  "{kq_gate}"
+  "kq specs (a real program, gating)"
+  (breaking "a_string_the_builder_corrupted_in_place")
+  release
+
 coverage_printed = row
   "an `error[kind]:` refusal printed as plain text, with no golden"
   true
@@ -496,7 +521,7 @@ coverage_printed = row
 
 rows_c1h = text/concat rows_c1g [dispatch coverage_driver]
 
-rows_c1i = text/concat rows_c1h [coverage_printed]
+rows_c1i = text/concat rows_c1h [coverage_printed kq_specs]
 
 rows_c = text/concat rows_c1i [itself]
 
@@ -513,15 +538,7 @@ no_row_e = unproven
   "asset digests (every reference rewritten, site still runs)"
   "needs a jekyll build the scratch worktree does not have"
 
-no_row_f = unproven
-  "kq specs (a real program, gating)"
-  "needs kq checked out beside this repository"
-
-unproven_a = [no_row_a no_row_e]
-
-unproven_b = [no_row_f]
-
-unproven_jobs = text/concat unproven_a unproven_b
+unproven_jobs = [no_row_a no_row_e]
 
 workflow = ".github/workflows/ci.yml"
 

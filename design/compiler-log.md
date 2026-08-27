@@ -2721,6 +2721,62 @@ fixtures pin for the two engines that work.
     7 passed                                     (tests/wasm_engine.rs)
     micro corpus green on native and --interp
 
+## 2026-08-27 — the kq row's excuse was wrong about the mechanism
+
+The ratchet's rule is that every CI job carries a mutation that turns it red,
+or a written reason. Three reasons were left. This is one of them, and it was
+wrong — not about whether the row could be proven, but about what the job does.
+
+    "kq specs (a real program, gating)"  —  "needs kq checked out beside this
+                                            repository"
+
+The job does not want kq beside the checkout. It CLONES it: ci.yml runs
+`sh .github/clone-sibling.sh kq /tmp/kq` and then `cd /tmp/kq`. Nothing is
+expected to be sitting anywhere.
+
+Refuted by running it. In a detached worktree of HEAD, the clone works, jq is
+already on the box, and kq's whole suite comes back green — unit tests, twelve
+fixture goldens against jq, three cost goldens, the scale gate and the
+published-numbers stamp. So the row is provable here and always was.
+
+One real constraint the excuse never mentioned: **the clone directory must be
+named `kq`.** `kanso build <dir>` names the binary for the directory, which is
+the package rule, and spec.sh invokes `./kq`. Cloning to `/tmp/kqprobe` built
+`./kqprobe` and the suite died with `./kq: not found`. CI already clones to
+/tmp/kq, so this bites only whoever writes the row.
+
+**Finding the mutation took three tries, and the two failures were mine.** kq
+is a jq clone with its OWN JSON — query/json.kso, query/number.kso,
+query/scan.kso, query/text.kso — and it never imports std/json. So corrupting
+`lib/json`'s tab escape and then its exponent parser changed nothing kq runs,
+and both times its suite came back green. That is not a gap in kq's coverage,
+which is what it looked like before I checked; it is a mutation in code the
+program does not execute.
+
+What kq does share is `std/text`: `text/append` appears seventy times in its
+query sources. So the mutation goes where ci.yml says the row's value lies —
+`k_b_append_into`'s fast path, the in-place append, zeroing the first byte of
+every multi-byte write. Right length, right counters, wrong contents, which is
+the shape of the bug that made this job gate: an in-place concat that printed
+267 nul bytes at exactly the right length. Under it kq dies with `invalid
+utf-8`, born in text/utf8, and the gate exits 1.
+
+**What the row does not claim.** `specs` catches the same mutation — three
+golden tests fail under it. This proves the gate runs and reddens, not that kq
+sees what the others miss. A mutation only kq catches would be a better row;
+the historical one took an incident to find, and saying so is better than
+implying this one is it.
+
+Two reasons remain, and both hold: the macos row adds a second machine rather
+than a mutation of its own, and the asset-digest row needs a jekyll build that
+the worktree cannot do — there is no Gemfile in the tree and the CI job uses
+the `actions/jekyll-build-pages` container to produce `_site`.
+
+The mutation is written with `sed` rather than a heredoc because
+`scripts/gates/python_free.sh` exists precisely to catch python creeping back
+in through mutation heredocs, and it names that as the history. I wrote the
+python version first and the gate would have caught it.
+
 ## 2026-08-27 — the page can read its own arguments now
 
 #1080 pinned what a page does with `args`, `stdin` and `now`, and two of the
@@ -2766,3 +2822,4 @@ than work: `call_builtin` is the interpreter's door and `kanso check lib/json`
 never enters it. Allocations and peak are identical at 61,981 and 822,004.
 Banked in `bench/compile_instructions_golden.txt` with that reading written
 beside it, the same way the +167 of the previous day was.
+
