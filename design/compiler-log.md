@@ -4335,3 +4335,23 @@ compiled against the old one would say the old thing while native said the new
 — the divergence this repo exists to refuse. The freshness guard in
 tests/wasm_engine.rs compares the blob against every `.rs` under `src/`, so CI
 catches a forgotten rebuild rather than shipping the split.
+
+COST: compile_instructions 57,568,471 -> 57,571,389, a rise of 2,918 (0.005%),
+and layout rather than work. `exports_play` cannot run on the measured path,
+for a reason that is the match arm ORDER rather than a claim about libraries:
+`("check", true)` is the FIRST arm of `compile_source`'s match, so `kanso check
+lib/json` returns from it and never evaluates the guard the new function sits
+in.
+
+MEASURED ON TWO HOSTS, WHICH DISAGREE ON THE SIGN — the same diff against the
+same base:
+
+    the runner      57,568,471 -> 57,571,389    +2,918
+    the container   58,162,797 -> 58,162,145      -652
+
+A change that added work would add it on both. `__memcmp_avx2_movbe` moved 639
+of the runner's 2,918, the same term that tracked this morning's layout moves.
+Every earlier layout attribution in this vein argued unreachability from the
+call graph and left the sign unexplained; this one has the sign measured twice
+and coming out opposite, which is what the pending question about
+instructions-only attributions was asking for.
