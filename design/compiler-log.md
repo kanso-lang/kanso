@@ -4856,3 +4856,38 @@ over. In each the correct behaviour existed in the file and did not run — whic
 is what a rule spread across pattern kinds, container kinds and three
 implementations costs, and it is the concrete form of the argument for putting
 err-handling in one named place.
+
+## 2026-08-27 — which patterns can hold a failure, as a table
+
+Gavel 24 rules on matching. Three patterns can hold an err — `(err …)`, an
+`:err` annotation, a typeset with err among its members — and none of them
+holds an err its own hako raised. Two of yesterday's divergences were cells of
+that table: `_:some` took a foreign failure on the interpreter and on wasm
+while native refused the annotation at build time (#1052), and a typeset arm
+took its own hako's failure on native alone (#1056).
+
+The rule was written down; the table was not. Ten pattern forms against two
+err origins is twenty cells, and three fixtures covered three of them. The
+bugs were in the seventeen nobody had asked about.
+
+    pattern   own   foreign
+    _         past  past
+    v         past  past
+    v:err     past  took
+    (err r)   past  took
+    v:maybe   past  took
+    v:some    past  past
+    v:int     past  past
+    v:string  past  past
+    v:none    past  past
+    1         past  past
+
+`took` means the arm fired; `past` means the failure went by as though the arm
+were not written. The foreign column names the three patterns the gavel names.
+The own column holds for every spelling, not only for the three that had been
+thought about.
+
+Adding a pattern form to the language adds a row here. A form with no row is
+one the question was never asked of.
+
+Fixture only — no counter moves.

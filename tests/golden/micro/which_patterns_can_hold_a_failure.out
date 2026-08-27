@@ -1,0 +1,11 @@
+pattern   own   foreign
+_         past  past
+v         past  past
+v:err     past  took
+(err r)   past  took
+v:maybe   past  took
+v:some    past  past
+v:int     past  past
+v:string  past  past
+v:none    past  past
+1         past  past
