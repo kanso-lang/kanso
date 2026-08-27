@@ -7,8 +7,8 @@
 use crate::ast::Program;
 use crate::diag::Span;
 use crate::eval::{
-    self, err_value, eval_binop, hop, index_value, is_failure, join_values, render,
-    render_demanded, trace_lines, Cells, Desc, ErrInfo, Executor, Interp, Value,
+    self, deliberate_exit, err_value, eval_binop, hop, index_value, is_failure, join_values,
+    render, render_demanded, trace_lines, Cells, Desc, ErrInfo, Executor, Interp, Value,
 };
 use crate::wasm_backend::Lit;
 use std::cell::RefCell;
@@ -1141,6 +1141,12 @@ pub fn exec_main(h: u32) -> (i32, String) {
     let outcome = match slot(h) {
         Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..) => match exec_slot(h) {
             Ok(y) => match slot(y) {
+                // `os/exit 3` is a program saying what it meant, so the page
+                // carries the code out the way the native endpoint does
+                // rather than showing the reader an error for it.
+                Slot::V(Value::ErrV(info)) if deliberate_exit(&info.reason).is_some() => {
+                    Some((deliberate_exit(&info.reason).unwrap_or(1) as i32, String::new()))
+                }
                 Slot::V(Value::ErrV(info)) => Some((
                     1,
                     format!(
@@ -1153,6 +1159,9 @@ pub fn exec_main(h: u32) -> (i32, String) {
             },
             Err(msg) => Some((1, format!("error[runtime]: {msg}\n"))),
         },
+        Slot::V(Value::ErrV(info)) if deliberate_exit(&info.reason).is_some() => {
+            Some((deliberate_exit(&info.reason).unwrap_or(1) as i32, String::new()))
+        }
         Slot::V(Value::ErrV(info)) => Some((
             1,
             format!(

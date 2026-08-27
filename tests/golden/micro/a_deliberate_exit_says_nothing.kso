@@ -1,0 +1,8 @@
+import "std/io"
+import "std/os"
+
+# `os/exit` yields an err carrying an `os/exit_status`, which is the program
+# saying what it meant rather than failing to. Every endpoint reads the code
+# and carries it out, so nothing is written about it — the line after the
+# exit never runs, and no report follows the one that did.
+pub play = io/write "reached the exit" >> os/exit 0 >> io/write " and past it"

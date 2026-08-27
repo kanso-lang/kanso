@@ -3216,3 +3216,63 @@ in a build body came to be dropped in silence. This fifth had no reason at all
 and turns out to be sound. The score is one real bug, three rewritten
 sentences, and one reason supplied; and the only way any of it was learned was
 by writing the program.
+
+## 2026-08-27 — four endpoints read a deliberate exit, and one of them did not
+
+`os/exit 3` yields an err whose reason is an `os/exit_status` record. That is
+the one err an endpoint reads instead of reporting, because the program said
+what it meant rather than failing to say it. Three endpoints already knew:
+`k_exit_status` at src/runtime.c:7511 for the compiled binary,
+`deliberate_exit` in src/main.rs for the driver and the oracle, and the repl,
+which never reaches an endpoint at all — it renders the err as the value you
+typed, `err os/exit_status 3`, and that is the right answer for a prompt.
+
+The fourth is the page. `exec_main` in src/wasm_rt.rs had neither arm, so a
+program that called `os/exit` printed at its reader
+
+    error[endpoint]: unhandled err reached the executor: os/exit_status 3
+      born in os/exit at std/os/os.kso:39
+
+and answered 1 whatever code the program named. A silent divergence, which the
+differential law does not allow: an engine may speak fewer features only where
+it refuses them plainly.
+
+HOW IT STAYED HIDDEN. The corpus walk in tests/wasm_engine.rs compares text AND
+exit code against native for every program in examples, tests/golden/runtime
+and tests/golden/micro. It would have caught this on the first run. There was
+no program to run: the only fixture in the tree that touches `os/exit` is
+`exit_needs_a_status`, which hands it a record that is not a status and pins
+the failure. The success case — a program that exits deliberately and says
+nothing about it — was pinned on no engine.
+
+WHERE THE PIN LIVES, AND WHY IT IS IN THREE PIECES. Neither corpus can carry a
+nonzero deliberate exit. `runtime_corpus_reports_endpoint_violations` asserts
+every program in tests/golden/runtime exits 1, which is its definition of the
+corpus; the two micro-corpus tests assert every program in tests/golden/micro
+exits 0. A deliberate three is neither, so:
+
+  - tests/golden/micro/a_deliberate_exit_says_nothing.kso holds the ZERO case
+    and rides the whole differential walk — native, `--interp`, release-built,
+    the wasm engine under wasmi, and Chrome. It also pins that the line after
+    the exit does not run.
+  - tests/a_deliberate_exit_carries_its_code.rs pins the code passing through
+    on native and on the oracle. `== 3`, not `!= 0`.
+  - a_deliberate_exit_carries_its_code_out_of_the_page in tests/wasm_engine.rs
+    pins the same three on the engine that was wrong.
+
+Each was watched red at its own source, and the sources turned out to be
+different ones. Breaking `eval::deliberate_exit` reddens the oracle and leaves
+NATIVE GREEN, because `kanso run` compiles to a binary and that binary reads
+the status in C: the native half only goes red when `k_exit_status` is broken.
+Two halves of one test, two mechanisms, and reading either one would have
+missed the other.
+
+WHAT MOVED IN THE SOURCE. `deliberate_exit` is in src/eval.rs now rather than
+src/main.rs, because main.rs is the binary and the page never compiles it. The
+page's endpoint gained the two arms the native endpoint has had all along. No
+behaviour changed on native or on the oracle — the function is the same text
+at a new address.
+
+PERF. Nothing on the compile path calls it, and the veins are host-divergent
+here so CI measures them. Welfare reads 84.12 against a floor of 84.12, with
+the compile terms unmoved.
