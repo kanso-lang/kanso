@@ -3280,8 +3280,17 @@ fn compile_module_loaded(
             }
         }
     }
+    // A module that IS a file resolves its own imports from the directory it
+    // sits in. Handing `load_dependencies` the file sent every `./sibling`
+    // looking under `a.kso/`, which cannot exist — so a file module could be
+    // imported but could never import, and the refusal said the sibling was
+    // not there while it sat beside it.
+    let base = match dir.is_file() {
+        true => dir.parent().unwrap_or(dir),
+        false => dir,
+    };
     let (mut dep_program, exports, shadowed, surfaced) =
-        phase::watched("load_dependencies", || load_dependencies(dir, &import_list, visited))?;
+        phase::watched("load_dependencies", || load_dependencies(base, &import_list, visited))?;
     // A module's surface is its own. Dependency pubs demote at this
     // boundary — importers of this module see none of them — and only an
     // explicit re-export puts an imported name back on the surface, as a

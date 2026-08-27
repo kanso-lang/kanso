@@ -65,4 +65,13 @@
 # measure the front end's work, and all three of those FELL: visits 16,818 to
 # 16,806, allocations 62,110 to 61,981, peak 825,664 to 822,004, because the
 # pub self-seed went and `lib/json` shed `must` and `defect`.
-compile_instructions=57492931
+#
+# 2026-08-27: 57,492,931 -> 57,493,961, a rise of 1,030 (0.0018%). A file
+# module could be imported and could never import: `load_dependencies` was
+# handed the module's own path as the base for resolving its imports, and for
+# a file module that path is the FILE, so `./sibling` was looked for under
+# `a.kso/`. The fix asks `dir.is_file()` once per module load, and this row is
+# the handful of stat calls that costs. The counters that measure only the
+# front end's work do not move at all: allocations 61,981 and peak 822,004,
+# both identical.
+compile_instructions=57493961

@@ -293,9 +293,37 @@ c17l = "a private name reached across an import"
 
 c17 = kase c17l [c17a c17m] "app" "check refuses" c17said
 
+# A module that IS a file, importing the file module beside it. The loader
+# handed `load_dependencies` the module's own path as the base for resolving
+# its imports, and for a file module that path is the FILE — so `./helper`
+# was looked for under `lib.kso/`, which cannot exist, and the refusal said
+# there was no such file beside this module while `helper.kso` sat beside it.
+# A file module could be imported and could never import.
+c18h = filed "helper.kso" """
+  pub fn twice n
+    n * 2
+"""
+
+c18d = filed "lib.kso" """
+  import "./helper"
+
+  pub fn reach n
+    helper/twice n
+"""
+
+c18m = filed "app/main.kso" """
+  import "../lib"
+
+  print "\{lib/reach 3}"
+"""
+
+c18l = "a file module importing the file module beside it"
+
+c18 = kase c18l [c18h c18d c18m] "app" "prints" "6\n"
+
 cases_a = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
 
-cases = text/concat cases_a [c17]
+cases = text/concat cases_a [c17 c18]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written
