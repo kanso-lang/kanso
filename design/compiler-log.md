@@ -3644,3 +3644,42 @@ So a docs-freshness budget took down the gate whose golden header calls it
 "the traffic the front end makes, which no other gate can see". Allocations
 rose 537 on that run and the job said nothing about it. The step has
 `if: always()` now, with the reason written beside it.
+
+## 2026-08-27 — the layout reading was right this time, and measured twice
+
+The entry above predicted the wall check's instruction rise would be REAL WORK
+and said so in the pull request. For the first implementation that held. For
+the one that shipped it does not, and the correction matters because it changes
+the attribution.
+
+    the runner        57,489,753 -> 57,571,608     +81,855   (+0.14%)
+    this container    58,158,740 -> 58,162,339      +3,599   (+0.006%)
+
+Both binaries profiled under callgrind side by side on one host for the second
+row. A change that does more work moves both hosts by a similar amount. A delta
+that is twenty-three times larger on one of them is layout, and the golden's own
+header already records the shape: one diff measuring +664, +393 and -6,763 on
+three sittings.
+
+The reachability argument agrees and is the stronger one. `lib/json` — the
+library this vein measures — contains no `>>` at all. Zero. So
+`never_describes` is never called on the measured path, the bound-name set is
+never built, and none of the new code runs. `compile_allocs` at 61,981,
+`compile_peak_bytes` at 822,004 and visits at 16,806 are identical for that
+reason, and their agreement is evidence of unreachability rather than of thrift.
+
+WHAT THE VEIN CANNOT SEE. A program that sequences effects pays one set per
+wall-bearing declaration, and `kanso check lib/json` compiles a pure library
+that never asks. So this row is silent on the feature's real cost, and saying
+the feature is free would be reading its silence as an answer.
+
+THE FLOOR MOVED, AND BY THE TOOL RATHER THAN BY HAND. `welfare --set` refuses a
+fall greater than 0.01 and accepts one at or under it; this fall reads 0.00.
+That threshold is what a rounding-scale move is for, so this is the sanctioned
+path rather than the hand edit the 84.12 entry describes. Floor 84.12 -> 84.11,
+with the two-host measurement in the reason.
+
+The order of operations is the part worth keeping. The expensive version fell
+0.06 and the first instinct was to bank it — goldens edited, page figures
+moved, paragraph drafted. The floor is what sent me looking for the cheaper
+implementation instead, and the cheaper one costs nothing measurable at all.
