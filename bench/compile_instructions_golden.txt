@@ -155,4 +155,13 @@
 # Sixth movement of this vein in two days from an untouched measured path:
 # +167, -251, +1,954, -159, and now +81,855. This one is larger than the rest
 # because the function it lives in was restructured rather than nudged.
-compile_instructions=57571608
+#
+# 2026-08-27 (sockets): 57,571,608 -> 57,568,244, a FALL of 3,364. The socket
+# executor in eval.rs stopped interpolating its handle — five `format!("{conn}
+# is not a connection")` became `"that is not a connection".to_string()` — so
+# the formatting machinery those calls pulled in is no longer in the binary.
+# `kanso check lib/json` opens no sockets and runs none of that code; what
+# moved is the binary around the measured path, the same way the +81,855 above
+# did, and in the same direction the deleted code went. Measured on the runner
+# and copied out of the job log, which is the only place this vein may be read.
+compile_instructions=57568244
