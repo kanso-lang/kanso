@@ -1,0 +1,19 @@
+# Dispatch on a description: the typed arm must not claim it and the bare arm
+# must. Both native engines answer the bare arm.
+import "std/io"
+
+type cell
+  n
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+fn seen v:cell
+  "a cell holding {v.n}"
+
+fn seen _
+  "not a cell"
+
+pub play = print "{seen (opaque d)}\n"

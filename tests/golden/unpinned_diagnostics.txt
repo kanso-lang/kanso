@@ -370,3 +370,35 @@ not a record
 # the corpus as tests/golden/runtime/calling_a_description_names_it, which is
 # what pins the sentence a reader actually gets.
 this value is not callable
+#
+# A BOUND DESCRIPTION CANNOT BE USED AS DATA HERE, `val`'s own words. This is
+# the sentence a site says INSTEAD of its own when it opens with `match val(h)`
+# and is handed a description, and it was reachable eight ways as recently as
+# this week. Each has since been routed to the site that owns the sentence, and
+# each routing left a program behind:
+#
+#   1 + d, d == d, 1 < d      tests/golden/runtime/a_description_is_not_
+#                             {an_operand,comparable,ordered}
+#   if d                      .../a_description_is_not_a_condition
+#   xs[i], xs[i]!             .../a_description_is_not_{indexable,an_index,
+#                             indexable_strictly,a_strict_index}
+#   err d                     .../an_err_may_carry_a_description
+#   (opaque d).n, v.n         .../a_description_{has_no_fields,
+#                             meets_a_field_read}
+#   pt x y = opaque d         .../a_description_cannot_be_destructured
+#   dispatch on one           tests/golden/micro/a_description_reaches_a_dispatch
+#
+# Two `val` sites could still take a description on paper — `rt_field_by_name`
+# and `rt_not_own_err` — and neither of the two programs written for them
+# reaches them: a field read compiles to a getter (so it lands in `rt_no_field`,
+# which the two field fixtures above pin) and a dispatch answers its bare arm
+# without asking the runtime. Everything else that reaches `val` through
+# `operand` or `value_of` is a `Slot::E`, the environment pack the runtime makes
+# itself, which the string-literal and environment-handle rows above already
+# argue a program cannot supply.
+#
+# So this sentence is what the page says when an invariant it holds internally
+# is broken, and no program states it. It is listed rather than deleted because
+# a wrong answer is worse than a wrong sentence, and the arm is what makes `val`
+# total.
+a bound description cannot be used as data here

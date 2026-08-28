@@ -1,0 +1,17 @@
+# The other field-read shape: a plain binding rather than a parenthesised
+# call, which is where `Expr::Field` survives to the emitter and calls
+# `rt_field_by_name`. The getter path is covered by
+# a_description_has_no_fields; this is the one beside it.
+import "std/io"
+
+type cell
+  n
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play =
+  v = opaque d
+  print "{v.n}"

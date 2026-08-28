@@ -596,9 +596,37 @@ rows_c1i = text/concat rows_c1h [coverage_printed kq_specs asset_digests]
 
 rows_c1j = text/concat rows_c1i [coverage_native]
 
+# A SIXTH opener, on the engine a reader meets FIRST — the website's playground
+# runs `docs/kanso.wasm`, and until the scan learned bare `die(` none of
+# wasm_rt.rs's 36 sites was read by any gate. Three of those sentences turned
+# out to be saying the wrong thing on 2026-08-28, and a fourth was a wrong
+# ANSWER rather than a wrong sentence.
+#
+# Two rows for the same reason as the oracle's two: `die("` carries its own
+# opening quote and the literal is the first piece of a split on it, where
+# `die(format!(` may put the string on the next line and the literal is the
+# second.
+coverage_page = row
+  "a refusal only the page writes, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_page_refusal_arrives_without_a_golden")
+  release
+
+coverage_page_format = row
+  "a page refusal built with format!, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_page_format_refusal_arrives_without_a_golden")
+  release
+
 rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
-rows_c = text/concat rows_c1k [itself]
+rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
+
+rows_c = text/concat rows_c1l [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
