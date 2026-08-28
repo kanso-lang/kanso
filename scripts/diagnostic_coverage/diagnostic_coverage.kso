@@ -35,6 +35,10 @@ oracle_opener = "message: \""
 
 oracle_format_opener = "message: format!("
 
+page_opener = " die(\""
+
+page_format_opener = " die(format!("
+
 listed_path = "tests/golden/unpinned_diagnostics.txt"
 
 lower = "abcdefghijklmnopqrstuvwxyz"
@@ -367,6 +371,47 @@ fn worth_oracle _ false
 fn worth_oracle msg true
   "runtime\n{msg}"
 
+# A SIXTH, and it is the page's. `src/wasm_rt.rs` refuses through `die(`, in
+# the same two shapes the oracle uses: a plain string and a `format!`. 36 sites
+# spell 24 distinct sentences, and this is the engine a reader meets first —
+# the website's playground runs it.
+#
+# THE LEADING SPACE IS LOAD-BEARING. `k_die("` CONTAINS `die("`, so an opener
+# without it would pull all 78 of native's refusals in under a second kind.
+# Measured rather than assumed: ` die("` is 19 sites in wasm_rt.rs and 0 in
+# runtime.c, ` die(format!(` is 17 and 0, all 36 are preceded by a space, and
+# wasm_rt.rs is the only file in src/ holding either.
+fn page_in src
+  chunks = list/to_list (list/drop (text/split src page_opener) 1)
+  found = list/to_list (list/map chunks page_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn page_site chunk
+  told_page (head_of (text/split chunk "\"")[1]!)
+
+fn page_format_in src
+  chunks = list/to_list (list/drop (text/split src page_format_opener) 1)
+  found = list/to_list (list/map chunks page_format_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn page_format_site chunk
+  page_quoted (text/split chunk "\"")
+
+fn page_quoted pieces
+  told_page (opening pieces (length pieces < 2))
+
+fn told_page ""
+  ""
+
+fn told_page msg
+  worth_page msg (length msg >= 10)
+
+fn worth_page _ false
+  ""
+
+fn worth_page msg true
+  "page\n{msg}"
+
 fn raised_in src
   chunks = list/to_list (list/drop (text/split src opener) 1)
   found = list/to_list (list/map chunks site_of)
@@ -449,7 +494,8 @@ fn more_sources rest found src
   plain = text/concat (driver_in src) (kinded_in src)
   spoken = text/concat (native_in src) plain
   oracle = text/concat (oracle_in src) (oracle_format_in src)
-  heard = text/concat oracle spoken
+  shown = text/concat (page_in src) (page_format_in src)
+  heard = text/concat oracle (text/concat shown spoken)
   both = text/concat (raised_in src) heard
   over_sources rest (text/concat found both)
 
