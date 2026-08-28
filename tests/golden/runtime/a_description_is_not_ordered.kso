@@ -1,0 +1,10 @@
+# The ordering arm is reached before the type table too, and it has its own
+# sentence for values it cannot rank.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{1 < opaque d}"

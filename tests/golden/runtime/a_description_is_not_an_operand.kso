@@ -1,0 +1,13 @@
+# `rt_binop` used to hand an operand's own handle back for any slot that was
+# not a plain value, so `1 + d` ANSWERED `d` and the page printed `<io>` where
+# both other engines refused. A silent wrong answer rather than a divergent
+# sentence, which is why the three-engine walk was the only thing that could
+# have found it.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{1 + opaque d}"
