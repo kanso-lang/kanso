@@ -36,8 +36,13 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             );
             let said = match says_play {
                 true => {
-                    "`pub play` is a library's export — `kanso run` runs this \
-                     file; `kanso play` takes bare statements"
+                    // This said "`kanso run` runs this file", and `run`
+                    // answers the same file `is a library — nothing to run`.
+                    // Each verb named the other and a reader went in a
+                    // circle, so this one names the route that works.
+                    "`pub play` is a library's export — import this module \
+                     from an entry file and name its `play`; `kanso play` \
+                     takes bare statements"
                 }
                 false => {
                     "a play file exports nothing — drop the `pub`; everything \
