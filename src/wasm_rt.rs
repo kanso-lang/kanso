@@ -1095,7 +1095,11 @@ pub extern "C" fn rt_die_destructure(value: u32, ty_lit: u32) {
         Value::Str(s) => s,
         _ => "that type".to_string(),
     };
-    let shown = with_interp(|interp| render(interp, &val(value), true));
+    // `operand`, so a description renders `<io>` here instead of `val`
+    // answering with its own sentence. This site REFUSES — it dies on the next
+    // line — so the placeholder is right; a carrying site wants `value_of`.
+    // See a_description_cannot_be_destructured.
+    let shown = with_interp(|interp| render(interp, &operand(value), true));
     die(format!(
         "cannot destructure {shown} as `{ty}`; bindings are irrefutable, so handle other \
          types by dispatch first"

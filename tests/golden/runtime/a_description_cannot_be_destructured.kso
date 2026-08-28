@@ -1,0 +1,17 @@
+# A description meeting an irrefutable binding. `rt_die_destructure` renders
+# the value it refuses, and rendering went through `val`, which answered first
+# with its own words.
+import "std/io"
+
+pub type pt
+  a
+  b
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play =
+  pt x y = opaque d
+  print "{x} {y}"

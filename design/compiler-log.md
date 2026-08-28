@@ -4698,6 +4698,12 @@ else is refused at compile time with `c` is not a construction made in this
 `` `set` writes a record field, not `` is unreachable from source. Left alone,
 recorded as unreachable.
 
+**A destructure.** `pt x y = opaque d` says `cannot destructure <io> as
+`m/pt`` on both native engines; the page said `val`'s sentence, because
+`rt_die_destructure` renders the value it is about to refuse and rendered it
+through `val`. This one is a REFUSING site, so `operand` is right here where
+`value_of` was right at `rt_mkerr`. Third of three.
+
 **`map`/`filter`.** Still open. `list/map` is the lazy library function and
 never enters `map_or_filter`; bare `map` and `filter` are unnameable. Nothing
 found that reaches those two `val` sites yet.
