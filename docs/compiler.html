@@ -1245,6 +1245,31 @@ the page               error[runtime]: a bound description cannot be
 
 <p>one of the four fixtures pins something none of the others can. materializing a deferred description demands the right side of its sequence, so a fix that performed the effects at construction time instead of when the program asks for them would leave the other three green. the fixture prints a word before the description runs, and the word has to come first on all three engines.</p>
 
+<h2 id="wronganswer"><span class="sec-num">27</span>the answer, not the sentence</h2>
+
+<p>the section above ends on four storing sites and a fix that was four calls. the count was wrong, and how it was wrong is the more useful half. following the failing program found four. starting from the accessor instead &#8212; reading each of its call sites and asking what a program could hand it &#8212; found six, and then two more families the first pass had no reason to look for.</p>
+
+<p>the first is the mirror of the storing one. a storing site carries a description onward and used to refuse it. a refusing site is meant to refuse, and the accessor refused first, in its own words: <code>if d</code> said <code>a bound description cannot be used as data here</code> where the other two engines say <code>an if condition is true or false, got &lt;io&gt;</code>. that sentence had been converged across all three engines the same morning it was found unreachable on one of them.</p>
+
+<p>then the one that was not a sentence at all:</p>
+
+<pre><code>d = io/write "a\n" &gt;&gt; io/write "b\n"
+pub play = print "{1 + opaque d}"
+
+native, interpreter    error[runtime]: `+` is not defined
+                       for these values
+the page               &lt;io&gt;</code></pre>
+
+<p>the operator read each side, found a slot that was not a plain value, and handed the operand&#8217;s own handle back. <code>1 + d</code> evaluated to <code>d</code>. every gate this project has for diagnostics compares refusals, and this program does not refuse; the error corpus pins what a program writes to stderr, and this one writes to stdout. the walk that compares what each engine prints is the only instrument that could have caught it.</p>
+
+<p>the fix hands the interpreter a placeholder description and lets it write the operator&#8217;s own words. that is sound because no operator succeeds on a description &#8212; equality was the one that could have, and it names them instead &#8212; and exact because every description renders <code>&lt;io&gt;</code>, so an error path that reports its operand cannot tell the placeholder from the real thing. three fixtures, one per arm a description can reach.</p>
+
+<p>the placeholder has a boundary, and the two sides of it look identical at the call site. a site that refuses wants it, because building the real description would force the right side of a sequence and native does not evaluate one before refusing. a site that <em>carries</em> wants the real thing, because a placeholder handed back to the program is an effect the program did not write. <code>err d</code> is the carrying case: it runs to the endpoint on both other engines and died on the page. the two fixes now sit a few lines apart in the same file with the distinction written between them.</p>
+
+<p>one more thing had to change before any of this could be watched. the gate that collects every error message the compiler can write had six openers by then, and none of them matched the browser engine &#8212; thirty-six sites spelling twenty-four sentences, on the engine a reader meets first, since the playground is what the website runs. a seventh and eighth opener took the count from 242 to 262. the comment claiming the gate already watched two hand-copied sentences for drift was written the day before, and was wrong when it was written.</p>
+
+<p>the accessor&#8217;s own sentence has no program left that reaches it. it was reachable eight ways this week &#8212; an operator, a condition, four index forms, an err, two field reads, a destructure &#8212; and each is now answered by the site that owns the words, with the program that proved it in the corpus. it stays in the source, listed as unpinned with its reasons, because the arm is what makes the accessor total.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
