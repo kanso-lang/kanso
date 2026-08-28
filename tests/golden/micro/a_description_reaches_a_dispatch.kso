@@ -16,4 +16,4 @@ fn seen v:cell
 fn seen _
   "not a cell"
 
-pub play = print "{seen (opaque d)}\n"
+pub play = print "{seen (opaque d)}"
