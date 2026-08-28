@@ -181,62 +181,16 @@ program is the reason to revisit it.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
-The July design doc ruled its A1–X and BB (those rulings are in the log
-and archive; the doc's full text is in git history). Letters that never
-closed:
-
-- **C — pure/yield**: does the fold-yield idiom need a named primitive
-  (`out >> yield store`) or does a plain value on `>>`'s right
-  auto-lift? Asked before `>>` deferred its right side.
-  **Cited: the search found no ruling; the deferral gavels that changed
-  its premise are archive 2026-08-15 onward.
-  RECOMMENDATION: strike as asked, re-ask if the idiom reappears. Under
-  deferral the right side of `>>` is a description that gets demanded,
-  which is the lifting the question wanted, so the primitive has nothing
-  left to do.**
-
-- **D — what a succeeded effect yields**: `none` today, whose silent
-  railway-skip is a footgun; a `done` marker was the alternative.
-  **Cited: the search found no ruling. The nearest is archive 2026-08-25,
-  `>>` stops at the first run-time failure, which settles sequencing and
-  not the yielded value.
-  RECOMMENDATION: mint `done`. The footgun is real — a succeeded effect
-  yielding `none` means a chain that tests for `none` cannot tell success
-  from absence — and it is the one place in the language where a value
-  means two things.**
-
-- **G — eta-reduction as canon**: ban the forwarding lambda
-  (`map (c -> fetch c)` → `map fetch`) plus the composition rules a
-  dispatch group held as a value still owes
-  (design/function-values.md).
-  **Cited: premise answered, archive 2026-07-25 "BUILT, MEASURED,
-  DECLINED: eta-reduction is not semantics-preserving here" — an `err`
-  records a hop per function, so the two forms print different
-  provenance and native stops agreeing with the oracle. Two forms that
-  trace differently cannot be canonicalised into each other.
-  RECOMMENDATION: strike G on that reason. One word closes it; the
-  composition-rules half stays.**
-
-- **Z — errors without exceptions**: presumed declined — the 2026-08-15
-  err gavel kept err with the foreign-only rescue license, which is the
-  world Z1 abolished.
-  **Cited: archive 2026-08-15, gavel 1.
-  RECOMMENDATION: confirm declined. One word and this line moves to the
-  log.**
-
-- **AA — newtype dispatch acceptance**: the live half is typeset
-  acceptance as the idiom vs explicit cast only. The 2026-08-19 ruling
-  covered the declaration and ctor form, not acceptance.
-  **Cited: archive 2026-08-19, "the July spellings" — `type
-  post_body:string` declares, `post_body ""` constructs, and acceptance
-  is untouched by it.
-  RECOMMENDATION: explicit cast only. A subtype that is accepted wherever
-  its base is accepted is a comment, and the reason to mint one is that
-  the compiler refuses the mix-up.**
+Emptied 2026-08-26: C, D, G, Z and AA were ruled in one sitting on their
+recommendations, closing the July campaign entirely. The rulings are in
+the log. The composition-rules half of G survives as a parked item below.
 
 ## Parked — on the record, no action
 
 - `<<` labels: walls cover staircases; revive on real DAG demand.
+- Dispatch-group composition rules (design/function-values.md): the
+  surviving half of July's G — what a group held as a value owes when
+  composed. Revive when a real program composes function values.
 - Labeled nameless patterns: parked 2026-08-19 — needs a fresh look
   against the post-24 language, not pending. Group headers stay behind
   it.

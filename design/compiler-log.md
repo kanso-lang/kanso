@@ -3702,3 +3702,35 @@ first argument. Nothing about the three words is syntax: they are
 library functions threaded by the same rule that makes
 `(expect 1) . to (equal x)` feed `expect 1` into `to`, and they can
 be called prefix-style outside a chain with the same meaning.
+
+## 2026-08-26 — gavel: the July letters close
+
+Clay ruled the five unclosed letters in one word — "gavel" — on the
+recommendations as presented, and the July campaign's ledger section
+empties.
+
+- **C (pure/yield): struck as asked.** Under deferral the right side
+  of `>>` is a description that gets demanded, which is the lifting
+  the question wanted; the named primitive has nothing left to do.
+  Re-ask only if the fold-yield idiom reappears and wants more.
+- **D: `done` is minted.** A succeeded effect yields `done`, not
+  `none`. `none` means absence and nothing else; the silent
+  railway-skip where success and absence shared a spelling — the one
+  place in the language a value meant two things — is gone. Chains
+  that tested for `none` after an effect migrate to `done`.
+- **G (eta-reduction as canon): struck**, on the July measurement —
+  an err records a hop per function, so `map (c -> fetch c)` and
+  `map fetch` print different provenance and cannot be canonicalised
+  into each other without breaking oracle agreement. The
+  composition-rules half (design/function-values.md) stays open as
+  its own item, not a letter.
+- **Z (errors without exceptions): confirmed declined.** Gavel 1 kept
+  err with the foreign-only rescue license; Z's world is abolished on
+  the record now, not just in effect.
+- **AA (newtype acceptance): explicit cast only.** A `post_body` is
+  not accepted where a `string` is; the compiler refusing the mix-up
+  is the reason the type was minted. The 2026-08-19 declaration and
+  ctor spellings stand; this closes the acceptance half.
+
+With this the GAVELS.md campaign is fully adjudicated: every letter
+A1–X, BB, and now C, D, G, Z, AA has a ruling in the log or archive.
