@@ -4664,11 +4664,11 @@ COST: the three compile veins are pinned to the runner's glibc and rustc and
 refuse to compare in this container, so CI measures them. Locally welfare
 reads 84.11 against a floor of 84.11 and the trend gate is silent.
 
-## 2026-08-27 — two more of the same family, and the emitter lied about both
+## 2026-08-27 — three more of the same family, and the emitter lied about two
 
 The entry above swept `val`'s call sites and listed eight that could receive a
 description. Running a program at each one moved most of the list, in both
-directions.
+directions. Three were real.
 
 **`err d`.** Native wraps the description, the err reaches the entry, and the
 endpoint renders it: `unhandled err reached the entry: <io>`. The page died
