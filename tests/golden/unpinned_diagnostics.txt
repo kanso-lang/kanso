@@ -300,3 +300,105 @@ unknown builtin `
 # `eval::set_foreign_call` at init — so a handle exists only where the way back
 # is already installed, and this arm answers a `None` that cannot occur.
 a compiled closure escaped the engine that owns it
+#
+# ==========================================================================
+# THE PAGE'S OWN REFUSALS. `src/wasm_rt.rs` writes 36 `die(` sites spelling 24
+# sentences, and until the scan learned two more openers none of them was read
+# by any gate — on the engine a reader meets first, since the website's
+# playground runs it. Ten are pinned by nothing, and every reason below was
+# established by walking the EMITTER or by running a program, because reading
+# a runtime arm and inferring what can reach it is how two excuses in this file
+# came to name the wrong mechanism.
+#
+# THE STRING-LITERAL GUARANTEE covers the next four sentences at five sites.
+# Every literal position in an emitted module is written by `str_lit`
+# (wasm_backend.rs:363), one function returning `Lit::Str`. So the handle these
+# arms inspect holds a string by construction: `rt_builtin`'s name comes from
+# wasm_backend.rs:1500, `rt_setfield`'s from 607, `rt_keyed_field`'s from 671,
+# `rt_field_by_name`'s from 745, and the origin and hop literals from 374
+# and 416. One guarantee, checkable in a minute, rather than five arguments.
+builtin name must be a string
+field name must be a string
+an origin or hop literal must be a string
+#
+# THE OPERATOR TABLE, an exact correspondence rather than an argument.
+# `binop_code` (wasm_backend.rs:868) returns {0,1,2,3,4,10,11,12,13,14,15,20,
+# 21,22} and `Err` for anything else — a COMPILE-time refusal. wasm_rt.rs:758
+# names exactly those fourteen codes. The emitter cannot write a code the
+# runtime does not know.
+no operator for code
+#
+# THE ENVIRONMENT HANDLE. All nine `RT_ENVGET` call sites in wasm_backend.rs
+# pass `local_get(1)` — the compiled function's second parameter, which the
+# calling convention documented at wasm_backend.rs:1105 makes the env the
+# runtime itself created as a `Slot::E`. A program has no way to put anything
+# else there.
+bad environment access
+#
+# THE FILTER PREDICATE, THIRD SPELLING. Native says it without the `, got` and
+# the interpreter with it; this is the page's. All three are the same dead arm:
+# `filter` is not one of check.rs's 55 BUILTINS so `filter xs p` is `unknown
+# name`, `builtin_filter` by hand is refused by name, and `lib/list` writes
+# `select` as a fold in kanso rather than calling a builtin. What a program
+# meets for a non-bool predicate is `list/select`'s own `if`.
+filter needs a bool (got
+#
+# THE MAP KEY. `require_literal_key` admits only `Expr::Int` and a `Expr::Str`
+# with no interpolation, so a key that is neither an int nor a string is
+# refused at compile time and never reaches the runtime's check.
+map keys are ints or strings, not
+#
+# NOT A RECORD, four sites in two functions, and both are shadowed by a check
+# that answers first — each of which is itself pinned, so what a program
+# actually reads is covered:
+#
+#   rt_field:370,372        `point a b = opaque "hello"` answers `cannot
+#                           destructure "hello" as ...`, pinned by
+#                           tests/golden/runtime/a_destructure_of_the_wrong_shape
+#   rt_keyed_field:503,505  `{ x y } = opaque 7` answers `cannot read fields
+#                           of 7; keyed reads take a record`, pinned by
+#                           tests/golden/runtime/a_keyed_read_takes_a_record
+#
+# Both fixtures live under tests/golden/runtime, which the wasm walk executes,
+# so the page is known to answer the shadowing sentence rather than this one.
+not a record
+#
+# THIS VALUE IS NOT CALLABLE, probed and it does not reproduce. The arm fires
+# when the callee is neither a closure nor a value — a description, say — but
+# `f = opaque (io/write "hi")` then `f 1` answers `` `<io>` is not callable ``
+# on all three engines, reaching the sibling arm beside it. The program is in
+# the corpus as tests/golden/runtime/calling_a_description_names_it, which is
+# what pins the sentence a reader actually gets.
+this value is not callable
+#
+# A BOUND DESCRIPTION CANNOT BE USED AS DATA HERE, `val`'s own words. This is
+# the sentence a site says INSTEAD of its own when it opens with `match val(h)`
+# and is handed a description, and it was reachable eight ways as recently as
+# this week. Each has since been routed to the site that owns the sentence, and
+# each routing left a program behind:
+#
+#   1 + d, d == d, 1 < d      tests/golden/runtime/a_description_is_not_
+#                             {an_operand,comparable,ordered}
+#   if d                      .../a_description_is_not_a_condition
+#   xs[i], xs[i]!             .../a_description_is_not_{indexable,an_index,
+#                             indexable_strictly,a_strict_index}
+#   err d                     .../an_err_may_carry_a_description
+#   (opaque d).n, v.n         .../a_description_{has_no_fields,
+#                             meets_a_field_read}
+#   pt x y = opaque d         .../a_description_cannot_be_destructured
+#   dispatch on one           tests/golden/micro/a_description_reaches_a_dispatch
+#
+# Two `val` sites could still take a description on paper — `rt_field_by_name`
+# and `rt_not_own_err` — and neither of the two programs written for them
+# reaches them: a field read compiles to a getter (so it lands in `rt_no_field`,
+# which the two field fixtures above pin) and a dispatch answers its bare arm
+# without asking the runtime. Everything else that reaches `val` through
+# `operand` or `value_of` is a `Slot::E`, the environment pack the runtime makes
+# itself, which the string-literal and environment-handle rows above already
+# argue a program cannot supply.
+#
+# So this sentence is what the page says when an invariant it holds internally
+# is broken, and no program states it. It is listed rather than deleted because
+# a wrong answer is worse than a wrong sentence, and the arm is what makes `val`
+# total.
+a bound description cannot be used as data here

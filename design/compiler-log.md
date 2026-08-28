@@ -4716,3 +4716,57 @@ written to reach something adjacent proves nothing.
 
 COST: CI measures the compile veins. Locally welfare and the trend gate agree
 with main.
+
+## 2026-08-28 — the scan could not read the engine a reader meets first
+
+`scripts/diagnostic_coverage` had five openers and none of them matched
+`src/wasm_rt.rs`, which writes 36 `die(` sites spelling 24 sentences. That is
+the engine the website's playground runs, so it is the first one most readers
+meet, and no gate had ever read a word of it. Two more openers — ` die("` and
+` die(format!(`, split apart for the same reason the oracle's two are, since
+one carries its opening quote and the other may put the literal on the next
+line — take the scan from 242 diagnostics to 262.
+
+The gap this closes is not hypothetical. #1105 kept two sentences as literals
+in wasm_rt.rs and said in a comment that the scan watched the copies for
+drift; it did not, and could not have. Over the two days before this landed,
+three of the page's sentences turned out to be saying something other than
+what the other two engines say, and a fourth was a wrong ANSWER rather than a
+wrong sentence.
+
+Ten of the page's sentences are pinned by nothing. Nine excuses were
+established by walking the emitter or by running a program:
+
+  - the string-literal guarantee, one function (`str_lit`) covering four
+    sentences at five sites
+  - the operator table, an exact correspondence between `binop_code`'s
+    fifteen codes and the fourteen names plus catch-all in wasm_rt.rs
+  - the environment handle, all nine `RT_ENVGET` call sites passing the
+    compiled function's second parameter
+  - the filter predicate, third spelling of a dead arm
+  - the map key, `require_literal_key` refusing anything else at compile time
+  - `not a record`, four sites shadowed by two checks that each have a
+    fixture in the wasm walk
+  - `this value is not callable`, probed and answered by the sibling arm
+
+The tenth is `val`'s own words, `a bound description cannot be used as data
+here`, and it could not be written until this week's three fixes. It is the
+sentence a site says INSTEAD of its own when it opens with `match val(h)` and
+meets a description, and it was reachable eight ways: an operator, a
+condition, four index forms, an err, two field reads, a destructure, a
+dispatch. Each is now routed to the site that owns the sentence, and each
+routing left a program in the corpus — the row lists all eight by path. Two
+`val` sites could take a description on paper, `rt_field_by_name` and
+`rt_not_own_err`, and the two programs written for them do not arrive: a field
+read compiles to a getter and lands in `rt_no_field`, and a dispatch answers
+its bare arm without asking the runtime. Both of those programs are in the
+corpus too, as the row's evidence rather than as anyone's bug.
+
+So the sentence is what the page says when an invariant it holds internally is
+broken, and no program states it. Listed rather than deleted: the arm is what
+makes `val` total, and a wrong answer is worse than a wrong sentence.
+
+Two ratchet mutations, one per opener, each watched turning the gate red and
+naming the sentence it injected.
+
+COST: no compiler source changed; the veins cannot move.
