@@ -1,0 +1,12 @@
+# `err` of a description: native wraps it, the err reaches the entry and the
+# endpoint renders it. The page's `rt_mkerr` opens with `val`, which refuses
+# every slot that is not a value or a closure — so this is a die where both
+# other engines run to completion.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = err (opaque d)
