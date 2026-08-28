@@ -4663,3 +4663,56 @@ is fresh:
 COST: the three compile veins are pinned to the runner's glibc and rustc and
 refuse to compare in this container, so CI measures them. Locally welfare
 reads 84.11 against a floor of 84.11 and the trend gate is silent.
+
+## 2026-08-27 — three more of the same family, and the emitter lied about two
+
+The entry above swept `val`'s call sites and listed eight that could receive a
+description. Running a program at each one moved most of the list, in both
+directions. Three were real.
+
+**`err d`.** Native wraps the description, the err reaches the entry, and the
+endpoint renders it: `unhandled err reached the entry: <io>`. The page died
+with `a bound description cannot be used as data here`. A die where the other
+two engines run to completion, which is the worst shape in this family.
+
+The fix is `value_of`, NOT the placeholder the refusing sites use. `rt_mkerr`
+CARRIES its reason onward, so a placeholder would be wrapped up and handed
+back to the program as if it were the effect the program wrote. That
+distinction now lives on `operand`'s doc comment, because the two fixes look
+identical at the call site and one of them is wrong.
+
+**`(opaque d).n`.** The page said `a bound description cannot be used as data
+here` where native says `` `.` reads a field of a record, not <io> ``. The
+first fix went to `rt_field_by_name`, which is what the emitter calls for
+`Expr::Field`, and changed nothing: a field name some record declares compiles
+to a GETTER, and a getter that matches nothing ends in `rt_no_field`. That
+site had been written off as unreachable an hour earlier on the strength of
+`(opaque d).nope`, which is a name error and never reaches the runtime — the
+probe used a field no record declares, and that is a different program. The
+`rt_field_by_name` change was reverted rather than kept: unproven either way.
+
+**`set`.** The two `val` sites in `rt_setfield` cannot receive a description.
+A `build` block writes only block-born constructions — `c.n = 1` on anything
+else is refused at compile time with `c` is not a construction made in this
+`build` block — so the target is a record by construction and the sentence
+`` `set` writes a record field, not `` is unreachable from source. Left alone,
+recorded as unreachable.
+
+**A destructure.** `pt x y = opaque d` says `cannot destructure <io> as
+`m/pt`` on both native engines; the page said `val`'s sentence, because
+`rt_die_destructure` renders the value it is about to refuse and rendered it
+through `val`. This one is a REFUSING site, so `operand` is right here where
+`value_of` was right at `rt_mkerr`. Third of three.
+
+**`map`/`filter`.** Still open. `list/map` is the lazy library function and
+never enters `map_or_filter`; bare `map` and `filter` are unnameable. Nothing
+found that reaches those two `val` sites yet.
+
+The method note from the entry above needs one correction. It said reading the
+emitter is not a substitute for running a program, which is right, and then
+both of today's dismissals came from probes that ran the WRONG program. A
+site is unreachable when a program written to reach it fails to; a program
+written to reach something adjacent proves nothing.
+
+COST: CI measures the compile veins. Locally welfare and the trend gate agree
+with main.

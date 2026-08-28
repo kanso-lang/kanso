@@ -1,0 +1,17 @@
+# `.` on a description. The site that answers is `rt_no_field`, not
+# `rt_field_by_name`: a field name some record declares compiles to a getter,
+# and a getter that matches nothing ends in that call. `(opaque d).nope`, with
+# no record declaring `nope`, is a name error and never reaches the runtime —
+# so reading the emitter says this site is unreachable and running a program
+# says it is not.
+import "std/io"
+
+type cell
+  n
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{(opaque d).n}"

@@ -457,7 +457,13 @@ pub extern "C" fn rt_no_field(base: u32, name_lit: u32) -> u32 {
         Value::Str(s) => s,
         _ => die("field name must be a string".to_string()),
     };
-    match val(base) {
+    // `operand` rather than `val`: a description reaches the arm below instead
+    // of being refused by the accessor in its own words. `.n` on a description
+    // arrives HERE and not at `rt_field_by_name` — a field name the program
+    // declares somewhere compiles to a getter, and a getter that matches
+    // nothing ends in this call. `(opaque d).nope`, with no record declaring
+    // `nope`, never reaches the runtime at all. See a_description_has_no_fields.
+    match operand(base) {
         Value::Record { ty, .. } => die(format!("`{ty}` has no field `{name}`")),
         other => {
             die(format!("`.` reads a field of a record, not {}", render_demanded(&other, true)))
@@ -536,7 +542,11 @@ fn raised_at(origin_lit: u32) -> crate::eval::Raised {
 
 #[no_mangle]
 pub extern "C" fn rt_mkerr(h: u32, origin_lit: u32) -> u32 {
-    let v = val(h);
+    // An err CARRIES its reason, so this is `value_of` and not `operand`:
+    // the placeholder the refusing sites use would be wrapped up and handed
+    // back to the program. `err d` runs to the endpoint on both native
+    // engines. See an_err_may_carry_a_description.
+    let v = value_of(h);
     if is_failure(&v) {
         return h;
     }
@@ -754,8 +764,13 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
 }
 
 /// A slot as a value the interpreter can read: an operator's side, an index,
-/// the thing being indexed, an `if` condition — every place a site reads a
-/// slot as data it may turn out to refuse.
+/// the thing being indexed, an `if` condition, the base of a field read —
+/// every place a site reads a slot as data it may turn out to refuse.
+///
+/// REFUSING sites only. A site that CARRIES a description onward — into a
+/// list, a record field, an err — wants `value_of`, which builds the real
+/// description; the placeholder below would be handed back to the program as
+/// if it were the effect the program wrote.
 ///
 /// A closure is data here the same way it is data in a list: `val` turns it
 /// into the handle-carrying function value, and the interpreter refuses that
@@ -1080,7 +1095,11 @@ pub extern "C" fn rt_die_destructure(value: u32, ty_lit: u32) {
         Value::Str(s) => s,
         _ => "that type".to_string(),
     };
-    let shown = with_interp(|interp| render(interp, &val(value), true));
+    // `operand`, so a description renders `<io>` here instead of `val`
+    // answering with its own sentence. This site REFUSES — it dies on the next
+    // line — so the placeholder is right; a carrying site wants `value_of`.
+    // See a_description_cannot_be_destructured.
+    let shown = with_interp(|interp| render(interp, &operand(value), true));
     die(format!(
         "cannot destructure {shown} as `{ty}`; bindings are irrefutable, so handle other \
          types by dispatch first"
