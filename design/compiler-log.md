@@ -3690,3 +3690,15 @@ three chain combinators are words:
 - Migration widens accordingly: every `.` chain step in the fleet
   respells as `bind`, in the same mechanical pass that respells the
   err-arms as `annotate`.
+
+## 2026-08-26 — rider: effect first, callback second
+
+Clay, closing the spelling: "I would think that the first argument to
+those methods would be the effect and the second would be the call
+back." So `bind`, `annotate` and `rescue` are ordinary two-argument
+functions — `bind effect callback` — and a chain line spelling only
+the callback is the chain rule already in the language supplying the
+first argument. Nothing about the three words is syntax: they are
+library functions threaded by the same rule that makes
+`(expect 1) . to (equal x)` feed `expect 1` into `to`, and they can
+be called prefix-style outside a chain with the same meaning.
