@@ -3881,11 +3881,21 @@ pub play = print "{shape}"
 also compiles clean, and prints `<mod>/shape` on native against `<fn>` on the
 interpreter. Two engines, two answers, neither an error, nothing red.
 
+And a third position, which both engines agreed on and both got wrong:
+
+```
+pub play = print "{(circle 1):shape}"
+```
+
+refuses at RUN time with "`:shape` widens; this value is not a shape" — a
+sentence that blames a program whose circle is exactly what the typeset
+admits. There is nothing to widen: the value already matches the annotation.
+
 A typeset is annotation-only vocabulary. `type shape circle square` names a
 union a parameter can stand in, and no value is ever a `shape`, which the AST
 comment beside `members` has said since the field was added. So the refusal is
-on the NAME — an `Ident` or a `&` partial anywhere an expression can stand —
-and the call is the case where the name is a head. `typeset_constructions` in
+on the NAME — an `Ident`, a `&` partial, or a widening's target, anywhere an
+expression can stand — and the call is the case where the name is a head. `typeset_constructions` in
 check.rs says so where it is written, and all three engines agree because none
 of them gets the name.
 

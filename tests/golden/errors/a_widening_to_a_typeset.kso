@@ -1,0 +1,14 @@
+# The third position a typeset's name can stand in. `(circle 1):shape` refused
+# at RUN time on both engines, and the sentence it gave — "this value is not a
+# shape" — blames a program whose circle is exactly what the typeset admits.
+# There is no widening to perform: a typeset annotates, and the value already
+# matches the annotation.
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+pub play = print "{(circle 1):shape}"

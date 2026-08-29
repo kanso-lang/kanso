@@ -1,0 +1,1 @@
+error[type]: `shape` is a typeset — it only annotates (module a_widening_to_a_typeset)

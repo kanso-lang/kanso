@@ -1742,7 +1742,17 @@ fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
         return;
     }
     fn walk(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
-        if let Expr::Ident(name, span) | Expr::Partial(name, span) = e {
+        let named = match e {
+            Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name, span)),
+            // A widening names its target after the colon, and a typeset is
+            // not something a value can become: `(circle 1):shape` for a
+            // typeset holding `circle` refused at RUN time, on both engines,
+            // with "this value is not a shape" — a sentence that blames a
+            // program whose circle is exactly what the typeset admits.
+            Expr::Upcast { ty, span, .. } => Some((ty, span)),
+            _ => None,
+        };
+        if let Some((name, span)) = named {
             if annotating.contains(name.as_str()) {
                 diags.push(Diagnostic::new(
                     "type",
