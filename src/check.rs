@@ -2569,7 +2569,12 @@ fn check_annotation_names(
     declared: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
 ) {
-    fn patterns(p: &Pattern, declared: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    fn patterns(
+        p: &Pattern,
+        declared: &HashSet<&str>,
+        annotating: &HashSet<&str>,
+        diags: &mut Vec<Diagnostic>,
+    ) {
         match p {
             Pattern::Annotated { ty, span, .. } => {
                 for name in undeclared_in(ty, declared) {
@@ -2580,27 +2585,53 @@ fn check_annotation_names(
                     ));
                 }
             }
-            // A constructor pattern names a type too, and `(banana w h)` with
-            // no `banana` declared reaches dispatch instead of this check. It
-            // is left for now because `Pattern::Ctor` carries no span, so the
-            // diagnostic would have nothing to point at — and unlike the two
-            // below, the engines agree on what to say about it.
-            Pattern::Ctor { fields, .. } => {
+            // `(shape x)` for a typeset `shape` destructures a record by its
+            // type, and a typeset has no fields to destructure and no value
+            // is ever one, so the arm can never match whatever arrives. Both
+            // engines said "no overload matches these arguments" at run time,
+            // which sends the reader to look at an argument that is fine.
+            //
+            // `Pattern::Ctor` carries no span, so this points at the first
+            // field — one token past the type name, the same place the two
+            // other ctor diagnostics in this file point. GIVING IT A SPAN WAS
+            // MEASURED AND DECLINED: `Pattern` grows 64 bytes to 72, and
+            // `kanso check lib/json` costs 482,913 more instructions for the
+            // exact column. The log entry has the numbers.
+            //
+            // `(banana w h)` with no `banana` declared still reaches dispatch.
+            // That one wants a set `declared` is not: `std/list` writes
+            // `(entry k v)`, and `entry` is a marker the compiler knows and
+            // `program.types` does not hold, so the obvious check calls a
+            // correct program wrong. Measured that way too.
+            Pattern::Ctor { ty, fields, .. } => {
+                if annotating.contains(ty.as_str()) && !fields.is_empty() {
+                    diags.push(Diagnostic::new(
+                        "type",
+                        format!(
+                            "`{ty}` is a typeset — it only annotates, so this arm \
+                             can never match"
+                        ),
+                        other_span(&fields[0]),
+                    ));
+                }
                 for f in fields {
-                    patterns(f, declared, diags);
+                    patterns(f, declared, annotating, diags);
                 }
             }
             _ => {}
         }
     }
 
+    // The typesets, borrowed from the list `declared` was built from.
+    let annotating: HashSet<&str> =
+        program.types.iter().filter(|t| !t.members.is_empty()).map(|t| t.name.as_str()).collect();
     for decl in &program.fns {
         for param in &decl.params {
-            patterns(param, declared, diags);
+            patterns(param, declared, &annotating, diags);
         }
         for stmt in &decl.body {
             if let Stmt::Bind { pattern, .. } = stmt {
-                patterns(pattern, declared, diags);
+                patterns(pattern, declared, &annotating, diags);
             }
         }
     }

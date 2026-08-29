@@ -3921,3 +3921,67 @@ at once when a program declares no typeset, which `lib/json` does not.
 container: opposite signs on one diff, layout, and the runner's side is the
 good side. The pass reads the type list, finds nothing, and stops, so there is
 no walk to pay for on the measured path.
+
+## 2026-08-29 — 482,913 instructions for an exact column, declined
+
+The typeset sweep's fourth position is a constructor pattern:
+
+```
+fn area (shape x)
+  x
+```
+
+Both engines compiled it and both answered "no overload of `area` matches
+these arguments" at run time, which sends the reader to look at an argument
+that is fine. A constructor pattern destructures a record by its type; a
+typeset has no fields to destructure and no value is ever one, so the arm can
+never match whatever arrives.
+
+`Pattern::Ctor` carries no span, which is why kanso#1126 left this alone — its
+comment says so in as many words. So the first attempt gave it one: thirteen
+sites, three constructions in the parser, one in `resolve_marker_pattern`, one
+in the getter synthesis, eight destructures gaining a `..`, and `other_span`
+answering a real column where it had answered `0:0`.
+
+**Then it was measured, and the field costs more than the column is worth.**
+
+```
+main after the typeset refusal          58,330,347
+  + the span on Pattern::Ctor           58,813,260    +482,913
+  + the span and the new arm            58,818,195    +487,848
+  the arm alone, no span                58,329,928        -419
+```
+
+The arm costs 4,935 with the span in place and reads as noise without it. The
+FIELD costs 482,913 — 0.83% of everything `kanso check lib/json` does — because
+`Pattern` grows from 64 bytes to 72 and patterns are moved through every pass
+in the front end.
+
+What the field buys is a caret on `shape` instead of on `x`, one token to its
+right. The arm points at the first field, which is where the two other
+constructor diagnostics in check.rs already point: `other_span(&fields[0])` is
+an idiom this file had before today. So the span is declined and the arm ships
+without it, at 419 instructions below the baseline.
+
+**The undeclared half is declined too, and for a different reason.** With the
+span in hand I also wrote the check kanso#1126 wanted — a constructor pattern
+naming no declared type — and the unit suite went red on the standard library.
+`std/list` has `fn put_renamed acc (entry k v) f` in two arms, and `entry` is a
+marker the compiler knows: `check.rs` puts it in `globals`, `codegen.rs` gives
+it type id zero. `declared` is built from `program.types`, which does not hold
+it, so the check called a correct program wrong. Putting `entry` in
+`BUILT_IN_TYPES` would let an annotation say `:entry` as a side effect, which
+is a different decision. The comment in `patterns()` names the missing set now
+rather than the missing span.
+
+**If the span is ever wanted, the cheap way in is to shrink `Span` first.** It
+is two `usize` — sixteen bytes for a line and a column, where two `u32` would
+hold a four-billion-line file. That change pays for this one several times over
+and speeds up everything else that carries a span, which is most of the AST.
+Not attempted here; recorded so the next reader does not re-derive the trade.
+
+`compile_allocs` is 61,974, unchanged. `compile_instructions` reads +3,760 on
+the runner against -419 in the container: opposite signs on one diff, layout.
+The arm is a branch on a walk that already ran, and `lib/json` declares no
+typeset, so the borrowed set is empty and the branch never fires on the
+measured path.

@@ -1,0 +1,23 @@
+# The fourth position a typeset's name can stand in, and the one both engines
+# agreed on while both were wrong. A constructor pattern destructures a record
+# by its type; a typeset has no fields to destructure and no value is ever
+# one, so the arm can never match whatever the caller passes. What it said
+# instead was "no overload of `area` matches these arguments", at run time,
+# which sends the reader to look at an argument that is fine.
+#
+# The caret sits on the first field rather than on `shape`, because
+# `Pattern::Ctor` carries no span. Giving it one was built and measured:
+# `Pattern` grows from 64 bytes to 72, and `kanso check lib/json` pays 482,913
+# more instructions for the exact column.
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+fn area (shape x)
+  x
+
+pub play = print "{area (circle 1)}"
