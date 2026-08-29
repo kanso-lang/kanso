@@ -1,0 +1,4 @@
+error[type]: `shape` is a typeset — it only annotates, so this arm can never match
+  --> a_constructor_pattern_over_a_typeset.kso:20:16
+  20 | fn area (shape x)
+                      ^
