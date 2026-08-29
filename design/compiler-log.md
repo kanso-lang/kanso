@@ -3331,3 +3331,50 @@ Worth stating the shape plainly, because three of today's five entries touch
 it: `compile_instructions` is a real vein for real work and a noisy one for
 layout, and the two are indistinguishable inside a single host. The second
 host is what separates them. Nothing else in the tree can.
+
+## 2026-08-29 — why the mutation sweep found nothing, which is a fact about the corpus
+
+The entry above declined a mutation sweep because it could not be shown red by
+any panic this compiler has had. That reads as bad luck. It is not luck, and
+the reason transfers.
+
+The second experiment says so. #1118 fixed `rt_maybe_bind`, which kept its own
+inline copy of the deferred-shape list; the fix is one call to `descish` and
+the fixture that found it is
+`tests/golden/micro/a_rescue_inside_a_joined_stage.kso`. Put the old list
+back, take the fixture away, and the whole page corpus is green — 393
+programs and none of them reaches it, exactly as #1118 said.
+
+So: can a one-line mutation of that corpus reach it? No, and the reason is
+structural rather than statistical. `rt_maybe_bind` sees a rescue slot only
+for a chain step whose piped value is a rescue description, which needs an
+EFFECT subject and a `.` step. One corpus program puts `rescue` in a `>>`
+chain, and there it is an argument to `print` over subjects that have already
+settled — no effect, no step. Dropping a token or repeating one cannot add a
+`.`, and cannot turn a settled value into an effect.
+
+The `wrap_err` panic failed the same way for a different local reason: the one
+program calling it with two arguments loses a BOUND name when the mutation
+drops its last token, so the unused-binding check fires long before codegen.
+
+**Single-token mutation explores the neighbourhood of the corpus. It does not
+synthesise a shape the corpus lacks.** Both bugs tested for live in shapes
+nothing in the corpus has, so no amount of mutating finds them — 8,724
+mutants or eight million. What finds them is a program with the shape, which
+is what #1116 and #1118 each added, by hand, after reasoning about where the
+engines could differ.
+
+That is worth having tried. "A sweep found nothing" invites a bigger sweep;
+"the mutation cannot produce the shape" says the corpus is the thing to grow,
+and says which shape is missing. The first is a shrug and the second is a
+direction.
+
+A near-miss on the way, worth recording because it nearly became a
+conclusion. The first revert of `rt_maybe_bind` was written from memory as
+`Slot::E(_) | Slot::Seq | Slot::Bind`, where the real pre-#1118 list read
+`Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..)`. The corpus went
+red — on `examples/concurrency.kso`, with `` `+` is not defined for these
+values `` — and for a moment that looked like the answer to the question
+being asked. It was a different bug, invented by a wrong revert. Reading the
+old code out of git rather than out of memory turned the corpus green again
+and put the experiment back.
