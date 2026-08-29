@@ -3035,3 +3035,42 @@ done is the failure this project has caught before. It is really in the book,
 at docs/book/ch04.html, and nothing in it is invalidated: it teaches call-site
 short-circuiting, which is the rule `call_closure` and `k_call1` implement and
 which the gavel did not touch.
+
+## 2026-08-29 — the join hole closes, and the refusal I documented was not the one it gave
+
+DONE. #1116 left a rescue or annotate inside a green-thread group refused on
+the page, with the mechanism written at the site: the interpreter reaches a
+page closure through `call_from_interp`, which goes through `call_closure`,
+where a failure argument comes straight back instead of entering the body. So
+a materialized rescue would run its subject, skip its callback, and answer the
+failure the other two engines catch.
+
+**The mechanism was right and the consequence I wrote was wrong.** I recorded
+that the page refuses, which it did, and never checked what it says. It says
+`error[runtime]: a bound description cannot be used as data here` — `val`'s
+sentence, about using a description as data, when the fault is that this
+engine could not schedule a worded step inside a group. A refusal that names
+the wrong thing is the failure this project has chased through four other
+PRs, and I had put one in on purpose without reading it.
+
+**The fix was smaller than the sizing.** `ForeignCall` is one thread-local
+hook with one implementor, so it takes a flag: `false` is the guarded call
+ordinary application makes, `true` is the decided call the worded steps need.
+`call_decided` gains a `Value::TableFn` arm that passes it. `as_desc`
+materializes both slots. Forty lines, no new machinery.
+
+**And it turned up a second bug, of the family the val sweep found.**
+`rt_maybe_bind` had its own copy of the deferred-shape list written out inline
+where everything else calls `descish`. So `rescue (...) k . print` on the page
+handed `print` the description as data and the page printed `<io>` where the
+other two printed the rescued value. The list is a predicate; a second copy of
+a predicate is a place for it to go stale, and this one did the moment the
+gavel added two shapes. It calls `descish` now.
+
+Both were found by one fixture,
+`tests/golden/micro/a_rescue_inside_a_joined_stage.kso`. It is filesystem-free
+in its OUTPUT rather than in its effects: the arm discards the reason, so a
+page saying it has no filesystem and native saying the file is absent both
+read `rescued`, and all three engines hold one golden with no gap entry. That
+shape is worth reusing — an engine that cannot do a thing can still be held to
+an answer that does not depend on how it fails.
