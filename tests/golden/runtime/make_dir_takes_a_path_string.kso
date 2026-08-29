@@ -1,0 +1,6 @@
+import "std/os"
+
+pub fn opaque x
+  x
+
+pub play = os/make_dir (opaque 7) . (made -> print "{made}")

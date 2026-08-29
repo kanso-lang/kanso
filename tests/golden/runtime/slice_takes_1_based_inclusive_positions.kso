@@ -1,0 +1,8 @@
+import "std/text"
+
+pub fn opaque x
+  x
+
+pub play =
+  part = text/slice "hello" (opaque "a") 2
+  print "{part}"

@@ -264,7 +264,181 @@ c16l = "a module reading a field of its own record, imported"
 
 c16 = kase c16l [c16a c16m] "app" "prints" "3\n"
 
-cases = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
+# The rule `pub` exists for, with nothing else going on: a plain private name
+# reached across a plain import. Every other case here either uses a pub name,
+# stays inside the module, or is the SHADOWED variant below, which is a known
+# defect — so until this arrived the refusal that is the whole point of the
+# visibility system had no passing case on this surface. A mutation that
+# switches the check off went red only through the known-defect ledger, whose
+# entry is meant to be deleted the day the ledger question is settled.
+c17a = filed "dep/dep.kso" """
+  fn secret _
+    41
+
+  pub fn open _
+    1
+"""
+
+c17m = filed "app/main.kso" """
+  import "../dep"
+
+  print "\{dep/secret 0}"
+"""
+
+c17head = "error[opacity]: `secret` is private to module `dep`"
+
+c17said = "{c17head} — only pub names cross an import"
+
+c17l = "a private name reached across an import"
+
+c17 = kase c17l [c17a c17m] "app" "check refuses" c17said
+
+# A module that IS a file, importing the file module beside it. The loader
+# handed `load_dependencies` the module's own path as the base for resolving
+# its imports, and for a file module that path is the FILE — so `./helper`
+# was looked for under `lib.kso/`, which cannot exist, and the refusal said
+# there was no such file beside this module while `helper.kso` sat beside it.
+# A file module could be imported and could never import.
+c18h = filed "helper.kso" """
+  pub fn twice n
+    n * 2
+"""
+
+c18d = filed "lib.kso" """
+  import "./helper"
+
+  pub fn reach n
+    helper/twice n
+"""
+
+c18m = filed "app/main.kso" """
+  import "../lib"
+
+  print "\{lib/reach 3}"
+"""
+
+c18l = "a file module importing the file module beside it"
+
+c18 = kase c18l [c18h c18d c18m] "app" "prints" "6\n"
+
+# Four refusals the loader raises before anything is compiled, and the reason
+# none of them was pinned: the coverage gate keys on `Diagnostic::new(`, and
+# these are written as plain `error:` text and printed. There are thirty-one
+# such sites in src/, and the gate has never been able to see one of them.
+# These four are the module ones, so they belong on this surface: the error
+# corpus compiles one file, and every case here needs a tree.
+c19a = filed "a.kso" "pub play = print \"the file\"\n"
+
+c19b = filed "a/a.kso" "pub play = print \"the directory\"\n"
+
+c19m = filed "main.kso" "import \"./a\"\n\na/play\n"
+
+c19l = "a file module and a directory module with the same name"
+
+c19said = "error: import \"./a\" names both a directory and a `.kso` file"
+
+c19 = kase c19l [c19a c19b c19m] "" "check refuses" c19said
+
+c20a = filed "m/m.kso" """
+  import "./m"
+
+  pub play = print "x"
+"""
+
+c20m = filed "main.kso" "import \"./m\"\n\nm/play\n"
+
+c20l = "a module importing itself"
+
+c20said = "error: import cycle through "
+
+c20 = kase c20l [c20a c20m] "" "check refuses" c20said
+
+c21a = filed "p/p.kso" """
+  import "../q"
+
+  pub fn a _
+    q/b 0
+"""
+
+c21b = filed "q/q.kso" """
+  import "../p"
+
+  pub fn b _
+    1
+"""
+
+c21m = filed "main.kso" "import \"./p\"\n\nprint \"\{p/a 0}\"\n"
+
+c21l = "two modules importing each other"
+
+c21 = kase c21l [c21a c21b c21m] "" "check refuses" c20said
+
+c22m = filed "main.kso" "import \"./nope\"\n\nprint \"x\"\n"
+
+c22l = "an import naming nothing on disk"
+
+c22said = "error: cannot resolve import \"./nope\""
+
+c22 = kase c22l [c22m] "" "check refuses" c22said
+
+# A directory that holds no kanso at all. The loader answers before anything is
+# compiled, and the message is driver text rather than a Diagnostic, so until
+# the coverage scan learned its second opener nothing could see it go missing.
+c23a = filed "husk/README.md" "nothing to compile here\n"
+
+c23m = filed "main.kso" "import \"./husk\"\n\nprint \"x\"\n"
+
+c23l = "a directory with no kanso in it"
+
+c23said = "error: no .kso files in "
+
+c23 = kase c23l [c23a c23m] "" "check refuses" c23said
+
+cases_a = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
+
+cases_b = text/concat cases_a [c17 c18]
+
+# Both arms of the self-import guard. The message was on the excused list as
+# unreachable, written from three tries that each landed somewhere else: a
+# directory importing `./itself` is taken first by the cycle check (c20), a
+# hako member importing its bare name is taken by "a bare path names a hako",
+# and an entry file importing a module beside it is the ordinary case.
+#
+# The reason all three missed: the guard asks `!ENTRY_COMPILE`, and that flag
+# stays true for the whole of an entry compile, dependencies included. So no
+# `kanso run` can reach it. Checking the MODULE ROOT can — the same door
+# `an_empty_branch_is_refused` uses — and both arms answer there.
+c24a = filed "list/a.kso" """
+  import "std/list"
+
+  pub fn twice xs
+    list/to_list (list/map xs (x -> x + x))
+"""
+
+c24l = "a module named for a shipped one, importing it"
+
+c24said = "error: a module cannot import itself — `std/list` is this module"
+
+c24 = kase c24l [c24a] "list" "check refuses" c24said
+
+c25a = filed "mine/a.kso" """
+  import "../mine"
+
+  pub fn f x
+    x + 1
+"""
+
+c25l = "a module reaching itself back through its parent"
+
+c25said = "error: a module cannot import itself — `../mine` resolves to this"
+
+c25 = kase c25l [c25a] "mine" "check refuses" c25said
+
+cases_c = text/concat cases_b [c19 c20 c21 c22]
+
+cases_d = text/concat cases_c [c23]
+
+cases = text/concat cases_d [c24 c25]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written
@@ -292,7 +466,7 @@ w1d = filed "dep/dep.kso" dep_src
 
 w1a = filed "app/main.kso" app_src
 
-w1l = "a module's own pub, shadowed by a dependency's name (task #51)"
+w1l = "a module's own pub, shadowed by a dependency's name (ledger)"
 
 w1said = "an import of `dep` exports `join` too and took the name"
 

@@ -1,11 +1,17 @@
+# wrap_err adds a reason and keeps what it was told, so the endpoint prints
+# both links of the chain.
+#
+# The err it wraps is std/text's, not this module's. Under gavel 24 a package
+# cannot match a failure it raised itself, so wrapping is something you do to
+# somebody else's failure — your own only bubbles, which is the doctrine
+# saying that adding context to your own failure is not a thing you need.
+import "std/text"
+
 type config_bad
   file
 
-type disk_torn
-  path
-
 fn low_read _
-  err (disk_torn "/etc/x")
+  text/utf8 [255]
 
 fn relabel e:err
   wrap_err (config_bad "app.conf") e

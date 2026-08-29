@@ -1,0 +1,21 @@
+# The third handle a keyed read can be given, and the one the fix for the other
+# two nearly broke. `a >> b` over two descriptions is a `Slot::Seq` on the page
+# — not a value, and not a closure either — so routing the check through `val`
+# would answer `a bound description cannot be used as data here` where both
+# native engines name it `<io>`.
+#
+# Its siblings carry a string (which pins the quoting) and a function (which
+# pins the closure arm). This one pins the arm that is neither.
+import "std/io"
+
+pub type point
+  x
+  y
+
+pub fn opaque v
+  v
+
+pub play =
+  d = io/write "a\n" >> io/write "b\n"
+  { x y } = opaque d
+  print "{x} {y}"

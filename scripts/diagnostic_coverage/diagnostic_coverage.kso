@@ -25,6 +25,20 @@ type scan
 
 opener = "Diagnostic::new("
 
+driver_opener = "\"error: "
+
+kinded_opener = "\"error["
+
+native_opener = "k_die(\""
+
+oracle_opener = "message: \""
+
+oracle_format_opener = "message: format!("
+
+page_opener = " die(\""
+
+page_format_opener = " die(format!("
+
 listed_path = "tests/golden/unpinned_diagnostics.txt"
 
 lower = "abcdefghijklmnopqrstuvwxyz"
@@ -194,14 +208,209 @@ fn headed kind group true
 fn told _ ""
   ""
 
+# The head has to be specific enough that finding it in the corpus means
+# finding this message and not another one, which is why there is a floor at
+# all. It sat at twelve and hid three reachable diagnostics: `function `,
+# `constant ` and `the name `, each ten characters with its opening backtick,
+# each raised by a program anybody could write, and none of them pinned. Ten
+# admits four sites. Three were those gaps. The fourth, `no arm of `, was
+# already pinned by literal_arg_type — a true match, not a coincidence — so
+# the widening cost no false pins.
 fn told kind msg
-  worth kind msg (length msg >= 12)
+  worth kind msg (length msg >= 10)
 
 fn worth _ _ false
   ""
 
 fn worth kind msg true
   "{kind}\n{msg}"
+
+# The loader and the driver do not build a Diagnostic. They write `error: …`
+# as plain text, print it, and exit — thirty-one sites in src/, and until this
+# the scan walked past every one of them, so a message a user meets before
+# anything is compiled could be reworded or lost with nothing going red.
+#
+# The chunk after the opener runs to the end of the file, so the literal is cut
+# at its closing quote first and only then handed to `head_of`. An escaped
+# quote truncates the head early, which costs specificity and never invents it.
+fn driver_in src
+  chunks = list/to_list (list/drop (text/split src driver_opener) 1)
+  found = list/to_list (list/map chunks driver_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn driver_site chunk
+  told_driver (head_of (text/split chunk "\"")[1]!)
+
+fn told_driver ""
+  ""
+
+fn told_driver msg
+  worth_driver msg (length msg >= 10)
+
+fn worth_driver _ false
+  ""
+
+fn worth_driver msg true
+  "driver\n{msg}"
+
+# A THIRD way the compiler writes an error, and the one that hid longest.
+# `error[kind]: …` is what a rendered Diagnostic looks like, so a message
+# written that way as plain text reads on a terminal exactly like one the
+# corpus pins — and the scan, keyed on the constructor and then on `error: `,
+# saw neither. Twenty-odd sites: the runtime's endpoints, the stack-depth
+# refusal, the exit-code refusals, the repl's name lookups.
+#
+# `error[` goes back on the front, because the corpus holds what a user sees.
+fn kinded_in src
+  chunks = list/to_list (list/drop (text/split src kinded_opener) 1)
+  found = list/to_list (list/map chunks kinded_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn kinded_site chunk
+  told_kinded (head_of (text/split chunk "\"")[1]!)
+
+fn told_kinded ""
+  ""
+
+fn told_kinded msg
+  worth_kinded "error[{msg}" (length msg >= 10)
+
+fn worth_kinded _ false
+  ""
+
+fn worth_kinded msg true
+  "printed\n{msg}"
+
+# A FOURTH, and the one that hid longest of all: src/runtime.c. `source?`
+# admitted a file only when its last three characters were `.rs`, so the scan
+# has never read the C at all — and the C is where a COMPILED BINARY gets its
+# runtime messages. Sixty-six distinct `k_die` texts, and on 2026-08-27 half of
+# them were pinned by nothing.
+#
+# `k_die("` is the whole key. The declaration is `k_die(const char* msg` and
+# the one runtime-valued call is `k_die(said`, neither of which carries the
+# quote, so both fall out without a rule. The seven `k_die(` in src/*.rs are
+# all `call void @k_die(ptr @{m})` in the emitter, likewise quoteless. Running
+# this extractor over every source is therefore safe, and simpler than teaching
+# read_src which opener belongs to which extension.
+fn native_in src
+  chunks = list/to_list (list/drop (text/split src native_opener) 1)
+  found = list/to_list (list/map chunks native_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn native_site chunk
+  told_native (head_of (text/split chunk "\"")[1]!)
+
+fn told_native ""
+  ""
+
+fn told_native msg
+  worth_native msg (length msg >= 10)
+
+fn worth_native _ false
+  ""
+
+fn worth_native msg true
+  "native\n{msg}"
+
+# A FIFTH, and it is the oracle's own. `src/eval.rs` raises 97 `RuntimeError`s
+# and a `RuntimeError` is a struct literal with a bare `message:` field, which
+# matches none of the four openers above. So the engine the differential law
+# calls the truth could reword any of its refusals with nothing going red.
+#
+# Two openers cover 96 of the 97. `message: "` carries its own opening quote,
+# so the chunk starts inside the literal exactly as the driver's does.
+# `message: format!(` does not: the string may sit on the next line, so the
+# message is the SECOND piece of a split on the quote rather than the first.
+#
+# The 97th is a `message: match (...)` with three arms, and it is the reason
+# there is no third opener: all three of its messages are already pinned —
+# ``.` reads a field of a record, not` by field_non_record, and the other two
+# by over_applied_group — so a key for that shape would buy nothing.
+#
+# Both run over every source, like `k_die("`. `message: "` appears nowhere
+# else in src/. `message: format!(` appears once more, at lib.rs:2169, and that
+# is a real find rather than a false pin: it is the ONE Diagnostic in the tree
+# built as a struct literal instead of through `Diagnostic::new`, so the scan
+# could not see it either. It happens to be pinned twice over, by
+# render_ownership and sub_render_ownership.
+fn oracle_in src
+  chunks = list/to_list (list/drop (text/split src oracle_opener) 1)
+  found = list/to_list (list/map chunks oracle_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn oracle_site chunk
+  told_oracle (head_of (text/split chunk "\"")[1]!)
+
+fn oracle_format_in src
+  chunks = list/to_list (list/drop (text/split src oracle_format_opener) 1)
+  found = list/to_list (list/map chunks oracle_format_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn oracle_format_site chunk
+  quoted (text/split chunk "\"")
+
+fn quoted pieces
+  told_oracle (opening pieces (length pieces < 2))
+
+fn opening _ true
+  ""
+
+fn opening pieces false
+  head_of pieces[2]!
+
+fn told_oracle ""
+  ""
+
+fn told_oracle msg
+  worth_oracle msg (length msg >= 10)
+
+fn worth_oracle _ false
+  ""
+
+fn worth_oracle msg true
+  "runtime\n{msg}"
+
+# A SIXTH, and it is the page's. `src/wasm_rt.rs` refuses through `die(`, in
+# the same two shapes the oracle uses: a plain string and a `format!`. 36 sites
+# spell 24 distinct sentences, and this is the engine a reader meets first —
+# the website's playground runs it.
+#
+# THE LEADING SPACE IS LOAD-BEARING. `k_die("` CONTAINS `die("`, so an opener
+# without it would pull all 78 of native's refusals in under a second kind.
+# Measured rather than assumed: ` die("` is 19 sites in wasm_rt.rs and 0 in
+# runtime.c, ` die(format!(` is 17 and 0, all 36 are preceded by a space, and
+# wasm_rt.rs is the only file in src/ holding either.
+fn page_in src
+  chunks = list/to_list (list/drop (text/split src page_opener) 1)
+  found = list/to_list (list/map chunks page_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn page_site chunk
+  told_page (head_of (text/split chunk "\"")[1]!)
+
+fn page_format_in src
+  chunks = list/to_list (list/drop (text/split src page_format_opener) 1)
+  found = list/to_list (list/map chunks page_format_site)
+  list/to_list (list/reject found (s -> s == ""))
+
+fn page_format_site chunk
+  page_quoted (text/split chunk "\"")
+
+fn page_quoted pieces
+  told_page (opening pieces (length pieces < 2))
+
+fn told_page ""
+  ""
+
+fn told_page msg
+  worth_page msg (length msg >= 10)
+
+fn worth_page _ false
+  ""
+
+fn worth_page msg true
+  "page\n{msg}"
 
 fn raised_in src
   chunks = list/to_list (list/drop (text/split src opener) 1)
@@ -220,11 +429,34 @@ fn fresh acc e true
 fn fresh acc _ false
   acc
 
+# `.c` joins `.rs` here: runtime.c is a source the compiler ships and a user
+# meets, and leaving it out is what hid thirty-three messages.
 fn source? name
-  text/slice name (length name - 2) (length name) == ".rs"
+  text/slice name (length name - 2) (length name) == ".rs" or c_source? name
 
+fn c_source? name
+  text/slice name (length name - 1) (length name) == ".c"
+
+# TWO CHANGES THAT DO NOTHING APART AND SOMETHING TOGETHER. `integer overflow`
+# and `main is not an io` are each pinned exactly — a whole diagnostic, alone in
+# its file, in a book sample the CI job executes and diffs. The excuse list said
+# the barrier was the extension. It was the extension AND the directory, and
+# each was measured alone before both went in: admitting `.out` while the walk
+# still started at tests/golden pinned nothing, because the 153 `.out` files
+# there hold program stdout rather than diagnostics; walking docs/book/samples
+# while `pinned_file?` still took `.stderr` pinned nothing either, because the
+# samples write theirs to `.out`. Both together pin exactly those two, and no
+# third.
+#
+# The worry on record was that admitting `.out` would drag in every micro
+# golden. It does, and that costs nothing: those files are what a program
+# PRINTS, and a printed line that happens to read as a diagnostic would have to
+# match ten characters of one exactly.
 fn pinned_file? name
-  text/slice name (length name - 6) (length name) == ".stderr"
+  text/slice name (length name - 6) (length name) == ".stderr" or out_file? name
+
+fn out_file? name
+  text/slice name (length name - 3) (length name) == ".out"
 
 fn kind_of pair
   (text/split pair "\n")[1]!
@@ -259,15 +491,50 @@ fn read_src name true rest found
   os/read_file "src/{name}" . (src -> more_sources rest found src)
 
 fn more_sources rest found src
-  over_sources rest (text/concat found (raised_in src))
+  plain = text/concat (driver_in src) (kinded_in src)
+  spoken = text/concat (native_in src) plain
+  oracle = text/concat (oracle_in src) (oracle_format_in src)
+  shown = text/concat (page_in src) (page_format_in src)
+  heard = text/concat oracle (text/concat shown spoken)
+  both = text/concat (raised_in src) heard
+  over_sources rest (text/concat found both)
 
 fn gathered found
   every = deduped (list/to_list (list/sort found))
-  corpus_of "tests/golden" [] . (parts -> with_tests every parts)
+  corpus_of "tests/golden" [] . (parts -> with_samples every parts)
+
+# The book's samples are a corpus too: every panel is executed and its output
+# diffed by the book-samples job, so a diagnostic pinned there is pinned as
+# hard as one in tests/golden.
+fn with_samples every parts
+  corpus_of "docs/book/samples" parts . (grown -> with_tests every grown)
+
+# TWO corpora, because the two openers are pinned in different places and a
+# substring search cannot tell an assertion from a mention.
+#
+# A Diagnostic's text is pinned by a .stderr file or, for the handful a corpus
+# of programs cannot express, by a Rust test — so tests/*.rs belongs in its
+# corpus. For the driver's messages that same file set is mostly noise: of the
+# six that read as pinned there, four were false, and every one of the four
+# came from tests/*.rs. `no .kso files in` matched tests/golden.rs's own
+# `assert!` message, `clang failed on` a doc comment, `cannot write` the
+# oracle's unrelated refusal, `cannot execute` a panic the wasm spec writes for
+# itself. None of those checks a compiler message; all four read as coverage.
+#
+# So the driver corpus is .stderr plus module_differential, which is where a
+# module refusal is legitimately pinned — it needs a tree on disk, which the
+# error corpus cannot express. A driver message pinned only by a Rust test goes
+# on the excused list naming that test, the way `an_empty_branch_is_refused.rs`
+# already is.
+module_pins = "scripts/module_differential/module_differential.kso"
 
 fn with_tests every parts
-  os/list_dir "tests" . (names -> test_sources (list/to_list names) parts)
-    . (all -> with_corpus every (text/join all ""))
+  os/list_dir "tests" . (names -> test_sources (list/to_list names) [])
+    . (rs -> with_module every (text/join parts "") (text/join rs ""))
+
+fn with_module every stderrs rs
+  wide = "{stderrs}{rs}"
+  os/read_file module_pins . (m -> with_corpus every wide "{stderrs}{m}")
 
 fn test_sources names parts
   onward_test names parts (length names == 0)
@@ -312,8 +579,9 @@ fn take_stderr _ false dir rest parts
 fn take_stderr here true dir rest parts
   os/read_file here . (t -> in_dir dir rest (push parts t))
 
-fn with_corpus every corpus
-  os/read_file listed_path . (t -> judged every corpus (allowances t))
+fn with_corpus every corpus driver_corpus
+  os/read_file listed_path
+    . (t -> judged every corpus driver_corpus (allowances t))
 
 fn allowances t
   lines = list/to_list (list/map (text/split t "\n") squeezed)
@@ -323,15 +591,32 @@ fn allowances t
 fn in_corpus? corpus msg
   length (text/split corpus msg) > 1
 
-fn judged every corpus excused
-  pinned = list/to_list (list/select every (e -> known? corpus e))
-  loose = list/to_list (list/reject every (e -> known? corpus e))
+fn judged every corpus driver_corpus excused
+  seen = (e -> known? corpus driver_corpus e)
+  pinned = list/to_list (list/select every seen)
+  loose = list/to_list (list/reject every seen)
   healed = list/to_list (list/select pinned (e -> listed? excused e))
   missing = list/to_list (list/reject loose (e -> listed? excused e))
   reported every excused missing healed
 
-fn known? corpus e
-  in_corpus? corpus (message_of e)
+fn known? corpus driver_corpus e
+  which = looked_in corpus driver_corpus (kind_of e)
+  in_corpus? which (message_of e)
+
+fn looked_in _ driver_corpus "driver"
+  driver_corpus
+
+# The printed family reads the WIDE corpus, where the driver's does not, and
+# the difference is measured rather than assumed. The driver's four false pins
+# were short generic phrases — `cannot write`, `cannot execute` — that a Rust
+# test can hold for a hundred unrelated reasons. An `error[kind]: …` string is
+# the RENDERED form of a diagnostic, so a test holding one is asserting output.
+# All three that matched here were checked by hand and all three were true.
+fn looked_in corpus _ "printed"
+  corpus
+
+fn looked_in corpus _ _
+  corpus
 
 fn listed? excused e
   list/any? excused (l -> l == message_of e)

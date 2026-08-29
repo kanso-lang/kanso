@@ -395,18 +395,17 @@ zero non-positive</code></pre>
 
 <h3 id="b-wrap_err"><code>wrap_err</code></h3>
 <p class="builtin-sig"><code>wrap_err reason err → err</code></p>
-<p>a new <code>err</code> carrying your reason, with the one it wraps kept as its <em>cause</em>. this is the only place an <code>err</code> is an ordinary argument instead of something that propagates: everywhere else, handing an <code>err</code> to anything yields that <code>err</code> unchanged, which is why <code>err e</code> cannot wrap and this function exists. the endpoint report prints the chain, each link keeping its own birthplace, so re-raising under a name of your own never loses where the trouble started:</p>
+<p>a new <code>err</code> carrying your reason, with the one it wraps kept as its <em>cause</em>. this is the only place an <code>err</code> is an ordinary argument instead of something that propagates: everywhere else, handing an <code>err</code> to anything yields that <code>err</code> unchanged, which is why <code>err e</code> cannot wrap and this function exists. the endpoint report prints the chain, each link keeping its own birthplace, so re-raising under a name of your own never loses where the trouble started. the err it wraps is <code>std/text</code>'s here, and it has to be somebody else's: an arm cannot see an err its own hako raised, so wrapping is what you do to a failure that reached you from elsewhere &mdash; your own only bubble:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">wrap_err.kso</div>
-  <pre><code><span class="k">type</span> config_bad
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">type</span> config_bad
   <span class="f">file</span>
 
-<span class="k">type</span> disk_torn
-  <span class="f">path</span>
-
 <span class="k">fn</span> <span class="f">low_read</span> _
-  <span class="f">err</span> (<span class="f">disk_torn</span> <span class="s">"/etc/x"</span>)
+  <span class="f">text/utf8</span> [<span class="n">255</span>]
 
 <span class="k">fn</span> <span class="f">relabel</span> e:err
   <span class="f">wrap_err</span> (<span class="f">config_bad</span> <span class="s">"app.conf"</span>) e
@@ -415,9 +414,9 @@ zero non-positive</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run wrap_err.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: config_bad "app.conf"
-  born in relabel at wrap_err.kso:11
-  caused by: disk_torn "/etc/x"
-  born in low_read at wrap_err.kso:8</code></pre>
+  born in relabel at wrap_err.kso:10
+  caused by: "invalid utf-8"
+  born in text/utf8 at std/text/text.kso:92</code></pre>
   </div>
 </div>
 

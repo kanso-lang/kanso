@@ -1,0 +1,23 @@
+# An effect written inside a `build` body, on any line but the last, used to
+# vanish. `build` is a statement with no value — what it built is in scope
+# after it — so its body is for construction, and a bare effect line there is
+# a description nobody joined. That is exactly what this diagnostic exists to
+# say, and until the check was added to the walker that handles `build` and
+# block bodies, nothing said it: three `io/write` lines in a build ran the
+# last one and lost the other two, in silence, on both engines.
+#
+# The outer walk had the rule all along. `reject_never_effect` in the parser
+# refuses a non-final literal, list, map, lambda or binary operation, and the
+# lexer folds consecutive expression lines into one group — so at the top
+# level the case cannot arise, which is what the excused-diagnostics list
+# concluded. It read one walker of two.
+import "std/io"
+
+type node
+  next
+
+build
+  n = node none
+  io/write "a\n"
+  io/write "b\n"
+  io/write "n={n.next}\n"

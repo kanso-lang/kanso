@@ -45,5 +45,163 @@
 # A figure quoted elsewhere from a plain `kanso check lib/json` in a checkout
 # will differ slightly from this row, and should. This one is measured in the
 # box with the environment emptied; that one is not.
+#
+# WHAT IS COMPILED, from 2026-08-26: the library staged WITHOUT its test file.
+# `kanso check lib/json` compiles lib/json's TEST file too, so every dependency
+# the suite imports was entering the program this row measures — and a row that
+# moves when a test file changes its imports answers a question nobody asked.
+# scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
+# welfare rebuild: the library's compile golden measures the library.
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
-compile_instructions=59717892
+#
+# 2026-08-26: 56,849,156 -> 57,490,077, a rise of 640,921 (1.13%). The
+# own-origin rule is dispatch semantics, so the front end now carries a
+# package name on every raise site and asks, at every arm that could match its
+# own hako's err, whether it may. Some of the rise is that work and some is
+# layout: `src/runtime.c` is `include_str!`'d into the compiler and grew, and
+# the entry above this one records the same edit measuring +664, +393 and
+# -6,763 on three sittings of one diff. The two are not separable from this
+# row alone. What is separable is the direction of the counters that do only
+# measure the front end's work, and all three of those FELL: visits 16,818 to
+# 16,806, allocations 62,110 to 61,981, peak 825,664 to 822,004, because the
+# pub self-seed went and `lib/json` shed `must` and `defect`.
+#
+# 2026-08-27: 57,492,931 -> 57,493,961, a rise of 1,030 (0.0018%). A file
+# module could be imported and could never import: `load_dependencies` was
+# handed the module's own path as the base for resolving its imports, and for
+# a file module that path is the FILE, so `./sibling` was looked for under
+# `a.kso/`. The fix asks `dir.is_file()` once per module load, and this row is
+# the handful of stat calls that costs. The counters that measure only the
+# front end's work do not move at all: allocations 61,981 and peak 822,004,
+# both identical.
+#
+# 2026-08-27: 57,493,961 -> 57,486,466, a fall of 7,495 (0.013%), banked.
+# `check_unused_private` is deleted. Its two loops walked every declared
+# function and every declared type asking whether the name begins with an
+# underscore, which the lexer has refused since leading underscores were
+# retired — so the walk ran on every compile and could never answer yes. What
+# went away is the walk. The counters that measure only the front end's work do
+# not move: allocations 61,981 and peak 822,004, both identical, which is what
+# a deletion of work that allocates nothing should read as.
+#
+# 2026-08-27: 57,486,466 -> 57,486,215, a fall of 251 (0.0004%), banked. The
+# change is two match arms in `call_builtin` for `args` and `stdin`, and
+# `call_builtin` is the INTERPRETER's door — `kanso check lib/json` never
+# enters it. So this is layout, not front-end work, the same way the +167 of
+# 2026-08-26 was: the compiler's own binary moved under an edit to a function
+# the measured path does not call. The counters that measure only the front
+# end's work are identical: allocations 61,981 and peak 822,004. A fall this
+# small with an untouched call graph is banked as layout and claimed as
+# nothing else.
+#
+# 2026-08-27: 57,486,215 -> 57,488,169, a rise of 1,954 (0.0034%). Layout, and
+# provably so this time rather than by resemblance. The change is one match on
+# `std::io::ErrorKind` inside `read_file_text`, and `read_file_text` has
+# exactly one caller: the executor's `read_file`, an EFFECT. `kanso check
+# lib/json` compiles a library and runs no program, so it cannot reach that
+# function at all. The counters that do measure the front end's work are
+# identical — allocations 61,981 and peak 822,004 — and the profile's own rows
+# moved the way layout moves them: `__memcmp_avx2_movbe` fell 327 while the
+# total rose. Third movement of this vein in two days with an untouched call
+# graph: +167, -251, +1,954.
+#
+# 2026-08-27: 57,488,169 -> 57,489,912, a rise of 1,743 (0.003%). REAL WORK,
+# and the first of today's four moves that is. The other three were layout —
+# each edited a function `kanso check lib/json` cannot reach — and the reflex
+# by the fourth was to reach for the same reading. It does not hold here.
+# `resolve_expr`'s walk over block and build bodies runs on every compile, and
+# it gained an `enumerate` and one index comparison per statement, which is
+# what these instructions are.
+#
+# What they buy: an effect line written in a `build` body used to be neither
+# run nor complained about. Three `io/write` lines ran the last and lost the
+# other two, in silence, on both engines. That walk had no unused-expression
+# check at all. Allocations and peak do not move (61,981 and 822,004) because
+# an index comparison allocates nothing, so the counters agreeing here is
+# evidence about the SHAPE of the work rather than evidence that there is none.
+#
+# 2026-08-27: 57,489,912 -> 57,489,753, a fall of 159 (0.0003%), banked. The
+# change is `deliberate_exit` moving from src/main.rs to src/eval.rs, and two
+# guards added to the page's endpoint in src/wasm_rt.rs. `kanso check
+# lib/json` compiles a library and runs no program, so it reaches none of the
+# three: main.rs is the driver's endpoint, wasm_rt.rs is the page's, and eval
+# only holds the function now — nothing on the measured path calls it. Layout,
+# by the same argument as the -251 and the +1,954 above, and the counters that
+# do measure the front end's work are identical: allocations 61,981 and peak
+# 822,004. Fifth movement of this vein in two days with an untouched call
+# graph: +167, -251, +1,954, and now -159. That count is what the pending
+# question about instructions-only attributions is about; a FALL costs nothing
+# to bank, so it is banked and nothing is claimed for it.
+#
+# 2026-08-27: 57,489,753 -> 57,571,608, a rise of 81,855 (0.14%). LAYOUT, and
+# the prediction that it would be work was wrong in a way worth recording.
+#
+# `never_describes` refuses a bare name at a wall now, which needs to know what
+# the declaration binds. The first shape collected that for EVERY declaration
+# and was work here: +537 allocations, +658,839 instructions, welfare 0.06
+# under its floor. The set is built on the first `Seq` the walk meets now, and
+# lib/json — the library this row measures — contains no `>>` at all. Zero. So
+# `never_describes` is never called on the measured path, the set is never
+# built, and none of the new code runs. What moved is the binary around it.
+#
+# THE VEIN CANNOT SEE THIS FEATURE'S COST, and that is the honest thing to say
+# rather than that the feature is free. A program that sequences effects pays
+# one set per wall-bearing declaration; `kanso check lib/json` compiles a pure
+# library and never asks. The counters that would show the work — allocations
+# at 61,981, peak at 822,004, visits at 16,806 — are identical for the same
+# reason, so their agreement here is evidence of unreachability rather than of
+# thrift.
+#
+# Sixth movement of this vein in two days from an untouched measured path:
+# +167, -251, +1,954, -159, and now +81,855. This one is larger than the rest
+# because the function it lives in was restructured rather than nudged.
+#
+# 2026-08-27 (sockets): 57,571,608 -> 57,568,244, a FALL of 3,364. The socket
+# executor in eval.rs stopped interpolating its handle — five `format!("{conn}
+# is not a connection")` became `"that is not a connection".to_string()` — so
+# the formatting machinery those calls pulled in is no longer in the binary.
+# `kanso check lib/json` opens no sockets and runs none of that code; what
+# moved is the binary around the measured path, the same way the +81,855 above
+# did, and in the same direction the deleted code went. Measured on the runner
+# and copied out of the job log, which is the only place this vein may be read.
+#
+# 2026-08-27 (destructure): 57,568,244 -> 57,568,390, a rise of 146. The
+# measured path is untouched: `kanso check lib/json` compiles a library and
+# never emits, so codegen.rs's changed call site and wasm_backend.rs's do not
+# run. What grew is the binary around it — src/runtime.c is embedded whole by
+# `include_str!` at main.rs:722 and gained a function, and src/wasm_rt.rs is an
+# unconditional `pub mod` that gained one too.
+#
+# ONE MECHANISM WAS RULED OUT RATHER THAN ASSUMED. main.rs:855 hashes the
+# embedded runtime.c, and hashing a longer file would be a real cost the check
+# path pays — but that hash lives in `cached_program_binary`, called only from
+# the RUN path at main.rs:810. `check` never reaches it. So this is layout,
+# like the +167, -251, +1,954, -159, +81,855 and -3,364 before it, and not the
+# hash it might plausibly have been.
+#
+# 2026-08-27 (the two verbs): 57,568,471 -> 57,571,389, a rise of 2,918
+# (0.005%). LAYOUT, and this one comes with the measurement the earlier
+# entries could only argue for.
+#
+# The change is two diagnostic strings and one new function, `exports_play`.
+# That function cannot run on the measured path, and the reason is the match
+# arm ORDER rather than a claim about what a library does: `("check", true)`
+# is the FIRST arm of `compile_source`'s match, so `kanso check lib/json`
+# returns from it and never evaluates the guard the new function sits in.
+#
+# MEASURED ON TWO HOSTS, WHICH DISAGREE ON THE SIGN. The same diff against the
+# same base, in the container rather than on the runner:
+#
+#   the runner      57,568,471 -> 57,571,389    +2,918
+#   the container   58,162,797 -> 58,162,145      -652
+#
+# The absolute figures differ because the hosts do (this file's own rule says
+# so). What the pair settles is the direction: a change that added work would
+# add it on both. `__memcmp_avx2_movbe` moved 639 of the runner's 2,918, which
+# is the term that tracked the layout moves of 2026-08-27 above.
+#
+# This is the strongest evidence any entry in this file has for a layout
+# attribution. The +167, -251, +1,954, -159, +81,855, -3,364 and +146 above
+# each argued unreachability from the call graph and left the sign
+# unexplained; this one has the sign measured twice and coming out opposite.
+compile_instructions=57571389

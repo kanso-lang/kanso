@@ -265,8 +265,16 @@ fn driven() -> ExitCode {
         let inference = kanso::infer::infer(&program);
         if std::env::var_os("KANSO_NO_PROV").is_none() {
             let prov = kanso::provenance::analyze(&program);
-            for advisory in kanso::provenance::violations(&program, &prov, &inference.returns) {
-                eprintln!("{advisory}");
+            // "It was never advisory" — Clay, 2026-08-25. Gavel 24 is dispatch
+            // semantics now, so an arm written for its own hako's err is dead
+            // code, and dead code that looks like error handling is worth
+            // refusing rather than mentioning.
+            let refusals = kanso::provenance::violations(&program, &prov, &inference.returns);
+            if !refusals.is_empty() {
+                for refusal in &refusals {
+                    eprintln!("{refusal}");
+                }
+                return ExitCode::from(1);
             }
         }
         if std::env::var_os("KANSO_COUNTERS").is_some() {
@@ -389,8 +397,8 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
         eval::Value::Desc(desc) => {
             let mut executor = eval::RealExecutor { program_args: args, rng: eval::Rng::seeded() };
             match interp.execute(&desc, &mut executor) {
-                Ok(eval::Value::ErrV(info)) if deliberate_exit(&info.reason).is_some() => {
-                    ExitCode::from(deliberate_exit(&info.reason).unwrap_or(1))
+                Ok(eval::Value::ErrV(info)) if eval::deliberate_exit(&info.reason).is_some() => {
+                    ExitCode::from(eval::deliberate_exit(&info.reason).unwrap_or(1))
                 }
                 Ok(eval::Value::ErrV(info)) => {
                     eprint!(
@@ -407,8 +415,8 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
                 }
             }
         }
-        eval::Value::ErrV(info) if deliberate_exit(&info.reason).is_some() => {
-            ExitCode::from(deliberate_exit(&info.reason).unwrap_or(1))
+        eval::Value::ErrV(info) if eval::deliberate_exit(&info.reason).is_some() => {
+            ExitCode::from(eval::deliberate_exit(&info.reason).unwrap_or(1))
         }
         eval::Value::ErrV(info) => {
             eprint!(
@@ -507,25 +515,6 @@ fn repl() -> ExitCode {
 fn opens_block(line: &str) -> bool {
     let head = line.strip_prefix("pub ").unwrap_or(line);
     head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
-}
-
-/// A deliberate exit is an err whose reason is `os/exit_status`. The endpoint
-/// reads its code rather than reporting it, because the program did not fail
-/// to say what it meant — it said it.
-fn deliberate_exit(reason: &eval::Value) -> Option<u8> {
-    let eval::Value::Record { ty, fields } = reason else { return None };
-    // the type spells its module chain at whatever depth the import graph
-    // qualified it: os/exit_status directly, hako/os/exit_status one hop in
-    if !(ty.as_ref() == "os/exit_status" || ty.ends_with("/os/exit_status")) {
-        return None;
-    }
-    match fields.borrow().first() {
-        Some(eval::Value::Int(code)) => Some(u8::try_from(code.clone()).unwrap_or(1)),
-        // an exit_status carrying something that is not a status is not a
-        // program saying what it meant — it is one that went wrong computing
-        // the code, and the reader is owed that rather than a silent 1
-        _ => None,
-    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

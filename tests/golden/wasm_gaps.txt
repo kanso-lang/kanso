@@ -11,20 +11,48 @@
 # A page has no filesystem, so a program that lists a directory cannot run
 # there. The capability is missing, not the agreement: `exists` still answers
 # (false, for everything), and every other engine matches.
-tests/golden/micro/dir_listing_is_sorted.kso	the playground has no filesystem
+tests/golden/micro/dir_listing_is_sorted.kso	the playground has no filesystem: cannot list listing
 
 # A tab cannot start a process, so a program that runs one cannot run there.
 # The capability is missing, not the agreement — the playground says so by
 # name, which is what the differential law asks of an engine that declines.
-tests/golden/micro/a_command_that_answers_127.kso	the playground cannot start processes
-tests/golden/micro/process_run.kso	the playground cannot start processes
-tests/golden/runtime/run_cannot_start.kso	the playground cannot start processes
+tests/golden/micro/a_command_that_answers_127.kso	the playground cannot start processes: cannot run sh
+tests/golden/micro/process_run.kso	the playground cannot start processes: cannot run printf
+tests/golden/runtime/run_cannot_start.kso	the playground cannot start processes: cannot run kanso_no_such_binary
 
 # The same missing filesystem, on the read side: a page cannot open a file to
 # find it absent, so it says why rather than reporting the absence.
-tests/golden/runtime/read_missing_file.kso	the playground has no filesystem
+tests/golden/runtime/read_missing_file.kso	the playground has no filesystem: cannot read /no/such/file
 
 # `is_dir` reads false in a page for the same reason `exists` does — there is
 # no filesystem to ask — so the golden's first answer differs there.
 tests/golden/micro/is_dir.kso	false
-tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
+tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem: cannot make .
+
+# A page has no stdin to read, so a program that reads one cannot run there.
+# Native and the interpreter both answer zero bytes when nothing is piped in,
+# which is what this program pins on those two.
+#
+# The refusal below is what the playground has always MEANT to say — src/wasm.rs
+# and src/wasm_rt.rs have each carried `Err("the playground has no stdin")`
+# since they were written — and until the two arms landed in `call_builtin` it
+# could not be reached, because the engine stopped short at `unknown builtin`
+# and reported a missing BUILTIN where the other declined capabilities report a
+# missing capability. This line now records the capability refusal, which puts
+# stdin in the same family as "the playground has no filesystem" above.
+tests/golden/micro/stdin_reads_what_it_is_given.kso	the playground has no stdin
+
+# A page has no clock the differential could agree on, so it reads zero. That
+# is DESIGNED, and said so in a comment in both engines since they were
+# written — it is here because saying it in a comment is not the same as
+# having a program that shows it, and until now no program in any corpus read
+# the clock at all. Native is past the epoch; a page is not.
+#
+# `now` is declared `pub now = builtin_now`, the same shape as `args` and
+# `stdin`, and it was the only one of the three `call_builtin` knew — so it
+# reached the executor while the other two stopped at `unknown builtin`. That
+# was a coincidence of coverage rather than a design, and it is the reason the
+# first reading of this, "every zero-argument builtin is broken on wasm", was
+# wrong. All three reach the executor now; this one still answers zero because
+# a page genuinely has no clock.
+tests/golden/micro/the_clock_answers_something.kso	the clock is past the epoch: false

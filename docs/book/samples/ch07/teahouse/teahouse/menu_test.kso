@@ -1,11 +1,7 @@
-fn err? (err _)
-  true
-
-fn err? _
-  false
+import "std/testing"
 
 test_base_price_raw = base_price "dango" == 350
 
 test_dango_price = price "dango" == 400
 
-test_unknown_item_fails = err? (price "pocky")
+test_unknown_item_fails = testing/failed? (price "pocky")

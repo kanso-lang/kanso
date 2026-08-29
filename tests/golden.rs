@@ -361,6 +361,23 @@ fn micro_corpus_agrees_across_engines() {
         };
         covered += 1;
 
+        // A program's stderr is part of what it does, and only `.out` was
+        // read here. `io/write_err`'s success case was therefore pinned on
+        // no engine: the wasm walk compares the two streams CONCATENATED
+        // against native, which proves the three engines AGREE and stays
+        // green if all three drop the write together. The failure case had
+        // a golden the whole time, in the runtime corpus — the same shape
+        // as `os/exit`, whose success case was also missing.
+        //
+        // No `.err` beside a program means it must say nothing on that
+        // stream. That is the assertion for 135 of the 136; the one that
+        // speaks carries a golden saying exactly what.
+        let err_golden = program.with_extension("err");
+        let expected_err = match err_golden.exists() {
+            true => std::fs::read_to_string(&err_golden).expect("the stderr golden reads"),
+            false => String::new(),
+        };
+
         for extra in [&[][..], &["--interp"][..]] {
             let output = run_kanso_as_library(&program, extra, &[]);
 
@@ -368,6 +385,11 @@ fn micro_corpus_agrees_across_engines() {
                 String::from_utf8_lossy(&output.stdout),
                 expected_out,
                 "{name} answers differently as a library (extra {extra:?})"
+            );
+            assert_eq!(
+                String::from_utf8_lossy(&output.stderr),
+                expected_err,
+                "{name} says something different on stderr (extra {extra:?})"
             );
             assert_eq!(
                 output.status.code(),
@@ -438,11 +460,25 @@ fn micro_corpus_survives_a_release_build() {
             String::from_utf8_lossy(&built.stderr)
         );
 
+        let err_golden = program.with_extension("err");
+        let expected_err = match err_golden.exists() {
+            true => std::fs::read_to_string(&err_golden).expect("the stderr golden reads"),
+            false => String::new(),
+        };
+
         let ran = Command::new(stage.join(&entry)).current_dir(&stage).output().expect("it runs");
         assert_eq!(
             String::from_utf8_lossy(&ran.stdout),
             expected_out,
             "{name} answers differently when release-built"
+        );
+        // The compiled binary is a fourth writer of these bytes, and the
+        // stream it writes them to is as much a fact about the program as
+        // the bytes themselves.
+        assert_eq!(
+            String::from_utf8_lossy(&ran.stderr),
+            expected_err,
+            "{name} says something different on stderr when release-built"
         );
         assert_eq!(ran.status.code(), Some(0), "{name} exits 0 when release-built");
         let _ = std::fs::remove_dir_all(&stage);

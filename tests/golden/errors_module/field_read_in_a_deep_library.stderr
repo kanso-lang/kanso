@@ -1,1 +1,1 @@
-error[name]: no record type has a field `nosuchfield` (module tests/golden/errors_module/field_read_in_a_deep_library/mid/../deep)
+error[name]: no record type has a field `nosuchfield` (module tests/golden/errors_module/field_read_in_a_deep_library/deep)

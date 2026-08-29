@@ -182,6 +182,7 @@ declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
+declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
@@ -193,6 +194,7 @@ declare void @k_no_field(%KValue, ptr)
 declare %KValue @k_field_forced(%KValue, ptr)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare i64 @k_check_some(%KValue)
+declare i64 @k_not_own_err(%KValue, ptr)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -212,6 +214,7 @@ declare %KValue @k_seq(%KValue, %KValue)
 declare void @k_die(ptr) noreturn
 declare void @k_die_arity(i64, i64) noreturn
 declare void @k_die_overload(ptr) noreturn
+declare void @k_die_destructure(%KValue, ptr) noreturn
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
@@ -623,6 +626,10 @@ struct FnEmit {
     /// wearing an unqualified name, which the cohort license must not read
     /// as user code.
     synthetic: bool,
+    /// The package this arm belongs to. An arm cannot see an err its own
+    /// package raised, and this is the side of that comparison the compiler
+    /// knows; the err carries the other.
+    hako: String,
     /// Registers of releasable lazy cells born in this body; every return
     /// path releases each unless the result aliases it.
     lazy_cells: Vec<String>,
@@ -639,6 +646,7 @@ impl FnEmit {
             sets: HashMap::default(),
             parsed: crate::hash::Map::default(),
             origin_prefix: String::new(),
+            hako: String::new(),
             file: String::new(),
             ret_ty: "%KValue".to_string(),
             group: String::new(),
@@ -1276,6 +1284,8 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let mut f = FnEmit::new();
         f.origin_prefix = outer.origin_prefix.clone();
+        f.hako = outer.hako.clone();
+        f.hako = outer.hako.clone();
         f.file = outer.file.clone();
         f.start_block("entry");
         for (i, cap) in captures.iter().enumerate() {
@@ -1573,6 +1583,26 @@ impl<'a> Backend<'a> {
         Ok(narrow_tailcc(out))
     }
 
+    /// Can a value matching this annotation be an err? Only then is the
+    /// own-origin guard worth emitting — every other pattern cannot see a
+    /// failure in the first place, so the check would be a call per match on
+    /// a hot path to learn nothing.
+    fn admits_err(&self, ty: &str) -> bool {
+        if ty == "err" {
+            return true;
+        }
+        match self.typesets.get(ty) {
+            Some(members) => members.iter().any(|m| m != ty && self.admits_err(m)),
+            None => false,
+        }
+    }
+
+    /// The arm's package as an interned literal, for `k_not_own_err`.
+    fn arm_hako(&mut self, f: &FnEmit) -> String {
+        let (name, _) = self.intern(&format!("{}\0", f.hako));
+        name
+    }
+
     fn intern(&mut self, text: &str) -> (String, usize) {
         let bytes = text.as_bytes().to_vec();
         let len = bytes.len();
@@ -1594,9 +1624,13 @@ impl<'a> Backend<'a> {
         t
     }
 
-    /// The interned origin literal for an err construction site.
+    /// The interned literal for an err construction site: the package that
+    /// raises here, then the trace line, each NUL-terminated. The runtime
+    /// reads the first for the match rule and the second for the report —
+    /// one argument instead of a second threaded through nineteen runtime
+    /// signatures to carry a package name.
     fn origin_arg(&mut self, f: &FnEmit, span: Span) -> String {
-        let (name, _) = self.intern(&format!("{}:{}\0", f.origin_prefix, span.line));
+        let (name, _) = self.intern(&format!("{}\0{}:{}\0", f.hako, f.origin_prefix, span.line));
         format!("ptr @{name}")
     }
 
@@ -1847,6 +1881,7 @@ impl<'a> Backend<'a> {
             f.start_block(&arm_labels[k]);
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
+            f.hako = crate::provenance::package_of(&decl.file).to_string();
             f.file = decl.file.clone();
             f.synthetic = decl.synthetic;
             for (i, pattern) in decl.params.iter().enumerate() {
@@ -1882,6 +1917,11 @@ impl<'a> Backend<'a> {
             "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
             "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
             "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
+            // `some` is any value that is not none, and a failure is not a
+            // value: without this arm the backend refused the annotation
+            // outright, where the interpreter took it and the checker had
+            // already passed the program.
+            "some" => format!("call i64 @k_check_some(%KValue {value})"),
             other => match self.type_ids.get(other) {
                 Some(id) if self.sub_parents.contains_key(other) => {
                     format!("call i64 @k_check_sub_id(%KValue {value}, i64 {id})")
@@ -2048,6 +2088,7 @@ impl<'a> Backend<'a> {
             f.lazy_cells.truncate(cells_before);
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
+            f.hako = crate::provenance::package_of(&decl.file).to_string();
             f.file = decl.file.clone();
             f.synthetic = decl.synthetic;
             for (i, pattern) in decl.params.iter().enumerate() {
@@ -2262,12 +2303,14 @@ impl<'a> Backend<'a> {
     /// `%parsed`. The two words hold `(value.tag | pos << 8, value.payload)` — a
     /// non-failure value's tag never collides with the failure tags 4/5, so the
     /// low byte of word 0 still tells success from failure. A failing field
-    /// propagates exactly as `k_rec` would have.
+    /// propagates exactly as `k_rec` would have — which means BOTH fields are
+    /// evaluated and two failures merge, the way two failing operands of an
+    /// operator do. Bailing on the first one skipped the second field
+    /// entirely and handed back one reason where the oracle carried two.
     fn emit_parsed_construction(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<(), String> {
         let pos = self.emit_expr(f, &args[0])?;
-        self.bail_on_failure(f, &pos);
         let value = self.emit_expr(f, &args[1])?;
-        self.bail_on_failure(f, &value);
+        self.bail_on_pair_failure(f, &pos, &value);
         let pos_payload = f.tmp();
         f.line(&format!("{pos_payload} = extractvalue %KValue {pos}, 1"));
         let shifted = f.tmp();
@@ -2284,6 +2327,25 @@ impl<'a> Backend<'a> {
         f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
         f.line(&format!("ret %parsed {p}"));
         Ok(())
+    }
+
+    /// If either field failed, return the merge of them in the current ABI
+    /// shape; otherwise fall through with both known good.
+    fn bail_on_pair_failure(&self, f: &mut FnEmit, left: &str, right: &str) {
+        let ok_left = inline_not_failure(f, left);
+        let ok_right = inline_not_failure(f, right);
+        let both = f.tmp();
+        f.line(&format!("{both} = and i1 {ok_left}, {ok_right}"));
+        let cont = f.label();
+        let bail = f.label();
+        f.line(&format!("br i1 {both}, label %{cont}, label %{bail}"));
+        f.start_block(&bail);
+        let merged = f.tmp();
+        f.line(&format!(
+            "{merged} = call %KValue @k_pair_failure(%KValue {left}, %KValue {right})"
+        ));
+        self.emit_ret(f, &merged);
+        f.start_block(&cont);
     }
 
     /// If `value` is a failure, return it in the current ABI shape; otherwise
@@ -2368,10 +2430,34 @@ impl<'a> Backend<'a> {
                 f.bind(name, value);
                 f.record(value, known & !FAIL);
             }
-            Pattern::Annotated { name, ty, .. } if self.typesets.contains_key(ty) => {
+            Pattern::Annotated { name, ty, .. } => {
+                if ty.ends_with("[]") {
+                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 9)"));
+                    f.bind(name, value);
+                    return Ok(());
+                }
+                if ty.contains('[') {
+                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 10)"));
+                    f.bind(name, value);
+                    return Ok(());
+                }
+                // One arm for every annotation, typeset or not, because two
+                // arms for one pattern kind is how the guard below went
+                // missing: the typeset arm returned before reaching it, so a
+                // typeset naming err let a package rescue its own failure on
+                // native where the oracle passed it through. `wasm_backend`
+                // has always had the one arm and has always been right.
+                if self.admits_err(ty) {
+                    let arm = self.arm_hako(f);
+                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
+                }
                 // a typeset matches when any member does: OR the members'
-                // checks, then branch once
-                let members = self.typesets[ty].clone();
+                // checks and branch once. A plain annotation is the same
+                // shape with one member.
+                let members = match self.typesets.get(ty) {
+                    Some(members) => members.clone(),
+                    None => vec![ty.clone()],
+                };
                 let mut acc: Option<String> = None;
                 for member in &members {
                     let call = self.type_check_call(value, member)?;
@@ -2386,29 +2472,16 @@ impl<'a> Backend<'a> {
                         }
                     });
                 }
-                let combined = acc.expect("a typeset has members");
+                let combined = acc.expect("an annotation names at least one type");
                 let b = f.tmp();
                 f.line(&format!("{b} = icmp ne i64 {combined}, 0"));
                 branch_i1(f, b);
                 f.bind(name, value);
             }
-            Pattern::Annotated { name, ty, .. } => {
-                if ty.ends_with("[]") {
-                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 9)"));
-                    f.bind(name, value);
-                    return Ok(());
-                }
-                if ty.contains('[') {
-                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 10)"));
-                    f.bind(name, value);
-                    return Ok(());
-                }
-                let call = self.type_check_call(value, ty)?;
-                check(self, f, call);
-                f.bind(name, value);
-            }
             Pattern::Ctor { ty, fields, whole } => {
                 if ty == "err" {
+                    let arm = self.arm_hako(f);
+                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
                     let inner = f.tmp();
                     f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
@@ -2574,9 +2647,14 @@ impl<'a> Backend<'a> {
                             let bad = f.label();
                             f.line(&format!("br i1 {b}, label %{ok}, label %{bad}"));
                             f.start_block(&bad);
-                            let msg = format!("cannot destructure value as `{ty}`\0");
-                            let (m, _) = self.intern(&msg);
-                            f.line(&format!("call void @k_die(ptr @{m})"));
+                            // The value goes to the runtime rather than a baked
+                            // sentence: the reader wants to see what they bound,
+                            // and only the runtime knows it. Its keyed sibling
+                            // `k_keyed_check` has always worked this way.
+                            let (m, _) = self.intern(&format!("{ty}\0"));
+                            f.line(&format!(
+                                "call void @k_die_destructure(%KValue {value}, ptr @{m})"
+                            ));
                             f.line("unreachable");
                             f.start_block(&ok);
                             for (i, field) in fields.iter().enumerate() {
@@ -3784,8 +3862,12 @@ impl<'a> Backend<'a> {
             Stmt::Expr(Expr::App { span, .. }) => span.line,
             _ => return None,
         };
+        // The same two-halves literal `origin_arg` builds, and for the same
+        // reason: this stamps a wrapper's own frame on an err the builtin
+        // raised, so the package it names is the WRAPPER's, not the caller's.
+        let hako = crate::provenance::package_of(&decl.file);
         let prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
-        let (interned, _) = self.intern(&format!("{prefix}:{line}\0"));
+        let (interned, _) = self.intern(&format!("{hako}\0{prefix}:{line}\0"));
         Some(format!("ptr @{interned}"))
     }
 
@@ -4296,6 +4378,7 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let mut f = FnEmit::new();
         f.origin_prefix = outer.origin_prefix.clone();
+        f.hako = outer.hako.clone();
         // A lifted lambda is still code from the file it was written in, and
         // in-place sites are keyed by source position — without this the key
         // is ("", line, col) and every mark inside a lambda body is missed.

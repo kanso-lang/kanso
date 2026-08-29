@@ -48,6 +48,8 @@ bench/history_series.jsonl
 /counters*.txt
 /emitted.txt
 /emitted_want.txt
+/emitted_others.txt
+/emitted_others_want.txt
 /text.txt
 /text_want.txt
 /work.txt

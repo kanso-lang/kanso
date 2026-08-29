@@ -1,0 +1,42 @@
+# Gavel 24, clause 1, as dispatch semantics rather than as a check: an arm
+# cannot see an err its own hako raised. At match time such an err does not
+# match, and infectiousness carries it onward exactly as if the arm were not
+# written — "your own failures only bubble", executing itself.
+#
+# Three lines, one rule.
+#
+#   1. the arm still works, on a value
+#   2. a foreign rescuer still reads the reason — `when_failed` is std's, so
+#      this module's failures are not its own and it needs no exemption
+#   3. the module's own arm does NOT fire on the module's own err: `mine own`
+#      answers the err, not "rescued 99", and the foreign rescuer reads the
+#      same reason out of it a second time
+#
+# If line 3 ever printed "rescued 99" the arm would have matched, and the
+# two-universe rule would be advice rather than semantics.
+import "std/testing"
+
+type torn
+  limit
+
+fn fetch 1
+  err (torn 99)
+
+fn fetch n
+  "plain {n}"
+
+fn mine (err t:torn)
+  "rescued {t.limit}"
+
+fn mine v
+  "value {v}"
+
+fn limit_of r
+  "foreign reads {r.limit}"
+
+own = fetch 1
+
+pub play =
+  print "own arm on a value: {mine (fetch 2)}"
+  >> print "foreign rescue: {testing/when_failed own limit_of}"
+  >> print "past the own arm: {testing/when_failed (mine own) limit_of}"

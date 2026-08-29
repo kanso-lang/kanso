@@ -1,0 +1,6 @@
+import "std/os"
+
+pub fn opaque x
+  x
+
+pub play = os/start "echo" (opaque 7) . (p -> print "{p}")

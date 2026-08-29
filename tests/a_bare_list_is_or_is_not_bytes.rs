@@ -52,8 +52,12 @@ fn both(expr: &str) -> (String, String) {
 
 /// The four sites, measured 2026-08-03. `utf8` is absent because it takes a
 /// list of codepoints by design and already agrees.
+///
+/// Written to fail, and ignored, while the question was open. The ruling
+/// landed — the interpreter has a real bytes value and a list of small
+/// integers is never quietly one — and all four sites answer identically on
+/// both engines now, so this is a regression guard rather than a wish.
 #[test]
-#[ignore = "needs the ruling on whether bytes are a type or a convention"]
 fn a_list_that_was_never_bytes_reads_the_same_on_both_engines() {
     for expr in [
         "text/to_float [1]",

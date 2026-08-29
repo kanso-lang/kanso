@@ -1,0 +1,8 @@
+length: 3
+listed: [err "a" err "b" 3]
+mapped: { "k":err "v" "ok":7 }
+nested: [{ "inner":err "deep" }]
+fielded: a_container_can_hold_a_failure/held [err "f"] 2
+keyed: a_container_can_hold_a_failure/held { "k":err "g" } 3
+buried: [a_container_can_hold_a_failure/held [err "h"] 1]
+read back: [err "f"]

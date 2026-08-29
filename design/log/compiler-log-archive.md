@@ -23450,3 +23450,5400 @@ the compiler's sources, which caught `docs/kanso.wasm` after a formatting-only
 edit: panic messages carry line numbers, so reformatting moves the bytes. Two
 rebuilds from one source hash identically, so the artifact is reproducible and
 the staleness guard is reading real drift rather than build noise.
+
+## 2026-08-23 — the gate that watches the page could not see the history
+
+The page-drift check counts log entries written since docs/compiler.html last
+changed and fails past a budget of three. It reported `0/3` on every pull
+request while the page fell twenty-two entries behind, and the reason is one
+line in the workflow, two steps above it:
+
+    git fetch origin main --depth 1
+
+The job checks out with `fetch-depth: 0`, so the history was there; that fetch
+truncates it for every step after it. In a truncated history the shallow
+boundary commit looks like the one that created every file, so
+`git log -1 -- docs/compiler.html` answers with the tip, and the diff from the
+tip to HEAD contains no log entries, so the count is zero.
+
+MEASURED, on main's tip in a fresh clone of this repository:
+
+    full history            the gate fails, 22 entries ahead of the page
+    after `--depth 1`       `page drift 0/3`, exit 0
+
+Two fixes, because either alone leaves the class open. The workflow's two
+fetches drop `--depth 1` — nothing in that job wanted a shallow one, and the
+checkout had already fetched everything. And the gate now asks
+`git rev-parse --is-shallow-repository` first and refuses to answer on a
+truncated clone, watched refusing before it was trusted. A gate that cannot see
+must not report success, which is the same rule as never trusting a spec you
+have not seen fail.
+
+This is what the ratchet exists to catch and could not: its rows prove a gate's
+own script goes red on a defect in the tree, and this defect was in the
+workflow around the script. The gate's script was fine. The clone it read was
+not.
+
+Found while checking why PR #985 has sat red for two days. That one is a
+different story and a real one: with its goldens regenerated — the decoder's
+emitted lines 11,593 to 11,603, the front end's rounds on lib/json 28 to 30,
+visits 23,224 to 23,345, peak 871,649 to 878,422 bytes — welfare reads 84.69
+against a floor of 84.85. It is not a stale golden. By the weights as written
+that change costs the project 0.16 points, and the branch owes either the
+reason it is worth it or the compile cost back.
+
+## 2026-08-23 — a sweep of the refusals, one divergence re-found and two messages fixed
+
+The `stale_a_panel` port died with `split takes two strings`, which named
+neither what it got nor where. That message is one of about twenty runtime
+refusals written separately for each engine, and the coverage ratchet does not
+reach them: `scripts/diagnostic_coverage` scans `Diagnostic::new(` literals,
+which are the check-time diagnostics, and a `RuntimeError` is not one.
+
+So the twelve most reachable were driven on both engines with a wrong argument
+hidden behind a call, since a literal is refused before the program runs.
+Eleven agree word for word — split, chars, bytes, join, slice, push, length,
+char_code, from_code, utf8, and to_int on an int, which answers rather than
+refusing.
+
+MEASURED, the twelfth:
+
+    text/to_float ["a"]
+    native:  to_float takes a string, bytes, or number, not ["a"]
+    oracle:  error[endpoint]: unhandled err reached the entry:
+             "bytes are not a number"
+
+Two engines, two answers, and not only the wording: native refuses at runtime
+where the oracle answers an err VALUE, which is a different channel. The cause
+is structural and already known — the interpreter has no distinct bytes value,
+so a list goes through `bytes_to_str`, and native's `K_BYTES` tag refuses
+anything that was never bytes. It was measured on 2026-08-02 and recorded, and
+the record went into the archive where nothing on a live list mentioned it
+again. It is in pending-gavels now, under also-open, with both ways out and
+what each costs.
+
+The sweep also showed why nothing caught it. `scripts/diagnostic_differential`
+already drives every std function with a wrong argument on both engines, and
+its one wrong value is a record — chosen because a record is wrong for
+everything and cannot be a literal. A record reaches the same refusal on both
+engines. Only a list reaches the one that differs, and a list is a legitimate
+argument to enough of the surface that probing with one needs care: `list/cycle`
+would not return. Widening the probe waits on the ruling that makes to_float's
+answer knowable.
+
+SHIPPED from the sweep, because it needed no ruling: `to_int` and `to_float`
+both accept the bytes a file read hands back, and neither said so — "to_int
+takes a string", "to_float takes a string or int". Both now name every kind
+they take and what arrived instead, the way `length` has all along, in both
+engines and byte-identical. Two fixtures pin them, watched red first. The
+arguments are a float and a `none`, which render without a module name, so the
+direct run and the run through an import say the same words and one golden
+covers both.
+
+The machine-code gate priced it: rendering the refused value costs 48 bytes of
+`.text` in four of the eight benchmarks and nothing in the other four, where the
+linker had already dropped the path. `bench/text_golden.txt` is regenerated on
+that reading. Every allocation counter is flat, both compile goldens are
+byte-identical, and welfare holds at 84.85.
+
+## 2026-08-23 — the bytes fork is six functions, and four of them answer
+
+The entry above records `text/to_float ["a"]` diverging and cites the archive's
+prediction that a ruling would settle `append`, `find2`, `find2_below` and
+`utf8` at the same time. Those four are measured now, driven with a list on
+both engines, and the prediction was right and understated.
+
+    text/append ["a"] "x"           native refuses    oracle: ["a" 120]
+    text/append [65 66] "x"         native refuses    oracle: [65 66 120]
+    text/find2 [65 66] 1 65 66      native refuses    oracle: 1
+    text/find2_below [65 66] ...    native refuses    oracle: 1
+    text/utf8 ["a"]                 native: an err    oracle: a refusal
+    text/to_float ["a"]             native refuses    oracle: an err
+
+Four of the six are worse than a wording difference. The oracle ANSWERS where
+native refuses, so a program written against the oracle runs and the same
+program compiled dies — which is the differential law's hardest case, and it
+points the wrong way: the oracle is meant to be the engine that can express
+whatever native runs, and here it is the one that accepts more.
+
+`text/utf8 [65 66]` agrees, answering `AB` on both, because a list of small
+ints is bytes to each of them. What the two disagree about is everything a
+list can be that bytes cannot.
+
+Nothing is fixed here, and nothing can be until the fork is ruled: either a
+bare list of small ints IS bytes, and native widens, or the interpreter gains a
+real bytes value. The table is in pending-gavels with both costs, and it is on
+the task list as Clay's.
+
+## 2026-08-23 — the accumulator rewrite gets a differential of its own
+
+Widening TRMC's license this morning meant trusting a reassociation nothing was
+checking. The pass rewrites `n * fact (n - 1)` into a tail-calling helper
+threading an accumulator, and a reassociation bug does not fail — it answers a
+number. No counter can see it: the rewrite changes the shape a recursion runs
+in and not one allocation.
+
+So the shapes are written twice. `f` is the plain form the rewrite reaches;
+`g` is the same arithmetic with the leftover operand passed through a function,
+which the license refuses to read through, so that group descends the way it
+always did. Twenty shapes — two operators over five operands over two base
+values — at four depths each, and the two forms must answer identically on both
+engines. It runs in 0.6 seconds, which is why it sits with the other
+differentials rather than in a nightly.
+
+The last line reads the instrument rather than the compiler: a sum twenty
+thousand deep, taken from the INTERPRETER's output, because that engine refuses
+unlicensed recursion at ten thousand frames and native would answer it either
+way on the operating system's stack. Delete the pass and that line dies.
+
+Watched red twice before it was trusted. With the identity for `*` changed from
+1 to 2, every product shape answers double and the gate names the lines. With
+the pass returning before it looks at anything, the deep sum stops answering on
+the interpreter and the gate says the comparison proves nothing.
+
+The depths are per operator, and the reason is native's own limit rather than
+the rewrite's: an int is arbitrary precision in the spec and an int64 in a
+native build, so a product thirty-seven deep overflows there while the
+interpreter answers. Every value the gate asks for stays inside int64 on both
+engines, which is what lets one output be compared against the other. The first
+run of the gate found that boundary by falling over it.
+
+`accumulator_rewrite_deleted` is the row that proves it, and it uses awk rather
+than the python heredoc its neighbours use — a line inserted after a matched
+line is one awk expression, and the six python mutations stay python for the
+bootstrapping reason recorded in STATUS.md rather than for the editing.
+
+## 2026-08-23 — the differential guards the license, not just the rewrite
+
+The gate from the entry above compares shapes the license accepts. Three more
+were added that it must keep refusing: a float operand over an integer base,
+`0.1`, `n * 0.1` and `n / 2`. Today neither copy is rewritten and they agree
+trivially, which is the point — the guard is against a future widening.
+
+Watched biting. With `int_arithmetic` widened by one line to accept a float
+literal, the gate goes red and names the line:
+
+    1.5000000000000002 1.5
+
+Five terms of `n * 0.1` summed one way and the other. That is the license's
+entire argument in one line of output, and it is now checked rather than
+asserted.
+
+The first attempt at these guards proved nothing, and the reason is worth
+keeping. Their base arms answered `0.0`, and `classify` requires an integer
+literal base before it looks at anything else — so the groups were refused for
+their base rather than their operand, and widening the operand rule left them
+refused. A guard that cannot fail is the failure this repo already has a rule
+about; the bases are integers now, and the widening was run again to watch the
+gate go red for the reason intended.
+
+## 2026-08-23 — the os package, built
+
+Gavel of 2026-08-17: the stdlib apes Go, `os` takes the filesystem, the
+environment, the arguments and the processes, `io` keeps the abstract read and
+write surface, `MkdirAll` goes to `os`, and any boundary case Go does not
+answer goes to the language committee and never back to Clay. It has sat
+unbuilt on the also-open list since.
+
+Moved: `exit_status`, `process`, `args`, `env`, `exit`, `exists`, `is_dir`,
+`list_dir`, `make_dir`, `read_file`, `run`, `start`, `kill`, `write_file`.
+Stayed: `stdin`, `write`, `write_err`.
+
+That last line is the boundary case, and this is the committee answering it.
+Go's standard streams are files in `os` and the writing is done from `fmt`;
+kanso has neither files nor a `fmt`, so what would move is three verbs and what
+would be left is a module named for a surface with nothing behind it. They stay
+in `io`, which is also what the gavel's own words ask for — "io keeps the
+abstract read/write surface" describes a module that still has one.
+
+The sweep: 69 `.kso` files rewritten, 332 call sites moved, 262 left; seven
+Rust tests carrying kanso programs in string literals; the `include_str!` table
+in `src/lib.rs`; and two places that knew the type's name — `deliberate_exit`
+in `src/main.rs` and `k_exit_status` in `src/runtime.c` both matched
+`io/exit_status` and now match `os/exit_status`, which is what keeps `os/exit 2`
+an exit rather than an unhandled err.
+
+Four things the sweep got wrong and the gates caught, each worth naming:
+
+  - A blanket re-sort of import blocks sorted `tests/golden/errors/import_order`,
+    the fixture whose whole job is to be out of order. The error corpus said so
+    on the next run.
+  - The imports in `.rs` string literals needed the same treatment as the files,
+    and a raw string is easier to rewrite than an escaped one.
+  - `bench/make_jsonbench` writes a program, and the program it writes carried
+    `import "std/io"` with nothing left in it that says `io/`. The decoder's
+    checksum gate reads that program.
+  - `scripts/effects_differential` emits one fixed import header for every
+    probe, and its own comment says a probe carries exactly the imports it uses,
+    because an unused import is an error and an error compares equal on both
+    engines — which reads as agreement. Eight probes went that way. The header
+    is read off the probe's body now.
+
+kq speaks the moved names and is the gating downstream job. Its branch is named
+`claude/go-to-town-m0dicm`, the same as this one, which is how
+`.github/clone-sibling.sh` checks the two together, and against this compiler
+its unit tests, twelve jq goldens, three cost goldens, scale gate and
+published-numbers stamp are all green. vse and kanso-json use none of the moved
+names and need no branch.
+
+Every counter gate is flat, both compile goldens byte-identical, welfare at
+84.85, the book's panels regenerated, and the browser differential reads 317
+programs with 0 disagreements.
+
+## 2026-08-23 — the names that moved say where they went
+
+A program written before the split says `io/read_file` and is told `unknown
+name`, which is true and useless: the name is right and the module moved. The
+refusal now names the destination and what stayed:
+
+    error[name]: unknown name `io/read_file` — it moved to `os/read_file`,
+    and `std/io` keeps the reading and writing
+
+Fourteen names, matched only under the `io/` prefix, so every other unknown
+name reads exactly as it did. Pinned at
+`tests/golden/errors/a_name_that_moved_to_os`, and the message before the
+change is on the record two entries up — the plain `unknown name` was what
+this repo's own migration met first.
+
+## 2026-08-23 — the perf check this branch owed, against main's own compiler
+
+Every change carries a perf check, and this branch moved the compiler three
+times — the accumulator rewrite, two refusal messages, and the library split.
+The counter gates say the decoder's emitted IR is byte-identical and both
+compile goldens held, but neither watches a clock, and the machine-code gate
+did move: the decoder's `.text` grew 48 bytes because `to_float`'s refusal
+renders the value it refused.
+
+So main's compiler was built beside this one and the two were interleaved on
+one box. That is a relative measurement and nothing else: this container has
+been compiling all day, and the published figures are a sitting on a quiet
+machine, so nothing here can re-sit them. What it can say is whether this
+branch moved anything.
+
+    front end, `check lib/json`, same input both sides, 12 rounds
+      main   21.6 ms best, 21.6–26.2 spread
+      here   21.2 ms best, 21.2–26.7 spread
+
+    decode, jsonbench, 6 rounds
+      main   332 ms best, 332–379 spread
+      here   336 ms best, 336–403 spread
+
+Both differences sit inside the per-run spread, and the decode difference is
+1.2% against the 3% this log already records for randomised layout on one
+tree. No published number moves. The 48 bytes are real and pinned in
+`bench/text_golden.txt`; they do not show up in the time.
+
+The front-end measurement is the interesting one, because the library split
+adds a module for the resolver to find whenever a program imports `std/os`.
+It costs nothing measurable on a program that imports it, which is what the
+byte-identical compile goldens already implied and this confirms with a clock.
+
+## 2026-08-23 — the site served whatever copy of the engine was committed
+
+`docs/kanso.wasm` is what the playground runs, and the pages workflow shipped
+the committed file. It builds the compiler, but only to run the fingerprinter;
+nothing rebuilt the engine. So a merge that changed the compiler without a
+hand-rebuild published a playground older than the page describing it, and no
+gate could see it: the specs rebuild the artifact *before* they test it, which
+proves this commit's source has a third engine and says nothing about the file
+the site serves.
+
+It is easy to be wrong about, which is the argument. This branch tripped the
+spec's own staleness guard three times in one day — twice after a
+formatting-only edit, because panic messages carry line numbers and moving them
+moves the bytes.
+
+The pages build rebuilds the engine before jekyll copies `docs` now, so the
+site serves the compiler it was built from. The committed copy stays for a
+checkout to run and for the browser differential to load, and the specs go on
+rebuilding it, which is the check that the source has a third engine at all.
+
+## 2026-08-23 — `kanso build myapp` from the directory above it
+
+Exercising the verbs after the library split — the point being that a stdlib
+change can break a whole verb where no corpus looks — turned up one that has
+nothing to do with the split. A build is named for its program (#984), so
+`kanso build greeter` run beside `greeter/` wants to write a file where the
+directory is:
+
+    /usr/bin/ld: cannot open output file greeter: Is a directory
+    clang: error: linker command failed with exit code 1
+    error: clang failed on greeter.ll
+
+Three lines that name neither the cause nor the way out, and the way out is one
+line. The build refuses before it writes anything now, and says both:
+
+    error: this build is named `greeter`, and a directory of that name is
+    here — build it from inside (`cd greeter && kanso build .`), or build it
+    from somewhere the name is free
+
+The spec checks the refusal, that no `.ll` is left behind, that the linker's
+words never reach the user — and that the route it recommends actually builds
+and runs, which is what makes printing it worth anything. Watched red against
+the old path first, where it read the linker's complaint instead.
+
+Nothing in this repo trips it: the benchmarks build from the root, where
+`jsonbench` names a file rather than a directory. It is the single-module
+project — `myapp/` built from beside it — that always hit it.
+
+## 2026-08-23 — three veins moved, and one of this morning's numbers was backwards
+
+CI caught what a stale build hid here. The cost-goldens job went red three
+pushes running on `emitted`, `machine code` and `work`, while all three passed
+locally — because the benchmark binaries on this box predated the fix to
+`bench/make_jsonbench`, whose generated entry now imports `std/os`. Rebuilt from
+nothing, every one of them moves, and they move the same way:
+
+    emitted lines   11,603 -> 11,588
+    escapebench     49,650 -> 49,458 bytes of .text
+    pendbench       73,458 -> 73,362
+    jsonbench    2,860,478,794 -> 2,860,478,381 retired instructions
+    deepbench      806,938,332 ->   806,934,626
+    (encodebench, oneshot, basket, widebench, escapebench, pendbench alike)
+
+Every number falls, and one cause explains all of them: a program that imports
+`std/io` used to drag the filesystem, the environment, the arguments and the
+processes in with it, and now pulls a module with three names in it. Less code
+is emitted, less machine code is linked, and a few hundred fewer instructions
+run before main. A fall is a win to bank, so all three goldens are regenerated
+here. Welfare does not move — a few hundred instructions in three billion is far
+below anything a saturating term can see — so there is nothing to `--set`.
+
+CORRECTION to this morning's entry on PR #985, which recorded its emitted-line
+move as 11,593 → 11,603, a rise. It is the other way round: the golden is
+11,603 and that branch produces 11,593, which is a FALL of ten lines and a win
+rather than a regression. What does not change is the finding that mattered:
+with its goldens regenerated honestly, #985 reads welfare 84.69 against a floor
+of 84.85, and the term that pays is compile cost — front-end rounds on lib/json
+28 → 30, visits 23,224 → 23,345, peak 871,649 → 878,422 bytes. That branch owes
+the reason it is worth it or the compile cost back, and the emitted-line
+direction was never the argument.
+
+The lesson for this box: a counter gate reads what is on disk, and what was on
+disk was built before the change. `sh scripts/gates/build_benchmarks.sh` after
+`rm -f` on the binaries is what makes a local green mean anything.
+
+## 2026-08-23 (later) — the instructions vein belongs to the runner, and this box is not it
+
+The entry above regenerated three veins together. Two of them were right and
+one was measured in the wrong place, and CI said so on the next push: `emitted`
+and `machine code` went green against the new numbers, `work` stayed red.
+
+The two that held are real. Building main in a worktree on this same box
+reproduces its emitted golden to the line — 11,603 — and this branch gives
+11,588, so the fall is the branch's and not the box's. Its cause is visible in
+the IR: `import "std/io"` carried 957 module-level globals into the decoder and
+`import "std/os"` carries 945, with three blank lines between them. Defines,
+calls and branches are identical either way.
+
+Retired instructions do not follow, because a global nobody reads retires
+nothing. What this box measured as a fall of about four hundred instructions
+across all eight benchmarks is the box: glibc here is 2.39-0ubuntu8.7 and the
+runner's is 2.39-0ubuntu8.8, one Ubuntu revision apart on the same upstream
+release. That is worth about 400 instructions before main, and several thousand
+where memcpy carries the work — widebench 993 and deepbench 3,680.
+
+Measured where the vein lives, the branch's actual move is small:
+
+    jsonbench     2,860,478,794   unmoved
+    encodebench   9,727,148,124   unmoved
+    oneshot          46,596,968   unmoved
+    basket           57,400,154   unmoved
+    widebench        84,816,701 ->    84,816,675   -26
+    deepbench       806,938,332 ->   806,938,306   -26
+    escapebench     258,568,120 ->   258,568,077   -43
+    pendbench       988,706,663 ->   988,706,559  -104
+
+So the two figures the entry above published for this vein are withdrawn.
+jsonbench did not go to 2,860,478,381 and deepbench did not go to 806,934,626;
+neither number moved at all. Welfare is unchanged either way, which is the one
+claim that survives intact — a hundred instructions in a billion is far below
+what a saturating term can resolve, and there is nothing to `--set`.
+
+The file already said not to do this. Its header has warned since it was
+written that a row must never be read against a number measured somewhere else,
+and the warning did not stop me, because what I had in front of me was a diff
+and a diff invites a paste. So the rule is checkable now: the golden names the
+host that measured it in a `measured-on` line, and
+`scripts/gates/instructions_host.sh` compares that line against the host it is
+running on. `scripts/gates/instructions.sh` runs it first, so off the runner
+the refusal costs milliseconds and prints no numbers at all, which is the
+point — there is nothing to copy. On the runner nothing changes.
+
+It is its own script rather than a block inside the big one so the ratchet can
+prove it honestly. A row whose gate is `instructions.sh` would go red in a
+scratch worktree whether or not the mutation landed, because there are no
+benchmark binaries there to measure, and a row that is red either way is
+evidence of nothing. The small gate needs the golden and `ldd`, so it is green
+unmutated and red under `instructions_host_unpinned`, which moves the claim
+rather than the box. Both directions were watched.
+
+The machine-code vein has the same shape and got the same treatment, because
+the trap is the class rather than the instance. Its rows are `.text` sizes,
+which are what the toolchain made of the source, so they belong to the clang
+that emitted them as surely as retired instructions belong to the glibc that
+ran them. `bench/text_golden.txt` names `clang=18.1.3` and
+`scripts/gates/machine_code.sh` checks it before measuring. Nothing has gone
+wrong there — this box and the runner share a clang, which is why CI accepted
+the `.text` numbers regenerated here — and the point is that nothing had to.
+
+One script over both goldens, `scripts/gates/measured_on.sh`, reading whichever
+facts the `measured-on` line names. The granularities differ and the difference
+is deliberate: glibc carries its Ubuntu revision because two revisions of one
+upstream release demonstrably moved the rows, and clang carries only the
+upstream version, because what selects codegen is the release and nothing here
+shows a package revision moving a byte. A fact pinned tighter than the evidence
+reds the gate on changes that are not changes.
+
+Valgrind's version is in neither, though it belongs in the instructions one on
+the merits. Pinning it would make that check unprovable on a host with no
+valgrind to ask, and the nightly ratchet runner is one. A valgrind bump moves
+the whole vein at once the way any toolchain bump does, which the header
+already covers.
+
+A toolchain bump will trip this, and should: every row moves with the image, no
+row has regressed, and the refusal says so and names both hosts.
+
+## 2026-08-23 (later still) — the compile-memory band has been hiding main's own drift
+
+Looking for other veins with the provenance problem turned up a different one
+in `bench/compile_memory_golden.txt`. Its peak-bytes row is not diffed exactly.
+CI asserts only that reality is within two per cent of it, and the header gives
+the reason: peak bytes is measured by the compiler's own allocator and is a
+property of the host, with linux and macos disagreeing by 56 bytes on the same
+input.
+
+Two per cent of 871,649 is 17,432 bytes. The divergence it was written to
+absorb is 56. Everything between the two is drift nobody sees, and there is
+drift in there now:
+
+    golden                                     871,649
+    main, measured here, three runs identical  872,025
+    this branch, measured here                 872,035
+    this branch, measured on the runner        872,061   (two runs identical)
+
+The number is deterministic per host — three runs on this box give the same
+digits, and two CI runs give the same digits. This branch is worth ten of those
+bytes. The other 376 are main's, accumulated since whenever the golden was last
+written, and every gate has been green the whole way.
+
+That matters more than the bytes, because welfare reads `compile_peak_bytes`
+out of this golden as the CURRENT value of a term rather than measuring it. So
+the compile-memory term has been scored against a figure the compiler left
+behind, and the floor was ratcheted to 84.85 while it was.
+
+Correcting it costs the floor. With 872,061 in the file the score still prints
+84.85 — the term moves from 0.167 to 0.168 points, below the second decimal —
+and `scripts/welfare` exits 1, because the true value now sits under a floor
+that was set against the stale reading.
+
+**This is Clay's, and it is on the list.** The options, as I read them:
+
+1. Regenerate the golden and `--set` the floor with the reason, which banks a
+   fall rather than a rise. That is the one thing `--set` has never been used
+   for, and the doctrine is explicit that moving the floor while leaving the
+   weights alone declares the objective wrong without saying so. Against that:
+   nothing here is a code change, and the floor was set against a misreading.
+2. Pay the 376 bytes back out of the front end and regenerate at whatever it
+   then reads, which keeps the floor honest and costs real work on a term the
+   weights say matters least.
+3. Tighten the band to something near the divergence it documents — say 128
+   bytes rather than 17,432 — so the next drift is caught the week it happens.
+   That is orthogonal to 1 and 2 and looks right regardless of them, and the
+   `measured-on` line makes it affordable, since the gate can now refuse off
+   the reference host instead of widening to tolerate it.
+
+Nothing is changed here. This branch leaves the golden alone: its own ten bytes
+are inside any reading of it, and the 376 predate it.
+## 2026-08-23 — the python that crept back is out, and a gate watches now
+
+The 2026-08-09 entry declared the repo python-free. Within three days it was
+not: #854's ratchet mutations carried six `python3` heredocs and #862's write-
+path gate added `scripts/stale_a_panel.py`, and a `bench/kq_race.sh` racing an
+apps/kq this repo no longer holds had survived the original sweep entirely.
+Nothing watched the claim, so nothing went red.
+
+Three moves, each verified differentially against the python it replaces.
+
+The panel staler is kanso (`scripts/stale_a_panel/`), byte-identical on ch04
+against the python, loud on a missing title or marker, and watched both ways
+through book_check: misname its panel and the check dies on `missing panel
+title`; restore it and the write path rewrites both staled panels back.
+
+The six mutation heredocs are POSIX awk in the same .sh files. Anchors travel
+through ENVIRON so no byte is reinterpreted, replacement is first-occurrence
+like the python's `replace(..., 1)`, and a missing anchor dies with the same
+"moved; this mutation needs rewriting" message. awk rather than kanso because
+a mutation runs in a fresh worktree before any build — a helper needing
+target/release/kanso would make the harness depend on the binary it is about
+to mutate. All six produce byte-identical mutated sources and identical exits
+against the heredocs they replace.
+
+kq_race.sh is deleted, not ported: the archive records apps/kq removed with
+kanso-lang/kq as its sole home, and the script builds a path that is not
+there.
+
+The gate is `scripts/gates/python_free.sh`, a python-free CI job, and a
+ratchet row: no tracked .py file, no python3 call outside design/'s history
+and the one mutation whose job is to introduce one. Watched red three ways —
+the stale racer before its deletion, a python3 line appended to book_check
+(the row's mutation), a tracked creep.py — and green on the clean tree.
+## 2026-08-23 — one ledger: pending decisions live in pending-gavels, and nowhere else
+
+Clay ruled it in the developer chat, verbatim intent: "110% UNIFY those
+into a clear single source of truth. compiler-log was supposed to just
+be the history of actual decisions, whereas we need something like
+'pending-gavels' for keeping track of anything that requires my personal
+decision because it's about the 'UX' of the language, not the
+implementation details."
+
+What had happened: four surfaces claimed the same authority and
+disagreed. STATUS.md carried a full-text "Waiting on Clay" section that
+forked per branch — main's copy showed one item waiting, the working
+branch's showed four. design/pending-gavels.md said "every decision
+waiting on Clay, in one place" while filing list-as-bytes under "not
+blocking" as STATUS.md called it blocking. GAVELS.md sat orphaned at the
+root — nothing referenced it — holding nine July letters that never
+closed, plus a ruled ledger duplicating the log. And sessions were
+citing decisions to Clay by their own private task-list numbers ("#2
+list-as-bytes"), which resolve nowhere outside the session that minted
+them.
+
+The unification, per the ruling:
+
+- **design/pending-gavels.md is the ledger.** Charter at the top: UX
+  forks only, entries leave on ruling (the file's own 2026-08-15
+  precedent, drifted from since), STATUS.md indexes but never carries
+  text, entries are cited by heading, edits ride promptly-merged PRs.
+- **This log is history and nothing else.** Rulings land here; nothing
+  pending lives here.
+- **The ruled entries left the ledger** — gavels 1 (surface), 3+5, 6,
+  8, 15, 16, 17, 18+19, 20b, 21, 22, 23, 24, fixed-length lists,
+  the name of `[]T` — their rulings are above under their dates and
+  their full text is in the file's git history.
+- **GAVELS.md is deleted.** Its ruled ledger (A1–A5, R5, T, W, B, BB,
+  X, nullary-BB) duplicates rulings recorded here and in the archive;
+  its unclosed letters are triaged into the ledger: Y closed 2026-08-19
+  (`>>` keeps its glyph), F parked 2026-08-19, H shipped as entropy-by-
+  default with KANSO_SEED pinning, and C, D, G, Z, AA sit under a
+  "stale — revalidate against the post-24 language" heading rather than
+  pending, with Z marked presumed-declined by the 2026-08-15 err gavel.
+  Full text in git history.
+- **The four live decisions** — list-as-bytes (upgraded to blocking,
+  which the measurements say it is), the undemanded knot, the
+  compile-memory band, and `>>` under run-time effect failure — are the
+  ledger's blocking section, carried over verbatim from the branch
+  STATUS.md that held the freshest text.
+
+CLAUDE.md's design-flow line now names the ledger; the vague "AND a
+memory file" is gone.
+
+## 2026-08-23 — gavel: an undemanded knot allocates nothing, on any engine
+
+Clay ruled the first entry in the unified ledger, in the developer chat.
+The principle: work defers until it is actually presented to IO — until
+it can affect the real world — and eager evaluation exists only as a
+resource-optimization heuristic inside that contract, never as a
+semantic difference an engine may expose.
+
+The shape that forced the question compiles clean and cannot be caught
+at compile time (an unreferenced knot is already `error[unused]`; this
+one is referenced in a dispatch arm the run never takes):
+
+    x = [x]
+
+    pub play = picked 1
+
+    fn picked 1
+      io/write "one\n"
+
+    fn picked _
+      io/write "{length (list/to_list x)}\n"
+
+Native reads `thunk_allocs=1, thunk_live_exit=1` — `k_caf_init` builds
+every knotted constant before main. The oracle reads zero. Reproduced
+today on both engines before ruling.
+
+The ruling: the oracle is right. A knotted constant defers like every
+other binding; an undemanded knot allocates nothing, and `thunk_allocs`
+stays in the engine-shared differential set counting demanded work
+only. The disagreement closes by changing native — the startup freeze
+goes — not by re-scoping the counter or splitting it.
+
+On the hot-loop cost that motivated the freeze, Clay rejected the
+premise that deferral means a perpetual conditional: "of course you
+need that check. but it shouldn't really be a 'check' like a
+conditional. instead, you just make a code change once it's evaluated.
+… imagine you have a stored lambda. when you run it, it says 'compute
+this expensive thing, then replace the existing lambda with a new one
+that just returns this'. then the next call doesn't need to 'check'
+anything. it just runs." That is update-in-place — the machinery the
+runtime already uses for ordinary thunks — an indirection rewritten at
+first evaluation, not a branch paid on every read. Implementation is
+the implementer's; if measurement finds a real hot-loop regression
+even in the update form, the number comes back to the ledger before
+any freeze returns.
+
+Unblocked: the fixture pinning an undemanded knot at zero on both
+engines, and the .mem/golden regeneration that lands with the native
+change. The entry leaves the ledger with this commit.
+
+## 2026-08-23 — gavel: a list is never bytes, and acceptance is declared
+
+Clay ruled the second ledger entry in the same sitting: "in general I
+like consistency," with the committee heard on the counterarguments
+before the gavel. The steelman for widening had three legs — bytes are
+just small ints (the data-is-data lens), the language has no bytes
+literal so `[104 105]` is the only spelling a user can write down, and
+`text/utf8 [65 66]` answers "AB" on both engines today, so full
+strictness would break the one case the engines agree on. The first leg
+dies on the evidence: `["a" 120]` — the oracle's answer for
+`text/append ["a"] "x"` — is not data-is-data, it is `bytes_to_str`
+accepting whatever list arrives. The other two legs are real and became
+the ruling's riders.
+
+The ruling: the interpreter gains a real bytes value, and a list is
+never ambiently bytes on any engine. The four cases where the oracle
+answered become refusals matching native's, and the fixture family
+(`append`, `find2`, `find2_below`, `utf8`, `to_float`) can finally pin.
+
+Two riders, named with the gavel:
+
+- **Acceptance is declared, not coerced.** Where a function genuinely
+  wants a list of small ints as byte input — utf8 is the live case —
+  that is a visible, per-function acceptance in the library, identical
+  on both engines. Whether utf8 keeps its list acceptance is a library
+  decision made in the migration, not an engine property. This is the
+  typeset-acceptance idiom already pending under the AA entry, applied
+  early.
+- **The constructor ships in the same change.** A list→bytes function
+  with a loud refusal on anything outside 0–255, so byte data stays
+  writable now that the coercion is gone. `text/bytes` covers strings;
+  this covers numbers.
+
+The entry leaves the ledger with this commit. Unblocked: the six-case
+fixture table, and the interpreter's bytes representation work, which
+is the implementer's.
+
+## 2026-08-23 — the startup freeze goes, and an undemanded knot builds nothing
+
+Implementing the gavel above. `k_caf_init` used to seed every knotted
+constant's cell and run every builder before main, so a knot the program never
+demands was built anyway. Each constant now seeds and builds its own cell on
+the first read, and `k_caf_init` is left holding only the math-id handshake.
+
+The ready flag is set BEFORE the builder runs, which is the same discipline
+`k_caf_init` had when it seeded every cell before running any builder: a
+constant that mentions itself re-enters the reader and has to find the
+blackhole rather than the zeroed global, which is an integer zero and reads as
+one. That seeding is what keeps the cycle finite, and the demanded knot still
+answers `1` on both engines.
+
+Measured on the ruling's own program, with the counters the differential
+shares:
+
+    undemanded      oracle 0 allocs   native 1 -> 0
+    demanded        oracle 0 allocs   native 1 -> 1
+
+The ruled disagreement closes. It cost nothing and paid something: the one
+fixture in the mem corpus whose numbers move,
+`an_unasked_equality_stays_a_cell`, falls from six allocations to two and from
+four evacuations to none, because a constant nobody asks for is no longer
+built and so never has to be evacuated as a survivor. The freeze had been
+buying eagerness nobody wanted and paying for it in the beat.
+
+One branch, taken once per constant. Clay's preferred shape is update in place
+— rewrite the indirection at first evaluation so later reads check nothing —
+and it stays the better form if this ever costs anything measurable. Nothing
+in this corpus says it does.
+
+Across the benchmark veins the shape repeats. Three of the eight `.text` rows
+rise by the branch — encodebench and widebench 16 bytes, escapebench 32, one
+per knotted constant — and five do not move at all, jsonbench among them,
+because the decoder links no knot and so the hottest path in the project is
+untouched. Three counter goldens fall: widebench loses five permanent
+allocations and six allocations outright, scanbench two permanent and two
+evacuations, encodebench two and two. Constants that used to be built before
+main are not built at all when nobody asks. Welfare holds at 84.85.
+
+Sixty-four bytes of `.text` is what update in place would take back, and this
+is the number it has to beat.
+
+A CORRECTION about how this was measured, because it nearly became a false
+report. `kanso run` compiles and runs; the oracle is `run --interp`. Measuring
+the ruling's program with `run` twice and calling one of them the oracle
+produced two identical rows and the conclusion that the gavel's premise did not
+reproduce. The premise reproduces exactly. The lesson is the same one three
+goldens now carry in a `measured-on` line, arriving this time through a verb
+rather than a host: a number means nothing without the thing that produced it.
+
+The price came back from the runner. Four rows of
+`bench/instructions_golden.txt` rise, each by about what taking the ready-flag
+branch costs: encodebench +17,931, deepbench +155,986, escapebench +5,993,
+widebench +358. deepbench's is the largest and the smallest — 0.019% of 807
+million — because it reads its knotted constants inside the hottest loop it
+has, so the ready-flag test is paid once per read instead of once per program.
+jsonbench, oneshot, basket and pendbench do not move at all. These numbers are
+the runner's: the vein carries `measured-on glibc=2.39-0ubuntu8.8` and this
+container is one revision off, so `scripts/gates/measured_on.sh` refuses to
+hand over a diff here and CI's job log is the only place they can come from.
+
+`encode_sh_buf` rises 96 bytes. A per-capacity histogram of freshly-allocated
+buffers, split by beat depth, says what it is: exactly one more five-element
+buffer, allocated inside the beat. Every other capacity class is
+byte-identical, `buf_reuse` does not move, and no five-element buffer is allocated
+before main under either codegen. Beside it on the same benchmark, two
+permanent allocations and two evacuation copies go away — `perm_allocs` 12 to
+10, `evac_allocs` 19 to 17, `evac_bytes` 624 to 576. Two constants that used
+to be frozen into malloc'd storage before main, and copied there out of the
+arena, are not frozen at all now; what is left is 96 bytes of arena the beat
+reclaims on its next rewind, in place of two allocations that lived until exit
+and forty-eight bytes of copying.
+
+Left open, and going to the ledger as its own entry: the DEMANDED knot still
+disagrees. Native reports `thunk_allocs=1` where the oracle reports `0`,
+because the oracle's `knotted` builds its cell without touching the counter.
+That predates this change and survives it, and which engine is right is a
+question about what the counter counts rather than a defect to pick a side on.
+
+## 2026-08-24 — bytes are a value on every engine
+
+Implementing the bytes gavel. The interpreter had no bytes: `text/bytes`
+answered a list of integers and every consumer ran whatever list arrived
+through `bytes_to_str`, which is how `text/append ["a"] "x"` came to answer
+`["a" 120]` where native refused. `Value::Bytes(Rc<Vec<u8>>)` exists now, and
+the six rows the ledger measured agree word for word on both engines:
+
+    text/append ["a"] "x"        append takes bytes and a string, bytes, or byte
+    text/append [65 66] "x"      append takes bytes and a string, bytes, or byte
+    text/find2 [65 66] 1 65 66   find2 takes bytes
+    text/find2_below [65 66] …   find2_below takes bytes
+    text/utf8 ["a"]              err "utf8 takes byte values (0-255)"
+    text/to_float ["a"]          to_float takes a string, bytes, or number, not ["a"]
+
+Four of those were the oracle ANSWERING where native refused, which is a
+program that runs under the interpreter and dies compiled. The browser engine
+comes along for free: `rt_builtin` calls the interpreter's `call_builtin`, so
+one implementation serves two of the three engines.
+
+The two riders shipped with it. utf8 keeps its list acceptance, spelled the
+same on both engines — there is no bytes literal, `[104 105]` is the only
+spelling a program can write down, and `text/utf8 [65 66]` was the one case
+the engines already agreed on. And `text/to_bytes` is the constructor, loud
+outside 0-255 rather than keeping the low byte: `text/bytes` covers strings,
+this covers numbers. The one place the low byte is still taken is
+`text/append`'s single-number form, because that is what the compiled engine
+has always done (`x.payload & 0xff`) and matching it is the differential law.
+Whether either engine should refuse there instead is a separate question.
+
+`==` still crosses. Native has compared a byte string against a list of its
+numbers since it was written (`k_bytes_eq_list`), so the interpreter does too;
+making both refuse is a change to native's semantics that the gavel did not
+order.
+
+What it cost: `front_end_visits` on lib/json 23,224 -> 23,250, and the
+decoder's emitted lines 11,588 -> 11,595. Both are the price of a public
+function in std/text, which lib/json imports. Measured separately: a plain
+`pub fn zzz x / x` in std/text costs 13 visits by itself, so roughly half of
+the 26 is the function existing and half is the builtin call in its body. No
+allocation counter moves, no `.text` row moves, and welfare's floor moved to
+whatever it cost — which welfare's own header says is what happens to a change
+that makes the engines agree.
+
+The goldens: six refusal fixtures under tests/golden/runtime, each watched
+red against the old oracle first — four of them ANSWERED there, which is the
+bug — and two micro fixtures for the surface that works and for the
+constructor's refusal. The error corpus moved three line numbers, and the book
+three more, because std/text grew five lines above `to_int` and an err trace
+names the line it was born on.
+
+## 2026-08-24 — a type field wakes its readers, not the whole program
+
+The bytes gavel cost lib/json 26 front-end visits, and looking at where they
+were spent found a much larger number sitting beside them. `KANSO_PHASES=1`
+on lib/json:
+
+    round 1: 365 moved of 407 visited
+    round 2:  45 moved of 407 visited
+    round 3:  52 moved of 407 visited
+    round 4:   7 moved of 407 visited
+
+Four full sweeps of every function, the last one to let seven of them move.
+The fixpoint has had dirty-tracking since it was written — a function's
+returns wake its readers and nobody else — and one line was defeating it. When
+a declared type's field set grew, inference set `all_dirty`, and the next round
+walked the program. It had to: nothing recorded which functions could care.
+
+They are static. `type_fields` is read in exactly one place, `bind_pattern`'s
+`Pattern::Ctor` arm, so the functions that can be affected are the ones whose
+patterns destructure that type — in the head or anywhere in the body. The index
+is built once, before the first round, and a field growing now wakes those and
+nothing else.
+
+The rounds it saved were paid back by rounds it cost: information travels one
+hop per round, and a round that walks forty functions carries it less far than
+one that walks four hundred. So a change moves its readers in the CURRENT round
+as well as the next. The sweep alternates direction, so about half of them are
+still ahead of the cursor and take the new answer immediately; the rest are
+behind it and are simply not walked again.
+
+    lib/json          rounds 28 -> 40, visits 23,224 -> 17,786
+    the module sample rounds  6 ->  6, visits  3,031 ->  2,403
+    the five samples  visits    133 ->    115
+
+`front_end_rounds` 28 -> 40 is the cost and it is real; 5,438 fewer expression
+visits is what it buys, and the visit is what carries the work — a round is a
+loop over a work list that is usually short now. Welfare weighs both and comes
+out ahead: 84.85 to 84.87, banked.
+
+The clock does not show it, and the entry would be dishonest without saying
+so. Interleaved on this container, three runs each, `infer` reads 2.80-3.04 ms
+on the branch against 2.82-4.06 ms on main — inference is about a fifth of a
+15 ms front end and the spread here is wider than the effect. The visit count
+is the instrument that can see it, which is the whole reason the compile
+goldens count work rather than time.
+
+The index costs memory to hold: `compile_peak_bytes` on lib/json reads 876,930
+here against main's 872,035 on the same box, three runs identical each way.
+That is inside the two per cent the gate allows and outside what welfare can
+see, because welfare reads the golden's number rather than measuring — which is
+the ledger entry that has been waiting on Clay since yesterday, and this change
+adds 4,895 bytes to what it is hiding.
+
+The answers do not move. Every engine, the error corpus, the diagnostics
+differential and the browser differential are unchanged — the only goldens that
+move are the ones that count the compiler's own work.
+
+## 2026-08-24 — the highest-ranked idea on the memory board was priced against a number that is gone
+
+`design/memory-frontier-research.md` has ranked copy-or-pin first since
+2026-08-07, on a measurement: half of every allocation the one-shot shelf made
+was the copy-out before a rewind — 63,967 evacuation allocations of 128,528,
+1,991,456 bytes. Rechecked today, one-shot reads `evac_allocs=3`,
+`evac_bytes=96`. #868 took it from 63,967 to 5 and #977 to 3. The measured half
+the idea was going to delete had been deleted by something else, and the memo
+did not know, because a status table records what an idea IS rather than
+whether its premise still holds.
+
+Where evacuation lives now, across the eight shelves: wide 264 allocations for
+1,032,336 bytes, pending 2,658 for 498,976, scan 36 for 8,800, and everything
+else under six hundred bytes. So the idea gets reposed rather than retired —
+and the instrument that priced it the first time can price it again. The
+evacuation path was instrumented to record each survivor's source address and
+copied size.
+
+Wide is four copies. Four nodes of 256,016 bytes — a 16,000-element list
+buffer, 16 + 16 x 16000 — carry 99.2% of the megabyte. `bench/wide.json` is a
+16,000-element list, so that is its top-level buffer evacuated as the streaming
+loop's carried accumulator, once per rewind. Two of the four report the same
+source address, which says only that the arena reused it — the addresses are
+bump-allocated and a rewind hands the same bytes back. The other 260 survivors
+are 8,272 bytes between them, median 32.
+
+Pending is diffuse: 666 of 2,658 survivors are needed to reach 90% of half a
+megabyte, nothing above four kilobytes, largest 3,216.
+
+That is the answer the memo asked for and nobody had taken, and it is two
+answers rather than one. A quarter-megabyte survivor occupies whole pages by
+itself, so not copying it retains almost nothing — and it does not need general
+page pinning, only a size threshold and storage that does not rewind. A
+three-kilobyte survivor is threaded through the garbage, and pinning its page
+keeps the garbage with it. The size distribution is the decision variable,
+which is 5.2's survivor-ratio selection asked one level down.
+
+Nothing is built. What changed is that the board now says what the shelves say.
+
+## 2026-08-24 — the beat carry copies a loop-invariant capture, once per rewind
+
+Chasing where widebench's megabyte of evacuation goes, from the reposed
+copy-or-pin entry. `k_deep_copy` has exactly three entry points — `k_beat_pop`'s
+result copy, `k_caf_freeze`, and `k_beat_iter_carry` — and tagging all three
+says all 264 evacuations and all 1,032,336 bytes come from the beat carry. The
+other two contribute nothing.
+
+What the carry copies is one slot, unkept, tag 8: a `K_DESC`. widebench's
+streaming loop hands on `io/write (...) . (_ -> stream_elems xs (i + 1))`, and
+the 256,016 bytes are the `xs` that description captures — the 16,000-element
+list, decoded inside `read_file`'s continuation and therefore ABOVE the outer
+beat's mark. It is the same value every iteration and never rebuilt, and the
+carry deep-copies it forward on every rewind regardless.
+
+Reduced to a pair of fixtures in `tests/golden/mem`, identical but for where
+the list is built:
+
+    a_loop_invariant_capture_is_copied_every_rewind   24 allocs   32,672 bytes
+    the_same_capture_built_below_the_mark_is_shared    6 allocs      192 bytes
+
+Same loop, same 500-element list, 504 rewinds against 502. Build it as an
+argument and it sits below the mark and is shared; build it inside the chain
+and it travels forward whole, once per rewind. The difference is invisible in
+the source shape, which is why it went unnoticed — and why the corpus needed
+both halves rather than a description of one.
+
+Two things this closes. `k_cohort_pop` has had a survivor-ratio guard since
+#389 — it sizes the survivor and refuses a copy that exceeds half the reclaim,
+or one above four times the block threshold — and `k_beat_iter_carry` has
+nothing of the kind: it copies every unkept slot at any size. The board's 5.2,
+"per-beat policy selection by survivor ratio", is therefore shipped for cohorts
+and absent exactly where the remaining cost is. And the page-pinning framing
+the board carried is the wrong shape for this: `k_carry_kept` already exists to
+say a slot must not be copied, it means "this cycle's own builder" today, and a
+loop-invariant capture is the other thing a carried slot can be.
+
+Nothing is built. The fixtures pin the cost as it stands, and a change that
+makes those two numbers converge is what they are for.
+
+## 2026-08-24 — two front-end passes stop allocating per occurrence
+
+A follow-on to the fixpoint entry earlier today, and much smaller: reading the
+phase profile that change produced, two passes were doing avoidable work.
+
+`prune_unused_getters` collected mentioned names into a `HashSet<String>`,
+which is one String allocation per identifier OCCURRENCE — every mention in the
+whole program, not every distinct name — plus a second for each qualified
+read's bare half. The set borrows the program's names now. A keep mask carries
+the answer across the end of the borrow so `retain` can have the program
+mutably. Interleaved three times on kq's query library, the pass reads
+0.84-0.89 ms against main's 1.11-1.19: about a quarter off, repeatable.
+
+`canonicalize_bare_aliases` found each synthetic bare alias's qualified twin by
+scanning every declaration in the program, with a `format!` inside the inner
+loop — quadratic, and one String per pair examined. A synthetic alias and its
+twin share a source position and an arity, so that tuple indexes them; the
+index is built once and the needle formatted once per alias rather than once
+per pair.
+
+That one does NOT show up in the clock at these sizes: 0.57-0.65 ms against
+0.52-0.76, which is noise on a loaded container. The change is asymptotic and
+should be described as nothing else — lib/json has 407 declarations and kq's
+query library is not much larger, so the quadratic has not had room to hurt
+yet. It is worth removing before something does.
+
+One idea from the same sweep was measured and declined. `load_dependencies` is
+the second-largest phase at 2.13 ms, and its `visited` set is a cycle detector
+rather than a cache — it removes each path when the module finishes, so a
+diamond import would compile the shared module twice. There is no diamond to
+exploit: `KANSO_PHASES=1` prints one `load` line per module on both lib/json
+and kq's query library, four and six modules with no repeats, because the
+stdlib modules these programs import do not import each other. Memoizing by
+canonical path would buy nothing today. Recorded so it stays declined until a
+program has the shape.
+
+No GOLDEN counter moves — rounds, visits and `compile_peak_bytes` are
+byte-identical and welfare holds at 84.87 — but a counter does, and finding it
+corrects the sentence this entry originally carried. `kanso check` has printed
+`compile_allocs` and `compile_alloc_bytes` since the counting allocator went in;
+nothing pins them, so they were invisible. On lib/json, two runs each,
+identical:
+
+    compile_allocs       153,346 -> 148,073   (-5,273, -3.4%)
+    compile_alloc_bytes  7,860,884 -> 7,942,065   (+81,181, +1.0%)
+
+Five thousand fewer allocations and eighty-one thousand more bytes: the Strings
+that went away were many and small, and the keep mask and the site index that
+replaced them are few and larger. The count is what the 24% fell out of, and the
+bytes are transient. Stating it as "no counter moves" would have been the
+silence the trend gate exists to refuse, on a dimension no gate watches.
+
+That the dimension is unwatched is its own finding. Both counters are
+deterministic here across runs, and neither is in
+`bench/compile_memory_golden.txt`, which pins rounds, visits and peak. Whether
+they can be pinned depends on whether they agree across hosts the way rounds
+and visits do and peak does not — that question, and the ratchet row a new gate
+owes, are a change of their own rather than a rider on this one.
+
+## 2026-08-24 — the dimension that watched nothing
+
+The entry above corrected itself once: it said no counter moved, and one did.
+`kanso check` has printed `compile_allocs` and `compile_alloc_bytes` since the
+counting allocator went into main.rs, and no golden has ever held them. So the
+front end has had an allocation-traffic dimension that nothing watched, and the
+pass rewrite is what walked into it — a quarter off its time, and every gate in
+the tree reporting nothing.
+
+`bench/compile_allocs_golden.txt` holds the count now, with a gate beside the
+compile-memory one. The proof that it earns its place is the ratchet's, and
+it is worth stating because a new gate that duplicates an old one is cost with
+no cover. Under `compile_allocs_unwatched` — the pass put back to owning the
+program's names, one String per identifier occurrence:
+
+    compile_rounds        40 ->        40
+    compile_visits    17,786 ->    17,786
+    compile_peak_bytes 876,930 ->   876,930
+    compile memory     green
+    welfare            green
+    compile allocations  RED    148,073 -> 153,859
+
+Rounds and visits cannot see it because the decision work is identical. Peak
+cannot see it because the strings are transient — allocated, dropped, and gone
+before the high-water mark is anywhere near them. That is three gates blind to
+the same shape, and the fourth is the reason to add a fourth.
+
+The allocator prints a second counter and the golden does not hold it. The
+first version of this file pinned `compile_alloc_bytes` beside the count, and
+the runner disagreed with the container by 26 bytes on a number near eight
+million — too small for a toolchain and too exact for noise. Five directory
+lengths, one tree, one binary:
+
+    16 chars   7,942,065        29 chars   7,942,091
+    17 chars   7,942,067        49 chars   7,942,131
+    21 chars   7,942,075
+
+which is 7,942,033 plus twice the length of the directory the compiler ran in,
+at every point. Two allocations hold the absolute path, and
+`/home/runner/work/kanso/kanso` is thirteen characters longer than
+`/home/user/kanso`. A row like that pins the clone rather than the compiler,
+and it would have reddened the first time somebody checked the repository out
+somewhere else — under a name that said the front end's allocation traffic had
+moved. It is dropped, with the measurement in the file so nobody puts it back.
+What it was wanted for is held on both sides already: `compile_allocs` for the
+traffic, `compile_peak_bytes` for the residency.
+
+The count survives the same test. It reads 148,073 at all five lengths, and
+148,073 under rustc 1.94.1 in the container and under 1.98.0 on the runner.
+
+`compile_peak_bytes` carries the same term — 876,898 plus twice the length,
+exact at all five — and that is a trap for the table above, which claims peak
+does not move under the mutation. The first reading of it said peak moved 132
+bytes, taken from a mutated build in a scratch worktree 66 characters deeper
+than the tree it was compared against. Rerun at one path, mutated and clean,
+peak is 876,930 both times: byte-identical, and the claim is measured rather
+than argued from what transient means. Where that leaves
+`bench/compile_memory_golden.txt` is a decision of Clay's and is in the ledger.
+
+The rest of the veins were swept for the same shape and are clean. The four
+runtime cost goldens produce byte-identical counter sets across a 38-character
+change of working directory, and so do all 51 fixtures in `tests/golden/mem`.
+Every counter that carries the path is a byte total on the compile side, which
+is the only place the compiler's own allocations are what is being counted:
+`compile_alloc_bytes` and `compile_peak_bytes`, and no others.
+`compile_allocs`, `compile_rounds`, `compile_visits` and `compile_passes` sit
+beside them and do not move.
+
+The row is kept under a toolchain guard anyway, because a good part of the
+count is the standard library's: a HashMap's growth schedule, a Vec's doubling,
+a String's spare. So the file carries a `measured-on rustc=` line and
+`scripts/gates/measured_on.sh` learned to read it, which makes three veins that
+name their host and one script that reads all three. Upstream version only, no
+point release — the same granularity clang gets, for the same reason: nothing
+here shows a point release moving a count, and a fact pinned tighter than the
+evidence reds the gate on changes that are not changes.
+
+Two toolchains agreeing is evidence rather than a guarantee, and a regeneration
+taken in the wrong place is silent, so the guard stays and the ratchet row that
+proves it stays with it.
+
+The row watched: green unmutated, red under `compile_allocs_unwatched` and
+under `compile_allocs_host_unpinned`, and the ratchet's cover check still says
+every CI job carries a mutation or a stated reason.
+
+The guard earned itself on its first outing, which was not the plan but is the
+best evidence it could have had. The golden went up carrying this container's
+`rustc=1.94.1`; the runner is on 1.98.0, and the gate refused rather than
+diffing — no numbers printed, both toolchains named. So the rows here are the
+runner's, taken from a job log, and a container cannot produce them. That is
+the same arrangement `bench/instructions_golden.txt` has had since a
+container's glibc numbers were pasted over the runner's, and the same
+bootstrap: name the host the vein will live on, let CI measure, copy the rows
+out.
+
+It follows that an image bump can red this gate. If it does, the row moved with
+the toolchain and has not regressed; the response is a regeneration, the line
+moved, and a sentence here — which is what the two veins beside it already ask
+for.
+
+## 2026-08-24 — the megabyte was the benchmark doing its job, and a correction
+
+"The beat carry copies a loop-invariant capture" says, earlier today, that the
+carry "copies every unkept slot on every rewind, at any size, with no guard",
+and that is wrong. Writing the change that would have followed from it is what
+found out.
+
+The guard is in the bind-chain driver, which is what pushes the beat those
+copies happen under. `k_exec`'s chain case sizes the staged continuation with
+the cohort guard's budgeted pass and takes one of three paths: under 4 KB in a
+region that has not drifted, leave it unstaged; over 256 KB, skip the
+evacuation and floor the region under it; between, stage and copy. It landed
+with the streaming-stdout work on 2026-07-27, where the 256 KB line was chosen
+low enough to exempt kq's 13 MB decoded document and took kq's full print from
+47.5 MB to 30.0.
+
+widebench's carried continuation captures 256,016 bytes, which is 2,128 short
+of that line. The cliff is sharp and reproducible — the same fixture at a range
+of sizes, `evac_bytes` against the survivor:
+
+    16,000 elements   256,016 bytes   1,028,512 evacuated
+    16,380 elements   262,096 bytes       3,648 evacuated
+
+So the proposed change was one constant: 256 KB down to 64 KB. It measures
+extremely well. widebench's `evac_bytes` falls 1,032,336 to 7,488,
+`alloc_bytes` by exactly one survivor copy, `beat_iters` 43 to 39; seven of the
+eight shelves are byte-identical; `arena_peak_bytes` does not move on any of
+them, nor on the reduced fixture at 128 KB or 192 KB survivors, where the
+copying disappears for nothing.
+
+**And it should not land.** Regenerating `bench/cost_golden_wide.txt` put its
+header on screen, which has said since the shelf was written: "Sixteen thousand
+elements, not twenty. The evacuation cost stops at 16,384 … so a fixture above
+that line exercises none of it. This one sits below." The size is deliberate.
+widebench exists to hold the staging path where a counter can see it, and
+lowering the threshold would move the shelf out of the band it was built to
+watch — hiding the cost rather than paying it.
+
+What survives is a real question asked properly. The 4 KB-to-256 KB staging
+band has never been measured against flooring on a program that is not a
+benchmark; on the reduced fixture, flooring is free at 128 KB and 192 KB. That
+is an argument for moving the line, and it has to be made on programs rather
+than on the shelf that was placed to sit under it — with widebench's own size
+moved in the same change, or the shelf loses its point either way.
+
+Two smaller corrections while the file is open. `k_beat_iter_carry` is where
+the copies are made, which the entry above measured correctly; the policy is at
+its caller, which the entry did not look for. And the framing this came from —
+copy-or-pin, page pinning, `k_carry_kept` — was aimed at a mechanism the tree
+already has in a better form. The memo carries the same correction.
+
+## 2026-08-24 — where the front end spends itself now
+
+Two compile-side changes landed today — #993's reader index and #996's
+borrowed names — and the plan carried forward from before them is stale. It
+named lex at 1.53 ms and parse at 1.58 ms as what was left. Measured on
+`kanso check lib/json`, five runs:
+
+    check_merged   3.0-4.0 ms   30%
+    infer          1.9-2.6 ms   19%
+    parse          1.1-1.3 ms   11%
+    lex            1.1-1.25 ms  10%
+
+Lex and parse have each fallen by about a third and are no longer where to
+look. `check_merged` is, and the number is its own work: `phase::watched`
+computes `mine = whole - IN_CHILDREN`, so infer's time is subtracted rather
+than counted twice.
+
+It is 22 independent whole-program traversals. Instrumenting each one puts
+the sum at 3.04 ms with no single pass to blame:
+
+    literal_arguments 0.73   call_arities  0.40   effect_discarded    0.37
+    call_shaped_list  0.21   wall_operands 0.18   none_in_collections 0.12
+    build_blocks      0.12   if_arity      0.11   field_exists        0.11
+    arm_ties          0.11   and twelve more below 0.10
+
+So a fix here is fusion — one traversal running every per-expression check —
+rather than a hot pass to rewrite. That is a real refactor and it is not
+started.
+
+`literal_arguments` earned a look on its own at twice the next largest, and
+most of it is its own walk. `inline::aliases`, which it calls, is a fixpoint
+that rebuilds a `HashMap<(String, usize), String>` every round and clones a
+callee name to build each lookup key — the shape #996 fixed twice elsewhere —
+and it has two callers. Priced at 0.30 ms across both, near three per cent of
+the front end. Worth doing and small, recorded here so the size is known
+before anybody starts.
+
+One hypothesis killed on the way. `phase::watched` calls `env::var_os` on
+every invocation, so 22 more calls per compile might have moved the counter
+the day's other change had just pinned. It does not: 148,073 instrumented and
+clean alike, because `var_os` on a missing variable answers None without
+allocating. The per-pass instrumentation costs nothing when off, which is the
+argument for keeping it rather than re-deriving it next time.
+
+## 2026-08-24 — check_merged runs four times, and the library is checked twice
+
+The entry above prices `check_merged` at about 3 ms and describes it as 22
+traversals. It is 22 traversals run four times. One `kanso check lib/json`
+reaches it once for each dependency and once for the merged program:
+
+    std/list     158 declarations   1.33 ms
+    std/text      26                0.19
+    std/render     2                0.02
+    merged       407                3.52
+
+Those are wall figures, so they carry the inference each call makes inside
+itself where the phase report subtracts it. The two agree: 5.06 ms less
+infer's 1.9 is the 3.17 the report gives, to a hundredth of a millisecond.
+Worth writing down because the apparent gap looked like a published number
+being wrong and was nearly filed as a correction.
+
+The merged pass's 407 declarations contain the dependencies' 186. So every
+compile of every program checks the standard library on its own and then
+checks it again inside the merge.
+
+Whether the per-dependency pass can go is a question about diagnostics
+rather than about time, and it is untested. `check_merged` exists because
+some checks need the whole program — gavel 1b's construction check and
+`check_call_arities` were moved there precisely because a per-file pass
+cannot see an imported group's arms. What the per-dependency pass catches
+that the merged pass would not is unproven in either direction, and the
+error corpus is the only thing that can answer it.
+
+If it can go, the saving is the 1.54 ms those three calls cost: near
+fifteen per cent of a 10.5 ms front end, and five times what
+`inline::aliases` is worth. That makes it the larger of the two leads
+recorded today, and the one to settle first.
+
+## 2026-08-24 — the per-dependency check is not redundant, and counting declarations never said it was
+
+The entry above says `check_merged` runs four times on one compile, once for
+each dependency and once for the merged program, and that the merged pass's
+declarations contain the dependencies'. Both are true. Removing the
+per-dependency call still loses a diagnostic.
+
+A field read no record type declares, inside a library reached through
+another library, goes unreported: `ok` where main answers `no record type has
+a field ...`. It is a fixture now — `tests/golden/errors_module/`
+`field_read_in_a_deep_library` — so the idea cannot come back quietly.
+
+`desugar_field_reads` is the reason, established by ablation rather than
+argued. It runs inside the dependency's own compile, before that compile
+returns, and rewrites `n.nosuchfield` into a shape `check_field_exists`
+cannot see. Guard all four of its call sites behind an environment variable
+and the diagnostic comes back:
+
+    desugar on     ok
+    desugar off    error[name]: no record type has a field `nosuchfield`
+
+Under main the dependency's own `check_merged` runs before that rewrite and
+catches the fault there. Take the pass away and the fault is unreachable by
+the time the entry merges.
+
+So the declarations are present and are no longer checkable. A check that
+reads a syntactic shape can only fire in the compile where that shape still
+exists, and a count of declarations says nothing about whether it can. That
+is the whole error: the case for removing the pass was that the same
+declarations get walked twice, which is true and is not the question.
+
+What it would have bought is real — rounds 40 to 28, visits 17,786 to 15,210,
+allocs 148,073 to 130,747, welfare 84.87 to 85.75 — and is available only to
+a change that moves the rewriting passes after the whole-program check, or
+splits the checks into those that read syntax and those that do not. Neither
+is started.
+
+Four claims were made wrong and corrected on the way, and they are one habit:
+evidence gathered under one configuration read as evidence about all of them.
+The suite was green because the error corpus is 161 single-file fixtures and
+none of them has a dependency. A comparison of two fixtures called them
+identical while running on a branch that did not contain them, both binaries
+answering `cannot read` and the digests agreeing. The first divergence was
+read as a labelling problem and a fix was built for it, which was real work
+at the wrong layer. The entry was said to get no whole-program check at all,
+from instrumenting one of `check_merged`'s four call sites instead of the
+function. Instrument the function. Run the ablation. Before generalising from
+a green fixture, ask what would have to be true for it to pass while the
+claim is false, and go build that.
+
+## 2026-08-24 — the children were gathered into a vector nobody kept
+
+`expr_children` handed every caller a fresh `Vec<&Expr>`. Thirty-seven call
+sites ask it, and twenty-four of them are the same shape — `for child in
+expr_children(e) { walk(child) }` — read once and dropped at the end of the
+loop. Counting inside the function on one `kanso check lib/json`: 94,784
+calls, of which 33,453 returned something and so allocated. The whole compile
+makes 148,073 allocations.
+
+The replacement is `for_each_child(e, |child| …)`, which hands the children
+over one at a time, and `any_child` for the predicates that were writing
+`expr_children(e).into_iter().any(..)`. Both sit on a private `walk_children`
+taking `&mut dyn FnMut(&Expr) -> bool`, which stops as soon as the answer is
+false — those predicates recurse into whole subtrees, so the short-circuit
+`Iterator::any` gave them had to survive. Same nodes, same order, no pass
+moved, and `front_end_rounds` 40 and `front_end_visits` 17,786 are identical
+on both sides.
+
+    compile_allocs        148,073 -> 91,185     -38.4%
+    compile_alloc_bytes 7,942,065 -> 6,830,193  -14.0%
+    compile_peak_bytes    876,930 -> 876,930     flat
+
+Thirty-eight per cent where the instrumentation predicted twenty-three. The
+counter recorded calls that allocated at least once, and several arms
+allocate twice: `vec![cond, early]` followed by an `extend` of the guard's
+rest reallocates, and a `.collect()` from a filtered iterator grows. 56,888
+allocations removed over 33,453 allocating calls is 1.70 apiece, which is
+what that shape predicts.
+
+Wall clock, interleaved, twenty compiles a reading, on a container that had
+been building all day: 16.5 ms down to 14.4 ms, about 13%. The figures on the
+compiler page are a dated quiet-box sitting and are not re-sat from here.
+
+Welfare reads 84.87 on both sides. It has no term for what compilation
+allocates: its compile terms are rounds and visits, which count the work the
+compiler decided to do, and `compile_peak_bytes`, which counts what it held.
+A third of the traffic disappearing is invisible to all three. This is the
+blind spot `bench/compile_allocs_golden.txt` was added for earlier today, and
+that gate is now the only thing in the tree that can see this change at all.
+Whether welfare should carry a traffic term is an argument about the weights,
+and it is not made here.
+
+## 2026-08-24 — a String per call expression, to look up a map
+
+Timing the twenty-two checks in `check_merged` individually put one of them
+at half the phase: `check_literal_arguments` 1.93 ms against a whole compile
+of about 19 ms, where no other check reaches 0.5. Splitting it again put 0.53
+ms in `inline::aliases` and 1.41 ms in the walk.
+
+The walk asks, at every call expression, whether the callee is a std wrapper
+over a builtin. `aliases` answers that from a `Map<(String, usize), String>`,
+and a lookup needs a key — so the callee's name was cloned into a `String`,
+twice, because `forwards` asked the same question a second line later. Two
+more `String`s followed for the bare name and for stripping `builtin_`. Four
+allocations per call expression to read a map.
+
+A view keyed by the program's own names is built once per pass:
+
+    let builtins: HashMap<(&str, usize), &str> =
+        owned.iter().map(|((n, a), t)| ((n.as_str(), *a), t.as_str())).collect();
+
+and the walk borrows through it. One lookup answers both questions and
+nothing is allocated.
+
+    compile_allocs   91,185 -> 87,824   -3.7%
+    front_end_rounds     40 -> 40        flat
+    front_end_visits 17,786 -> 17,786    flat
+
+Wall clock does not move outside the noise of a loaded container, which is
+the honest report: 3,361 allocations is about 840 call expressions reached
+per pass, times four passes, times one saved allocation each after the
+compiler folds the rest. The 1.41 ms is the traversal, not the malloc.
+
+`tests/golden/errors/a_std_wrapper_does_not_hide_its_builtin` is the spec and
+it was watched red first. Pin `forwards` to false — the one substitution that
+would be wrong if `alias.is_some()` and `contains_key` disagreed — and the
+fixture reports two diagnostics where it should report three, losing the one
+for `split`, whose demand comes through a wrapper. Restore it and the corpus
+is green.
+
+## 2026-08-24 — the compiler was hashing against an attacker who was never coming
+
+Callgrind on `kanso check lib/json`, after the child walk stopped building
+vectors:
+
+    14,622,313 (16.09%)  core::hash::sip::Hasher::write
+    12,475,688 (13.73%)  core::hash::BuildHasher::hash_one
+
+Twenty-nine point eight per cent of every instruction the front end retired
+was the default hasher. `std` picks SipHash-1-3 with a per-process random key
+because a server keying a map on a request header needs collisions to be
+unpredictable. A compiler keying a map on the identifiers in a file it was
+handed has no such adversary and pays for the protection at every lookup.
+
+`src/hash.rs` is the multiply-rotate hash rustc has used for its own interner
+since 2015, twenty lines of it, no dependency added. `Map` and `Set` alias
+`std`'s containers over it, and every file in the compiler moved: check,
+infer, lib, inline, advisory, beat, codegen, demand, dispatch, escape,
+linear, provenance, trmc, wasm_backend, parser. `eval.rs` and `wasm_rt.rs`
+keep `std`'s maps — those hold a running program's values rather than the
+compiler's own bookkeeping.
+
+    instructions   90,899,357 -> 67,160,895   -26.1%
+    compile_allocs     87,824 -> 87,824        flat
+    front_end_rounds       40 -> 40            flat
+    front_end_visits   17,786 -> 17,786        flat
+    compile_peak_bytes 876,930 -> 864,274      -12,656
+
+The peak falls because `BuildHasherDefault` is zero-sized where `RandomState`
+carries sixteen bytes of key, and every map in the compile is that much
+smaller. It stays inside the compile-memory band, so no golden moves.
+
+### The determinism, which was the real find
+
+Instruction counts were being taken to check the change, and the baseline
+would not sit still. Same binary, same sources, same directory, empty
+environment:
+
+    default hasher   90,704,760   90,676,800      len 80
+                     90,667,959   90,708,405      len 115
+    seedless hash    66,961,255 x3                len 80
+                     66,966,868 x3                len 115
+
+(These are lower than the pair above because they were taken with `env -i`
+and from a copied tree; the comparison is within each block.)
+
+Forty thousand instructions of spread between two runs of identical code,
+because the random key changes the probe sequences and moves where the
+rehashes land. The seedless hash gives the same digits three times.
+
+So the compiler's instruction count was not a measurable quantity, and now it
+is. That matters more than the 26%: every other vein in the tree pins an
+exact number, and this dimension could not have had one. What the goldens
+could see of this change is nothing — allocations identical, rounds and
+visits identical, peak inside its band — which is the shape #998 was written
+about, one dimension over. The vein that would see it is a separate change
+and is written down as one.
+
+Path length still moves the count, 160 instructions per character, visible
+only once the run-to-run noise is gone. Any such gate has to compile from a
+fixed-length directory rather than from the checkout, for the same reason
+`compile_alloc_bytes` is absent from its own golden.
+
+### Why iteration order was never at risk
+
+`RandomState` reseeds every process, so map iteration order has always varied
+run to run. The compiler's output is byte-deterministic and its goldens are
+not flaky, which means nothing observable reads that order. A different hash
+changes the order and can change nothing else. The full suite agrees: 161
+flat error fixtures, the three directory cases, the diagnostics differential
+and the browser differential are all green.
+
+The ratchet's `compile_allocs_unwatched` mutation greps for
+`std::collections::HashSet` in `src/lib.rs`, which this rename moves, so it
+was rewritten against the new spelling and re-proved: applied, the counter
+goes 87,824 to 93,610 and the gate reds. The other twenty-two mutations were
+each applied to a fresh copy of the converted tree and all twenty-three still
+take. `cover` runs per PR and only checks that every job has a row, so a
+mutation that stopped matching would have gone unnoticed until the nightly
+`prove`.
+
+## 2026-08-24 — the compiler's own instruction count gets a vein
+
+`bench/instructions_golden.txt` counts the benchmarks, which are the programs
+the compiler produces. Nothing counted the compiler. The hasher change earlier
+today took `kanso check lib/json` from 90.9 million retired instructions to
+67.2 million and every gate in the tree reported nothing: `compile_allocs`
+identical at 87,824, rounds identical at 40, visits identical at 17,786, and
+`compile_peak_bytes` moving twelve thousand bytes inside a thirty-five
+thousand byte band. A quarter of the work went away in silence, and a quarter
+coming back would have been just as quiet.
+
+`bench/compile_instructions_golden.txt` is that dimension, and
+`scripts/gates/compile_instructions.sh` reads it.
+
+Two things had to be true first, and only one of them was.
+
+The count has to be repeatable, and under `std`'s hasher it was not: 90,704,760
+on one run and 90,676,800 on the next, same binary and same sources, because
+the per-process key moves the probe sequences and moves where the rehashes
+land. Forty thousand instructions of spread with nothing behind it. That is
+why this gate lands the day after the hasher and not before — the earlier
+change was the precondition, not merely something the gate would have caught.
+
+The count also moves with the length of the directory the compiler runs in,
+about 160 instructions per character, because the absolute path is copied and
+walked. That is the trap `compile_alloc_bytes` fell into, and the reason it is
+absent from its own golden rather than pinned in it. So the gate does not
+measure in the checkout: it copies `lib/` to a fixed path, compiles there, and
+the number then agrees to the digit from clones at different depths — 80
+characters and 115 characters both read 66,968,333 in the container where that
+was tested.
+
+The row itself is the runner's, 66,450,587, copied out of the first job log.
+Half a per cent below the container's reading, which is the provenance line
+earning its place on the gate's opening run: same sources and the same box,
+a different rustc and a different libc.
+
+The ratchet row is `compile_ir`, and its mutation points inference's maps back
+at `std`'s hasher. That is the shape the vein exists for: instructions
+66,968,333 to 72,245,921 in the container, with `compile_allocs`, the rounds
+and the visits all byte-identical. A second row covers the provenance line, as the allocation and
+machine-code veins each have.
+
+## 2026-08-24 — the first thing the instruction vein caught
+
+`inline::direct_aliases` decides whether a function is a rename over a
+builtin. It resolved the target by stripping `builtin_` off the callee and
+then rebuilding `format!("builtin_{target}")` — two `String` allocations per
+candidate, on every pass of the fixpoint, for a round trip that cannot change
+the string. Every value the map holds was written with the prefix on it, and
+the other arm only fires when the callee already carries one, so both paths
+came back to where they started. `counts` was rebuilt on each pass as well,
+though the program does not change while the fixpoint runs.
+
+    compile_allocs        87,824 -> 87,290       -534
+    compile_instructions  66,450,587 -> 65,995,610   -0.68%
+    front_end_rounds          40 -> 40             flat
+    front_end_visits      17,786 -> 17,786         flat
+
+Both rows are the runner's. Part of the instruction fall is a second edit CI
+asked for: with the target a `&str` rather than a `&String`,
+`BIRTHS_ERR.iter().any(|b| target == *b)` is `manual_contains` and clippy
+refuses it — and the slice's own `contains` is the better codegen too, worth
+another 75,373 instructions on the container reading. I had run clippy before
+the cherry-pick and not after, so CI caught that rather than me.
+
+`bench/emitted_golden.txt` is unmoved, and that is the evidence that matters
+rather than the argument above: the same map drives
+`inline_builtin_wrappers`, so a round trip that was not the identity would
+have changed what the compiler wrote.
+
+Half a per cent of the front end's instructions, and 534 allocations. Neither
+number is large. What makes it worth an entry is that the vein landed six
+hours ago and this is the first change it has seen — a move too small for the
+wall clock on a loaded box, and invisible to rounds, visits and peak, which
+all sat still.
+
+## 2026-08-24 — the door analysis was copying names the program already held
+
+The runner's profile, printed by the instruction gate on its opening run,
+named a type outright:
+
+    1,308,039 (1.98%)  HashMap<String, (), BuildHasherDefault<Fx>>::insert
+
+A set of owned strings, hot enough to reach the top fifteen. Ablating the
+door advisory behind an environment variable sized it: `compile_allocs`
+87,824 to 85,118, so the pass was spending 2,706 allocations, and
+`phase::watched` puts it at 0.41 ms of about 11.8.
+
+Every name that analysis carries is a type the program declares. `name_types`
+answered a declared type with `name.to_string()`, and the fixpoint's
+`returns`, `env` and `tail` were `Set<String>` the whole way up — copies of
+strings already in memory, keyed and hashed as copies. They are `Set<&str>`
+now, borrowed from the program. `door_advisories` still returns owned
+`Vec<String>` messages, so no lifetime escapes the pass.
+
+    compile_allocs        87,290 -> 85,788           -1,502
+    compile_instructions  65,995,610 -> 65,590,655   -0.61%
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+
+That is 55% of what the pass spent. The rest is the fixpoint's own vectors
+and the message strings, which are the work it exists to do.
+
+`tests/advisory.rs` is the spec and it was watched red first. Make
+`name_types` answer an empty set for a declared type and
+`a_pub_fn_returning_a_foreign_type_with_no_accepting_op_is_advised` fails
+while the other five stay green — the door path and only the door path.
+
+The gate's own profile shows the swap where it happened. The owned-key line
+falls from 1,308,039 to 1,106,146, and a borrowed-key line stands beside it
+at 1,196,935:
+
+    1,196,935 (1.82%)  HashMap<&str, (), Fx>::insert
+    1,106,146 (1.69%)  HashMap<String, (), Fx>::insert
+
+Those two cannot be added together and compared against the old single line.
+The listing is thresholded at 90%, so a borrowed-key line may well have been
+there before and sat under the cut; what a reader can take from it is which
+monomorphisation the pass now uses, and nothing about totals. The total is
+the row: 65,590,655.
+
+Worth saying where this came from: nobody went looking for it. The gate added
+yesterday prints its profile on every run, and the profile named the type on
+the first red diff it produced. That is the second thing the instruction vein
+has found in a day, and both times the finding was in output that already
+existed rather than in a measurement somebody set out to take.
+
+## 2026-08-24 — the demand pass owns keys made of names the program holds
+
+`DemandInfo` answers two questions for codegen: is the bind at this statement
+lazy, and may its cell be released with the frame. Both are sets keyed by
+`(owning fn name, arity, statement index)`, and the name was a `String`.
+
+That cost twice. Tallying the votes allocated a key per statement per
+declaration — names the program was already holding — and every query
+allocated another key to throw away:
+
+    self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
+
+The sets are `Set<(&'a str, usize, usize)>` now, borrowed from the program.
+
+    compile_allocs        85,788 -> 84,261       -1,527
+    compile_instructions  65,590,655 -> 65,216,434  -374,221
+    front_end_rounds          40 -> 40            flat
+    front_end_visits      17,786 -> 17,786        flat
+
+1,527 of the 2,813 the pass was spending, which is 54% — near enough the 55%
+the door analysis gave up yesterday to suggest the shape has a characteristic
+size. What stays is the fixpoint's own vectors and the discard map.
+
+The instruction fall works out at 245 per allocation removed, against 270 for
+the door analysis yesterday. Both are the same order as the malloc machinery
+alone: `_int_malloc`, `malloc`, `_int_free` and `free` together are
+15,367,938 of this run's 65,216,434, which over 84,261 allocations is 182
+apiece before any name is copied. Rounds, visits and peak are flat, so the
+allocation and instruction veins are the whole record of the change.
+
+The query allocations go too, and no vein can see it: `is_lazy_bind` and
+`is_releasable` are called only from codegen, which `kanso check` never runs.
+They are gone all the same.
+
+Two things about the borrow were settled by building rather than reasoning.
+The first was whether `DemandInfo` could borrow at all, given that it outlives
+its pass — all three owners already carry a lifetime and already borrow the
+program, so `infer::Ctx<'a>`, `eval::Interp<'a>` and `codegen::Backend<'a>`
+took it unchanged. The second looked worse: `HashSet::contains` wants
+`K: Borrow<Q>`, and for a tuple key `Q` is the tuple exactly, so a
+`Set<(&'a str, …)>` seemed to need an `&'a str` to probe with rather than the
+shorter-lived `&str` the query signature offers. The plan was to restructure
+as `Map<&'a str, Set<(usize, usize)>>` to avoid it. The plan was unnecessary:
+`&str` is covariant and `HashSet` is covariant in its key, so the probe
+compiles as written. One build settled what an afternoon of reasoning would
+have got wrong in the safe direction.
+
+`src/demand.rs`'s own two tests are the spec, and the mutation was watched:
+tally the votes under a key whose name is `""` and
+`discard_capable_argument_is_lazy` fails while
+`scrutinized_binding_stays_strict` stays green, which is the lookup path and
+only the lookup path.
+
+## 2026-08-24 — the alias canonicaliser borrows the names it reasons about
+
+`canonicalize_bare_aliases` decides which bare function names are clones of a
+qualified original and rewrites them to the qualified spelling. Two things it
+did cost allocations that had nothing to do with that decision.
+
+The first was a needle. For every synthetic declaration it built
+`format!("/{}", d.name)` and asked whether a twin's name ended with it, then
+dropped the string. `strip_suffix` asks the same question without building
+anything:
+
+    let qualified = name
+        .strip_suffix(d.name.as_str())
+        .is_some_and(|qual| qual.ends_with('/'));
+
+The second was the binder walk. `bound_in_pattern`, `bound_in_stmt` and
+`bound_in_expr` collect every name a declaration binds — parameters, `x = ...`
+bindings, lambda parameters, destructured fields — so that a name which is
+ever locally bound is never rewritten. They collected them as `String`.
+`check.rs` has carried a borrowed twin of the same walk at :1453 and :1463 for
+as long as this one has owned its names, so the shape was already in the tree
+and already proven. This walk was the outlier.
+
+    compile_allocs        84,261 -> 82,848      -1,413
+    front_end_rounds          40 -> 40           flat
+    front_end_visits      17,786 -> 17,786       flat
+    compile_peak_bytes   864,274 -> 864,274      flat
+
+Measured against main before the demand pass landed, this same diff was worth
+66,117,450 -> 65,586,233, a fall of 531,217. Measured against main after it
+landed, the identical diff is worth 65,709,239 -> 65,364,674, a fall of
+344,565. The allocation delta is -1,413 in both cases. Every count is exact:
+the branch figure reads 65,364,674 on two consecutive runs in the fixed box,
+which is what the seedless hash bought.
+
+So the same 1,413 allocations are worth 376 instructions apiece on the fatter
+tree and 244 on the leaner one. Allocation counts compose — 84,261 - 1,413 is
+82,848 and that is what the counter reads — and instruction counts do not.
+The malloc machinery's cost per call depends on the state of the free lists,
+and a tree that already stopped making 1,527 allocations presents a cheaper
+one. That is a caution about a habit this log has been building: three entries
+now have quoted an instructions-per-allocation ratio (270 for the door
+analysis, 245 for the demand pass), and the ratio is a property of the
+measurement rather than of the change. Two changes each worth "250 per
+allocation" do not add up to their sum.
+
+The golden row was predicted before CI ran, by carrying the container's delta
+across to the runner's baseline: 65,216,434 - 344,565 = 64,871,869. The runner
+read 64,840,962, so the prediction was 30,907 high — the runner's own delta is
+-375,472 against the container's -344,565. Allocations transferred exactly
+(82,848 was predicted and 82,848 is what CI read, as it has every time), and
+instructions did not. The toolchains differ, 1.98.0 on the runner against
+1.94.1 here, and the malloc-shape argument above says the instruction cost of a
+change depends on the tree it lands in. Predicting the allocation row is safe.
+Predicting the instruction row saves nothing, because being 0.05% out costs the
+same red cycle as not guessing at all.
+
+`beat::tests::a_locally_bound_name_is_never_rewritten` is the spec, and the
+mutation was watched. Make `bound_in_pattern` insert nothing for `Var` and
+`Annotated` and it fails with `the local was rewritten: {"list/first", "xs"}`,
+while the other 33 in that module stay green — the skip set loses the local
+`xs`, and the bare alias is rewritten straight over it. That is the walk's
+entire purpose and the only path that moves.
+
+The ratchet needed a repair to survive this. Its `compile_allocs` mutation
+rewrote `out.insert(name.as_str());` unscoped, meaning to hit `mentions_in_expr`
+— the only place that line existed. `bound_in_pattern` now has a line spelled
+exactly the same, and the sed rewrote both, which put a `String` into a
+`Set<&str>` and made the mutation fail to compile. The substitution is scoped
+to `mentions_in_expr` by address now, and it was checked the long way: apply
+it, confirm the tree still builds, confirm `bound_in_pattern` was left alone,
+and read the counter at 88,634 against a golden of 82,848.
+
+The reason this could have gone unnoticed is written down in `ratchet.kso` as a
+deliberate rule: "a build that breaks because of the mutation is the gate going
+red early, and `prove` counts that as red." So a mutation that stops compiling
+passes `prove` exactly as a working one does, and the row goes on asserting
+that `compile_allocs` notices an owned-name pass when nothing has tested that
+in months.
+
+The rule is reasonable for a mutation whose defect is meant to break the build.
+It is wrong for this vein, where the whole claim is that a COUNTER moves: a
+tree that will not compile never reaches the counter, so the row proves
+nothing. Any mutation keyed on a line of source rather than on a function is
+one identical line away from that state, and by the rule above it will not
+announce the change.
+
+That is the ratchet's own design, so by the pending-gavels rule it is settled
+here rather than sent up. `prove` now requires `setup` to succeed, and a row
+whose mutated tree will not build reports UNBUILT instead of red. The split is
+safe because the rows whose defect IS a build or lint failure — clippy bait,
+misformatted source, a given-up tail call — carry `no_setup` and do their
+building inside the GATE, where a failure still counts. Only the ten rows
+carrying `release` as setup are affected, and every one of their gates reads a
+counter or a golden.
+
+The demonstration is the bug itself. With the unscoped sed restored, on the
+same tree:
+
+    old prove:  red      ... every row turned its gate red
+    new prove:  UNBUILT  ... 1 rows proved nothing
+
+and with the sed scoped, the new code reads red again and all eight rows pass.
+
+Fixing that turned up a second thing immediately, which is the argument for
+the change. Two rows came back UNBUILT on an unmutated tree, and the reason
+was that `prove` symlinks each worktree's `target` at a shared
+`/tmp/kanso-ratchet-target` that nothing creates. On a fresh machine the link
+dangles, `cargo build` stops with "Not a directory", and every row carrying
+`release` as setup was being counted red without its gate ever running. It
+takes a `mkdir -p` to fix. How long it had been true is not something this log
+can say — the old code could not distinguish that state from a working row,
+which is the whole point.
+
+One thing found on the way. The doc comment above `bound_in_pattern` had
+collected two paragraphs belonging to other functions: one describing
+`qualify` and one describing `canonicalize_types`, both of which sat
+undocumented further down the file. They are back where they belong.
+
+## 2026-08-24 — four maps that knew their size and did not say so
+
+`reserve_rehash` was 2,402,471 instructions of the front end's 65.4 million,
+which is a map growing from empty and copying itself at 3, 7, 14, 28 entries
+and so on. Four of the maps that pay it are built by walking `program.fns`,
+whose length is known before the loop starts: `groups` and `callee_first`'s
+`by_name` in inference, `at_site` and `by_name` in the alias canonicaliser.
+They are pre-sized now.
+
+    compile_allocs        82,848 -> 82,776   -72
+    front_end_rounds          40 -> 40        flat
+    front_end_visits      17,786 -> 17,786    flat
+    compile_peak_bytes   864,274 -> 864,274   flat
+
+The instruction figure is the part worth keeping. Rehash work fell by 419,151,
+from 2,402,471 to 1,983,320, and the total fell by 80,631 — a fifth of what
+was saved. The rest went back out in the larger table: a capacity hint that
+over-shoots buys a bigger allocation and a bigger region to clear.
+
+Which suggested sizing each map to what it actually holds, so the table would
+be no larger than natural growth would have made it. The sizes were measured
+rather than guessed — printing `len()` at the end of each build over lib/json
+and its dependencies gives 89/158, 22/26, 1/2, 240/407 and 186/326 for the two
+name-keyed maps, so five eighths is above every sample; `at_site` runs at
+1.00, 1.00, 1.00 and 0.81, so it wants the full count. Working through
+hashbrown's bucket arithmetic, that lands each table on the same power of two
+natural growth reaches, with none of the rehashes. It should have been strictly
+better than the blanket hint.
+
+It was worse. Sized to need reads 65,318,681 against the blanket 65,284,043,
+so the careful version gives back 34,638 of the 80,631. The blanket hint's
+extra room is not waste: a table at half load probes in fewer steps, and that
+is worth more than the memset it costs. The arithmetic was right about bucket
+counts and wrong about what bucket counts are for.
+
+So the blanket `program.fns.len()` ships, and this is recorded mostly because
+the reasoning was careful, checkable, and beaten by the measurement. There was
+no way to reach it from the bucket arithmetic alone.
+
+    compile_instructions  64,840,962 -> 64,771,091   -69,871
+
+The runner's fall is 69,871 against the container's 80,631, and this time the
+row was taken from CI rather than predicted, which is what the previous entry
+concluded to do.
+
+A third of `reserve_rehash` remains, in maps this change does not touch.
+
+## 2026-08-24 — gavel: no tolerance bands — a golden is exact, per platform
+
+Clay ruled the compile-memory entry: "that shouldn't be a tolerance. it
+should be a setting per platform. or a conversion now that you're
+running in the cloud instead of locally on my Mac."
+
+The band was the bug's whole habitat. Two per cent of 871,649 is 17,432
+bytes of slack for a host divergence documented at 56, and main drifted
+376 bytes greener inside it with CI green the entire time. The
+host-pinning that landed on 2026-08-23 already built the other half of
+the ruling: goldens carry a measured-on line and an off-reference host
+refuses to compare rather than fuzzing.
+
+The ruling, in three clauses:
+
+- `bench/compile_memory_golden.txt` holds an exact figure for its named
+  platform and the gate asserts equality — the two-per-cent band dies.
+- Platform is a setting, not a tolerance: the file's shape allows one
+  row per reference host (the CI runner is the reference now that the
+  work runs in the cloud rather than on Clay's Mac), and any host
+  without its row refuses, which the measured-on machinery already
+  does.
+- The stored figure corrects to the runner's true number (872,061,
+  measured twice), and the welfare floor moves with it via `--set`,
+  recorded as a data correction rather than a relaxation: the 84.85
+  floor was ratcheted against a figure the compiler had already left
+  behind, so the correction restores the term to measuring reality.
+
+The entry leaves the ledger with this commit. Implementation — the gate
+edit, the corrected figure, the floor `--set` with this entry cited —
+is the implementer's, in one PR so the red window never exists.
+
+## 2026-08-24 — gavel: a demanded knot counts, and the oracle moves
+
+Clay confirmed the recommendation ("it seems so obvious"), and it is the
+other half of the undemanded-knot gavel: `thunk_allocs` counts the
+program's own demanded work, identically on every engine. An undemanded
+knot is not demanded work, so it counts nowhere — ruled and built as
+#992. A demanded knot IS demanded work, so it counts everywhere: both
+engines report `thunk_allocs=1` for `x = [x]` that something reads. The
+engine that moves is the oracle, whose `knotted` builds its cell without
+touching the counter — bookkeeping brought into line, no semantic
+change anywhere. Unblocked: the fixture pinning a demanded knot's
+allocation shape; values and forces already agree. The entry leaves the
+ledger with this commit.
+
+## 2026-08-24 — `>>` stops at the first run-time failure, which was never open
+
+The ledger's last blocking entry asked whether `>>` accumulates
+run-time effect failures or stops at the first, and Clay's answer was
+that he had answered it — repeatedly. He had. The July B ruling is
+explicit: an err is a true exception, it short-circuits except where
+parallelism makes that impossible, and a parallel join accumulates only
+because every member is already running. `>>` is the sequential
+operator; a run-time failure on its left stops its right, and under the
+deferral gavels that is structural rather than special-cased — the
+right side is a description that never gets demanded. Build failures
+merging on both sides was settled separately and stands; the two
+behaviors differ because the failures happen at different times, which
+is the distinction the operator exists to express.
+
+Recorded as ruled by standing precedent, not as a new gavel. The entry
+should have been checked against the July ledger before being filed —
+"search the archive before calling an idea new" already says so — and
+re-asking a settled question cost Clay the tenth answering of it. The
+entry leaves the ledger; the blocking section is empty.
+
+## 2026-08-24 — gavel: a build hole is spelled `_`, and fills exactly once
+
+Filed by Clay in the developer chat, another ruling given many times
+and recorded nowhere — the shipping ch03 sample does the thing he
+rejected. His words: "build doesn't work this way, as i said many
+times. you don't supply 'none', you supply _
+
+    build
+      ada = person "ada" _
+      bob = person "bob" ada
+      ada.partner = bob
+
+then you can update with a real value exactly once."
+
+The ruling: inside `build`, a field whose value is not yet available
+is constructed with `_` — a hole, not a value. `none` keeps its one
+meaning, genuine absence, and never means "not wired yet"; a person
+with no partner and a person whose partner has not been wired are
+different things and now look different. A hole is filled by the field
+write with a real value exactly once: unfilled at the block's freeze
+is a refusal, and a second write to the same field is a refusal.
+
+The ratified build-blocks design (2026-07-19) never specified the
+placeholder, which is how `none` crept into
+docs/book/samples/ch03/knot.kso — the defect that surfaced this.
+Implementation is the implementer's: the `_` construction form, the
+exactly-once check, the sample, its golden, and the ch03 prose that
+teaches it.
+
+## 2026-08-25 — the allocation map, and one throwaway vector it found
+
+Every allocation win so far was found by reading the instruction profile and
+guessing which pass behind it was allocating. That guessing has been wrong at
+least once today: `used_globals` looked like the obvious owner of the
+986,615-instruction `Set<String>::insert` line, and instrumenting it showed 612
+inserts, which cannot be it.
+
+The per-phase allocation probe was built for this and declined, because it
+costs the shipped compiler 92,873 instructions per compile to carry a counter
+nobody outside a profiling run reads. It did not need to be in the compiler.
+`valgrind --tool=dhat` records every allocation with its call stack and needs
+no code at all — build with `RUSTFLAGS=-g` for symbols and read the JSON. It
+agrees with the counter exactly: 82,788 blocks against `compile_allocs`
+82,776, the difference being twelve allocations before the counting allocator
+is installed.
+
+Attributing each block to its innermost kanso frame gives the map the tree has
+never had:
+
+    8,649  10.4%  lexer::lex_line
+    7,733   9.3%  infer::eval_expr
+    5,768   7.0%  walk_children
+    5,236   6.3%  hashbrown fallible_with_capacity
+    3,956   4.8%  Tok::clone
+    3,866   4.7%  infer::infer
+    3,184   3.8%  lexer::lex
+    2,726   3.3%  inline::rewrite
+    2,407   2.9%  trmc::rewrite
+    2,366   2.9%  provenance::Walk::expr
+    2,318   2.8%  check::param_names
+    2,239   2.7%  parser::P::parse_app
+
+Lexing is 19.1% of the total across its three frames, which is the largest
+single area and the one whose obvious fix was declined on 2026-08-24 for
+reasons that still hold.
+
+One row in that table needs reading carefully, and it is a caution about the
+method rather than about the row. `walk_children` does not allocate — it was
+given a callback in #1007 precisely so that it would not. Its 5,768 blocks are
+`RawVec::grow_one` inside `for_each_child`'s closure, which is a CALLER's
+vector growing while the walk runs. Four places in `check.rs` spell
+`let mut stack = vec![e]` once per statement and then push children into it, so
+each statement allocates a worklist and doubles it as it fills. The innermost
+kanso frame is the honest thing for dhat to report and it is not the same as
+the frame that owns the memory; where a callback separates the two, the stack
+has to be read rather than the label.
+
+`check::param_names` is not that. It answered `Vec<&str>` — already borrowed,
+but a vector per call, and the `Ctor` arm built one for the fields and then a
+second to put the `whole` name in front of it, so a nested pattern allocated
+one per level for names nobody kept. That is the shape `expr_children` had
+before it took a callback. It takes one now, with `first_param_name` beside it
+for the single caller that wants only the first.
+
+    compile_allocs        82,776 -> 80,458           -2,318
+    compile_instructions  64,771,091 -> 64,175,885   -595,206
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+The fall is exactly what dhat attributed to that frame, which is the useful
+part: the map predicts, rather than merely explains after the fact.
+
+The spec is `tests/golden/errors/let_binding.kso` and it was watched red. Make
+`for_each_param_name` hand back nothing for `Var` and `Annotated` and the
+corpus reports ``a binding is ` = …` `` where it should say
+``a binding is `x = …` ``, which is `first_param_name` and only that path.
+
+Worth naming honestly: that mutation blinds both functions, and only the one
+golden moved. The four callers that build a `bound` set — the shadow checks and
+the literal walk — went on passing with every set empty. Their coverage is
+thinner than it looks, and that is true of the code as it stood this morning
+rather than anything this change did.
+
+## 2026-08-25 — five worklists that were rebuilt for every statement
+
+The entry above found that `walk_children`'s 5,768 blocks in the allocation
+map belong to callers rather than to the walk. This is those callers.
+
+Five places in `check.rs` drive an explicit worklist instead of recursing —
+`let mut stack = vec![e]`, then pop and push the children. Three built that
+vector once per STATEMENT and two once per DECLARATION, and in every case it
+started empty and doubled its way up as the walk filled it. A vector per
+statement, across every statement of every declaration, for a scratch list
+that is empty again by the time the statement ends.
+
+One vector per site now, cleared and reused.
+
+    compile_allocs        80,458 -> 77,249           -3,209
+    compile_instructions  64,175,885 -> 63,492,172   -683,713
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+dhat agrees on where it went: `walk_children` falls from 5,768 blocks to
+4,237, and the rest of the difference is the `vec![e]` itself, which was
+attributed to the calling function rather than to the closure.
+
+The `clear()` is the part worth explaining, because the reuse does not need it
+to be correct. Every one of those loops drains its stack — `while let Some(cur)
+= stack.pop()` runs to empty, and none of the five has a `break`, `continue` or
+`return` inside it, which was checked rather than assumed. So the stack is
+already empty when the next statement starts.
+
+What the `clear()` buys is that nothing has to keep being true. The mutation
+was run: make one of those loops stop early, so it leaves items on the stack
+for the next statement to inherit, and the entire golden error corpus stays
+green. Ten golden tests, every diagnostic compared exactly, and not one of them
+can see a walk that carries expressions from one statement into the next. An
+invariant that load-bearing, with no spec under it, is not one to build a
+performance change on top of; a `clear()` on an empty vector costs a store and
+removes the question.
+
+That the corpus cannot see this is the finding, and it is about the corpus
+rather than about the worklists. It is recorded here rather than fixed because
+the fixture that would catch it — a leak that changes which file a diagnostic
+names — belongs to whoever next touches those checkers.
+
+### The map was blurred, and sharpening it moved the headline
+
+The map in the previous entry, and the one this entry started with, attributed
+every block to the innermost kanso frame valgrind reported. On an optimised
+build that frame is the ENCLOSING function: everything inlined into it collapses
+under its name. The `walk_children` row was one symptom, caught by reading the
+stacks. It was not the only one.
+
+`valgrind --tool=dhat --read-inline-info=yes` resolves the inlined frames, and
+the same 77,261 blocks sort quite differently:
+
+    25,966  33.6%  String::clone
+     5,885   7.6%  Vec::from_iter
+     5,236   6.8%  hashbrown table allocation
+     4,802   6.2%  infer::eval_expr
+     3,707   4.8%  String::from_iter(&char)
+     3,263   4.2%  Vec::clone
+     3,078   4.0%  lexer::lex_line
+
+A third of everything the front end allocates is copying a `String`. That did
+not appear anywhere in the coarse map, because each clone was charged to
+whichever pass had inlined it. `infer::eval_expr` shrank from 7,733 to 4,802
+for the same reason, and its 3-to-5-byte blocks — which no `HashMap<&str, u16>`
+clone could ever produce, since the smallest hashbrown table is over a hundred
+bytes — are the ones that moved out.
+
+Charging each `String::clone` to the first kanso frame beneath it gives the
+list worth working from:
+
+    3,807  Tok::clone                 1,628  inline::direct_aliases
+    2,916  for_each_child closure     1,192  check::declared_names
+    2,366  provenance::Walk::expr     1,046  trmc::rewrite
+    2,292  check::check_file_shadow     919  demand::analyze
+    2,105  compile_module_loaded        843  inline::rewrite
+    1,829  provenance::analyze          788  fuse_enumerable
+
+Provenance is the largest cluster outside the lexer at 4,195 across its two
+frames. Nothing here is acted on yet.
+
+The lesson is the same one the `walk_children` row taught, and it is worth
+stating once: a profile that names functions is naming the frames the compiler
+left behind, not the code that ran. Read the inline info, or read the stacks.
+
+## 2026-08-25 — provenance borrows its group keys, and gets a spec at last
+
+The sharpened map put `String::clone` at a third of the front end's
+allocations, spread across a dozen passes. Provenance was the largest cluster
+outside the lexer, 4,195 blocks across `Walk::expr` and `analyze`.
+
+`type Group = (String, usize)` — a declaration's name and arity, with the name
+owned. That is the shape the demand pass had before 2026-08-24, and it cost the
+same way, only worse: this is a fixpoint that runs the whole program through up
+to two hundred rounds, and every round rebuilt the key for every group it
+touched. `self.returns.get(&(name.clone(), args.len()))` allocated a `String`
+per lookup and dropped it.
+
+`Group<'a>` is `(&'a str, usize)` now, `binds` is `HashMap<&'a str, Pkgs>`, and
+`Provenance<'a>` carries the lifetime out to its one consumer in `main.rs`,
+where the program outlives it. It compiled on the first attempt; the covariance
+question that was settled by building on 2026-08-24 did not come up again.
+
+    compile_allocs        77,249 -> 72,756           -4,493
+    compile_instructions  63,492,172 -> 62,351,359   -1,140,813
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+That is 1.8% of the front end's work for one pass's keys, and 254 instructions
+per allocation removed — the highest rate of the day, because a fixpoint pays
+for its keys once per round rather than once.
+
+The fall is larger than the 4,195 dhat charged to provenance, because the
+candidate list's `group.clone()` and the vectors around it went with the keys.
+
+### The pass had no spec, and now it does
+
+The mutation was run before the change shipped, and it found nothing. Collapse
+every group's name — `("", decl.params.len())` — so that provenance can no
+longer tell one declaration from another of the same arity, and all six
+advisories in `tests/advisory.rs` stay green, and lib/json's three licence
+advisories come back byte-identical. The central key of a whole pass, and the
+suite could not see it change.
+
+`tests/golden/advisory/group_identity` is the fixture that can. `rescue` is pub,
+so provenance seeds it — a published err parameter is assumed to see its own
+package's failures, because its callers are not all in view. `quiet` is private
+and uncalled, so nothing ever feeds it. The two differ only in their name. With
+the key intact only `rescue` is advised; with the names collapsed `quiet`
+inherits what `rescue` was fed and is advised for a rescue it never made, and
+`a_group_is_told_apart_by_its_name_and_not_only_its_arity` goes red while the
+other six stay green.
+
+One thing worth recording about how that was found, because it nearly went the
+other way. Restoring the source and re-running WITHOUT rebuilding produced a
+reading that looked like a genuine result — both functions advised on correct
+code — and the explanation for it was already half-written before a `grep` of
+the source against the binary's behaviour showed the binary was still the
+mutated one. The rule that saves this is cheap: after restoring a mutation,
+rebuild before reading anything.
+
+## 2026-08-25 — the log's older end moves to the archive, and the page catches up
+
+This file's own header has said "the last forty entries" for as long as the
+archive has existed, and it held eighty-two. 3,482 lines, read at the tail on
+every session and in full by nobody, which is the cost the arrangement was
+invented to stop paying.
+
+The older forty-two are in `log/compiler-log-archive.md` now, unedited and in
+order, which puts this file back at forty entries and 2,028 lines and the
+archive at 673. The move was checked rather than trusted: the 713 entry
+headings across the two files come back in identical order, and a multiset of
+every line in both differs by exactly one blank line at the join.
+
+`docs/compiler.html` moved with it, which is what `page_drift` was sitting at
+3/3 to insist on. Three shipped changes had landed in this log since the page
+was last edited and the numbers it published were three changes stale: the
+front end allocates 72,756 times where the page said 82,776, and retires
+62,351,359 instructions where it said 64,771,091. The page now also carries the
+two things from this sweep that outlast the numbers — that dhat gives an
+allocation map with no code in the compiler, and that its first map was blurred
+because an optimised build charges inlined code to the enclosing frame.
+
+## 2026-08-25 — the shadow checker's globals, and the arities beside them
+
+`collect_globals` builds the set of every name a module puts in scope — the
+ambient builtins, the nullary forms, every type and every declaration — and it
+built that set out of `String`. `check_file_shadow` then extended it with a
+clone of every extern global on top, and beside it keyed two more maps,
+`fn_arities` and `type_arity`, on cloned declaration and type names. All of it
+read once and dropped at the end of the call.
+
+The set and both maps borrow from the program now, and `Resolver` holds
+`&'a HashSet<&'a str>` where it held `&'a HashSet<String>`.
+
+    compile_allocs        72,756 -> 70,356           -2,400
+    compile_instructions  62,351,359 -> 61,349,546   -1,001,813
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+The gate's own profile shows the swap where it happened. The
+`HashMap<String, ()>::insert` line that has sat in the top fifteen since the
+seedless hash went in — 986,615 instructions — is gone from the listing
+entirely, and the borrowed-key line beside it rises from 1,310,405 to
+1,543,975. As with the door analysis on 2026-08-24, those two figures cannot be
+added and compared against the old pair: the listing is thresholded at 90% and
+what a reader can take from it is which monomorphisation the pass uses. The
+total is the row.
+
+`used_globals` stays owned, and that is not an oversight. It accumulates across
+every dependency in the build and is read after each one's program has gone, so
+its contents have to outlive the thing they came from. It is the one name set
+here that cannot borrow.
+
+This path is pinned, unlike the last two. Drop declaration names from the
+globals set and thirty of `beat.rs`'s tests fail, the first of them with a wall
+of `error[name]: unknown name` over std/text — every function in the program
+becomes a name nothing declared. That is what a covered invariant looks like,
+and it is worth putting beside the two found bare today: the difference is that
+this set is what a user meets as a diagnostic, while a fixpoint's key and a
+worklist's residue are internal and were tested as if they did not exist.
+
+## 2026-08-25 — the extern name set stops being copied once per file
+
+`declared_names` answered `HashSet<String>`, and the loop that checks each file
+of a module used it twice over:
+
+    let mut extern_globals = all_names.clone();
+    for name in check::declared_names(program) {
+        extern_globals.remove(&name);
+    }
+
+`all_names` holds every name the whole build declares. Cloning it once per file
+is a `String` per name per file, and `declared_names` allocated another set of
+its own on the next line so the copy could have names removed from it. The
+result is read by the shadow check and dropped.
+
+`declared_names` borrows now, and the extern set is built by filtering
+references out of `all_names` rather than copying and subtracting:
+
+    let extern_globals: crate::hash::Set<&str> = {
+        let own = check::declared_names(program);
+        all_names.iter().map(String::as_str).filter(|n| !own.contains(n)).collect()
+    };
+
+    compile_allocs        70,356 -> 67,948           -2,408
+    compile_instructions  61,349,546 -> 60,277,520   -1,072,026
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+`all_names` itself stays owned, and the borrow checker is the reason rather
+than a preference: the loop below it takes `&mut parsed`, so a set holding
+references into those programs could not live across it. It is fed with an
+explicit `String::from` now, which says at the call site that the copy is
+deliberate.
+
+Watched red: invert the filter, so the set holds a file's own names instead of
+everything else, and six of `beat.rs`'s and the dispatch, escape and linear
+suites go red together.
+
+Two things about the method, both mine to own. The clippy that CI runs
+(`--all-targets`, no `--release`) refused `declared_names<'a>` as a needless
+lifetime; the elided form is what shipped, and running the CI form locally is
+what caught it rather than CI. And a `cargo test --release` was started while
+an earlier one was still running in the background, which put them on the same
+target directory and produced a failing `ir_verifier` that reran green on its
+own. A test result read out of a contended run is not a result. One suite at a
+time, and read the exit code rather than grepping the stream.
+
+## 2026-08-25 — the bare-name set in mark_bare_quals
+
+The last row on the allocation map that was neither the lexer nor a scattering
+of small ones. `for_each_child::{{closure}}` carried 2,916 `String::clone`
+blocks, and reading the stacks put every one of them in `mark_bare_quals`:
+
+    if let ast::Expr::Ident(name, _) = e {
+        if !name.contains('/') {
+            bare.insert(name.clone());
+        }
+    }
+
+That walk covers every expression of every declaration in the program, and it
+kept a `String` per bare identifier OCCURRENCE — not per distinct name — for a
+set that is asked two questions at the bottom of the function and dropped.
+
+    compile_allocs        67,948 -> 64,884           -3,064
+    compile_instructions  60,277,520 -> 59,527,334   -750,186
+    front_end_rounds          40 -> 40                flat
+    front_end_visits      17,786 -> 17,786            flat
+    compile_peak_bytes   864,274 -> 864,274           flat
+
+The fall is larger than the 2,916 charged to the closure, because the recursion
+carried captures of its own that went with the change.
+
+Watched red: insert `""` instead of the name and
+`every_example_runs_by_the_verb_its_shape_asks_for` fails with
+`error[unused]: unused import "std/list"` against two examples that plainly use
+it. A blinded set marks no qualifier as used, so every import looks dead. That
+is the whole purpose of the function and the only path that moves.
+
+### Where this leaves the sweep
+
+`compile_allocs` has gone 85,788 -> 64,884 across eleven changes today, which
+is 24.4%, and `compile_instructions` 65,590,655 -> 59,527,334, which is 9.2%
+and takes the front end under sixty million for the first time. `front_end_rounds`,
+`front_end_visits` and `compile_peak_bytes` are identical at both ends: the same
+passes decide the same things and hold the same memory, without copying names
+the program is already holding.
+
+What is left of `String::clone` is about eleven thousand blocks and it no
+longer has a large single owner. `Tok::clone` is 3,807 of it and belongs to the
+lexer, where the obvious fix was declined on 2026-08-24 for reasons that still
+hold. The rest is one and two thousand at a time in `inline`, `trmc`, `demand`
+and `fuse_enumerable` — real, but each its own small errand rather than a
+thread.
+
+The systemic answer from here is an interned symbol in the AST, which turns
+every one of those clones into a copy of four bytes. That is a much larger
+change than anything in this sweep: it touches the parser, every pass, both
+back ends and the interpreter. It is recorded here as the shape of the next
+move rather than proposed, because the prize is known (about eleven thousand
+allocations) and the cost is not measured, and this log has a rule about
+building rather than describing.
+
+## 2026-08-25 — how big an interner would have to be
+
+The entry above left the interned-symbol idea recorded rather than proposed,
+on the grounds that the prize was known and the cost was not. Half of that cost
+is cheap to measure, so here it is.
+
+A throwaway census over `check_merged` counts the DISTINCT names a merged
+program carries against the number of times one appears — declaration names,
+file names, type and field names, and every `Ident` or `Partial` in every body:
+
+    distinct=167  occurrences=1,098
+    distinct=57   occurrences=143
+    distinct=4    occurrences=6
+    distinct=394  occurrences=2,875
+
+The largest program in the json build holds 394 distinct names, and 622 across
+all four before counting the overlap a shared table would collapse. Against
+that, the front end still makes about eleven thousand `String::clone`s.
+
+So an interner would be a few hundred entries — one small allocation each,
+made once — standing in for eleven thousand copies, and every name comparison
+in the compiler would become a `u32` compare instead of a `memcmp`. The
+`__memcmp_avx2_movbe` line has sat in the gate's top fifteen at 1.3 million
+instructions all day, and it is names being compared.
+
+What that settles is the economics, which are not close. What it does not
+settle is the churn: `ast::Expr::Ident` holds a `String` today and every pass,
+both back ends and the interpreter read it, so the table has to be reachable
+wherever a name is printed. That is the part still unmeasured, and it is a
+question about how much code moves rather than about whether the move pays.
+
+The probe is not in the tree. It was two functions behind an environment
+variable, run once, and reverted — a census is a thing to know, not a thing to
+carry.
+
+## 2026-08-25 — ruling archaeology: what was decided and never became record
+
+Clay: *"the goal here would be to not have anything left to gavel. I feel like
+I keep gathering things and then you ask me the same question 10 to 20 more
+times."* This is one sweep of the log, the archive and every `design/*.md` for
+rulings whose content is not reflected in the ledger, the gavels, or shipped
+behaviour. Seventy-nine attributed rulings across the two log files; four
+findings.
+
+### Gavel 1b, ruled, half built, and its marker lost twice
+
+`### 1b. Foreign structure access, gaveled — per-field pub` sits in the archive
+at 2026-08-14. Named structure reads cross packages, `pub` is granted per
+field, and the gavel explicitly "retires failure_position-style projections".
+
+The construction half was enforced on 2026-08-20 — *"yes 251 is mine"* — and
+that entry says plainly it is "1b implemented rather than a second decision".
+The read half is not built: `pub x` inside a type is still a syntax error, so
+the field-level fence the gavel grants has no way to be written.
+
+The marker has now fallen out of the ledger twice. The first loss was caught
+and written up in the archive under A TRAP WORTH THE SENTENCE — *"the index is
+maintained by hand and can lose a fact; the log is append-only and cannot. They
+disagree in one direction only, so when they do, the log wins"* — and the
+marker was restored in that same commit. It went again in `e3052383`, the
+rewrite that consolidated four files into the one ledger, and has been absent
+since.
+
+Three things follow, and none of them is a question for Clay:
+
+- The ledger's **Dot chains route around accessor privacy (Demeter)** entry
+  sits under "Open, not blocking" in a file whose charter is decisions
+  awaiting Clay. It is not awaiting Clay. It is awaiting an implementer, and
+  it says so itself — "the unbuilt half of per-field `pub`".
+- `failure_position` and `failure_reason` still ship in `lib/json/json.kso`,
+  four arms of them, though 1b retires exactly that shape.
+- kanso#985 is that migration. The 2026-08-17 entry scopes it — "the
+  projections, json_failure_door.kso, and the ch08 suite" — and rules the ch08
+  leg with it. It has sat as a draft since 2026-08-21.
+
+I had this one wrong earlier today and the correction is the point of the
+sweep: I told Clay #985 was a language-surface decision and therefore his. It
+is the implementation of a gavel he gave on 2026-08-14.
+
+### G — eta-reduction as canon — has its answer in a declined experiment
+
+The ledger asks whether to ban the forwarding lambda, `map (c -> fetch c)`
+becoming `map fetch`. The archive answers the premise on 2026-07-25 under
+BUILT, MEASURED, DECLINED: the rewrite is not semantics-preserving here,
+because an `err` records a hop for every function it passes through, so
+removing the lambda changes the provenance the trace prints and native stops
+agreeing with the oracle.
+
+Two forms that print different traces cannot be canonicalised into each other.
+That retires G's premise rather than G's question, which is why this one is a
+recommendation with the reason attached rather than a strike: one word closes
+it.
+
+### `--explain-copies` is part-superseded and the ledger does not say so
+
+The archive records it at 2026-07-27: part-superseded by the counter stack
+(`bytes_peak`, `cohort_kept`, `carry_dedup`, the trend gate, the welfare peak
+terms), with the unserved half — naming the source site of each evacuation
+copy — scoped and waiting on a CLI-surface ruling. The ledger entry describes
+only the unserved half without recording that the rest already landed, which
+reads as a larger open question than it is.
+
+### The assert hako is correctly filed, and this says so
+
+Its licence half was ruled on 2026-08-17 — assertions are ordinary foreign
+rescue — and the ledger entry already carries that sentence. Recorded here so
+the next sweep does not re-derive it.
+
+### What the sweep did not find
+
+`C` (pure/yield), `D` (what a succeeded effect yields), `Z` (errors without
+exceptions) and `AA` (newtype dispatch acceptance) have no prior ruling in
+either log file. They are genuinely open, and the ledger's own caveat about C
+and D — that they were asked before `>>` deferred its right side, so the
+question's shape may not have survived — still stands.
+
+## 2026-08-25 — the residual sweep: what is left to rule, and what never was
+
+The archaeology sweep earlier today asked which rulings never became record.
+This one asks the complement: of everything anybody ever wrote down as open,
+what is still genuinely un-ruled. The ledger now holds that list, each entry
+with a citation and a recommendation, so a sitting can be a yes or a no.
+
+Six candidates were answered already, and each is written here so it never
+reaches Clay a second time.
+
+**A lambda in a chain stage needs its parens, and the grammar says so.**
+design/enumerable.md §9.4 lists it as open and adds "needs a lexer rule". The
+rule is there. `list/map (x -> x * 2)` prints `[2 4 6]`; the same line without
+the parens dies at the arrow with `error[syntax]: expected )`. Both forms were
+run before this was written.
+
+**The `next` primitive has its signature.** §9.5 asks what the role method
+looks like and how consumers drive it. lib/list ships eleven `next` arms —
+`capped`, `bounded`, `cursor`, `counting`, `cycled`, `grown`, `mapped`,
+`paired` and the rest — as one dispatch group, which is the answer the item
+was waiting for.
+
+**Rendering and equality over cyclic values were settled at implementation
+time, exactly as the note predicted.** design/build-blocks.md defers them to
+"the book chapter's examples will force the answer"; archive 2026-07-23
+records the answer twice over — rendering carries a visited set and prints
+`<cycle>` at re-entry, with shared acyclic subtrees still rendering in full,
+and equality on two distinct cyclic values is bisimulation, pinned by
+examples/build_cyclic_eq.kso.
+
+**`run` and `play` separated themselves.** Archive 2026-07-29 left it for
+Clay as a CLI decision, noting his instinct that the two should be separate
+and that only one was documented. Today `play` has its own line in the usage
+text and `run` on a `pub play` file refuses by name: "is a library — nothing
+to run … or run its definitions beside their statements with `kanso play`".
+His instinct is what shipped.
+
+**The three small July spellings were ruled on 2026-08-19** — local imports
+wear the dot prefix, subtypes declare as `type post_body:string`, and
+into-subtype is the ctor form — and **the write-once field marker was ruled
+on 2026-08-24** as `_`, filling exactly once. Both were carried as riders in
+entries that never got a closing line, which is how they stayed findable only
+by reading the whole archive.
+
+### What the sweep changed in the ledger
+
+Gavel 1 of 2026-08-15 listed six riders. Four have closed since — the test
+surface, ch08's pedagogy, and the three July spellings — so the err entry now
+says which two remain and cites where the others went. The arm-based advisory
+migration is not a seventh question: it follows whatever spelling is chosen.
+
+The Demeter entry leaves. This morning's sweep established it is the unbuilt
+read half of gavel 1b and therefore an implementer's job, and a ledger whose
+charter is decisions awaiting Clay should not carry it. It moves to the task
+list.
+
+The July reification form — an err becoming an inert Failure record at the
+opacity and supervisory boundaries — is recorded in the `serve` parking note
+as dead. Gavel 1 replaced it with `rescue`, and the entry describing it
+(archive 2026-07-24) was the only place it ever appeared, so a `serve`
+campaign starting from the archive would have started from a design that no
+longer exists.
+
+design/err-migration.md is deleted. It plans gavel B's world, where an `err`
+is unhandleable and an `(err reason)` arm is a compile error. Gavel 1 replaced
+that absolute with the foreign-only rescue license, so the plan's first two
+compiler items would now be wrong, and none of its three ever shipped. Its one
+additive piece, a `valid_utf8` predicate for lib/json, was never built and is
+not part of what gavel 1 superseded; it goes to the task list rather than
+vanishing with the file.
+
+### Six entries filed, each with its search
+
+Own-origin err arms as dispatch semantics rather than the advisory that ships
+today (derived in design/testing.md with a veto window Clay never used); the
+bare-call cross-module tie, refused by an interim committee ruling that is
+still live in `check_bare_ambiguity` and still says "interim"; whether a
+dependency's render arms should join the root group, recorded once in a
+render-plan.md that no longer exists; `first coll n`; whether `std/` ships
+inside the toolchain binary; and block-born as a dataflow property, which
+widens what the checker admits.
+
+The charter gains a second rule to match the filing gate: an entry carries a
+recommendation. A question with no proposed answer makes a sitting into a
+design conversation, which is the thing that turns one question into ten.
+
+### A grep that lied, and the correction
+
+Half of this sweep's first pass ran `grep -rniE "a\|b"`, which under `-E`
+matches a literal pipe and finds nothing. Three phrases came back empty that
+were sitting in the archive — "dot-prefixed" is in design/hako.md line 45, and
+a direct grep found it a minute later. Every "the search found nothing" line
+in the ledger was re-run without the escapes before it was written down. A
+citation is only worth what the search behind it was worth, and an alternation
+that silently matches nothing is the failure mode a filing gate cannot catch
+by itself.
+
+## 2026-08-25 — a string built from a captured seed shared one buffer, and the history had been recording it
+
+`origin/perf-history` has rows like this in it, and has had for months:
+
+    "compile_alloc_bytescompile_allocscompile_peak_bytescompile_passes":5
+    "allocsalloc_bytesarena_blocksperm_allocsbeat_itersel_parses…":0
+
+Four counter names appended into one key with a single value under it. Five of
+the six groups perf_record writes came out that way, so `compile_peak_bytes`,
+`compile_allocs`, the decode counters, the encode counters, the oneshot
+counters and the basket counters have never been plotted. The row still looked
+like a row, the job stayed green, and the chart drew the dimensions that
+survived.
+
+### What it was
+
+Native miscompiled this, and the oracle did not:
+
+    fn kept prefix n
+      "{prefix}{n}"
+
+    fn go prefix
+      list/to_list (list/map ["a" "b" "c"] (n -> kept prefix n))
+
+    print (go "")
+
+    native  ["abc" "abc" "abc"]        oracle  ["a" "b" "c"]
+
+Every returned string aliased one buffer that each call had appended to. Three
+things are all required, found by bisection: the interpolated parameter is
+first (`"{n}{prefix}"` is correct), the interpolation is in a named function
+seeded by that function's own parameter (a literal at the call site is
+correct), and the call reaches it through `list/map` (a direct call is
+correct).
+
+### Why the analysis said yes
+
+`string_builders` in src/linear.rs licenses a join to write through its seed
+when the seed is finished: every mention of the parameter in the arm is inside
+the join, and `callers_hand_over` says every caller hands the value over. The
+second half was measured by counting mentions, and `go` mentions `prefix`
+once. `list/map` then hands it to `kept` once per element. One textual use,
+three hand-overs.
+
+`walk_for_builder` already knew the shape of this — "a lambda runs when
+somebody else decides", and it refuses to license a join site inside a lambda.
+The caller half had no such refusal.
+
+### The fix, and the one it had to keep
+
+Refusing every call inside a lambda was the first attempt and it was too
+broad: `tests/golden/mem/a_loop_invariant_capture_is_copied_every_rewind.kso`
+went from 2,012 allocations to 2,512 with `push_mut_fast` 496 to 0, because
+its `_ -> walk (built 500 []) 1` hands `built` a fresh `[]` on every run and
+that push is legitimately in place.
+
+So the capture is what the rule turns on, not the lambda. The names a lambda
+binds — its parameters and its own locals — travel down the walk, and a call
+inside it counts as a hand-over only when its argument is built entirely from
+them. `[]` qualifies. A parameter of the enclosing function does not.
+
+Every counter gate, the mem corpus and welfare are byte-identical across the
+fix: 84.87 before and after, floor untouched. The licence that went was one
+nothing sound was using.
+
+### The fixture, and the version of it that proved nothing
+
+tests/golden/micro/an_interpolation_seeded_by_a_capture_is_its_own_string.kso
+pins it on all three engines, and carries the in-place push beside the broken
+join so a future fix cannot buy one by losing the other.
+
+The first draft of that fixture passed on the unfixed compiler. It reached
+`go` through a module constant — `empty = ""` — and a shared constant is not a
+unique source, so the chain never formed and the bug never fired. Watching it
+go red first is what caught that; a fixture written after a fix and never seen
+red is a guess about what the code does.
+
+### What the history cannot get back
+
+The corrupt rows hold no numbers to recover — the values were never written,
+only one per group survived under a mangled key. The file is bounded to 500
+rows and appended on main, so it corrects itself as new commits land rather
+than by any edit here.
+
+## 2026-08-25 — the compile-memory band is gone, and the figure it hid was not the one the gavel named
+
+The no-tolerance-bands gavel of 2026-08-24 is built. Its three clauses, and
+what each turned out to cost:
+
+**The band dies.** `scripts/gates/compile_memory.sh` asserts equality on
+`compile_peak_bytes`. Rounds and visits are counts of the compiler's own
+algorithm, so they stay checked on every host; the peak is checked only where
+its measured-on line says it may be.
+
+**Platform is a setting.** `bench/compile_memory_golden.txt` carries
+`# measured-on rustc=1.98.0` and the gate runs `measured_on.sh` before the
+peak comparison, so an unlisted host refuses instead of measuring. rustc alone,
+for the reason the allocation vein gives: what the front end holds is counted
+by its own allocator, and a good part of the figure is the standard library's
+growth schedules.
+
+**The figure corrects — to 864,300, not the 872,061 the gavel recorded.**
+That number was measured on 2026-08-24 and twelve allocation PRs landed after
+it. Writing it would have shipped a gate red on arrival. The runner's current
+figure was read out of this PR's own CI log, where the gate prints it on every
+run including the green ones:
+
+    front end holds 864300 bytes; golden 871649, band 854217..889081
+
+A container on rustc 1.94.1 reads 864,274 against that 864,300 — twenty-six
+bytes apart, the scale the measured-on prose documents, and the reason the
+line exists. The stored 871,649 was 7,349 bytes above reality, which is what a
+two-per-cent band is for.
+
+Welfare rises 84.87 to 84.89 and is `--set` in the same commit. The move is a
+data correction rather than work: the term had been scoring a peak the compiler
+had already left behind.
+
+### The gate had no mutation, which is why it could rot
+
+The ratchet had rows for `compile_allocs`, `compile_allocs_host`, `compile_ir`
+and `compile_ir_host`, and nothing at all for compile memory. Both are added.
+
+`compile_memory_banded` puts 865,300 into the golden — 1,026 bytes off, 0.119%,
+comfortably inside the two per cent the old gate allowed. It was watched red
+against the new gate and priced against the old one, so the mutation says in
+one number what the ruling was about.
+
+`compile_memory_host_unpinned` moves the measured-on line to `rustc=0.0.0` and
+the gate refuses rather than printing a diff somebody would paste.
+
+Both were proved locally by pinning the golden to the container's own toolchain
+so the peak comparison could be reached at all; the committed file names the
+runner.
+
+### One more thing the line broke
+
+`# measured-on rustc=1.98.0` contains an `=`, and `scripts/welfare/welfare.kso`
+read every line with an `=` in it as a counter. It died on
+`"1.98.0" is not an integer`. Every golden in the tree is commented, so the
+guard went on the shared reader rather than on the one file that grew the line.
+
+## 2026-08-25 — `valid_utf8` has nothing left to do, and the reason is a gavel
+
+The err-arm migration plan was deleted earlier today because it describes gavel
+B's world. Its one additive item was carried forward rather than deleted with
+it: a `valid_utf8` predicate over bytes, "the test-validity-first predicate
+lib/json needs".
+
+It is not needed, and the same gavel that superseded the plan is why.
+
+Under gavel B an err was unhandleable — it rose to the endpoint and an
+`(err reason)` arm was a compile error — so a program that wanted to know
+whether some bytes were valid utf-8 had to ask before converting. Gavel 1
+(2026-08-15) replaced that absolute with the foreign-only rescue license, and
+`std/text` is foreign to every program that imports it. So the question can be
+put to the conversion:
+
+    fn told (err _)
+      "refused"
+
+    fn told _
+      "ok"
+
+    told (text/utf8 [104 105])   ok
+    told (text/utf8 [255])       refused
+
+Both engines agree. lib/json already relies on this shape — `text/utf8` raises
+on an invalid byte and the decoder lets it ride — so nothing in the library was
+waiting on a predicate either.
+
+`tests/golden/runtime/utf8_of_a_slice_names_the_wrapper.kso` pinned the refusal
+reaching the endpoint when nobody asks. Nothing pinned that somebody may ask,
+which is the fact this cancellation rests on, so a micro golden pins it on all
+three engines. Removing its err arm turns the program into an endpoint failure,
+so the fixture discriminates rather than passing on any compiler that happens
+to print two lines.
+
+## 2026-08-25 — BUILT, MEASURED, DECLINED: the lexer's names cannot move into the AST
+
+Recorded because nothing recorded it. The investigation ran, reached an answer,
+and the answer lived only in a session's task list — which is the shape of an
+idea that gets re-attempted in three weeks.
+
+### The map that started it
+
+A per-phase allocation probe, measured on the tree that read `compile_allocs`
+85,788, with 59,593 of it inside watched phases. The tree has since fallen to
+64,884, so read these as proportions of that sitting rather than as today's
+counts:
+
+    lex                       12,600   21.1%
+    load_dependencies         11,348   19.0%
+    check_merged               9,943   16.7%
+    infer                      9,565   16.1%
+    parse                      9,408   15.8%
+    infer/demand               2,813    4.7%
+    canonicalize_bare_aliases  2,107    3.5%
+    fuse_enumerable            1,362    2.3%
+    finish_program               330    0.6%
+
+`load_dependencies` is the unwatched orchestration of the nested compiles; the
+dependencies' own lex, parse, infer and check_merged are watched and already
+subtracted. Lex and parse together are 36.9%, and the reason is one habit:
+`Tok::Ident(String)` owns its identifier and the parser clones it into the AST,
+so every name in the program is allocated twice.
+
+### The idea, and the audit that passed
+
+Move the `String` out of the token rather than cloning it — the parser walks
+forward, so a consumed token's payload is dead.
+
+Inside one parser that holds. `self.pos` is monotonic: its single reassignment,
+`self.pos = arrow_end + 1`, is a forward jump. Of sixteen token reads only
+parser.rs:2317 looks backward, and `tolerated_before` reads a payload solely
+for `Tok::Op`, while `ends_an_atom` matches `Tok::Ident(_)` and `Tok::Str(_)`
+by kind — an emptied payload still answers correctly.
+
+### Where it dies
+
+`P` holds `toks: &'a [(Tok, Span)]`. It borrows the stream, and the same tokens
+are handed to several parsers over overlapping slices: parser.rs:555 and :682
+both build over `&header.tokens`, and :1445 parses a whole line before :1458
+and :1461 re-parse `[..i]` and `[i+1..]` of it. So "consumed" is not a property
+of a token, and emptying one robs a later parser of a name it still needs. The
+borrow checker says the same thing more bluntly, since `toks` is behind a `&`.
+
+Removing the double allocation for real means the AST borrows too —
+`ast::Expr::Ident` owns a `String` — which is a whole-compiler lifetime
+refactor rather than a local change. Measure the ceiling before anyone starts.
+
+### Two corrections to my own notes
+
+parser.rs:2127 does `match tok.clone()`, which I called waste. In the common
+case it is not: the clone happens once and the taken arm uses it, so nothing is
+thrown away unless the match falls through to the error arm. The double
+allocation across lex and parse is real; that site is not the evidence for it.
+
+And the probe disagreed with an earlier `ld/compile_dep` measurement of 2.65 ms
+until the configurations were compared: the probe tree carries no `ld/*`
+watches, so the two are consistent. I nearly filed the apparent disagreement as
+a finding, which would have been this log's own recurring error — evidence
+gathered under one configuration read as evidence about another.
+
+### The probe is not shipped, and the reason is task #20's question
+
+It costs 92,873 instructions on every compile, about one per allocation,
+because letting the library read the binary's counter makes that static's
+address escape. Three arrangements were measured: exporting the counter costs
+173,229, a bare extra atomic 254,029, the OnceLock reader 92,873. Spending
+0.14% of the compiler permanently on a diagnostic is exactly the trade welfare
+cannot see, which is the open ledger entry. It ships with that ruling or not at
+all.
+
+## 2026-08-25 — what the read half of 1b actually needs, measured rather than assumed
+
+The ledger said the fence "needs record-type inference the value sets do not
+do". That was written from reading the code; this is the same claim from
+running the compiler, because the sizing is what anyone starting the work needs
+and a guess about it would be worth nothing.
+
+**A field no type declares is refused before anything runs.** `p.z` where no
+record has a `z` gives `error[name]: no record type has a field 'z'`, pinned by
+tests/golden/errors/field_missing.
+
+**A field the wrong type declares is not.** Two types, one with `name`, and
+reading `p.name` off a `point` gives `error[runtime]: 'point' has no field
+'name'` — on both engines, pinned across all three by
+tests/cross_module_fields.rs. The static check asks whether ANY record has the
+field, never which record is in hand.
+
+**The value sets cannot answer the second question by construction.** `Set` in
+src/infer.rs is a `u16` of fourteen kind bits, and `REC` is one of them. It
+records that an expression may be a record and carries no identity, so there is
+nothing to consult at a field read.
+
+So the fence needs a new analysis: record-type identity per expression, sourced
+at constructors and carried through bindings, parameters and returns the way
+the value sets already are. Then a field read can be refused for the type in
+hand rather than for the program's whole vocabulary.
+
+### The gap is wider than privacy
+
+`error[runtime]: 'point' has no field 'name'` is a refusal this language's own
+doctrine says should not exist — it refuses before anything runs. That is a
+correctness hole, older than the privacy question and independent of it, and
+the same analysis closes both: knowing the type in hand turns the run-time
+refusal static, and knowing whether the field is `pub` for a foreign type is
+one more question asked at the same site.
+
+Worth stating because it changes what the work is for. The privacy fence looked
+like a low-priority nicety with a large prerequisite. The prerequisite is
+carrying a correctness gap of its own.
+
+## 2026-08-25 — the interner's other half: the churn is wide in count and narrow in kind
+
+The census above settled the economics — a few hundred entries standing in for
+eleven thousand copies — and left the churn explicitly unmeasured: "a question
+about how much code moves rather than about whether the move pays". Here is
+that count.
+
+**What holds a name.** 230 sites destructure `Expr::Ident(` across seventeen
+files, led by linear.rs at 34, lib.rs at 32, and check.rs and beat.rs at 31
+each. Beside `Ident` itself, ast.rs declares twenty-eight further String-typed
+name fields — parameters, type names, field names, parents, members, renames —
+which move with it or the compiler carries two representations of a name.
+
+**Most of it gets cheaper rather than harder.** 36 of those sites compare the
+name against something, and a comparison becomes a `u32` test. Of the nineteen
+that call a string method, most call `as_str()` only to index a
+`HashSet<&str>` — hash lookups that also get cheaper. `__memcmp_avx2_movbe`
+has sat in the gate's top fifteen at 1.3 million instructions, and that is
+names being compared.
+
+**The genuine text work is two questions.** "Is this name qualified?" is 21
+`contains('/')` sites, nineteen of them about a declaration or type name and
+two about a file path. "Make a qualified name" is 26 `format!("{qual}/{…}")`
+sites, 23 in lib.rs's module-qualification machinery and three elsewhere, two
+of which are beat.rs diagnostics rather than names. Splitting an identifier
+apart happens in exactly two places, infer.rs:750 and provenance.rs:47; the
+other four `split('/')` sites are splitting file paths.
+
+So the textual work is not scattered string handling. It is one concept —
+whether a name carries a module, and how it gets one — and a symbol that holds
+its module and its base answers the first with a null check and the second by
+construction. The eighty-odd sites collapse into the symbol type rather than
+spreading across it.
+
+**What this does not measure**, and the reason the idea stays recorded rather
+than proposed: the back ends and the interpreter print names, so a table has to
+be reachable at every print site. That is a different shape of question from
+the front end's, and counting it is the next thing anybody starting this should
+do rather than trusting the paragraph above to cover it.
+
+## 2026-08-25 — the interpolation fix was too broad, and the gates that said otherwise were stale
+
+CI caught what this box did not. Four goldens moved on the runner —
+`text_golden` (pendbench's machine code +784 bytes), `instructions_golden`
+(pendbench 988,706,559 to 1,008,534,326, **+2.01%**), `compile_instructions`
+(−1,526), and `cost_golden_pend` (its permanent buffer gone entirely,
+`perm_live_bytes` 629,328 to 0) — while the commit message said every counter
+gate was byte-identical.
+
+**The gates were reading benchmark binaries built before the fix.** The
+counter gates measure `./pendbench` and friends; they do not build them.
+`build_benchmarks.sh` had last run against the old compiler, so nine gates
+reported on code the change had not touched. This log already carries the same
+mistake in another shape — restoring a mutated source and reading the mutant's
+output — and the rule stands unchanged: after changing the compiler, rebuild
+what the gate measures before believing the gate.
+
+### What the cost actually was
+
+pendbench's output is `3798885` before and after, so nothing was miscompiled
+there. The 2% bought no correctness at all: the fix had withdrawn a licence
+that shape was entitled to.
+
+The probe found exactly one lost site, `bench.kso:40:12` — the `push acc
+(made n)` inside `gathered`, whose caller is
+
+    fn built n acc
+      io/write "" . (_ -> gathered n acc)
+
+That lambda is a continuation. It runs once, and `acc` reaching it is one
+hand-over, which is exactly what the use count measured.
+
+### The distinction the parser already draws
+
+`a . f` parses as `App { head: f, args: [a], piped: true }`, so a lambda on the
+right of a dot is the HEAD of its application — applied where it stands. A
+lambda handed to `list/map` is an ARGUMENT. The first runs once per evaluation
+of the expression it sits in; the second runs once per element. Only the second
+breaks the count, and the parser has been telling them apart all along.
+
+So the capture check applies to a lambda in argument position and not to one
+in head position. The streaming-loop idiom this language is written in is all
+head-position lambdas, which is why the first attempt was expensive.
+
+### The fold branch had to be closed too
+
+With that in place the miscompilation came straight back, because fusion
+writes a `map`'s reducer as an immediately-applied lambda *inside a folder*,
+and the folder branch descended into its body with no capture set at all. The
+`scoped` mechanism there says the accumulator is unique, which is the fold's
+own contract; everything else the folder captures is still handed over once per
+element. The branch now carries the capture set like any other consumer's
+callback.
+
+Both facts had to hold at once, and each hid the other: the narrow rule alone
+put the bug back, and the broad rule alone cost 2%. The reduced fixture and
+pendbench's counters together are what pinned them.
+
+Final state: the nine-line reproduction prints `["a" "b" "c"]` on both engines,
+every counter gate passes against freshly built benchmarks, welfare is 84.89
+against its floor, and `cost_golden_pend` is byte-identical to the row it held
+before any of this. `text_golden` and `instructions_golden` are back to their
+old rows too — pendbench's machine code and its billion instructions were the
+whole of the 2%.
+
+**What the fix costs, in the end: 727 instructions in the front end**,
+`compile_instructions` 59,527,334 to 59,528,061, or 0.0012%. That is the
+capture set being built and walked at the lambdas the analysis now looks
+through, measured on the runner and read out of the gate's own output because
+the row is host-pinned. A rise of a thousandth of a per cent to stop the
+compiler emitting three strings that are secretly one is not a trade worth
+arguing about; it is recorded because the rule is that a moved number gets a
+sentence.
+
+The corpus fixture carries the nested case as well as the flat one — a
+per-element `map` inside a once-only continuation, which is where both halves
+of the rule meet. Removing either half turns all three of its lines into
+`["abc" "abc" "abc"]`, so the fixture discriminates on both.
+
+## 2026-08-25 — the row is checked on the way out now, and the check runs before a merge
+
+The miscompilation fixed this morning had a second half nobody had looked at:
+what it damaged, and why nothing said so.
+
+`docs/numbers.html` fetches the perf-history branch and renders rows by key.
+Two of its six trend series read keys the bug had mangled — `run memory` reads
+`oneshot_arena_peak_bytes`, `compile memory` reads `compile_peak_bytes` — so
+both were empty for months. So were the panel's whole decode and encode
+sections. The other four series read top-level keys the bug never touched,
+which is why the chart looked like a working chart.
+
+### The gate for it could not have caught this
+
+`scripts/site_smoke` stubs the fetch with a six-row hand-written history and
+asserts every series draws exactly six points. Its own comment says a presence
+check "would pass on an empty canvas, which is the failure this exists to
+catch" — and it does catch that. What it cannot catch is the pipeline no longer
+emitting the keys, because the fixture supplies them itself, spelled correctly,
+throughout.
+
+That is this project's own rule about hand-built intermediate state, met in the
+wild: a spec written against a fixture the real pipeline never produces passes
+forever.
+
+### Where the check belongs
+
+Not in the browser test. `perf_record` already refuses when a watched counter
+is absent from the goldens it reads — `every_watched` — and the goldens were
+fine the whole time. The names reached `counters` and did not reach the row, so
+the row is now checked against the same lists on the way out. Thirty keys, and
+the refusal names the ones that went.
+
+Run against this morning's compiler it exits 2 and lists `allocs alloc_bytes
+arena_blocks perm_allocs …`, which is the original failure, caught at the point
+it happened.
+
+### And it runs before a merge now
+
+The step that builds the row was `if: github.ref == 'refs/heads/main'`. A pull
+request never ran it, so a change that broke the row reached main before
+anything executed the program that writes the published numbers. The record
+step now runs on every pull request; only the append to the history branch
+stays main-only.
+
+That promotes the job out of the ratchet's unproven list, where it sat with the
+reason "writes to a branch, and red means writing there from a mutated tree".
+It carries a row and a mutation now, and the mutation is the original bug
+rather than a stand-in: it collapses the interpolated key to a constant, so
+every pair in a group shares one name and `list/to_h` keeps the last. Watched
+red, and it names all thirty.
+## 2026-08-25 — how wide a record-type set has to be, measured before building one
+
+The read half of gavel 1b needs a per-expression record-type set, and the
+obvious shape is the one the value sets already use: a bitmask, one bit per
+declared type, saturating to "unknown" when it overflows. `Set` is a `u16` of
+fourteen kind bits, so a `u64` for types looks like the natural sibling.
+
+A census of every module in the tree says otherwise. Merged programs, which is
+what inference sees — a module plus everything it imports:
+
+    types= 87  scripts/grammar_check
+    types= 79  scripts/fingerprint
+    types= 69  scripts/book_panels
+    types= 67  scripts/site_smoke
+    types= 67  scripts/browser_differential_run
+    types= 65  scripts/prose_check
+    types= 54  scripts/welfare
+    types= 53  scripts/perf_record
+    types= 46  bench/scanbench
+    types= 45  lib/regexp
+
+Eight programs in this repository already exceed sixty-three, so a `u64` would
+saturate on them and the fence would go quiet exactly where the programs are
+biggest. `u128` fits today's maximum with 1.46× headroom, which is thin for a
+number that only grows.
+
+Worth knowing before writing any of it, because the per-file counts suggest the
+opposite: `lib/regexp` declares fifteen types in its own source and lib/ holds
+eighteen between all of it. The merged figure is four to six times that, since
+a program carries its dependencies' types too.
+
+### What the shape probably is instead
+
+One type or unknown — a single index with a sentinel — rather than a set. It
+costs four bytes, has no width limit and no saturation cliff, and it answers
+the question the fence actually asks, which is whether the base is *definitely*
+some named type. A union of several types degrades to unknown, and the check
+stays silent there, which is what today's compiler does anyway.
+
+The cost is on the correctness half rather than the privacy half: with a real
+set, `p.name` could be refused when no member of the union has the field; with
+one-or-unknown it is refused only when exactly one type is known. That is still
+strictly more than the nothing the checker does today, and it does not saturate
+on the programs that need it most.
+
+Recorded rather than built. The measurement is what kills the bitmask, and it
+would have been discovered halfway through writing one.
+
+## 2026-08-25 — a field read the checker can see the type of is refused before it runs
+
+The first increment of gavel 1b's read half, and it closes the correctness
+half rather than the privacy half.
+
+`check_field_exists` asked whether ANY declared record has the field, and its
+own comment recorded the limit: "Reading a field a *particular* record lacks
+stays a runtime error, since only the value knows its type." That is true of a
+parameter. It is not true of a local bound to a bare construction, and that is
+where the mistake is usually written:
+
+    p = point 1 2
+    print "{p.name}"
+
+    was   error[runtime]: `point` has no field `name`
+    now   error[name]: `point` has no field `name`, with the span
+
+Both engines, refused before anything runs, which is what the doctrine asks
+for. The run-time refusal was a hole rather than a design.
+
+### What it will and will not answer
+
+The type is read off the statement, with no inference: a construction written
+where it stands, or a local bound to one. A parameter still answers nothing,
+because what it will hold is a question for the whole-program fixpoint, and
+this check stays quiet rather than guessing.
+
+It also only trusts a **plain** record — no parent to inherit fields from, no
+typeset members standing for something else. Certainty is the whole licence for
+refusing early, and a type that borrows its shape from elsewhere has none to
+offer here.
+
+`tests/cross_module_fields.rs` still passes unchanged, which is the honest
+measure of the limit: its case reads a field off a value this analysis cannot
+see the type of, so the run-time refusal is still there for it.
+
+### Cost
+
+`compile_allocs` 64,884 to **64,950**, sixty-six allocations for the type table
+and one small map per function body. The container and the runner agree to the
+digit on this one, which they do not always.
+
+`compile_instructions` 59,528,061 to **59,732,726**, a rise of 204,665 or
+0.34%. `check_merged` carries 16,184 of it and the `&str` map's insert another
+8,227, which is the type table being built and the locals being recorded.
+`compile_peak_bytes` does not move at all: the maps are small and transient.
+
+A third of a per cent of the front end to turn a run-time failure into a
+compile-time one is worth paying, and it is the first increment's price rather
+than the fence's — the per-expression set the census sized will cost more, and
+should be weighed on its own evidence when it is built.
+
+### Watched red
+
+`tests/golden/errors/field_of_the_wrong_record.kso` prints the old
+`error[runtime]` and exits 0 without the change, where the error corpus
+requires exit 2. So the fixture fails for the right reason rather than for the
+absence of a message.
+
+### What is left
+
+The parameter case, which needs the per-expression record-type set the census
+above sized: one type or unknown, sourced at constructors, carried by the
+fixpoint the value sets already use. This increment needs none of that, which
+is why it went first.
+
+## 2026-08-25 — two parameter forms name their type without the fixpoint
+
+The increment before this refused a field read when the type was plain to read
+off a statement: a construction written where it stands, or a local bound to
+one. It said a parameter answers nothing, and left that to the whole-program
+set the census sized.
+
+Two parameter forms are not a guess and need none of it.
+
+An **annotation** says the type outright — `fn shown m:money` — and a
+**constructor pattern's as-binding** is whatever dispatch matched, since
+`fn sized r@(money c)` reached that arm because the value IS a money. Both
+seed the same per-body map the locals use, before the walk starts.
+
+    fn shown m:money        m.text    money has no field text
+    fn sized r@(money c)    r.width   money has no field width
+
+A parameter that is neither still answers nothing, which is the honest state
+until the fixpoint carries a type.
+
+`Pattern::Annotated`'s `ty` may name a typeset or a subtype, and those are not
+in the plain-record table, so the lookup misses and the check stays quiet. The
+conservative direction falls out of the table rather than needing a rule.
+
+### It costs no memory and 40,430 instructions
+
+`compile_allocs` is 64,950 either side — the same figure the previous increment
+landed on. The seeding reuses the map that was already being built per function
+body, so there is no new allocation anywhere. Rounds, visits and peak are
+identical too.
+
+`compile_instructions` is not: 59,732,726 to **59,773,156**, a rise of 40,430,
+or 0.068%. `check_merged` carries 31,147 of it and `memcmp` another 7,029,
+which is the parameter loop and the type names it compares.
+
+Worth saying plainly, because the first draft of this entry said the increment
+"costs nothing" on the strength of the counters this box can measure. Four of
+them did not move and the fifth is host-pinned, so a container cannot see it
+and CI can. A claim about cost that only covers the measurable half is the
+shape of the mistake made twice already today, once about stale benchmark
+binaries and once about a golden figure taken before twelve merges.
+
+### Watched red
+
+`tests/golden/errors/field_of_an_annotated_parameter.kso` covers both forms,
+each reading a DIFFERENT absent field so the golden tells them apart. Without
+the seeding it prints the old `error[runtime]` and exits 0, where the error
+corpus requires exit 2.
+
+## 2026-08-25 — the field fence types none of the fleet, and the first census that said otherwise was invalid
+
+Two increments of gavel 1b's read half shipped today, and before building the
+third — the whole-program fixpoint, which touches every arm of `eval_expr` —
+the question worth answering is how many field reads it would newly answer.
+
+**142 declared field reads across the fleet. The fence types zero of them.**
+
+    lib/regexp                       reads=100  typed=0
+    scripts/ratchet                  reads= 24  typed=0
+    scripts/welfare                  reads= 11  typed=0
+    bench/pendbench                  reads=  4  typed=0
+    scripts/perf_record              reads=  3  typed=0
+    lib/json, lib/list, lib/text     reads=  0
+
+So the five shapes that answer — a construction where it stands, a local bound
+to one, an annotated parameter, a constructor pattern's as-binding, and a field
+no type declares — cover the shape a MISTAKE takes and not the shape the IDIOM
+takes. Real code reads a field off a bare parameter, which is the one case only
+the fixpoint can see.
+
+That is worth stating plainly against any impression that the fence is mostly
+built. What is built catches the beginner's error, where a value is constructed
+and then misread three lines later. The fixpoint is not an increment on top of
+that; it is where the fence starts earning its keep on programs people wrote.
+
+### The first census was invalid, for a reason already in this log
+
+The first attempt walked `Expr::Field` over merged programs and reported fifty
+field reads in the whole tree, four of them answerable. A grep of the sources
+finds hundreds. The AST census was measuring nothing.
+
+The reason is recorded in the 2026-08-19 withdrawal of the per-dependency
+`check_merged` removal: *"the rewriting passes run inside the dependency's own
+compile, before it returns: by the time the entry merges, a field read has been
+desugared into a shape the check that looks for it can no longer see."* A
+merged program is exactly the wrong place to count field reads, and that is why
+the per-dependency pass is not redundant.
+
+The instrument that works is the check itself, which runs per dependency where
+the shape still exists. Counting there gives the 142 above, and it was verified
+against the two error goldens first — they report typed, as they must, so a
+zero elsewhere is a fact rather than a broken probe.
+
+This is the second time today a measurement was taken under one configuration
+and read as evidence about another. The first was a set of counter gates
+reading benchmark binaries built before the change. Both were caught by
+cross-checking against something independent rather than by noticing at the
+time.
+
+### The same reads answer to a cheaper instrument
+
+A second probe asked what a rule with no inference in it would win of the same
+ground. Take the set of fields read off one value in one body. If no declared
+record holds all of them together, the program is wrong whatever that value's
+type turns out to be.
+
+Across the same eight roots:
+
+    bases with at least one field read       60
+    bases reading two or more fields         30
+      ... pinning exactly one declared type  30
+      ... pinning none, or more than one      0
+
+Every base that reads two fields determines its type completely. Two of the
+thirty match a pair of names — `row` and `ratchet/row` — which is one
+declaration under a qualified and an unqualified spelling rather than two
+types.
+
+The refusal's reach was measured by substitution: for every base, and every
+field name declared anywhere in that root that the base does not already read,
+does the rule refuse the base with that name added? It refuses 1,992 of 2,123,
+or 93.8%. Every substituted name is declared on some type, so the fence shipped
+in #1029 — which refuses a field no type declares at all — says nothing about
+any of them, and the 93.8% is ground it does not hold.
+
+Soundness needs the reads to happen together, which costs almost nothing here.
+A second gather kept only the reads that certainly execute: never inside a
+lambda, which may never be called; never in a deferred arm of `if`; never under
+a name a nested binder has shadowed. That gather loses one base of the thirty
+and none of the refusals.
+
+This does not replace the fixpoint. A base with a single field read is out of
+reach, and so is the 6.2% where some other record happens to hold the confused
+pair. What it changes is the price of the 142: a walk of each body against the
+type table, rather than a second value threaded through every arm of
+`eval_expr`.
+
+## 2026-08-25 — a value read for fields no one record declares is refused, and no inference is behind it
+
+The measurement in the entry above said the fence types none of the fleet and
+that a rule with no inference in it reaches 93.8% of the same confusions. This
+is that rule.
+
+**The argument.** `Expr::Field` in `eval.rs` reads a field off `Value::Record`
+and errors on everything else, and a subtype reads through to its base record,
+so a value a body reads for two fields is one record and a record this program
+declares. When no declaration holds every field read off a value, those reads
+cannot all be of the same value, and the program is wrong whatever type it
+would have had. Nothing is inferred; the type table and one walk of the body
+answer it.
+
+    fn width m
+      m.to - m.wanted
+
+    error[name]: `m` is read for `to` and `wanted`, and no record type has both
+
+`to` is declared on `span` and `wanted` on `node`, so the fence shipped in
+#1029 — which asks only whether any record declares the name — passes both
+reads through and the program dies at run time.
+
+**Which reads may be pooled.** Only the ones that run whenever the body runs.
+Three shapes defer: a lambda, which may never be called; the two arms of an
+`if` or a guard, of which one is taken; and the right operand of `and` or `or`,
+which the left may already have decided. A binding of the same name ends the
+run, because the reads after it are of a different value, and a `build` block
+runs its statements so a binding inside one ends a run too. `set p.x = v` is
+counted as a read, since a build block runs its sets and the field must exist.
+
+The restriction is nearly free. Measured over the fleet before building this:
+the certain-only gather loses one base of the thirty that read two or more
+fields, and none of the refusals.
+
+**The odd one out.** When dropping exactly one field leaves the rest sitting on
+a record together, the diagnostic points at that read, because it is the one to
+change. `n.kind + n.from + n.to` points at `kind`, since `from` and `to` are a
+`span`.
+
+**Cost, and a second walk that CI caught.** `compile_allocs` on lib/json is
+64,950 before and after, byte for byte, and rounds and visits are unmoved. The
+first draft cost 157 allocations, all of them a set built per binding statement
+whether or not anything was open; a walk that carries the open bases and asks
+the pattern about each one allocates nothing until a body actually reads a
+field, and lib/json reads none.
+
+Allocations were the wrong dimension to stop at. The draft was a SECOND
+traversal of every body beside the one the #1029 fence already does, and the
+vein built for exactly this reported it: `compile_instructions` rose 59,773,156
+to 60,090,679 on the runner, **+317,523 for a module with no field reads in
+it**. Nothing else moved, because a walk that finds nothing allocates nothing
+and decides nothing.
+
+The fix is one walk. The two questions a field read raises — does this field
+exist at all, and can the fields read off this value belong to one record —
+differ only in where they may look: the first is asked wherever the read
+appears, the second only where the read certainly runs. So the walk carries
+`certain` and stops recording under the shapes that defer, rather than
+traversing twice.
+
+**The runner reads 59,717,892 against 59,773,156, a fall of 55,264.** So the
+refusal lands with the front end doing LESS work than before it existed: the
+gather rides a walk that was already there, and folding the two tightened the
+one that remains — `walk_children` 1,703,108 to 1,631,080, its recursive twin
+965,191 to 940,511, `check_merged` 1,793,255 to 1,771,785. The golden takes the
+new figure and this is the sentence beside it. `compile_peak_bytes` held at
+864,300 on the same run, and `compile_instructions` is not a welfare term, so
+the floor does not move.
+
+The container host agrees on direction and not on magnitude, which is why the
+row is host-pinned: 60,404,144 against 60,625,645 there, each repeated to the
+instruction.
+
+### Watched red
+
+`tests/golden/errors/fields_that_no_one_record_declares.kso` on the compiler as
+it stood exits **1** with `error[runtime]: `span` has no field `wanted``. With
+the check it exits 2 with two diagnostics, one for the two-field message and
+one for the three-field message. That is the hole this closes: a language that
+refuses before anything runs was deferring this one to run time.
+
+### Watched red three more times, for the quiet cases
+
+A refusal that fires is half the behaviour; the other half is staying silent
+where a program is correct, and that half is where a false refusal would live.
+`tests/golden/micro/a_field_read_the_body_may_skip_is_not_pooled.kso` is three
+correct programs the rule would refuse if it pooled too much, and each clause
+was watched red by breaking its own guard:
+
+    the two arms of an `if` pooled     `x` is read for `from` and `kind`
+    a lambda body pooled with outside  `m` is read for `kind`, `from` and `to`
+    a rebinding did not end the run    `p` is read for `from`, `to`, `kind`
+                                       and `wanted`
+
+Each of the three is a program that runs and prints, so the fixture is a micro
+golden rather than an error golden — it pins the output, and any of the three
+guards going away turns the print into a refusal.
+
+The rebinding case took a second attempt to write at all. A body cannot rebind
+a name after a bare effect line — the grammar puts every binding before every
+effect — so the rebinding lives in a constant that returns a string and `play`
+prints it. That is worth knowing: the shape this guard exists for cannot be
+written in an effectful body in the first place.
+
+### What it does not reach
+
+A value read for exactly one field, where that one name is the wrong one. The
+93.8% above is measured by ADDING a confused name to what a value is already
+read for, which is why single-read bases are mostly covered: a second, wrong
+read makes a two-set and the two-set is usually homeless. A *replacement* on a
+base read once leaves a one-set and nothing to compare. Thirty of the sixty
+bases are read for exactly one field, carrying 46 of the 142 reads, and that is
+the fixpoint's real prize — along with the 6.2% where some other record happens
+to hold the confused pair.
+
+### What the fixpoint's room costs, measured before building it
+
+`Set` in src/infer.rs is a `u16` with fourteen kind bits used, so bits 14 and
+15 are all that is spare and the fleet declares 143 record types. Carrying a
+type identity in the lattice means widening the word. That price can be read
+without spending any of it: change `pub type Set = u16` to `u32`, use none of
+the new bits, and measure.
+
+    compile_allocs         64,950 -> 64,950
+    front_end_rounds           40 -> 40
+    front_end_visits       17,786 -> 17,786
+    compile_peak_bytes    864,300 -> 866,908      +2,608
+    welfare                 84.89 -> 84.88
+
+So the room is nearly free, and the fixpoint's cost is entirely in the
+propagation rather than in the representation. The figures are the container
+host's, and only the peak is host-pinned, so the runner's own would need
+re-reading before any of this is banked.
+
+That also corrects the shape of the cost. The note left on this task said
+`eval_expr` returns a `Set`, so carrying a record identity means threading a
+SECOND value through every arm. It does not, if the identity rides in the high
+bits of the widened word: an arm that passes a set through unchanged needs no
+edit, and a kind test masks against a low-bit constant and still works.
+
+What a packed identity does break is the JOIN, because two identities cannot be
+bitwise-ORed into a third. That count comes off the compiler rather than a
+grep — a `Set` newtype that still masks and compares but implements no `BitOr`,
+which makes rustc report exactly the sites a packed design must rewrite:
+
+    Set | Set                             65
+    |= on a Set                           12
+    the same through a trait bound         7
+    integer |= Set                         2
+                                      ------
+    join sites                            86
+
+    expected `Set`, found integer         90    the empty set written as `0`
+    borrow and iterator shapes            11
+                                      ------
+    total errors                         187
+
+**86 join sites** across infer.rs, codegen.rs, beat.rs, check.rs, dispatch.rs
+and provenance.rs, each of them a place that would have to decide what joining
+`span` with `node` means — a record whose identity is unknown, which is a
+lattice question rather than a bitwise one. The other hundred are mechanical:
+a real implementation names the empty set instead of writing `0`.
+
+Against the interner's 365 for one AST field, 86 is a different order of thing,
+and the prize is a refusal rather than speed. This is priced, not declined, and
+not yet taken: 46 reads and 6.2% of confusions, for 86 lattice decisions and
+0.01 welfare of room.
+
+## 2026-08-25 — the interned symbol is DECLINED, and the churn was counted by making the name opaque
+
+The economics have been settled since the "how big an interner would have to
+be" entry: around 400 distinct names per program, 622 across the build, against
+roughly 11,000 `String::clone`s. What was left open was the churn, and the note
+left for whoever started said to count the print sites in the back ends and the
+interpreter first.
+
+A grep would have given a number nobody could check. The instrument that
+answers it is the compiler. Make the name type opaque — a newtype in a private
+module with a constructor and no way to read the text — change one AST field to
+it, and every site rustc reports is a site an interner's table would have to
+reach.
+
+    pub Expr::Ident(String, Span)  ->  Expr::Ident(Name, Span)
+
+**365 errors in the library, 366 including the test target.** One field.
+
+    codegen  63     linear   36     demand    9     advisory  7
+    check    62     infer    28     parser    8     provenance 4
+    lib      42     trmc      9     inline    7     dispatch  1
+    beat     42     escape    9     eval      5     ast       1
+
+That is a lower bound twice over. Errors cascade, so fixing this wave uncovers
+sites the first one hid; and `ast.rs` holds 28 other String-typed name fields
+that a real move would have to convert too. The back-end and interpreter half
+the note asked for is codegen's 63 and eval's 5, with `wasm_backend.rs`
+reporting none — it works off a lowering that has already resolved names.
+
+### What the objective can see
+
+Welfare's compile terms are `front_end_rounds`, `front_end_visits`,
+`emitted_lines` and `compile_peak_bytes`. An interner moves none of the first
+three: it changes what the compiler allocates, not what it decides. The one
+term it does touch is the one it would likely make worse, because a table holds
+every name for the whole compile where a String dies with its scope.
+
+So the index would read the same or lower for 365-plus sites of churn.
+
+That is not the whole argument, and saying it is would be dishonest about the
+model. Wall time is absent from welfare deliberately, and what a model leaves
+out it weights at zero — the borrow-the-names work on 2026-08-24 took a quarter
+off a pass's time with every gate in the tree reporting nothing, which is
+exactly the dimension an interner is aimed at. `compile_allocs` is pinned in a
+vein of its own for that reason and would fall.
+
+### The ruling
+
+DECLINED as a whole-AST move. The win is real and invisible to the objective;
+the cost is 365 sites for one field of twenty-nine, on a front end that already
+finishes lib/json in about six milliseconds. Under the satiation the project
+chose for compile cost — 0.5, where successive doublings are worth 4.3, 2.9,
+1.7 and 0.9 points — a compiler that is already imperceptible has little left
+to win.
+
+What survives is narrower and was already isolated by the churn analysis. Two
+questions do genuine text work: "is this qualified?" (21 `contains('/')` sites)
+and "make a qualified name" (26 `format!` sites, 23 of them in lib.rs's
+qualification machinery). A name carrying its module and base answers both
+structurally, and it is a fraction of the conversion. Whoever returns to this
+should measure that, not the interner.
+## 2026-08-25 — gavel: welfare measures what compiling costs, not what it counts
+
+Clay ruled the sweep's first entry, and against its recommendation. Told
+that welfare's compile-speed terms are front_end_rounds, front_end_visits
+and emitted_lines — counts of what the compiler decided to do rather
+than what doing it cost — his words: "then you have a MASSIVE deficiency
+in your welfare metric. my god." The recommendation was to leave the
+model alone and note the gap in prose; the ruling is the opposite.
+
+The ruling: welfare's compile-cost model measures actual cost. The terms
+that stand in for compile speed become the measured ones — instructions
+retired and allocator traffic, the two deterministic host-pinned veins
+that already exist (bench/compile_instructions_golden.txt and
+bench/compile_allocs_golden.txt) — so that making the compiler genuinely
+faster or leaner always moves the score, and a 26% front-end improvement
+can never again land silent. compile_peak_bytes stays as the memory
+term; the no-tolerance-bands gavel already un-stales its reading. The
+proxy counters stay pinned in their goldens as regression tripwires;
+they stop being scored.
+
+Weights and satiation for the measured terms are the holder's to price
+from evidence, the way the 2026-08-01 weights session did — that is
+implementation under the ledger's own charter, and it does not come
+back here. The floor re-ratchets from the rescored model in the same
+change, recorded as a model correction.
+
+The entry leaves the ledger with this commit. Fifteen of the sweep's
+sixteen remain with Clay.
+
+## 2026-08-25 — gavel: an arm never sees its own err, and it was never advisory
+
+Clay ruled the sweep's own-origin entry, emphatically: "it has certainly
+never been 'advisory' whatever the hell that means." The doctrine — no
+arm may match an err born in its own hako — was ruled with gavel 24 and
+was never optional; the warning-only enforcement that ships today
+(src/provenance.rs raising advisory[license] while the program compiles
+and runs) is a defect against the ruling, not a design state.
+
+The ruling ratifies the committee's derivation from design/testing.md:
+clause 1 is dispatch semantics. At match time, an err whose origin hako
+equals the arm's hako does not match the arm — infectiousness carries it
+onward exactly as if the arm were absent. The pub self-seed retires; the
+static refusal stays for what provenance proves without it; when_failed
+and the blessed generic foreign rescuers keep working with no exemption
+written for them, because a foreign err still matches. Build it now:
+the advisory becomes the semantics, and a program that rescues its own
+failure stops being expressible.
+
+The entry leaves the ledger with this commit. Fourteen of the sweep's
+sixteen remain.
+
+## 2026-08-25 — gavel: the floor is absolute against refactorings, permeable to the language
+
+Clay ruled the blocking entry, and with a sharper principle than either
+framing on offer: "welfare can absolutely fall if you are considering
+language functionality as part of the welfare score. of course the more
+correct way of expressing this is just that welfare can fall in order to
+implement a language feature. it can't fall from a refactoring so to
+speak."
+
+The ruling: the welfare floor is absolute against behavior-preserving
+change — a refactoring that costs welfare is worse code and stays
+refused, no exceptions. A change to what the language IS — a feature, a
+doctrine-compelled migration — may move the floor down, with the fall
+recorded and attributed to the change that spent it, because the thing
+being measured changed. Hunting a compensating optimization in the same
+pull request to hold the number flat stays forbidden as gaming the
+index.
+
+Applied: kanso#1034 implements gavels 1b and 24, so it merges and the
+floor moves to 84.79, recorded as a language-change fall. The instrument
+question the entry raised — the library's compile golden charging the
+test file's dependencies to the library — folds into the already-ruled
+welfare rebuild ("welfare measures what compiling costs, not what it
+counts", this log, 2026-08-25): measure the thing the golden claims to
+measure. It does not return to the ledger as its own entry.
+
+The entry leaves the ledger with this commit.
+
+## 2026-08-25 — the floor gavel, stated precisely by Clay
+
+Clay refined the ruling within the hour, and the refinement replaces the
+word "refactoring" with what he meant: "technically they aren't
+refactorings necessarily — they can actually have real impacts on
+performance both in terms of compilation speed and resources and actual
+run time performance. but those are things that can be improved
+independently, where if one gets sufficiently better another can get a
+little bit worse as long as the overall welfare goes up. but you cannot
+just reject an actual language feature in the name of welfare score."
+
+Two clauses, precisely:
+
+- **Non-feature work trades freely inside the index.** A change that is
+  not a language feature — performance work, implementation work — may
+  worsen any individual dimension (compile speed, compile memory, run
+  time) if another improves enough that the AGGREGATE welfare rises.
+  The floor binds the composite, never a single term. This is what the
+  weighted index is for.
+- **A language feature is never hostage to the score.** A feature or
+  doctrine-compelled change cannot be rejected in the name of welfare.
+  When it costs, the floor moves down with the fall recorded and
+  attributed. The index measures the implementation; it does not govern
+  the language.
+
+The forbidden move stands: packaging a compensating optimization into a
+feature's own pull request to hide its cost is index-gaming either way —
+the feature's fall and the optimization's gain each deserve their own
+attributed record.
+## 2026-08-26 — the error corpus had no ratchet row, and now has one
+
+The ratchet's rule is one row per CI job, and `specs (unit, golden,
+differential)` has carried one since the file existed. Which command that row
+actually runs is a different question from whether the rule is satisfied, and
+it was worth asking while claiming ratchet cover for a new error golden.
+
+Four rows run `cargo test --test golden`. Two point at
+`micro_corpus_agrees_across_engines`, one at
+`micro_corpus_survives_a_release_build`, one at
+`mem_corpus_pins_native_allocator_counters`. The error corpus — 164 fixtures
+pinning byte for byte every diagnostic the language emits — had none. Nothing
+in this tree had ever watched it fail.
+
+That is the file's own stated reason for existing, in its header: a gate nobody
+has watched fail has no evidence it works, and five checks went green in one
+day while checking nothing.
+
+**The row.** `error_corpus`, gate `cargo test --release --test golden
+error_corpus`, job `specs (unit, golden, differential)`, mutation
+`a_diagnostic_stops_being_raised`, setup `release` — the same shape as
+`thunk_walk`, which reads a golden through a release build.
+
+**The mutation** is the regression the corpus is for, which is a check that
+quietly stops firing rather than a golden that drifts. The none-in-a-list walk
+still runs and still visits every list, and finds nothing in any of them:
+
+    for item in items.iter().take(0).filter(|i| is_none_lit(i))
+
+It compiles without a warning, so no other gate in the tree objects to it, and
+the corpus is left to notice on its own.
+
+### Watched red before it was wired
+
+The mutation was applied by hand first, `cargo build --release` came back
+clean, and `cargo test --release --test golden error_corpus` FAILED. Only then
+was it reverted and the row written. The row is therefore written against a
+mutation already known to work, rather than a mutation guessed at to fit a row.
+
+The filter is proven non-empty by the same run. A gate that matches no test
+passes forever, which is the failure this file is named after, and
+`cargo test --release --test golden error_corpus` reported "0 passed; 1 failed;
+9 filtered out" — exactly one test, and it went red.
+
+### And the row that had been proving nothing since 2026-08-24
+
+Running `prove` for the new row turned up a second thing, which is the better
+find of the two. It reported **1 rows proved nothing**:
+
+    BROKE cost goldens — the pending-cell shape erased from a strictness
+    change: the mutation would not apply
+
+`pending_cells_proven_strict` anchors on an exact line of src/demand.rs:
+
+    self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
+
+#1015 made the demand pass borrow the names its keys are made of, so that line
+now reads `&(fn_name, arity, stmt_index)`. The mutation's `awk` found no match,
+exited 3, and the row has been unable to introduce its defect ever since.
+
+The `pend_counters` row was therefore green for a reason that had nothing to do
+with the gate working.
+
+The anchor now matches the borrowed form, and the row was watched red by hand
+to be sure the fix restores the substance rather than the sed: applied, built,
+and `scripts/gates/pend_counters.sh` exits 1 with the lazy tier gone —
+
+    thunk_allocs   200 -> 0
+    thunk_forces   100 -> 0
+    thunk_evals    100 -> 0
+
+which is precisely what the mutation's own comment says it should do. Reverted,
+rebuilt, gate green again.
+
+### The machinery worked. Nobody answered it.
+
+The first draft of this entry said nothing watched the mutations, and that was
+wrong in a way worth correcting rather than quietly fixing. `prove` exits 1 on
+a row that proves nothing — `told bad false` writes the count and calls
+`os/exit 1` — and `.github/workflows/ratchet.yml` runs it on a schedule every
+morning at 09:00 UTC.
+
+So the timeline is not a blind spot:
+
+    2026-08-24 22:52 UTC   #1015 lands, dropping the .to_string()
+    2026-08-25 09:27 UTC   nightly ratchet run 14 fires
+    2026-08-25 09:37 UTC   run 14 FAILS, naming this exact mutation
+    2026-08-26 00:50 UTC   still red, still unanswered
+
+The ratchet caught it the very next morning and said so precisely — `BROKE
+cost goldens … the mutation would not apply` — in the first red run that
+workflow has had in fourteen. It was found today only because `prove` was run
+by hand for an unrelated reason.
+
+That reframes the lesson. The gap is not instrumentation, which did its job on
+schedule; it is that a nightly nobody reads is a nightly that does not exist.
+A per-PR signal gets answered because it blocks a merge, and a scheduled one
+competes with whatever else the morning holds. Worth saying plainly because the
+obvious fix — build more watching — is the wrong one here. What this needed was
+for the red run to reach somebody.
+
+### A count in a comment, drifting
+
+`tests/errors_module.rs` opened by saying the corpus holds 161 fixtures. It
+holds 164. Nothing checks that number and it goes stale every time somebody
+adds a mistake to the corpus, so the sentence now says a fixture per mistake
+and names no figure. Where a count carries weight it belongs in a golden, where
+CI reads it.
+
+## 2026-08-26 — the cheap half of the ratchet moves to where it gets answered
+
+The entry above found `pending_cells_proven_strict` unable to apply since
+#1015, recorded that the nightly had caught it and that nobody answered, and
+said the fix — making a red nightly reach somebody — was a preference rather
+than a defect to settle alone. That was the wrong shape to leave it in.
+
+The two things `prove` does have different prices. **Applying a mutation costs
+a sed. Proving it reddens its gate costs a build.** Only the second needs a
+nightly. The failure that actually bit was the first kind, and the first kind
+is cheap enough to run on every change.
+
+So `cover` — the per-PR half — now creates one throwaway worktree of HEAD,
+applies each mutation in turn, restores between rows, and refuses any that no
+longer matches the source it patches. Twenty-nine mutations in **seven
+seconds**, against a job that already pays a compile.
+
+### Watched red, on the exact historical failure
+
+Not a synthetic defect: the anchor was set back to the pre-#1015 spelling,
+which is precisely what that commit invalidated.
+
+    ratchet: 1 mutations no longer apply
+      STALE cost goldens (deterministic ratchet, no clocks) — the pending-cell
+            shape erased from the corpus by a strictness change
+
+Exit 1. Restored, green again. #1015's own pull request would have gone red on
+this, and its author would have fixed the anchor in the same change rather than
+leaving a row proving nothing for two days.
+
+### What it reads, and what it therefore does not
+
+Like `prove`, this walks a worktree of HEAD rather than the working tree, so a
+mutation edited but not yet committed is not what it checks. That is right for
+CI, which checks out the commit, and it caught me out twice while building
+this: the first watched-red stayed green because the break was unstaged, and
+the reset that removed the break took the feature with it. The property is
+worth stating rather than discovering — the ratchet answers for what a commit
+carries, never for what is sitting unsaved beside it.
+
+### What is still not built
+
+Making a red NIGHTLY reach somebody. That remains a question about how the
+owner wants to be told, and this change does not answer it — it only removes
+the failure mode that had no business waiting for a nightly at all. A gate that
+stays green under its mutation still costs a build to detect, still runs at
+09:00, and still has no addressee.
+
+## 2026-08-26 — the floor is permeable to the language, and now the trend gate knows it
+
+Clay ruled on 2026-08-25 that the welfare floor is absolute against
+refactorings and permeable to the language: a feature or a doctrine-compelled
+change is never rejected for the score. It lands, the floor moves, and the fall
+is recorded against the change that spent it. Compensating-optimization
+bundling stays forbidden in both directions.
+
+The ruling landed in the log yesterday and one gate had not heard it.
+
+### The fixture is #1034
+
+Obeying gavels 1b and 24 costs lib/json four counters and improves none of
+them: `front_end_rounds` 40 -> 42, `front_end_visits` 17,786 -> 17,886,
+`compile_peak_bytes` 864,300 -> 870,289, `compile_instructions` 59,717,892 ->
+60,772,083. The welfare floor was moved by hand to 84.79 with the fall
+attributed in `bench/welfare_floor.json`'s history, which is what the ruling
+asks for. CI then said:
+
+    FAIL  a pure regression: something got worse and nothing got
+    better. that trade has no other side, and it is the one move
+    the gate refuses outright.
+
+A branch obeying a gavel could not merge. The gate was written before the
+ruling and was right for what it knew — the pure regression it refuses is a
+refactoring that quietly spends the score — but a language change spending the
+score is exactly the case the ruling carves out, and the gate had no way to
+tell the two apart.
+
+### What tells them apart
+
+The attribution itself. A pure regression now passes when the branch adds an
+entry to the history array in `bench/welfare_floor.json`; without one it is
+refused as before. That is the same posture the gate already takes toward the
+compiler log — it checks that a sentence exists, not that the sentence is
+right — and it puts the escape exactly where the ruling puts the record.
+
+It is not a hole a refactoring can crawl through by accident. To use it a
+change must move the floor and write down what it spent, in the ledger whose
+whole readership is Clay, beside fifty-odd entries that say what each earlier
+move bought. A refactoring that does that has not evaded the rule; it has
+signed its name to breaking it.
+
+The narrower reading — accept the fall only when the floor went DOWN — was
+considered and dropped. A rise cannot reach this code at all: welfare reads the
+same counters, so a branch that raised the number improved one of them, and
+`better` is non-empty before the refusal is reached. The extra condition would
+never fire, and a condition that cannot fire is a claim about the code that the
+code does not make.
+
+### Watched red, then green, on the same worsening
+
+    compile_peak_bytes=999999999, no history entry     exit 1, refused
+    compile_peak_bytes=999999999, history entry added  exit 0, attributed
+
+Same counter, same direction, same magnitude; only the record differs. The
+first of those is now a ratchet row — `a_counter_worsens_for_nothing` — because
+the trend gate had none. It is a step inside the cost-goldens job, and the
+ratchet's own coverage check is per JOB, so a step-level gate hides behind the
+rows its neighbours carry. That is a general gap and this closes one instance
+of it, not the gap.
+## 2026-08-26 — json stops reading its own failure (written 2026-08-21, landed today)
+
+The work below was done on 2026-08-21 and sat in a draft pull request until
+today. It is filed at the tail rather than at its own date, because this log
+is append-only and the entries between were written first.
+
+Gavel 1b said only a type's owner constructs one; gavel 24 said your own
+failures only bubble. Between them, `json/failure_position` and
+`json/failure_reason` were arms inside lib/json matching an err lib/json
+had raised, which is the thing the second rule forbids. They are gone.
+
+The suite reaches the same facts from where the rule allows. `std/testing`
+is foreign to json, so `when_failed` may hold json's err, and it hands the
+bare reason record to a continuation:
+
+    test_error_position =
+      decoded = decode "[1, nope]"
+      testing/when_failed decoded (r -> r.position == 5)
+
+Watched red twice before it was believed, because one direction is not
+enough here. With the position wrong the example fails, which is the
+ordinary case. With the input CHANGED TO PARSE it also fails — `when_failed`
+answers false on a value, so a test that expected a failure and got an
+answer cannot pass quietly. That second failure is the one the old
+projection could not produce: `failure_position` answered 0 for a
+non-failure, and `0 == 5` is a perfectly good false that says nothing about
+why.
+
+`test_must_wraps_defect` needed the same door and a named local group, since
+a lambda carries no arms — `a_defect?` rather than the `defect_reason` the
+design note guessed at, because the naming rule wants the question mark on
+anything answering only true or false. The note now says what shipped.
+
+The example that demonstrated the old door demonstrates the new one, and it
+is a better example for having two branches instead of one: a consumer
+outside json writes an ordinary arm on `err r` and reads `r.position`,
+because json's failure is foreign there. Destructuring the reason in the
+pattern is refused — opacity, and rightly, since the record's shape does not
+cross an import — so the arm names the err and the field read does the rest.
+
+The book taught the rule this change contradicts. Chapter 04 said "no
+function gets to turn one back into a value. not a helper, not a library,
+not `main`", and its personified err said "nobody catches me". Both are
+about who raised the err rather than about nobody, and both now say so.
+Chapter 08's api panel showed the projection that no longer exists, its
+suite panel showed sixteen tests where there are twenty, and both used
+parentheses the grammar has since refused. Three surfaces, all moved.
+
+## 2026-08-26 — the floor moves for the language, and the fall is attributed
+
+Clay ruled the blocking entry: the welfare floor is absolute against work that
+leaves the language alone, and permeable to work that changes it. A feature or
+a doctrine-compelled migration is never rejected for the score — it lands, the
+floor moves, and the fall is recorded against the change that spent it.
+
+Applied here. #1034 implements gavels 1b and 24 — json may not match an err
+json raised — and the score falls **84.89 to 84.79**.
+
+**Where the cost is, isolated rather than guessed.** Not the deletion: the
+library shrank, and `bench/emitted_golden.txt` records it, 11,595 emitted lines
+to 11,585. The cost is the one line the test file gained. `kanso check
+lib/json` compiles lib/json's TEST file, so `import "std/testing"` pulls a
+whole module into the program the compile golden measures:
+
+    front_end_rounds              40 -> 42
+    front_end_visits          17,786 -> 17,886
+    compile_peak_bytes       864,300 -> 870,289
+    compile_allocs            64,950 -> 65,543
+    compile_instructions  59,717,892 -> 60,772,083
+
+Reverting `json.kso` alone and keeping the new test file gives 65,801
+allocations and 42 rounds, so all of the rise is the test file and the deletion
+claws a little back.
+
+**One of those figures was first written down wrong, and the error names its
+own cause.** The peak row went in at 870,263, which is the CONTAINER's reading;
+the runner reads 870,289. The gap is twenty-six bytes, and twenty-six bytes is
+exactly the container-runner divergence this golden's own header documents from
+2026-08-24 (864,274 against 864,300). Two hosts, both deterministic, a constant
+offset between them — and the row whose header says to read the runner's number
+out of the job log had the container's pasted into it. The measured-on line
+caught it on the next run, which is the second time that machinery has earned
+its place before a bad paste rather than after one.
+
+No compensating optimization was hunted for this pull request. The same ruling
+forbids it in both directions: a feature's fall and an optimization's gain each
+deserve their own attributed record, and bundling them hides both.
+
+The instrument question this exposed — a library's compile golden charging its
+test file's dependencies to the library — does not return to the ledger. It
+folds into the already-ruled welfare rebuild, which is the next thing built.
+
+## 2026-08-26 — welfare measures what compiling costs, and the goldens stop charging the library for its tests
+
+Building the gavel of 2026-08-25. Compile speed was `front_end_rounds`,
+`front_end_visits` and `emitted_lines` — how many times a fixpoint went round,
+how many expressions a pass looked at, how many lines came out. All three are
+the compiler's bookkeeping about itself, and the case against them is already
+in the tree: on 2026-08-24 a change took `kanso check lib/json` from 90.9
+million retired instructions to 67.2 million with every one of them
+byte-identical. A quarter of the front end's work went away and the dimension
+whose job is compile speed scored the change at zero.
+
+It reads `compile_instructions` and `compile_allocs` now, both counted rather
+than inferred.
+
+### The proxies stay, as tripwires
+
+They keep their goldens and still turn CI red when they move. A dropped
+fixpoint round is news whatever the score thinks, and `emitted_lines` is the
+only vein that watches what the compiler WROTE rather than what it allocated —
+the decoder gained twenty per cent more calls over a fortnight with every
+allocation counter identical. A tripwire and a term are different jobs, and
+these three were only ever good at the first.
+
+### The weights did not move, and that is the argument
+
+0.28 and 0.5 stand. They were priced for the DIMENSION — what teams shipping
+software pay for, with 45% of the people who stopped using rust naming compile
+times among their reasons — and the dimension has not moved. A better
+thermometer is not a change of mind about the temperature. Repricing here
+would have smuggled a preference change in behind an instrument change, which
+is the move the ledger exists to make visible.
+
+### The instrument fix, folded in
+
+`kanso check lib/json` compiles lib/json's TEST file, so every dependency the
+suite imports enters the program the compile goldens measure. #1034 is how
+that surfaced: moving json's assertions onto `std/testing` cost the LIBRARY's
+golden two rounds, a hundred visits, 5,989 peak bytes and a million retired
+instructions, none of it the library getting more expensive to compile.
+
+`scripts/gates/library_box.sh` stages the library without its tests, at the
+fixed path the instruction count already needed for its own reason, and all
+three compile gates now read the same staged program rather than two of them
+reading the checkout:
+
+    compile_allocs           65,543 -> 62,110
+    front_end_visits         17,886 -> 16,818
+    front_end_rounds             42 -> 40
+    compile_peak_bytes      870,289 -> 825,664
+    compile_instructions 60,772,083 -> 56,848,763
+
+Two of those the container and the runner agreed on to the digit, which is
+worth recording because the host gate refuses the comparison rather than
+making it: `compile_allocs` and `compile_peak_bytes` came out identical on
+both. `compile_instructions` did not — 57,524,712 here against the runner's
+56,848,763, a bit over one per cent — so the row and its welfare BASELINE both
+carry the runner's figure. A baseline holding a number no CI host will ever
+measure would have the term entering at a ratio against a fiction.
+
+The visits fall is nine hundred more than #1034 added, because json_test.kso
+was always in the measured program — #1034 only made the charge large enough
+to notice.
+
+### The floor is re-set, not lowered
+
+84.79 to 84.14. The precedent is the 66.6 entry, where run speed stopped being
+three allocation counters: a term with no baseline is filled from the present
+and enters where its dimension already stands, so compile speed gives up the
+credit its proxies had banked. Nothing got slower. Scores either side of this
+entry are not comparable, and the entry says so in the file rather than only
+here.
+
+Of the 0.79 the swap cost on the old goldens, the instrument fix gave 0.14
+back before the floor was set, which is the honest order: fix what is measured
+first, then read the number.
+## 2026-08-26 — a merged err came out of a hop nested on native and flat everywhere else
+
+Three failures answer three reasons however they were grouped. That is the
+documented rule, written in a comment directly above the struct that breaks it.
+
+    merged = boom 1 + boom 2
+    three  = through merged + boom 3
+
+    interpreter   ["e1" "e2" "e3"]
+    native      [["e1" "e2"] "e3"]
+
+`through` has no err arm, so the middle failure only hops. `k_hop` rebuilds the
+err box, and it set four of the five fields — `merged` was left to whatever the
+arena had at that address. `k_alloc` bumps a pointer and does not zero, so the
+flag read as a fresh page's zero, the reason list stopped being a list OF
+reasons, and the next merge nested it instead of folding it.
+
+### Four constructors, three of them incomplete
+
+Reading the rest of the family found the same shape three more times:
+
+    k_err          reason origin hops cause merged      complete
+    k_b_wrap_err   reason origin hops cause             merged unset
+    k_hop          reason origin hops cause             merged unset
+    k_deep_copy    reason origin hops                   cause AND merged unset
+
+There is now one constructor, `k_err_box_new`, taking all five. The
+evacuation copy still allocates through the copy arena rather than the main
+one, so it assigns the two it was missing directly. A field added to `KErrBox`
+tomorrow can no longer be forgotten by three call sites at once.
+
+### What is proved and what is not
+
+The hop path has a reproduction, in `tests/golden/micro`, and it was watched
+red first: with the `merged` copy taken back out, native answers 2 where the
+interpreter answers 3. It reads the count through `std/testing`'s
+`when_failed`, which is foreign to the sample and is therefore the licensed
+party that separates the reason from the failure.
+
+The other three are fixed by reading. `k_b_wrap_err`'s omission needs the
+arena to hand back non-zero bytes at that offset to bite, which is not a thing
+a fixture can arrange on demand. The evacuation copy's dropped `cause` should
+lose a "caused by" line from the endpoint report, and the obvious shape — a
+qualified call returning a wrapped err — does not evacuate, so no reproduction
+exists for it yet. That gap is filed rather than papered over: the fix is
+right by inspection, and inspection is what this entry can claim for it.
+
+### Only native
+
+`wasm_rt`'s `rt_err_hop` calls the interpreter's own `hop`, which copies
+`merged` like every other field, so the browser engine was never wrong. The
+divergence was one engine against two, which is the shape the differential law
+exists to surface — and it surfaced only because somebody went looking, since
+no fixture in the corpus merged a failure and then hopped it.
+
+### What the fix costs, to the byte
+
+Every emitted binary grows **48 bytes** — eight of eight, the same number each
+time, which is what a fix that adds one store to a constructor and two to a
+copy should look like.
+
+`compile_instructions` also moves, and the way it moves is worth recording.
+`src/runtime.c` is `include_str!`'d into the compiler, so a longer runtime
+lengthens a static and shifts the code and data around it; `kanso check
+lib/json` never reads that string. The number is therefore pure layout, and it
+behaves like layout. Three measurements of one diff:
+
+    runner, unstaged library    60,772,083 -> 60,772,747     +664
+    runner, staged library      56,848,763 -> 56,849,156     +393
+    container, staged library   57,524,712 -> 57,517,949   -6,763
+
+Same edit, opposite signs, an order of magnitude between the two hosts that
+agree on direction.
+
+That is not a reason to distrust the row — it is exact for the host and the
+program its header names, and both figures above are exact for theirs. It is a
+reason to say plainly what a move of this size means when the diff is bytes of
+embedded text: nothing about the front end's work, and the row is regenerated
+because it is exact, not because the compiler got slower or faster.
+
+## 2026-08-26 — the trend gate could not see two of the four compile veins
+
+The gate that exists to refuse silent counter movement read
+`bench/compile_golden.txt` and `bench/compile_memory_golden.txt` and neither of
+the two MEASURED compile veins. So `compile_instructions` and `compile_allocs`
+could move by any amount and the listing said nothing.
+
+That is not hypothetical. It happened twice today. #1034's instruction rise of
+1,054,191 never reached the gate, and #1040's runtime edit moved the same row
+three separate times with the gate silent each time. Only the per-golden exact
+diff caught them, which is a different job: the diff says a row moved, the
+listing says WHICH WAY every counter went and refuses a change where everything
+went the wrong way.
+
+The blindness mattered more from 2026-08-26, because those two veins became
+welfare's compile-speed terms that morning. The gate meant to watch the score's
+inputs could not see half of them.
+
+### Measured, not argued
+
+Same branch, same worsening — `compile_instructions` forced to 99,999,999, a
+rise of forty-three million:
+
+    the gate as it stands on main   exit 0, no output at all
+    the gate with the two veins in  exit 1, names the counter, refuses
+
+### The ratchet row moves to the vein that was blind
+
+`a_counter_worsens_for_nothing` used to worsen `compile_peak_bytes`. It worsens
+`compile_instructions` now. Each vein already has its own exact-diff gate with
+its own row; what this row proves is that a vein reaches the LISTING, and
+pointing it at the counter that was invisible is what keeps it from going
+invisible again. Proved red in a worktree of HEAD, not only in the working
+tree.
+
+## 2026-08-26 — three differential sweeps were covered by their neighbours
+
+Searched the log and `log/compiler-log-archive.md` for `render_differential`,
+`behaviour_differential` and `dispatch_differential`: each is recorded arriving,
+and none of the three is recorded gaining a row.
+
+The ratchet's `cover` check asks whether every JOB in ci.yml carries a mutation.
+The diagnostics differential job runs nine sweeps as nine steps, and two rows —
+`diagnostics` and `accumulator` — satisfied the check for all nine. So seven
+sweeps could have been deleted, or quietly reduced to nothing, and `cover`
+would still have said the job was proven.
+
+That is the same blindness the file was written to refuse, one level down. A
+gate nobody has watched fail has no evidence it works, and a step whose row
+belongs to its neighbour has never been watched at all.
+
+### Three rows, and what each was watched doing
+
+Each mutation was applied in a worktree, built, and its own sweep run. The
+sweep named the defect in its own words before it was restored:
+
+    native_renders_a_float_wider          9 of 68 values disagree
+      integral floats printed with two decimals in k_render only, so 1.0
+      reads as 1.00 on native. Reported as `0.0`, `1.0`, `-1.0`, `100.0`,
+      `1000000.0`, `-0.0`, `2.0 * 3.0`, and inside a list and a record.
+
+    native_rounds_a_half_to_even          2 of 66 calls disagree
+      llround to llrint, so `math/round 0.5` answers 0 against the oracle's
+      1 and `math/round 2.5` answers 2 against 3. Nothing complains, no
+      counter moves, and no golden prints a half.
+
+    a_literal_arm_ranks_below_a_wildcard  22 of 22 cases wrong
+      the emitter's arm ladder ranks a literal below a bare binder, so the
+      first case the sweep names — "a literal beats a later wildcard" — takes
+      the wildcard on native and the literal on the oracle.
+
+All three were green again on restore.
+
+### One mutation was replaced because it went red for the wrong reason
+
+The first attempt at the behaviour row broke `text/slice`'s ascii fast path by
+one character. The sweep did go red, and reported `the probes do not run:
+neither engine printed 1 for the sample` — its own canary, which trims a
+string and so slices one. A gate that goes red because the harness stopped
+working is not a gate that caught the defect, and a row credited for it would
+be proving the canary. `math/round` was chosen instead because nothing in the
+compiler's own path calls it.
+
+### The remaining six steps
+
+`trmc_differential` has the `accumulator` row and `diagnostic_differential` has
+`diagnostics`. That leaves `numeric_differential`, `effects_differential`,
+`module_differential` and `diagnostic_coverage` rowed only by their neighbours.
+They are the same debt this entry pays down, and they are OPEN.
+
+## 2026-08-26 — the trend gate could not read three runtime veins, one of them at all
+
+Searched this file and `log/compiler-log-archive.md` for `instructions_golden`,
+`text_golden` and `emitted_golden` beside the trend gate: the entry earlier
+today added the two MEASURED COMPILE veins and named no runtime one. This is
+that entry's argument applied one vein down, and the same fixture found it.
+
+`bench_goldens` held eight files. It did not hold
+`bench/instructions_golden.txt`, `bench/text_golden.txt` or
+`bench/emitted_golden.txt` — so the listing that exists to say WHICH WAY every
+counter went could not see what a program costs to run, how big its machine
+code is, or what the compiler wrote for the decoder.
+
+Four of `instructions_golden`'s eight rows are welfare's run-speed terms.
+Half the score's inputs were invisible to the gate meant to watch the score's
+inputs, which is word for word the case the compile veins were added on.
+
+### One of the three was not merely unlisted — it was unreadable
+
+The reader takes tokens containing exactly one `=`. `emitted_golden` is
+`calls=1777` and `text_golden` is `jsonbench text=80450`, so both would have
+parsed the moment they were listed. `instructions_golden` writes `jsonbench
+2912170881`, which contains no `=` at all, so every line yielded no pairs — and
+no pairs is indistinguishable from no movement. The file could have been
+listed and still read as empty.
+
+### Measured, not argued
+
+Same branch, `jsonbench` forced from 2,860,478,794 to 2,999,999,999, a rise of
+139,521,205:
+
+    the gate as it stands on main   exit 0, no output at all
+    the gate with the three veins   exit 1, names work_jsonbench, refuses
+
+The same forcing on the other two, with the reader fixed: `emitted_lines
+11,585 -> 99,999` and `text 647,120 -> 667,120`, both named as worsenings.
+
+### What the names are, and why text sums
+
+Direction is looked up on the counter with its FILE PREFIX STRIPPED, which the
+first draft of this change got wrong: `work_jsonbench` went in the table, the
+lookup asked about `jsonbench`, and a 139-million rise was reported as an
+improvement. Caught because the fixture was run rather than reasoned about — a
+gate that reports the wrong direction is worse than one that says nothing,
+because it tells you the thing you should be worried about is fine.
+
+`emitted_golden`'s four counters needed no table entry at all: `lines`,
+`calls`, `branches` and `defines` are there already for `compile_golden`. They
+do need the file prefix, so the decoder's IR line count and a compile sample's
+line count are two sums rather than one — otherwise a rise in either could hide
+a fall in the other.
+
+`text_golden`'s eight rows share the field name `text`, so it sums to a single
+number over the binaries. That is the treatment `compile_golden`'s five samples
+already get, and the per-golden exact diff is what says which binary moved.
+
+### A second row rather than a repointed one
+
+`a_counter_worsens_for_nothing` stays on `compile_instructions`.
+`a_runtime_counter_worsens_for_nothing` is new and worsens `jsonbench`. Two
+rows, because the two files are read by DIFFERENT CODE — one by the field
+reader that has always worked, one by the bare-pair reader added here — so a
+row proving the first proves nothing about the second. Both proved red in a
+worktree of HEAD and green on restore.
+
+### Three more, found by asking the question properly
+
+Listing `bench/*.txt` and subtracting the files this program names turned up
+three others nobody had listed: `cost_golden_escape.txt`, `cost_golden_scan.txt`
+and `cost_golden_wide.txt`. All three are `name=value` like their four listed
+siblings, so nothing had to be taught to read them and they go in here rather
+than into a note — the list was short by three, which is a plainer failure than
+the unreadable vein above and turned up the same way.
+
+`scan_allocs` forced from 3,977,890 to 4,977,890 is now named and refused; on
+main it was silent. Every file in `bench/` is read by this gate as of this
+entry, which is a property worth stating because it is the one that decays.
+
+## 2026-08-26 — a number the page stated about the present had been wrong for three changes
+
+Searched this file and `log/compiler-log-archive.md` for `golden_prose` and for
+`data-golden`: the gate is recorded arriving, to close the class where "the
+landing page and the compiler page each quoted an allocation count the ratchet
+had long since moved past". Nothing records which goldens it can reach.
+
+It reaches two. `decode.` keys read `bench/cost_golden.txt` and `encode.` keys
+read `bench/cost_golden_encode.txt`, and there is no third family. Six numbers
+in the whole site carry the attribute — three on compiler.html, three on
+index.html — and all six are decode counters.
+
+So compiler.html said, in the present tense, that the library's front end
+**does 17,786 expression visits**, while `front_end_visits` went to 17,886
+(#1034's test-file import), then 16,818 (#1041 staging the library without its
+test file), then 16,806 (#1043 shedding `must` and `defect`). The gate reported
+`0 golden-quoting number(s) drifted` on every run through all three, and it was
+right about the question it was asked.
+
+### The class, not the instance
+
+`compile.` now reads all three compile veins as one family —
+`compile_memory_golden`, `compile_allocs_golden` and
+`compile_instructions_golden`, whose key names do not collide, so which file a
+counter came from is a fact the page has no reason to carry.
+
+The sentence is fixed as history rather than restated: 17,786 and 23,224 were
+both true when the reader-index change was measured, so they read as past
+tense, and the current figure sits beside them as a tagged number that moves
+on its own. `--write` was run in both directions to check the rewrite
+round-trips and keeps the comma style.
+
+### The gate had no row either
+
+`golden_prose` runs as the second step of the welfare job, and `welfare_floor`
+satisfied `cover` for both steps — the same shape as the differential sweeps
+three entries above, and with a live failure attached rather than a
+hypothetical one. `a_published_number_drifts` anchors on the attribute rather
+than the value, because the counter moves whenever the front end does. Proved
+red in a worktree of HEAD and green on restore.
+
+### What is still untagged
+
+Most of what compiler.html quotes is narrative about a particular change, which
+is history and correctly left alone. Anything phrased about the present should
+carry the attribute; this entry fixes the one that was caught. A sweep of the
+page for other present-tense claims is OPEN.
+
+## 2026-08-26 — an arm cannot see an err its own hako raised, on all three engines
+
+Gavel 24, clause 1, built. Clay's words at the sitting: *it was never advisory.*
+The rule is dispatch semantics now — at match time a failure does not enter an
+arm its own hako raised, and infectiousness carries it onward exactly as if the
+arm were not written. "Your own failures only bubble", executing itself instead
+of being warned about.
+
+### What an err carries, and what an arm knows
+
+An err records the package that RAISED it, beside the trace line it already
+carried. On all three engines the two are read off the same frame, so no
+construction site can set one and forget the other.
+
+Native and wasm take that further: codegen emits ONE literal per raise site,
+`"{hako}\0{fn} at {file}:{line}"`, and the runtime splits it — the match rule
+reads the first half, the endpoint report the second. Nineteen runtime
+signatures in `runtime.c` carry an origin and nine codegen sites emit one;
+threading a second argument through all of them to move a package name was not
+worth it, and one literal cannot drift apart from itself.
+
+The guard is emitted only where a pattern CAN hold an err — `(err …)`, an
+`:err` annotation, or a typeset with err among its members. Everything else
+refuses failures already, so a check there would cost a call per match on a hot
+path to learn nothing.
+
+### The granularity question the build exposed, and Clay's ruling
+
+`package_of` answered `std` for every shipped module. Invisible until an err's
+raiser became part of dispatch, and then wrong at once: `std/testing` and
+`std/json` came out the same package, so `when_failed` could not rescue a
+failure `decode` raised and the harness could not report a test failure.
+
+Clay ruled it the same day: **a package is a directory, and its import path
+names it** — Go's rule, named as Go's. `std/json` and `std/testing` differ;
+`std/json/json.kso` and `scan.kso` are one; `std/net` and `std/net/http` are
+two. It applies to a program's own modules too, and that is what makes the rule
+teachable rather than merely enforceable: a decoder module and the module that
+reports its failures are two packages, so the reporting arm is licensed exactly
+where a reader would put it.
+
+### What it cost the corpus and the book, which is the honest measure of it
+
+A package's own failure is now completely opaque to that package. A bare binder
+already refused failures; the two err-admitting patterns now refuse own-origin
+ones. So you cannot pass your own failure to your own function at all — every
+"render my own possibly-failed value" helper moves one package over.
+
+- **`lib/json` lost `must` and `defect`.** `must` converted json's own parse
+  failure into a defect, which json may not read. It had exactly one caller —
+  its own test — and its documented purpose in ch08 was the case that no longer
+  works. The caller writes it now, in their package, where json's failure is
+  foreign; ch08 says so and shows the panel as a caller's file.
+- **Nine corpus fixtures migrated.** Seven micro, the typeset entryfile fixture,
+  and `wrap_cause`, which now wraps `std/text`'s failure because wrapping is
+  something you do to somebody else's.
+- **Four book samples restructured.** ch07's teahouse moves its reporting to
+  the entry; ch08's `using` splits `describe` from `told`; `literal` and
+  `positions` become two-module programs — a decoder and a reporter — which is
+  how you would write them anyway and now the only way you can.
+- **The pub self-seed retired.** It assumed a published err parameter sees its
+  own package's failures because the callers are not all in view. Right while
+  this pass was the only enforcement; wrong now, and under it every pub
+  bare-err arm was a violation, `when_failed` included. What survives is what
+  the written call sites prove, and `kanso check` REFUSES it rather than
+  mentioning it: an arm that can never fire is dead code wearing the shape of
+  error handling.
+
+### Watched red on three engines at once
+
+`tests/golden/micro/an_arm_cannot_see_its_own_hakos_err.kso` prints three
+lines: the arm on a value, a foreign rescue, and the arm on an own err. With
+the rule taken back out of the interpreter, native and wasm together, the third
+line reads `false` instead of `foreign reads 99` — the arm matched, and
+`when_failed` on the resulting string answers false. Restored, all three agree.
+
+### The front end got cheaper doing it
+
+`lib/json` shed `must` and `defect`: expression visits 16,818 to 16,806,
+allocations 62,110 to 61,981, peak 825,664 to 822,004. Welfare rises, and the
+rise is banked in this change rather than left for the next one to spend.
+
+### What the arms cost, in the decoder and in the binary
+
+Two runtime veins move, and they move for the same reason from opposite
+directions. In the decoder's IR: calls 1775 to 1777, branches 1175 to 1176,
+lines 11585 to 11574. Three `k_not_own_err` calls and a declare go in — the
+arms that can now be skipped ask before they match — while `lib/json`'s
+`defect` record comes out, taking six string constants, one call and its arm in
+the field dispatch with it. `defines` does not move: `defect` was a type, and
+`must` had already been dead since #1034 stopped calling it.
+
+In the machine code every binary grows, and by a different amount each:
+jsonbench +544, encodebench +624, oneshot +592, basket +256, widebench +624,
+deepbench +160, escapebench +80, pendbench +224. Both costs scale with the
+program rather than with the runtime — a call and a branch per skippable arm, a
+package name per raise site — which is why the spread runs from 80 bytes to 624
+where #1040's constructor fix landed on 48 for all eight.
+
+The spread was measured in the container, and the container reproduces main's
+whole `.text` table exactly, which is what makes it usable: `bench/text_golden`
+pins `clang=18.1.3` and nothing else, because what compiles the emitted IR is
+clang and what rustc built is only the program that wrote it.
+
+### What it costs to run, and what it costs to compile
+
+The runtime instruction vein, from the runner:
+
+    jsonbench    2,860,478,794 -> 2,912,170,881   +51,692,087   +1.81%
+    oneshot         46,596,968 ->    46,941,571      +344,603   +0.74%
+    widebench       84,817,033 ->    85,113,625      +296,592   +0.35%
+    basket          57,400,154 ->    57,408,155        +8,001   +0.01%
+    encodebench  9,727,166,055 -> 9,727,535,960      +369,905   +0.004%
+    deepbench, escapebench, pendbench unmoved
+
+Three rows do not move at all, and that is the finding rather than a footnote.
+The cost is paid per err-dispatching arm that runs, not per instruction
+executed, so the decoder's inner loop — which is made of such arms — pays 1.81%
+while the three programs whose hot paths hold none of them pay nothing.
+encodebench renders rather than dispatching on err, and its rise is four
+thousandths of a per cent across nine billion.
+
+`compile_instructions` rises 56,849,156 to 57,490,077, and that row is part
+work and part layout: the front end now carries a package name on every raise
+site and asks at every skippable arm, and `src/runtime.c` grew, which shifts
+the compiler's own code around a static it never reads. The entry above this
+one measured that same effect at +664, +393 and −6,763 on three sittings of a
+single diff, so the two halves are not separable from this row alone. What is
+separable is every counter that measures ONLY the front end's work, and all
+three of those fell: visits 16,818 to 16,806, allocations 62,110 to 61,981,
+peak 825,664 to 822,004 — the pub self-seed retired and `lib/json` shed `must`
+and `defect`.
+
+### The floor moves, by hand, because the tool refuses
+
+welfare goes 84.14 to 84.12. Gavel 24 clause 1 is a language change, and Clay's
+ruling of 2026-08-25 governs it: the floor is absolute against refactorings and
+permeable to the language, so a doctrine-compelled change lands, the floor
+moves, and the fall is recorded against the change that spent it. The 84.79
+entry has this exact shape and is the precedent.
+
+`welfare --set` refuses a fall of more than 0.01 and refused this one. That
+refusal is the design — its own comment names hand-editing
+`bench/welfare_floor.json` as the single override, precisely so the move
+appears in a diff a reviewer reads rather than behind a flag. So the floor was
+edited by hand and the entry carries the whole attribution. No compensating
+optimization was hunted, which the same ruling forbids.
+
+### Each counter, by the name the gate prints
+
+`work_jsonbench` rises 51,692,087 and is the one that matters: the decoder's
+inner loop is made of arms that can hold an err, and each now asks before it
+matches. `work_oneshot` rises 344,603 and `work_widebench` 296,592 for the same
+reason at smaller volume. `work_encodebench` rises 369,905, four thousandths of
+a per cent across nine billion, and `work_basket` 8,001, a hundredth of one —
+both render rather than dispatching on err, and both are at the size where
+layout accounts for as much as work. `work_deepbench`, `work_escapebench` and
+`work_pendbench` do not move at all.
+
+`emitted_calls` rises 2 and `emitted_branches` 1: the guard's three calls into
+the decoder, less the one that went with `lib/json`'s `defect`. `emitted_lines`
+falls 11 against them, because a record that goes takes six string constants
+with it. `text` rises 3,104 over the eight binaries, spread from 80 to 624
+rather than uniform, since both costs scale with the program.
+
+Every one of these is bought by the same thing: an arm cannot see an err its
+own hako raised, and the ruling says that is dispatch rather than a check. The
+sum is priced in welfare and the floor moves with it.
+
+### The trend gate said nothing about any of the runtime rows
+
+It named four compile counters and refused the one whose sentence was missing.
+It did not mention jsonbench's 1.81%, or any `.text` row, or the three emitted
+counters, because `bench/instructions_golden.txt`, `bench/text_golden.txt` and
+`bench/emitted_golden.txt` are not in `bench_goldens`. Only the per-golden
+exact diff caught them.
+
+That was the blindness #1044 closed for the two measured compile veins, still
+open one vein down — and it mattered more here, because `instructions_golden`
+is where welfare's four run-speed terms come from, so half the score's inputs
+were invisible to the gate meant to watch the score's inputs.
+
+Filed as its own change rather than folded in, because it touches the gate this
+branch was being judged by, and closed by the entry directly above this one
+while this branch waited on CI. The finding stands as recorded: the numbers in
+this entry are the ones that went past the gate unnamed, and they are why that
+change exists.
+
+## 2026-08-26 — the last four differential steps get rows, and one of them found a hole
+
+Named OPEN in the entry three above this one, which rowed the first three. The
+diagnostics differential job runs nine sweeps as nine steps and `cover` is per
+JOB, so a row on any one satisfied it for all nine.
+
+All nine are rowed now. Each mutation was applied in a worktree, built, and its
+own sweep run, and each was green again on restore.
+
+    native_floors_a_negative_modulo          -1 % 2 -> 1, -1 % 7 -> 6
+      integer `%` floors on native where the oracle truncates. Both are a
+      language's defensible choice — C and Rust truncate, Python and Haskell
+      floor — and kanso may only have one. No diagnostic is raised, every
+      allocation counter is flat, and no golden prints a negative modulo.
+
+    native_sequences_two_effects_backwards   10 of 10 shapes disagree
+      `>>` runs its right side first, so `io/write "a" >> io/write "b"`
+      prints `ba`. The executor is written twice with no shared code, and
+      only this sweep asks what happens when two effects are SEQUENCED.
+
+    a_diagnostic_arrives_without_a_golden    1 newly unpinned
+      a `Diagnostic::new` with literal text and no golden, appended as a
+      function nobody calls so the tree still builds. What is under test is
+      whether the SCAN finds it, not whether the compiler can raise it.
+
+    a_private_name_crosses_an_import         1 no longer as recorded
+      the check that refuses a private name at an import looks itself up
+      under a key nothing declares, so `pub` stops meaning anything across a
+      module boundary.
+
+### The module mutation is in the shared front end, and that is the point
+
+It changes no engine's behaviour relative to the other — both go on agreeing
+perfectly, because both read the same front end. What moves is the VERDICT, and
+`module_differential` is the only gate that asks that question of a real
+directory on disk. Agreement alone cannot see a rule that is wrong in both
+engines, which the sweep's own header says it has had.
+
+### The hole it found, and the case that closes it
+
+The first time it was proved, it went red through the KNOWN-DEFECT ledger
+rather than the case list: `0 wrong; 1 known defects, 1 no longer as recorded`.
+`w1` — a module's own pub shadowed by a dependency's name, filed against task
+#51 — was the ONLY case in the sweep touching the import-privacy refusal at
+all, and it is recorded as a defect rather than passing.
+
+So the row worked and its grip was on an entry meant to be deleted the day task
+#51 is settled. A mutation whose red depends on a recorded defect stops proving
+anything the moment the defect is fixed.
+
+The rule itself is fine. Asked directly, the compiler refuses exactly as it
+should:
+
+    error[opacity]: `secret` is private to module `dep`
+                    — only pub names cross an import
+
+What was missing was a case asking. Every other module in the sweep uses a pub
+name, stays inside the module, or is `w1`. So the rule `pub` exists for — a
+plain private name reached across a plain import, nothing else going on — had
+no passing test on the one surface that runs whole modules from disk.
+
+`c17` is that case. With it the sweep reads 17 modules, and the mutation now
+goes red through the case list where it belongs:
+
+    17 modules, 1 wrong; 1 known defects, 1 no longer as recorded
+      a private name reached across an import
+        expected a refusal saying 'error[opacity]: `secret` is private
+        to module `dep` — only pub names cross an import', but it compiled
+
+`w1` stays exactly as it is, recorded as it behaves.
+
+### numeric's row carries the argument CI runs
+
+`-- 0`, no random rounds. Every random draw lands past the native ceiling, so
+the rounds spend ten minutes re-confirming what the 561 edge cases already say.
+A row whose gate string differed from the workflow's would be proving a
+different program.
+
+## 2026-08-26 — the rest of the page's present-tense claims
+
+The entry two above this one closed the class and left the sweep OPEN: which
+other figures on docs/compiler.html are stated about the PRESENT rather than
+about a particular change. Swept. Two, and only two.
+
+`§08`, the borrowed-names paragraph, said the json library's front end
+**allocates** 64,884 times and **retires** 59,527,334 instructions. Both verbs
+are present tense about the compiler in the tree, and both figures are what
+that change measured, not what the compiler does now: `compile_allocs` reads
+61,981 and `compile_instructions` 57,490,077. The sentence keeps 91,185 and
+66,961,255 as the before-figures they always were, puts the two after-figures
+in past tense as what that change reached, and carries the current pair as
+tagged numbers that move on their own.
+
+`§08`, the compile-memory band paragraph, said the runner **holds** 864,300.
+That one is narrative — the whole paragraph is the story of the band being
+ruled away — so the fix is the tense rather than a tag: it *held* 864,300, on
+the day the band came off. `compile_peak_bytes` is 822,004 now, and a reader
+who took "holds" for the present was forty thousand bytes out.
+
+### What is deliberately left alone
+
+Everything else the page quotes is narrative about a particular change, and
+correctly reads as history: the encode allocation chain (42,312,800 to
+68,640,508 to 26,327,708), the 1,874,992 allocations, 5.25 instructions per
+cycle against jq's 5.20, the 365 conversion sites the interned symbol would
+have cost, the 87/79/67 type counts. None of those claims anything about the
+compiler as it stands, and none has a golden to be pinned to.
+
+So the page now has five tagged numbers on the compile veins and three on
+decode, and every remaining figure is dated by its own sentence. The rule that
+falls out of doing this twice: a number about the present carries the
+attribute, and a number about a change carries a past-tense verb. The gate
+enforces the first; only reading enforces the second.
+
+## 2026-08-26 — two failures in a record merge, and `some` is not a failure
+
+Writing up the err spelling as two worlds (#1051) meant stating what the rule
+does from the language's side rather than from the pass that enforces it. Two
+programs written to check the write-up came back disagreeing with it.
+
+### A record's fields are one operation, and the compiled engines forgot
+
+Clay ruled on 2026-08-05 that two failures in one operation merge, the way a
+parallel group had always merged them. The interpreter does that for a record
+construction. Native and wasm returned the first failing field:
+
+    operated: ["a" "b"]     both engines
+    built:    a             native
+    built:    ["a" "b"]     the interpreter, which is the oracle
+
+Nothing in the corpus had ever built a record out of two failures, so three
+engines disagreed and every gate stayed green. `k_rec`, `k_rec_reuse` and
+`rt_mkrec` merge now. So does `emit_parsed_construction`, the
+register-returnable construction the codegen writes in tail position, which
+tested the first field, returned if it failed, and never evaluated the second
+— its own comment claimed it propagated "exactly as `k_rec` would have", which
+had quietly stopped being true.
+
+### `some` was an unmarked rescue
+
+`some` means a value that is not none, and `type_match_depth` answered
+`("some", _) => true`, which takes an err. So
+
+    pub fn caught _:some
+      "some-arm swallowed it"
+
+took a foreign failure and answered whatever it liked, with no `err` written
+anywhere and no destructuring form in sight. That is the one door the
+two-universe rule exists to watch, standing open in an annotation that names
+no failure. An err is not "some value" — it is the absence of one — and the
+arm refuses it now the way a bare parameter does, on all three engines.
+
+Native could not compile the annotation at all: `unknown type `some``, at
+build time, in a message about a backend, while `check` had already passed the
+program because `some` is in its built-in list. The `declare i64
+@k_check_some` sat in the codegen preamble with nothing behind it and nothing
+calling it. It is written and wired now.
+
+### The prices, and the one that had to be paid back
+
+`emitted_calls` 1,777 -> 1,785 and `module_calls` 748 -> 749: the merged bail
+is one call where the two early returns were none. Against them
+`emitted_branches` 1,176 -> 1,168 and `emitted_lines` 11,574 -> 11,527, because
+one bail block replaces two at eight decoder sites. `text` 650,224 -> 650,928:
+the merge inlines at each site.
+
+The vein that mattered was `work`, and only CI could see it. `k_rec` is 16.9%
+of pendbench — every record construction walks its fields — and the first
+version folded the merge into that walk. A/B on one host, so the container's
+glibc offset cancels:
+
+    pendbench   main 988,706,173   folded 1,020,722,638   +3.24%
+    oneshot     main  46,941,172   folded  47,374,597     +0.92%
+
+Three per cent of a benchmark for work that runs only when a field has already
+failed. The scan keeps its early exit now and hands off to a `cold`,
+`noinline` `k_merge_rest` from the index that failed: pendbench comes out at
+987,905,773, 0.08% BELOW where it started, and oneshot at 47,276,631, +0.71%
+that no function in the profile accounts for — the top fifteen are
+byte-identical to main's, so what is left is code layout rather than work.
+
+### What CI measured, and what it cost
+
+The runner's rows, which the container cannot produce — its glibc is
+2.39-0ubuntu8.7 against the runner's 8.8 — so they are copied from the gate's
+own diff:
+
+    work_jsonbench     2,912,170,881 -> 2,910,241,430   -0.066%
+    work_encodebench   9,727,535,960 -> 9,866,843,909   +1.43%
+    work_oneshot          46,941,571 ->     47,277,030   +0.71%
+    work_basket           57,408,155 ->     57,416,154   +0.014%
+    work_widebench        85,113,625 ->     85,209,624   +0.11%
+    work_pendbench       988,706,559 ->    987,906,159   -0.081%
+    compile_instructions  57,490,077 ->     57,490,136   +59
+
+deepbench and escapebench do not move. The container reproduces the deltas
+exactly where it was checked: oneshot measured 46,941,172 on main here and
+47,276,631 on the branch, +335,459, and the runner's two rows differ by
+335,459.
+
+`work_encodebench` is the one that costs anything, and it is not work the
+change added. Nothing in the encoder's profile moved: `k_b_append_mut` still
+holds 23.24% and `k_rec` does not appear in its top five at all. The scan that
+finds a failing field is the same instruction sequence it was, the merge is
+`cold` and out of line behind it, and marking `k_pair_failure` cold as well
+moved encodebench by fourteen thousand instructions out of nine billion. What
+is left is an inlining shift from two functions arriving in runtime.c, which
+is also why jsonbench and pendbench moved the other way. Welfare falls 0.00 —
+below the display's resolution — and the floor was re-set with that reason.
+
+Both fixtures were watched red first, which is how the second one was caught
+at all: `some_is_a_value_not_a_failure` prints `failure: false` with the fix
+out, because the arm swallowed the err and `when_failed` found no failure to
+read. The construction fixture needed the wasm engine rebuilt with the fix
+reverted to prove the corpus reaches it — the wasm corpus compares against
+native rather than against the `.out` file, so corrupting the golden proves
+nothing there. Worth knowing before the next person tries it.
+
+## 2026-08-26 — `../` was reaching the diagnostics, and the first fix
+cost 164,130 instructions that were not work
+
+`resolve_import` strips a leading `./` with a comment saying why: the dots are
+import syntax rather than part of the name, and carrying them into the
+resolved path would put them in every diagnostic the module raises. `../` is
+the same syntax and was never taken back out. A module reached as `../deep`
+from `mid/` named itself `mid/../deep` — in its diagnostics, in the origin its
+errs recorded, and in the hako `package_of` reads off that origin.
+
+It survived because both module-error goldens pinned the unfolded spelling.
+The corpus had been regenerated from whatever the code printed and nobody read
+the path. That is the third defect this week whose shape is the same: a golden
+regenerated without being read pins the bug instead of catching it. The
+counters have the trend gate for this; the text goldens have nothing.
+
+### The measurement that changed the implementation
+
+The first version joined `base` with `../deep` and walked the components
+afterwards taking `x/..` pairs out. CI charged the front end 164,130
+instructions, +0.29% — on a program that never calls it, because `lib/json`
+imports nothing relative. The container measured the same source 1,925
+instructions CHEAPER than main:
+
+    container   main 61,333,649   folded 61,331,724   -1,925
+    runner      main 57,490,136   folded 57,654,266   +164,130
+
+A change cheaper on one toolchain and 0.29% dearer on another is not doing
+more work; it is an inlining outcome. The deltas usually carry between the two
+hosts — oneshot's +335,459 matched to the instruction earlier the same day —
+so a delta that does NOT carry is itself the finding.
+
+So the fold is gone. Each leading `../` is now a step taken while resolving:
+`base` loses a component, the name loses the prefix, the path is built once
+from the result. No Vec, no second walk, no function to place. The runner
+charges 18 instructions for it — one `strip_prefix` test per relative
+import — and the container reads it 37 under main.
+
+### A pure regression, attributed
+
+Eighteen instructions worse and nothing better is what the trend gate refuses
+outright. The escape is the one the gavel of 2026-08-25 put there: the floor
+is permeable to the language, so the fall is recorded in
+`bench/welfare_floor.json`'s history against the change that spent it. The
+alternative was leaving import syntax in the language's own error messages to
+protect an eighteen-instruction counter.
+
+## 2026-08-26 — the third pattern gavel 24 named never got its guard on native
+
+Gavel 24 names three patterns that can hold an err: `(err …)`, an `:err`
+annotation, and a typeset with err among its members. The first two carried the
+own-hako guard on every engine. The third did not, on native.
+
+`emit_pattern` splits `Pattern::Annotated` into two arms — a typeset arm and a
+general one — and only the general one asked `admits_err`. A typeset name never
+reaches it. So the guard the third case was promised was never emitted, and a
+package could rescue its own failure by naming a typeset instead of naming err:
+
+    type maybe err int
+
+    fn look _:maybe
+      "the typeset arm took it"
+
+    own = look (boom "a")
+
+    interp   own: a                          the oracle passes it through
+    native   own: false                      the arm took it
+
+`admits_err` was already right — it recurses through a typeset's members — and
+wasm was already right too, because `wasm_backend` handles typesets INSIDE the
+one annotated arm and calls `admits_err` before anything else. Native's split
+was the whole bug.
+
+So the fix is not the guard added to the second arm; it is the two arms made
+one, the way wasm has always had them. A plain annotation is a typeset with a
+single member, which is what `wasm_backend` writes and what native now writes.
+The shape that caused this cannot recur, because there is no longer a second
+arm for a guard to be missing from.
+
+The measurement said the same thing. Patching the typeset arm read +421,503
+instructions in the container against the runner's +2,562 — a delta that does
+not carry, which by the rule written the same day means layout rather than
+work, since `kanso check` never runs codegen at all. The merged arm reads 16
+BELOW main and the runner charges 456, down from 2,562.
+
+Nothing else moved: the guard is emitted only where a typeset admits err, no
+benchmark declares one, and emitted, text and every counter vein are
+byte-identical. Four hundred and fifty-six worse and nothing better is the
+pure regression the trend gate refuses outright, so the fall is attributed in
+`bench/welfare_floor.json`'s history under the rule that the floor is
+permeable to the language — the same escape #1053 used, for the same kind of
+reason.
+
+`a_typeset_arm_cannot_see_its_own_hakos_err` pins both halves: the failure
+passes through, and the arm still takes a member that is not a failure.
+
+## 2026-08-26 — a list can hold a failure, and native alone disagreed
+
+The access side of the err rule was swept three times today and gave up three
+bugs. This is the propagation side, and the sweep was the same: name every
+site where a failure can reach an operation, then ask all three engines.
+
+Five agreed — an operator merges two failures, a comparison merges, an
+interpolation with two failing holes takes the first, a call takes the first,
+a list literal builds rather than propagates. The sixth did not.
+
+    listed = [(boom "a") (boom "b") 3]
+
+    interp   length: 3   listed: [err "a" err "b" 3]
+    wasm     the same, through eval::render
+    native   error[endpoint]: unhandled err reached the executor: ["a" "b"]
+
+Both engines BUILD the list — `length` is 3 everywhere — so the divergence is
+rendering, which is one of the three surfaces this project already knows is
+divergence-prone. `k_render` opened with
+
+    if (v.tag == K_ERR) return v;
+
+which is right at the top of a render and wrong inside one. Twenty lines down
+the same function has `case K_ERR: return k_concat(k_str("err "), ...)` — the
+oracle's answer, and dead code, because the early return caught every err
+first. Two places deciding one thing, and the one that ran was not the one
+that was right. Third instance of that shape today, after the `some` arm and
+native's two annotated arms.
+
+Printing a list of results handed the merged failure to the endpoint and took
+the successes with it, which is the behaviour a program would notice.
+
+### What the fix cost, and the shape that made it cheap
+
+Splitting `k_render` into a top-level entry and a held-value body cost 1,424
+bytes of .text per binary — 1.76% on jsonbench — because two bodies is two
+bodies however the symbols are marked; `static` moved nothing. One body with a
+`held` flag says the same thing for 128 bytes. Eleven times cheaper, and the
+error message the reader sees is identical.
+
+### What it costs, measured rather than assumed
+
+The `held` flag is one comparison per render call, and the veins say so:
+
+    work_jsonbench     2,910,241,430 -> 2,910,241,403     -27
+    work_encodebench   9,866,843,909 -> 9,866,843,910      +1
+    work_oneshot          47,277,030 ->     47,277,078     +48
+    work_basket           57,416,154 ->     57,436,155 +20,001
+    work_deepbench       807,094,292 ->    807,094,318     +26
+    work_escapebench     258,574,070 ->    258,574,097     +27
+    work_pendbench       987,906,159 ->    987,907,097    +938
+    widebench                                          unchanged
+    compile_instructions  57,490,610 ->     57,492,931  +2,321
+    text, every binary                                    +128 to +144
+
+basket is the one worth reading: +20,001 is 0.035%, and the shape of the
+number says what it is — one comparison in a render that runs twenty thousand
+times. jsonbench came out 27 BELOW, so this is not a pure regression and the
+gate does not need the floor's escape, though the entry recording it stands.
+
+What it buys is the differential law holding on a surface where two engines
+already agreed and the third was alone.
+
+## 2026-08-26 — the same fix, missing the map, and why the fixture let it
+
+#1057 gave `k_render` a `held` flag so a failure inside a container renders
+rather than propagating. It reached lists and records. It missed the map
+beside them.
+
+Two mistakes stacked. The edit was applied over a fixed-size window of the
+function, and the map's key and value renders sit past the end of that window,
+so they kept calling the top-level entry. And the fixture held a list alone,
+so the corpus agreed with the half-fixed compiler and CI went green on it.
+
+    mapped = { "k":(boom "v") }
+
+    interp   mapped: { "k":err "v" }
+    native   error[endpoint]: unhandled err reached the entry: "v"
+
+Live on main for the length of one merge. The fixture now holds a list, a map,
+and a map nested in a list, because a spec that covers one member of a family
+proves nothing about the others — which is the general form of what went
+wrong, not a detail of this function.
+
+Sixteen bytes of .text a binary, and the work vein moves by tens: jsonbench
++23, basket +23, pendbench +38, oneshot -21. The map render is on no
+benchmark's path, so what these are is the one comparison arriving at a
+slightly different address.
+
+## 2026-08-26 — what a failure does at every site, pinned
+
+The rule is one sentence: a failure reaching an operation carries past it. What
+that means differs by site, and each site is implemented separately in three
+engines. Asking one question of all three — what happens HERE — produced four
+divergences in an afternoon (#1052 twice, #1056, #1057 with #1058), every one
+a site where two engines agreed and the third did not.
+
+None of them was hard to find. What was missing was the question being asked
+of each site in turn, and a place to write the answer down. Twelve sites, one
+fixture:
+
+    merge      operator, comparison, constructor, `&` join
+    first      call with no matching arm, interpolation, `>>` sequence
+    holds      list literal, map literal — a container is not its contents
+    through    field read, index, builtin
+
+`what_a_failure_does_at_every_site` runs all twelve and pins what each answers.
+A site that drifts on any engine goes red; a site nobody has thought about is
+a line missing from the file, which is a thing a reader can notice.
+
+Worth naming because the same shape recurred four times: the right code was
+already written and something shadowed it. `type_match_depth` answered `some`
+before it answered `err`. Native's typeset arm returned before reaching the
+annotated arm's guard. `k_render` returned an err before reaching the case that
+renders one. And the map render sat outside the window an edit was applied
+over. In each the correct behaviour existed in the file and did not run — which
+is what a rule spread across pattern kinds, container kinds and three
+implementations costs, and it is the concrete form of the argument for putting
+err-handling in one named place.
+
+## 2026-08-27 — which patterns can hold a failure, as a table
+
+Gavel 24 rules on matching. Three patterns can hold an err — `(err …)`, an
+`:err` annotation, a typeset with err among its members — and none of them
+holds an err its own hako raised. Two of yesterday's divergences were cells of
+that table: `_:some` took a foreign failure on the interpreter and on wasm
+while native refused the annotation at build time (#1052), and a typeset arm
+took its own hako's failure on native alone (#1056).
+
+The rule was written down; the table was not. Ten pattern forms against two
+err origins is twenty cells, and three fixtures covered three of them. The
+bugs were in the seventeen nobody had asked about.
+
+    pattern   own   foreign
+    _         past  past
+    v         past  past
+    v:err     past  took
+    (err r)   past  took
+    v:maybe   past  took
+    v:some    past  past
+    v:int     past  past
+    v:string  past  past
+    v:none    past  past
+    1         past  past
+
+`took` means the arm fired; `past` means the failure went by as though the arm
+were not written. The foreign column names the three patterns the gavel names.
+The own column holds for every spelling, not only for the three that had been
+thought about.
+
+Adding a pattern form to the language adds a row here. A form with no row is
+one the question was never asked of.
+
+Fixture only — no counter moves.
+
+## 2026-08-27 — the fourth container, and a sentence that was wrong about it
+
+`a_container_can_hold_a_failure` opened by naming three containers and a
+record. It then tested three. The header even says why that matters — "a spec
+that covers one member of a family proves nothing about the others" — which
+is how #1058 got found.
+
+The record takes a step to reach, and the sentence describing it was wrong.
+"A record's field once the record exists" cannot happen: a constructor merges
+its arguments' failures, so `held (boom "a") 2` is a failure and not a record
+holding one, which #1059 pins as the `built` row. What a record can hold is a
+field that is a list or a map holding one — the constructor sees a container,
+and the failure is inside it.
+
+    fielded: held [err "f"] 2
+    keyed:   held { "k":err "g" } 3
+    buried:  [held [err "h"] 1]
+
+Byte-identical on the interpreter, native and wasm.
+
+What these lines do NOT pin is the `held` flag on `k_render`'s record branch.
+Reverting that one argument to 0 changes none of them, because the field is a
+container and the container branch sets the flag again for its own items. The
+flag is load-bearing only for a field that is itself an err, and no program can
+build one. So the lines pin routing — that a record's fields reach rendering by
+the same road its items do — and the comment now says so rather than claiming a
+mutation they would catch.
+
+## 2026-08-27 — the render differential had never rendered a failure
+
+The project names rendering divergence-prone and gave it a harness for that
+reason. Two rendering divergences shipped this week anyway — #1057 and #1058,
+both `k_render` answering differently from the oracle for a container holding
+a failure — and the harness could not have caught either, because not one of
+its 68 values was a failure.
+
+Eighteen more, built the way the rest of the corpus is built: a failure in a
+list, in a map, in a map beside a value, nested twice, with a reason that is
+an int, a float, `none`, `true`, a list, a map, an escaped string, an empty
+string, and a constructor whose merged failure renders in a list.
+
+    68 values rendered, 0 disagree      before
+    86 values rendered, 0 disagree      after
+
+Watched red for the right reason. With #1057's `held` flag reverted — the
+early `if (v.tag == K_ERR) return v;` restored — the sweep answers
+
+    86 values rendered, 16 disagree
+
+and names each one: native hands the failure to the endpoint where the oracle
+prints the container. The two that still agree under the bug are the two whose
+value is a bare failure, which both engines propagate.
+
+This harness compares native against the oracle. wasm's rendering is covered
+by the browser differential over the golden corpora, where #1059 and the
+container fixture live.
+
+## 2026-08-27 — eight programs emitted code nobody counted
+
+`bench/emitted_golden.txt` exists because 7.6% of decode speed leaked away
+between 2026-07-27 and 2026-08-07 with every allocation counter
+byte-identical: the decoder gained 20% more calls and 23% more branches for
+the same work, and nothing watched the dimension that moved.
+
+It watches the decoder. `scripts/gates/build_benchmarks.sh` builds nine
+programs, and the machine-code gate beside it reads eight. So the leak that
+was found once could have happened in any of the other eight, in silence,
+including `scanbench` — the largest at 20,023 lines, and absent from
+bench/text_golden.txt as well.
+
+    encodebench defines=153 calls=1663 branches=1014 lines=10466
+    oneshot     defines=154 calls=1779 branches=1159 lines=11469
+    basket      defines=118 calls=1324 branches=726  lines=7181
+    widebench   defines=169 calls=1884 branches=1116 lines=11507
+    deepbench   defines=92  calls=840  branches=520  lines=5046
+    escapebench defines=29  calls=97   branches=48   lines=708
+    pendbench   defines=106 calls=1250 branches=611  lines=6169
+    scanbench   defines=307 calls=3745 branches=2216 lines=20023
+
+A second file rather than eight more lines in the first, for two reasons. The
+decoder's golden IS its history — eleven dated entries explaining every move —
+and summing eight programs into it would let a rise in one hide a fall in
+another. And the counters are read from kanso's own IR before any linker runs,
+so they are host-independent: `sh scripts/gates/emitted_code.sh` reproduces
+the committed jsonbench numbers exactly in this container, which is how these
+eight could be generated here at all.
+
+Two ratchet mutations now, one per golden. A gate that reads two files and is
+only ever proved against one is proved for one.
+
+### The trend gate cannot tell a wider vein from a worse program
+
+Found while deciding whether `scanbench` could join bench/text_golden.txt in
+the same change. It cannot:
+
+    worsened: text 652,128 -> 777,794  (bench/text_golden.txt)
+    FAIL  a pure regression: something got worse and nothing got better.
+
+Nothing got worse. Those 125,666 bytes are scanbench's `.text` counted for the
+first time.
+
+The first guess was that `judged` reads a name missing from the base as zero,
+and a fix for that was written. It changes nothing here, and measuring said so
+before it shipped: `text` is not a missing name. The gate sums a golden's
+counters BY FIELD NAME across samples, deliberately — the file's own comment
+says `text` is "one number across the eight binaries" and the per-golden diff
+is what names which. So a ninth binary raises the sum, and a rise is a rise.
+Wider and worse are the same shape to a sum.
+
+The emitted counters above escaped only because a golden with no copy on main
+is skipped outright, which is the second reason the eight went into a file of
+their own rather than beside the decoder.
+
+Whether a summed vein should be compared per sample is a question about what
+this gate is for, not a bug in how it reads. Left open here rather than
+answered in a change about emitted code.
+
+## 2026-08-26 — the argument gets a page: why there is no bind
+
+Clay lost the thread and asked for it back: he remembered devising a
+way to avoid explicit combinator keywords and could not reconstruct
+it. The device was gavel 24's three moves — own errs unreceivable,
+foreign handling as ordinary arms, signature-directed elaboration —
+and it lived only in this log's archive, which is exactly how it got
+lost. compiler.html gains entry 23, "why there is no bind", stating
+the assembled argument as settled surface: the combinator words stay
+off the surface in every variant under consideration, and the entry
+fences the genuinely open half — whether the failure machinery lives
+in dispatch or in the elaborator — as the design ledger's question,
+not the page's. The reconstruction-from-log episode is named in the
+entry itself as the reason it exists.
+
+## 2026-08-27 — the clone that owns a qualified name, measured at last
+
+`module_differential`'s known defect `w1` — a module's own `pub` reading as
+private because one of its imports exports the same name — was filed on
+2026-07-27 against "the question task #51 holds a gavel over". Task #51 was
+ruled on 2026-08-17 as gavel 51 and built the same day. The defect was never
+revisited, and gavel 51 does not settle it: gavel 51 is one module reached by
+two paths, and this is two modules colliding inside one namespace.
+
+Three things the ledger did not have.
+
+**Who claims the name.** An instrumented `qualify` says it plainly:
+
+    PROBE key=dep/join taken=None       is_pub=false synthetic=true  file=std/text/text.kso
+    PROBE key=dep/join taken=Some(false) is_pub=true  synthetic=false file=.../dep/dep.kso
+
+The first writer is a bare-enrollment clone of a NON-PUB ARM of std/text's
+`join` group. The map is first-writer-wins, so `dep`'s own `pub` never gets to
+set the flag.
+
+**When the clone survives.** Only when the importing module declares the same
+name. With no `join` in `dep`, `canonicalize_bare_aliases` folds the clone
+away and `dep/join` is an ordinary unknown name. The collision is the
+condition for the bug, not the enrollment.
+
+**What the one-line fix costs.** Letting `dep`'s `pub` win the flag makes the
+refusal go away and makes `dep/join` reach std/text's arm. Written so that
+`dep`'s own arm cannot match —
+
+    pub fn join a:int b:int          in dep
+    print "{dep/join ["x" "y"] "-"}" in app
+
+    x-y        native
+    x-y        interpreter
+
+`dep` never exported that function. The archive recorded this hazard in
+2026-07-27 without a case; here is the case, on both engines. The refusal is
+the only thing between a program and a silent re-export of a dependency under
+a name its author never wrote.
+
+So the flag and the dispatch are one question, and it is a design question:
+making `dep/join` mean `dep`'s declaration requires the enrolled clones out of
+`dep`'s qualified namespace, and `dep`'s own bare call sites are rewritten
+INTO that namespace during qualification. The bare overload space would need a
+spelling of its own that a consumer cannot write. Filed in
+design/pending-gavels.md under "Which claim owns `dep/join`", with a
+recommendation. `w1` stays recorded as it behaves; its label stops citing a
+gavel that has fallen.
+
+## 2026-08-27 — one cell of five, and two wrong answers on the way to it
+
+§18 of docs/compiler.html named an open item: a loop threading a map retains
+71.9 MB where the scalar form holds 1.5 MB, "and the fix is to give a threaded
+container storage outside the rewound region the way a byte builder already
+has."
+
+`git log -S` dates that sentence to 2026-08-01, in #664. The archive holds four
+entries from 2026-08-02 that build exactly it and revert it three times, every
+attempt moving the arena counter and none moving the process — the best got the
+counter down 69x while peak RSS went 71.8 MB to 75.2 MB. The page has carried a
+declined fix as its plan for twenty-five days, which is what "negative results
+are recorded on the compiler page so ideas stay declined" exists to prevent.
+
+Then measuring it took three goes, and the two wrong answers are the useful
+part of this entry.
+
+FIRST WRONG ANSWER. A loop threading a map beside a scalar brackets and holds
+1.7 MB, where the map-only loop I wrote held 69.7 MB. I concluded the scalar
+parameter was the difference and wrote it up. It was not: my map-only loop
+recursed through a helper group and the other did not, so the comparison
+carried two changes at once.
+
+SECOND WRONG ANSWER. Controlling for that — a self-recursive, map-only,
+two-argument loop — brackets, at 1.7 MB. So the container is not the axis
+either, and the page's "a map or a list" was wrong in both directions.
+
+WHAT IS ACTUALLY TRUE, at 1.6 million iterations with the same string built and
+dropped each time round (`sh_str` reads 72,282,272 in all five):
+
+    carried    recursion         beat_iters    arena peak    peak RSS
+    scalar     self              1,600,000      1,048,576      1.7 MB
+    map        self              1,600,000      1,048,576      1.7 MB
+    scalar     through a helper  3,200,000      1,048,576      1.7 MB
+    list       through a helper  3,200,000      1,048,576      1.7 MB
+    map        through a helper          0     72,351,744     69.7 MB
+
+One cell of five: a map carried by a loop that recurses through a second group,
+and nothing else. A list through the same helper brackets, and the same map in
+a self-recursive loop brackets. The refused group draws no line from
+KANSO_BEAT_REPORT at all, so the analysis never reaches it.
+
+That is why the storage fix could not have paid — it aimed at what the loop
+carries, and carrying a map is not the problem.
+
+WHY MAPS ARE OUT, from `beat.rs` itself:
+
+    /// Maps stay out: the first read caches a freshly allocated sorted view —
+    /// an above-the-mark pointer — into the below-mark header. Instant dangle.
+    const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC | LIST;
+
+So the exclusion is deliberate and the hazard is real. What the table adds is
+that four of the five shapes bracket anyway, the map-under-self-recursion among
+them. Crossing is not what separates them: a probe on the crossing test answers
+`loop/go/2 pos1 not_crossing=false` for exactly the self-recursive loop that
+brackets, so the map crosses the iteration boundary there too and the loop
+still rewinds. The narrowed question is why a helper hop changes the answer.
+
+A program can have the forty-fold win today by writing the loop so it calls
+itself, which nothing in the tree said.
+
+WHERE IT HAPPENS, and it is a priced refusal rather than an oversight.
+Instrumenting `eligible_clusters` on both loops:
+
+    map  through a helper   entries=1  edges_ok=true  carried=[go[1], onward[1]]
+    list through a helper   entries=1  edges_ok=true  carried=[]
+
+`cluster_edges_ok` SUCCEEDS in both, so the edge check is not what refuses the
+map. What differs is what becomes of the slot. LIST is in THREADED, so the list
+slot is threaded and nothing is carried. MAP is not:
+
+    const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC | LIST;
+
+so the map slot falls through to `carried` — a slot the loop evacuates at every
+rewind — and then this fires:
+
+    // A demoted entry buys a plain beat and nothing more. A carried
+    // slot is evacuated at every rewind, and a cluster reached only
+    // by a tail call is one whose cost nobody has measured — the
+    // json string scanner pays 8 GB of copies for the licence.
+    if !entries.is_empty() && !carried.is_empty() { continue; }
+
+So the forty-fold difference is a trade somebody already priced, on a different
+program. A draft of this entry called it a missing licence, by reading the type
+sets and never the selector; the probe above is what corrected it, and that is
+the fourth reading of this loop a measurement has overturned.
+
+WHAT IS ACTUALLY OPEN is whether the price is right for THIS program. A loop
+carrying a one-key map evacuates a handful of bytes per rewind where the string
+scanner evacuates a buffer, and the rule cannot tell them apart. Two ways out:
+make a map threadable the way a list is, which returns to the sorted-view
+hazard the threadable set was drawn to avoid; or make the carried-slot refusal
+read the size of what it would copy. Both are licensing changes rather than bug
+fixes, which is why this entry stops at naming them.
+
+## 2026-08-27 — four acceptance tests had started passing, and nothing said so
+
+Five tests in the tree carry `#[ignore]`. Each was written to fail, as the
+acceptance criterion for something not built, and each says in as many words:
+delete this attribute in the change that builds it. `cargo test -- --ignored`
+says four of the five now pass.
+
+    a_bare_list_is_or_is_not_bytes   the bytes ruling landed; four sites agree
+    accumulator_growth               the rewind is built for this shape
+    view_cache_is_returned  (x2)     the view has an owner
+
+None is vacuous, and each was checked rather than trusted.
+
+`view_cache_is_returned` guards a leak measured at 76,800,048 bytes over 1.6
+million iterations — forty-eight bytes a map, unbounded in the iteration count,
+and invisible to every arena counter because the view is malloc'd. It reads
+`view_allocs` against `view_frees`:
+
+    20,000 transient maps      view_allocs=20000   view_frees=20000
+
+The gap is zero, where the test allows a small constant. The leak is closed.
+
+`accumulator_growth` asserts a hard equality on arena peak across a sixteenfold
+change in iterations. Measured at 256x instead:
+
+    n           arena_peak_bytes    beat_iters
+    5,000              1,048,576         5,000
+    80,000             1,048,576        80,000
+    1,280,000          1,048,576     1,280,000
+
+Flat. That loop is self-recursive, threads a map, `put`s into it every
+iteration and reads it with both `m["k1"]!` and `entries` — so the map is
+re-derived, not merely passed along, and it brackets anyway. `beat.rs` has a
+rule for exactly this, `is_scalar_map_chain`. What the cluster path lacks is a
+counterpart to that rule, which is the finding recorded in the entry above.
+
+`a_bare_list_is_or_is_not_bytes` was ignored pending "the ruling on whether
+bytes are a type or a convention". The ruling landed — the interpreter has a
+real bytes value and a list of small integers is never quietly one — and all
+four sites answer identically on both engines.
+
+`entry_file`'s remains ignored and remains red, which is the point of the
+check: one of the five is still a live defect.
+
+UN-IGNORING TWO OF THEM MADE A THIRD FAIL, which is a thing worth writing
+down. Both `view_cache_is_returned` tests ask for 20,000 maps, cargo runs them
+on separate threads, and `views` named its scratch directory for the size
+alone — so one test removed the other's program mid-run. They never collided
+while both were ignored. The directory is unique per call now.
+
+## 2026-08-27 — a file module could be imported and could never import
+
+Found while trying to repair the one `#[ignore]`d test that still fails. Its
+fixture needed a third module, the third module would not resolve, and the
+refusal was wrong about the facts:
+
+    error: cannot resolve import "./helper" — a dot-prefixed path names a
+    module beside the importing one, and there is no such directory or `.kso`
+    file there
+
+`helper.kso` sat beside it. Reduced to three files:
+
+    main.kso    import "./a"          a/play
+    a.kso       import "./b"          pub play = print "{b/v}"
+    b.kso                             pub v = 1
+
+`main.kso` imports the file module `a.kso` and that works. `a.kso` importing
+the file module beside it does not. The same shape as directories — `a/a.kso`
+doing `import "../b"` against `b/b.kso` — has always worked.
+
+WHY. `compile_module_loaded` hands `load_dependencies` its own `dir` as the
+base for resolving imports, and for a file module `dir` is the FILE. So
+`resolve_import` looked for `a.kso/b` and `a.kso/b.kso`, neither of which can
+exist, and reported the sibling missing while it sat there. One line:
+
+    let base = match dir.is_file() {
+        true => dir.parent().unwrap_or(dir),
+        false => dir,
+    };
+
+The self-import guard behaves the same either way afterwards — a file module
+importing itself and a directory module importing itself both answer
+`import cycle through …`, where before this the file form could not get far
+enough to say anything.
+
+`module_differential` gains the case, which is the corpus for whole modules on
+disk. It reads 18 modules now, and with the fix reverted it goes red naming
+the case and quoting the diagnostic rather than through the known-defect
+ledger:
+
+    18 modules, 1 wrong; 1 known defects, 0 no longer as recorded
+      a file module importing the file module beside it
+        expected it to compile: error: cannot resolve import "./helper" …
+
+WHAT IT COSTS. `compile_instructions` 57,492,931 -> 57,493,961, a rise of
+1,030 on 57.5 million — 0.0018%, and it is the stat calls: one `is_file` per
+module load. The counters that measure only the front end's work do not move
+at all, `compile_allocs` at 61,981 and `compile_peak_bytes` at 822,004 both
+identical, and no runtime vein is touched. The trend gate refuses a rise that
+buys nothing, so this change takes the language escape and records itself in
+bench/welfare_floor.json's history. The floor does not move: welfare reads
+84.12 either way, because a thousand instructions in fifty-seven million is
+below the hundredth the gate can see.
+
+## 2026-08-27 — two questions the residual sweep could not see
+
+The 2026-08-25 sweep walked the log, the archive and every design doc for
+questions asked and never answered, and said so: "The intent is that this is
+the whole of it." Today turned up two it missed, and both were missed the same
+way — each was recorded in a TEST rather than in prose.
+
+The first is `w1` in `module_differential`'s known-defect ledger: which claim
+owns a qualified spelling when a module declares a name one of its imports
+also exports. Filed today with its measurement.
+
+The second is `tests/entry_file.rs`, whose `#[ignore]` reason reads "the two
+conventions collide; the rule is a gavel, not a fix". The archive entry behind
+it — "an err's reason renders with the compiler's spelling, not the program's",
+2026-08-02 — ends with the sentence "That is a gavel." It never reached the
+ledger either.
+
+    run the file directly     trouble: slow_lane 7
+    import it                 trouble: lane/slow_lane 7
+
+Same program, same value, and which spelling you get depends on how the program
+was entered. The bare-name fix was built and reverted because two deliberate
+pins went red — `cross_module_fields` asserts `` `geo/label` `` in a diagnostic
+and `lib/pair 6 "v"` as output, both correct for an imported type. So the rule
+wanted is "render the name the asking module would write", and render has no
+idea who is asking.
+
+Filed with a recommendation: qualified everywhere, on the grounds that Go's
+package rule is already ruled here and Go prints `main.T` rather than `T`, and
+that the defect is entering the same code two ways and reading two things. The
+cost is stated in the entry rather than glossed.
+
+THE RULE THAT CHANGES. STATUS.md's filing gate said an entry cites its search
+of the log, the archive and every design doc. It now says the tests too. A
+sweep that reads only prose cannot see a question a spec is carrying, and two
+of them were sitting in specs the whole time.
+
+## 2026-08-27 — three diagnostics the coverage gate could not see
+
+The scan that pins every diagnostic to a golden matches a message by its
+leading literal run: the text before the first interpolation, which is the only
+part a golden can match on. It required twelve characters of that run.
+
+Three messages have exactly ten.
+
+    function `{name}` has no body          src/parser.rs:581
+    constant `{name}` has no value         src/parser.rs:614, 648
+    the name `{}` is already taken         src/check.rs:2229, 2240
+
+Each is raised by a program anybody could write: `fn nobody x` with nothing
+under it, `answer =` with nothing under it, `type err`, a function named after
+a type in the same module. None had a golden, and the gate read 81 diagnostics
+and called the corpus complete.
+
+Lowering the floor to ten admits four sites. Three are those. The fourth is
+`no arm of `, which literal_arg_type already pins — I read the golden to check
+the match was the message itself and not a coincidence — so the widening cost
+no false pins. The gate reads 85 now, with three new fixtures under
+tests/golden/errors and both arms of the already-taken message in one of them.
+
+Nine characters is still invisible, and one message sits there: `private `{}`
+is never used in its module`. No program reaches it. Both loops in
+`check_unused_private` test `starts_with('_')`, the lexer refuses a leading
+underscore before the parser sees the word — `leading_underscore` in the corpus
+pins that refusal — and `_` alone lexes as the wildcard rather than a name, so
+`type _` is turned away with "expected a type name". Its type-side sibling has
+been on the excused list since the gate was turned on, which is how the check
+went on being compiled after the convention it serves was retired. Deleting it
+moves the compile veins, so it is a separate change.
+
+The floor is a number the gate now depends on, so it gets a mutation:
+`a_ten_character_diagnostic_arrives_without_a_golden` appends a bait whose run
+is `unpinned ` and a backtick, exactly ten characters. It stops being seen the
+moment the floor moves back up.
+
+Then the excused list itself, which carries four messages and a paragraph
+saying why each cannot be reached. Those paragraphs are readings of the source.
+One had already been wrong once: the inline-constant claim missed heads that
+open blocks and left the list on 2026-08-20. Writing the program is cheap, so I
+wrote one for each of the remaining claims.
+
+    expected a top-level declaration    REACHABLE
+    expected a constant name            holds — the top-level line rule speaks first
+    unused expression: …                holds — consecutive expressions fold into one Seq
+    private type `                      holds — see the next entry
+
+The indented-line excuse said the indentation rule or the blank-line rule
+always takes the line first. Both do when a declaration precedes it. Put the
+indented line at the top of the file and nothing precedes it, so it reaches the
+top-level loop with a non-zero indent and is refused there by name. Pinned at
+`an_indented_first_line`; the line leaves the list. The gate reports the other
+direction too — with the line still there it says "now pinned, delete its
+line" — and I watched it do so.
+
+Goldens and two scripts — no counter moves.
+
+## 2026-08-27 — the check a retired convention left behind
+
+`check_unused_private` reported a `_`-prefixed declaration that nothing in its
+module used. Leading underscores were retired from the language, and the check
+stayed.
+
+Both its loops test `name.starts_with('_')`. The lexer refuses any word longer
+than one character that begins with `_`, before the parser sees it; `_` alone
+comes back as the wildcard rather than as a word, so each of the three name
+positions turns it away with its own message:
+
+    type _      expected a type name
+    fn _ x      expected a function name
+    _ = 1       a top-level line must begin with `fn`, `type`, or a constant binding
+
+No declared name in a kanso program can begin with an underscore, so neither
+loop could fire and neither of its two diagnostics could be raised. The
+type-side one has been on the excused list since the coverage gate was turned
+on, listed as unreachable — correctly, and for a reason that made the check
+itself unreachable, which nobody drew out. The fn-side one was never on any
+list: its literal run is nine characters, under even the floor of ten that
+today's earlier entry set, so the gate has never seen it.
+
+The premise is pinned on both halves now. `leading_underscore` covers the long
+words; `an_underscore_is_the_wildcard_not_a_name` covers the three name
+positions and the message each raises. The check is deleted, its two call sites
+with it, and the excused line goes.
+
+That leaves the shape worth naming. A convention can be retired in the lexer
+and leave its enforcement standing three passes away, and the thing that ought
+to have noticed — a gate whose whole job is to find diagnostics nobody can
+reach — had one of the two on a list of tolerated exceptions and could not see
+the other at all.
+
+The veins, from the runner's log: `compile_instructions` 57,493,961 ->
+57,486,466, a fall of 7,495 (0.013%), banked. What went away is the walk —
+both loops visited every declared function and every declared type on every
+compile to ask a question the lexer had already made unanswerable.
+`compile_allocs` holds at 61,981 and `compile_peak_bytes` at 822,004, which is
+what a deletion of work that allocates nothing should read as. Welfare rises
+from 84.11750548393506 to 84.11785353572103 and the floor moves with it.
+
+The page's tagged figure moves with the golden, and it took `golden_prose`
+going red on CI to say so: I regenerated the golden, re-ran welfare and the
+trend gate, and carried forward a "0 drifted" from a run taken before the
+regeneration. The entry above this one records the same check catching the same
+omission on the same figure four hours earlier. Checking the surfaces from
+memory is the failure; the checklist exists because recall does not work here.

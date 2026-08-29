@@ -1,0 +1,13 @@
+# The value is a STRING rather than an int, because the quoting is what a
+# single int would not have shown: native rendered unquoted at first and
+# agreed with the interpreter on 7, [1 2 3] and 1.5, diverging only here.
+pub type point
+  x
+  y
+
+pub fn opaque v
+  v
+
+pub play =
+  point a b = opaque "hello"
+  print "{a} {b}"

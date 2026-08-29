@@ -21,6 +21,19 @@ import "std/text"
 # welfare scalar, which weighs the sides. The name-each-worsening listing stays
 # advisory: the sentence is reflection, not enforcement.
 #
+# One branch escapes the refusal, added 2026-08-26 under the gavel of the day
+# before — the floor is absolute against refactorings and permeable to the
+# language. A feature or a doctrine-compelled change is never rejected for the
+# score: it lands, the floor moves, and the fall is recorded against the change
+# that spent it. So a pure regression passes when this branch adds an entry to
+# the history in bench/welfare_floor.json, which is where that record is kept.
+# The gate checks that the attribution exists, the way the listing below checks
+# that a sentence exists; whether the change earns it is Clay's to say.
+#
+# gavel 24 cost lib/json four counters and improved none of them, and this gate
+# refused it while the ruling in the log said it must land. That is the fixture:
+# a branch obeying a gavel could not merge.
+#
 # A finding is the counter's name, which way it went, and the line to print.
 type move
   key
@@ -42,13 +55,36 @@ lower_e = ["rounds" "visits"]
 
 lower_f = ["front_end_rounds" "front_end_visits" "compile_peak_bytes"]
 
+# The two MEASURED compile veins. They became welfare's compile-speed terms on
+# 2026-08-26 and this gate could not see either of them, so an instruction
+# count could move by a million with the listing silent — which is exactly what
+# it did while gavel 24 was being built, and only the per-golden diff caught it.
+lower_g = ["compile_instructions" "compile_allocs"]
+
+# The runtime work vein, per benchmark. Four of these are welfare's run-speed
+# terms, so half the score's inputs were invisible to the gate that exists to
+# watch the score's inputs — the same argument the two compile veins above
+# were added on, one vein down. Named WITHOUT the file's prefix, because the
+# direction lookup strips it: what is classified is the counter, wherever it
+# was read from. `text` is the machine-code vein, summed over the binaries.
+lower_h = ["jsonbench" "encodebench" "oneshot" "basket" "widebench"]
+
+lower_i = ["deepbench" "escapebench" "pendbench" "text"]
+
 lower_ab = text/concat lower_a lower_b
 
 lower_cd = text/concat lower_c lower_d
 
-lower_ef = text/concat lower_e lower_f
+lower_ef = text/concat lower_e (text/concat lower_f lower_g)
 
-lower = text/concat lower_ab (text/concat lower_cd lower_ef)
+# emitted_golden's four counters need no entry: `lines`, `calls`, `branches`
+# and `defines` are in lower_d already, for compile_golden. The prefix on the
+# file keeps the two sums apart; the direction is the same question either way.
+lower_run = text/concat lower_h lower_i
+
+lower_efr = text/concat lower_ef lower_run
+
+lower = text/concat lower_ab (text/concat lower_cd lower_efr)
 
 higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
 
@@ -70,17 +106,69 @@ bench_modules = [["bench/compile_golden_modules.txt" "module_"]]
 
 bench_memory = [["bench/compile_memory_golden.txt" ""]]
 
+bench_ir = [["bench/compile_instructions_golden.txt" ""]]
+
+bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
+
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
+
+# The three RUNTIME veins, none of which this gate could read. `work_` and
+# `emitted_` are prefixed because the names collide otherwise: every benchmark
+# would clash with nothing, but `lines`, `calls`, `branches` and `defines`
+# belong to bench/compile_golden.txt already, and summing the decoder's IR
+# line count into a compile sample's would let a rise in one hide a fall in
+# the other. text_golden's rows share the field name `text`, so it sums to one
+# number across the eight binaries — the same treatment compile_golden's five
+# samples already get, and the per-golden diff is what says which binary.
+bench_work = [["bench/instructions_golden.txt" "work_"]]
+
+bench_emitted = [["bench/emitted_golden.txt" "emitted_"]]
+
+# The eight programs the emitted gate did not watch until 2026-08-27. A second
+# prefix rather than a second entry under `emitted_`, so a rise in a benchmark
+# cannot be hidden by a fall in the decoder — they are separate questions and
+# the decoder's series is the one with eleven entries of history behind it.
+bench_emitted_others = [["bench/emitted_golden_others.txt" "emitted_other_"]]
+
+bench_text = [["bench/text_golden.txt" ""]]
+
+# Three cost goldens that were simply never listed. They are `name=value` like
+# their four listed siblings, so nothing had to be taught to read them — the
+# list was short by three, which is a different failure from the one above and
+# found the same way: by asking which files in bench/ this program names.
+bench_escape = [["bench/cost_golden_escape.txt" "escape_"]]
+
+bench_scan = [["bench/cost_golden_scan.txt" "scan_"]]
+
+bench_wide = [["bench/cost_golden_wide.txt" "wide_"]]
 
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_de = text/concat bench_memory bench_pend
+bench_compiled = text/concat bench_ir bench_traffic
 
-bench_goldens = text/concat bench_ab (text/concat bench_cd bench_de)
+bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
+
+bench_emits = text/concat bench_emitted bench_emitted_others
+
+bench_run = text/concat bench_work (text/concat bench_emits bench_text)
+
+bench_rest = text/concat bench_escape (text/concat bench_scan bench_wide)
+
+bench_ce = text/concat bench_cd (text/concat bench_de bench_run)
+
+bench_cf = text/concat bench_ce bench_rest
+
+bench_goldens = text/concat bench_ab bench_cf
 
 mem_dir = "tests/golden/mem"
+
+floor_file = "bench/welfare_floor.json"
+
+# One history entry per `{"floor":` — the key opens each record and appears
+# nowhere else in the file, the top-level floor being reached through a comma.
+marker = "\{\"floor\":"
 
 advice = "movement is fine; silence is not. say why in design/compiler-log.md."
 
@@ -113,9 +201,33 @@ fn pair_of prefix f
 fn body? l
   text/slice l 1 1 != "#" and length l > 0
 
+fn said? t
+  length t > 0
+
+# Two shapes. Most goldens write `name=value`, one or several to a line, and a
+# leading word that is not a field is a sample name the reader drops so the
+# fields sum across samples. `bench/instructions_golden.txt` writes `name
+# value` instead, and the reader saw nothing at all in it — three benchmarks'
+# worth of a 1.81% decode regression went past this gate unnamed, because a
+# line with no `=` in it produced no pairs and no pairs is indistinguishable
+# from no movement.
 fn on_line prefix line
-  fields = list/select (text/split line " ") field?
-  list/to_list (list/map fields (f -> pair_of prefix f))
+  toks = list/to_list (list/select (text/split line " ") said?)
+  fields = list/to_list (list/select toks field?)
+  named = list/to_list (list/map fields (f -> pair_of prefix f))
+  shaped prefix toks named (length named)
+
+fn shaped prefix toks _ 0
+  lone prefix toks (length toks == 2)
+
+fn shaped _ _ named _
+  named
+
+fn lone prefix toks true
+  [["{prefix}{toks[1]!}" toks[2]!]]
+
+fn lone _ _ false
+  []
 
 fn joined acc more
   text/concat acc more
@@ -209,6 +321,19 @@ fn answered _ _
 
 fn added? l
   text/slice l 1 1 == "+"
+
+# Did this branch record a fall against itself? An added history entry is the
+# attribution gavel 2026-08-25 asks for, and its absence is what the refusal
+# below is really about.
+fn recorded text
+  length (text/split text marker) - 1
+
+fn attributed? base
+  from_git base floor_file
+    . (theirs -> os/read_file floor_file . (ours -> grew? theirs ours))
+
+fn grew? theirs ours
+  recorded ours > recorded theirs
 
 fn log_delta base
   argv = ["diff" base "--" "design/compiler-log.md"]
@@ -316,16 +441,16 @@ fn gathered base names
   walked base (every_golden names) [] . (ms -> priced base ms)
 
 fn priced base ms
-  log_delta base . (added -> verdict ms added)
+  log_delta base . (added -> attributed? base . (att -> verdict ms added att))
 
-fn verdict moves added
+fn verdict moves added att
   worse = list/to_list (list/select moves (m -> m.worse))
   better = list/to_list (list/reject moves (m -> m.worse))
-  said moves . (_ -> weighed_up moves worse better added)
+  said moves . (_ -> weighed_up moves worse better added att)
 
-fn weighed_up moves worse better added
+fn weighed_up moves worse better added att
   quiet = list/to_list (list/select worse (m -> silent? added m))
-  unpriced quiet . (_ -> summary moves quiet . (_ -> ruling worse better))
+  unpriced quiet . (_ -> summary moves quiet . (_ -> ruling worse better att))
 
 # The summary only speaks when nothing went unpriced; a listing already said
 # more than it would.
@@ -376,18 +501,27 @@ fn listed quiet false
 fn key_line m
   "  {m.key}\n"
 
-fn ruling worse better
-  settled (length worse > 0 and length better == 0)
+fn ruling worse better att
+  settled (length worse > 0 and length better == 0) att
 
-fn settled true
+fn settled true true
+  banked 0
+
+fn settled true false
   refused 0 . (_ -> os/exit 1)
+
+fn settled false _
+  io/write ""
+
+fn banked _
+  io/write "\nA pure regression, attributed: welfare_floor.json gained a\n"
+  >> io/write "history entry, so the fall is recorded against the change that\n"
+  >> io/write "spent it. The floor is permeable to the language.\n"
 
 fn refused _
   io/write "\nFAIL  a pure regression: something got worse and nothing got\n"
   >> io/write "better. that trade has no other side, and it is the one move\n"
-  >> io/write "the gate refuses outright.\n"
-
-fn settled false
-  io/write ""
+  >> io/write "the gate refuses outright. A language change that must spend\n"
+  >> io/write "the score says so in bench/welfare_floor.json's history.\n"
 
 pub play = os/args . (a -> started (base_of a))

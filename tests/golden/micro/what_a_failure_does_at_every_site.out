@@ -1,0 +1,12 @@
+operated:  ["a" "b"]
+compared:  ["a" "b"]
+built:     ["a" "b"]
+grouped:   ["a" "b"]
+called:    a
+woven:     a
+sequenced: a
+listed:    [err "a" 2]
+mapped:    { "k":err "a" }
+reached:   a
+indexed:   a
+sized:     a

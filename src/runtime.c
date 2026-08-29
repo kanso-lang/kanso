@@ -204,6 +204,7 @@ KValue k_thunk_release_unless(KValue cell, KValue result) {
 }
 
 KValue k_render(KValue v, long long quote);
+static KValue k_render_at(KValue v, long long quote, int held);
 KValue k_b_render_value(KValue v) {
     return k_render(v, 0);
 }
@@ -284,8 +285,16 @@ typedef struct KErrBox KErrBox;
 /* `merged` says the reason is a list *of reasons* rather than one reason
    that happens to be a list, so merging is a fold: three failures answer
    three reasons however they were grouped, and `err ["a" "b"]` stays one. */
-struct KErrBox { KValue reason; const char* origin; KHop* hops; KErrBox* cause;
-                 long long merged; };
+/* `hako` is the package that RAISED this err, which is what an arm asks
+   about: a group may not see a failure its own package made. It is not stored
+   separately — codegen hands one literal holding both halves, "<hako>\0<fn> at
+   <file>:<line>", so `hako` points at the literal and `origin` just past its
+   NUL. Nineteen runtime signatures carry an origin and nine codegen sites emit
+   one; threading a second argument through all of them to move four bytes of
+   information was not worth it. NULL for an err with no frame, which therefore
+   belongs to no package and matches every arm. */
+struct KErrBox { KValue reason; const char* origin; const char* hako;
+                 KHop* hops; KErrBox* cause; long long merged; };
 
 static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
@@ -1432,6 +1441,12 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             k_copy_map_put(p, ne);
             ne->reason = k_deep_copy(e->reason, cp);
             ne->origin = e->origin;
+            /* the copy allocator does not zero either, and an err that
+               survives an evacuation keeps what it was told and what it
+               wrapped */
+            ne->cause = e->cause;
+            ne->merged = e->merged;
+            ne->hako = e->hako;
             KHop** tail = &ne->hops;
             KHop* h = e->hops;
             for (; h && !k_survives_x(h, cp->mark); h = h->prev) {
@@ -2004,18 +2019,52 @@ static KValue k_both_or_either(KValue a, KValue b) {
 
 long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
+
 /* `any` is every value a slot may hold; the absence channel is disjoint */
 
 static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
 
-KValue k_err(KValue reason, const char* origin) {
-    if (!k_not_failure(reason)) return reason;
+/* An arm cannot see an err its own package raised (gavel 24, clause 1, ruled
+   as dispatch semantics rather than as a check). Answers whether the match may
+   proceed, so every non-err and every err from elsewhere passes; an own-origin
+   err fails the arm and infectiousness carries it onward exactly as if the arm
+   were not written. Package names are one short string — "" for the program,
+   "std", or a hako owner — so the compare is a few bytes. */
+long long k_not_own_err(KValue v, const char* arm) {
+    if (v.tag != K_ERR) return 1;
+    const char* raiser = k_err_box(v)->hako;
+    if (!raiser) return 1;
+    return strcmp(raiser, arm) != 0;
+}
+
+/* Every field, every time. The arena bumps and does not zero, so a
+   construction that leaves a field out reads whatever the last user of those
+   bytes wrote. That is not theoretical: k_hop and k_b_wrap_err both skipped
+   `merged`, so a merged err that passed through a function came back claiming
+   its reason list was one reason rather than several, and three failures
+   printed as [["e1" "e2"] "e3"] on native against ["e1" "e2" "e3"] on the
+   interpreter. One constructor now, and a field added later cannot be
+   forgotten by three call sites at once. */
+static KErrBox* k_err_box_new(KValue reason, const char* origin, const char* hako,
+                              KHop* hops, KErrBox* cause, long long merged) {
     KErrBox* box = k_alloc(sizeof(KErrBox));
     box->reason = reason;
     box->origin = origin;
-    box->hops = NULL;
-    box->cause = NULL;
-    box->merged = 0;
+    box->hako = hako;
+    box->hops = hops;
+    box->cause = cause;
+    box->merged = merged;
+    return box;
+}
+
+/* The trace half of a raise site's literal: past the package name's NUL. */
+static const char* k_origin_text(const char* both) {
+    return both ? both + strlen(both) + 1 : NULL;
+}
+
+KValue k_err(KValue reason, const char* origin) {
+    if (!k_not_failure(reason)) return reason;
+    KErrBox* box = k_err_box_new(reason, k_origin_text(origin), origin, NULL, NULL, 0);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -2025,11 +2074,8 @@ KValue k_err(KValue reason, const char* origin) {
 KValue k_b_wrap_err(KValue reason, KValue original, const char* origin) {
     if (!k_not_failure(reason)) return reason;
     if (original.tag != K_ERR) k_die("wrap_err takes a reason and the err it wraps");
-    KErrBox* box = k_alloc(sizeof(KErrBox));
-    box->reason = reason;
-    box->origin = origin;
-    box->hops = NULL;
-    box->cause = k_err_box(original);
+    KErrBox* box =
+        k_err_box_new(reason, k_origin_text(origin), origin, NULL, k_err_box(original), 0);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -2040,14 +2086,11 @@ KValue k_err_hop(KValue v, const char* fn) {
     // not theirs to see — the getter prefix no source can spell
     if (strncmp(fn, "Get_", 4) == 0) return v;
     KErrBox* old = k_err_box(v);
-    KErrBox* box = k_alloc(sizeof(KErrBox));
     KHop* hop = k_alloc(sizeof(KHop));
     hop->fn = fn;
     hop->prev = old->hops;
-    box->reason = old->reason;
-    box->origin = old->origin;
-    box->hops = hop;
-    box->cause = old->cause;
+    KErrBox* box = k_err_box_new(old->reason, old->origin, old->hako, hop, old->cause,
+                                 old->merged);
     KValue out; out.tag = K_ERR; out.payload = k_ptr(box); return out;
 }
 
@@ -2066,8 +2109,38 @@ static char k_marker_ready[K_MARKER_CACHE];
    to a fresh allocation. */
 KValue k_rec(long long type_id, long long n, KValue* args);
 
+/* A record's fields are one operation, so two failing fields merge the way
+   two failing operands of `+` do — neither caused the other and neither is
+   less true. Native and wasm both used to hand back the FIRST failing field
+   here, where the interpreter merged; the corpus never built a record from
+   two failures and the three engines disagreed unwatched.
+
+   Out of line and never inlined, because the caller's scan is the hot path:
+   every record construction walks its fields, and folding the merge into that
+   walk cost pendbench 3.2% and oneshot 0.9% for work that runs only when a
+   field has already failed. The scan keeps its early exit; this takes over
+   from the field that failed. */
+__attribute__((noinline, cold)) static KValue k_merge_rest(long long n, KValue* args, long long at) {
+    KValue out = args[at];
+    for (long long i = at + 1; i < n; i++) {
+        if (!k_not_failure(args[i])) out = k_accumulate_failures(out, args[i]);
+    }
+    return out;
+}
+
+/* The same merge for the register-returnable construction the codegen builds
+   in tail position, where the two fields are in registers rather than an
+   array. At least one of them failed; the caller tested that. */
+KValue k_pair_failure(KValue a, KValue b) {
+    KValue args[2];
+    args[0] = a;
+    args[1] = b;
+    return k_merge_rest(2, args, k_not_failure(a) ? 1 : 0);
+}
+
 KValue k_rec_reuse(long long type_id, long long n, KValue* args, KValue victim) {
-    for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
+    for (long long i = 0; i < n; i++)
+        if (__builtin_expect(!k_not_failure(args[i]), 0)) return k_merge_rest(n, args, i);
     if (n > 0 && victim.tag == K_REC) {
         KRec* r = k_as_rec(victim);
         if (r->nfields == n) {
@@ -2080,7 +2153,8 @@ KValue k_rec_reuse(long long type_id, long long n, KValue* args, KValue victim) 
 }
 
 KValue k_rec(long long type_id, long long n, KValue* args) {
-    for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
+    for (long long i = 0; i < n; i++)
+        if (__builtin_expect(!k_not_failure(args[i]), 0)) return k_merge_rest(n, args, i);
     if (n == 0 && type_id >= 0 && type_id < K_MARKER_CACHE) {
         if (!k_marker_ready[type_id]) {
             KRec* r = k_alloc_perm(sizeof(KRec));
@@ -2120,6 +2194,9 @@ KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
 /* pattern checks: nonzero on match */
 long long k_check_tag(KValue v, long long tag) { return v.tag == tag; }
+/* `some` is a value that is not none. A failure is neither, and answering
+   otherwise made an arm that names no err at all take a foreign failure. */
+long long k_check_some(KValue v) { return v.tag != K_NONE && v.tag != K_ERR; }
 long long k_check_int(KValue v, long long n) { return v.tag == K_INT && v.payload == n; }
 long long k_check_rec(KValue v, long long type_id, long long nfields) {
     /* A pattern naming a type takes a subtype of it, so the walk looks for
@@ -2263,6 +2340,7 @@ static const char* k_lazy_hint(KValue v);
 extern long long k_type_field_count(long long type_id);
 extern const char* k_type_field_name(long long type_id, long long i);
 KValue k_render(KValue v, long long quote);
+static KValue k_render_at(KValue v, long long quote, int held);
 
 /* keyed reads: `{ author: writer title } = post` — fields resolve by name
    against the record's declared type */
@@ -2276,6 +2354,29 @@ KValue k_keyed_check(KValue v, long long entries) {
     if (entries >= k_as_rec(v)->nfields)
         k_die("a keyed read omits at least one field; reading every field is the positional form");
     return v;
+}
+
+/* The POSITIONAL destructuring bind — `point a b = v` — where `v` is not a
+   `point`. Its keyed sibling above has always rendered the value; this form
+   said `cannot destructure value as ...` and named neither the value nor what
+   to do instead, so the two engines printed different sentences for the same
+   program until 2026-08-27.
+
+   The interpreter's wording is the one kept, because both halves native was
+   missing are worth having: `7` is a value the reader's own program produced,
+   unlike the socket handles in kanso#1094 that kanso hands out, and the clause
+   after the semicolon is the only place the language says why a bind cannot
+   simply fail over to another arm. */
+void k_die_destructure(KValue v, const char* ty) {
+    /* QUOTED, matching `render(self, &value, true)` at eval.rs:1283. Unquoted
+       agrees for an int, a float and a list and diverges on a string — which a
+       fixture holding one int would never have shown. */
+    KValue shown = k_render(v, 1);
+    fprintf(stderr,
+            "%serror[runtime]:%s cannot destructure %s as `%s`; bindings are irrefutable, "
+            "so handle other types by dispatch first\n",
+            k_c_err(), k_c_off(), k_as_str(shown)->data, ty);
+    exit(1);
 }
 
 /* `.` field access: failures ride through; a non-record dies loudly. */
@@ -3282,11 +3383,22 @@ long long k_render_dispatchable(KValue v) {
     return v.tag == K_REC || v.tag == K_NONE || v.tag == K_DESC || v.tag == K_SUB;
 }
 
-KValue k_render(KValue v, long long quote) {
-    // an err propagates through rendering (it is an exception); a none is a
-    // value and renders its sentinel below
-    if (v.tag == K_ERR) return v;
-    if (v.tag == K_SUB) return k_render(k_sub_base(v), quote);
+/* Rendering a value that IS a failure hands the failure back, because the
+   interpolation asked for a failing value and infectiousness carries it. That
+   is a property of the top of a render, not of every err it reaches: an err
+   held INSIDE a list or a record is a thing the container holds, and the
+   switch below renders it `err <reason>` the way the oracle does.
+
+   The two used to be one function, and the early return shadowed the switch
+   case, so printing a list of results handed the merged failure to the
+   endpoint and took the successes with it. Native was alone in that: the
+   interpreter and wasm both answer through `eval::render`, which has only the
+   nested case. */
+KValue k_render(KValue v, long long quote) { return k_render_at(v, quote, 0); }
+
+static KValue k_render_at(KValue v, long long quote, int held) {
+    if (v.tag == K_ERR && !held) return v;
+    if (v.tag == K_SUB) return k_render_at(k_sub_base(v), quote, held);
     /* Output is the demand, so rendering forces what it prints. The oracle
        answers the same way. */
     if (v.tag == K_THUNK) {
@@ -3296,7 +3408,7 @@ KValue k_render(KValue v, long long quote) {
         if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
         /* the wire is the demand: output forces what it prints, and the path
            above is what stops a knot walking round */
-        KValue out = k_render(k_force(v), quote);
+        KValue out = k_render_at(k_force(v), quote, held);
         if (k_render_depth > 0) k_render_depth--;
         return out;
     }
@@ -3330,7 +3442,7 @@ KValue k_render(KValue v, long long quote) {
         case K_TRUE: return k_str("true");
         case K_FALSE: return k_str("false");
         case K_NONE: return k_str("<none>");
-        case K_ERR: return k_concat(k_str("err "), k_render(k_err_inner(v), 1));
+        case K_ERR: return k_concat(k_str("err "), k_render_at(k_err_inner(v), 1, 1));
         case K_STR:
             if (!quote) return v;
             return k_concat(k_concat(k_str("\""), v), k_str("\""));
@@ -3343,7 +3455,7 @@ KValue k_render(KValue v, long long quote) {
                 KValue out = k_str(k_type_name(r->type_id));
                 for (long long i = 0; i < r->nfields; i++) {
                     out = k_concat(out, k_str(" "));
-                    out = k_concat(out, k_render(r->fields[i], 1));
+                    out = k_concat(out, k_render_at(r->fields[i], 1, 1));
                 }
                 k_render_depth--;
                 return out;
@@ -3362,7 +3474,7 @@ KValue k_render(KValue v, long long quote) {
             KValue out = k_str("[");
             for (long long i = 0; i < l->len; i++) {
                 if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render(l->items[i], 1));
+                out = k_concat(out, k_render_at(l->items[i], 1, 1));
             }
             if (k_render_depth > 0) k_render_depth--;
             return k_concat(out, k_str("]"));
@@ -3378,9 +3490,9 @@ KValue k_render(KValue v, long long quote) {
             KValue out = k_str("{ ");
             for (long long i = 0; i < n; i++) {
                 if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render(s[i * 2], 1));
+                out = k_concat(out, k_render_at(s[i * 2], 1, 1));
                 out = k_concat(out, k_str(":"));
-                out = k_concat(out, k_render(s[i * 2 + 1], 1));
+                out = k_concat(out, k_render_at(s[i * 2 + 1], 1, 1));
             }
             if (k_render_depth > 0) k_render_depth--;
             return k_concat(out, k_str(" }"));
@@ -4168,7 +4280,18 @@ static KValue k_exec(KDesc* d) {
         }
         case 21: {
             /* Only reached outside a parallel group, where nothing else could
-               ever connect; k_step yields instead of arriving here. */
+               ever connect; k_step yields instead of arriving here.
+
+               The handle is checked first because this arm used to answer
+               "nothing connected" whatever it was given — a true statement
+               about a listener nobody has dialled, said about a value that is
+               not a listener at all. The interpreter refused it; native
+               described the world instead of the argument. The string is the
+               one k_step already uses for the same fault, which is worth
+               keeping identical: clang folds the two returns together, and a
+               distinct wording costs 128 bytes of .text in every binary. */
+            if (k_socket_of(d->x.payload) < 0)
+                return k_err(k_str("that is not a listener"), NULL);
             return k_err(k_str("nothing connected"), NULL);
         }
         case 22: {

@@ -75,6 +75,16 @@ pub enum ThunkState {
 pub struct ErrInfo {
     pub reason: Value,
     pub origin: Option<Rc<str>>,
+    /// The package that RAISED this err, which is what an arm asks about: a
+    /// group may not see a failure its own package made. Read off the raising
+    /// frame beside `origin`, never off the reason's declaration — a package
+    /// can raise an err whose reason type belongs to somebody else, and the
+    /// rule turns on who raised it.
+    ///
+    /// `None` for an err with no frame (the wasm host) and for one merged out
+    /// of several, which belongs to no single package. Both always match: the
+    /// rule refuses what it can prove is yours, and neither of these is.
+    pub hako: Option<Rc<str>>,
     pub hops: Vec<Rc<str>>,
     /// The err this one was wrapped around, kept so a re-raise never
     /// discards what it was told (`wrap_err`).
@@ -86,20 +96,54 @@ pub struct ErrInfo {
     pub merged: bool,
 }
 
-/// The evaluation frame an expression runs in, as an err-origin prefix
-/// "{fn} at {file}"; absent where no source frame exists (the wasm host).
-pub type Frame = Option<Rc<str>>;
+/// The evaluation frame an expression runs in: the err-origin prefix
+/// "{fn} at {file}" a raise stamps on its err, and the package that file
+/// belongs to. The two are read off the same declaration and travel together,
+/// because an err carrying one without the other is an err whose provenance a
+/// match cannot ask about. Absent where no source frame exists (the wasm host).
+#[derive(Debug)]
+pub struct Site {
+    pub prefix: Rc<str>,
+    pub hako: Rc<str>,
+}
+
+pub type Frame = Option<Rc<Site>>;
 
 fn frame_of(decl: &FnDecl) -> Frame {
-    Some(Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)))
+    Some(Rc::new(Site {
+        prefix: Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)),
+        hako: Rc::from(crate::provenance::package_of(&decl.file)),
+    }))
 }
 
-pub fn origin_at(frame: &Frame, span: Span) -> Option<Rc<str>> {
-    frame.as_ref().map(|prefix| Rc::from(format!("{prefix}:{}", span.line)))
+/// Where an err was raised, as the two things a raise records: the trace line
+/// a report prints and the package to hold responsible. They are produced
+/// together so no construction site can set one and forget the other.
+#[derive(Clone, Default)]
+pub struct Raised {
+    pub at: Option<Rc<str>>,
+    pub hako: Option<Rc<str>>,
 }
 
-pub fn err_value(reason: Value, origin: Option<Rc<str>>) -> Value {
-    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new(), cause: None, merged: false }))
+pub fn origin_at(frame: &Frame, span: Span) -> Raised {
+    match frame {
+        Some(site) => Raised {
+            at: Some(Rc::from(format!("{}:{}", site.prefix, span.line))),
+            hako: Some(site.hako.clone()),
+        },
+        None => Raised::default(),
+    }
+}
+
+pub fn err_value(reason: Value, raised: Raised) -> Value {
+    Value::ErrV(Rc::new(ErrInfo {
+        reason,
+        origin: raised.at,
+        hako: raised.hako,
+        hops: Vec::new(),
+        cause: None,
+        merged: false,
+    }))
 }
 
 /// A byte list (the scanner's `bytes`/`slice` view) as its utf-8 text, so a
@@ -133,12 +177,37 @@ pub fn hop(failure: Value, name: &str) -> Value {
             Value::ErrV(Rc::new(ErrInfo {
                 reason: info.reason.clone(),
                 origin: info.origin.clone(),
+                hako: info.hako.clone(),
                 hops,
                 cause: info.cause.clone(),
                 merged: info.merged,
             }))
         }
         other => other,
+    }
+}
+
+/// A deliberate exit is an err whose reason is `os/exit_status`. The endpoint
+/// reads its code rather than reporting it, because the program did not fail
+/// to say what it meant — it said it.
+///
+/// This lives here rather than beside the native endpoint because there are
+/// three endpoints and only one of them was in `main.rs`. The page's endpoint
+/// (`wasm_rt::exec_main`) could not see this function at all, so a program
+/// that exited deliberately was reported to the reader as an unhandled err.
+pub fn deliberate_exit(reason: &Value) -> Option<u8> {
+    let Value::Record { ty, fields } = reason else { return None };
+    // the type spells its module chain at whatever depth the import graph
+    // qualified it: os/exit_status directly, hako/os/exit_status one hop in
+    if !(ty.as_ref() == "os/exit_status" || ty.ends_with("/os/exit_status")) {
+        return None;
+    }
+    match fields.borrow().first() {
+        Some(Value::Int(code)) => Some(u8::try_from(code.clone()).unwrap_or(1)),
+        // an exit_status carrying something that is not a status is not a
+        // program saying what it meant — it is one that went wrong computing
+        // the code, and the reader is owed that rather than a silent 1
+        _ => None,
     }
 }
 
@@ -525,7 +594,7 @@ impl Executor for RealExecutor {
         KIDS.with(|k| {
             let mut k = k.borrow_mut();
             let Some(mut child) = k.running.remove(&handle) else {
-                return Err(format!("{handle} is not a running process"));
+                return Err("that is not a running process".to_string());
             };
             let _ = child.kill();
             child.wait().map_err(|e| e.to_string())?;
@@ -538,7 +607,7 @@ impl Executor for RealExecutor {
         KIDS.with(|k| {
             let mut k = k.borrow_mut();
             let Some(child) = k.running.get_mut(&handle) else {
-                return Err(format!("{handle} is not a running process"));
+                return Err("that is not a running process".to_string());
             };
             let status = child.try_wait().map_err(|e| e.to_string())?;
             let Some(status) = status else { return Ok(None) };
@@ -578,7 +647,7 @@ impl Executor for RealExecutor {
             let found = s
                 .listeners
                 .get(&listener)
-                .ok_or_else(|| "that is not an open listener".to_string())?;
+                .ok_or_else(|| "that is not an open socket".to_string())?;
             let addr = found
                 .local_addr()
                 .map_err(|e| format!("cannot read the port of that listener: {e}"))?;
@@ -593,7 +662,7 @@ impl Executor for RealExecutor {
             found.map(|l| l.try_clone()).transpose().map_err(|e| e.to_string())
         })?;
         let Some(socket) = socket else {
-            return Err(format!("{listener} is not a listener"));
+            return Err("that is not a listener".to_string());
         };
         socket.set_nonblocking(true).map_err(|e| e.to_string())?;
         let taken = match socket.accept() {
@@ -622,7 +691,7 @@ impl Executor for RealExecutor {
             found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
         })?;
         let Some(stream) = stream.as_mut() else {
-            return Err(format!("{conn} is not a connection"));
+            return Err("that is not a connection".to_string());
         };
         let mut buffer = [0u8; 65536];
         let read = stream.read(&mut buffer).map_err(|e| format!("cannot read: {e}"))?;
@@ -637,7 +706,7 @@ impl Executor for RealExecutor {
             found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
         })?;
         let Some(stream) = stream.as_mut() else {
-            return Err(format!("{conn} is not a connection"));
+            return Err("that is not a connection".to_string());
         };
         stream.write_all(text.as_bytes()).map_err(|e| format!("cannot write: {e}"))?;
         stream.flush().map_err(|e| format!("cannot write: {e}"))
@@ -649,7 +718,7 @@ impl Executor for RealExecutor {
             let closed = s.conns.remove(&handle).is_some() || s.listeners.remove(&handle).is_some();
             match closed {
                 true => Ok(()),
-                false => Err(format!("{handle} is not an open socket")),
+                false => Err("that is not an open socket".to_string()),
             }
         })
     }
@@ -756,8 +825,27 @@ impl Executor for RealExecutor {
 /// does not change with the host's libc or this compiler's version, which a
 /// reproducible diagnostic cannot afford.
 pub fn read_file_text(path: &str) -> Result<String, String> {
-    std::fs::read_to_string(path)
-        .map_err(|_| format!("cannot read {path}: no such file or unreadable"))
+    std::fs::read_to_string(path).map_err(|why| match why.kind() {
+        // A file that is THERE and READABLE and simply is not text was being
+        // reported as absent, because the reason was thrown away. `kanso.wasm`
+        // is the example that found it: the interpreter said the file did not
+        // exist while native read it and printed its bytes back unchanged.
+        //
+        // The two still differ, and the differential law allows that only for
+        // an engine that refuses with a clear diagnostic — which is what this
+        // makes it. Native reads any file; a Rust `String` cannot hold bytes
+        // that are not utf-8, so the interpreter cannot follow it there, and
+        // saying so is the most it can do. Whether `read_file` should be
+        // byte-transparent on every engine is a design question, filed.
+        //
+        // The wording stays fixed rather than interpolating the OS's own
+        // message, for the reason the comment above gives: `ErrorKind` is
+        // Rust's classification and does not move with the host's libc.
+        std::io::ErrorKind::InvalidData => {
+            format!("cannot read {path}: the bytes are not text")
+        }
+        _ => format!("cannot read {path}: no such file or unreadable"),
+    })
 }
 
 #[derive(Default)]
@@ -1180,7 +1268,7 @@ impl<'a> Interp<'a> {
             Pattern::Var(name, _) => Ok(bind(env, name, value)),
             Pattern::Ctor { ty, .. } => {
                 let mut binds = Vec::new();
-                match match_one(pattern, &value, &mut binds) {
+                match match_one(pattern, &value, &mut binds, None) {
                     Some(_) => {
                         let mut env = env;
                         for (name, bound) in binds {
@@ -1453,7 +1541,7 @@ impl<'a> Interp<'a> {
                     bad if is_failure(&bad) => Ok(bad),
                     other => Err(RuntimeError {
                         message: format!(
-                            "a return condition is true or false, got {}",
+                            "an if condition is true or false, got {}",
                             render(self, &other, false)
                         ),
                         span: *span,
@@ -1830,7 +1918,10 @@ impl<'a> Interp<'a> {
                 if decl.params.len() != args.len() {
                     continue;
                 }
-                let Some((score, binds)) = match_params(&decl.params, &args) else { continue };
+                let arm = Some(crate::provenance::package_of(&decl.file));
+                let Some((score, binds)) = match_params(&decl.params, &args, arm) else {
+                    continue;
+                };
                 let replace = match &best {
                     Some((best_score, ..)) => score > *best_score,
                     None => true,
@@ -1908,9 +1999,11 @@ impl<'a> Interp<'a> {
                     span,
                 });
             };
+            let raised = origin_at(frame, span);
             return Ok(Value::ErrV(Rc::new(ErrInfo {
                 reason,
-                origin: origin_at(frame, span),
+                origin: raised.at,
+                hako: raised.hako,
                 hops: Vec::new(),
                 cause: Some(cause),
                 merged: false,
@@ -1976,9 +2069,23 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Write(content))))
             }
-            "now" => {
+            // `args`, `stdin` and `now` are the three builtins a program names
+            // without calling, so `eval_ident` answers all three and this
+            // function only ever needed `now` — which is how it came to know
+            // that one and neither of the others. The wasm backend routes
+            // every builtin through here (`wasm_backend.rs` emits a
+            // `RT_BUILTIN` call, `wasm_rt.rs` lands it on `call_builtin`), so
+            // a page that asked for `stdin` got `unknown builtin` where the
+            // same program run natively got a descriptor. `now` reaching the
+            // executor on that engine was a coincidence of coverage, not a
+            // design; these two arms make the coincidence a rule.
+            "args" | "stdin" | "now" => {
                 let [] = arity(args, name, span)?;
-                Ok(Value::Desc(Rc::new(Desc::Now)))
+                Ok(Value::Desc(Rc::new(match name {
+                    "args" => Desc::Args,
+                    "stdin" => Desc::Stdin,
+                    _ => Desc::Now,
+                })))
             }
             "exists" | "is_dir" | "list_dir" => {
                 let [path] = arity(args, name, span)?;
@@ -2962,7 +3069,31 @@ fn arity<const N: usize>(
     }
 }
 
-fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)> {
+/// An arm cannot see an err its own package raised.
+///
+/// Gavel 24, clause 1, ruled as DISPATCH SEMANTICS rather than as a check:
+/// at match time an err whose raiser is this arm's package simply does not
+/// match, and infectiousness then carries it onward exactly as if the arm
+/// were not written. "Your own failures only bubble" is the doctrine, and
+/// this is the doctrine executing itself rather than a warning about it.
+///
+/// Only the two err-admitting patterns ask. A bare binder and a wildcard
+/// refuse every failure already, which is what makes one hop enough for the
+/// static half of the rule in `provenance.rs`.
+/// `None` where there is no arm to speak of — a destructuring bind is not
+/// dispatch, and the rule is about what an arm may see.
+fn own_failure(arg: &Value, arm: Option<&str>) -> bool {
+    match (arg, arm) {
+        (Value::ErrV(info), Some(pkg)) => info.hako.as_deref() == Some(pkg),
+        _ => false,
+    }
+}
+
+fn match_params(
+    params: &[Pattern],
+    args: &[Value],
+    arm: Option<&str>,
+) -> Option<(Score, Bindings)> {
     let mut score = Vec::new();
     let mut binds = Vec::new();
     for (pattern, arg) in params.iter().zip(args) {
@@ -2974,7 +3105,7 @@ fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)>
             1 => 100,
             _ => 10,
         };
-        let depth = match_one(pattern, arg, &mut binds)?;
+        let depth = match_one(pattern, arg, &mut binds, arm)?;
         score.push(base.saturating_sub(depth));
     }
     Some((score, binds))
@@ -2988,7 +3119,12 @@ fn bind_whole(whole: &Option<Box<(String, crate::diag::Span)>>, arg: &Value, bin
     }
 }
 
-fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
+fn match_one(
+    pattern: &Pattern,
+    arg: &Value,
+    binds: &mut Bindings,
+    arm: Option<&str>,
+) -> Option<u8> {
     match (pattern, arg) {
         (Pattern::IntLit(n, _), Value::Int(v)) if n == v => Some(0),
         (Pattern::StrLit(s, _), Value::Str(v)) if s == v => Some(0),
@@ -3006,18 +3142,22 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
                 Some(0)
             }
         },
-        (Pattern::Annotated { name, ty, .. }, _) => match type_match_depth(ty, arg) {
-            Some(depth) => {
-                binds.push((name.clone(), arg.clone()));
-                Some(depth)
+        (Pattern::Annotated { name, ty, .. }, _) if !own_failure(arg, arm) => {
+            match type_match_depth(ty, arg) {
+                Some(depth) => {
+                    binds.push((name.clone(), arg.clone()));
+                    Some(depth)
+                }
+                None => None,
             }
-            None => None,
-        },
+        }
         (Pattern::Keyed { .. }, _) => None,
-        (Pattern::Ctor { ty, fields, whole }, Value::ErrV(info)) if ty == "err" => {
+        (Pattern::Ctor { ty, fields, whole }, Value::ErrV(info))
+            if ty == "err" && !own_failure(arg, arm) =>
+        {
             match fields.len() == 1 {
                 true => {
-                    let inner = match_one(&fields[0], &info.reason, binds)?;
+                    let inner = match_one(&fields[0], &info.reason, binds, arm)?;
                     bind_whole(whole, arg, binds);
                     // a bare reason binder demands err-ness but names
                     // nothing: it ranks below every named reason — leaf
@@ -3035,7 +3175,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
             if ty.as_str() == &**vty && fields.len() == vfields.borrow().len() =>
         {
             for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
-                match_one(fp, fv, binds)?;
+                match_one(fp, fv, binds, arm)?;
             }
             bind_whole(whole, arg, binds);
             Some(0)
@@ -3068,7 +3208,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
             match &base {
                 Value::Record { fields: vfields, .. } if fields.len() == vfields.borrow().len() => {
                     for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
-                        match_one(fp, fv, binds)?;
+                        match_one(fp, fv, binds, arm)?;
                     }
                     bind_whole(whole, arg, binds);
                     Some(depth)
@@ -3205,6 +3345,11 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
     }
     let ok = match (ty, arg) {
         ("some", Value::NoneV) => false,
+        // a failure is not "some value", it is the absence of one. Answering
+        // true here made `_:some` an unmarked rescue: an arm that names no
+        // err at all took a foreign failure and returned whatever it liked,
+        // which is the one door the two-universe rule exists to watch.
+        ("some", Value::ErrV(_)) => false,
         ("some", _) => true,
         ("int", Value::Int(_)) => true,
         ("float64", Value::Float(_)) => true,
@@ -3309,7 +3454,7 @@ fn merged_failures(args: &[Value]) -> Value {
         .expect("a caller checked that one argument fails")
 }
 
-fn accumulate_failures(left: Value, right: Value) -> Value {
+pub fn accumulate_failures(left: Value, right: Value) -> Value {
     match (&left, &right) {
         (Value::ErrV(a), Value::ErrV(b)) => {
             let mut reasons = reasons_of(a);
@@ -3317,6 +3462,7 @@ fn accumulate_failures(left: Value, right: Value) -> Value {
             Value::ErrV(Rc::new(ErrInfo {
                 reason: Value::List(Rc::new(reasons)),
                 origin: None,
+                hako: None,
                 hops: Vec::new(),
                 cause: None,
                 merged: true,
@@ -3841,23 +3987,23 @@ impl<'a> Interp<'a> {
             }
             Desc::Stdin => Ok(match executor.stdin() {
                 Ok(text) => Value::Str(text),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::ReadFile(path) => Ok(match executor.read_file(path) {
                 Ok(text) => Value::Str(text),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             // three answers in a list, which the std wrapper turns into a
             // record: a builtin cannot name a type declared in kanso.
             Desc::Run(cmd, argv) => Ok(match executor.run(cmd, argv) {
                 Ok(done) => ran_value(done),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             // Only reached outside a parallel group; step() starts and awaits.
             Desc::Await(handle) => Ok(match executor.finished(*handle) {
                 Ok(Some(done)) => ran_value(done),
-                Ok(None) => err_value(Value::Str("still running".to_string()), None),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Ok(None) => err_value(Value::Str("still running".to_string()), Raised::default()),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Write(text) => {
                 executor.write(text);
@@ -3882,50 +4028,52 @@ impl<'a> Interp<'a> {
             }),
             Desc::ListDir(path) => Ok(match executor.list_dir(path) {
                 Ok(names) => Value::List(Rc::new(names.into_iter().map(Value::Str).collect())),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::MakeDir(path) => Ok(match executor.make_dir(path) {
                 Ok(()) => Value::NoneV,
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
                 Ok(()) => Value::NoneV,
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Start(cmd, argv) => Ok(match executor.start(cmd, argv) {
                 Ok(handle) => Value::Int(handle.into()),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Kill(handle) => Ok(match executor.kill(*handle) {
                 Ok(()) => Value::NoneV,
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Listen(port) => Ok(match executor.listen(*port) {
                 Ok(handle) => Value::Int(handle.into()),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::SocketPort(listener) => Ok(match executor.socket_port(*listener) {
                 Ok(port) => Value::Int(port.into()),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Accept(listener) => Ok(match executor.accept(*listener) {
                 Ok(Some(handle)) => Value::Int(handle.into()),
                 // Reached only outside a parallel group, where no other fiber
                 // could ever connect; step() yields instead of arriving here.
-                Ok(None) => err_value(Value::Str("nothing connected".to_string()), None),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Ok(None) => {
+                    err_value(Value::Str("nothing connected".to_string()), Raised::default())
+                }
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Receive(conn) => Ok(match executor.receive(*conn) {
                 Ok(text) => Value::Str(text),
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
                 Ok(()) => Value::NoneV,
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::CloseSocket(handle) => Ok(match executor.close_socket(*handle) {
                 Ok(()) => Value::NoneV,
-                Err(reason) => err_value(Value::Str(reason), None),
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
         }
     }
@@ -4037,18 +4185,18 @@ impl<'a> Interp<'a> {
             Desc::Accept(listener) => match executor.accept(*listener) {
                 Ok(Some(handle)) => Ok(Step::Done(Value::Int(handle.into()))),
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
-                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
             },
             // Same shape for a process: start it, then wait by yielding, so
             // the other statements of the group run while it does.
             Desc::Run(cmd, argv) => match executor.start(cmd, argv) {
                 Ok(handle) => Ok(Step::Blocked(1, Rc::new(Desc::Await(handle)))),
-                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
             },
             Desc::Await(handle) => match executor.finished(*handle) {
                 Ok(Some(done)) => Ok(Step::Done(ran_value(done))),
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
-                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
             },
             Desc::Seq(a, b, span) => match self.step(a, executor)? {
                 Step::Blocked(ms, cont) => {

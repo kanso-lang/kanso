@@ -33,10 +33,12 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">teahouse/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"./teahouse"</span>
+<span class="k">import</span> <span class="s">"std/testing"</span>
 
 dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
 pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
-<span class="f">print</span> (<span class="f">describe</span> dango) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> pocky)</code></pre>
+<span class="f">print</span> (<span class="f">describe</span> dango)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> pocky (r <span class="o">-&gt;</span> <span class="s">"gomen: <span class="i">{r}</span>"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teahouse</div>
     <pre><code>400 yen, service included

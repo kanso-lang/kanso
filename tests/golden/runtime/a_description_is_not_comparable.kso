@@ -1,0 +1,13 @@
+# Equality is the one operator that could have answered a description rather
+# than refusing it: it reaches its own arm before the type table, and that arm
+# could have called two descriptions equal. It names them instead. The page
+# gets this sentence by handing the interpreter a description, so it is the
+# oracle's own words and not a copy.
+import "std/io"
+
+pub fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+pub play = print "{opaque d == opaque d}"

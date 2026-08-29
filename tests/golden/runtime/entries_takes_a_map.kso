@@ -1,0 +1,6 @@
+pub fn opaque x
+  x
+
+pub play =
+  es = entries (opaque 7)
+  print "{es}"

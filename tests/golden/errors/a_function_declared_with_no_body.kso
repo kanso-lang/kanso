@@ -1,0 +1,12 @@
+# A `fn` line carrying parameters and nothing under it. The parser holds a
+# name and a parameter list with no statements to attach them to, so it
+# refuses here rather than building a function that answers nothing.
+#
+# No golden pinned this message until now, and the gate built to catch that
+# could not see it. The scan keeps a diagnostic's leading literal run — the
+# text before the first interpolation — and required twelve characters of it.
+# `function ` plus the backtick is ten, so the site was walked past and the
+# corpus was reported complete.
+fn nobody x
+
+pub play = print "x"

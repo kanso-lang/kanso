@@ -1,0 +1,12 @@
+error[syntax]: expected a type name
+  --> an_underscore_is_the_wildcard_not_a_name.kso:10:6
+  10 | type _
+            ^
+error[syntax]: expected a function name
+  --> an_underscore_is_the_wildcard_not_a_name.kso:13:4
+  13 | fn _ x
+          ^
+error[syntax]: a top-level line must begin with `fn`, `type`, or a constant binding
+  --> an_underscore_is_the_wildcard_not_a_name.kso:16:1
+  16 | _ = 1
+       ^

@@ -7,86 +7,134 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: nothing.**
+only indexes it. **Blocking right now: one — "What a digest costs, and whether it stays
+written in kanso".** `sha256/hex` holds the whole message; peak arena is linear
+in the input at about six and a half thousand bytes per byte hashed, and the
+asset-digests job's headroom falls as `docs/kanso.wasm` grows.
 
-**Sixteen questions are ready to rule, and every one of them carries a
-recommendation.** That is the point of the 2026-08-25 sweep: Clay's ask was
+**Fourteen questions are waiting, and every one of them carries a
+recommendation** — one blocking, thirteen open but not blocking. The July
+letters are closed: Clay ruled the last five in one sitting on 2026-08-26, and
+that ruling reached main only on 2026-08-28, on a branch that had been sitting
+unmerged. Counted from the ledger rather than carried forward. That is the point of the 2026-08-25 sweep: Clay's ask was
 *"the goal here would be to not have anything left to gavel. I feel like I keep
 gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**Nine open, not blocking** — the two
-surviving err-gavel riders (the annotate/rescue spelling, and construction
-enforcement); `--explain-copies`; the assert hako's surface; the
+**The thirteen open, not blocking** — whether a `compile_instructions` move that
+cannot be work needs a spend attribution, asked after three such moves in two
+days; whether `read_file` is text or bytes, which
+is one reader with no way to say which you meant and two engines that answer
+differently; which claim owns a qualified name when a module declares one of
+its imports' names, whose filing pointed at a gavel that has since fallen; what
+a record prints as when its module is imported;
+`--explain-copies`; the assert hako's surface; the
 bare-call cross-module tie whose interim ruling is still live and still called
 interim; whether a dependency's render arms join the root group; `first coll n`;
 where `std/` comes from; block-born as a dataflow property; and the
 ten-thousand-frame guard, which is a standing offer rather than a question.
 
-**Five July letters** — C (pure/yield), D (what a succeeded effect yields), G
-(eta-reduction as canon), Z (errors without exceptions), AA (newtype dispatch
-acceptance). Three of the five are recommended for one word: strike, confirm
-declined, strike.
+**The July letters are closed.** C struck, `done` minted for D, G struck on the
+July provenance measurement, Z confirmed declined, AA explicit-cast only. Every
+letter A1–X, BB, C, D, G, Z and AA has a ruling in the log or the archive.
 
 Six candidates the sweep turned up were **already answered by shipped code**
 and went to the log rather than the ledger, so they cannot reach him again: the
 lambda-parens rule, `next`'s signature, cyclic rendering and equality, `run`
 versus `play`, the three small July spellings, and the write-once marker.
 
-Two rules now guard the file. An entry **cites its search** of the log, the
-archive and every design doc, or it is invalid — an unsearched question does
-not go to Clay. And an entry **carries a recommendation**, because a question
-with no proposed answer turns one sitting into ten.
+Three rules now guard the file. An entry **cites its search** of the log, the
+archive, every design doc **and the tests**, or it is invalid — an unsearched
+question does not go to Clay. The third source was added on 2026-08-27, after
+two questions turned up that the 2026-08-25 sweep had missed because each was
+recorded only in a spec: `module_differential`'s known-defect ledger carried
+one, and an `#[ignore]` reason in `tests/entry_file.rs` carried the other,
+whose log entry ends "That is a gavel." A sweep that reads only prose cannot
+see a question a test is holding. And an entry **carries a recommendation**,
+because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso #1027 — the history row is checked on the way out, and before a merge.**
-The second half of the interpolation miscompilation: `docs/numbers.html` had
-two trend series and two panel sections empty for months because five groups of
-counter keys were being run together into one key each, and `site_smoke` could
-not see it because its fixture is hand-written and supplies the keys itself.
-`perf_record` now checks its output against the same lists it checks its inputs
-against, and the step that builds the row runs on every pull request instead of
-only after a merge. That promotes the perf-history job out of the ratchet's
-unproven list.
+Nothing. Every branch this session opened is merged and verified on
+`origin/main`, and neither kanso nor kq has an open pull request.
 
-## What landed on 2026-08-25
+One branch could not be cleaned up: `origin/the-log-is-forty-entries-again`
+(3837161a) is an earlier, unmerged log trim with no PR, superseded by #1110.
+The git proxy in this container refuses a delete refspec, so it is recorded as
+superseded here and in #1110's body rather than removed.
 
-    kanso ca5dc614  #1026  four gavels, the archaeology, the residual list,
-                           a miscompilation, and the band gavel built
+## What landed on 2026-08-27 and 2026-08-28
 
-**Four gavels reached the record** — no tolerance bands, a demanded knot counts,
-a build hole is spelled `_`, and `>>` stops at the first run-time failure
-(which was never open; July's B ruling had answered it).
+    kanso fa6b10d0  #1100  the scan reads eval.rs: 175 diagnostics became 242
+    kanso d887d913  #1099  `if` and the guard say one sentence on all three
+    kanso 0c958475  #1098  `cannot destructure` diverged on three engines
+    kanso 7c173bd4  #1101  the page said "this value" about two things
+    kanso d2177f3a  #1102  six val sites, not four: a constructor and an
+                           interpolation too
+    kanso aec580f8  #1104  the walk could not say how much it had walked
+    kanso a705979b  #1105  the page refused before three sites could explain
+    kanso 3a7e76c5  #1103  two refusals named each other, and a reader had
+                           nowhere to go
+    kanso 61af582a  #1106  the page answered `1 + d` with `d`
+    kanso 9441e3f3  #1107  three more of the same family
+    kanso d45c4f17  #1108  the scan reads the browser engine: 242 became 262
+    kanso ad851b12  #1109  the page catches up: §27, the answer not the sentence
+    kanso 5f53290d  #1110  the log holds forty entries again
 
-**The band gavel is built.** `bench/compile_memory_golden.txt` is exact for the
-host its `measured-on` line names, and the figure corrected to the runner's
-864,300 — not the 872,061 the ruling recorded, which predated twelve merges.
-Welfare 84.87 to 84.89, banked. The gate had carried no ratchet mutation at
-all, which is how it could rot; it has two now.
+**The through-line is one accessor.** `val` in `src/wasm_rt.rs` answers a value
+for a value and a handle for a closure and refuses everything else in its own
+words. Any site that opens with `match val(h)` and owns a sentence about what
+it was handed therefore never reaches that sentence, and any site that means to
+CARRY a description refuses it instead. Both halves were live, and the second
+half had a case in it that was not a sentence at all: `1 + d` handed the
+operand's own handle back, so the expression evaluated to `d` and the page
+printed `<io>` where the other two engines refuse.
 
-**A miscompilation, found from a symptom.** An interpolation seeded by a
-captured parameter shared one buffer across map iterations, so native printed
-`["abc" "abc" "abc"]` where the oracle printed `["a" "b" "c"]`. The first fix
-was too broad and cost pendbench 2% for no correctness; the parser already drew
-the distinction, between a lambda applied where it stands and one handed to a
-consumer. Final cost 727 front-end instructions.
+That one is the finding worth carrying. Every diagnostic gate this project has
+compares refusals, and the program does not refuse; the error corpus pins what
+a program writes to stderr, and it writes to stdout. The three-engine walk,
+which compares what each engine PRINTS, is the only instrument that could have
+seen it — and it could only see it because #1104 had just taught the walk to
+account for every program in the corpus.
 
-**Three results recorded so they stay recorded**: the lexer's names cannot move
-into the AST (declined, with the reason, on the compiler page); `valid_utf8` is
-cancelled by the gavel that superseded the plan carrying it; and the interner's
-churn is measured — wide in count, narrow in kind.
+**The method that found the rest.** Following the failing program found four
+sites. Sweeping the accessor's own call sites — reading each one and asking
+what a program could hand it — found six, then a refusing family, then a
+carrying one. Where the sweep was wrong it was wrong in a specific way: twice a
+site was written off as unreachable on the strength of a probe that ran a
+DIFFERENT program. `(opaque d).nope` is a name error and never reaches the
+runtime; `(opaque d).n`, where some record declares `n`, reaches `rt_no_field`.
+A site is unreachable only when a program written to reach IT fails to.
+
+**And the scan finally reads the engine a reader meets first.** `src/wasm_rt.rs`
+writes 36 `die(` sites spelling 24 sentences, on the engine the website's
+playground runs, and no gate had read a word of it. Two openers took the count
+from 242 to 262, and both carry a ratchet mutation watched turning the gate
+red. #1105 had claimed in a comment that the scan already watched two
+hand-copied sentences for drift; it did not, and could not have — the copies
+are gone now anyway, dissolved by #1106's placeholder.
 
 ## Next
 
-**The read half of gavel 1b** is the largest remaining piece, and it is sized
-rather than guessed: a field the WRONG type declares is caught at run time, not
-before, because `Set` in src/infer.rs is fourteen kind bits with no type
-identity. The work is a per-expression record-type set, sourced at constructors
-and carried by the fixpoint the value sets already use. It closes a correctness
-gap older than the privacy question — the doctrine says this language refuses
-before anything runs, and `has no field` does not.
+**The queue is empty for the first time in a while.** The four findings the
+last version of this section left open are all closed:
 
-**kanso#985** is the implementation of gavel 1b's json half, not a decision.
-One log conflict from ready; `merge-tree` says everything else applies cleanly.
+  - the fifth file the ratchet could not see, `src/eval.rs` — #1100
+  - the fourth way the compiler writes a message, `codegen.rs`'s `format!` —
+    answered: one of the two was fixed in #1098 and the other is dead, because
+    `check_field_annotations` refuses every field annotation, so nothing
+    reaches the emitter's half. Deleting it is still not obviously right
+  - the scan's corpus taking `.stderr` only — measured and settled
+  - whether the scan should read `wasm_rt.rs` as well — #1108, yes, and the
+    week above is what it found
+
+**What is open is a decision, not a build.** Twenty questions in
+`design/pending-gavels.md`, one of them blocking. Nothing in the task list can
+start without a ruling.
+
+**The rule that carries forward**, restated from the last version because it
+went on being true and then got sharper: a scan over a corpus enumerates the
+corpus's file types from the harness that reads it, never from the ones that
+came to mind. And its sibling, learned twice this week: a claim that a site
+cannot be reached is only as good as the program written to reach that site.

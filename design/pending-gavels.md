@@ -50,9 +50,259 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-Nothing. The section stays so the next entry has somewhere to land.
+### What a digest costs, and whether it stays written in kanso
+
+**Cited: searched design/compiler-log.md (no sha256 entry), the archive (five
+entries, `A digest, and the import path that broke it` is the one that rules on
+this), and every design/*.md (none mention it). The rationale below is quoted
+from that archive entry; nothing has revisited it since.**
+
+`sha256/hex` holds the whole message. Peak arena is linear in the input at
+about six and a half thousand bytes per byte hashed, deterministic to the byte:
+
+    message   arena_peak_bytes   per byte
+      1,024          7,340,032      7,168
+      2,048         14,680,064      7,168
+      4,096         27,262,976      6,656
+      8,192         54,525,952      6,656
+     16,384         108,003,328      6,592
+     32,768         216,006,672      6,592
+     65,536         428,867,600      6,544
+
+The per-byte figure falls slowly and converges near 6,544, which is what a
+fixed per-block overhead amortising against a growing message looks like — one
+more piece of evidence that the cost is per-block retention rather than
+anything quadratic. At that rate `docs/kanso.wasm`, 1,604,098 bytes, predicts
+about 10.5 GB for the hash ALONE. The kernel's out-of-memory report for the
+whole `scripts/fingerprint` run read 13,954,684 kB, and the difference is the
+rest of that run — the byte list, the padded copy, the other assets, the site's
+pages. The two figures corroborate.
+
+A hash reads 64 bytes at a time and carries eight words of state, so peak
+should be flat. `cohort_frees=0` and `alloc_bytes` within half a per cent of
+`arena_peak_bytes` say what is happening: nothing is reclaimed for the length
+of the call. Eight candidate causes have been built as small programs and
+measured, and all eight hold the arena at the one-block floor — the in-place
+append (93.8% of appends already take the fast path), the module boundary, a
+list read while appended to, a long-lived indexed message, per-iteration list
+literals, and, tested inside the module itself, both forcing the state
+accumulator and removing the per-block thunk entirely. That last one takes
+`thunk_live_exit` from one-per-block to zero and moves peak by nothing. The log
+entry carries the full table. So the leak needs the real combination, and
+whoever takes this on has eight fewer places to look.
+
+WHY IT BLOCKS. `scripts/fingerprint` digests `docs/kanso.wasm`, now 1,604,098
+bytes, in the asset-digests CI job. That run was OOM-killed in a container at
+anon-rss 13,954,684 kB. It passes on the runner, so the runner has more
+headroom — but the headroom falls by about seven kilobytes for every byte added
+to the blob, and the blob has grown 23% since the archive entry was written.
+`tests/sha256_peak.rs` pins the figures so the next move is visible; it does
+not buy any headroom back.
+
+THE RATIONALE ON THE RECORD, verbatim from the archive: "a builtin would buy
+speed on a path that runs once per built file and nothing else." That entry
+measured the wall clock at 2.6 seconds and did not measure memory. The claim is
+sound about speed and silent about the dimension that turned out to bind.
+
+THREE ANSWERS, and this is the choice:
+
+1. **Reclaim inside a long call chain.** The most general, and it would pay
+   everywhere rather than here. Also the largest, and it touches the collector.
+2. **Restructure the block loop** in `lib/sha256/sha256.kso`. Contained, and it
+   keeps the module in kanso, which is the property the original entry was
+   protecting. TRIED, TWICE, AND IT MOVES NOTHING — see the recommendation.
+3. **Make the digest a builtin.** Smallest and surest, and it spends the thing
+   the archive entry declined to spend.
+
+RECOMMENDATION CHANGED, and the change is the point. It was 2, on the reasoning
+that a contained fix inside the module was cheap to try. Two versions of 2 have
+now been tried and both moved the peak by zero digits, which is what the eight
+killed hypotheses above amount to: the cost is not in a shape the module
+chooses, so rewriting the module is unlikely to reach it.
+
+So: **1**, and 3 only if 1 is judged too large to be worth one digest. The
+question that decides it is whether the arena's failure to rewind here is
+specific to this call or general, and nothing in the tree answers that today —
+which is itself an argument for looking, because a general answer is worth much
+more than a hash.
+
 
 ## Open, not blocking
+
+### Whether a compile_instructions move that cannot be work needs an attribution
+
+**Cited: searched design/compiler-log.md and the archive for
+`compile_instructions`. The vein's own header in
+bench/compile_instructions_golden.txt is the record of why it exists and is
+quoted below; nothing has revisited the question this entry asks.**
+
+The vein moved three times in two days from an untouched call graph:
+
+    2026-08-26   +167     a reworded driver message in src/main.rs
+    2026-08-27   -251     two match arms in the interpreter's call_builtin
+    2026-08-27   +1,954   one ErrorKind match in read_file_text
+
+In each case the edited function is unreachable from the measured path —
+`kanso check lib/json` compiles a library and runs no program — and the
+counters that measure the front end's work are identical across all three:
+allocations 61,981 and peak 822,004. The compiler's own binary is being
+rearranged by edits elsewhere in the crate, and the vein reads that as the
+front end's work changing.
+
+THE VEIN EARNS ITS PLACE and this is not a proposal to remove it. Its header
+records the case: a change took the front end from 90.9M retired instructions
+to 67.2M with every other gate reporting nothing. That is exactly what it is
+for.
+
+The question is narrower. A RISE with allocations, rounds, visits and peak all
+identical, in a diff that does not touch the measured path, currently costs a
+golden update, a page-figure update, a log paragraph, and — because the trend
+gate calls it a pure regression — an entry in `bench/welfare_floor.json`
+attributing a spend. Today's attribution had to say in its own text that
+nothing was spent, which is an odd thing for a ledger of spends to contain.
+
+TWO ANSWERS:
+
+1. **Leave it.** The ritual is cheap per occurrence and the alternative is a
+   rule that could be leaned on. Silence is the thing the vein exists to
+   refuse, and three paragraphs in two days is not a crisis.
+2. **Let the trend gate treat an instructions-only move as priced by the log
+   sentence alone**, when every other compile counter is identical. The golden
+   still moves and the sentence is still required; only the welfare_floor
+   attribution is dropped, because there is nothing to attribute.
+
+RECOMMENDATION: 2, narrowly — conditioned on the other three compile counters
+being byte-identical, so it cannot cover a change that did real work. If that
+condition feels like a crack, 1 is honest and the cost is small; what should
+not stand is a spend ledger whose entries say no spend occurred.
+
+### Whether `read_file` is text or bytes
+
+**Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
+for `read_file` and for `text/bytes`. The archive's `A digest, and the import
+path that broke it` is the only entry that touches this and it asserts the
+opposite of what is true today — "`io/read_file` carries binary content intact
+and `text/bytes` exposes it" — which holds on native and not on the
+interpreter. No design/*.md mentions it. Nothing has ruled on it.**
+
+`lib/os/os.kso` has one reader, `read_file`, and it does not say what it reads.
+On native it reads any file and preserves the bytes; on the interpreter a file
+whose bytes are not utf-8 is refused, because the value it reads into is a Rust
+`String`. As of today that refusal at least names the reason rather than
+claiming the file is absent, which is what the differential law needs from an
+engine that speaks less — but the two still answer differently for the same
+program, and a caller has no way to say which behaviour it wanted.
+
+THREE ANSWERS:
+
+1. **Text-only, everywhere, and a separate bytes reader beside it.** Go's
+   shape. Native would begin refusing files it reads today, which is a
+   behaviour change to `scripts/fingerprint` among others, so it needs the
+   bytes reader in the same change.
+2. **Byte-transparent everywhere.** Needs the interpreter to hold a non-utf-8
+   payload, which is a change to what a kanso string is on that engine, and
+   the archive records a ruling that a bytes value is real and a list is never
+   bytes — so the machinery may be closer than it looks.
+3. **Leave it.** Native reads everything, the interpreter refuses clearly, and
+   the law is satisfied. The cost is that the oracle cannot run every program
+   native can, which is the thing the oracle is for.
+
+RECOMMENDATION: 1. It is the only one where the library says what it does. It
+is also the only one that makes `read_file`'s name true on both engines, and
+the bytes reader it needs is the same surface `text/bytes` already implies.
+
+
+### Which claim owns `dep/join` — the bare-enrollment clone, or `dep`
+
+**Cited: archive 2026-07-27 filed this against "the question task #51 holds
+a gavel over". Task #51 was RULED on 2026-08-17 as gavel 51, one module —
+identity is the canonical path, one dispatch group per name — and built the
+same day. The search found no revisit of this case after that ruling, and
+gavel 51 does not settle it: gavel 51 is about ONE module reached by two
+paths, and this is TWO modules whose names collide inside one namespace.
+`module_differential`'s known-defect entry `w1` still records the behaviour,
+still pointing at a gavel that has fallen.**
+
+A module declares `pub fn join` and also imports `std/text`, which exports
+`join`. From outside, `dep/join` is refused: "`dep` declares `join` pub, but
+an import of `dep` exports `join` too and took the name."
+
+Measured this session, which the ledger did not have:
+
+  - `dep/join` is claimed FIRST by a bare-enrollment clone of a NON-PUB ARM
+    of std/text's `join` group, carried into `dep` under the file
+    `std/text/text.kso`. The exports map is first-writer-wins, so `dep`'s own
+    `pub` reads as private.
+  - The clone survives only when the importing module declares the same name.
+    Otherwise `canonicalize_bare_aliases` folds it away, and `dep/join` is
+    an ordinary unknown name. So the collision is the condition, not the
+    enrollment.
+  - Letting `dep`'s own `pub` win the flag — one line — makes the refusal go
+    away and makes `dep/join` reach std/text's arm. With `pub fn join a:int
+    b:int` in `dep` so that `dep`'s arm cannot match, `dep/join ["x" "y"] "-"`
+    answers `x-y` on BOTH engines. `dep` never exported that function. The
+    refusal is the only thing standing between a program and a silent
+    re-export of a dependency under a name its author never wrote.
+
+So the flag and the dispatch are one question. Making `dep/join` mean `dep`'s
+declaration requires the enrolled clones to stop living in `dep`'s qualified
+namespace — and `dep`'s own bare `join` call sites are rewritten INTO that
+namespace during qualification, which is what puts them there. The bare
+overload space would need a spelling of its own, per module, that a consumer
+cannot write.
+
+**RECOMMENDATION: rule that a qualified name is its module's declaration and
+nothing else, and give the bare overload space its own namespace.** Go's rule
+is already ruled here (a package is a directory named by its import path), and
+under it `dep/join` can only mean `dep`'s. The alternative — keep the refusal
+— costs an author the right to declare a name any of their imports happens to
+export, which no other language charges for, and the diagnostic already has to
+tell them to rename someone else's import.
+
+Whichever way it goes, `w1` leaves the known-defect ledger in the same commit.
+
+### What a record prints as, when its module is imported
+
+**Cited: archive 2026-08-02, "an err's reason renders with the compiler's
+spelling, not the program's", which ends "That is a gavel." The search found no
+entry for it in this ledger, and the 2026-08-25 residual sweep did not carry it
+over. `tests/entry_file.rs` holds the spec, ignored, and it is the one ignored
+test in the tree that still fails.**
+
+Qualification renames a module's declarations to keep them unique across a
+merge, and that spelling reaches render:
+
+    run the file directly     trouble: slow_lane 7
+    import it                 trouble: lane/slow_lane 7
+
+Same program, same value, two answers, and which one you get depends on how the
+program was entered rather than on anything the program says.
+
+The obvious fix was built and reverted, and the corpus is why. A bare-name
+render turned two deliberate pins red: `cross_module_fields` asserts the
+diagnostic `` `geo/label` has no field `x` `` and asserts `lib/pair 6 "v"` as
+rendered output. Both are right for an IMPORTED type — `lib/pair` is what that
+program wrote, and a diagnostic saying `label` where two modules declare one
+tells the reader nothing. So the rule wanted is "render the name the asking
+module would write", and render is called from the runtime with no idea who is
+asking.
+
+Two ways out, as the archive framed them. Either rendering carries the asking
+module — wider than it sounds, since the context would have to reach every
+runtime render site — or the qualified spelling is simply what a record prints
+everywhere, and the fixture is wrong to expect otherwise.
+
+**RECOMMENDATION: qualified everywhere.** Go's package rule is already ruled
+here, and Go prints `main.T` for a root package's own type rather than `T`, so
+the precedent this project has already taken says the name does not depend on
+who is looking. It also fixes the actual defect, which is that entering the
+same code two ways prints two things. The cost is real and should be said
+plainly: every program that prints a record of its own type gains a prefix, the
+root module needs a name for that prefix to exist, and the fixture's
+expectation flips from `slow_lane 7` to the qualified form.
+
+Whichever way it goes, `tests/entry_file.rs` stops being ignored — either its
+expectation changes or it starts passing.
 
 ### `--explain-copies`
 
@@ -68,6 +318,21 @@ carry machinery.
 counters already say how much is copied and when the number moves, and
 nobody has yet asked which line did it. Span plumbing through the carry
 machinery is a fortnight of work for a question that has not come up.
+
+### The book teaches the boundary language (queued P1, Clay 2026-08-26)
+
+Clay's directive after re-deriving the no-explicit-bind design from
+the log a second time: the call-site story must live in the book, high
+priority. Half one is DONE (ch04 "nothing is asked of the signature",
+2026-08-26): the err half, present tense — short-circuit at the call,
+nothing forced on signatures, one function for both call sites. Half
+two is GATED on the elaborator build: teaching signature-directed
+lifting for effects (`retry (fetch url)` unmarked, binds inserted at
+value-demanding positions, collapse at io) — the book speaks in the
+present tense, so this half lands with the elaborator, not before.
+The assembled argument for why the combinator words stay off the
+surface is compiler.html entry 23; the open dispatch-vs-elaborator
+question above decides only the machinery, not this surface.
 
 ### An assert hako
 
@@ -181,16 +446,15 @@ program is the reason to revisit it.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
-Emptied 2026-08-26: C, D, G, Z and AA were ruled in one sitting on their
-recommendations, closing the July campaign entirely. The rulings are in
-the log. The composition-rules half of G survives as a parked item below.
+EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,
+`done` minted for D, G struck on the July provenance measurement, Z
+confirmed declined, AA explicit-cast only. Every letter A1–X, BB, C, D, G,
+Z and AA now has a ruling in the log or the archive; the section stays as a
+header so a reader looking for the campaign finds where it went.
 
 ## Parked — on the record, no action
 
 - `<<` labels: walls cover staircases; revive on real DAG demand.
-- Dispatch-group composition rules (design/function-values.md): the
-  surviving half of July's G — what a group held as a value owes when
-  composed. Revive when a real program composes function values.
 - Labeled nameless patterns: parked 2026-08-19 — needs a fresh look
   against the post-24 language, not pending. Group headers stay behind
   it.

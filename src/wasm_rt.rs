@@ -7,8 +7,8 @@
 use crate::ast::Program;
 use crate::diag::Span;
 use crate::eval::{
-    self, err_value, eval_binop, hop, index_value, is_failure, join_values, render,
-    render_demanded, trace_lines, Cells, Desc, ErrInfo, Executor, Interp, Value,
+    self, deliberate_exit, err_value, eval_binop, hop, index_value, is_failure, join_values,
+    render, render_demanded, trace_lines, Cells, Desc, ErrInfo, Executor, Interp, Value,
 };
 use crate::wasm_backend::Lit;
 use std::cell::RefCell;
@@ -311,7 +311,8 @@ pub extern "C" fn rt_check_type(h: u32, code: u32) -> u32 {
             5 => matches!(v, Value::Map(_)),
             6 => matches!(v, Value::ErrV(_)),
             7 => matches!(v, Value::NoneV),
-            8 => !matches!(v, Value::NoneV),
+            // `some` is a value that is not none; a failure is neither
+            8 => !matches!(v, Value::NoneV | Value::ErrV(_)),
             tid => match v {
                 Value::Record { ty, .. } => {
                     type_index(ty).is_some_and(|i| i == (tid - 100) as usize)
@@ -382,16 +383,29 @@ pub extern "C" fn rt_err_inner(h: u32) -> u32 {
     push(Slot::V(info.reason.clone()))
 }
 
+/// One sentence, two callers: a keyed read names what it was handed.
+fn keyed_refusal(shown: &str) -> String {
+    format!("cannot read fields of {shown}; keyed reads take a record")
+}
+
 #[no_mangle]
 pub extern "C" fn rt_keyed_check(h: u32, entries: u32) -> u32 {
-    let Slot::V(value) = slot(h) else {
-        die("cannot read fields of this value; keyed reads take a record".to_string());
-    };
+    // The guard here used to be `let Slot::V(value) = slot(h)`, which fired on
+    // exactly the two handles that are not values — a closure and a
+    // description — and said "cannot read fields of this value" about both.
+    // The other two engines name what they were given, `<fn>` and `<io>`.
+    //
+    // A closure goes through `val`, which is how a closure is data everywhere
+    // else on this engine. A description does not: `val` refuses it, so the
+    // slot answers instead. Every description renders `<io>` whatever it
+    // holds, and building the Desc to render it would mean demanding a
+    // deferred right side — an effect a refusal must not have.
+    if descish(&slot(h)) {
+        die(keyed_refusal("<io>"));
+    }
+    let value = val(h);
     let Value::Record { ty, .. } = &value else {
-        die(format!(
-            "cannot read fields of {}; keyed reads take a record",
-            render_demanded(&value, true)
-        ));
+        die(keyed_refusal(&render_demanded(&value, true)));
     };
     let declared = TYPES.with(|t| {
         let types = t.borrow();
@@ -411,7 +425,9 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
         Value::Str(s) => s,
         _ => die("field name must be a string".to_string()),
     };
-    let new = val(value_h);
+    // The fourth storing position, and the last one that read through `val`.
+    // See a_description_rides_in_a_field.
+    let new = value_of(value_h);
     // a constructor given a failure handed the failure back, so there is
     // no record to write to
     if is_failure(&val(h)) {
@@ -441,7 +457,13 @@ pub extern "C" fn rt_no_field(base: u32, name_lit: u32) -> u32 {
         Value::Str(s) => s,
         _ => die("field name must be a string".to_string()),
     };
-    match val(base) {
+    // `operand` rather than `val`: a description reaches the arm below instead
+    // of being refused by the accessor in its own words. `.n` on a description
+    // arrives HERE and not at `rt_field_by_name` — a field name the program
+    // declares somewhere compiles to a getter, and a getter that matches
+    // nothing ends in this call. `(opaque d).nope`, with no record declaring
+    // `nope`, never reaches the runtime at all. See a_description_has_no_fields.
+    match operand(base) {
         Value::Record { ty, .. } => die(format!("`{ty}` has no field `{name}`")),
         other => {
             die(format!("`.` reads a field of a record, not {}", render_demanded(&other, true)))
@@ -504,13 +526,43 @@ pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
     }
 }
 
+/// The raise site's literal holds both halves — the package that raises here,
+/// a NUL, then the trace line — so one argument carries what the match rule
+/// asks about and what the report prints. `origin_lit` in the backend builds
+/// it; native's `origin_arg` builds the same shape.
+fn raised_at(origin_lit: u32) -> crate::eval::Raised {
+    let both = lit_str(origin_lit);
+    match both.split_once('\0') {
+        Some((hako, at)) => {
+            crate::eval::Raised { at: Some(Rc::from(at)), hako: Some(Rc::from(hako)) }
+        }
+        None => crate::eval::Raised { at: Some(both), hako: None },
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_mkerr(h: u32, origin_lit: u32) -> u32 {
-    let v = val(h);
+    // An err CARRIES its reason, so this is `value_of` and not `operand`:
+    // the placeholder the refusing sites use would be wrapped up and handed
+    // back to the program. `err d` runs to the endpoint on both native
+    // engines. See an_err_may_carry_a_description.
+    let v = value_of(h);
     if is_failure(&v) {
         return h;
     }
-    push(Slot::V(err_value(v, Some(lit_str(origin_lit)))))
+    push(Slot::V(err_value(v, raised_at(origin_lit))))
+}
+
+/// An arm cannot see an err its own hako raised (gavel 24, clause 1, as
+/// dispatch semantics). Answers whether the match may proceed, so every
+/// non-err and every err from elsewhere passes.
+#[no_mangle]
+pub extern "C" fn rt_not_own_err(h: u32, arm_lit: u32) -> u32 {
+    let arm = lit_str(arm_lit);
+    match val(h) {
+        Value::ErrV(info) => u32::from(info.hako.as_deref() != Some(&*arm)),
+        _ => 1,
+    }
 }
 
 fn lit_str(h: u32) -> Rc<str> {
@@ -535,9 +587,11 @@ pub extern "C" fn rt_err_hop(h: u32, name_lit: u32) -> u32 {
 pub extern "C" fn rt_err_stamp(h: u32, origin_lit: u32) -> u32 {
     match slot(h) {
         Slot::V(Value::ErrV(info)) if info.origin.is_none() => {
+            let raised = raised_at(origin_lit);
             push(Slot::V(Value::ErrV(Rc::new(ErrInfo {
                 reason: info.reason.clone(),
-                origin: Some(lit_str(origin_lit)),
+                origin: raised.at,
+                hako: raised.hako,
                 hops: info.hops.clone(),
                 cause: info.cause.clone(),
                 merged: info.merged,
@@ -557,7 +611,11 @@ pub extern "C" fn rt_mklist(n: u32) -> u32 {
     let handles = pop_args(n);
     let mut items = Vec::with_capacity(handles.len());
     for h in handles {
-        items.push(val(h));
+        // `value_of` rather than `val`: a description is data in a container
+        // on the other two engines, and `val` refuses every slot shape that
+        // is not a value or a closure, so `[d]` died here where native and
+        // the interpreter carried it. See a_description_rides_in_a_list.
+        items.push(value_of(h));
     }
     push(Slot::V(Value::List(Rc::new(items))))
 }
@@ -566,8 +624,15 @@ pub extern "C" fn rt_mklist(n: u32) -> u32 {
 pub extern "C" fn rt_mkmap(n: u32) -> u32 {
     let handles = pop_args(n * 2);
     let mut values = Vec::with_capacity(handles.len());
-    for h in &handles {
-        values.push(val(*h));
+    for (at, h) in handles.iter().enumerate() {
+        // The values ride like a list's items; the keys do not. A key is an
+        // int or a string, checked just below, so reading one through
+        // `value_of` would only change which of two refusals a description
+        // key gets. See a_description_rides_in_a_map.
+        values.push(match at % 2 {
+            0 => val(*h),
+            _ => value_of(*h),
+        });
     }
     let mut map = std::collections::BTreeMap::new();
     for pair in values.chunks(2) {
@@ -644,12 +709,27 @@ pub extern "C" fn rt_upcast(inner: u32, code: u32) -> u32 {
 pub extern "C" fn rt_mkrec(tid: u32, n: u32) -> u32 {
     let handles = pop_args(n);
     let mut fields = Vec::with_capacity(handles.len());
+    // A record's fields are one operation, so two failing fields merge the
+    // way two failing operands of `+` do. Returning the first failure here
+    // was a divergence from the oracle that no fixture built.
+    let mut failed: Option<Value> = None;
     for h in handles {
-        let v = val(h);
+        // A record's field is the fifth storing position, and it was missed on
+        // the first pass over this file: `box (opaque d)` then `b.it` runs the
+        // description on native and died here. See
+        // a_description_rides_in_a_constructor.
+        let v = value_of(h);
         if is_failure(&v) {
-            return h;
+            failed = Some(match failed {
+                Some(seen) => crate::eval::accumulate_failures(seen, v),
+                None => v,
+            });
+            continue;
         }
         fields.push(v);
+    }
+    if let Some(v) = failed {
+        return push(Slot::V(v));
     }
     let name = TYPES.with(|t| t.borrow()[tid as usize].0.clone());
     push(Slot::V(Value::Record {
@@ -663,7 +743,11 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
     let handles = pop_args(n);
     let mut out = String::new();
     for h in handles {
-        let v = val(h);
+        // An interpolation READS rather than stores, and it is the most
+        // ordinary thing a program does with a value. `"{d}"` renders `<io>`
+        // on the other two engines and died here. See
+        // a_description_renders_in_an_interpolation.
+        let v = value_of(h);
         // only an err propagates; none renders its sentinel via the group —
         // the same rule as the other engines, through the same helper
         if matches!(v, Value::ErrV(_)) {
@@ -679,16 +763,51 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
     push(Slot::V(Value::Str(out)))
 }
 
+/// A slot as a value the interpreter can read: an operator's side, an index,
+/// the thing being indexed, an `if` condition, the base of a field read —
+/// every place a site reads a slot as data it may turn out to refuse.
+///
+/// REFUSING sites only. A site that CARRIES a description onward — into a
+/// list, a record field, an err — wants `value_of`, which builds the real
+/// description; the placeholder below would be handed back to the program as
+/// if it were the effect the program wrote.
+///
+/// A closure is data here the same way it is data in a list: `val` turns it
+/// into the handle-carrying function value, and the interpreter refuses that
+/// by name. A description is not data, and nothing that reads one this way
+/// succeeds — arithmetic and comparison have no arm that takes one, equality
+/// refuses it in so many words, indexing has no arm for it either, and `if`
+/// wants true or false. Every arm that reports one renders it `<io>`. So any
+/// description stands in for the real one, and the site's sentence still
+/// comes out of the code that owns it rather than being copied here.
+///
+/// Standing one in is also what keeps a refusal from running anything.
+/// `as_desc`, which builds the true description, forces a deferred right
+/// side — and native does not:
+///
+///     xs = [1]
+///     boom = io/write "{opaque xs[5]!}"    # errors if ever evaluated
+///     d = io/write "a\n" >> boom
+///     pub play = print "{1 + opaque d}"
+///
+/// answers `+` is not defined for these values on both native engines, not
+/// the out-of-bounds error, so `boom` never runs. Demanding it to build a
+/// value about to be refused would do strictly more than the oracle does.
+///
+/// Handing the operand's own handle back — what `rt_binop` used to do for
+/// every slot that was not a plain value — made `1 + d` answer `d`, so the
+/// page printed `<io>` where both other engines refused.
+fn operand(h: u32) -> Value {
+    match slot(h) {
+        Slot::V(v) => v,
+        s if descish(&s) => Value::Desc(Rc::new(Desc::Args)),
+        _ => val(h),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
-    let a = {
-        let Slot::V(v) = slot(a) else { return a };
-        push(Slot::V(crate::eval::sub_base(v)))
-    };
-    let b = {
-        let Slot::V(v) = slot(b) else { return b };
-        push(Slot::V(crate::eval::sub_base(v)))
-    };
+    let (a, b) = (crate::eval::sub_base(operand(a)), crate::eval::sub_base(operand(b)));
     let op = match op {
         0 => "+",
         1 => "-",
@@ -711,7 +830,7 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
     // The browser forces through its own door; equality reaches a cell the
     // same way any demand does.
     let cells = Cells { id: &cell_handle, force: &|v| Ok(forced(v)) };
-    match eval_binop(op, val(a), val(b), SPAN0, &cells) {
+    match eval_binop(op, a, b, SPAN0, &cells) {
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }
@@ -720,11 +839,11 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
 /// Strict indexing: a miss is an err (unlike `at`, whose miss is none).
 #[no_mangle]
 pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
-    let idx = val(index);
-    match index_value(val(base), idx.clone(), SPAN0) {
+    let idx = operand(index);
+    match index_value(operand(base), idx.clone(), SPAN0) {
         Ok(Value::NoneV) => {
             let msg = format!("missing index {}", render_demanded(&idx, true));
-            push(Slot::V(err_value(Value::Str(msg), None)))
+            push(Slot::V(err_value(Value::Str(msg), crate::eval::Raised::default())))
         }
         Ok(v) => push(Slot::V(forced(v))),
         Err(rt) => die(rt.message),
@@ -734,7 +853,7 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
 /// Lenient indexing: a miss is none — the plain `xs[i]` form.
 #[no_mangle]
 pub extern "C" fn rt_at(base: u32, index: u32) -> u32 {
-    match index_value(val(base), val(index), SPAN0) {
+    match index_value(operand(base), operand(index), SPAN0) {
         Ok(v) => push(Slot::V(forced(v))),
         Err(rt) => die(rt.message),
     }
@@ -742,10 +861,12 @@ pub extern "C" fn rt_at(base: u32, index: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn rt_truthy(h: u32) -> u32 {
-    match val(h) {
+    match operand(h) {
         Value::True => 1,
         Value::False => 0,
-        other => die(format!("if takes a bool condition (got {})", render_demanded(&other, true))),
+        other => {
+            die(format!("an if condition is true or false, got {}", render_demanded(&other, false)))
+        }
     }
 }
 
@@ -764,7 +885,10 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
     }
     let mut args = Vec::with_capacity(handles.len());
     for h in handles {
-        args.push(val(h));
+        // A builtin takes a description like any other argument — `push [] d`
+        // hands back a list still holding it. See
+        // a_description_rides_through_a_builtin.
+        args.push(value_of(h));
     }
     let result = with_interp(|interp| interp.call_builtin(&name, args, SPAN0, &None));
     match result {
@@ -961,6 +1085,27 @@ pub extern "C" fn rt_die(msg_lit: u32) {
     die(msg);
 }
 
+/// The positional destructuring bind's refusal. It renders the value QUOTED,
+/// the way `render(.., true)` does at eval.rs:1283 and `k_render(v, 1)` does in
+/// runtime.c — unquoted agrees on an int, a list and a float and diverges on a
+/// string, which is the whole reason the fixture holds one.
+#[no_mangle]
+pub extern "C" fn rt_die_destructure(value: u32, ty_lit: u32) {
+    let ty = match val(ty_lit) {
+        Value::Str(s) => s,
+        _ => "that type".to_string(),
+    };
+    // `operand`, so a description renders `<io>` here instead of `val`
+    // answering with its own sentence. This site REFUSES — it dies on the next
+    // line — so the placeholder is right; a carrying site wants `value_of`.
+    // See a_description_cannot_be_destructured.
+    let shown = with_interp(|interp| render(interp, &operand(value), true));
+    die(format!(
+        "cannot destructure {shown} as `{ty}`; bindings are irrefutable, so handle other \
+         types by dispatch first"
+    ));
+}
+
 #[no_mangle]
 pub extern "C" fn rt_list_len(h: u32) -> u32 {
     match slot(h) {
@@ -1079,6 +1224,15 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                     return Ok(right);
                 }
             }
+            // GAVEL 15 defers the right side, so what it answers is not known
+            // until here — and `never_describes` in check.rs only refuses a
+            // literal or a direct call, which leaves a bare name to reach the
+            // run. `rt_seq` says this when both sides arrive as values; the
+            // deferred side has to say the same thing or the page names a
+            // different fault from the one the other two engines name.
+            if !descish(&slot(right)) {
+                return Err("`>>` sequences two effect descriptions".to_string());
+            }
             exec_slot(right)
         }
         Slot::Bind(inner, closure) => {
@@ -1089,6 +1243,13 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                 _ => Ok(next),
             }
         }
+        // Unreachable, and the argument is construction rather than a reading
+        // of what looks unlikely. Every handle this function is handed is
+        // descish: `exec_main` tests before it calls, `rt_seq` builds a
+        // `Slot::Seq` only when its left side is descish, `rt_maybe_bind`
+        // builds a `Slot::Bind` only when what is piped in is, and the one
+        // side that was not decided at construction — a deferred right — is
+        // tested above. The arm stays because the match must be exhaustive.
         _ => Err("main is not an io".to_string()),
     }
 }
@@ -1101,6 +1262,12 @@ pub fn exec_main(h: u32) -> (i32, String) {
     let outcome = match slot(h) {
         Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..) => match exec_slot(h) {
             Ok(y) => match slot(y) {
+                // `os/exit 3` is a program saying what it meant, so the page
+                // carries the code out the way the native endpoint does
+                // rather than showing the reader an error for it.
+                Slot::V(Value::ErrV(info)) if deliberate_exit(&info.reason).is_some() => {
+                    Some((deliberate_exit(&info.reason).unwrap_or(1) as i32, String::new()))
+                }
                 Slot::V(Value::ErrV(info)) => Some((
                     1,
                     format!(
@@ -1113,6 +1280,9 @@ pub fn exec_main(h: u32) -> (i32, String) {
             },
             Err(msg) => Some((1, format!("error[runtime]: {msg}\n"))),
         },
+        Slot::V(Value::ErrV(info)) if deliberate_exit(&info.reason).is_some() => {
+            Some((deliberate_exit(&info.reason).unwrap_or(1) as i32, String::new()))
+        }
         Slot::V(Value::ErrV(info)) => Some((
             1,
             format!(

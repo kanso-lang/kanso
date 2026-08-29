@@ -1,0 +1,6 @@
+import "std/time"
+
+pub play = time/now . announce
+
+pub fn announce t
+  print "the clock is past the epoch: {t > 0}"

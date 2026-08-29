@@ -1,0 +1,4 @@
+error[syntax]: expected a top-level declaration (`fn` or `type`)
+  --> an_indented_first_line.kso:9:3
+   9 |   stray
+         ^

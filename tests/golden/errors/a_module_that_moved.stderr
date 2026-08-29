@@ -1,0 +1,1 @@
+error: `std/random` moved — `random` lives in `std/math`

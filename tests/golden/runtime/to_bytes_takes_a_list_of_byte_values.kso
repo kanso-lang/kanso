@@ -1,0 +1,8 @@
+import "std/text"
+
+pub fn opaque x
+  x
+
+pub play =
+  bytes = text/to_bytes (opaque 7)
+  print "{bytes}"

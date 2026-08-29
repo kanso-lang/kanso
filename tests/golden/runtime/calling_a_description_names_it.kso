@@ -1,0 +1,16 @@
+# Calling an effect DESCRIPTION, which is the value kind the three siblings
+# beside this one do not cover — they call a number, a `none` and a plain
+# value. It is here because it was a probe that came back negative and the
+# answer is worth keeping: wasm_rt.rs has a `this value is not callable` arm
+# that fires when the handle is neither a closure nor a value, and this program
+# does not reach it. All three engines name the description instead.
+import "std/io"
+
+pub fn opaque v
+  v
+
+pub play =
+  d = io/write "hi\n"
+  f = opaque d
+  x = f 1
+  print "{x}"

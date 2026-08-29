@@ -1,0 +1,13 @@
+# A builtin's argument pack is the third place a description was refused on
+# the page. `push` is the one to write it with: it takes the description as
+# an ordinary argument and hands back a list still holding it.
+import "std/io"
+
+fn opaque v
+  v
+
+d = io/write "a\n" >> io/write "b\n"
+
+ys = push [] (opaque d)
+
+pub play = ys[1]!

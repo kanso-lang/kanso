@@ -52,6 +52,41 @@ no_setup = "true"
 
 release = "cargo build --release"
 
+# One line because a gate is a shell string. `$PWD` is read before the `cd`,
+# so KANSO names the worktree's own binary rather than anything on the host.
+kq_clone = "rm -rf /tmp/kq && sh .github/clone-sibling.sh kq /tmp/kq"
+
+kq_run = "KANSO=$K KQ_STORED=report sh spec.sh"
+
+kq_gate = "{kq_clone} && K=$PWD/target/release/kanso && cd /tmp/kq && {kq_run}"
+
+# The asset-digests job builds the site with a jekyll ACTION, which a shell gate
+# cannot run — which is what the excuse this replaces said, and it was reading
+# the job rather than the assertion. What the job asserts is
+# `scripts/gates/undigested_references.sh`, two greps over a built `_site`, and
+# a plain copy of `docs/` reproduces both states: green once fingerprint has
+# rewritten the references, red before it has. Measured both ways.
+#
+# `kanso.wasm` is stood in for. The assertion counts surviving references and
+# says nothing about any digest, so the size of one asset cannot change the
+# answer — and the real blob costs about fourteen gigabytes of live arena to
+# hash, which is filed as a blocking decision in design/pending-gavels.md. A
+# second CI job holding that much every run is not a cost to add while the
+# question is open.
+ag_dir = "rm -rf /tmp/agsite && mkdir -p /tmp/agsite"
+
+ag_site = "{ag_dir} && cp -r docs /tmp/agsite/_site"
+
+ag_stub = "printf 'stand-in\\n' > /tmp/agsite/_site/kanso.wasm"
+
+ag_run = "$W/target/release/kanso run $W/scripts/fingerprint -- ./_site"
+
+ag_check = "sh $W/scripts/gates/undigested_references.sh"
+
+ag_made = "{ag_site} && {ag_stub} && W=$PWD"
+
+ag_gate = "{ag_made} && cd /tmp/agsite && {ag_run} && {ag_check}"
+
 benchmarks = "sh scripts/gates/build_benchmarks.sh"
 
 fn breaking name
@@ -96,6 +131,18 @@ goldens = row
   "specs (unit, golden, differential)"
   (breaking "drifted_micro_golden")
   no_setup
+
+# The four `cargo test --test golden` rows above and below all point at the
+# micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
+# every diagnostic the language emits — had no row at all, so nothing had
+# ever watched it fail, which is the exact shape this file exists to refuse.
+error_corpus = row
+  "a check that quietly stops firing"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_diagnostic_stops_being_raised")
+  release
 
 release_profile = row
   "a release build that gives up the guaranteed tail call"
@@ -159,6 +206,16 @@ emitted_code = row
   (gating "emitted_code")
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "emitted_lines_moved")
+  benchmarks
+
+# The same gate, the other file. One mutation per golden, because a gate that
+# reads two files and is only ever proved against one is proved for one.
+emitted_others = row
+  "another benchmark's emitted line count moving"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_others_moved")
   benchmarks
 
 machine_code = row
@@ -241,12 +298,43 @@ perf_row = row
   (breaking "perf_row_loses_a_group")
   release
 
+trend = row
+  "a counter worsening with nothing traded and nothing attributed"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_counter_worsens_for_nothing")
+  release
+
+# The same refusal in the other vein. Two rows, because the two goldens are
+# read by different code: one is `name=value` and the gate has always parsed
+# it, the other is `name value` and the gate saw nothing in it at all.
+trend_runtime = row
+  "the decoder's retired instructions rising with nothing traded for them"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_runtime_counter_worsens_for_nothing")
+  release
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
   "./target/release/kanso run scripts/welfare"
   "welfare (one number over runtime and compile cost, ratcheted)"
   (breaking "welfare_term_worsens")
+  release
+
+# The other step in that job. `welfare_floor` above satisfied `cover` for both
+# of them, so this one had never been watched fail — and it had a live failure
+# to be watched at: a number stated as a fact about the present went stale
+# three times over with the gate reporting no drift.
+published_numbers = row
+  "a number the page states about the present drifting from its golden"
+  true
+  "./target/release/kanso run scripts/golden_prose"
+  "welfare (one number over runtime and compile cost, ratcheted)"
+  (breaking "a_published_number_drifts")
   release
 
 grammar = row
@@ -281,6 +369,118 @@ accumulator = row
   (breaking "accumulator_rewrite_deleted")
   release
 
+rendering = row
+  "the two renderers disagreeing on a value nobody thought to print"
+  true
+  "./target/release/kanso run scripts/render_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_renders_a_float_wider")
+  release
+
+behaviour = row
+  "a legal call answered differently at an edge, with nothing complaining"
+  true
+  "./target/release/kanso run scripts/behaviour_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_rounds_a_half_to_even")
+  release
+
+dispatch = row
+  "the two engines taking different arms for the same call"
+  true
+  "./target/release/kanso run scripts/dispatch_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_literal_arm_ranks_below_a_wildcard")
+  release
+
+numeric = row
+  "the two engines answering one arithmetic operator differently"
+  true
+  "./target/release/kanso run scripts/numeric_differential -- 0"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_floors_a_negative_modulo")
+  release
+
+effects = row
+  "two effects running in the wrong order on one engine"
+  true
+  "./target/release/kanso run scripts/effects_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "native_sequences_two_effects_backwards")
+  release
+
+modules = row
+  "a name a module keeps private crossing an import anyway"
+  true
+  "./target/release/kanso run scripts/module_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_private_name_crosses_an_import")
+  release
+
+coverage = row
+  "a diagnostic arriving with no golden pinning its text"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_diagnostic_arrives_without_a_golden")
+  release
+
+decoder = row
+  "a json decoder that reads something other than the document"
+  true
+  "sh scripts/gates/native_checksum.sh"
+  "json decoder end-to-end (native, 150 decodes)"
+  (breaking "a_decoder_that_answers_a_wrong_checksum")
+  release
+
+validator = row
+  "a utf-8 validator the independent reference disagrees with"
+  true
+  "./target/release/kanso run scripts/utf8_differential"
+  "utf-8 validator (differential vs an independent reference)"
+  (breaking "a_validator_the_reference_disagrees_with")
+  release
+
+landing = row
+  "a landing sample and the output the page prints under it disagreeing"
+  true
+  "./target/release/kanso run scripts/site_smoke"
+  "site (landing sample and playground run in a browser)"
+  (breaking "a_landing_sample_that_breaks_its_promise")
+  release
+
+in_the_page = row
+  "the engine in the page answering what no other engine answers"
+  true
+  "bash scripts/browser_differential.sh"
+  "browser differential (three engines, byte-identical, headless chrome)"
+  (breaking "the_wasm_engine_answers_something_else")
+  release
+
+shop_window = row
+  "a playground example the language will not run"
+  true
+  "cargo test --test playground"
+  "playground examples (every engine)"
+  (breaking "a_playground_example_the_engine_refuses")
+  release
+
+coverage_floor = row
+  "a diagnostic whose literal run is the shortest the scan will keep"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_ten_character_diagnostic_arrives_without_a_golden")
+  release
+
+coverage_driver = row
+  "a refusal the driver prints as plain text, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_driver_refusal_arrives_without_a_golden")
+  release
+
 itself = row
   "a gating job nobody said how to prove"
   true
@@ -295,7 +495,7 @@ rows_b1a = [decode_counters escape_counters pend_counters]
 
 rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
-rows_b1b = text/concat rows_b1 [emitted_code machine_code]
+rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
 
 rows_b1c = text/concat rows_b1b [instructions_host text_host]
 
@@ -305,56 +505,153 @@ rows_b1e = text/concat rows_b1d [compile_ir compile_ir_host]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
-rows_c1 = [welfare_floor grammar book_outputs]
+rows_c1 = [welfare_floor grammar book_outputs error_corpus trend]
 
-rows_c1a = text/concat rows_c1 [perf_row]
+rows_c1a = text/concat rows_c1 [perf_row trend_runtime published_numbers]
 
-rows_c = text/concat rows_c1a [diagnostics accumulator itself]
+rows_c1b = text/concat rows_c1a [diagnostics accumulator]
+
+rows_c1c = text/concat rows_c1b [rendering behaviour]
+
+rows_c1d = text/concat rows_c1c [numeric effects]
+
+rows_c1e = text/concat rows_c1d [modules coverage]
+
+rows_c1f = text/concat rows_c1e [coverage_floor decoder validator]
+
+rows_c1g = text/concat rows_c1f [landing in_the_page shop_window]
+
+# kq is a real program with its own JSON, and its own text goes through
+# `text/append` seventy times, so a runtime that corrupts an in-place append
+# reaches it. That is the row's mutation, and the shape ci.yml names as the
+# reason this job gates at all.
+#
+# The gate clones kq the way the job does rather than expecting one beside the
+# checkout, which is what the excuse this replaces claimed it needed. The clone
+# directory must be named `kq`: `kanso build <dir>` names the binary for the
+# directory and spec.sh invokes `./kq`.
+asset_digests = row
+  "a page that keeps its undigested reference while every asset is digested"
+  true
+  "{ag_gate}"
+  "asset digests (every reference rewritten, site still runs)"
+  (breaking "a_page_keeps_its_undigested_reference")
+  release
+
+kq_specs = row
+  "a byte builder that writes the right length and the wrong bytes"
+  true
+  "{kq_gate}"
+  "kq specs (a real program, gating)"
+  (breaking "a_string_the_builder_corrupted_in_place")
+  release
+
+coverage_printed = row
+  "an `error[kind]:` refusal printed as plain text, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_printed_error_kind_arrives_without_a_golden")
+  release
+
+rows_c1h = text/concat rows_c1g [dispatch coverage_driver]
+
+# A FOURTH opener, and the file the scan could not see. `source?` took `.rs`
+# only, so src/runtime.c — where a compiled binary gets its runtime messages —
+# had never been read. Thirty-three of its sixty-six k_die texts were pinned by
+# nothing.
+coverage_native = row
+  "a refusal the native runtime dies with, and no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_native_runtime_refusal_arrives_without_a_golden")
+  release
+
+# A FIFTH opener, on the engine the differential law calls the truth. eval.rs
+# raises `RuntimeError { message: ... }` — a bare struct field none of the four
+# above match — so all 97 of the oracle's refusals were rewordable in silence.
+#
+# Two rows because the extraction differs: `message: "` carries its own opening
+# quote and the literal is the first piece of a split on it, where
+# `message: format!(` may put the string on the next line and the literal is
+# the second. One mutation would leave the other path untested.
+coverage_oracle = row
+  "a refusal the interpreter raises, and no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "an_oracle_refusal_arrives_without_a_golden")
+  release
+
+coverage_oracle_format = row
+  "a refusal the interpreter formats, and no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "an_oracle_format_refusal_arrives_without_a_golden")
+  release
+
+rows_c1i = text/concat rows_c1h [coverage_printed kq_specs asset_digests]
+
+rows_c1j = text/concat rows_c1i [coverage_native]
+
+# A SIXTH opener, on the engine a reader meets FIRST — the website's playground
+# runs `docs/kanso.wasm`, and until the scan learned bare `die(` none of
+# wasm_rt.rs's 36 sites was read by any gate. Three of those sentences turned
+# out to be saying the wrong thing on 2026-08-28, and a fourth was a wrong
+# ANSWER rather than a wrong sentence.
+#
+# Two rows for the same reason as the oracle's two: `die("` carries its own
+# opening quote and the literal is the first piece of a split on it, where
+# `die(format!(` may put the string on the next line and the literal is the
+# second.
+coverage_page = row
+  "a refusal only the page writes, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_page_refusal_arrives_without_a_golden")
+  release
+
+coverage_page_format = row
+  "a page refusal built with format!, with no golden"
+  true
+  "./target/release/kanso run scripts/diagnostic_coverage"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_page_format_refusal_arrives_without_a_golden")
+  release
+
+rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
+
+rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
+
+rows_c = text/concat rows_c1l [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
 # A job with no row and no reason is the thing this refuses. A reason is a
 # sentence, not a flag: it has to say what would prove the job, so the debt is
 # readable rather than a name on a list.
+# The one job that keeps a reason, and the reason is not the one it had.
+#
+# It read "the mutations are `specs`'s; what this adds is a second machine".
+# The second half holds. The first half stopped holding on 2026-08-27, when
+# this job caught a defect `specs` passed on linux: a fixture interpolated its
+# own absolute path into generated kanso source, so the source line's length
+# became a property of the host's temp directory. Eighty characters is the
+# limit; macOS's `/var/folders/...` took it to ninety-nine, and the run died on
+# a formatting refusal before reaching what it meant to test. A defect class
+# only the second machine can see is not `specs`'s mutation.
+#
+# What keeps the job unproven is the harness rather than the mutations. `prove`
+# is authoritative on linux — this file says so in its own header — and it
+# cannot run a macOS gate at all.
 no_row_a = unproven
   "the other host (macos, arm)"
-  "the mutations are `specs`'s; what this adds is a second machine"
+  "prove runs on linux and cannot reach a second machine's gate at all"
 
-no_row_b = unproven
-  "playground examples (every engine)"
-  "the same corpus and engines as `specs`, so a row proves the corpus"
-
-no_row_c = unproven
-  "json decoder end-to-end (native, 150 decodes)"
-  "wants a decoder answering a wrong checksum, so a mutation to lib/json"
-
-no_row_d = unproven
-  "utf-8 validator (differential vs an independent reference)"
-  "wants a validator the independent reference disagrees with"
-
-no_row_e = unproven
-  "asset digests (every reference rewritten, site still runs)"
-  "needs a jekyll build the scratch worktree does not have"
-
-no_row_f = unproven
-  "kq specs (a real program, gating)"
-  "needs kq checked out beside this repository"
-
-no_row_g = unproven
-  "site (landing sample and playground run in a browser)"
-  "needs headless chrome in the scratch worktree"
-
-no_row_h = unproven
-  "browser differential (three engines, byte-identical, headless chrome)"
-  "needs headless chrome in the scratch worktree"
-
-unproven_a = [no_row_a no_row_b no_row_c]
-
-unproven_b = [no_row_d no_row_e no_row_f]
-
-unproven_c = [no_row_g no_row_h]
-
-unproven_jobs = text/concat unproven_a (text/concat unproven_b unproven_c)
+unproven_jobs = [no_row_a]
 
 workflow = ".github/workflows/ci.yml"
 
@@ -402,12 +699,66 @@ fn against declared
 
 fn verdict _ _ true
   io/write "ratchet: every ci job carries a mutation or a stated reason\n"
+    . (_ -> applies_all)
 
 fn verdict gaps ghosts false
   said = list/to_list (list/map gaps (n -> "  no row and no reason: {n}\n"))
   gone = list/to_list (list/map ghosts (n -> "  no such ci job: {n}\n"))
   body = text/join (text/concat said gone) ""
   saying = "ratchet: the table and ci.yml disagree\n{body}"
+  io/write_err saying . (_ -> os/exit 1)
+
+# APPLYING a mutation costs a sed; proving it reddens its gate costs a build.
+# Those are different prices, and only the second one needs the nightly. So the
+# cheap half runs here, on every change: a mutation that no longer matches the
+# source it patches is a row that has quietly stopped proving anything.
+#
+# This exists because pending_cells_proven_strict anchored on a line #1015
+# rewrote, and the nightly said so the next morning — correctly, precisely, and
+# to nobody. Fifteen hours later it was still red. A per-PR signal gets answered
+# because it blocks a merge, so the check that would have caught #1015 belongs
+# in #1015's own pull request.
+#
+# Like `prove`, this reads a worktree of HEAD rather than the working tree, so
+# it answers for what a pull request carries rather than for what is still
+# unsaved beside it.
+applies_all = borrowed "/tmp/kanso-ratchet-applies"
+
+fn borrowed dir
+  os/run "git" ["worktree" "add" "--detach" "--force" dir "HEAD"]
+    . (_ -> applying dir rows 1 [])
+
+fn applying dir list at acc
+  applied dir list at acc (at > length list)
+
+fn applied dir _ _ acc true
+  os/run "git" ["worktree" "remove" "--force" dir] . (_ -> intact acc)
+
+fn applied dir list at acc false
+  r = list[at]!
+  shell dir r.mutation . (m -> after_try dir list at acc r m.status)
+
+# The worktree is restored between rows so one stale mutation cannot make the
+# next one look stale too.
+fn after_try dir list at acc _ 0
+  restored dir . (_ -> applying dir list (at + 1) acc)
+
+fn after_try dir list at acc r _
+  restored dir . (_ -> applying dir list (at + 1) (push acc r))
+
+fn restored dir
+  shell dir "git checkout -- . && git clean -fdq"
+
+fn intact acc
+  standing acc (length acc == 0)
+
+fn standing _ true
+  io/write "ratchet: every mutation still matches the source it patches\n"
+
+fn standing acc false
+  said = list/to_list (list/map acc (r -> "  STALE {r.job} — {r.claim}\n"))
+  body = text/join said ""
+  saying = "ratchet: {length acc} mutations no longer apply\n{body}"
   io/write_err saying . (_ -> os/exit 1)
 
 # Each row runs in a worktree of HEAD, so a mutation cannot reach the tree the

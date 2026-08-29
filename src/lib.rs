@@ -421,6 +421,19 @@ fn declares_tests(source: &str) -> bool {
     program.fns.iter().any(|d| d.name.starts_with("test_") && d.params.is_empty())
 }
 
+/// Whether the module exports `play`, which decides which of two refusals a
+/// non-entry file gets. `kanso play` accepts a file of definitions beside bare
+/// statements and refuses one holding `pub play`, so the advice to reach for
+/// it is true for the first and a dead end for the second.
+///
+/// Read from the parsed program rather than a line prefix, so `pub play`
+/// inside a string or a comment is not mistaken for the export.
+fn exports_play(source: &str) -> bool {
+    let Ok(lexed) = lexer::lex(source) else { return false };
+    let Ok(program) = parser::parse(&lexed) else { return false };
+    program.fns.iter().any(|d| d.name == "play" && d.is_pub)
+}
+
 /// The CLI and the browser share this so the engines never diverge on which
 /// compile a file gets.
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
@@ -443,6 +456,15 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
         (_, true) if !library_verb && declares_tests(source) => {
             Err(format!("error: `{file}` holds tests — `kanso test {file}` runs them\n"))
         }
+        // `kanso play` refuses a file holding `pub play` — it takes bare
+        // statements — so offering it here sent a reader to a refusal that
+        // sent them back. A pub-play module is meant to be imported, and
+        // that is what this says instead.
+        (_, true) if !library_verb && exports_play(source) => Err(format!(
+            "error: `{file}` is a library — nothing to run. it exports \
+             `play`: import the module from an entry file, or give the \
+             module a main.kso entry\n"
+        )),
         (_, true) if !library_verb => Err(format!(
             "error: `{file}` is a library — nothing to run. give the module a \
              main.kso entry, or run its definitions beside their statements \
@@ -674,9 +696,25 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     if path.starts_with("./") || path.starts_with("../") {
         // `./` is import syntax rather than part of the name — carrying it into
         // the resolved path would put it in every diagnostic the module raises.
-        let bare = path.strip_prefix("./").unwrap_or(path);
-        let relative = base.join(bare);
-        let file = base.join(format!("{bare}.kso"));
+        // `../` is the same syntax and was NOT being taken back out: a module
+        // reached as `../deep` from `mid/` named itself `mid/../deep` in every
+        // diagnostic it raised and in the hako its errs recorded.
+        // Each leading `../` is a step up taken here rather than left in the
+        // path: `base` loses a component and the name loses the prefix. A
+        // `..` with nothing above it stays, because there is nothing to fold
+        // it into. The walk is lexical on purpose — the directory a module is
+        // reached THROUGH need not be one it lives under, and asking the
+        // filesystem would also make every path absolute, into every
+        // diagnostic, which is the thing being fixed.
+        let mut here = base.to_path_buf();
+        let mut bare = path.strip_prefix("./").unwrap_or(path);
+        while let Some(above) = bare.strip_prefix("../") {
+            let Some(parent) = here.parent() else { break };
+            here = parent.to_path_buf();
+            bare = above;
+        }
+        let relative = here.join(bare);
+        let file = here.join(format!("{bare}.kso"));
         // one name, two spellings on disk, and both at once is a question the
         // spelling cannot answer
         if relative.is_dir() && file.is_file() {
@@ -3264,8 +3302,17 @@ fn compile_module_loaded(
             }
         }
     }
+    // A module that IS a file resolves its own imports from the directory it
+    // sits in. Handing `load_dependencies` the file sent every `./sibling`
+    // looking under `a.kso/`, which cannot exist — so a file module could be
+    // imported but could never import, and the refusal said the sibling was
+    // not there while it sat beside it.
+    let base = match dir.is_file() {
+        true => dir.parent().unwrap_or(dir),
+        false => dir,
+    };
     let (mut dep_program, exports, shadowed, surfaced) =
-        phase::watched("load_dependencies", || load_dependencies(dir, &import_list, visited))?;
+        phase::watched("load_dependencies", || load_dependencies(base, &import_list, visited))?;
     // A module's surface is its own. Dependency pubs demote at this
     // boundary — importers of this module see none of them — and only an
     // explicit re-export puts an imported name back on the surface, as a
@@ -3424,8 +3471,7 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
-    let mut diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
-    check::check_unused_private(&merged, &used, &mut diags);
+    let diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
     finish_program(&mut merged);
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));

@@ -6,12 +6,29 @@
 # tolerated so the gate could be turned on at all.
 #
 # The list only shrinks. Adding a diagnostic means adding a golden under
-# tests/golden/errors — scripts/diagnostic_coverage.py fails on any message
-# that is neither pinned nor listed here, and fails again when a listed one
-# becomes pinned, so the line gets deleted rather than left lying.
+# tests/golden/errors — the coverage scan fails on any message that is
+# neither pinned nor listed here, and fails again when a listed one becomes
+# pinned, so the line gets deleted rather than left lying.
+#
+# THE ONE BELOW HAD NO REASON WRITTEN, and this file's own rule is that a
+# mechanism is named "so nobody spends another sitting writing programs for
+# them". A sitting was spent on 2026-08-27 for want of these four lines.
+#
+# It cannot be reached, and the argument is control flow rather than a reading
+# of what looks unlikely. `parse_constant` is called from one place,
+# src/parser.rs:303, under a guard that has already matched `Tok::Ident(_)` at
+# `head_idx`. Inside, the `let ... else` that raises this reads
+# `header.tokens.get(off)`, and `off` is computed the same way `head_idx` is —
+# one if `pub` leads the line, zero otherwise. So the token it tests is the
+# token the guard just matched as an identifier, and the `else` is dead. It
+# stays because a `let ... else` must have one.
+#
+# Three programs confirm the shadowing rather than assuming it. `2 = 3`,
+# `pub 2 = 3` and `pub "x" = 3`, each in a library read by `kanso check`, are
+# all refused by "a top-level line must begin with `fn`, `type`, or a constant
+# binding" — the catch-all arm, reached because a non-identifier at `head_idx`
+# matches neither the constant arm nor the re-export arm.
 expected a constant name
-expected a top-level declaration (`fn` or `type`)
-private type `
 
 # Widening the gate found these. The scan it replaced stopped a message at the
 # first comma a lowercase word followed, which for a message that holds such a
@@ -21,18 +38,28 @@ private type `
 # another sitting writing programs for them. Neither is deleted, because both
 # arms are the safe side of a fork — see task #69.
 #
-# The other four are each answered first by a check added later, verified by
-# trying them rather than by reading. An inline constant never reaches the
-# parser carrying a block: the lexer folds an indented line into its head
-# unless that head opens one, and a `>>` or `.` continuation is legal, so the
-# shape does not exist. A non-identifier in a constant's name position is
-# refused first by "a top-level line must begin with `fn`, `type`, or a
-# constant binding". An indented line at the top level is refused first by the
-# indentation rule or the blank-line rule. And the private-type message fires
-# on a leading underscore, which the naming rule retired.
+# The other four were each said to be answered first by a check added later.
+# An inline constant never reaches the parser carrying a block: the lexer folds
+# an indented line into its head unless that head opens one, and a `>>` or `.`
+# continuation is legal, so the shape does not exist. A non-identifier in a
+# constant's name position is refused first by "a top-level line must begin
+# with `fn`, `type`, or a constant binding". The private-type message fired on
+# a leading underscore, which the naming rule retired — and the check behind it
+# was deleted once that was checked by running a program rather than by reading
+# the source, so the line is gone from here too.
 #
 # That is the pattern worth naming: a diagnostic can be shadowed by a better
 # one added later, and nobody notices, because it simply stops appearing.
+#
+# The reading it is not safe to do is the one that says which check speaks
+# first. Two of the excuses written here were wrong. The inline-constant claim
+# missed heads that OPEN blocks and left on 2026-08-20. The claim that an
+# indented top-level line is always taken by the indentation rule or the
+# blank-line rule held only where a declaration precedes it: put the indented
+# line first in the file and there is nothing above it for either rule to work
+# against, so the top-level loop refuses it and says so. That one is pinned at
+# an_indented_first_line and has left this list too. An excuse is worth what
+# the program written to test it is worth.
 #
 # The indented-block rule cannot fire because the lexer decides, before the
 # parser sees anything, which indented lines stay lines. `is_block_header`
@@ -41,12 +68,20 @@ private type `
 # more argument. So `parse_block_construct` is only ever handed a head it
 # already accepts, and `else` is taken by its callers first.
 #
-# The unused-expression rule cannot fire because the parser handles both
-# halves of it. `reject_never_effect` refuses a non-final literal, list, map,
-# lambda or binary operation with its own message, and consecutive expression
-# statements are folded into one `Seq`, so a body never holds a non-final
-# `Stmt::Expr` for the checker to complain about.
-unused expression: every non-final line binds a name (sequence
+# The unused-expression rule left this list on 2026-08-27, and its excuse is
+# the third here to be shown wrong by a program. The reasoning above it —
+# `reject_never_effect` refuses a non-final literal, list, map, lambda or
+# binary operation, and consecutive expression statements fold into one `Seq`
+# — is true of the walk over a function body, and there are TWO walks. The one
+# that handles `build` and block bodies had no such check, so an effect line in
+# a build was neither run nor complained about: three `io/write` lines ran the
+# last and lost the other two, in silence, on both engines. The check is in
+# that walker now and the case is pinned at
+# tests/golden/errors/a_build_body_line_goes_nowhere.
+#
+# The lesson is the one the top of this file already states, sharpened: an
+# excuse that reasons about which check speaks first has to name WHICH walk it
+# is reasoning about, because a second one may not have the rule at all.
 
 # The inline-constant message left this list on 2026-08-20: the claim that
 # the lexer's folding made it unreachable missed heads that OPEN blocks —
@@ -55,3 +90,315 @@ unused expression: every non-final line binds a name (sequence
 # replaced the panic beside it is reachable only through `kanso check` on a
 # library file, which the run/play corpus cannot express, so its pin lives
 # at tests/an_empty_branch_is_refused.rs rather than in the corpus.
+
+# THE DRIVER'S MESSAGES. The loader and the driver write `error: …` as plain
+# text, print it and exit — thirty-one sites in src/, and the scan could not
+# see one of them until it learned a second opener. Two were pinned in the same
+# change (`a_module_that_moved` in the error corpus, `no .kso files in` as a
+# module_differential case) and #1078 had already pinned two more there. The
+# rest are below, each with what was actually tried.
+#
+# ONE IS PINNED BY A RUST TEST, which the driver corpus deliberately excludes:
+# a Rust file's doc comments and its own assert! messages are not pins of a
+# compiler message, and four of the six that read as pinned there were false.
+# The precedent is `an_empty_branch_is_refused.rs`, already cited above.
+this build is named `
+#
+#   this build is named `   tests/build_names_collide.rs asserts it:
+#                           assert!(said.contains("this build is named `greeter`,
+#                           and a directory of that name is here"))
+#
+# `main is not an io; there is no plan to show` sat here beside it until the
+# scan learned to read the book's samples. docs/book/samples/ch05/quiet_plan.out
+# is that whole sentence and nothing else, executed and diffed by the
+# book-samples job, so the entry is gone rather than reworded.
+#
+# THREE FIRE ON AN IO ERROR FROM THE HOST, not on anything a program says. A
+# fixture cannot portably cause one: the container runs as root, so an
+# unwritable directory is not unwritable — measured on 2026-08-27, root writes
+# into a mode-000 directory without complaint. What each needs is stated so
+# nobody writes the program twice.
+cannot execute
+cannot open the terminal:
+cannot write
+#
+#   cannot execute           spawn of the built binary fails
+#   cannot open the terminal: the repl with no tty
+#   cannot write             the .ll cannot be written
+#
+# TWO MORE ARE PINNED BY A RUST TEST as of 2026-08-27, and stay listed for the
+# reason the two above them do: the driver family's corpus search deliberately
+# excludes Rust tests, so a message pinned only there still reads as unpinned
+# and its line has to say where the pin lives.
+cannot build:
+cannot invoke clang:
+#
+# The excuse that had covered these was wrong, in a way worth keeping. It read
+# "clang is installed", which treats installation as the question. What the
+# compiler asks is whether PATH resolves it, and PATH is a per-process variable
+# rather than a fact about the box:
+#
+#   env PATH=/nonexistent kanso build <dir>  ->  cannot invoke clang: ...
+#   env PATH=/nonexistent kanso run <dir>    ->  cannot build: ...
+#
+# One absence, two sentences, because `build` spawns clang itself and `run`
+# reaches it through the cached-binary path. Both are asserted in
+# tests/a_toolchain_the_path_cannot_reach.rs, on the compiler's own prefix and
+# not the host's io text — that part moves with the libc, which is the reason
+# src/eval.rs gives for never pinning one.
+#
+# ONE FIRES WHEN CLANG REJECTS WHAT THE COMPILER EMITTED, which is a compiler
+# defect rather than a program a user can write. tests/build_names_collide.rs
+# names it in a doc comment, which is not a pin.
+clang failed on
+#
+# THE PRINTED FAMILY. `error[kind]: …` written as plain text is what a rendered
+# Diagnostic looks like on a terminal, so these read to a user exactly like a
+# message the corpus pins. The scan learned this third opener after the second;
+# ten sites, and one of them is excused.
+#
+# ONE IS UNREACHABLE ON UNIX, and this is a claim about control flow rather
+# than a reading of what looks unlikely. src/main.rs calls `ended_by_signal`
+# only from the `None` arm of `code.code()`. On unix, `ExitStatus::code()`
+# answers None exactly when a signal ended the process, and in exactly that
+# case `ExitStatusExt::signal()` answers Some — so the `None` arm INSIDE
+# `ended_by_signal` cannot be reached. It stays because the match on an Option
+# must be exhaustive. The `#[cfg(not(unix))]` body returns the same sentence
+# unconditionally and is reachable on Windows, which CI does not run.
+error[runtime]: the program ended without an exit code
+
+# ---------------------------------------------------------------------------
+# THE NATIVE RUNTIME, added 2026-08-27 when the scan first read src/runtime.c.
+#
+# `source?` admitted a file only when its last three characters were `.rs`, so
+# sixty-six k_die texts had never been looked at. Thirty-three were unpinned.
+# Twenty were pinned in the same sitting; the twelve below are what is left,
+# each with the mechanism that keeps a program from reaching it — measured by
+# running one, not by reading the source. Two earlier attempts at this list
+# were written from reading and were wrong: the six `net_*`/`port`/`accept`
+# refusals looked shadowed by the wrappers' `.handle` read, and a record whose
+# handle is a STRING rather than an int reaches every one of them. They are
+# pinned now rather than excused.
+#
+# THE LIST BUILTINS' OWN REFUSALS ARE SHADOWED BY THEIR WRAPPERS. `map`,
+# `filter`, `sort` and `sum` are not names a program can call: `list/map 7 f`
+# and the bare `map 7` both answer `unknown name`, and the only route is
+# lib/list/list.kso, whose `map`, `select` and `sort` call `length` on the
+# collection first. So a non-collection is refused by `length takes a list,
+# string, or map, not 7` before the builtin sees it, and a map or a string —
+# which `length` accepts — fails later on the index rather than at the
+# builtin's own check. `list/sum` is a fold over `+`, so it raises
+# `` `+` is not defined for these values ``, pinned by none_no_arm.
+map takes a list
+filter takes a list
+sort takes a list
+sum takes a list
+sum takes a list of int
+#
+# THE SAME DEAD ARM ON NATIVE. runtime.c's `k_b_filter` carries this sentence
+# without the `, got` the interpreter's version has, so it is a second message
+# and needs a second row — the list matches on equality, so neither excuses the
+# other.
+#
+# It is dead for the reason its sibling below is: `filter` is not one of the 55
+# names in check.rs's BUILTINS, so `filter xs p` is `unknown name `filter``,
+# `builtin_filter` by hand is `` `builtin_filter` is internal to the standard
+# library ``, and `k_b_filter` is called from nowhere in runtime.c. The emitter
+# knows the name (codegen.rs lists it with arity 2) and no program can reach
+# the emitter with it.
+#
+# An earlier excuse here said the mechanism was `list/select`'s own `if`. That
+# is what a program meets for a non-bool predicate, and it is not what shadows
+# THIS message: `list/select` is a fold written in kanso and never calls the
+# builtin, so the `if` refusal and this arm are on different paths. The same
+# mistake stood against the interpreter's copy and was corrected below.
+a filter predicate returns true or false
+#
+# PRINT RENDERS ANYTHING, so this cannot be reached. `print 7`, `print [1 2]`,
+# `print <a function>` and `print <an effect>` all succeed, writing `7`,
+# `[1 2]`, `<fn>` and `<io>`. The message describes a rule the renderer does
+# not enforce.
+print takes a string; interpolate instead
+#
+# THE STRING BUILDER'S SEED IS CHECKED TWICE, and the earlier check is the one
+# a program meets. `text/bytes (opaque 7)` answers `bytes takes a string`,
+# which is pinned; the builder's own seed check sits behind it, and the
+# accumulator check behind that is reachable only from IR the emitter does not
+# write for a source program.
+a string builder starts from a string
+a string builder was expected here
+#
+# THREE RESOURCE CAPS. Each is reachable in principle and each fixture would
+# cost more than it proves.
+#   string too long          2,147,483,647 bytes; the fixture allocates 2 GB
+#   too many sockets         K_SOCKETS is 64; the fixture binds 64 real ports
+#                            on the runner, which is what sockets_serve.rs's
+#                            header records a day of wedged suites for
+#   fiber cap                256, passed to k_flatten_join at runtime.c:4822;
+#                            the fixture writes 257 adjacent statements
+string too long
+too many sockets open at once
+parallel group exceeds the scheduler's fiber cap
+#
+# `integer overflow (int64 native build; spec int is arbitrary precision)` was
+# the last entry here, excused as pinned somewhere the scan could not look. The
+# excuse named the extension and the barrier was the extension AND the
+# directory: docs/book/samples/ch02/overflow.out is outside the corpus root as
+# well as outside the file type, and each change alone pinned nothing. The scan
+# reads both now and the entry is gone.
+#
+# SEVEN OF THE ORACLE'S OWN, each shadowed by a check that answers first. Every
+# mechanism below is a program that was run, not a reading of the source, and
+# the sentence the run produced is quoted.
+#
+# TWO `set` REFUSALS, both shadowed by check_build_blocks. A field write lives
+# in a `build` block and its target must be a construction made in that same
+# block — `x = opaque 7` then `x.n = 2` is refused at compile time with ``x.n =
+# ... writes only block-born values``. So the target is bound, which is the
+# first message, and it is a construction. Constructor arity is checked too
+# (`cell` with one of two fields is `has 2 field(s), got 1`), so the
+# construction is a record rather than a partial application — which is the
+# second. A constructor handed a failure hands the failure back, and that arm
+# `continue`s before either check.
+`set` target `
+`set` writes a record field, not
+#
+# THE BIND PATTERN CATCH-ALL. `destructure` has arms for a name, a constructor
+# and a keyed read, and this is the `_`. All three call sites pass a
+# `Stmt::Bind` pattern, and `parse_bind_target` builds only those three: `_ =
+# opaque 7` and `7 = opaque 7` are both `expected a binding name or type` from
+# the parser. A literal or a wildcard never reaches the evaluator.
+binding patterns are irrefutable: names and constructor
+#
+# THE FILTER PREDICATE, in an arm no program reaches. `filter` is not one of
+# the 55 names in check.rs's BUILTINS, `lib/list` writes `select` as a fold in
+# kanso rather than calling a builtin, and `builtin_filter` written by hand is
+# `` `builtin_filter` is internal to the standard library ``. So this arm is
+# dead for the same reason `unknown builtin` below it is.
+#
+# What a program DOES meet for a non-bool predicate is `list/select`'s own
+# `if`: `list/select (opaque [1 2]) (x -> "{x}")` answers `an if condition is
+# true or false, got 1`, which a golden pins. That is the sentence this one
+# was mistaken for.
+a filter predicate returns true or false, got
+#
+# SORT'S ELEMENT CHECK, shadowed by the comparison it performs. `list/sort
+# (opaque [1 "a"])` answers `comparison requires two values of one comparable
+# type` — the pairwise compare refuses before the sort can conclude anything
+# about the list as a whole.
+sort requires comparable elements of one type
+#
+# THE UNKNOWN BUILTIN, shadowed by the name check. `builtin_nope 1` in a user
+# program is `` `builtin_nope` is internal to the standard library — import its
+# module``. Reaching this arm means a stdlib module naming a builtin that does
+# not exist, which is a compiler-internal invariant rather than something a
+# program can express.
+unknown builtin `
+#
+# THE ESCAPED CLOSURE, unreachable by construction. `Value::TableFn` is built
+# in `src/wasm_rt.rs` and nowhere else, and that module calls
+# `eval::set_foreign_call` at init — so a handle exists only where the way back
+# is already installed, and this arm answers a `None` that cannot occur.
+a compiled closure escaped the engine that owns it
+#
+# ==========================================================================
+# THE PAGE'S OWN REFUSALS. `src/wasm_rt.rs` writes 36 `die(` sites spelling 24
+# sentences, and until the scan learned two more openers none of them was read
+# by any gate — on the engine a reader meets first, since the website's
+# playground runs it. Ten are pinned by nothing, and every reason below was
+# established by walking the EMITTER or by running a program, because reading
+# a runtime arm and inferring what can reach it is how two excuses in this file
+# came to name the wrong mechanism.
+#
+# THE STRING-LITERAL GUARANTEE covers the next four sentences at five sites.
+# Every literal position in an emitted module is written by `str_lit`
+# (wasm_backend.rs:363), one function returning `Lit::Str`. So the handle these
+# arms inspect holds a string by construction: `rt_builtin`'s name comes from
+# wasm_backend.rs:1500, `rt_setfield`'s from 607, `rt_keyed_field`'s from 671,
+# `rt_field_by_name`'s from 745, and the origin and hop literals from 374
+# and 416. One guarantee, checkable in a minute, rather than five arguments.
+builtin name must be a string
+field name must be a string
+an origin or hop literal must be a string
+#
+# THE OPERATOR TABLE, an exact correspondence rather than an argument.
+# `binop_code` (wasm_backend.rs:868) returns {0,1,2,3,4,10,11,12,13,14,15,20,
+# 21,22} and `Err` for anything else — a COMPILE-time refusal. wasm_rt.rs:758
+# names exactly those fourteen codes. The emitter cannot write a code the
+# runtime does not know.
+no operator for code
+#
+# THE ENVIRONMENT HANDLE. All nine `RT_ENVGET` call sites in wasm_backend.rs
+# pass `local_get(1)` — the compiled function's second parameter, which the
+# calling convention documented at wasm_backend.rs:1105 makes the env the
+# runtime itself created as a `Slot::E`. A program has no way to put anything
+# else there.
+bad environment access
+#
+# THE FILTER PREDICATE, THIRD SPELLING. Native says it without the `, got` and
+# the interpreter with it; this is the page's. All three are the same dead arm:
+# `filter` is not one of check.rs's 55 BUILTINS so `filter xs p` is `unknown
+# name`, `builtin_filter` by hand is refused by name, and `lib/list` writes
+# `select` as a fold in kanso rather than calling a builtin. What a program
+# meets for a non-bool predicate is `list/select`'s own `if`.
+filter needs a bool (got
+#
+# THE MAP KEY. `require_literal_key` admits only `Expr::Int` and a `Expr::Str`
+# with no interpolation, so a key that is neither an int nor a string is
+# refused at compile time and never reaches the runtime's check.
+map keys are ints or strings, not
+#
+# NOT A RECORD, four sites in two functions, and both are shadowed by a check
+# that answers first — each of which is itself pinned, so what a program
+# actually reads is covered:
+#
+#   rt_field:370,372        `point a b = opaque "hello"` answers `cannot
+#                           destructure "hello" as ...`, pinned by
+#                           tests/golden/runtime/a_destructure_of_the_wrong_shape
+#   rt_keyed_field:503,505  `{ x y } = opaque 7` answers `cannot read fields
+#                           of 7; keyed reads take a record`, pinned by
+#                           tests/golden/runtime/a_keyed_read_takes_a_record
+#
+# Both fixtures live under tests/golden/runtime, which the wasm walk executes,
+# so the page is known to answer the shadowing sentence rather than this one.
+not a record
+#
+# THIS VALUE IS NOT CALLABLE, probed and it does not reproduce. The arm fires
+# when the callee is neither a closure nor a value — a description, say — but
+# `f = opaque (io/write "hi")` then `f 1` answers `` `<io>` is not callable ``
+# on all three engines, reaching the sibling arm beside it. The program is in
+# the corpus as tests/golden/runtime/calling_a_description_names_it, which is
+# what pins the sentence a reader actually gets.
+this value is not callable
+#
+# A BOUND DESCRIPTION CANNOT BE USED AS DATA HERE, `val`'s own words. This is
+# the sentence a site says INSTEAD of its own when it opens with `match val(h)`
+# and is handed a description, and it was reachable eight ways as recently as
+# this week. Each has since been routed to the site that owns the sentence, and
+# each routing left a program behind:
+#
+#   1 + d, d == d, 1 < d      tests/golden/runtime/a_description_is_not_
+#                             {an_operand,comparable,ordered}
+#   if d                      .../a_description_is_not_a_condition
+#   xs[i], xs[i]!             .../a_description_is_not_{indexable,an_index,
+#                             indexable_strictly,a_strict_index}
+#   err d                     .../an_err_may_carry_a_description
+#   (opaque d).n, v.n         .../a_description_{has_no_fields,
+#                             meets_a_field_read}
+#   pt x y = opaque d         .../a_description_cannot_be_destructured
+#   dispatch on one           tests/golden/micro/a_description_reaches_a_dispatch
+#
+# Two `val` sites could still take a description on paper — `rt_field_by_name`
+# and `rt_not_own_err` — and neither of the two programs written for them
+# reaches them: a field read compiles to a getter (so it lands in `rt_no_field`,
+# which the two field fixtures above pin) and a dispatch answers its bare arm
+# without asking the runtime. Everything else that reaches `val` through
+# `operand` or `value_of` is a `Slot::E`, the environment pack the runtime makes
+# itself, which the string-literal and environment-handle rows above already
+# argue a program cannot supply.
+#
+# So this sentence is what the page says when an invariant it holds internally
+# is broken, and no program states it. It is listed rather than deleted because
+# a wrong answer is worse than a wrong sentence, and the arm is what makes `val`
+# total.
+a bound description cannot be used as data here

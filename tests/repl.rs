@@ -256,3 +256,18 @@ fn reset_starts_the_names_over() {
 
     assert_eq!(session.next_it(), "it0");
 }
+
+/// `:delete` and `:show` on a name the session does not hold answer the same
+/// refusal, and until the coverage scan learned to read `error[kind]:` written
+/// as plain text neither was pinned anywhere. Both doors are asserted, because
+/// the two build the message separately.
+#[test]
+fn a_name_the_session_does_not_hold_is_refused() {
+    let mut session = Session::new();
+
+    let deleted = session.delete("absent").expect_err("deleting an absent name refuses");
+    let shown = session.show(Some("absent")).expect_err("showing an absent name refuses");
+
+    assert_eq!(deleted, "error[name]: nothing named `absent` is defined\n");
+    assert_eq!(shown, "error[name]: nothing named `absent` is defined\n");
+}

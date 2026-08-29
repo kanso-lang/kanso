@@ -246,11 +246,55 @@
 # Update in place, rewriting the indirection at first evaluation so later reads
 # test nothing, would take these 64 bytes back. It stays the better shape and
 # this is the number it would have to beat.
-jsonbench text=79858
-encodebench text=97010
-oneshot text=97138
-basket text=88978
-widebench text=98098
-deepbench text=62802
-escapebench text=49490
-pendbench text=73362
+# 2026-08-26: every binary grows, and by a different amount each — jsonbench
+# +544, encodebench +624, oneshot +592, basket +256, widebench +624, deepbench
+# +160, escapebench +80, pendbench +224. A rise, and one the change buys
+# outright: an arm that could match its own hako's err now asks before it
+# matches, so each such arm carries a call and a branch, and each raise site
+# carries its package name beside the file and line it already carried. Both
+# scale with the program rather than with the runtime, which is why the spread
+# runs from 80 bytes to 624 instead of landing on one number the way #1040's
+# constructor fix did.
+# 2026-08-26: every benchmark grew — jsonbench 80,450 -> 80,738, and 32 to 128
+# bytes elsewhere. The register-returnable construction stopped bailing on its
+# first failing field: it now evaluates both, and on the failing path calls
+# `k_pair_failure`, which the optimizer inlines at each of the sites. The IR
+# shrank by 47 lines and the machine code grew by 288, which is the shape of an
+# inlined merge replacing a second early return. It buys a correctness fix —
+# native and wasm handed back the FIRST failing field where the interpreter
+# merged both reasons. deepbench then moved again, 63,042 -> 63,122, when the
+# merge was pushed out of line: `k_rec` scans every field of every record it
+# builds, and folding the merge into that scan cost pendbench 3.2% for work
+# that only runs once a field has failed. The merge is `cold` and `noinline`
+# now, the scan keeps its early exit, and pendbench came out 0.08% BELOW where
+# it started.
+# 2026-08-26 (last): every benchmark grew 128 to 144 bytes. `k_render` opened
+# by handing back any err it was given, which is right at the top of a render
+# and wrong inside one: an err held in a list is a thing the list holds, and
+# the switch twenty lines down already rendered it `err <reason>` — dead code
+# the early return shadowed. Native was alone in that; the interpreter and
+# wasm both answer through eval::render, which has only the nested case.
+# The first fix split the function in two and cost 1,424 bytes a binary. One
+# body with a `held` flag costs 128, and says the same thing.
+# 2026-08-26 (map): +16 a binary. The held-render fix reached lists and
+# records and missed the map beside them — the edit was applied over a fixed
+# window of the function and the map case fell outside it, and the fixture
+# held a list alone so it passed. Every container is in the fixture now.
+#
+# 2026-08-27 (accept): +48 a binary, uniform. `net/accept` outside a parallel
+# group never looked at its handle — it answered "nothing connected", which is
+# true of a listener nobody has dialled and was said for a value that is not a
+# listener at all. The check is one call and one branch, and it reuses the
+# string k_step already carries for that fault. A distinct string would have
+# cost 128 more: while two arms share one string pointer clang folds their
+# `return k_err(k_str(<ptr>), NULL)` tails into one block, and a distinct one
+# breaks the fold. Measured both ways, and it is distinctness rather than
+# length — a same-length distinct string costs the same 128.
+jsonbench text=80930
+encodebench text=97922
+oneshot text=98002
+basket text=89602
+widebench text=99010
+deepbench text=63314
+escapebench text=49794
+pendbench text=73938

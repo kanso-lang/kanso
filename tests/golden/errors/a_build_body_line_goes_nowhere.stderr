@@ -1,0 +1,8 @@
+error[unused]: unused expression: every non-final line binds a name (sequence effects with `>>`)
+  --> a_build_body_line_goes_nowhere.kso:21:3
+  21 |   io/write "a\n"
+         ^
+error[unused]: unused expression: every non-final line binds a name (sequence effects with `>>`)
+  --> a_build_body_line_goes_nowhere.kso:22:3
+  22 |   io/write "b\n"
+         ^

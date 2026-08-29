@@ -1,0 +1,33 @@
+# `some` means a value that is not none. It used to mean "not none", full
+# stop, which let an arm that names no err at all take a foreign failure and
+# answer whatever it liked — an unmarked rescue, reachable without writing
+# `err` anywhere and without the destructuring form that hands out a reason.
+#
+# The three engines disagreed about it too. The interpreter took the
+# annotation and swallowed the failure; wasm took it and swallowed it; native
+# refused the annotation outright with `unknown type `some``, at build time,
+# in a message about a backend — the declare for its check sat in the preamble
+# with nothing behind it.
+#
+# So: a failure reaches neither arm, and leaves with a hop, the way it does
+# past any group whose arms all refuse it. A value still reaches the `some`
+# arm, which is what the annotation is for.
+import "std/json"
+import "std/testing"
+
+fn as_text reason
+  "{reason}"
+
+fn taken _:some
+  "the some arm took it"
+
+fn taken v
+  "a value: {v}"
+
+broken = taken (json/decode "[1, 2")
+
+fine = taken 7
+
+pub play =
+  print "failure: {testing/when_failed broken as_text}"
+  >> print "value: {fine}"

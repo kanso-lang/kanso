@@ -1,0 +1,11 @@
+# The plain builtin, which agreed on the two native engines and diverged on the
+# page — `rt_truthy` is what both `if` and a guard reach there, so one wrong
+# sentence covered both constructs and nothing walked either.
+#
+# The condition is a STRING because the page's old sentence differed in two
+# ways and an int shows only one: `if takes a bool condition (got "x")` is the
+# other wording AND the other rendering, where an int reads `7` on all three.
+pub fn opaque v
+  v
+
+pub play = print "{if (opaque "x") "a" "b"}"

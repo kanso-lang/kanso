@@ -75,6 +75,13 @@ const RT_NO_FIELD: u32 = 35;
 const RT_DEFER: u32 = 36;
 const RT_CONST: u32 = 37;
 const RT_FORCE: u32 = 38;
+/// Whether a match may proceed: false only for an err this arm's own hako
+/// raised (gavel 24, clause 1, as dispatch semantics).
+const RT_NOT_OWN_ERR: u32 = 39;
+/// A positional destructuring bind whose value is the wrong shape. It takes
+/// the VALUE as well as the type name, because the sentence names what the
+/// reader bound and only the runtime knows it.
+const RT_DIE_DESTRUCTURE: u32 = 40;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -117,6 +124,8 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_defer", params: 1, returns: true },
         Import { name: "rt_const", params: 1, returns: true },
         Import { name: "rt_force", params: 1, returns: true },
+        Import { name: "rt_not_own_err", params: 2, returns: true },
+        Import { name: "rt_die_destructure", params: 2, returns: false },
     ]
 }
 
@@ -125,6 +134,9 @@ struct Ctx {
     scope: HashMap<String, u32>,
     /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
     prefix: String,
+    /// The hako that declaration belongs to. An arm cannot see an err its own
+    /// hako raised, and this is the side of the comparison the compiler knows.
+    hako: String,
     /// The constant this body computes, where it is a constant. A list
     /// element mentioning it has to wait rather than read a cell that is
     /// still being filled.
@@ -324,13 +336,41 @@ impl<'a> WasmBackend<'a> {
         idx
     }
 
+    /// Can a value matching this annotation be an err? Only then is the
+    /// own-origin guard emitted — every other pattern refuses failures
+    /// already, so the check would cost a call per match to learn nothing.
+    fn admits_err(&self, ty: &str) -> bool {
+        if ty == "err" {
+            return true;
+        }
+        self.program
+            .types
+            .iter()
+            .find(|t| t.name == ty && !t.members.is_empty())
+            .is_some_and(|t| t.members.iter().any(|m| m != ty && self.admits_err(m)))
+    }
+
+    /// Refuse the match when the value is an err this arm's own hako raised.
+    fn own_origin_guard(&mut self, ctx: &mut Ctx, value_local: u32) {
+        let arm = self.str_lit(&ctx.hako.clone());
+        ctx.body.local_get(value_local);
+        ctx.body.i32_const(arm as i64);
+        ctx.body.call(RT_NOT_OWN_ERR);
+        ctx.body.eqz();
+        ctx.body.br_if(0);
+    }
+
     fn str_lit(&mut self, text: &str) -> u32 {
         self.lit(LitKey::Str(text.to_string()), || Lit::Str(text.to_string()))
     }
 
     /// The origin literal for an err construction site.
-    fn origin_lit(&mut self, prefix: &str, span: crate::diag::Span) -> u32 {
-        let origin = format!("{prefix}:{}", span.line);
+    /// The raise site's literal: the package that raises here, a NUL, then the
+    /// trace line. `rt_mkerr` splits it — the match rule wants the first half
+    /// and the report wants the second, and one literal keeps the two from
+    /// drifting apart. Native's `origin_arg` builds the same shape.
+    fn origin_lit(&mut self, prefix: &str, hako: &str, span: crate::diag::Span) -> u32 {
+        let origin = format!("{hako}\0{prefix}:{}", span.line);
         self.str_lit(&origin)
     }
 
@@ -355,6 +395,7 @@ impl<'a> WasmBackend<'a> {
             body: Body::new(arity as u32),
             scope: HashMap::default(),
             prefix: String::new(),
+            hako: String::new(),
             group: match arity {
                 0 => name.to_string(),
                 _ => String::new(),
@@ -363,6 +404,7 @@ impl<'a> WasmBackend<'a> {
         for decl in decls {
             ctx.scope.clear();
             ctx.prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
+            ctx.hako = crate::provenance::package_of(&decl.file).to_string();
             ctx.body.block_void();
             for (i, pattern) in decl.params.iter().enumerate() {
                 self.emit_pattern(&mut ctx, i as u32, pattern)?;
@@ -446,6 +488,9 @@ impl<'a> WasmBackend<'a> {
                 ctx.scope.insert(name.clone(), value_local);
             }
             Pattern::Annotated { name, ty, .. } => {
+                if self.admits_err(ty) {
+                    self.own_origin_guard(ctx, value_local);
+                }
                 let members: Vec<String> = self
                     .program
                     .types
@@ -472,6 +517,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.scope.insert(name.clone(), value_local);
             }
             Pattern::Ctor { ty, fields, whole } if ty == "err" => {
+                self.own_origin_guard(ctx, value_local);
                 ctx.body.local_get(value_local);
                 ctx.body.call(RT_CHECK_ERR);
                 ctx.body.eqz();
@@ -595,9 +641,13 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_CHECK_REC);
                 ctx.body.eqz();
                 ctx.body.if_void();
-                let msg = self.str_lit(&format!("cannot destructure value as `{ty}`"));
+                // The value goes to the runtime rather than a baked sentence,
+                // matching codegen.rs and the interpreter. `v` still holds it:
+                // the local_tee above kept it past the check.
+                let msg = self.str_lit(ty);
+                ctx.body.local_get(v);
                 ctx.body.i32_const(msg as i64);
-                ctx.body.call(RT_DIE);
+                ctx.body.call(RT_DIE_DESTRUCTURE);
                 ctx.body.unreachable();
                 ctx.body.end();
                 for (i, field) in fields.iter().enumerate() {
@@ -702,7 +752,7 @@ impl<'a> WasmBackend<'a> {
                 match strict {
                     true => {
                         ctx.body.call(RT_INDEX);
-                        let origin = self.origin_lit(&ctx.prefix, *span);
+                        let origin = self.origin_lit(&ctx.prefix, &ctx.hako, *span);
                         ctx.body.i32_const(origin as i64);
                         ctx.body.call(RT_ERR_STAMP);
                     }
@@ -770,7 +820,7 @@ impl<'a> WasmBackend<'a> {
                     ctx.body.local_get(b);
                     ctx.body.call(RT_BINOP);
                     if *op == "/" {
-                        let origin = self.origin_lit(&ctx.prefix, *span);
+                        let origin = self.origin_lit(&ctx.prefix, &ctx.hako, *span);
                         ctx.body.i32_const(origin as i64);
                         ctx.body.call(RT_ERR_STAMP);
                     }
@@ -783,7 +833,7 @@ impl<'a> WasmBackend<'a> {
                 self.emit_expr(ctx, rhs, false)?;
                 ctx.body.call(RT_BINOP);
                 if *op == "/" {
-                    let origin = self.origin_lit(&ctx.prefix, *span);
+                    let origin = self.origin_lit(&ctx.prefix, &ctx.hako, *span);
                     ctx.body.i32_const(origin as i64);
                     ctx.body.call(RT_ERR_STAMP);
                 }
@@ -1068,6 +1118,7 @@ impl<'a> WasmBackend<'a> {
             body: Body::new(2),
             scope: HashMap::default(),
             prefix: ctx.prefix.clone(),
+            hako: ctx.hako.clone(),
             group: String::new(),
         };
         self.emit_expr(&mut inner, item, true)?;
@@ -1118,6 +1169,7 @@ impl<'a> WasmBackend<'a> {
             body: Body::new(2),
             scope: HashMap::default(),
             prefix: ctx.prefix.clone(),
+            hako: ctx.hako.clone(),
             group: ctx.group.clone(),
         };
         for (i, c) in captures.iter().enumerate() {
@@ -1162,6 +1214,7 @@ impl<'a> WasmBackend<'a> {
             body: Body::new(2),
             scope: HashMap::default(),
             prefix: ctx.prefix.clone(),
+            hako: ctx.hako.clone(),
             group: String::new(),
         };
         for (i, p) in param_names.iter().enumerate() {
@@ -1255,7 +1308,7 @@ impl<'a> WasmBackend<'a> {
         }
         if name == "err" {
             self.emit_expr(ctx, &args[0], false)?;
-            let origin = self.origin_lit(&ctx.prefix, span);
+            let origin = self.origin_lit(&ctx.prefix, &ctx.hako, span);
             ctx.body.i32_const(origin as i64);
             ctx.body.call(RT_MKERR);
             return Ok(());
@@ -1398,7 +1451,7 @@ impl<'a> WasmBackend<'a> {
         // wrap_err mints an err too — through the generic builtin bridge,
         // where no frame exists, so the site's origin is stamped here
         if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "wrap_err" | "to_bytes") {
-            let origin = self.origin_lit(&ctx.prefix, span);
+            let origin = self.origin_lit(&ctx.prefix, &ctx.hako, span);
             ctx.body.i32_const(origin as i64);
             ctx.body.call(RT_ERR_STAMP);
         }
@@ -1450,7 +1503,7 @@ impl<'a> WasmBackend<'a> {
                     "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes"
                 );
                 let origin = match fallible {
-                    true => Some(self.origin_lit(&ctx.prefix, span)),
+                    true => Some(self.origin_lit(&ctx.prefix, &ctx.hako, span)),
                     false => None,
                 };
                 let fn_idx = self.module.declare(2);

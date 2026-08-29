@@ -1,0 +1,6 @@
+import "std/os"
+
+pub play = os/args . announce
+
+pub fn announce list
+  print "args holds {length list} of them"

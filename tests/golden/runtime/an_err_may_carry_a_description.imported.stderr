@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the entry: <io>
+  born in an_err_may_carry_a_description/play at an_err_may_carry_a_description.kso:12

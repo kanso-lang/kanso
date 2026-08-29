@@ -40,5 +40,12 @@
 #
 # A rise is a regression to explain and a fall is a win to bank. Movement is
 # fine; silence is not.
+#
+# WHAT IS COMPILED, from 2026-08-26: the library staged WITHOUT its test file.
+# `kanso check lib/json` compiles lib/json's TEST file too, so every dependency
+# the suite imports was entering the program this row measures — and a row that
+# moves when a test file changes its imports answers a question nobody asked.
+# scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
+# welfare rebuild: the library's compile golden measures the library.
 # measured-on rustc=1.98.0
-compile_allocs=64950
+compile_allocs=61981

@@ -1,0 +1,10 @@
+import "std/io"
+
+# The sibling of a_wall_whose_right_side_is_a_name: a function named but not
+# called is a closure, which is no more an effect than an integer is, and
+# `never_describes` cannot see it either — it tests calls by (name, arity) and
+# a bare `twice` is arity zero, which that map has no row for.
+fn twice n
+  n * 2
+
+pub play = io/write "one" >> twice

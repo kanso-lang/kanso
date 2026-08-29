@@ -1,6 +1,14 @@
+import "std/testing"
+
 # A typeset gathers this module's own types into one name an annotation can
 # use. Qualifying the module renames the types, so the membership list has to
-# name them by the same spelling or the set is empty.
+# name them by the same spelling or the set is empty and the typeset arm never
+# fires.
+#
+# The failures reach that arm the way gavel 24 leaves open: `when_failed` is
+# std's, foreign to this module, so it is licensed to separate the reason from
+# the failure. What this module then dispatches on is a plain reason record,
+# never its own err.
 type quota_torn
   limit
 
@@ -18,16 +26,13 @@ fn fetch 2
 fn fetch n
   "plain {n}"
 
-fn handle (err q:quota_torn)
+fn named q:quota_torn
   "quota: limit {q.limit}"
 
-fn handle (err e:lane_err)
+fn named e:lane_err
   "lane trouble: {e}"
 
-fn handle v
-  "ok: {v}"
-
 pub play =
-  print (handle (fetch 1))
-  >> print (handle (fetch 2))
-  >> print (handle (fetch 3))
+  print (testing/when_failed (fetch 1) named)
+  >> print (testing/when_failed (fetch 2) named)
+  >> print "ok: {fetch 3}"

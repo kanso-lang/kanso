@@ -1,0 +1,6 @@
+import "std/net"
+
+pub fn opaque x
+  x
+
+pub play = net/listen (opaque "80") . (l -> print "{l}")

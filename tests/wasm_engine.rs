@@ -278,8 +278,22 @@ fn known_gaps() -> Vec<(String, String)> {
 fn wants_a_filesystem(source: &str) -> bool {
     source.lines().any(|line| {
         let line = line.trim_start();
-        line.starts_with("import ") && !line.starts_with("import \"std/")
+        // The path is the QUOTED part, which is not always where the line
+        // starts. `import t { slice:cut } "std/text"` names the stdlib and
+        // reads as a local import to a check that only looks at the prefix —
+        // which is how examples/imports.kso sat out the differential while
+        // being a program the page can run perfectly well.
+        line.starts_with("import ")
+            && !imported_path(line).is_some_and(|path| path.starts_with("std/"))
     })
+}
+
+/// The quoted module path on an import line, whatever alias or selection
+/// stands between the keyword and it.
+fn imported_path(line: &str) -> Option<&str> {
+    let open = line.find('"')? + 1;
+    let rest = &line[open..];
+    Some(&rest[..rest.find('"')?])
 }
 
 /// A program the wasm engine cannot survive long enough to be compared with.
@@ -409,13 +423,22 @@ fn the_wasm_engine_agrees_with_the_golden_corpus() {
     let gaps = known_gaps();
     let mut toolchain = Toolchain::load();
     let (mut ran, mut met) = (0, 0);
-    let mut skipped = Vec::new();
+    let mut skipped: Vec<(String, &str)> = Vec::new();
     for path in corpus() {
         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
         let listed = path.strip_prefix(root()).unwrap_or(&path).to_string_lossy().to_string();
         let source = std::fs::read_to_string(&path).expect("the program reads");
-        if wants_a_filesystem(&source) || outruns_the_runners_stack(&listed) {
-            skipped.push(listed.clone());
+        // Both reasons used to print as "relative import", so the one program
+        // skipped for outrunning the stack was described as something else
+        // entirely. A skip is a hole in the differential; the line that
+        // records it has to say which hole.
+        let why = match (wants_a_filesystem(&source), outruns_the_runners_stack(&listed)) {
+            (true, _) => Some("a local import, and neither host has a filesystem"),
+            (_, true) => Some("it outruns the runner's stack before it can be compared"),
+            _ => None,
+        };
+        if let Some(why) = why {
+            skipped.push((listed.clone(), why));
             continue;
         }
         let gap = gaps.iter().find(|(listed_name, _)| *listed_name == listed);
@@ -464,7 +487,44 @@ fn the_wasm_engine_agrees_with_the_golden_corpus() {
             (Answer::CompileError(text), _) => panic!("{name} fails to compile on wasm: {text}"),
         }
     }
-    assert!(ran > 0, "nothing in the corpus ran on wasm");
+    // `ran > 0` stood here, which one surviving program would satisfy. A walk
+    // is worth what it covers, so what is asserted is the ACCOUNTING: every
+    // program in the corpus was run, met as a listed gap, or skipped for a
+    // reason named on this list — and nothing fell off it quietly.
+    assert_eq!(
+        ran + met + skipped.len(),
+        corpus().len(),
+        "the walk lost programs: {ran} ran, {met} gaps, {} skipped, {} in the corpus",
+        skipped.len(),
+        corpus().len()
+    );
+
+    // The skip list is pinned by NAME rather than by count, because the way
+    // this goes wrong is a predicate quietly widening. `wants_a_filesystem`
+    // read the start of an import line instead of its quoted path, so
+    // `import t { slice:cut } "std/text"` looked local and examples/imports.kso
+    // sat out the differential — a program the page runs correctly.
+    let expected_skips = [(
+        "tests/golden/runtime/a_guarded_shape_that_is_not_a_knot.kso",
+        "it outruns the runner's stack before it can be compared",
+    )];
+    let seen: Vec<(&str, &str)> = skipped.iter().map(|(n, w)| (n.as_str(), *w)).collect();
+    assert_eq!(
+        seen,
+        expected_skips.to_vec(),
+        "the set of programs held out of the wasm differential changed"
+    );
+
+    // A directory that stops contributing is the other way coverage collapses,
+    // and the total above cannot see it: `corpus()` would shrink and the
+    // accounting would still balance. Each walked directory answers for itself.
+    for dir in ["examples", "tests/golden/runtime", "tests/golden/micro"] {
+        let from_here = corpus()
+            .iter()
+            .filter(|p| p.strip_prefix(root()).unwrap_or(p).to_string_lossy().starts_with(dir))
+            .count();
+        assert!(from_here > 0, "{dir} contributed nothing to the wasm walk");
+    }
     // A gap this runner cannot execute is still a gap — Chrome runs it and
     // holds it to the listed answer. Counting it here would demand a run that
     // ends the test process.
@@ -474,9 +534,9 @@ fn the_wasm_engine_agrees_with_the_golden_corpus() {
         gaps.len(),
         "a program in tests/golden/wasm_gaps.txt was never reached"
     );
-    println!("wasm: {ran} agree, {met} known gaps, {} need a filesystem", skipped.len());
-    for name in &skipped {
-        println!("  skipped {name} (relative import — neither host has a filesystem)");
+    println!("wasm: {ran} agree, {met} known gaps, {} held out", skipped.len());
+    for (name, why) in &skipped {
+        println!("  skipped {name} ({why})");
     }
 }
 
@@ -647,5 +707,33 @@ fn a_program_that_dies_leaves_the_engine_usable() {
     assert!(
         matches!(&after, Answer::Ran(1, text) if text == blackhole),
         "a program run after one that died answered {after:?}"
+    );
+}
+
+/// A deliberate exit is the one err an endpoint reads rather than reports:
+/// `os/exit 3` yields an err carrying `os/exit_status 3`, and the program
+/// said what it meant. Three of the four endpoints already knew this —
+/// `k_exit_status` in the emitted C runtime, and `eval::deliberate_exit`
+/// from the driver — but `exec_main` here did not, so a page that called
+/// `os/exit` printed `unhandled err reached the executor` at its reader and
+/// answered 1 whatever code the program named.
+///
+/// The corpus walk holds the zero case
+/// (`tests/golden/micro/a_deliberate_exit_says_nothing.kso`) against native.
+/// Neither corpus can carry a NONZERO one — micro asserts every program in
+/// it exits 0 and the runtime corpus asserts every program in it exits 1 —
+/// so the code passing through is pinned here for this engine and in
+/// tests/a_deliberate_exit_carries_its_code.rs for the other two.
+#[test]
+fn a_deliberate_exit_carries_its_code_out_of_the_page() {
+    let mut toolchain = Toolchain::load();
+    let source = "import \"std/io\"\nimport \"std/os\"\n\n\
+                  pub play = io/write \"before\" >> os/exit 3\n";
+
+    let answer = toolchain.run("a_deliberate_exit.kso", source);
+
+    assert!(
+        matches!(&answer, Answer::Ran(3, text) if text == "before"),
+        "the page lost the code the program named: {answer:?}"
     );
 }
