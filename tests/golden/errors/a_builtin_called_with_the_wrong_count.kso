@@ -1,0 +1,4 @@
+fn sized xs
+  length xs xs
+
+pub play = print "{sized [1 2]}"

@@ -737,3 +737,28 @@ fn a_deliberate_exit_carries_its_code_out_of_the_page() {
         "the page lost the code the program named: {answer:?}"
     );
 }
+
+/// A count is the front end's answer, so the page gives it too.
+///
+/// This is the half no corpus reaches. The browser differential reads
+/// `examples`, `tests/golden/runtime` and `tests/golden/micro` — programs
+/// that RUN — and a program refused at compile time is in none of them, so
+/// the sentence the page says for a wrong builtin count was a thing nobody
+/// had read. Before this it ran the program: the count was tested where the
+/// call happened, and the call never happened.
+#[test]
+fn the_page_refuses_a_wrong_builtin_count() {
+    let mut toolchain = Toolchain::load();
+    let said = match toolchain.run(
+        "a_builtin_called_with_the_wrong_count.kso",
+        "fn sized xs\n  length xs xs\n\npub play = print \"alive\"\n",
+    ) {
+        Answer::CompileError(said) => said,
+        Answer::Ran(code, out) => panic!("the page ran it, {code}: {out}"),
+        Answer::Declined(said) => panic!("the page declined instead of refusing: {said}"),
+    };
+    assert!(
+        said.contains("`length` takes 1 argument(s), got 2"),
+        "the page said something else: {said}"
+    );
+}

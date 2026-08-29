@@ -72,6 +72,110 @@ pub const BUILTINS: [&str; 58] = [
 pub const AMBIENT: [&str; 9] =
     ["annotate", "bind", "entries", "if", "length", "print", "push", "put", "rescue"];
 
+/// What each builtin takes. `if` is absent: its count is checked where its
+/// branches are, because a guard form spells the same word with a different
+/// shape.
+///
+/// The native backend carried these counts beside its emit list and tested
+/// them in the backend, which is late and is one engine. A count the front
+/// door does not read is a count three engines answer three ways: the
+/// interpreter ran `length x x` in an unreached function and printed the
+/// program's output, the native backend refused the whole program with
+/// `native backend: `length` takes 1 argument(s)` and no span, the page
+/// died at the call, and `kanso check` said ok. So the counts live here,
+/// beside the names, and every reader takes them from one place.
+pub const BUILTIN_ARITY: [(&str, usize); 62] = [
+    ("accept", 1),
+    ("annotate", 2),
+    ("append", 2),
+    ("args", 0),
+    ("at", 2),
+    ("bind", 2),
+    ("bit_and", 2),
+    ("bit_not", 1),
+    ("bit_or", 2),
+    ("bit_shl", 2),
+    ("bit_shr", 2),
+    ("bit_xor", 2),
+    ("bytes", 1),
+    ("char_code", 1),
+    ("chars", 1),
+    ("concat", 2),
+    ("entries", 1),
+    ("env", 1),
+    ("exists", 1),
+    ("filter", 2),
+    ("find2", 4),
+    ("find2_below", 5),
+    ("from_code", 1),
+    ("is_desc", 1),
+    ("is_dir", 1),
+    ("join", 2),
+    ("kill", 1),
+    ("length", 1),
+    ("list_dir", 1),
+    ("listen", 1),
+    ("make_dir", 1),
+    ("map", 2),
+    ("net_close", 1),
+    ("net_port", 1),
+    ("net_read", 1),
+    ("net_write", 2),
+    ("now", 0),
+    ("print", 1),
+    ("push", 2),
+    ("put", 3),
+    ("random", 1),
+    ("read_file", 1),
+    ("render_value", 1),
+    ("rescue", 2),
+    ("round", 1),
+    ("run", 2),
+    ("sleep", 1),
+    ("slice", 3),
+    ("sort", 1),
+    ("split", 2),
+    ("sqrt", 1),
+    ("start", 2),
+    ("stdin", 0),
+    ("sum", 1),
+    ("to_bytes", 1),
+    ("to_float", 1),
+    ("to_int", 1),
+    ("utf8", 1),
+    ("wrap_err", 2),
+    ("write", 1),
+    ("write_err", 1),
+    ("write_file", 2),
+];
+
+/// What a builtin takes, under either spelling. A std wrapper module reaches
+/// a native through the `builtin_` prefix, and that call is a call.
+///
+/// `BUILTIN_ARITY` is in alphabetical order so this can binary-search it:
+/// six comparisons where a scan does thirty-one, allocating nothing and
+/// holding nothing. `a_builtin_table_a_binary_search_can_read` keeps the
+/// order honest — an unsorted table would make this miss in silence.
+///
+/// The front end asks it of every head no declaration and no binding claims,
+/// which is where the cost is; the backends ask it once per emitted call.
+///
+/// Four shapes were measured on `kanso check lib/json`, which asks this 335
+/// times, against a container reading 58,201,174 for main: a scan of the
+/// table 58,342,747, this 58,311,708, a map built per `check_merged` call
+/// 58,271,359, a map built once for the process 58,232,625.
+///
+/// The last is the fastest and it is not the one that shipped. The map it
+/// holds is 3,216 bytes the process never gives back, which is a
+/// compile_peak_bytes term, and welfare prices a byte held about five times
+/// what it prices an instruction spent: that shape put the number under its
+/// floor and this one leaves it where it was. design/compiler-log.md,
+/// 2026-08-29, carries the readings.
+pub fn builtin_arity(name: &str) -> Option<usize> {
+    let bare = name.strip_prefix("builtin_").unwrap_or(name);
+    BUILTIN_ARITY.binary_search_by(|(b, _)| (*b).cmp(bare)).ok().map(|at| BUILTIN_ARITY[at].1)
+}
+
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
@@ -1806,6 +1910,17 @@ fn arity_walk_expr(
                         ));
                     }
                 }
+                if known.is_none() {
+                    if let Some(takes) = builtin_arity(name) {
+                        if args.len() != takes {
+                            diags.push(Diagnostic::new(
+                                "arity",
+                                format!("`{name}` takes {takes} argument(s), got {}", args.len()),
+                                *span,
+                            ));
+                        }
+                    }
+                }
                 if let Some(known) = known {
                     if !known.contains(&args.len()) && !known.contains(&0) {
                         let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
@@ -3402,5 +3517,39 @@ fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>
             ),
             *span,
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{builtin_arity, BUILTINS, BUILTIN_ARITY};
+
+    /// `builtin_arity` binary-searches the table, so an entry out of order is
+    /// a builtin the front end stops knowing the count of — no error, no
+    /// diagnostic, just a check that quietly stops covering one name.
+    #[test]
+    fn a_builtin_table_a_binary_search_can_read() {
+        let mut sorted: Vec<&str> = BUILTIN_ARITY.iter().map(|(b, _)| *b).collect();
+        let written = sorted.clone();
+        sorted.sort_unstable();
+        assert_eq!(written, sorted, "BUILTIN_ARITY is out of alphabetical order");
+        for (name, takes) in BUILTIN_ARITY {
+            assert_eq!(builtin_arity(name), Some(takes), "the search missed `{name}`");
+            assert_eq!(
+                builtin_arity(&format!("builtin_{name}")),
+                Some(takes),
+                "the search missed `builtin_{name}`"
+            );
+        }
+    }
+
+    /// A name a program can write bare and no count to check it against. `if`
+    /// is the one deliberate absence: its count is checked where its branches
+    /// are, because the guard form spells the word with a different shape.
+    #[test]
+    fn every_bare_builtin_has_a_count() {
+        let missing: Vec<&str> =
+            BUILTINS.iter().copied().filter(|n| *n != "if" && builtin_arity(n).is_none()).collect();
+        assert!(missing.is_empty(), "no count for {missing:?}");
     }
 }

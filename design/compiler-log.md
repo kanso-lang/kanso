@@ -3093,3 +3093,101 @@ attribution in this file argued from the call graph — the code is not
 reachable, therefore the move is layout — and the entries above admit the sign
 went unexplained each time. A vein that returns to an earlier value under a
 different diff is layout showing its hand rather than being argued for.
+
+## 2026-08-29 — a builtin's count was checked by nobody at the front door
+
+DONE. `length x x` inside a function nothing calls: the interpreter printed
+the program's output and exited 0, the native backend refused the whole
+program with `native backend: `length` takes 1 argument(s)` and no span, the
+page compiled it and ran it, and `kanso check` said ok. A user function with
+the same mistake is refused by `check_call_arities` at the site, with a span,
+identically on every engine — `no 2-argument arm of `one` (arms take 1)`.
+Builtins fell through that walk because nothing in the front end knew what
+one takes.
+
+`print (wrap_err 1)` was worse than a divergence: `emit_call_rest` indexed the
+second argument of a one-argument call and the compiler panicked, exit 101
+with a Rust backtrace, on a two-word program.
+
+The counts now live in `check::BUILTIN_ARITY`, sixty-two of them, and
+`builtin_arity` answers under either spelling — a bare ambient name, or the
+`builtin_` form a std wrapper reaches a native by. `check_call_arities` reads
+it for any head no declaration and no binding claims, so a wrong count is
+refused where it is written, before any backend runs.
+
+The counts were in codegen's `BUILTIN_CALLS` as a second field. That table
+answers a different question — which builtins get a direct C call rather than
+an inline expansion — and carrying the counts too is what let the backend
+refuse a call the front door had waved through. It is a list of names now, and
+both its readers, plus the page's builtin-wrapper site, take the count from
+`check`. The page's site had a hardcoded `"print" => 1` beside its lookup
+because `print` is not in `BUILTIN_CALLS`; with one table that special case
+went.
+
+Every runtime vein is byte-identical — decode, escape, oneshot, basket, wide,
+pend, scan, encode, emitted — and the browser differential agrees on all 393
+programs. The two compile veins refuse to compare on this host; CI measures
+them.
+
+**The page test was wrong twice before it was right, and the second way is
+the one worth writing down.** The first form asked the playground prompt to
+evaluate `length [1 2] [3]`. It passed on main, because the prompt reaches
+the interpreter and the interpreter's runtime check fires there — the
+assertion read the same sentence for a different reason. The second form
+declared `fn sized xs / length xs xs` at the prompt, which the repl accepts
+on both engines: a declaration at the prompt is not a program, and no
+whole-program check runs on it. Only the third form — the compile door,
+`kanso_compile_wasm`, on a library with an entry — could tell, and on main it
+answered `Ran(0, "alive")`. Three instruments, two of which reported health
+they could not see.
+
+A corpus reads programs that RUN. The browser differential takes `examples`,
+`tests/golden/runtime` and `tests/golden/micro`, so a program refused at
+compile time is in none of them, and what the page says for a compile-time
+refusal was unread by construction. That is a gap in the corpus, not in this
+change, and one test does not close it.
+
+## 2026-08-29 — what the front-door count costs, and the shape welfare chose
+
+The first shape scanned `BUILTIN_ARITY` for every head no declaration and no
+binding claimed. CI put that at 57,567,033 -> 57,711,064 on `kanso check
+lib/json`, a rise of 144,031, and welfare sits exactly on its floor, so the
+rise had to come down before the change could land.
+
+CI measured the shape that shipped at compile_instructions 57,567,033 ->
+57,678,168, a rise of 111,135, and `bench/welfare_floor.json` carries the
+attribution.
+
+`kanso check lib/json` asks the question 335 times — counted, after guessing
+wrong about where the cost was. Four shapes, on a container where main reads
+58,201,174:
+
+    a scan of the table                58,342,747    +141,573
+    a binary search of it              58,311,708    +110,534
+    a map built per check_merged call  58,271,359     +70,185
+    a map built once for the process   58,232,625     +31,451
+
+The last is the fastest by a wide margin and it is not the one that shipped.
+It holds a 3,216-byte table for the life of the process, which CI measured as
+compile_peak_bytes 822,004 -> 825,220, and **welfare prices a byte held about
+five times what it prices an instruction spent**: 3,216 bytes cost 0.010
+points where 33,772 instructions cost 0.002. The number went to 84.10 under
+its own floor. The two shapes that hold nothing both leave it at 84.11.
+
+That is the finding. A local reading of "fastest" and the project's own
+reading of "best" disagreed here, and the disagreement was entirely about
+residency — which no instruction count can see, which is why compile_peak
+is a vein of its own. The binary search ships: it allocates nothing, holds
+nothing, needs no static, and moves one golden instead of three.
+
+`BUILTIN_ARITY` being in alphabetical order is load-bearing now, so
+`a_builtin_table_a_binary_search_can_read` asserts the order and then asks
+for every name under both spellings. Watched red with two entries swapped:
+the order assertion fires, and so does the lookup for the entry that moved,
+which is the silent failure the test exists for.
+
+The middle two rows are worth keeping for the next person. `check_merged`
+runs per module and `kanso check lib/json` has three, so building a
+sixty-two-entry map each time cost half of what the scans had — construction
+was the cost, not lookup, and the 335 probes were never the problem.
+

@@ -56,8 +56,13 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-Nothing. Every branch this session opened is merged and verified on
-`origin/main`, and neither kanso nor kq has an open pull request.
+**kanso#1119**, a builtin's count checked at the front door. `length x x` in a
+function nothing calls: the interpreter printed the program's output and
+exited 0, the native backend refused the whole program with no span, the page
+compiled it and ran it, and `kanso check` said ok. `print (wrap_err 1)`
+panicked the compiler outright. The counts live in one table now, read by the
+front end and by both backends. Every runtime vein is byte-identical;
+`compile_instructions` rises and is priced in the log.
 
 **One thing is blocked on access rather than on a decision.** The ironclad
 branch directive of 2026-08-26 reached main on 2026-08-28 in #1112, having sat
@@ -69,6 +74,24 @@ so nothing unfinished is hiding there. The purge and
 not have — the git proxy refuses a delete refspec, the GitHub MCP has no
 delete-branch tool, and there is no `gh`. Setting the flag first is the half
 worth doing: it stops the class recurring.
+
+## What landed on 2026-08-29
+
+    kanso b42699d4  #1115  the err migration count, corrected
+    kanso ab158a37  #1116  the three chain words on all three engines
+    kanso 2b2f7e36  #1117  §23 told the opposite of what shipped
+    kanso 5d49b125  #1118  a rescue inside a group, on all three engines
+
+**The corpus reads programs that RUN, and that is a gap.** The browser
+differential takes `examples`, `tests/golden/runtime` and
+`tests/golden/micro`, so a program refused at compile time is read on two
+engines and never on the third. Measured on 2026-08-29: all 173
+`tests/golden/errors` fixtures put through the page's compile door give 141
+byte-identical answers, 32 differing, 0 that run and 0 declined — and every
+one of the 32 is the same cause, native's `(module foo.kso)` against the
+page's `(module foo)`. `src/lib.rs:3484` prints the resolved path on native
+and the import path on the page. So the gate is one decision away: which
+spelling is a module's name. Task #116.
 
 ## What landed on 2026-08-27 and 2026-08-28
 
@@ -121,19 +144,16 @@ red. #1105 had claimed in a comment that the scan already watched two
 hand-copied sentences for drift; it did not, and could not have — the copies
 are gone now anyway, dissolved by #1106's placeholder.
 
-## Next, and the handoff
+## Next
 
-**This session hands off here.** The directive of 2026-08-26 — merged to main
-only on 2026-08-28, in #1112, having sat unmerged on the branch that carried
-it — says the running cloud session makes no further claude-code-remote tool
-calls, because it predates the checked-in allowlist and every one of them
-prompts Clay's phone. It also says the handoff happens at the natural boundary,
-current PR queue drained, and that a session started fresh inherits the merged
-`.claude/settings.json` and runs silent. The queue is drained. Nothing else
-transfers, because the repo carries it.
-
-One catch worth knowing: creating the successor is itself a
-claude-code-remote call, so the running session cannot start it. Clay does.
+The directive of 2026-08-26 — merged to main only on 2026-08-28, in #1112,
+having sat unmerged on the branch that carried it — says the running cloud
+session makes no further claude-code-remote tool calls, because it predates
+the checked-in allowlist and every one of them prompts Clay's phone. That
+holds: self-scheduled check-ins are bash waits, and creating a successor
+session is itself such a call, so Clay starts one when he wants one. The queue
+drains and refills in the meantime; it is not a boundary the session can act
+on by itself.
 
 **The biggest buildable thing is now the err spelling, and it is ruled.**
 Gaveled 2026-08-26 and on main since #1112:
