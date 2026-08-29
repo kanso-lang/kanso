@@ -3232,3 +3232,27 @@ fixture, and its "1 of 173" is the count assertion doing its job.
 That first mutation is worth keeping. The obvious mutation for a new gate is
 to undo the fix that made it pass, and here that proves a different gate. A
 mutation belongs to the thing it turns red, not to the change it came in with.
+
+## 2026-08-29 — twelve instructions here, 83,829 there, same diff
+
+compile_instructions 57,678,168 -> 57,761,997 on the module-naming change, a
+rise of 83,829 for one `strip_suffix(".kso")` on a string the measured program
+never formats: the block runs only when a DEPENDENCY fails to check, and
+`kanso check lib/json` succeeds.
+
+The container cannot compare absolute numbers with CI — different glibc,
+different rustc — but it can compare a delta on itself. Main reads 58,311,708
+there and the branch reads 58,311,720. **Twelve instructions.**
+
+A change that costs twelve instructions on one host is not doing 83,829
+instructions of work on another. That is a better layout attribution than
+this file has managed before. The entries above argue from the call graph —
+the code cannot run, therefore the move is layout — and one of them offered a
+round trip, a vein returning to a value it held earlier under a different
+diff. A two-host delta beats both, because it measures the same question
+twice and the answers differ by four orders of magnitude.
+
+It is also cheap. The measurement is `valgrind --tool=callgrind ./kanso check
+lib/json` twice in a container, about a minute, and it turns "this must be
+layout" into a number. Every compile_instructions move from here should carry
+one.

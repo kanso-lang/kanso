@@ -241,4 +241,21 @@
 #
 # What it buys: a wrong count refused where it is written, with a span, on
 # all three engines. It used to be four answers, one of them a compiler panic.
-compile_instructions=57678168
+#
+# 2026-08-29 (a module is named the way an import writes it): 57,678,168 ->
+# 57,761,997, a rise of 83,829. LAYOUT, and this one has two-host evidence
+# rather than an argument.
+#
+# The diff is one `strip_suffix(".kso")` on a string that is only formatted
+# when a DEPENDENCY fails to check. `kanso check lib/json` succeeds, so the
+# block never runs. The container that cannot compare absolute numbers can
+# still compare a delta on itself, and it read main 58,311,708 against the
+# branch 58,311,720: **twelve instructions**. The same diff is 83,829 here.
+#
+# A change that costs twelve instructions on one host is not doing 83,829
+# instructions of work on another. Every earlier layout attribution in this
+# file argued from the call graph — the code cannot run, therefore the move is
+# layout — and the entry above added a round trip as better evidence. Two
+# hosts disagreeing by four orders of magnitude on the same diff is better
+# still, and it is cheap: the container measures the delta in a minute.
+compile_instructions=57761997
