@@ -325,4 +325,24 @@
 # over the same iterator twice per compile. One set, and the counter is
 # 61,974 again — byte-identical on both hosts. The vein that cannot be blamed
 # on layout is the one that caught it.
-compile_instructions=57801548
+#
+# 2026-08-29 (a held name is a use): 57,801,548 -> 57,811,952, a rise of
+# 10,404. WORK, and both hosts say so:
+#
+#   the runner      57,801,548 -> 57,811,952    +10,404
+#   the container   58,321,444 -> 58,336,378    +14,934
+#
+# Same sign, same order — which is what this file has come to expect of work,
+# against the opposite signs it has come to expect of layout. The arm is one
+# pattern widened in `mark_bare_quals`, so a bare `&make` marks its import used
+# the way a bare `make` does, and `lib/json` holds bare partials, so it runs.
+#
+# compile_allocs does not move: the set holds borrowed `&str` rather than a
+# `String` per occurrence, which the comment above that walk says was the point
+# of an earlier change, and this arm inherits the property rather than spending
+# it.
+#
+# What it buys is a file that could not be written at all. An import whose only
+# use was a bare held name was refused as unused; dropping the import leaves the
+# name unresolved and keeping it fails the check.
+compile_instructions=57811952

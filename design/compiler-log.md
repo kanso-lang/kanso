@@ -3639,6 +3639,12 @@ because the set holds borrowed `&str` — the comment above it says the walk
 stopped keeping a `String` per occurrence for exactly that reason, and the new
 arm inherits the property rather than spending it.
 
+The runner agrees, which is the point of taking both. `compile_instructions`
+goes 57,801,548 -> 57,811,952 there, +10,404 against the container's +14,934:
+same sign, same order. Two entries above this one in the golden read the other
+way — a rise on one host and a fall on the other — and were banked as layout.
+This is what the contrast is for.
+
 Third instance of one shape in a day, and the shape is worth naming: a walk
 that answers a question about NAMES, written against the one expression kind
 that obviously carries a name. `Partial` carries a name under a sigil, an
