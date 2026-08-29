@@ -3534,3 +3534,55 @@ COPY `./target/release/kanso` rather than build it, so the first two container
 readings were the same binary twice and agreed to the digit, which read as
 confirmation of the first mistake. The claim was in a commit message and a
 pull request before CI contradicted it.
+
+## 2026-08-29 — the same mistake, four positions, one of them checked
+
+`check_annotation_names` refuses `x:banana` when nothing is called `banana`,
+and its own comment says why that is worth doing: "The native backend already
+refuses it, so the program did fail — but at build time, in a message about a
+backend, rather than here in a message about the program." It walked a
+declaration's top-level parameters and stopped, so three other positions that
+name a type went to the backends instead. With `banana` declared nowhere:
+
+    x:banana            check: no type is called `banana`
+    (banana w h)        check: ok; both engines then say
+                          "no arm of `f` takes an int here (arms take banana)"
+    (pair x:banana y)   check: ok; native says "unknown type `banana`",
+                          the interpreter says "no overload of `lib/f` matches"
+    (v):banana          check: ok; native says "unknown type `banana`",
+                          the interpreter says "`:banana` widens; this value is
+                          not a banana" — at run time, about a type that does
+                          not exist to compare anything against
+
+The last two are divergences the differential law does not have a clause for,
+and both are now the front door's sentence. The constructor pattern is left,
+with its reason: `Pattern::Ctor` carries no span, so a diagnostic about its
+type name would have nothing to point at, and the two engines already agree on
+what to say about it. Bracketed forms were never part of this — `[]banana` and
+`map[string banana]` are read through `annotation_names` and were already
+refused.
+
+**Two shapes, and the cheap one is also the right home.** The first walked
+every expression of every declaration looking for `Expr::Upcast`. It works,
+and it costs 162,827 instructions on `kanso check lib/json` — a whole extra
+traversal to find nothing, since lib/json holds no upcast at all.
+
+The second asks in `resolve_expr`, which already visits every expression and
+already resolves names. An upcast's target is a name, so the question belongs
+there on its meaning rather than only on its price. It reads 58,340,411
+against main's 58,345,564 in the container — a fall of 5,153, inside the
+layout band this vein moves in on its own.
+
+    main                       58,345,564
+    a dedicated walk           58,508,391    +162,827
+    asked in the resolver      58,340,411      -5,153
+
+The resolver needed the declared type names, which made it eight parameters
+and one over clippy's limit. The three maps it now carries — fn arities, type
+arities, type names — are one question about one program, so they travel as
+one `Declared` rather than as three parameters and nearly a fourth.
+
+Two mutations, each reddening exactly one fixture and leaving the other green:
+drop the resolver's arm and `a_widening_names_no_type` passes; stop the
+pattern walk recursing into constructor fields and
+`an_annotation_inside_a_pattern_names_no_type` passes.

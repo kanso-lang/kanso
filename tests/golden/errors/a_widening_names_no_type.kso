@@ -1,0 +1,14 @@
+# The widening `(x):type` names a type the way an annotation does, and the
+# check that refuses `x:banana` walked parameters only, so it never read one.
+# `kanso check` answered ok and left the three engines to speak for
+# themselves: the native backend and the page refused the whole program with
+# `unknown type`, in a message about a backend, and the interpreter said at
+# run time that the value was not a banana — which is true of nothing, since
+# no banana exists to compare it against.
+fn widen v
+  (v):banana
+
+fn also v
+  (v):mango
+
+pub play = print "{widen 1} {also 2}"

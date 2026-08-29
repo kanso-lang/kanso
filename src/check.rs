@@ -1225,22 +1225,18 @@ pub fn check_file_shadow(
     // function with one, and the compiler knows both counts. A typeset never
     // constructs and a subtype takes the one value it wraps, so neither is
     // entered here.
+    let declared_type_names: HashSet<&str> =
+        program.types.iter().map(|t| t.name.as_str()).collect();
     let type_arity: crate::hash::Map<&str, usize> = program
         .types
         .iter()
         .filter(|t| t.members.is_empty() && t.parent.is_none() && !t.fields.is_empty())
         .map(|t| (t.name.as_str(), t.fields.len()))
         .collect();
+    let declared =
+        Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: &declared_type_names };
     for decl in &program.fns {
-        check_fn_body_shadow(
-            decl,
-            &globals,
-            used_globals,
-            &mut diags,
-            shadowable,
-            &fn_arities,
-            &type_arity,
-        );
+        check_fn_body_shadow(decl, &globals, used_globals, &mut diags, shadowable, &declared);
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -2488,22 +2484,56 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// — so the name inside was decoration nothing verified, and `[]banana`
 /// compiled and ran while a bare `banana` was refused. A typo in an element
 /// name should be as loud as a typo anywhere else.
+/// The type names no declaration provides. Two readers ask this — the walk
+/// over patterns below, and the resolver, which is where an upcast's target
+/// is reached — so the list lives here rather than at either of them.
+const BUILT_IN_TYPES: [&str; 8] =
+    ["int", "float64", "string", "bool", "none", "err", "some", "any"];
+
+/// The names in an annotation that no type answers to. A qualified name is
+/// the import resolver's to answer for.
+fn undeclared_in(ty: &str, declared: &HashSet<&str>) -> Vec<String> {
+    annotation_names(ty)
+        .into_iter()
+        .filter(|n| !n.contains('/') && !BUILT_IN_TYPES.contains(n) && !declared.contains(n))
+        .map(str::to_string)
+        .collect()
+}
+
 fn check_annotation_names(program: &Program, diags: &mut Vec<Diagnostic>) {
-    const BUILT_IN: [&str; 8] = ["int", "float64", "string", "bool", "none", "err", "some", "any"];
     let declared: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    fn patterns(p: &Pattern, declared: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+        match p {
+            Pattern::Annotated { ty, span, .. } => {
+                for name in undeclared_in(ty, declared) {
+                    diags.push(Diagnostic::new(
+                        "type",
+                        format!("no type is called `{name}`, so this arm can never match"),
+                        *span,
+                    ));
+                }
+            }
+            // A constructor pattern names a type too, and `(banana w h)` with
+            // no `banana` declared reaches dispatch instead of this check. It
+            // is left for now because `Pattern::Ctor` carries no span, so the
+            // diagnostic would have nothing to point at — and unlike the two
+            // below, the engines agree on what to say about it.
+            Pattern::Ctor { fields, .. } => {
+                for f in fields {
+                    patterns(f, declared, diags);
+                }
+            }
+            _ => {}
+        }
+    }
+
     for decl in &program.fns {
         for param in &decl.params {
-            let Pattern::Annotated { ty, span, .. } = param else { continue };
-            for name in annotation_names(ty) {
-                // a qualified name is the import resolver's to answer for
-                if name.contains('/') || BUILT_IN.contains(&name) || declared.contains(name) {
-                    continue;
-                }
-                diags.push(Diagnostic::new(
-                    "type",
-                    format!("no type is called `{name}`, so this arm can never match"),
-                    *span,
-                ));
+            patterns(param, &declared, diags);
+        }
+        for stmt in &decl.body {
+            if let Stmt::Bind { pattern, .. } = stmt {
+                patterns(pattern, &declared, diags);
             }
         }
     }
@@ -2794,12 +2824,10 @@ struct Local {
     used: bool,
 }
 
-struct Resolver<'a> {
-    globals: &'a HashSet<&'a str>,
-    locals: Vec<Local>,
-    used_globals: &'a mut HashSet<String>,
-    diags: Vec<Diagnostic>,
-    shadowable: &'a HashSet<String>,
+/// What the program declares, gathered once and asked about everywhere. The
+/// three used to travel as three parameters; a fourth would have been a
+/// fourth, and they are one question about one program.
+struct Declared<'a> {
     /// Arities of this module's own fn groups; an application of a local
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
@@ -2807,6 +2835,19 @@ struct Resolver<'a> {
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
     type_arity: &'a crate::hash::Map<&'a str, usize>,
+    /// Every declared type name, records and subtypes and typesets alike.
+    /// An upcast's target is a name this walk already reaches, so asking
+    /// whether a type answers to it costs the lookup and no traversal.
+    types: &'a HashSet<&'a str>,
+}
+
+struct Resolver<'a> {
+    globals: &'a HashSet<&'a str>,
+    locals: Vec<Local>,
+    used_globals: &'a mut HashSet<String>,
+    diags: Vec<Diagnostic>,
+    shadowable: &'a HashSet<String>,
+    declared: &'a Declared<'a>,
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
@@ -2818,8 +2859,7 @@ fn check_fn_body_shadow(
     used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &HashSet<String>,
-    fn_arities: &crate::hash::Map<&str, Vec<usize>>,
-    type_arity: &crate::hash::Map<&str, usize>,
+    declared: &Declared,
 ) {
     let mut resolver = Resolver {
         globals,
@@ -2828,8 +2868,7 @@ fn check_fn_body_shadow(
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
         shadowable,
-        fn_arities,
-        type_arity,
+        declared,
     };
     for param in &decl.params {
         resolver.bind_pattern(param);
@@ -3041,7 +3080,21 @@ impl Resolver<'_> {
                 }
             }
             Expr::Field { base, .. } => self.resolve_expr(base),
-            Expr::Upcast { expr, .. } => self.resolve_expr(expr),
+            // `(x):type` names a type the way an annotation does, and until
+            // this arm asked, nothing before the backends did. `kanso check`
+            // answered ok and each engine then spoke for itself: the two
+            // backends refused the whole program with `unknown type`, and the
+            // interpreter said at run time that the value was not one.
+            Expr::Upcast { expr, ty, span } => {
+                for name in undeclared_in(ty, self.declared.types) {
+                    self.diags.push(Diagnostic::new(
+                        "type",
+                        format!("no type is called `{name}`, so there is nothing to widen to"),
+                        *span,
+                    ));
+                }
+                self.resolve_expr(expr);
+            }
             Expr::MapLit(pairs, _) => {
                 for (key, value) in pairs {
                     self.resolve_expr(key);
@@ -3069,7 +3122,7 @@ impl Resolver<'_> {
                 if let Expr::Ident(name, span) = &**head {
                     let local = self.locals.iter().any(|l| &l.name == name);
                     if !local {
-                        if let Some(fields) = self.type_arity.get(name.as_str()) {
+                        if let Some(fields) = self.declared.type_arity.get(name.as_str()) {
                             if args.len() != *fields {
                                 self.diags.push(Diagnostic::new(
                                     "arity",
@@ -3082,7 +3135,7 @@ impl Resolver<'_> {
                                 ));
                             }
                         }
-                        if let Some(arities) = self.fn_arities.get(name.as_str()) {
+                        if let Some(arities) = self.declared.fn_arities.get(name.as_str()) {
                             if !arities.contains(&args.len()) && !arities.contains(&0) {
                                 let mut known: Vec<String> =
                                     arities.iter().map(|a| a.to_string()).collect();
