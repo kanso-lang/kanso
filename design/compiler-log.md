@@ -2658,3 +2658,39 @@ the page owes a rewrite or retirement. Consequences:
 - "Nothing is asked of the signature" survives unchanged: the words
   are call-site spelling, not type-level tracking; no signature
   carries an effect row.
+
+## 2026-08-29 — the one-keyword world, explored and declined
+
+After the supersession, Clay probed whether the combinators could go:
+"I'd love to not need combinators but i don't see any clean way to
+prevent the developer from bypassing effects." The exploration, so it
+stays explored:
+
+The requirements split three ways. Can't-drop needs no words — the
+railway already makes discard unspellable. Can't-handle-your-own needs
+no words — provenance already skips own-origin errs at match time. The
+irreducible part is replace-vs-recover: one bit of intent with no
+footprint in code shape, since a buggy annotation and a legal rescue
+are the same program.
+
+The candidate for carrying that bit without chain words: key on the
+arm's declaration — any arm with an err-typed parameter is a handling
+site; unmarked, its result is auto-rewrapped (annotation by
+construction); a `rescue` keyword in the declaration is the sole door.
+Enforcement is sound: bare parameters already refuse errs, so the
+err-pattern arms are the exhaustive entry points.
+
+DECLINED, by Clay: "that feels awkward and imprecise. to just say it
+any argument matches err." The imprecision is real — with several
+parameters nothing says which err is the cause; an arm wanting an err
+as plain data (a log formatter, a matcher) is neither annotating nor
+rescuing and the rule has no place for it; and a parameter's type
+reaching over to rewrite what the return value means is action at a
+distance inside one signature. The explicit words are the repair:
+`annotate effect callback` and `rescue effect callback` attach the
+intent to exactly one effect and one callback.
+
+The three-explicit-forms gavel stands, having survived its strongest
+challenger. Koka's row-tracking was examined in the same sitting and
+declined on the standing doctrine: the row is signature infection made
+ergonomic, and nothing is asked of the signature here.
