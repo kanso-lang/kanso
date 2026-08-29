@@ -2943,3 +2943,39 @@ argued away: 0.2% on the chain-heaviest benchmark buys a failure channel that
 is spelled instead of deduced.
 
 Welfare holds at 84.11.
+
+## 2026-08-29 — the check the chain loop was already paying twice
+
+DONE, and it turns the entry above's regression into a win. Welfare read the
+regenerated goldens and fell a hair under its floor: the runtime rises
+outweighed the two compile falls, and by the project's own weights that means
+the change was worse. There is nothing to argue about a term that paid, so the
+cost had to go somewhere.
+
+It went. `k_call1` guards its argument against failure before entering a
+closure's body, and the chain loop had just tested the same value for the same
+thing — that test IS the difference between the worded steps. So every bind
+step in the language was testing the yielded value twice, and had been long
+before this branch: the loop used to call `k_call1` straight, which meant the
+guard ran once, and adding `k_worded_step` made it two. Removing the redundant
+one leaves exactly one test per step, where the old code had one and the
+gavel's rule needs one.
+
+Measured locally, same host, so the deltas are exact:
+
+    deepbench  808,726,272 -> 806,982,268   -1,744,004
+    widebench   85,337,184 ->  85,273,176      -64,008
+
+Against the pre-branch baseline that puts deepbench about 108,000 BELOW where
+it started, and widebench about 64,000 above rather than 128,000. The chain
+loop is cheaper than it was before the three words existed.
+
+`k_call_on_err` is renamed `k_call_decided`, because it now has two callers
+with different reasons and one property: the caller has already decided about
+the argument. `rescue` uses it to get past the guard on purpose; `bind` uses
+it because the guard is redundant. One function, and the name says the
+contract rather than one of the two uses.
+
+CI's numbers for the four goldens are regenerated in the commit that carries
+this; the veins are host-pinned and this container cannot measure them, so
+they come from the cost-goldens job's own diff.

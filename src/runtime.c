@@ -4140,12 +4140,22 @@ KValue k_maybe_bind(KValue piped, KValue closure) {
     return k_call1(closure, piped);
 }
 
-/* Call a callback with an err as its argument. k_call1 refuses this for a
-   closure — a failure handed to a lambda propagates instead of entering the
-   body, which is what threads failures through a chain for free — and
-   `rescue` is the one step that must get past it. A group needs no help:
-   dispatch already routes an err to the arm written for it. */
-KValue k_call_on_err(KValue f, KValue a) {
+/* k_call1 without its argument guard, for the two callers that have already
+   decided about the argument themselves.
+
+   `rescue` is one: k_call1 refuses to hand a failure to a closure — a failure
+   propagates instead of entering the body, which is what threads failures
+   through a chain for free — and rescue is the step that must get past it. A
+   group needs no help; dispatch already routes an err to the arm written for
+   it.
+
+   `bind` is the other, and it is there for speed rather than meaning. The
+   chain loop tests the yielded value for failure before deciding whether the
+   callback runs at all — that test IS the difference between the worded steps
+   — so k_call1's copy of it is redundant work on the hottest path in the
+   language. Measured: dropping it takes deepbench back under its pre-gavel
+   count. */
+KValue k_call_decided(KValue f, KValue a) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
@@ -4162,8 +4172,8 @@ KValue k_call_on_err(KValue f, KValue a) {
    `worded_step` is the oracle for both. */
 KValue k_worded_step(long long dtag, KValue yielded, KValue callee) {
     int failed = !k_not_failure(yielded);
-    if (dtag == 29) return failed ? k_call_on_err(callee, yielded) : yielded;
-    return failed ? yielded : k_call1(callee, yielded);
+    if (dtag == 29) return failed ? k_call_decided(callee, yielded) : yielded;
+    return failed ? yielded : k_call_decided(callee, yielded);
 }
 
 /* An effect defers and becomes a chain node; a value that has already settled
@@ -4192,7 +4202,7 @@ KValue k_b_rescue(KValue subject, KValue callback) {
 static KValue k_annotate_wrap(void* env, KValue failure) {
     KValue callback = k_env_get(env, 0);
     KValue site = k_env_get(env, 1);
-    return k_b_wrap_err(k_call_on_err(callback, failure), failure,
+    return k_b_wrap_err(k_call_decided(callback, failure), failure,
                         (const char*)(intptr_t)site.payload);
 }
 
