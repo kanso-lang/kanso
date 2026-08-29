@@ -1366,7 +1366,7 @@ fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
         for stmt in &decl.body {
             field_reads(stmt, &scan, &local, &mut open, diags);
             if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
-                match constructed_type(expr, &scan.plain) {
+                match type_in_hand(expr, &scan.plain) {
                     Some(ty) => local.insert(n.as_str(), ty),
                     None => local.remove(n.as_str()),
                 };
@@ -1378,12 +1378,22 @@ fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-/// The record type this expression constructs, when that is plain to read off
-/// the call itself. Anything else answers `None` and the read stays as it was.
-fn constructed_type<'a>(
-    e: &'a Expr,
-    plain: &HashMap<&'a str, HashSet<&'a str>>,
-) -> Option<&'a str> {
+/// The record type this expression hands back, when that is plain to read off
+/// the expression itself. Anything else answers `None` and the read stays as
+/// it was.
+///
+/// Two expressions say it plainly. A construction names the type as the head
+/// of the call. A widening names it after the colon — `(v):point` hands back a
+/// point and says so — and until this read it, `p = (v):point` followed by
+/// `p.z` compiled clean where the same field read is refused through an
+/// annotation, through a constructor pattern's as-binding, and through a local
+/// construction. Three ways of naming a type reached the table and the fourth
+/// did not; both engines then refused `p.z` at run time, identically, so this
+/// was a diagnostic arriving late rather than a disagreement.
+fn type_in_hand<'a>(e: &'a Expr, plain: &HashMap<&'a str, HashSet<&'a str>>) -> Option<&'a str> {
+    if let Expr::Upcast { ty, .. } = e {
+        return plain.get_key_value(ty.as_str()).map(|(k, _)| *k);
+    }
     let Expr::App { head, .. } = e else { return None };
     let Expr::Ident(name, _) = head.as_ref() else { return None };
     plain.get_key_value(name.as_str()).map(|(k, _)| *k)
@@ -1622,7 +1632,7 @@ fn base_type<'a>(
 ) -> Option<&'a str> {
     match base {
         Expr::Ident(n, _) => local.get(n.as_str()).copied(),
-        other => constructed_type(other, plain),
+        other => type_in_hand(other, plain),
     }
 }
 
