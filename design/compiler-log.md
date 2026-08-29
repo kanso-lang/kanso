@@ -3795,5 +3795,8 @@ gets `field `{field}` of `{}` takes {}` right where the longest run could not
 see it at all. The five it finds unpinned are real gaps. That is its own
 change; the measurement is here so it does not have to be taken twice.
 
-`compile_allocs` is 61,974, unchanged. The article is a runtime concern and
-`kanso check lib/json` never reaches either message.
+`compile_allocs` is 61,974, unchanged. `compile_instructions` reads +3,863 on
+the runner and -3,950 in the container: opposite signs on one diff, layout.
+`article` moves between two modules and gains three callers, `k_article` is
+new in runtime.c and absent from this binary, and both messages they feed are
+runtime messages that `kanso check lib/json` never reaches.

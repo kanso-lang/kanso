@@ -1828,11 +1828,7 @@ impl<'a> Interp<'a> {
             }
             if !type_matches(parent, &inner) {
                 return Err(RuntimeError {
-                    message: format!(
-                            "`{}` wraps {}",
-                            ty.name,
-                            article(parent)
-                        ),
+                    message: format!("`{}` wraps {}", ty.name, article(parent)),
                     span,
                 });
             }
