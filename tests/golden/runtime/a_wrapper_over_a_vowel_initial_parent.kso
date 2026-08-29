@@ -1,0 +1,6 @@
+# The other half of the same fumble. A subtype constructor refuses a value the
+# parent does not admit, and names the parent. A parent is a builtin type, so
+# no import qualifies it, and `int` reaches the sentence exactly as written.
+type age int
+
+pub play = print "{age "old"}"

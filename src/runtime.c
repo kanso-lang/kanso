@@ -3342,12 +3342,25 @@ long long k_check_sub_rec(KValue v, long long type_id, long long nfields) {
     return r->type_id == type_id && r->nfields == nfields;
 }
 
+/* "an int", "a string" — a diagnostic that fumbles its own grammar reads as
+   carelessness about everything else in it. The rule is spelling, not
+   pronunciation: a type name is a program's word rather than an English one,
+   and the letter is what a reader has in front of them. `article` in diag.rs
+   is the same rule for the other two engines. */
+static const char* k_article(const char* word) {
+    switch (word[0]) {
+        case 'a': case 'e': case 'i': case 'o': case 'u': return "an";
+        default: return "a";
+    }
+}
+
 /* Construction: `post_body s` — the inner value must be (or reach) the
    parent; want encodes a type id, or -(tag+1) for a primitive. */
 KValue k_sub_ctor(long long type_id, long long want, KValue inner, const char* tyname, const char* parent) {
     if (!k_not_failure(inner)) return inner;
     if (k_sub_depth(inner, want) < 0) {
-        fprintf(stderr, "%serror[runtime]:%s `%s` wraps a %s\n", k_c_err(), k_c_off(), tyname, parent);
+        fprintf(stderr, "%serror[runtime]:%s `%s` wraps %s %s\n", k_c_err(), k_c_off(), tyname,
+                k_article(parent), parent);
         exit(1);
     }
     return k_sub_wrap(type_id, inner);
@@ -3367,8 +3380,8 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
         if (want < 0 && cur.tag == -(want + 1)) return cur;
         if (want >= 0 && cur.tag == K_REC
             && ((KRec*)(intptr_t)cur.payload)->type_id == want) return cur;
-        fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not a %s\n",
-                k_c_err(), k_c_off(), tyname, tyname);
+        fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not %s %s\n",
+                k_c_err(), k_c_off(), tyname, k_article(tyname), tyname);
         exit(1);
     }
 }

@@ -1,0 +1,8 @@
+# A widening that misses says which type it wanted, and the sentence puts an
+# article in front of the name. `int` starts with a vowel and the article was
+# `a` on all three engines, because each built the sentence with a format
+# string and no engine asked what letter the name begins with. The front end
+# has answered this question since `article` was written for the demand
+# diagnostics; the runtimes had their own copy of the wording and not of the
+# rule.
+pub play = print "{("x"):int}"

@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::diag::{Diagnostic, Span};
+use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
@@ -740,19 +740,6 @@ fn literal_type(e: &Expr) -> Option<&'static str> {
         Expr::MapLit(..) => Some("map"),
         Expr::Ident(name, _) if name == "true" || name == "false" => Some("bool"),
         _ => None,
-    }
-}
-
-/// The constructor check keeps a field's promise where the value is written
-/// out; assignment is the other place a field is written, and only a `build`
-/// block may do it. Without this the promise holds until the knot is tied and
-/// then stops holding, which is the worst of both.
-/// "an int", "a string" — a diagnostic that fumbles its own grammar reads as
-/// carelessness about everything else in it.
-fn article(word: &str) -> String {
-    match word.starts_with(['a', 'e', 'i', 'o', 'u']) {
-        true => format!("an {word}"),
-        false => format!("a {word}"),
     }
 }
 
