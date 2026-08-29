@@ -3695,6 +3695,8 @@ the closure is written, which the comment at codegen.rs:2745 says is the thing
 it cannot do with several arms. Nothing here decides that; the refusal now
 describes itself accurately either way.
 
-No counter moves: `compile_allocs` is 61,974 and instructions read within a
-hundred and fifty of main, because `partial_lambda` runs on the emit path and
-`kanso check lib/json` never emits.
+`compile_allocs` is 61,974, unchanged. `compile_instructions` reads -136 in the
+container and +1,560 on the runner — opposite signs on the same diff, which is
+this file's layout signature, and `partial_lambda` runs on the emit path where
+`kanso check lib/json` emits nothing. The entry before it is the contrast:
++14,934 and +10,404, same sign and order, banked as work.
