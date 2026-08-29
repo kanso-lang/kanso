@@ -1,0 +1,15 @@
+# A typeset is annotation-only vocabulary — `type shape circle square` names a
+# union for a parameter to stand in, and no value is ever a `shape`. Writing
+# one at a call was three different answers before this: the interpreter and
+# the page refused it at run time, and native built a one-field record and
+# printed `shape 1`. The compiler can see it, so it says so here and none of
+# the three engines gets the chance to disagree.
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+pub play = print "{shape 1}"

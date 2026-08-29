@@ -1646,6 +1646,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, &mut diags);
     foreign_constructions(program, &mut diags);
+    typeset_constructions(program, &mut diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
@@ -1712,6 +1713,70 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
 }
 
 /// GAVEL 1b: the owner's pub functions are the only door, so a value wearing a
+/// A typeset is annotation-only vocabulary: `type shape circle square` names
+/// a union for a parameter to stand in, and no value is ever a `shape`. So a
+/// call whose head names one is a mistake the compiler can see, and until this
+/// it was three different answers. The interpreter refused it at run time —
+/// "`shape` is a typeset — it only annotates" — the page said the same, and
+/// native built a one-field record and PRINTED `shape 1`. A silent divergence
+/// on the engine most programs run on.
+///
+/// Naming one without calling it diverges too, and more quietly: `print
+/// "{shape}"` compiles clean, prints `<mod>/shape` on native and `<fn>` on the
+/// interpreter. Two engines, two answers, neither an error. So the refusal is
+/// on the NAME rather than the call — an `Ident` or a `&` partial in any
+/// expression position — and a call is the case where the name is a head.
+///
+/// Refusing it here makes the three agree by construction, because none of
+/// them gets to see the name. Annotations are untouched: a parameter's `:shape`
+/// is a pattern, a field's is a type list, and neither is an expression. What
+/// stays at run time is the same test on the interpreter's construction path.
+fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let annotating: HashSet<&str> = program
+        .types
+        .iter()
+        .filter(|ty| !ty.members.is_empty())
+        .map(|ty| ty.name.as_str())
+        .collect();
+    if annotating.is_empty() {
+        return;
+    }
+    fn walk(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+        let named = match e {
+            Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name, span)),
+            // A widening names its target after the colon, and a typeset is
+            // not something a value can become: `(circle 1):shape` for a
+            // typeset holding `circle` refused at RUN time, on both engines,
+            // with "this value is not a shape" — a sentence that blames a
+            // program whose circle is exactly what the typeset admits.
+            Expr::Upcast { ty, span, .. } => Some((ty, span)),
+            _ => None,
+        };
+        if let Some((name, span)) = named {
+            if annotating.contains(name.as_str()) {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{name}` is a typeset — it only annotates"),
+                    *span,
+                ));
+            }
+        }
+        crate::for_each_child(e, |child| walk(child, annotating, diags));
+    }
+    for decl in &program.fns {
+        if decl.synthetic || decl.name.contains('/') {
+            continue;
+        }
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    walk(expr, &annotating, diags)
+                }
+            }
+        }
+    }
+}
+
 /// type's name was built by its owner. Reading one is free — naming it,
 /// annotating with it, destructuring it by name — and so is building your own.
 /// What this refuses is reaching across an import to construct.
