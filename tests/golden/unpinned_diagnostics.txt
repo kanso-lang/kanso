@@ -418,7 +418,10 @@ a bound description cannot be used as data here
 # a `builtin_` name spelled outside the standard library, a field typeset
 # naming no type, two modules answering one bare name, a module with nothing
 # to re-export, a record built across an import, and a dependency that is only
-# an entry file. These eight could not be, and each line below says why.
+# an entry file. A ninth was a divergence — native printed `shape 1` for a
+# typeset used as a constructor where the other two refused — and is pinned by
+# the front-door refusal that replaced it. These seven could not be, and each
+# line below says why.
 
 # The driver's refusal when `kanso run` is handed a file that exports `play`.
 # The error corpus reaches every fixture through the harness's library
@@ -442,12 +445,6 @@ this function takes {} argument(s), got 1
 # stderr, because those cases assert what a package DOES rather than what it
 # is refused for.
 error[license]: `{}` has an arm for an err raised in {}, and
-
-# A DIVERGENCE, not an unreachable message. The interpreter and the page both
-# refuse `shape 1` for a typeset `shape` with this sentence; native prints
-# `<mod>/shape 1` and exits 0. Nothing can pin a message two engines raise and
-# the third answers with output, so this line stands until native refuses too.
-`{}` is a typeset — it only annotates
 
 # Two engines refuse the same program at different times, in different words.
 # `9223372036854775808 & 1` reaches the interpreter's bitwise guard, and the

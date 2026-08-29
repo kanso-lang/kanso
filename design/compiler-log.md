@@ -3848,3 +3848,49 @@ the interpreter and by the page with the same sentence, and native prints
 `<mod>/shape 1` and exits 0. Nothing can pin a message two engines raise and
 the third answers with output. That is its own fix; the line stands until it
 lands.
+
+## 2026-08-29 — a typeset written as a constructor, and what native did with it
+
+The gate widened an hour ago and listed `` `{}` is a typeset — it only
+annotates `` as a message nothing pinned. Looking for a program that raises it
+found this:
+
+```
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+pub play = print "{shape 1}"
+```
+
+`kanso check` said ok. Then the interpreter refused it at run time with that
+sentence, the page said the same thing byte for byte, and native printed
+`<mod>/shape 1` and exited 0. Native had built a one-field record whose type
+was the typeset, and a one-field record renders as its name and its field.
+
+A typeset is annotation-only vocabulary. `type shape circle square` names a
+union a parameter can stand in, and no value is ever a `shape`, which the AST
+comment beside `members` has said since the field was added. So a call whose
+head names one is a mistake the compiler can see, and `typeset_constructions`
+in check.rs now says so where it is written. All three engines agree because
+none of them gets the call.
+
+The two controls hold: a typeset as a parameter annotation still compiles, and
+a record whose type shares the typeset's members still constructs.
+
+**Why the interpreter's runtime test stays.** The front door refuses a typeset
+name written at a call. A typeset name reached as a held value — through `&`,
+through a binding — arrives at `construct` without an `App` head for the walk
+to see. Nothing in the corpus writes that, and removing the test to find out
+is the wrong order.
+
+The message existed and the divergence existed, and what found them was a gate
+that could not see the message at all until its key changed. The scan reported
+262 diagnostics for weeks with this one outside the count.
+
+`compile_allocs` is 61,974, unchanged — the pass borrows its names and returns
+at once when a program declares no typeset, which `lib/json` does not.
