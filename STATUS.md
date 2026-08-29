@@ -15,8 +15,8 @@ grows. And "Whether a chain line keeps its leading dot", which is the only
 thing standing between the shipped `bind`/`rescue`/`annotate` and the
 346-site respelling of the fleet.
 
-**Sixteen questions are waiting, and every one of them carries a
-recommendation** — two blocking, fourteen open but not blocking. Counted
+**Seventeen questions are waiting, and every one of them carries a
+recommendation** — two blocking, fifteen open but not blocking. Counted
 from the ledger, which is the only place that count is true; this file said
 fourteen in one paragraph and sixteen in another until 2026-08-29. The July
 letters are closed: Clay ruled the last five in one sitting on 2026-08-26, and
@@ -267,10 +267,11 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which blocks the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Sixteen questions wait in `design/pending-gavels.md`** — two blocking,
-fourteen open — each with a recommendation, counted from the ledger rather
-than carried forward. Two are new today: the chain-line grammar and whether
-an err gains readers a callback can use.
+**Seventeen questions wait in `design/pending-gavels.md`** — two blocking,
+fifteen open — each with a recommendation, counted from the ledger rather
+than carried forward. Three are new today: the chain-line grammar, whether
+an err gains readers a callback can use, and whether the backends should
+build a partial whose callee is a value.
 
 **The rules that carry forward**, each earned twice:
 

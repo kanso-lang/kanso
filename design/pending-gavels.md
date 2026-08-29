@@ -129,6 +129,50 @@ more than a hash.
 
 ## Open, not blocking
 
+### Whether the backends should build a partial over a value
+
+**Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
+for a ruling on `&` over a value callee and found only the entry of 2026-08-29
+that raises it; searched every design/*.md and found nothing. The sources below
+are the language's own spec file and the two backends' own comments.**
+
+`&f` where `f` is a parameter holding a function is a feature, specified by
+`tests/partial.rs::a_partial_of_a_parameter_finishes_at_the_call_site` and run
+by the interpreter, which prints 14 for
+
+    fn add a b c
+      a + b + c
+
+    fn foo f
+      &f 2
+
+    print "{(foo add) 5 7}"
+
+The spec's own comment says why the sigil takes no arity: "the callee here is a
+parameter, so the arity is not knowable where the `&` is written. It resolves
+when the arguments arrive."
+
+Neither backend builds it. `&` becomes a lambda there, and a lambda commits to
+a parameter count where it is written — codegen.rs's comment on the ambiguous
+case says the same thing about several arms, and a value callee is that
+problem with no arms at all. Both decline, which the differential law permits;
+as of 2026-08-29 both decline in words that name the limit as their own rather
+than blaming the program, and `tests/partial.rs` and `tests/wasm_engine.rs`
+hold them to it.
+
+So the question is not whether the refusal is honest — it is now — but whether
+it should exist. Two answers, and neither is obviously right:
+
+- **Leave it.** A feature on the oracle alone, refused clearly by the other
+  two, is a shape the law already allows and the specs already pin. The cost
+  is that a program using it cannot be built or run in a page.
+- **Build it.** The backends would need a closure whose arity is decided by
+  the arguments that arrive rather than where it is written. That is a real
+  runtime shape (a growable partial), not a rewrite of the call site, and it
+  is the same machinery an ambiguous multi-arm partial would want.
+
+Nothing is blocked on this. The refusal describes itself accurately either way.
+
 ### Whether a chain line keeps its leading dot
 
 **Cited: searched design/compiler-log.md for the three-forms gavel of

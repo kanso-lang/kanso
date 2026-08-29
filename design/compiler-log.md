@@ -3652,3 +3652,49 @@ upcast's target carries one after a colon, and a pattern's annotation carries
 one after another colon. Each was found by reading the walk rather than by any
 sweep, and each was invisible to the corpus because no program in it was
 written into the corner the omission creates.
+
+## 2026-08-29 — a refusal that blamed the program, and the reading that got there backwards
+
+`&f` where `f` is a parameter holding a function is a feature.
+`tests/partial.rs` specifies it and the interpreter runs it: the arity is not
+knowable where the `&` is written and settles when the arguments arrive. Both
+backends decline it, which the differential law permits — a feature may live on
+fewer engines when the rest refuse out loud — and the file's own header says so.
+
+What they said was `` `&f` holds 1 argument(s), and no `f` takes more ``. That
+sentence asks the reader to go and count arms of `f`, and there are none to
+count: `f` is a parameter. The refusal read as a mistake in a program that has
+none, and the two specs that now hold the backends to their half did not exist,
+so nothing checked what "out loud" actually said.
+
+One test emptied the arity list for two different reasons and one message spoke
+for both. A name no declaration answers to is not one of them — the front door
+refuses an unknown name before either backend runs, which `&nosuchname` shows —
+so what reaches the message is always a name bound to a VALUE. Splitting the
+test in two gives each its own sentence, and the value case now names the
+limit as the backend's own.
+
+**The reading that got here was backwards, and the spec suite caught it.** The
+first move was a front-door refusal for `&` on anything but a declared group,
+on the premise that two backends agreeing word for word meant the interpreter
+was the leak. `a_partial_of_a_parameter_finishes_at_the_call_site` went red,
+and its comment is the design: "the callee here is a parameter, so the arity is
+not knowable where the `&` is written." The change would have refused a
+specified feature. It is reverted whole.
+
+Three times today a confident reading of the source turned out to be a
+hypothesis. The escape analysis's missing arm was real and unreachable; the
+census reported two constructs as carried by nothing and was wrong four ways;
+this one had the design exactly inverted. What settled all three was running
+something — calling the analysis, parsing the corpus through both doors, the
+suite going red — rather than reading harder.
+
+What is still open, and is Clay's: should the backends implement a partial over
+a value at all? It needs a closure whose parameter count is fixed later than
+the closure is written, which the comment at codegen.rs:2745 says is the thing
+it cannot do with several arms. Nothing here decides that; the refusal now
+describes itself accurately either way.
+
+No counter moves: `compile_allocs` is 61,974 and instructions read within a
+hundred and fifty of main, because `partial_lambda` runs on the emit path and
+`kanso check lib/json` never emits.
