@@ -3510,6 +3510,27 @@ whole time. Three passes ask the same question of the same node and one of
 them answered; that is what a per-variant walk costs, and there is no
 mechanism in the tree that would have paired them.
 
-Welfare holds at 84.10 and the compile veins do not move on this host — the
-new arms' bodies run only for the node kinds they name, and `lib/json` upcasts
-nothing.
+`compile_instructions` rises 25,449, and the two-host method splits the diff
+rather than labelling it. The rename-pass fix reads +2,167 on the runner and
+−116 in the container: opposite signs, so layout, and `lib/json` holds no
+upcast for the new arm to run on. The unused-import fix reads +23,282 on the
+runner and +33,960 in the container: same sign, same order, so work.
+`used_quals` walks every expression of every compile, and it now marks two node
+kinds it skipped, each mark a `split_once` and a `String`. `lib/json` holds
+names, so it pays. Welfare stays at 84.10 with the floor stepped in the same
+commit.
+
+That is the first time the two-host reading has separated one branch into
+commits with different answers, and it was worth the four callgrind runs: the
+whole rise would otherwise have been attributed to whichever story was told
+first.
+
+An instrument fault on the way, which nearly shipped a false claim in three
+places. `cargo test --test compile_cost` finishes in nine hundredths of a
+second and was read as evidence that this vein had not moved — it measures
+allocations, rounds and visits, and callgrind lives in a gate script, so it
+cannot see the vein at all. Then `scripts/gates/library_box.sh` turned out to
+COPY `./target/release/kanso` rather than build it, so the first two container
+readings were the same binary twice and agreed to the digit, which read as
+confirmation of the first mistake. The claim was in a commit message and a
+pull request before CI contradicted it.
