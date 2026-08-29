@@ -2626,3 +2626,35 @@ and CI catches the number moving; the *where* is two weeks of span
 plumbing through the carry machinery for a question nobody has asked.
 Its only realistic user today is the compiler's own memory work.
 Re-file when someone actually reaches for it.
+
+## 2026-08-29 — supersession: the three words replace the no-bind surface
+
+Clay's rule, stated when the fork surfaced: "there cannot be
+incompatible rulings. a later ruling REPLACES an older one." The
+timeline, by commit timestamp:
+
+- 2026-08-26 13:58 PDT — #1054 lands compiler.html entry 23, "why
+  there is no bind": combinator words off the surface, handling as
+  ordinary arms, signature-directed elaboration.
+- 2026-08-27 — fa834a71, "three explicit forms": Clay rules `bind`,
+  `annotate`, `rescue` as explicit chain steps, chain err-arms retire.
+- 2026-08-27 and after — 61774d65 makes bind a word parallel with the
+  others (`.` retires from chain position), and the effect-first rider
+  fixes the signature: `bind effect callback`.
+
+The later ruling wins. The three-explicit-words design is the
+language; entry 23's no-surface-combinators argument is superseded and
+the page owes a rewrite or retirement. Consequences:
+
+- The dispatch-vs-elaborator machinery question dissolves in the
+  words' favor: the foreign-only license is checked at `rescue`, the
+  re-wrap at `annotate`, so the per-arm provenance machinery (the
+  fixpoint, `k_not_own_err` at every match) has a smaller home —
+  which is what #1054 called World B, now with the words on the
+  surface rather than hidden.
+- The queued book story ("the boundary language") re-premises on the
+  three words; nothing is gated on an elaborator, because there is no
+  elaborator to wait for.
+- "Nothing is asked of the signature" survives unchanged: the words
+  are call-site spelling, not type-level tracking; no signature
+  carries an effect row.

@@ -307,18 +307,19 @@ expectation changes or it starts passing.
 
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
 
-Clay's directive after re-deriving the no-explicit-bind design from
-the log a second time: the call-site story must live in the book, high
-priority. Half one is DONE (ch04 "nothing is asked of the signature",
-2026-08-26): the err half, present tense — short-circuit at the call,
-nothing forced on signatures, one function for both call sites. Half
-two is GATED on the elaborator build: teaching signature-directed
-lifting for effects (`retry (fetch url)` unmarked, binds inserted at
-value-demanding positions, collapse at io) — the book speaks in the
-present tense, so this half lands with the elaborator, not before.
-The assembled argument for why the combinator words stay off the
-surface is compiler.html entry 23; the open dispatch-vs-elaborator
-question above decides only the machinery, not this surface.
+**RE-PREMISED 2026-08-29 by the supersession gavel: the later ruling
+(fa834a71 and its amendments, 2026-08-27) replaced the no-explicit-bind
+surface of compiler.html entry 23.** The call-site story the book owes
+is the three explicit words — `bind`, `annotate`, `rescue` as ordinary
+two-argument functions (effect first, callback second) threaded by the
+chain rule, `.` retired from chain position, callbacks receiving the
+err itself for polymorphic dispatch. Half one is DONE (ch04 "nothing
+is asked of the signature", 2026-08-26) and survives: the words are
+call-site spelling, not type-level tracking, so no signature carries
+anything. Half two is no longer gated on an elaborator — there is no
+elaborator — and lands when the three words are implemented, in the
+present tense as always. compiler.html entry 23 owes a rewrite or
+retirement in the same campaign.
 
 ### An assert hako
 
