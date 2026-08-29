@@ -299,7 +299,6 @@
 # points, which are extern symbols the emitter can call, so the linker keeps
 # them whether a benchmark does or not. The 32-byte spread between the figures
 # is alignment padding absorbing part of it in some.
-
 jsonbench text=81250
 encodebench text=98274
 oneshot text=98322
