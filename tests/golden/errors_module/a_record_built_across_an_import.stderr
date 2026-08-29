@@ -1,0 +1,4 @@
+error[opacity]: `shapes/point` is foreign — only `shapes` builds a `point`; ask it for one through a pub function
+  --> tests/golden/errors_module/a_record_built_across_an_import/main.kso:4:13
+   4 | io/write "{(shapes/point 1 2).x}"
+                   ^

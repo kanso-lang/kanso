@@ -1,0 +1,4 @@
+import "./outer"
+import "std/io"
+
+io/write "{outer/four 3}"

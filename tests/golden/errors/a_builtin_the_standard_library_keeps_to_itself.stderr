@@ -1,0 +1,4 @@
+error[name]: `builtin_length` is internal to the standard library — import its module
+  --> a_builtin_the_standard_library_keeps_to_itself.kso:5:20
+   5 | pub play = print "{builtin_length [1 2]}"
+                          ^

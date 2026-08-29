@@ -1,0 +1,5 @@
+# `builtin_` names are how the standard library reaches the engine. A program
+# outside it that spells one is told to import the module that wraps it,
+# rather than being told the name does not exist — it does, and it is not
+# theirs.
+pub play = print "{builtin_length [1 2]}"

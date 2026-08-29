@@ -1,0 +1,4 @@
+error[name]: `quiet` exports nothing to re-export
+  --> tests/golden/errors_module/a_module_with_nothing_to_re_export/outer/core.kso:3:5
+   3 | pub quiet
+           ^
