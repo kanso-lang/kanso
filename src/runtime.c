@@ -300,6 +300,8 @@ static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
 static KValue k_list_own(KValue* items, long long n);
 KValue k_call1(KValue f, KValue a);
+KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, KValue* caps);
+KValue k_env_get(void* env, long long i);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
 /* The arena is a chain of blocks, newest first; allocation bumps in the head
@@ -4175,6 +4177,31 @@ KValue k_b_bind(KValue subject, KValue callback) {
 KValue k_b_rescue(KValue subject, KValue callback) {
     if (subject.tag == K_DESC) return k_mkdesc(29, subject, callback);
     return k_worded_step(29, subject, callback);
+}
+
+/* `annotate` is `rescue` with a wrapper around its callback, so it needs no
+   description of its own — which matters, because it is the one word that
+   builds an err, an err records where it was raised, and a description's two
+   slots are already the subject and the callback. The runtime builds the
+   wrapper here instead: a closure over the callback and the site, standing
+   where the user's callback would.
+
+   The site rides as an int payload. It is a static literal the collector
+   never owns and never traces, and a raw pointer in a payload is already how
+   `k_fnref` carries what it carries. */
+static KValue k_annotate_wrap(void* env, KValue failure) {
+    KValue callback = k_env_get(env, 0);
+    KValue site = k_env_get(env, 1);
+    return k_b_wrap_err(k_call_on_err(callback, failure), failure,
+                        (const char*)(intptr_t)site.payload);
+}
+
+KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
+    KValue site; site.tag = K_INT; site.payload = (long long)(intptr_t)origin;
+    KValue caps[2]; caps[0] = callback; caps[1] = site;
+    KValue wrap = k_closure(k_annotate_wrap, 1, 2, caps);
+    if (subject.tag == K_DESC) return k_mkdesc(29, subject, wrap);
+    return k_worded_step(29, subject, wrap);
 }
 
 KValue k_desc_sleep(KValue ms) {

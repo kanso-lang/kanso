@@ -56,3 +56,10 @@ tests/golden/micro/stdin_reads_what_it_is_given.kso	the playground has no stdin
 # wrong. All three reach the executor now; this one still answers zero because
 # a page genuinely has no clock.
 tests/golden/micro/the_clock_answers_something.kso	the clock is past the epoch: false
+
+# The three worded chain steps of the 2026-08-26 gavel work on the interpreter
+# and on native; the page has no node for them yet. It refuses by name rather
+# than compiling one — which it did until this program ran here, answering the
+# endpoint failure that `rescue` is supposed to catch. A gap the corpus can
+# see beats a divergence it cannot.
+tests/golden/micro/a_settled_failure_meets_the_three_words.kso	unsupported call to `rescue`

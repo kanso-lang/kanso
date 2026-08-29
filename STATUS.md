@@ -149,21 +149,27 @@ err itself, so a dispatch group is a legal callback. Annotate cannot resurrect
 by construction. Rescue is the sole door, its foreign-only license checked at
 the word. `.` retires from chain-step position; field access is untouched.
 
-**`bind` and `rescue` work on the oracle and on native** as of 2026-08-29
-(kanso#1116); `annotate` is oracle-only and native refuses it by name, which
-is what the differential law asks of an engine that cannot yet speak a
-feature. `tests/golden/chainwords/` holds four cases and
-`tests/the_three_chain_words.rs` pins three of them on BOTH engines against
-one golden and the fourth as a refusal. Three mutations were watched turning
-the right case red.
+**All three words work on the oracle and on native** as of 2026-08-29
+(kanso#1116). The page refuses them by name, which is what the differential
+law asks of an engine that cannot yet speak a feature.
+`tests/golden/chainwords/` holds four cases, pinned on both engines against
+one golden, and three mutations were watched turning the right case red.
 
-`annotate` does not fit native yet for a structural reason worth knowing
-before anyone tries: it builds an err, an err records where it was raised, and
-a two-field description has nowhere to put the site. The cheap answer is to
-have codegen synthesise the wrapping closure so `annotate e k` compiles to a
-rescue whose callback wraps — costing nothing, but needing the callback bound
-to a local first so a synthetic lambda cannot mention it twice. The log entry
-of 2026-08-29 has the two rejected alternatives and why.
+`annotate` needed no new description field: the runtime builds its wrapper
+closure itself, over the callback and the site, and hands it to rescue's node.
+`k_closure` was already there for that shape.
+
+**The page was diverging in silence and nothing in the tree could see it.**
+It compiled `rescue` and then propagated the failure the other two engines
+catch, because the wasm backend has no node for the words and the names fell
+through its generic call path rather than its `unsupported call` arm. Every
+chainwords case needs a filesystem to make an effect fail, and a page has
+none, so no program the page could run reached the words.
+`tests/golden/micro/a_settled_failure_meets_the_three_words.kso` closes that:
+it reaches them through a subject that has already failed, with no filesystem,
+so all three engines run it. It went red on the wasm harness on its first run.
+The general lesson is worth carrying: the engine with no world is the one that
+most needs a case, and a fixture that fails an effect cannot be that case.
 
 `bind`, `rescue` and `annotate` are reserved names now. Two fixtures in the
 corpus had defined functions by two of those names and were renamed, which is

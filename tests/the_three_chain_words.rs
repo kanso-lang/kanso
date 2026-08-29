@@ -64,31 +64,28 @@ fn golden(name: &str, extension: &str) -> String {
     }
 }
 
-/// Every case in the corpus, what it exits with, and whether native speaks
-/// the words it uses. A case with no `.err` beside it must say nothing on
-/// that stream.
-const CASES: [(&str, i32, bool); 4] = [
-    ("a_rescue_opens_the_executors_door", 0, true),
-    ("a_rescue_lets_a_success_past", 0, true),
-    ("a_bind_never_sees_a_failure", 1, true),
-    ("an_annotate_cannot_resurrect", 1, false),
+/// Every case in the corpus and what it exits with. A case with no `.err`
+/// beside it must say nothing on that stream.
+const CASES: [(&str, i32); 4] = [
+    ("a_rescue_opens_the_executors_door", 0),
+    ("a_rescue_lets_a_success_past", 0),
+    ("a_bind_never_sees_a_failure", 1),
+    ("an_annotate_cannot_resurrect", 1),
 ];
 
 #[test]
 fn the_oracle_answers_every_case() {
-    for (name, code, _) in CASES {
+    for (name, code) in CASES {
         answers(name, code, &["--interp"]);
     }
 }
 
-/// The engines agree on every case native can compile — the differential law
-/// in its ordinary form, one golden read by both.
+/// The two engines agree on every case, one golden read by both — the
+/// differential law in its ordinary form.
 #[test]
-fn native_answers_the_same_where_it_speaks_the_words() {
-    for (name, code, native) in CASES {
-        if native {
-            answers(name, code, &[]);
-        }
+fn native_answers_the_same() {
+    for (name, code) in CASES {
+        answers(name, code, &[]);
     }
 }
 
@@ -105,26 +102,4 @@ fn answers(name: &str, code: i32, extra: &[&str]) {
         "{name} said something else on stderr (extra {extra:?})"
     );
     assert_eq!(out.status.code(), Some(code), "{name} exited differently (extra {extra:?})");
-}
-
-/// The word native cannot compile. It must be REFUSED by name — the
-/// alternative the law forbids is a program that runs and answers something
-/// the oracle would not. `annotate` builds an err of its own and so needs the
-/// site it was written at, which a two-field description has nowhere to put;
-/// that is the piece still to design, not an oversight.
-#[test]
-fn native_refuses_annotate_by_name() {
-    for (name, _, native) in CASES {
-        if native {
-            continue;
-        }
-        let out = run(name, &[]);
-        let said = String::from_utf8_lossy(&out.stderr).to_string();
-        assert!(
-            said.contains("`annotate` is not yet supported"),
-            "{name} must be refused by name on native, and said: {said}"
-        );
-        assert_eq!(out.status.code(), Some(2), "{name} refuses before it runs");
-        assert!(out.stdout.is_empty(), "{name} printed before refusing");
-    }
 }

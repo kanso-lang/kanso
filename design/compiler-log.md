@@ -2773,3 +2773,50 @@ separate change with its own fixture rather than a rider on this one.
 So native refuses `annotate` by name and speaks the other two, and
 `tests/the_three_chain_words.rs` now pins three cases on BOTH engines against
 one golden and the fourth as a refusal that names the word.
+
+## 2026-08-29 — annotate reaches native after all, and the page was diverging in silence
+
+DONE (all three words on the oracle and native), OPEN (the page, which now
+refuses them by name). Supersedes the entry above on two counts, both found by
+building rather than reasoning.
+
+**annotate needed no new field and no codegen desugar.** The entry above listed
+three ways to carry the site a raise records, and all three were worse than the
+one it missed: the runtime builds the wrapper closure itself. `k_closure`
+already exists for exactly this shape, so `k_b_annotate` makes a one-parameter
+closure over the callback and the site and hands it to rescue's node. The site
+rides as an int payload — a static literal the collector never owns and never
+traces, and a raw pointer in a payload is already how `k_fnref` carries what it
+carries. `annotate` therefore has no dtag of its own.
+
+The measurement that killed the alternatives first: `rescue e (__e -> rescue
+__e k)` already works on both engines, which says `rescue` on a settled err
+reaches a group — so the whole word lowers to rescue plus wrap_err, and the
+only question left was where to put the wrapper. Building it beat arguing
+about a fourth field.
+
+**The page was compiling `rescue` and answering something else.** Not
+refusing — compiling, and then propagating the failure the other two engines
+catch. The wasm backend has no node for the words, and the names fell through
+to its generic call path instead of its `unsupported call` arm. This is the
+exact shape the differential law forbids, and it was invisible to everything
+in the tree: the chainwords corpus needs a filesystem to make an effect fail,
+and a page has none, so no program the page could run reached the words.
+
+`tests/golden/micro/a_settled_failure_meets_the_three_words.kso` closes that.
+It reaches `bind` and `rescue` through a subject that has already failed —
+json's parse failure, foreign here, no filesystem — so all three engines run
+it. It went red on the wasm harness on its first run, naming the divergence,
+and the page now refuses by name with the gap written in
+`tests/golden/wasm_gaps.txt`.
+
+Two method notes worth keeping. A probe that called `wasm_backend::compile`
+directly and asked whether it errored answered "accepted" for all three words
+with byte-identical modules, which was the front end eliding the call rather
+than the backend accepting it — an inconclusive instrument that read as a
+clean result. The corpus was the instrument that could tell. And the reason
+nothing caught this earlier is the fixture design: every case that makes an
+effect fail needs the world to refuse something, and the engine that has no
+world is the one that most needs a case.
+
+Welfare holds at 84.11.

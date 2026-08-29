@@ -1313,6 +1313,15 @@ impl<'a> WasmBackend<'a> {
             ctx.body.call(RT_MKERR);
             return Ok(());
         }
+        // The three worded chain steps of the 2026-08-26 gavel. The page does
+        // not speak them yet, and a refusal by name is what the differential
+        // law asks — without this the name fell through to the generic call
+        // path, where the page compiled `rescue` and then propagated the
+        // failure the other two engines rescue. That divergence was silent
+        // until micro/a_settled_failure_meets_the_three_words.kso ran here.
+        if matches!(name.as_str(), "bind" | "rescue" | "annotate") {
+            return Err(format!("unsupported call to `{name}`"));
+        }
         if let Some(tid) = self.type_ids.get(name.as_str()).copied() {
             let is_sub = self.program.types.iter().any(|t| t.name == *name && t.parent.is_some());
             if is_sub {
