@@ -3743,5 +3743,6 @@ carries a type name after its colon and every one of them walked past it.
 
 `compile_allocs` is 61,974, unchanged — the arm is a branch on an existing
 walk and allocates nothing. `compile_instructions` reads -3,127 in the
-container, inside the layout band; the runner's reading goes in the golden
-header when CI reports it.
+container and +2,513 on the runner: opposite signs on one diff, which is this
+file's layout signature. `lib/json` widens nothing, so the arm is never taken
+on the measured path.
