@@ -1,0 +1,13 @@
+# The same check read a declaration's parameters and stopped there, so an
+# annotation one level down — inside a constructor pattern — was never
+# looked at. The native backend refused the program with `unknown type` and
+# the interpreter reported a dispatch failure, neither of them naming the
+# typo that caused both.
+type pair
+  a
+  b
+
+fn f (pair x:banana y)
+  "{x} {y}"
+
+pub play = print (f (pair 1 2))

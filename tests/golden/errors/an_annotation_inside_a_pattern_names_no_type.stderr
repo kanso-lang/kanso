@@ -1,0 +1,4 @@
+error[type]: no type is called `banana`, so this arm can never match
+  --> an_annotation_inside_a_pattern_names_no_type.kso:10:12
+  10 | fn f (pair x:banana y)
+                  ^

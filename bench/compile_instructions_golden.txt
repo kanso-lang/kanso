@@ -302,4 +302,27 @@
 # cannot see them. `scripts/gates/library_box.sh` COPIES ./target/release/kanso
 # rather than building it, so the first two container readings were the same
 # binary twice and agreed to the digit, which read as confirmation.
-compile_instructions=57789584
+#
+# 2026-08-29 (four positions, one checked): 57,789,584 -> 57,801,548, a rise of
+# 11,964. LAYOUT, and the two hosts disagree on the sign, which is the reading
+# this file trusts most.
+#
+#   the runner      57,789,584 -> 57,801,548    +11,964
+#   the container   58,345,564 -> 58,321,444    -24,120
+#
+# The change asks, in `resolve_expr`, whether an upcast's target names a type.
+# `lib/json` contains no upcast, so the new arm's body never runs on the
+# measured path; what it also does is replace three pointer arguments to
+# `check_fn_body_shadow` with one `Declared`, at a call made per declaration,
+# which is a plausible mechanism for the container's fall and is not offered as
+# a measurement of it.
+#
+# `compile_allocs` is the reason this entry has two numbers rather than one. It
+# went red on the first push of this branch and it measures front-end work
+# rather than the binary's shape, so the fault was the change's and not the
+# runner's: the resolver was handed its own `HashSet` of declared type names
+# built beside the one `check_annotation_names` already built, the same collect
+# over the same iterator twice per compile. One set, and the counter is
+# 61,974 again — byte-identical on both hosts. The vein that cannot be blamed
+# on layout is the one that caught it.
+compile_instructions=57801548
