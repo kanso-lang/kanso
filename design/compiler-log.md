@@ -2617,3 +2617,41 @@ Two ratchet mutations, one per opener, each watched turning the gate red and
 naming the sentence it injected.
 
 COST: no compiler source changed; the veins cannot move.
+
+## 2026-08-29 — the branch audit runs, and two thirds of the rule cannot
+
+The ironclad branch directive of 2026-08-26 reached main only on 2026-08-28,
+in #1112, having sat unmerged on the branch that carried it. Its third clause
+— every check-in audits the branch list — ran for the first time today.
+
+    324   branches on origin
+      2   are ancestors of main
+    321   carry commits main does not
+      1   is perf-history, which CI maintains and nothing should delete
+
+Ancestry is the wrong test and the 321 is not a work queue. A squash merge
+leaves the branch's own commits outside main's history, so a fully landed
+branch reads as unmerged by that measure. The twenty most recently touched
+were checked by hand: every one is a squash-merged pull request from the two
+preceding days whose content is on main. Nothing unfinished is hiding at the
+recent end, which is the part of the answer that matters — the FIFO clause
+has no outstanding work to enforce, and what remains is litter.
+
+The directive counted roughly 250 three days ago. The class is growing at
+about twenty-five a day, which is the merge rate.
+
+The other two clauses cannot be executed from a cloud session, and this is
+the finding rather than an excuse:
+
+  - `git push origin --delete` and `git push origin :branch` both fail with
+    "the remote end hung up unexpectedly". The container's git proxy refuses
+    a delete refspec. Tried on two days against a branch whose pull request
+    was merged; the same failure both times.
+  - The GitHub MCP server offers `create_branch` and `delete_file` and no
+    delete-branch tool, and there is no `gh` in the container.
+  - `delete_branch_on_merge=true` needs the REST API or the settings page.
+
+So the purge and the repository setting both need somebody with push-delete
+rights. The setting is the half worth doing first: it stops the class
+recurring, which turns the purge from a chore that returns into a job done
+once.

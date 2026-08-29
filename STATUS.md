@@ -59,10 +59,16 @@ because a question with no proposed answer turns one sitting into ten.
 Nothing. Every branch this session opened is merged and verified on
 `origin/main`, and neither kanso nor kq has an open pull request.
 
-One branch could not be cleaned up: `origin/the-log-is-forty-entries-again`
-(3837161a) is an earlier, unmerged log trim with no PR, superseded by #1110.
-The git proxy in this container refuses a delete refspec, so it is recorded as
-superseded here and in #1110's body rather than removed.
+**One thing is blocked on access rather than on a decision.** The ironclad
+branch directive of 2026-08-26 reached main on 2026-08-28 in #1112, having sat
+unmerged on the branch that carried it. Its audit clause ran on 2026-08-29 and
+found 324 branches on origin, growing at about the merge rate; the twenty most
+recently touched are all squash-merged pull requests whose content is on main,
+so nothing unfinished is hiding there. The purge and
+`delete_branch_on_merge=true` both need push-delete rights this container does
+not have — the git proxy refuses a delete refspec, the GitHub MCP has no
+delete-branch tool, and there is no `gh`. Setting the flag first is the half
+worth doing: it stops the class recurring.
 
 ## What landed on 2026-08-27 and 2026-08-28
 
