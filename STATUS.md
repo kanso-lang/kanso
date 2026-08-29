@@ -7,13 +7,18 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one — "What a digest costs, and whether it stays
-written in kanso".** `sha256/hex` holds the whole message; peak arena is linear
-in the input at about six and a half thousand bytes per byte hashed, and the
-asset-digests job's headroom falls as `docs/kanso.wasm` grows.
+only indexes it. **Blocking right now: two.** "What a digest costs, and
+whether it stays written in kanso" — `sha256/hex` holds the whole message,
+peak arena is linear in the input at about six and a half thousand bytes per
+byte hashed, and the asset-digests job's headroom falls as `docs/kanso.wasm`
+grows. And "Whether a chain line keeps its leading dot", which is the only
+thing standing between the shipped `bind`/`rescue`/`annotate` and the
+346-site respelling of the fleet.
 
-**Fourteen questions are waiting, and every one of them carries a
-recommendation** — one blocking, thirteen open but not blocking. The July
+**Sixteen questions are waiting, and every one of them carries a
+recommendation** — two blocking, fourteen open but not blocking. Counted
+from the ledger, which is the only place that count is true; this file said
+fourteen in one paragraph and sixteen in another until 2026-08-29. The July
 letters are closed: Clay ruled the last five in one sitting on 2026-08-26, and
 that ruling reached main only on 2026-08-28, on a branch that had been sitting
 unmerged. Counted from the ledger rather than carried forward. That is the point of the 2026-08-25 sweep: Clay's ask was
@@ -56,24 +61,8 @@ because a question with no proposed answer turns one sitting into ten.
 
 ## In flight
 
-**kanso#1119**, a builtin's count checked at the front door. `length x x` in a
-function nothing calls: the interpreter printed the program's output and
-exited 0, the native backend refused the whole program with no span, the page
-compiled it and ran it, and `kanso check` said ok. `print (wrap_err 1)`
-panicked the compiler outright. The counts live in one table now, read by the
-front end and by both backends. Every runtime vein is byte-identical;
-`compile_instructions` rises and is priced in the log.
-
-**One thing is blocked on access rather than on a decision.** The ironclad
-branch directive of 2026-08-26 reached main on 2026-08-28 in #1112, having sat
-unmerged on the branch that carried it. Its audit clause ran on 2026-08-29 and
-found 324 branches on origin, growing at about the merge rate; the twenty most
-recently touched are all squash-merged pull requests whose content is on main,
-so nothing unfinished is hiding there. The purge and
-`delete_branch_on_merge=true` both need push-delete rights this container does
-not have — the git proxy refuses a delete refspec, the GitHub MCP has no
-delete-branch tool, and there is no `gh`. Setting the flag first is the half
-worth doing: it stops the class recurring.
+Nothing. Every branch this session opened is merged and verified on
+`origin/main`, and neither kanso nor kq has an open pull request.
 
 ## What landed on 2026-08-29
 
@@ -81,6 +70,40 @@ worth doing: it stops the class recurring.
     kanso ab158a37  #1116  the three chain words on all three engines
     kanso 2b2f7e36  #1117  §23 told the opposite of what shipped
     kanso 5d49b125  #1118  a rescue inside a group, on all three engines
+    kanso afc7947b  #1119  a builtin's count, checked where a user
+                           function's is
+    kanso 4c40088e  #1120  a module is named the way an import writes it,
+                           and the page reads the error corpus
+    kanso 6bc5b168  #1121  the backend still indexed the argument the
+                           front door had started counting
+    kq    f0f413a   #81    the pin absorbs seventy-three kanso merges
+
+**Where a rule lives is the through-line, and §29 now carries it.** A
+builtin's argument count had four answers — the interpreter checked at
+runtime, the native backend checked in its emit list, the page not at all,
+and `kanso check` did not know — because the counts were a second field on a
+table answering a different question. `print (wrap_err 1)` aborted the
+compiler outright. This is the third instance of one shape in eight days,
+after the `val` accessor and `rt_maybe_bind`'s inline copy of a predicate,
+and the observation worth keeping is how the duplicates arrive: not one was
+written as a copy. Each was a local detail at a site that needed it, and
+became a duplicate later when somebody wrote the abstraction.
+
+**And the opposite lesson on the same rule.** Once the front end checks the
+count, the backend's own check looks like exactly that kind of second copy.
+It is not: three builtins are emitted inline and read their arguments by
+index before any guard runs, so with the front-end check off the abort is
+still there. Knowing a fact twice is the problem; refusing to proceed
+without it twice is the defence.
+
+**A second host separates work from layout, and it costs a minute.** Same
+diff, `compile_instructions`: +12 here against CI's +83,829 on #1120, then
+byte-identical here against +2,138 on #1121. Every earlier layout
+attribution in the log argued from the call graph. Two callgrind runs in the
+container make it a number, and the same trick bisected kq's work vein to a
+single kanso commit — the container cannot compare absolute numbers with the
+runner, and its deltas matched to the instruction.
+
 
 **The corpus reads programs that RUN, and that is a gap.** The browser
 differential takes `examples`, `tests/golden/runtime` and
@@ -244,8 +267,8 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which blocks the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Sixteen questions wait in `design/pending-gavels.md`** — one blocking,
-fifteen open — each with a recommendation, counted from the ledger rather
+**Sixteen questions wait in `design/pending-gavels.md`** — two blocking,
+fourteen open — each with a recommendation, counted from the ledger rather
 than carried forward. Two are new today: the chain-line grammar and whether
 an err gains readers a callback can use.
 
