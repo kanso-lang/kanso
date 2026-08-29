@@ -213,4 +213,16 @@
 # on this vein has been layout every previous time it was chased — the +146
 # and +2,918 entries above are the two that were chased to the end — and
 # nothing here suggests a different answer.
-compile_instructions=57569314
+# 2026-08-29 (the group fix): 57,569,314 -> 57,567,033, a fall of 2,281, and
+# it lands on a number this vein already held today. The chain-words branch
+# read 57,567,033 before a pure rename moved it to 57,569,314; this commit
+# changes eval.rs and wasm_rt.rs again and it comes back. Four moves in one
+# day on three changes, none of which touches `kanso check`'s path — the
+# measured run never emits, and neither a rename nor a call-hook flag nor a
+# predicate call reaches it.
+#
+# That round trip is the strongest thing this file has said about itself. An
+# attribution to layout has usually been an argument from the call graph; a
+# vein that returns to an earlier value under a different diff is layout
+# showing its hand.
+compile_instructions=57567033

@@ -3074,3 +3074,22 @@ page saying it has no filesystem and native saying the file is absent both
 read `rescued`, and all three engines hold one golden with no gap entry. That
 shape is worth reusing — an engine that cannot do a thing can still be held to
 an answer that does not depend on how it fails.
+
+## 2026-08-29 — compile_instructions returns to a number it held this morning
+
+DONE. The group fix moves the vein 57,569,314 -> 57,567,033, a fall of 2,281,
+and the value is one it already had today. The chain-words branch read
+57,567,033; a rename of `call_on_err` to `call_decided` moved it to
+57,569,314; this commit changes eval.rs and wasm_rt.rs again and it comes
+back.
+
+Four moves in one day across three changes, and not one of them touches the
+measured path. `kanso check lib/json` compiles a library and never emits, so a
+rename in the Rust sources, a flag on a call hook, and a predicate call in
+place of an inline match all sit outside what it runs.
+
+The round trip is worth more than the number. Every previous layout
+attribution in this file argued from the call graph — the code is not
+reachable, therefore the move is layout — and the entries above admit the sign
+went unexplained each time. A vein that returns to an earlier value under a
+different diff is layout showing its hand rather than being argued for.
