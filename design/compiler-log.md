@@ -3011,3 +3011,27 @@ same commit. The book's boundary-language entry cited §23 for "why the
 combinator words stay off the surface", and the assert-hako entry was gated on
 the err spelling being ruled — that gate is lifted, ruled and built, so a
 matcher surface can now be designed once rather than twice.
+
+## 2026-08-29 — the ledger sweep, finished and counted
+
+Correction to the entry above, which says two ledger entries carried the stale
+premise. It is three. The chain-line entry was filed this morning saying the
+three words "work prefix-style on the interpreter", which was true when it was
+written and understated by the afternoon; it is corrected in the same commit
+alongside the boundary-language and assert-hako entries.
+
+The sweep is complete rather than opportunistic, and the method is worth
+keeping: every entry mentioning bind, rescue, annotate, chain or combinator was
+read against the gavel, not just the ones that looked likely. Three of the
+fifteen open entries were stale. Two mentions in the Parked section were
+checked and are not: "dot-absorbs-`>>` erases the visible then/bind split"
+argues about the dot's visibility and holds either way the chain-line grammar
+is ruled, and the serve campaign's "starts from the three combinators" is
+forward-looking and only helped by their existing.
+
+ch04's "nothing is asked of the signature" was checked rather than trusted,
+because the ledger marks it DONE and a record that says done without being
+done is the failure this project has caught before. It is really in the book,
+at docs/book/ch04.html, and nothing in it is invalidated: it teaches call-site
+short-circuiting, which is the rule `call_closure` and `k_call1` implement and
+which the gavel did not touch.
