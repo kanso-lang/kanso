@@ -1047,9 +1047,15 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
         Slot::Bind(inner, closure) => {
             Some(Rc::new(Desc::Bind(as_desc(inner)?, Value::TableFn(closure))))
         }
-        // A worded step other than `bind` has no shape in the interpreter's
-        // Desc, so a program that reaches the scheduler through one is
-        // refused rather than quietly running a different chain.
+        // `rescue` and `annotate` are deliberately NOT materialized, and the
+        // reason is a mechanism rather than an omission. Their callbacks
+        // receive the err, and the interpreter reaches a page closure through
+        // `call_from_interp`, which goes through `call_closure` — where a
+        // failure argument comes straight back instead of entering the body.
+        // So a materialized rescue inside a green-thread group would run its
+        // subject, skip its callback, and answer the failure the other two
+        // engines catch. Answering None refuses instead, which is the only
+        // one of the two that cannot be wrong quietly.
         Slot::Rescue(..) | Slot::Annotate(..) => None,
         _ => None,
     }

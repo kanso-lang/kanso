@@ -2872,3 +2872,29 @@ was checked to be load-bearing.
 ch08's boundary-language chapter still owes the same move, and it is a bigger
 one: it is queued P1 in the ledger and its whole shape assumes the failure
 channel is inferred from an arm.
+
+## 2026-08-29 — the join hole on the page, tried and left refused, with the mechanism
+
+REVERTED, and the reason is worth more than the change would have been.
+
+The entry above records that the page's `as_desc` answers None for a rescue or
+annotate slot, so one inside a green-thread group is refused rather than
+scheduled. Making it answer Some looked like three lines, and it compiled.
+
+It is wrong, for a mechanism rather than a taste. The interpreter reaches a
+page closure through `call_from_interp`, which pushes the arguments as slots
+and goes through `call_closure` — where a failure argument comes straight back
+instead of entering the body. That is the same rule all three engines have and
+the same rule `call_on_err` exists to get past, and `call_from_interp` has no
+err-passing twin. So a materialized rescue inside a group would run its
+subject, skip its callback, and answer the failure the other two engines
+catch: a silent divergence, in the same shape as the one this PR just closed
+and in a place no fixture reaches.
+
+The refusal stays. The comment at the site now says the mechanism rather than
+"has no shape", so the next reader does not have to find it again. Closing the
+hole properly means an err-passing path from the interpreter back into the
+module, which is a change with its own fixture — and the fixture is awkward,
+because reaching it needs a rescue over an EFFECT that fails on a page, and
+the only effects that fail there are the playground's own refusals, whose
+messages differ from native's by design and would need a gap entry.
