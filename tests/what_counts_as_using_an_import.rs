@@ -1,10 +1,11 @@
 //! What counts as using an import.
 //!
-//! The unused-import check walks the program marking every module qualifier a
-//! name mentions. It read `Expr::Ident` and the type in a pattern, and nothing
-//! else — so two ways of naming an imported thing marked nothing, and a file
-//! whose only use was one of them could not be written at all: drop the import
-//! and the name does not resolve, keep it and the check refuses the file.
+//! Two walks answer it. One marks every module qualifier a name mentions;
+//! the other marks bare names, because the bare overload space makes spelling
+//! optional and not the dependency. Both read `Expr::Ident` and stopped there,
+//! so three ways of naming an imported thing marked nothing — and a file whose
+//! only use was one of them could not be written at all: drop the import and
+//! the name does not resolve, keep it and the check refuses the file.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -45,6 +46,18 @@ fn a_held_function_uses_the_import() {
     let dir = staged("partial", "import \"./shapes\"\n\nf = &shapes/make\n\nprint \"{f 3}\"\n");
     let (err, code) = check(&dir);
     assert!(!err.contains("unused import"), "the held name marked nothing: {err}");
+    assert_eq!(code, Some(0), "{err}");
+}
+
+/// The bare overload space makes spelling optional, not the dependency: a
+/// name any import exports can be written without its qualifier. `&make` is
+/// that name held rather than called, and the walk that collects bare uses
+/// read `Expr::Ident` and nothing else.
+#[test]
+fn a_held_name_uses_the_import_without_its_qualifier() {
+    let dir = staged("bare", "import \"./shapes\"\n\nf = &make\n\nprint \"{f 3}\"\n");
+    let (err, code) = check(&dir);
+    assert!(!err.contains("unused import"), "the bare held name marked nothing: {err}");
     assert_eq!(code, Some(0), "{err}");
 }
 

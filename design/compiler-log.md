@@ -3612,3 +3612,43 @@ opposite signs on the same diff, which is what this file has come to treat as
 layout rather than work. `lib/json` holds no upcast, so the arm the change adds
 cannot run on the measured path at all. The golden takes the runner's number,
 as its own rule requires.
+
+## 2026-08-29 — the third walk that reads a name and stops at `Ident`
+
+Two walks answer "does this file use its import". `used_quals` marks module
+qualifiers; `mark_bare_quals` marks bare names, because the bare overload space
+makes spelling optional and not the dependency. #1125 gave the first one
+`Expr::Partial` and an upcast's target. The second still read `Expr::Ident` and
+stopped, so a file whose only use of an import was a bare `&make` was refused
+as unused — and refused into a corner, because dropping the import leaves the
+name unresolved and keeping it fails the check.
+
+One arm. `tests/what_counts_as_using_an_import.rs` had the qualified `&mod/fn`
+case from #1125 and gains the bare one; the control that keeps an idle import
+refused is already there, so widening the walk cannot pass by marking every
+import used. Removing the arm reddens exactly the new spec and leaves the other
+three green.
+
+Work, and cheap, measured on this host as an A/B on one tree:
+
+    without the arm            58,321,444   allocs 61,974
+    with it                    58,336,378   allocs 61,974   +14,934
+
+`lib/json` holds bare partials, so the arm runs. Allocations do not move
+because the set holds borrowed `&str` — the comment above it says the walk
+stopped keeping a `String` per occurrence for exactly that reason, and the new
+arm inherits the property rather than spending it.
+
+The runner agrees, which is the point of taking both. `compile_instructions`
+goes 57,801,548 -> 57,811,952 there, +10,404 against the container's +14,934:
+same sign, same order. Two entries above this one in the golden read the other
+way — a rise on one host and a fall on the other — and were banked as layout.
+This is what the contrast is for.
+
+Third instance of one shape in a day, and the shape is worth naming: a walk
+that answers a question about NAMES, written against the one expression kind
+that obviously carries a name. `Partial` carries a name under a sigil, an
+upcast's target carries one after a colon, and a pattern's annotation carries
+one after another colon. Each was found by reading the walk rather than by any
+sweep, and each was invisible to the corpus because no program in it was
+written into the corner the omission creates.

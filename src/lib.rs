@@ -2602,7 +2602,12 @@ fn mark_bare_quals(
     // for a set that is asked two questions below and dropped.
     let mut bare: crate::hash::Set<&str> = crate::hash::Set::default();
     fn collect<'a>(e: &'a ast::Expr, bare: &mut crate::hash::Set<&'a str>) {
-        if let ast::Expr::Ident(name, _) = e {
+        // `&select` names the import the way `select` does; the sigil holds
+        // the name rather than changing it. Left out, a file whose only use of
+        // an import was a held name could not be written at all: drop the
+        // import and the name does not resolve, keep it and this reads it as
+        // unused.
+        if let ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) = e {
             if !name.contains('/') {
                 bare.insert(name.as_str());
             }
