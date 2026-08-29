@@ -4128,6 +4128,28 @@ impl<'a> Backend<'a> {
         let was_builtin = name.starts_with("builtin_");
         let name: &str = name.strip_prefix("builtin_").unwrap_or(name);
 
+        // Every builtin's count, before anything reads an argument by index.
+        // The block below emits `wrap_err` inline and takes `emitted[1]`, and
+        // the guard further down covers only the names this file emits a
+        // direct C call for — `wrap_err` is not one of them. So
+        // `print (wrap_err 1)` walked off the end of a one-element vector and
+        // aborted the process: exit 101 with a Rust backtrace, on a two-word
+        // program. The front door refuses that program now, and this stays
+        // because a backend that indexes an argument it never counted is one
+        // front-end regression from doing it again.
+        // A declaration of the same name is that declaration — the bail
+        // further down says so, and this has to say it too, because it runs
+        // first. lib/sha256 declares `bytes`, and a guard that skipped this
+        // condition refused its three-argument call as a wrong-count builtin.
+        let shadows = !was_builtin && self.program.fns.iter().any(|d| d.name == name);
+        if !shadows {
+            if let Some(takes) = crate::check::builtin_arity(name) {
+                if emitted.len() != takes {
+                    return Err(format!("native backend: `{name}` takes {takes} argument(s)"));
+                }
+            }
+        }
+
         if name == "err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();

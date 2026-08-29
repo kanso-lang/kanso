@@ -3256,3 +3256,58 @@ It is also cheap. The measurement is `valgrind --tool=callgrind ./kanso check
 lib/json` twice in a container, about a minute, and it turns "this must be
 layout" into a number. Every compile_instructions move from here should carry
 one.
+
+## 2026-08-29 — the backend still indexed the argument the front door had started counting
+
+#1119 stopped `print (wrap_err 1)` at the front door. It did not close the
+hole it was walking into. `emit_call_rest` emits `err`, `annotate` and
+`wrap_err` inline, reading `emitted[0]` and `emitted[1]` directly, and its
+own arity guard sits a couple of hundred lines further down and covers only
+`BUILTIN_CALLS` — the names this file emits a direct C call for. `wrap_err`
+is not one of them.
+
+With the front-door check switched off, today's build still dies:
+
+    thread 'main' panicked at src/codegen.rs:4156:36:
+    index out of bounds: the len is 1 but the index is 1
+
+So the count is checked before anything reads an argument by index, for every
+builtin that has one. Watched red exactly that way — front door off, guard
+absent, exit 101 — and green the same way with the guard, exit 2 and a
+sentence.
+
+**The guard was wrong once and the suite caught it.** Placed where `emitted`
+first exists, it runs before the bail that says a declaration of the same
+name IS that declaration, so lib/sha256's own `bytes` — three parameters —
+was refused as a wrong-count builtin. It carries the bail's condition now.
+The near-miss is the interesting half: a defence added a few lines too early
+in a function turns a working program away, and the only reason it was not
+shipped is that `sha256_peak` runs a real program.
+
+### The mutation sweep, built, measured and declined
+
+The panic was found by hand, and so were the two before it —
+`a_set_in_a_play_body_is_refused_not_panicked` and
+`an_empty_branch_is_refused_not_panicked` are each a fixture written after
+somebody tripped. So: mutate every corpus program one line at a time (drop
+the last token, repeat the last token) and run every mutant through the
+compiler.
+
+  - 8,724 mutants over 490 programs through `kanso check`: **0 panics**. Wrong
+    verb — the panic lives past the front door.
+  - The same 8,724 through `kanso build`, which reaches codegen: **0 panics**.
+  - A 900-mutant sample says the class does get there: 274 compiled, 626 were
+    refused, and the refusals are mostly grammar (297 syntax, 135 formatting).
+
+Then the test that decides it. With the front-door check switched off, so the
+`wrap_err` panic is live again, the **full** sweep is still green. The one
+corpus program that calls `wrap_err` with two arguments is
+`tests/golden/runtime/wrap_cause.kso`, and the token this mutation drops is
+the parameter `e` — which makes `e` unused, and the unused-binding check
+fires long before codegen.
+
+A gate that cannot be shown red by any panic this compiler has actually had
+is the thing this project keeps catching in other people's specs. It would
+have run in 0.22s over all three backends and reported health it could not
+see. Not committed; recorded here so the idea stays declined and the next
+person starts from the mutation shape rather than the sweep.
