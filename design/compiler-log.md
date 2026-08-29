@@ -3495,5 +3495,21 @@ compared on it down the path where names move. A construct can have plenty of
 carriers and still have none on the second — which is what a per-construct
 count buys over a program count.
 
+Two more of the same shape, found by reading the neighbouring passes rather
+than by probing. The unused-import check marks a module used by walking the
+program for qualified names; it read `Expr::Ident` and the type in a pattern
+and nothing else. So an import whose only use was `(x):shapes/num`, or
+`&shapes/make`, marked nothing and was refused as unused — and such a file
+could not be written at all, because dropping the import leaves the name
+unresolved and keeping it fails the check. Both are one arm each, in
+`used_quals`, and `tests/what_counts_as_using_an_import.rs` holds them with a
+control so widening the walk cannot pass by marking every import used.
+
+The third pass that reads an upcast's target, `door_expr`, had it right the
+whole time. Three passes ask the same question of the same node and one of
+them answered; that is what a per-variant walk costs, and there is no
+mechanism in the tree that would have paired them.
+
 Welfare holds at 84.10 and the compile veins do not move on this host — the
-new arm's body runs only for an `Upcast` node and `lib/json` has none.
+new arms' bodies run only for the node kinds they name, and `lib/json` upcasts
+nothing.

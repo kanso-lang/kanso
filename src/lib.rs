@@ -2656,8 +2656,16 @@ fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
         }
     }
     fn walk_expr(e: &ast::Expr, quals: &mut crate::hash::Set<String>) {
-        if let ast::Expr::Ident(name, _) = e {
-            mark(name, quals);
+        match e {
+            // `&shapes/make` names the module the way a call does: the sigil
+            // holds the name rather than changing it.
+            ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => mark(name, quals),
+            // `(x):shapes/num` names `shapes` exactly the way an annotation
+            // does. Left out, an import whose only use is a widening target
+            // reads as unused and the file cannot be written at all: drop the
+            // import and the type does not resolve, keep it and this refuses.
+            ast::Expr::Upcast { ty, .. } => mark(ty, quals),
+            _ => {}
         }
         for_each_child(e, |child| walk_expr(child, quals));
     }
