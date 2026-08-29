@@ -2655,3 +2655,80 @@ So the purge and the repository setting both need somebody with push-delete
 rights. The setting is the half worth doing first: it stops the class
 recurring, which turns the purge from a chore that returns into a job done
 once.
+
+## 2026-08-29 — the executor gains a door: rescue, annotate and bind on the oracle
+
+DONE (oracle), OPEN (native, page). The three-forms gavel of 2026-08-26 and
+the amendment that made `bind` a word are built on the interpreter. What the
+build turned up is that one of the three is new capability rather than a
+respelling, which the migration sizing had not seen.
+
+**An execution-time failure could not be handled inside a chain at all.** A
+chain step over an effect synthesises a one-parameter closure around the
+step's expression (eval.rs, the `piped` branch). At execute time `Desc::Bind`
+calls that closure with whatever the subject yielded, and `call_closure`
+returns a failure argument instead of entering the body. So the failure never
+reached the callback, whatever shape the callback had — a lambda and a group
+with an `(err _)` arm were treated identically, because neither was ever
+called.
+
+`docs/book/samples/ch05/fallback.kso` is exactly that program, and its golden
+is the endpoint message. ch05 teaches it as the design: an err born at the
+edge "does not knock at the continuations waiting downstream, even ones with
+an arm ready". So the migration's err-arm half really is empty, and for a
+better reason than the three greps in #1115 gave — the chain err-arm was never
+a working surface, and the one site in the fleet that looks like one is the
+book's counter-example showing it does not fire.
+
+Two consequences the sizing owes an update: `bind`'s skip-on-failure rule was
+already what the machine did, so spelling it out changes no program; and
+`rescue` needs the executor to hand the err to a callback, which nothing did.
+
+**What landed.** `Desc::Rescue` and `Desc::Annotate` beside `Desc::Bind`, one
+`worded_step` holding the whole difference between the three, and
+`call_on_err` for the one thing ordinary application will not do — hand a
+failure to a lambda. `annotate` carries the site it was written at, because
+the err it builds is a raise and a raise records where it happened. Its
+re-wrap is unconditional, so it cannot resurrect without anything checking
+that it doesn't; a callback that answers with a failure of its own keeps that
+one rather than being wrapped twice.
+
+**The three words are reserved now.** `bind`, `rescue` and `annotate` joined
+AMBIENT, so no program may define a function by those names. Two fixtures in
+the corpus did — `tests/golden/advisory/group_identity` and
+`.../reraises` — which is evidence the names are natural ones for user code.
+They were renamed to `recover` and `relabel`. This is a cost of the gavel's
+spelling and worth saying out loud rather than discovering later.
+
+**Pinned.** `tests/golden/chainwords/` and `tests/the_three_chain_words.rs`:
+four cases, each run on the oracle against a golden AND asserted refused by
+name on native. Three mutations were watched turning the right case red —
+rescue not reading the failure channel, annotate not re-wrapping, bind reading
+the failure channel — and the corpus goes green again when each is restored.
+The micro corpus could not host these: it runs native and `--interp` and
+requires them to agree.
+
+**Not built, and why the differential law allows it.** Native and the page
+both refuse the words by name — `native backend: \`rescue\` is not yet
+supported` and the wasm backend's `unsupported call to \`rescue\``. The law
+permits a feature on fewer engines only when the others REJECT it, and both
+do. Native's chain loop is the beat/evacuation loop with a cost golden
+watching it, so a new dtag there is its own measured change rather than a
+rider on this one.
+
+**Two things the gavel's own sample needs that do not exist.** Its lambda
+form is `annotate (e -> "config: {e.reason}")`, and an err has no `.reason`
+reader — nor could an interpolation read one, since every operation on an err
+propagates it. So a lambda callback can receive an err and cannot look at it.
+A group callback can, by destructuring, which is the gavel's primary story
+("a dispatch group is a legal callback"). Whether an err gains readers that
+get past its own infectiousness, the way `wrap_err`'s second argument does, is
+a question for Clay and is filed.
+
+**The migration count is corrected.** 485 loose-dot steps in fleet code with
+comments and strings stripped, not 309: 346 are `. (lambda)`, the monadic
+steps that respell, and 139 are `. named_fn`, the threading form the
+effect-first rider preserves. The 309 in STATUS counted differently.
+
+Welfare holds at 84.11 against its floor. compile_instructions rose 2,918
+(57,568,471 -> 57,571,389) for two Desc variants and a builtin branch.

@@ -1,11 +1,11 @@
 # Two arms of arity one, both matching this package's own err, and only one of
 # them is reported.
 #
-# `rescue` is fed by the written call site below. `quiet` is never called, so
+# `recover` is fed by the written call site below. `quiet` is never called, so
 # nothing reaches its parameter and it stays silent. The two differ only in
 # their NAME: provenance keys its fixpoint on (name, arity), and if that key
 # ever stops distinguishing them — a collapsed group, a hash that ignores the
-# name — `quiet` inherits what `rescue` was fed and is reported for a rescue it
+# name — `quiet` inherits what `recover` was fed and is reported for a rescue it
 # never made.
 #
 # This used to lean on the pub self-seed, which retired with gavel 24. A call
@@ -17,11 +17,11 @@ type woe
 fn boom _
   err (woe 5)
 
-fn rescue (err w:woe)
+fn recover (err w:woe)
   w.at
 
 fn quiet (err w:woe)
   w.at
 
 pub fn asked _
-  rescue (boom 0)
+  recover (boom 0)

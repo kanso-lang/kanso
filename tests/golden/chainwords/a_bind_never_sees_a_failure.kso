@@ -1,0 +1,9 @@
+# The other half of the same rule. `bind` reads the value channel, so a
+# failure skips its callback whatever shape the callback has — the sentence
+# below is never printed — and travels on to the endpoint unchanged.
+import "std/os"
+
+fn saw text
+  print "bind saw: {text}"
+
+pub play = bind (os/read_file "no-such-file.txt") saw

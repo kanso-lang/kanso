@@ -57,15 +57,15 @@ fn an_arm_for_this_packages_own_err_can_never_match() {
 /// green and lib/json's three unchanged, so the pass could have been gutted
 /// without a spec noticing.
 ///
-/// `rescue` is fed by a written call site; `quiet` is never called, so nothing
+/// `recover` is fed by a written call site; `quiet` is never called, so nothing
 /// reaches it. They differ only in their name, and if the key stops telling
-/// them apart `quiet` inherits what `rescue` was fed and is reported for a
+/// them apart `quiet` inherits what `recover` was fed and is reported for a
 /// rescue it never made.
 #[test]
 fn a_group_is_told_apart_by_its_name_and_not_only_its_arity() {
     assert_eq!(
         licenses("tests/golden/advisory/group_identity"),
-        vec!["error[license]: `rescue` has an arm for an err raised in \
+        vec!["error[license]: `recover` has an arm for an err raised in \
              `group_identity`, and that arm can never match — a failure does not \
              enter an arm its own hako raised, so it passes as though the arm were \
              not written. Return an err, or let a caller in another package name \

@@ -1,0 +1,11 @@
+# `annotate` reads the failure channel like `rescue` and differs in what
+# happens to the answer: it is re-wrapped as an err with the original as its
+# cause. So a callback that returns a perfectly good string still leaves a
+# failure, and the endpoint prints both halves — the new reason and what it
+# was told.
+import "std/os"
+
+fn said (err reason)
+  "config: {reason}"
+
+pub play = annotate (os/read_file "no-such-file.txt") said

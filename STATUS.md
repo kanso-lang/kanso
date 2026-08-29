@@ -149,29 +149,51 @@ err itself, so a dispatch group is a legal callback. Annotate cannot resurrect
 by construction. Rescue is the sole door, its foreign-only license checked at
 the word. `.` retires from chain-step position; field access is untouched.
 
-The work is a front-end change plus a fleet migration: parser, checker, all
-three engines, every chain err-arm becoming `annotate`, every `.` chain step
-becoming `bind`, the differential corpus, and the book's boundary-language
-chapter. **Nothing of it is built.** `docs/compiler.html` §28 describes it and
-says so in as many words, which means the page and the compiler disagree on
-purpose until this lands — the one case where that is allowed, and it should
-not outlive the migration.
+**The three words work on the interpreter** as of 2026-08-29 (kanso#1116).
+Native and the page refuse each one by name, which is what the differential
+law asks of an engine that cannot yet speak a feature; native's chain loop is
+the beat/evacuation loop with a cost golden on it, so a new dtag there is its
+own measured change. `tests/golden/chainwords/` holds four cases and
+`tests/the_three_chain_words.rs` runs each on the oracle against a golden and
+asserts the native refusal. Three mutations were watched turning the right
+case red.
 
-**And it is one pass, not two — measured before anyone starts.** 309 `.`
-chain steps across the fleet respell as `bind`: 246 in `scripts`, 33 in
-`tests/golden`, 15 in `lib`, 14 in the book samples, 1 in `examples`. That
-`scripts` share is 80% of the work and it is the gates, so a botched pass
-there takes CI down rather than a user program.
+`bind`, `rescue` and `annotate` are reserved names now. Two fixtures in the
+corpus had defined functions by two of those names and were renamed, which is
+a fair measure of how ordinary the words are.
 
-The err-arm half looks empty. Zero chain steps in the fleet destructure an
-err; the sixteen `(err x)` sites that exist are all function dispatch arms,
-which the gavel preserves and promotes; and the compiler has no
-chain-err-arm concept and no "an err arm must answer an err" rule — the only
-two matches for the phrase are comments about how a dispatch arm ranks. The
-gavel appears to retire a surface that was never built, which fits its own
-"it is unspellable". Three agreeing greps are not a reading of the design, so
-confirm it — but do not conclude the search is broken when it comes back
-empty, which is what this paragraph exists to prevent.
+**`rescue` was new capability, not a respelling** — the finding that reshapes
+the rest. An execution-time failure could not be handled inside a chain at
+all: a chain step over an effect wraps its expression in a one-parameter
+closure, and handing a failure to a closure returns the failure rather than
+entering the body, so the callback was never called whatever its shape.
+`docs/book/samples/ch05/fallback.kso` is that program and ch05 teaches it as
+the design. So the migration's err-arm half is empty for a stronger reason
+than the greps below gave: the chain err-arm was never a working surface, and
+the one site that looks like one is the book's counter-example.
+
+**What is left is one pass over the lambda steps.** 485 loose-dot steps in
+fleet code with comments and strings stripped: 346 are `. (lambda)`, the
+monadic steps that respell as `bind`, and 139 are `. named_fn`, the threading
+form the effect-first rider preserves. (An earlier count of 309 counted
+differently and is superseded.) Most of the 346 are in `scripts`, which is the
+gates, so a botched pass there takes CI down rather than a user program.
+
+**It cannot start until Clay rules on the line grammar.** The gavel's sample
+is dotless — `bind (text -> ...)` — while the same paragraph says the first
+argument comes from the rule that makes `(expect 1) . to (equal x)` work, and
+that rule is the dot. Dropping the dot collides with the rule that an indented
+line under an argument-taking statement is one more argument (`src/lexer.rs`),
+which the leading `.` is currently the only thing distinguishing — so the
+dotless form needs the parser to know the three words, contradicting "nothing
+about them is syntax". Filed.
+
+**Two things the gavel's own sample needs and does not have.** Its lambda form
+reads `e.reason`, and an err has no such reader — nor could a lambda use one,
+since every operation on an err propagates it. A group callback destructures
+instead, which is the gavel's primary story. Whether an err gains readers that
+get past its own infectiousness, the way `wrap_err`'s second argument does, is
+open.
 
 **`done` is the second, smaller one.** Letter D was ruled in the same sitting:
 a succeeded effect yields `done`, not `none`. `none` means absence and nothing
@@ -182,11 +204,13 @@ else. Chains that tested for `none` after an effect migrate.
   - the one blocking question, what a digest costs, filed with its measurement
   - `delete_branch_on_merge=true` and the 324-branch purge (task #109), both
     checked from here on two days and both refused by the tooling
-  - whether the err migration begins in the successor session or elsewhere
+  - the chain-line grammar above, which blocks the 346-site respelling
+  - whether an err gains readers a lambda callback can use
 
-**Fourteen questions wait in `design/pending-gavels.md`** — one blocking,
-thirteen open — each with a recommendation, counted from the ledger rather
-than carried forward.
+**Sixteen questions wait in `design/pending-gavels.md`** — one blocking,
+fifteen open — each with a recommendation, counted from the ledger rather
+than carried forward. Two are new today: the chain-line grammar and whether
+an err gains readers a callback can use.
 
 **The rules that carry forward**, each earned twice:
 

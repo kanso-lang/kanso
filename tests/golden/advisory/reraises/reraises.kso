@@ -4,5 +4,5 @@ type woe
 pub fn boom _
   err (woe 5)
 
-pub fn annotate (err w:woe)
+pub fn relabel (err w:woe)
   err (woe (w.at + 1))

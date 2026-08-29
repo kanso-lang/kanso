@@ -1,0 +1,6 @@
+# `rescue` reads the failure channel and only the failure channel. A subject
+# that succeeded hands its value straight on, and the callback is not called —
+# which is what the printed line says: `true`, not `rescued: true`.
+import "std/os"
+
+pub play = rescue (os/exists "/") (seen -> "rescued: {seen}") . print
