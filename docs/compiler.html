@@ -1270,6 +1270,25 @@ the page               &lt;io&gt;</code></pre>
 
 <p>the accessor&#8217;s own sentence has no program left that reaches it. it was reachable eight ways this week &#8212; an operator, a condition, four index forms, an err, two field reads, a destructure &#8212; and each is now answered by the site that owns the words, with the program that proved it in the corpus. it stays in the source, listed as unpinned with its reasons, because the arm is what makes the accessor total.</p>
 
+<h2 id="threewords"><span class="sec-num">28</span>and then bind became a word</h2>
+
+<p>section 23 is called &#8220;why there is no bind&#8221;, and it is now half wrong. the argument it makes still holds: the compiler threads the failure channel, the programmer does not write the plumbing, and a chain reads as a stack of steps. what changed is the spelling, and the reason is worth keeping because the ruling went past what was recommended.</p>
+
+<p>the recommendation kept the chain err-arm as the surface for annotating a failure &#8212; an arm whose shape told the compiler it was the failure branch. clay killed it in one sentence: &#8220;since you want to be able to handle an error in two different ways, you need the explicit rescue either way &#8212; and that kind of makes me think we should just be symmetrical and have all three forms explicit.&#8221; then, immediately after: &#8220;i think bind should stay parallel with rescue and annotate. be consistent.&#8221;</p>
+
+<pre><code>io/read_file path
+bind   (text -&gt; json/parse text)
+annotate (e -&gt; "config: {e.reason}")
+rescue when_failed</code></pre>
+
+<p>three words, and nothing about them is syntax. they are ordinary two-argument functions &#8212; <code>bind effect callback</code> &#8212; and a chain line that spells only the callback is the chain rule already in the language supplying the first argument, the same rule that makes <code>(expect 1) . to (equal x)</code> feed <code>expect 1</code> into <code>to</code>. they can be called prefix-style outside a chain and mean the same thing. the dot retires from chain-step position; field access was never the monad and is untouched.</p>
+
+<p>the part that pays for the extra verbiage is that the callback receives the err itself rather than an unwrapped reason. a dispatch group is therefore a legal callback, and its arms match reason types polymorphically, subtype rung and all &#8212; <code>rescue when_failed</code> is the whole generic-rescuer story, with nothing written specially for it. two more properties fall out of the spelling rather than being checked: annotate cannot resurrect, because its result is always re-wrapped as err with the original as cause whatever the callback returns; and rescue is the sole door, so the foreign-only license is enforced at the word instead of by enumerating sites.</p>
+
+<p>the failure channel is now fully spelled and never inferred from an arm&#8217;s shape. that is the trade: a chain is longer to write and there is nothing left to deduce about which branch is which.</p>
+
+<p>this is ruled and not yet built. the migration is mechanical &#8212; every chain err-arm in the fleet becomes an <code>annotate</code> step and every <code>.</code> chain step becomes <code>bind</code> &#8212; and the book&#8217;s chapter on the boundary language moves with it.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

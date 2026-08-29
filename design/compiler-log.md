@@ -20,6 +20,191 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
+> Eight entries dated 2026-08-26 sit at the top: they were written on a
+> branch that did not merge until 2026-08-28, so they arrive after the
+> entries below them were filed. They are placed in DATE order, which
+> puts this file at forty-seven until the next trim.
+
+## 2026-08-26 — ironclad: branches do not hang out, and old work finishes first
+
+Clay, verbatim, after finding a day-old and a four-day-old branch
+sitting on origin: "there needs to be an ironclad rule that prevents
+branches from just hanging out... what the fuck is any process doing
+making a new PR when there's an existing one there that clearly is
+older." An inventory taken on the spot found roughly 250 branches on
+origin, the oldest from July 13 — most of them squash-merge litter
+whose PRs landed weeks ago and whose head branches nobody deleted, and
+on top of that the genuinely unfinished ones aging in place.
+
+The ironclad rule, three clauses:
+
+- **FIFO, corrected from the earlier 24-hour misstatement.** The rule
+  was never an age limit: no session starts a new branch or a new PR
+  while an older open PR or unfinished pushed branch of its own
+  remains. Oldest first, driven to merged-on-green, superseded, or
+  closed with the reason recorded — then the next thing begins.
+- **A merged branch dies at merge.** Turn on the repository's
+  delete-branch-on-merge setting (gh api -X PATCH repos/kanso-lang/kanso
+  -f delete_branch_on_merge=true, and the same for kq) so the litter
+  class cannot recur, and run the one-time purge: every branch whose PR
+  is merged or closed is deleted; a branch with no PR and no unlanded
+  content is deleted; a branch with real unlanded content either gets
+  its PR opened now or its salvage recorded as a task — nothing stays
+  parked.
+- **Every check-in audits the branch list**, not just the PR list. A
+  branch on origin is either main, or actively being driven to done by
+  the FIFO. There is no third state.
+
+This entry rides the oldest unfinished branch this session owns, which
+is the rule applied to itself.
+
+## 2026-08-26 — the branch rule, refined by Clay: parallel is fine, abandoned is not
+
+Clay refined the ironclad within the hour, and the refinement loosens
+the serial reading: "you can have multiple agents working at once, and
+if that is the case it's fine to have one agent working on a new issue
+as long as there's at least one agent currently working on closing off
+any existing issues. you should be checking for ensuring that nothing
+is abandoned before you commence something new."
+
+So the rule is not strict FIFO across the fleet. It is an abandonment
+check: before any agent commences new work, verify that every existing
+open item — branch, PR, task — is either actively being driven by some
+agent or explicitly closed out. Parallel streams are welcome; an item
+with no agent on it is the violation. The check runs at the moment of
+commencing, every time, and the earlier clauses stand: merged branches
+die at merge, the one-time purge proceeds, and every check-in audits
+the branch list.
+
+## 2026-08-26 — directive: no more trigger calls from the running session
+
+Clay, seeing yet another Update Trigger prompt from the kanso cloud
+session: "fucking stop." Effective on reading this: the running cloud
+session makes no further claude-code-remote tool calls of any kind —
+no create, update, fire, or delete. Self-scheduled check-ins move to
+Monitor with an until-loop, or to simply continuing the turn. Every
+such call prompts Clay's phone, because the running session predates
+the checked-in allowlist and cannot load it.
+
+The permanent fix: at the next natural boundary — current PR queue
+drained — the running session hands off to a successor. A session
+started now inherits the merged .claude/settings.json and autoMode
+policy and runs silent. Write the handoff into STATUS.md as usual;
+nothing else transfers, because the repo already carries everything.
+
+## 2026-08-26 — gavel: three explicit forms, and the err travels whole
+
+Clay ruled the spelling rider in dialog, and went past the
+recommendation. The recommendation kept the chain err-arm as annotate's
+surface; his insight killed it: "since you want to be able to handle an
+error in two different ways, you need the explicit rescue either way —
+and that kind of makes me think we should just be symmetrical and have
+all three forms explicit. which certainly simplifies things drastically
+despite requiring a bit more verbiage." And the refinement: "annotate
+and rescue should just pass the actual error, so that you can still use
+polymorphic dispatch."
+
+The ruling:
+
+- **Three explicit forms.** `.` stays bind — it is the gaveled monad
+  and already unambiguous. `annotate` and `rescue` become explicit
+  chain steps, and the chain err-arm retires: the failure channel is
+  fully spelled, never inferred from an arm's shape.
+
+      io/read_file path
+      . (text -> json/parse text)
+      annotate (e -> "config: {e.reason}")
+      rescue when_failed
+
+- **The callback receives the err itself**, not an unwrapped reason —
+  so a dispatch group is a legal callback and its arms match reason
+  types polymorphically, subtype rung and all. `rescue when_failed` is
+  the whole generic-rescuer story; nothing special is written for it.
+- **Annotate cannot resurrect, by construction.** Its result is always
+  re-wrapped as err with the original as cause, whatever the callback
+  returns. The old "an err arm must answer an err" rule is not checked;
+  it is unspellable.
+- **Rescue is the sole door**, and the foreign-only license is checked
+  at the word — the site enumeration gavel 1 wanted, made trivial by
+  the explicit spelling. Own-origin errs skip its arms at match time
+  per the enforcement gavel of 2026-08-25.
+- **Migration is mechanical**: every chain err-arm in the fleet becomes
+  an `annotate` step; the book's ch08 teaching moves with it.
+
+The rider leaves the ledger with this commit; the construction-
+enforcement rider beneath it was already recommended struck and falls
+with the same reasoning — provenance is computed, the doctrine line
+retires. The assert hako's design pass unblocks: failures now have
+their spelled surface.
+
+## 2026-08-26 — amendment: bind is a word too
+
+Clay, immediately after the three-forms gavel: "i think bind should
+stay parallel with rescue and annotate. be consistent." That reverses
+the one clause the recommendation had kept — `.` as the bind step —
+and completes the symmetry the ruling was already reaching for. All
+three chain combinators are words:
+
+    io/read_file path
+    bind (text -> json/parse text)
+    annotate (e -> "config: {e.reason}")
+    rescue when_failed
+
+- **The word is `bind`**, spelled as Clay named it. `.` retires from
+  chain-step position; a chain is a stack of worded steps and nothing
+  else. Field access (`e.reason`) is untouched — that dot was never
+  the monad.
+- Everything else in the three-forms gavel stands unchanged: the
+  callback receives the err itself, annotate always re-wraps, rescue
+  is the sole door with the foreign-only license at the word.
+- Migration widens accordingly: every `.` chain step in the fleet
+  respells as `bind`, in the same mechanical pass that respells the
+  err-arms as `annotate`.
+
+## 2026-08-26 — rider: effect first, callback second
+
+Clay, closing the spelling: "I would think that the first argument to
+those methods would be the effect and the second would be the call
+back." So `bind`, `annotate` and `rescue` are ordinary two-argument
+functions — `bind effect callback` — and a chain line spelling only
+the callback is the chain rule already in the language supplying the
+first argument. Nothing about the three words is syntax: they are
+library functions threaded by the same rule that makes
+`(expect 1) . to (equal x)` feed `expect 1` into `to`, and they can
+be called prefix-style outside a chain with the same meaning.
+
+## 2026-08-26 — gavel: the July letters close
+
+Clay ruled the five unclosed letters in one word — "gavel" — on the
+recommendations as presented, and the July campaign's ledger section
+empties.
+
+- **C (pure/yield): struck as asked.** Under deferral the right side
+  of `>>` is a description that gets demanded, which is the lifting
+  the question wanted; the named primitive has nothing left to do.
+  Re-ask only if the fold-yield idiom reappears and wants more.
+- **D: `done` is minted.** A succeeded effect yields `done`, not
+  `none`. `none` means absence and nothing else; the silent
+  railway-skip where success and absence shared a spelling — the one
+  place in the language a value meant two things — is gone. Chains
+  that tested for `none` after an effect migrate to `done`.
+- **G (eta-reduction as canon): struck**, on the July measurement —
+  an err records a hop per function, so `map (c -> fetch c)` and
+  `map fetch` print different provenance and cannot be canonicalised
+  into each other without breaking oracle agreement. The
+  composition-rules half (design/function-values.md) stays open as
+  its own item, not a letter.
+- **Z (errors without exceptions): confirmed declined.** Gavel 1 kept
+  err with the foreign-only rescue license; Z's world is abolished on
+  the record now, not just in effect.
+- **AA (newtype acceptance): explicit cast only.** A `post_body` is
+  not accepted where a `string` is; the compiler refusing the mix-up
+  is the reason the type was minted. The 2026-08-19 declaration and
+  ctor spellings stand; this closes the acceptance half.
+
+With this the GAVELS.md campaign is fully adjudicated: every letter
+A1–X, BB, and now C, D, G, Z, AA has a ruling in the log or archive.
+
 ## 2026-08-27 — two of the ratchet's excuses were to-do notes
 
 Every gating CI job carries either a mutation that turns it red or a written

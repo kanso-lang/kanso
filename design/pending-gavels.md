@@ -212,100 +212,6 @@ is also the only one that makes `read_file`'s name true on both engines, and
 the bytes reader it needs is the same surface `text/bytes` already implies.
 
 
-### Riders under the err gavel (the three-combinator model, 2026-08-15)
-
-**Cited: gavel 1, archive 2026-08-15, listed six riders. Four have since
-closed — the test surface (archive 2026-08-17, assertions are ordinary
-foreign rescue), ch08's pedagogy (scoped into the 1b migration, archive
-2026-08-17), and the three small July spellings (archive 2026-08-19, "the
-July spellings"). These two are what remain.**
-
-- **Spelling**: names and syntax for annotate and rescue — combinator
-  call vs marked arm on a chain — and whether the existing chain
-  err-arm syntax is annotate's surface.
-
-  **The question is where err-handling LIVES, not how tightly it is
-  contained.** That is Clay's framing, 2026-08-26, and it reframes what
-  the two worlds below are about. Containment was settled by the
-  round-trip ruling: a foreign party may hand a reason back to its
-  raiser, "and if the caller wants to pass it back to you, so be it".
-  What is open is whether access to a wrapped value goes through
-  dispatch or through a named function.
-
-  **What the rule is today, from the language's side.** A bare parameter
-  refuses a failure: `fn f x` does not match when the argument is an
-  err, so the body never runs and the err leaves with a hop. An arm
-  takes one only by writing `err` in the parameter, and such an arm
-  matches only a FOREIGN err. Your own package's err never enters your
-  own arm — dispatch skips it and the failure passes as though the arm
-  were not written, which is why `provenance.rs` reports it with
-  `error[license]`.
-
-  Verified on both engines rather than read off the passes: a bare
-  parameter passed the err through with a hop; `(err w:dep/woe)` in
-  another package matched and returned a string; the same arm inside the
-  raising package matched nothing, not even its own `_` fallback.
-
-  **World A — err-handling lives in dispatch.** What ships. Every
-  pattern match asks whether its argument is a failure and whose. The
-  cost is not the rule, it is where the rule sits: `match_one` carries
-  an err case on every pattern shape, `match_params` and the dispatch
-  loop thread the arm's package through every match, `provenance.rs`
-  exists solely to answer "may this arm see its own err" by fixpoint
-  over the call graph, and native and wasm each carry a
-  `k_not_own_err` beside an interned package literal per declaration.
-  The failure mode is a silently dead arm: written, never fired, and
-  only a whole-program pass can tell you.
-
-  `_:some` swallowing a foreign failure (fixed 2026-08-26, #1052) is
-  this world's characteristic bug. It needed no `err` anywhere: an
-  annotation meaning "not none" reached an err because
-  `type_match_depth` had to know about errs at all.
-
-  **World B — err-handling lives in named functions.** `bind` unwraps,
-  hands the value to a continuation, re-wraps. `annotate` and `rescue`
-  hand out the err or its reason and enforce the package constraint
-  themselves, in one place, at the call. Dispatch goes back to being
-  dumb: a parameter is a parameter, and an err never reaches a user arm
-  because propagation short-circuits before dispatch. Everything in the
-  paragraph above is deleted. The refusal becomes a diagnostic at the
-  rescue site naming the raising package, rather than an arm that can
-  never match.
-
-  No rule of the form "a function that takes an err in any argument
-  position must return an err" is needed, because a function cannot
-  receive one it did not ask a combinator for.
-
-  **What does not change either way.** Propagation stays implicit —
-  `f (g x)` is `f (g x)` whether or not `g` failed — so err-in/err-out
-  remains a FACT about calls; it stops being a rule anybody writes down
-  or a checker enforces. And the merge semantics are propagation rather
-  than access: the construction divergence of 2026-08-26 (native and
-  wasm returned the first failing field where the interpreter merged)
-  was three engines implementing propagation separately, and World B
-  does not collect that win.
-
-  The chain's err arm survives as surface in either world: desugar it to
-  `bind`/`annotate` calls rather than to dispatch arms, and the spelling
-  programs already use and the book already teaches is untouched.
-
-  **RECOMMENDATION: World B.** This is the second reversal in a day and
-  the reason is structural rather than about containment, which is what
-  the first two arguments got wrong. World A buys nothing World B
-  cannot state more directly, and it pays for it in every dispatch.
-
-- **Construction enforcement**: reason building module-private is
-  stated by the doctrine, unnecessary for soundness now that provenance
-  is computed, and unenforced.
-
-  **RECOMMENDATION: strike it.** It was the proxy for provenance, and
-  provenance is computed (archive 2026-07-28, "Clay: build it
-  correctly"). A rule that buys nothing and costs a fleet migration is
-  doctrine the code has outgrown.
-
-- Downstream of the spelling, not a separate question: the arm-based
-  advisory migrates onto whatever surface is chosen. Implementation.
-
 ### Which claim owns `dep/join` — the bare-enrollment clone, or `dep`
 
 **Cited: archive 2026-07-27 filed this against "the question task #51 holds
@@ -540,58 +446,11 @@ program is the reason to revisit it.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
-The July design doc ruled its A1–X and BB (those rulings are in the log
-and archive; the doc's full text is in git history). Letters that never
-closed:
-
-- **C — pure/yield**: does the fold-yield idiom need a named primitive
-  (`out >> yield store`) or does a plain value on `>>`'s right
-  auto-lift? Asked before `>>` deferred its right side.
-  **Cited: the search found no ruling; the deferral gavels that changed
-  its premise are archive 2026-08-15 onward.
-  RECOMMENDATION: strike as asked, re-ask if the idiom reappears. Under
-  deferral the right side of `>>` is a description that gets demanded,
-  which is the lifting the question wanted, so the primitive has nothing
-  left to do.**
-
-- **D — what a succeeded effect yields**: `none` today, whose silent
-  railway-skip is a footgun; a `done` marker was the alternative.
-  **Cited: the search found no ruling. The nearest is archive 2026-08-25,
-  `>>` stops at the first run-time failure, which settles sequencing and
-  not the yielded value.
-  RECOMMENDATION: mint `done`. The footgun is real — a succeeded effect
-  yielding `none` means a chain that tests for `none` cannot tell success
-  from absence — and it is the one place in the language where a value
-  means two things.**
-
-- **G — eta-reduction as canon**: ban the forwarding lambda
-  (`map (c -> fetch c)` → `map fetch`) plus the composition rules a
-  dispatch group held as a value still owes
-  (design/function-values.md).
-  **Cited: premise answered, archive 2026-07-25 "BUILT, MEASURED,
-  DECLINED: eta-reduction is not semantics-preserving here" — an `err`
-  records a hop per function, so the two forms print different
-  provenance and native stops agreeing with the oracle. Two forms that
-  trace differently cannot be canonicalised into each other.
-  RECOMMENDATION: strike G on that reason. One word closes it; the
-  composition-rules half stays.**
-
-- **Z — errors without exceptions**: presumed declined — the 2026-08-15
-  err gavel kept err with the foreign-only rescue license, which is the
-  world Z1 abolished.
-  **Cited: archive 2026-08-15, gavel 1.
-  RECOMMENDATION: confirm declined. One word and this line moves to the
-  log.**
-
-- **AA — newtype dispatch acceptance**: the live half is typeset
-  acceptance as the idiom vs explicit cast only. The 2026-08-19 ruling
-  covered the declaration and ctor form, not acceptance.
-  **Cited: archive 2026-08-19, "the July spellings" — `type
-  post_body:string` declares, `post_body ""` constructs, and acceptance
-  is untouched by it.
-  RECOMMENDATION: explicit cast only. A subtype that is accepted wherever
-  its base is accepted is a comment, and the reason to mint one is that
-  the compiler refuses the mix-up.**
+EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,
+`done` minted for D, G struck on the July provenance measurement, Z
+confirmed declined, AA explicit-cast only. Every letter A1–X, BB, C, D, G,
+Z and AA now has a ruling in the log or the archive; the section stays as a
+header so a reader looking for the campaign finds where it went.
 
 ## Parked — on the record, no action
 

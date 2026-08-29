@@ -12,21 +12,21 @@ written in kanso".** `sha256/hex` holds the whole message; peak arena is linear
 in the input at about six and a half thousand bytes per byte hashed, and the
 asset-digests job's headroom falls as `docs/kanso.wasm` grows.
 
-**Twenty questions are waiting, and every one of them carries a
-recommendation** — one blocking, fourteen open but not blocking, five July
-letters. Counted from the ledger on 2026-08-28 rather than carried forward. That is the point of the 2026-08-25 sweep: Clay's ask was
+**Fourteen questions are waiting, and every one of them carries a
+recommendation** — one blocking, thirteen open but not blocking. The July
+letters are closed: Clay ruled the last five in one sitting on 2026-08-26, and
+that ruling reached main only on 2026-08-28, on a branch that had been sitting
+unmerged. Counted from the ledger rather than carried forward. That is the point of the 2026-08-25 sweep: Clay's ask was
 *"the goal here would be to not have anything left to gavel. I feel like I keep
 gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**The fourteen open, not blocking** — whether a `compile_instructions` move that
+**The thirteen open, not blocking** — whether a `compile_instructions` move that
 cannot be work needs a spend attribution, asked after three such moves in two
 days; whether `read_file` is text or bytes, which
 is one reader with no way to say which you meant and two engines that answer
-differently; the two
-surviving err-gavel riders (the annotate/rescue spelling, and construction
-enforcement); which claim owns a qualified name when a module declares one of
+differently; which claim owns a qualified name when a module declares one of
 its imports' names, whose filing pointed at a gavel that has since fallen; what
 a record prints as when its module is imported;
 `--explain-copies`; the assert hako's surface; the
@@ -35,10 +35,9 @@ interim; whether a dependency's render arms join the root group; `first coll n`;
 where `std/` comes from; block-born as a dataflow property; and the
 ten-thousand-frame guard, which is a standing offer rather than a question.
 
-**Five July letters** — C (pure/yield), D (what a succeeded effect yields), G
-(eta-reduction as canon), Z (errors without exceptions), AA (newtype dispatch
-acceptance). Three of the five are recommended for one word: strike, confirm
-declined, strike.
+**The July letters are closed.** C struck, `done` minted for D, G struck on the
+July provenance measurement, Z confirmed declined, AA explicit-cast only. Every
+letter A1–X, BB, C, D, G, Z and AA has a ruling in the log or the archive.
 
 Six candidates the sweep turned up were **already answered by shipped code**
 and went to the log rather than the ledger, so they cannot reach him again: the
