@@ -3586,3 +3586,24 @@ Two mutations, each reddening exactly one fixture and leaving the other green:
 drop the resolver's arm and `a_widening_names_no_type` passes; stop the
 pattern walk recursing into constructor fields and
 `an_annotation_inside_a_pattern_names_no_type` passes.
+
+**And then CI caught a second set nobody needed.** `compile_allocs` moved,
+which is the vein that measures front-end work directly rather than the
+binary's shape, so it was mine and not layout. The resolver needed the
+declared type names and got its own `HashSet` built beside the one
+`check_annotation_names` was already building — the same collect over the same
+iterator, twice per compile. Built once and handed to both readers, the
+counter reads 61,974 again, byte-identical to the golden.
+
+The first shape's numbers were taken with that duplicate present, so the
+comparison understated the shape it favoured. With one set:
+
+    main                       58,345,564   allocs 61,974
+    a dedicated walk           58,508,391      +162,827
+    asked in the resolver      58,321,444       -24,120   allocs 61,974
+
+The fall is larger than the band this vein wanders in on its own and is not
+attributed here: `Declared` replaced three pointer arguments with one at a
+call made per declaration, which is a mechanism but not a measurement. What is
+measured is the direction, and that both counters end at or below where they
+started.

@@ -1210,7 +1210,11 @@ pub fn check_file_shadow(
     check_retired_any(program, &mut diags);
     check_field_annotations(program, &mut diags);
     check_field_conflicts(program, &mut diags);
-    check_annotation_names(program, &mut diags);
+    // One set, read by the annotation walk and by the resolver. Built twice
+    // it cost a second HashSet on every compile, which compile_allocs saw.
+    let declared_type_names: HashSet<&str> =
+        program.types.iter().map(|t| t.name.as_str()).collect();
+    check_annotation_names(program, &declared_type_names, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
     let mut fn_arities: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
@@ -1225,8 +1229,6 @@ pub fn check_file_shadow(
     // function with one, and the compiler knows both counts. A typeset never
     // constructs and a subtype takes the one value it wraps, so neither is
     // entered here.
-    let declared_type_names: HashSet<&str> =
-        program.types.iter().map(|t| t.name.as_str()).collect();
     let type_arity: crate::hash::Map<&str, usize> = program
         .types
         .iter()
@@ -2500,8 +2502,11 @@ fn undeclared_in(ty: &str, declared: &HashSet<&str>) -> Vec<String> {
         .collect()
 }
 
-fn check_annotation_names(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let declared: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+fn check_annotation_names(
+    program: &Program,
+    declared: &HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
     fn patterns(p: &Pattern, declared: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
         match p {
             Pattern::Annotated { ty, span, .. } => {
@@ -2529,11 +2534,11 @@ fn check_annotation_names(program: &Program, diags: &mut Vec<Diagnostic>) {
 
     for decl in &program.fns {
         for param in &decl.params {
-            patterns(param, &declared, diags);
+            patterns(param, declared, diags);
         }
         for stmt in &decl.body {
             if let Stmt::Bind { pattern, .. } = stmt {
-                patterns(pattern, &declared, diags);
+                patterns(pattern, declared, diags);
             }
         }
     }
