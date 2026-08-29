@@ -3378,3 +3378,62 @@ values `` — and for a moment that looked like the answer to the question
 being asked. It was a different bug, invented by a wrong revert. Reading the
 old code out of git rather than out of memory turned the corpus green again
 and put the experiment back.
+
+## 2026-08-29 — the census, and four wrong readings of it on the way
+
+The entry above ends by saying the corpus is the thing to grow, and that the
+mutation sweep says which shape is missing. That is a claim about a number
+nobody had, so this counts it: every `Expr`, `Pattern` and `Stmt` variant, over
+the 298 programs the page runs, in `tests/wasm_engine.rs` against
+`tests/golden/shapes.txt`.
+
+The result is that no construct is missing. Two are thin. `Upcast` — the
+widening `(expr):type` — is carried by `examples/subtypes.kso` and by nothing
+else, and `Block` by two programs. Delete either carrier, or move it to
+`wasm_gaps.txt`, and the three engines stop being compared on that construct
+with every gate in the tree still green. The golden names carriers while there
+are at most three and says `many` above that: four independent programs survive
+losing one, and naming them would move the file on every ordinary fixture
+without saying anything.
+
+The census does not compile if a new AST variant appears, because `shape` and
+`pattern_shape` match without a catch-all, and it does not pass until a
+page-runnable program carries the new variant.
+
+The four wrong readings are the actual content of the day, because each one
+produced a confident number that was an artefact of the instrument.
+
+**`s:Set` read as carried by nothing.** `for_each_child` hands a build block's
+statements to its caller as the expressions inside them, so a `Set` arrives as
+the value being assigned and its statement-hood is gone. A census that walked
+expressions alone reported that no page-runnable program assigns a field, while
+`examples/build_blocks.kso` does it twice. Nine programs do.
+
+**`Upcast` read as carried by nothing, correctly, for the wrong reason.** Seventeen
+corpus programs failed `parse` and were skipped by a `let Ok(..) else
+{ continue }`. They are the play-door programs — declarations beside bare
+statements — and `subtypes.kso` is one of them. The census now tries both
+doors and fails on a program neither reads, rather than dropping it.
+
+**The count read 302 when the corpus holds 307.** The walk recursed and the
+harness's `corpus()` does not, so `examples/trace_demo/main.kso` and
+`tests/golden/runtime/reencode/main.kso` were counted as page-runnable when the
+differential never runs them. The census lives in `tests/wasm_engine.rs` now
+and calls `corpus()` and `known_gaps()` directly, so there is one walk rather
+than two that agree until they don't.
+
+**`Block` read as one program, then two.** Same cause as the second: `if_blocks.kso`
+was behind the play door.
+
+Each of those was a number I would have written down. The pattern across all
+four is that the instrument was built beside the thing it measures instead of
+out of it, and every divergence between the copy and the original showed up as
+a fact about the language. That is the third time today — the `check`-versus-
+`build` verb and the from-memory revert of `rt_maybe_bind` were the other two.
+
+Two mutations, watched red before the gate went green. Move
+`examples/subtypes.kso` out of the corpus and `Upcast` reads `NOBODY`. Route
+`Expr::Build` through `for_each_child` instead of the statement walk and
+`s:Set` reads `NOBODY`.
+
+No counter moves: nothing under `src/` changed.

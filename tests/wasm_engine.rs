@@ -815,3 +815,226 @@ fn the_page_refuses_the_error_corpus_the_way_the_others_do() {
     assert_eq!(read, files.len(), "a fixture was skipped without saying so");
     assert!(wrong.is_empty(), "{} of {read} differ:\n{}", wrong.len(), wrong.join("\n"));
 }
+
+/// The most witnesses a construct can have and still be named. Three
+/// independent programs survive losing one and still leave two behind, so
+/// naming carriers past that buys nothing and would move this golden every
+/// time an ordinary fixture lands.
+const WITNESSES: usize = 3;
+
+/// Which construct each `Expr` variant is, for the census below. Written out
+/// rather than derived, so a new variant does not compile until somebody
+/// decides what to call it and whether a program carries it.
+fn shape(e: &kanso::ast::Expr) -> &'static str {
+    use kanso::ast::Expr::*;
+    match e {
+        Int(..) => "Int",
+        Float(..) => "Float",
+        MapLit(..) => "MapLit",
+        Str(..) => "Str",
+        Ident(..) => "Ident",
+        Partial(..) => "Partial",
+        List(..) => "List",
+        App { .. } => "App",
+        Field { .. } => "Field",
+        Index { .. } => "Index",
+        Seq(..) => "Seq",
+        Lambda { .. } => "Lambda",
+        BinOp { .. } => "BinOp",
+        Join { .. } => "Join",
+        Block(..) => "Block",
+        Upcast { .. } => "Upcast",
+        Build(..) => "Build",
+        Guard { .. } => "Guard",
+    }
+}
+
+fn pattern_shape(p: &kanso::ast::Pattern) -> &'static str {
+    use kanso::ast::Pattern::*;
+    match p {
+        IntLit(..) => "p:IntLit",
+        StrLit(..) => "p:StrLit",
+        Nullary(..) => "p:Nullary",
+        Var(..) => "p:Var",
+        Wildcard(..) => "p:Wildcard",
+        Annotated { .. } => "p:Annotated",
+        Ctor { .. } => "p:Ctor",
+        Keyed { .. } => "p:Keyed",
+    }
+}
+
+type Census = std::collections::BTreeMap<&'static str, std::collections::BTreeSet<String>>;
+
+fn carries(census: &mut Census, what: &'static str, program: &str) {
+    census.entry(what).or_default().insert(program.to_string());
+}
+
+/// Statements, walked as statements. `for_each_child` hands a `Set` inside a
+/// build block to its caller as the value being assigned, so a census that
+/// went through it alone would read every field assignment in the corpus as
+/// an ordinary expression and report `s:Set` as carried by nothing.
+fn census_stmts(list: &[kanso::ast::Stmt], census: &mut Census, program: &str) {
+    for st in list {
+        match st {
+            kanso::ast::Stmt::Bind { pattern, expr } => {
+                carries(census, "s:Bind", program);
+                carries(census, pattern_shape(pattern), program);
+                census_expr(expr, census, program);
+            }
+            kanso::ast::Stmt::Expr(e) => {
+                carries(census, "s:Expr", program);
+                census_expr(e, census, program);
+            }
+            kanso::ast::Stmt::Set { value, .. } => {
+                carries(census, "s:Set", program);
+                census_expr(value, census, program);
+            }
+        }
+    }
+}
+
+fn census_expr(e: &kanso::ast::Expr, census: &mut Census, program: &str) {
+    carries(census, shape(e), program);
+    match e {
+        kanso::ast::Expr::Block(list, _) | kanso::ast::Expr::Build(list, _) => {
+            census_stmts(list, census, program)
+        }
+        kanso::ast::Expr::Guard { cond, early, rest, .. } => {
+            census_expr(cond, census, program);
+            census_expr(early, census, program);
+            census_stmts(rest, census, program);
+        }
+        _ => kanso::for_each_child(e, |c| census_expr(c, census, program)),
+    }
+}
+
+/// Every construct the grammar has, carried by a program the page runs.
+///
+/// The corpus above is what holds the three engines to one answer, so a
+/// construct no program in it uses is a construct the page is never asked
+/// about. Nothing in the tree could see that. The widening upcast
+/// `(expr):type` rides on a single program, and deleting that program — or
+/// moving it to the gap list — would retire the construct from the
+/// differential without turning anything red.
+///
+/// Two doors, because a corpus program is either a library exporting `play`
+/// or declarations beside bare statements, and `parse` alone refuses the
+/// second kind. A program that neither door reads fails here rather than
+/// being skipped: seventeen were, silently, when this census was a scratch
+/// file, and the hole is what made it report two constructs as carried by
+/// nothing.
+#[test]
+fn every_construct_is_carried_by_a_program_the_page_runs() {
+    let gapped: std::collections::BTreeSet<String> =
+        known_gaps().into_iter().map(|(path, _)| path).collect();
+
+    let mut census = Census::new();
+    let (mut read, mut skipped) = (0, 0);
+    let mut unread = Vec::new();
+    for path in corpus() {
+        let listed = path
+            .strip_prefix(root())
+            .expect("the corpus lives under the root")
+            .to_string_lossy()
+            .to_string();
+        if gapped.contains(&listed) {
+            skipped += 1;
+            continue;
+        }
+        let source = std::fs::read_to_string(&path).expect("a corpus program reads");
+        let Ok(lexed) = kanso::lexer::lex(&source) else {
+            unread.push(format!("{listed}: does not lex"));
+            continue;
+        };
+        let program = match kanso::parser::parse(&lexed) {
+            Ok(p) => p,
+            Err(_) => match kanso::parser::parse_play(&lexed) {
+                Ok(p) => p,
+                Err(diags) => {
+                    unread.push(format!("{listed}: {}", diags[0].message));
+                    continue;
+                }
+            },
+        };
+        read += 1;
+        for decl in &program.fns {
+            for param in &decl.params {
+                carries(&mut census, pattern_shape(param), &listed);
+            }
+            census_stmts(&decl.body, &mut census, &listed);
+        }
+    }
+    assert!(unread.is_empty(), "the census could not read:\n  {}", unread.join("\n  "));
+    assert_eq!(read + skipped, corpus().len(), "the walk lost programs");
+
+    let order = [
+        "Int",
+        "Float",
+        "MapLit",
+        "Str",
+        "Ident",
+        "Partial",
+        "List",
+        "App",
+        "Field",
+        "Index",
+        "Seq",
+        "Lambda",
+        "BinOp",
+        "Join",
+        "Block",
+        "Upcast",
+        "Build",
+        "Guard",
+        "p:IntLit",
+        "p:StrLit",
+        "p:Nullary",
+        "p:Var",
+        "p:Wildcard",
+        "p:Annotated",
+        "p:Ctor",
+        "p:Keyed",
+        "s:Bind",
+        "s:Expr",
+        "s:Set",
+    ];
+    let mut here = String::new();
+    for what in order {
+        let carriers = census.remove(what).unwrap_or_default();
+        let named = match carriers.len() {
+            0 => "NOBODY".to_string(),
+            n if n <= WITNESSES => carriers.into_iter().collect::<Vec<_>>().join(" "),
+            _ => "many".to_string(),
+        };
+        here.push_str(&format!("{what}\t{named}\n"));
+    }
+    assert!(census.is_empty(), "a construct the order forgot: {:?}", census.keys());
+
+    let golden = root().join("tests/golden/shapes.txt");
+    if std::env::var("KANSO_REGEN_SHAPES").is_ok() {
+        let head = std::fs::read_to_string(&golden)
+            .map(|t| {
+                t.lines()
+                    .take_while(|l| l.starts_with('#') || l.trim().is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .expect("the golden's header stays");
+        std::fs::write(&golden, format!("{head}\n{here}")).expect("the golden writes");
+    }
+    let want: String = std::fs::read_to_string(&golden)
+        .expect("tests/golden/shapes.txt")
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        .map(|l| format!("{l}\n"))
+        .collect();
+    assert_eq!(
+        want, here,
+        "the constructs the page-runnable corpus carries moved.\n\
+         NOBODY means the last program using a construct left the corpus, and the page \
+         stopped being asked about it — add a program rather than regenerating.\n\
+         Otherwise regenerate with KANSO_REGEN_SHAPES=1 and say in the pull request which \
+         construct gained or lost a carrier.\n\
+         {read} programs read, {skipped} gapped"
+    );
+}
