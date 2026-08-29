@@ -2979,3 +2979,59 @@ contract rather than one of the two uses.
 CI's numbers for the four goldens are regenerated in the commit that carries
 this; the veins are host-pinned and this container cannot measure them, so
 they come from the cost-goldens job's own diff.
+
+## 2026-08-29 — the page's own rationale entry was arguing against what shipped
+
+DONE. §23 was titled "why there is no bind" and closed with the sentence the
+design ledger cites as the assembled argument: "what remains open is not
+whether these words stay off the surface — they do, in every variant under
+consideration". Three of those words shipped this morning.
+
+§28 flagged the contradiction when the gavel was ruled and unbuilt, and that
+was the right shape then — the page and the compiler were allowed to disagree
+on purpose while a ruling waited for its build. The build landed, so the
+allowance expires and §23 has to tell the truth in the present tense.
+
+What survives is most of it, which is why this is a rewrite of the conclusion
+rather than a deletion. The three decisions stand: own failures only bubble,
+handling at a boundary is dispatch, elaboration is signature-directed. The
+second needed one adjustment rather than a reversal — `rescue` became a word
+without becoming a keyword, and an arm is still what does the handling, so
+what arrived is a way to say which channel you meant. The conclusion is
+rewritten: the compiler writes most of the plumbing, three words are the
+exception, and they are the failure channel.
+
+The title goes with it. "who writes the plumbing" is the question the section
+actually answers, and it stays true whichever way the open
+dispatch-vs-elaborator question goes. The anchor stays `nobind`: an anchor is
+not prose and changing it breaks links from outside.
+
+Two ledger entries carried the same stale premise and are corrected in the
+same commit. The book's boundary-language entry cited §23 for "why the
+combinator words stay off the surface", and the assert-hako entry was gated on
+the err spelling being ruled — that gate is lifted, ruled and built, so a
+matcher surface can now be designed once rather than twice.
+
+## 2026-08-29 — the ledger sweep, finished and counted
+
+Correction to the entry above, which says two ledger entries carried the stale
+premise. It is three. The chain-line entry was filed this morning saying the
+three words "work prefix-style on the interpreter", which was true when it was
+written and understated by the afternoon; it is corrected in the same commit
+alongside the boundary-language and assert-hako entries.
+
+The sweep is complete rather than opportunistic, and the method is worth
+keeping: every entry mentioning bind, rescue, annotate, chain or combinator was
+read against the gavel, not just the ones that looked likely. Three of the
+fifteen open entries were stale. Two mentions in the Parked section were
+checked and are not: "dot-absorbs-`>>` erases the visible then/bind split"
+argues about the dot's visibility and holds either way the chain-line grammar
+is ruled, and the serve campaign's "starts from the three combinators" is
+forward-looking and only helped by their existing.
+
+ch04's "nothing is asked of the signature" was checked rather than trusted,
+because the ledger marks it DONE and a record that says done without being
+done is the failure this project has caught before. It is really in the book,
+at docs/book/ch04.html, and nothing in it is invalidated: it teaches call-site
+short-circuiting, which is the rule `call_closure` and `k_call1` implement and
+which the gavel did not touch.

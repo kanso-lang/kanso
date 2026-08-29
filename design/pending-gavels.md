@@ -159,8 +159,9 @@ about them is syntax".
 
 346 lambda chain steps in the fleet respell either way, and the shape of the
 migration pass differs entirely between the two. The three words already work
-prefix-style on the interpreter (kanso#1116); this decides only how a chain
-line spells them.
+prefix-style on all three engines (kanso#1116, merged 2026-08-29); this
+decides only how a chain line spells them, and it is the only thing the
+migration waits on.
 
 **Recommendation: keep the dot.** It is the smaller change, it keeps the three
 words ordinary functions rather than parser-known heads, and it leaves the
@@ -397,9 +398,13 @@ two is GATED on the elaborator build: teaching signature-directed
 lifting for effects (`retry (fetch url)` unmarked, binds inserted at
 value-demanding positions, collapse at io) — the book speaks in the
 present tense, so this half lands with the elaborator, not before.
-The assembled argument for why the combinator words stay off the
-surface is compiler.html entry 23; the open dispatch-vs-elaborator
-question above decides only the machinery, not this surface.
+The assembled argument for the whole is compiler.html entry 23. Its
+concluding claim — that the combinator words stay off the surface, "in
+every variant under consideration" — was reversed by the three-forms
+gavel of 2026-08-26, and the entry now says so: `bind`, `rescue` and
+`annotate` are surface words, built on all three engines in kanso#1116.
+The three decisions that entry rests on are untouched, and the open
+dispatch-vs-elaborator question still decides only the machinery.
 
 ### An assert hako
 
@@ -411,10 +416,12 @@ A real assertion library in the rspec direction Clay sketched —
 improvised inside a test fix. Its arms are foreign to every tested hako,
 so the err license needs nothing special. Queued 2026-08-17.
 
-**RECOMMENDATION: build it as its own design pass, after the err
-spelling above is ruled.** The matcher surface reads failures, so its
-shape depends on how a failure is spelled; designing it first would mean
-designing it twice.
+**RECOMMENDATION: build it as its own design pass. The gate is lifted.**
+The matcher surface reads failures, so its shape depended on how a
+failure is spelled — that is ruled (three-forms gavel, 2026-08-26) and
+built on all three engines (kanso#1116), so designing it now cannot mean
+designing it twice. `rescue` is the word a matcher's own failure door
+would use.
 
 ### A bare call two imports answer alike
 
