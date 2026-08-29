@@ -3154,6 +3154,10 @@ binding claimed. CI put that at 57,567,033 -> 57,711,064 on `kanso check
 lib/json`, a rise of 144,031, and welfare sits exactly on its floor, so the
 rise had to come down before the change could land.
 
+CI measured the shape that shipped at compile_instructions 57,567,033 ->
+57,678,168, a rise of 111,135, and `bench/welfare_floor.json` carries the
+attribution.
+
 `kanso check lib/json` asks the question 335 times — counted, after guessing
 wrong about where the cost was. Four shapes, on a container where main reads
 58,201,174:

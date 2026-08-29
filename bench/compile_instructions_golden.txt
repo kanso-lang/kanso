@@ -225,4 +225,20 @@
 # attribution to layout has usually been an argument from the call graph; a
 # vein that returns to an earlier value under a different diff is layout
 # showing its hand.
-compile_instructions=57567033
+#
+# 2026-08-29 (a builtin's count at the front door): 57,567,033 -> 57,678,168,
+# a rise of 111,135. Work, not layout. `check_call_arities` now asks what a
+# builtin takes for every head no declaration and no binding claims — 335
+# times on this program, counted rather than guessed — and each ask is a
+# binary search of a sixty-two entry table.
+#
+# The first shape scanned that table and cost 144,031. A map built once for
+# the process cost only 33,772 and did not ship: it holds 3,216 bytes for the
+# life of the process, compile_peak_bytes moved with it, and welfare prices a
+# byte held about five times what it prices an instruction spent, which put
+# the number under its floor at 84.10. This shape holds nothing and welfare
+# stays at 84.11. design/compiler-log.md, same date, has all four readings.
+#
+# What it buys: a wrong count refused where it is written, with a span, on
+# all three engines. It used to be four answers, one of them a compiler panic.
+compile_instructions=57678168
