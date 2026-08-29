@@ -3800,3 +3800,51 @@ the runner and -3,950 in the container: opposite signs on one diff, layout.
 `article` moves between two modules and gains three callers, `k_article` is
 new in runtime.c and absent from this binary, and both messages they feed are
 runtime messages that `kanso check lib/json` never reaches.
+
+## 2026-08-29 — the gate keyed a message on its first few characters
+
+`diagnostic_coverage` decides whether a diagnostic is pinned by looking for
+its text in the corpus. The text it looked for was the leading run — the
+literal up to the first interpolation — and any key under ten characters was
+dropped, because one backtick matches every fixture there is.
+
+So a message that opens with an interpolation was not unpinned. It was
+invisible: not in the 262 the gate counted, not in the 38 it listed, not in
+its world at all. `` `:{ty}` widens; this value is not a {ty} `` has the key
+`` `: ``. That is how the article bug in the entry above sat in six sites with
+nothing watching, and thirty-eight literals sat in the same blind spot,
+including every `` `{ty}` has no field `{name}` `` site.
+
+The floor stays. What changes is the key: the whole message, with each
+interpolation written `{}`, so the field read keys as
+`` `{}` has no field `{}` ``. `in_corpus?` then asks for every run of a shape,
+in order, on ONE line. The line matters — runs matched anywhere in the blob
+would let one fixture's opening backtick and another's closing backtick stand
+in for a message nothing raises. The longest run is tried against the whole
+corpus first, so the per-line walk only runs for shapes that could hit.
+
+The other key measured was the longest run alone. It makes 29 of the 38
+visible against the skeleton's 30, and it false-pins: `{name} takes a list` is
+matched by `accept takes a listener`. It also cannot see
+`` field `{field}` of `{}` takes {} `` at all, which the skeleton reports
+correctly as unpinned.
+
+**262 diagnostics became 309.** Eight of what the gate found were pinned in
+the same change: an import of a std module that is not shipped, a rename of
+something an import does not export, a `builtin_` name spelled outside the
+standard library, a field typeset naming no type, and — in the module-shaped
+corpus — two modules answering one bare name, a module with nothing to
+re-export, a record built across an import, and a dependency that is only an
+entry file.
+
+Eight could not be pinned and each carries its reason in the list. Three are
+the same shape twice over: the two engines refuse the same program at
+different times in different words, and the runtime corpus asks both for the
+same stderr. Two are unreachable through the harness that stages the corpus.
+One needs a hako package, which no stderr corpus holds.
+
+One is a divergence. `shape 1`, for a typeset `shape`, is refused by
+the interpreter and by the page with the same sentence, and native prints
+`<mod>/shape 1` and exits 0. Nothing can pin a message two engines raise and
+the third answers with output. That is its own fix; the line stands until it
+lands.

@@ -1,0 +1,8 @@
+error[name]: `nosuchtype` in the typeset of field `v` names no declared or builtin type
+  --> a_field_typeset_naming_no_type.kso:6:3
+   6 |   v:int nosuchtype
+         ^
+error[type]: a record field carries no type — write `v` and let the compiler infer what it holds
+  --> a_field_typeset_naming_no_type.kso:6:3
+   6 |   v:int nosuchtype
+         ^

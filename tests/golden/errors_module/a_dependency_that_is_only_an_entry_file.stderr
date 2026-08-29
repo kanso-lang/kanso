@@ -1,0 +1,1 @@
+error: tests/golden/errors_module/a_dependency_that_is_only_an_entry_file/lonely holds only an entry file — a module is its library files, and main.kso is a program

@@ -1,0 +1,6 @@
+import "./quiet"
+
+pub quiet
+
+pub fn four n
+  quiet/four n

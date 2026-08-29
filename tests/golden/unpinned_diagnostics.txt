@@ -102,7 +102,7 @@ expected a constant name
 # a Rust file's doc comments and its own assert! messages are not pins of a
 # compiler message, and four of the six that read as pinned there were false.
 # The precedent is `an_empty_branch_is_refused.rs`, already cited above.
-this build is named `
+this build is named `{}`, and a directory of that name is here —
 #
 #   this build is named `   tests/build_names_collide.rs asserts it:
 #                           assert!(said.contains("this build is named `greeter`,
@@ -118,9 +118,9 @@ this build is named `
 # unwritable directory is not unwritable — measured on 2026-08-27, root writes
 # into a mode-000 directory without complaint. What each needs is stated so
 # nobody writes the program twice.
-cannot execute
-cannot open the terminal:
-cannot write
+cannot execute {}: {}
+cannot open the terminal: {}
+cannot write {}: {}
 #
 #   cannot execute           spawn of the built binary fails
 #   cannot open the terminal: the repl with no tty
@@ -130,8 +130,8 @@ cannot write
 # reason the two above them do: the driver family's corpus search deliberately
 # excludes Rust tests, so a message pinned only there still reads as unpinned
 # and its line has to say where the pin lives.
-cannot build:
-cannot invoke clang:
+cannot build: {}
+cannot invoke clang: {}
 #
 # The excuse that had covered these was wrong, in a way worth keeping. It read
 # "clang is installed", which treats installation as the question. What the
@@ -150,7 +150,7 @@ cannot invoke clang:
 # ONE FIRES WHEN CLANG REJECTS WHAT THE COMPILER EMITTED, which is a compiler
 # defect rather than a program a user can write. tests/build_names_collide.rs
 # names it in a doc comment, which is not a pin.
-clang failed on
+clang failed on {}
 #
 # THE PRINTED FAMILY. `error[kind]: …` written as plain text is what a rendered
 # Diagnostic looks like on a terminal, so these read to a user exactly like a
@@ -260,8 +260,8 @@ parallel group exceeds the scheduler's fiber cap
 # construction is a record rather than a partial application — which is the
 # second. A constructor handed a failure hands the failure back, and that arm
 # `continue`s before either check.
-`set` target `
-`set` writes a record field, not
+`set` target `{}` is not bound
+`set` writes a record field, not {}
 #
 # THE BIND PATTERN CATCH-ALL. `destructure` has arms for a name, a constructor
 # and a keyed read, and this is the `_`. All three call sites pass a
@@ -280,7 +280,7 @@ binding patterns are irrefutable: names and constructor
 # `if`: `list/select (opaque [1 2]) (x -> "{x}")` answers `an if condition is
 # true or false, got 1`, which a golden pins. That is the sentence this one
 # was mistaken for.
-a filter predicate returns true or false, got
+a filter predicate returns true or false, got {}
 #
 # SORT'S ELEMENT CHECK, shadowed by the comparison it performs. `list/sort
 # (opaque [1 "a"])` answers `comparison requires two values of one comparable
@@ -293,7 +293,7 @@ sort requires comparable elements of one type
 # module``. Reaching this arm means a stdlib module naming a builtin that does
 # not exist, which is a compiler-internal invariant rather than something a
 # program can express.
-unknown builtin `
+unknown builtin `{}`
 #
 # THE ESCAPED CLOSURE, unreachable by construction. `Value::TableFn` is built
 # in `src/wasm_rt.rs` and nowhere else, and that module calls
@@ -326,7 +326,7 @@ an origin or hop literal must be a string
 # 21,22} and `Err` for anything else — a COMPILE-time refusal. wasm_rt.rs:758
 # names exactly those fourteen codes. The emitter cannot write a code the
 # runtime does not know.
-no operator for code
+no operator for code {}
 #
 # THE ENVIRONMENT HANDLE. All nine `RT_ENVGET` call sites in wasm_backend.rs
 # pass `local_get(1)` — the compiled function's second parameter, which the
@@ -341,12 +341,12 @@ bad environment access
 # name`, `builtin_filter` by hand is refused by name, and `lib/list` writes
 # `select` as a fold in kanso rather than calling a builtin. What a program
 # meets for a non-bool predicate is `list/select`'s own `if`.
-filter needs a bool (got
+filter needs a bool (got {})
 #
 # THE MAP KEY. `require_literal_key` admits only `Expr::Int` and a `Expr::Str`
 # with no interpolation, so a key that is neither an int nor a string is
 # refused at compile time and never reaches the runtime's check.
-map keys are ints or strings, not
+map keys are ints or strings, not {}
 #
 # NOT A RECORD, four sites in two functions, and both are shadowed by a check
 # that answers first — each of which is itself pinned, so what a program
@@ -402,3 +402,72 @@ this value is not callable
 # a wrong answer is worse than a wrong sentence, and the arm is what makes `val`
 # total.
 a bound description cannot be used as data here
+
+# EIGHT THE WIDENED KEY FOUND, 2026-08-29.
+#
+# Until this change the scan keyed a message on its leading run — everything
+# before the first interpolation — and dropped any key under ten characters,
+# because one backtick matches every fixture in the corpus. A message that
+# opens with an interpolation was therefore not merely unpinned but invisible:
+# not counted among the diagnostics, not listed here. The key is the whole
+# message now, with each interpolation written `{}`, and `in_corpus?` asks for
+# all of a shape's runs in order on one line. 262 diagnostics became 309.
+#
+# Eight of what it found were pinned in the same change: an import of a std
+# module that is not shipped, a rename of something an import does not export,
+# a `builtin_` name spelled outside the standard library, a field typeset
+# naming no type, two modules answering one bare name, a module with nothing
+# to re-export, a record built across an import, and a dependency that is only
+# an entry file. These eight could not be, and each line below says why.
+
+# The driver's refusal when `kanso run` is handed a file that exports `play`.
+# The error corpus reaches every fixture through the harness's library
+# staging, which sees `pub play` and writes an entry that imports it — so the
+# shape that raises this is exactly the shape the harness turns into a working
+# program. Its sibling, for a library exporting no `play`, is pinned by
+# `no_main`; the two differ only in the sentence after the full stop.
+`{}` is a library — nothing to run. it exports
+
+# The page's arity check on a `map`/`bind` callback (wasm_rt.rs:283). Reaching
+# it means handing one of those a closure whose arity is not 1, and the front
+# door refuses that first: `list/map [1 2] &pair` with a two-parameter `pair`
+# answers "no 1-argument arm of `list/map` (arms take 2)" on all three
+# engines, before any callback runs. No program tried on 2026-08-29 got past
+# the call site to the page's own check.
+this function takes {} argument(s), got 1
+
+# provenance.rs:325, and it needs a hako: an arm for an err raised by the
+# package that owns the arm, which can never match. tests/golden/hako holds
+# two package trees and neither is a corpus the diagnostic scan reads for
+# stderr, because those cases assert what a package DOES rather than what it
+# is refused for.
+error[license]: `{}` has an arm for an err raised in {}, and
+
+# A DIVERGENCE, not an unreachable message. The interpreter and the page both
+# refuse `shape 1` for a typeset `shape` with this sentence; native prints
+# `<mod>/shape 1` and exits 0. Nothing can pin a message two engines raise and
+# the third answers with output, so this line stands until native refuses too.
+`{}` is a typeset — it only annotates
+
+# Two engines refuse the same program at different times, in different words.
+# `9223372036854775808 & 1` reaches the interpreter's bitwise guard, and the
+# native backend refuses the literal at compile time — "the literal ... does
+# not fit this build's 64-bit int (spec int is arbitrary precision)". The
+# runtime corpus runs both engines and requires the same stderr from each, so
+# a program that raises one raises neither there.
+`{}` takes whole numbers that fit 64 bits
+{} takes whole numbers that fit 64 bits
+
+# The same shape again. `age 1 2` for `type age int` reaches the interpreter's
+# construction check, and native refuses it at compile time as its own limit:
+# "native backend: `age` wraps one value". Both refuse, which the differential
+# law allows; the runtime corpus asks for more than that.
+`{}` wraps one {} value
+
+# A field annotated with two or more types is refused at the front door on
+# both engines — "a record field carries no type — write `v` and let the
+# compiler infer what it holds" — so construction never runs and the member
+# check never fires. The compile-time half of the same rule IS reachable and
+# is pinned by a_field_typeset_naming_no_type; this is the runtime twin of a
+# check that has already happened.
+field `{}` of `{}` takes {}

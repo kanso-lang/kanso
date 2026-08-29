@@ -1,0 +1,6 @@
+# `import { theirs:yours }` renames what an import exports. A name the import
+# does not export has nothing to rename, and the loader says which import was
+# asked and which name it could not find.
+import { nosuch:mine } "std/io"
+
+pub play = print "hi"

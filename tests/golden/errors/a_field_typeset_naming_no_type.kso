@@ -1,0 +1,8 @@
+# A field's annotation may list several types — `v:int string` — and the field
+# then holds any one of them. Every member has to name a type the program
+# declares or one of the five builtin words, and a member that names neither
+# is refused where the field is written.
+type box
+  v:int nosuchtype
+
+pub play = print "{(box 1).v}"
