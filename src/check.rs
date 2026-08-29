@@ -152,23 +152,28 @@ pub const BUILTIN_ARITY: [(&str, usize); 62] = [
 /// What a builtin takes, under either spelling. A std wrapper module reaches
 /// a native through the `builtin_` prefix, and that call is a call.
 ///
-/// This walks the table, so it is for the backends, which ask it once per
-/// emitted call site. The front end asks it of every head no declaration
-/// claims, and a scan there cost 144,031 instructions on `kanso check
-/// lib/json` — measured, not guessed. `builtin_arities` is what the walk
-/// reads instead: one map, built once.
+/// `BUILTIN_ARITY` is in alphabetical order so this can binary-search it:
+/// six comparisons where a scan does thirty-one, allocating nothing and
+/// holding nothing. `a_builtin_table_a_binary_search_can_read` keeps the
+/// order honest — an unsorted table would make this miss in silence.
+///
+/// The front end asks it of every head no declaration and no binding claims,
+/// which is where the cost is; the backends ask it once per emitted call.
+///
+/// Four shapes were measured on `kanso check lib/json`, which asks this 335
+/// times, against a container reading 58,201,174 for main: a scan of the
+/// table 58,342,747, this 58,311,708, a map built per `check_merged` call
+/// 58,271,359, a map built once for the process 58,232,625.
+///
+/// The last is the fastest and it is not the one that shipped. The map it
+/// holds is 3,216 bytes the process never gives back, which is a
+/// compile_peak_bytes term, and welfare prices a byte held about five times
+/// what it prices an instruction spent: that shape put the number under its
+/// floor and this one leaves it where it was. design/compiler-log.md,
+/// 2026-08-29, carries the readings.
 pub fn builtin_arity(name: &str) -> Option<usize> {
     let bare = name.strip_prefix("builtin_").unwrap_or(name);
-    BUILTIN_ARITY.iter().find(|(b, _)| *b == bare).map(|(_, takes)| *takes)
-}
-
-/// The same table as a map, for the one caller that reads it per call site.
-/// Built once for the process: `check_merged` runs per module, and
-/// `kanso check lib/json` has a dozen of them.
-fn builtin_arities() -> &'static crate::hash::Map<&'static str, usize> {
-    static TABLE: std::sync::LazyLock<crate::hash::Map<&'static str, usize>> =
-        std::sync::LazyLock::new(|| BUILTIN_ARITY.iter().copied().collect());
-    &TABLE
+    BUILTIN_ARITY.binary_search_by(|(b, _)| (*b).cmp(bare)).ok().map(|at| BUILTIN_ARITY[at].1)
 }
 
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
@@ -1778,7 +1783,6 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
             slot.push(decl.params.len());
         }
     }
-    let builtins = builtin_arities();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -1793,7 +1797,7 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
             bound_in_stmt(stmt, &mut bound);
         }
         for stmt in &decl.body {
-            arity_walk_stmt(stmt, &arities, builtins, &fields, &bound, diags);
+            arity_walk_stmt(stmt, &arities, &fields, &bound, diags);
         }
     }
 }
@@ -1866,14 +1870,13 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
 fn arity_walk_stmt(
     stmt: &Stmt,
     arities: &HashMap<&str, Vec<usize>>,
-    builtins: &crate::hash::Map<&str, usize>,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     match stmt {
         Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            arity_walk_expr(expr, arities, builtins, fields, bound, diags)
+            arity_walk_expr(expr, arities, fields, bound, diags)
         }
     }
 }
@@ -1881,7 +1884,6 @@ fn arity_walk_stmt(
 fn arity_walk_expr(
     e: &Expr,
     arities: &HashMap<&str, Vec<usize>>,
-    builtins: &crate::hash::Map<&str, usize>,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
@@ -1909,8 +1911,7 @@ fn arity_walk_expr(
                     }
                 }
                 if known.is_none() {
-                    let bare = name.strip_prefix("builtin_").unwrap_or(name.as_str());
-                    if let Some(&takes) = builtins.get(bare) {
+                    if let Some(takes) = builtin_arity(name) {
                         if args.len() != takes {
                             diags.push(Diagnostic::new(
                                 "arity",
@@ -1939,9 +1940,7 @@ fn arity_walk_expr(
             }
         }
     }
-    crate::for_each_child(e, |child| {
-        arity_walk_expr(child, arities, builtins, fields, bound, diags)
-    });
+    crate::for_each_child(e, |child| arity_walk_expr(child, arities, fields, bound, diags));
 }
 
 /// A literal argument no arm could ever take.
@@ -3518,5 +3517,39 @@ fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>
             ),
             *span,
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{builtin_arity, BUILTINS, BUILTIN_ARITY};
+
+    /// `builtin_arity` binary-searches the table, so an entry out of order is
+    /// a builtin the front end stops knowing the count of — no error, no
+    /// diagnostic, just a check that quietly stops covering one name.
+    #[test]
+    fn a_builtin_table_a_binary_search_can_read() {
+        let mut sorted: Vec<&str> = BUILTIN_ARITY.iter().map(|(b, _)| *b).collect();
+        let written = sorted.clone();
+        sorted.sort_unstable();
+        assert_eq!(written, sorted, "BUILTIN_ARITY is out of alphabetical order");
+        for (name, takes) in BUILTIN_ARITY {
+            assert_eq!(builtin_arity(name), Some(takes), "the search missed `{name}`");
+            assert_eq!(
+                builtin_arity(&format!("builtin_{name}")),
+                Some(takes),
+                "the search missed `builtin_{name}`"
+            );
+        }
+    }
+
+    /// A name a program can write bare and no count to check it against. `if`
+    /// is the one deliberate absence: its count is checked where its branches
+    /// are, because the guard form spells the word with a different shape.
+    #[test]
+    fn every_bare_builtin_has_a_count() {
+        let missing: Vec<&str> =
+            BUILTINS.iter().copied().filter(|n| *n != "if" && builtin_arity(n).is_none()).collect();
+        assert!(missing.is_empty(), "no count for {missing:?}");
     }
 }
