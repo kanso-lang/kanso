@@ -157,6 +157,22 @@ says so in as many words, which means the page and the compiler disagree on
 purpose until this lands — the one case where that is allowed, and it should
 not outlive the migration.
 
+**And it is one pass, not two — measured before anyone starts.** 309 `.`
+chain steps across the fleet respell as `bind`: 246 in `scripts`, 33 in
+`tests/golden`, 15 in `lib`, 14 in the book samples, 1 in `examples`. That
+`scripts` share is 80% of the work and it is the gates, so a botched pass
+there takes CI down rather than a user program.
+
+The err-arm half looks empty. Zero chain steps in the fleet destructure an
+err; the sixteen `(err x)` sites that exist are all function dispatch arms,
+which the gavel preserves and promotes; and the compiler has no
+chain-err-arm concept and no "an err arm must answer an err" rule — the only
+two matches for the phrase are comments about how a dispatch arm ranks. The
+gavel appears to retire a surface that was never built, which fits its own
+"it is unspellable". Three agreeing greps are not a reading of the design, so
+confirm it — but do not conclude the search is broken when it comes back
+empty, which is what this paragraph exists to prevent.
+
 **`done` is the second, smaller one.** Letter D was ruled in the same sitting:
 a succeeded effect yields `done`, not `none`. `none` means absence and nothing
 else. Chains that tested for `none` after an effect migrate.
