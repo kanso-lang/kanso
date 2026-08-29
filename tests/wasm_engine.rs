@@ -762,3 +762,56 @@ fn the_page_refuses_a_wrong_builtin_count() {
         "the page said something else: {said}"
     );
 }
+
+/// The whole error corpus, on the engine no corpus reached.
+///
+/// The browser differential reads `examples`, `tests/golden/runtime` and
+/// `tests/golden/micro` — programs that RUN — so a program refused at compile
+/// time was held to a golden on two engines and to nothing on the third. The
+/// differential law does not have a clause for that: three engines agree or
+/// the quiet ones refuse in words somebody has read.
+///
+/// Every fixture must reach the same sentence the other two do, byte for
+/// byte. There is no gap list, because there are no gaps: the front end is
+/// shared, and a diagnostic that differs here is one of the engines having
+/// its own copy of something. The count is asserted so a corpus that stops
+/// being walked cannot pass by walking none of it.
+#[test]
+fn the_page_refuses_the_error_corpus_the_way_the_others_do() {
+    let dir = root().join("tests/golden/errors");
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .expect("the error corpus reads")
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "kso"))
+        .collect();
+    files.sort();
+    assert!(files.len() > 150, "the error corpus shrank to {}", files.len());
+
+    let mut toolchain = Toolchain::load();
+    let mut wrong = Vec::new();
+    let mut read = 0;
+    for path in &files {
+        let name = path.file_name().expect("fixtures have names").to_string_lossy().to_string();
+        let source = std::fs::read_to_string(path).expect("a fixture reads");
+        // the `.imported.stderr` twin, where one exists, is what a fixture
+        // says when it is reached as a module — which is how both this and
+        // the native corpus runner stage it
+        let imported = path.with_extension("imported.stderr");
+        let golden = match imported.exists() {
+            true => std::fs::read_to_string(&imported),
+            false => std::fs::read_to_string(path.with_extension("stderr")),
+        }
+        .expect("every fixture carries a golden");
+        read += 1;
+        let said = match toolchain.run(&name, &source) {
+            Answer::CompileError(said) => said,
+            Answer::Ran(code, out) => format!("<ran, {code}> {out}"),
+            Answer::Declined(said) => format!("<declined> {said}"),
+        };
+        if said != golden {
+            wrong.push(format!("{name}\n  page:   {said:?}\n  golden: {golden:?}"));
+        }
+    }
+    assert_eq!(read, files.len(), "a fixture was skipped without saying so");
+    assert!(wrong.is_empty(), "{} of {read} differ:\n{}", wrong.len(), wrong.join("\n"));
+}

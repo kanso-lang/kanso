@@ -1,1 +1,1 @@
-error[dispatch]: these `open_start?` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position (module an_arm_set_with_no_settling_arm.kso)
+error[dispatch]: these `open_start?` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position (module an_arm_set_with_no_settling_arm)

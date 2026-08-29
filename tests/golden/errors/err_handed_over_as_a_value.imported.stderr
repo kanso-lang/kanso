@@ -1,1 +1,1 @@
-error[name]: `err` raises, so it is a call and not a value — an err records the line it was raised on, and a bare mention has no line to record. Write `(reason -> err reason)` (module err_handed_over_as_a_value.kso)
+error[name]: `err` raises, so it is a call and not a value — an err records the line it was raised on, and a bare mention has no line to record. Write `(reason -> err reason)` (module err_handed_over_as_a_value)

@@ -3191,3 +3191,68 @@ runs per module and `kanso check lib/json` has three, so building a
 sixty-two-entry map each time cost half of what the scans had — construction
 was the cost, not lookup, and the 335 probes were never the problem.
 
+
+## 2026-08-29 — a module is named the way an import writes it
+
+DONE. Two imports a reader spells the same way got two spellings back:
+
+    import "./pkg"   ->  error[arity]: ... (module pkg)
+    import "./one"   ->  error[arity]: ... (module one.kso)
+
+A module in a directory was named by its directory and a module in one file
+by its file, extension and all, because both came from `dir.to_string_lossy()`
+at src/lib.rs and only one of them has an extension to leak. The suffix names
+which module a diagnostic came from, so it takes the name the program uses.
+The extension is a fact about storage.
+
+The page had the third answer, `(module one)`, and it was right: a browser has
+no filesystem, so a handed module is keyed by the import path and there is no
+file to name. Native agrees with it now.
+
+**What this unlocks is the point.** The browser differential reads `examples`,
+`tests/golden/runtime` and `tests/golden/micro` — programs that RUN — so a
+program refused at compile time was held to a golden on two engines and to
+nothing on the third. 173 fixtures, read on two of three engines, and the only
+thing stopping the third from being gated was this one spelling: measured
+before the fix, the page answered 141 of them byte-identically, differed on
+32, ran none and declined none, and every one of the 32 was the `.kso`.
+
+`the_page_refuses_the_error_corpus_the_way_the_others_do` is the gate. No gap
+list, because there are no gaps: the front end is shared, and a diagnostic
+that differs there is one engine having its own copy of something — which is
+the family this log has been working through since #1102. It asserts the count
+walked, after #1104, so a corpus that stops being read cannot pass by reading
+none of it.
+
+Two mutations, both watched. Removing the strip turns the NATIVE corpus red,
+not the page one — the page never said `.kso` and the mutation has to reach
+what the page says. Perturbing one golden turns the page gate red naming the
+fixture, and its "1 of 173" is the count assertion doing its job.
+
+That first mutation is worth keeping. The obvious mutation for a new gate is
+to undo the fix that made it pass, and here that proves a different gate. A
+mutation belongs to the thing it turns red, not to the change it came in with.
+
+## 2026-08-29 — twelve instructions here, 83,829 there, same diff
+
+compile_instructions 57,678,168 -> 57,761,997 on the module-naming change, a
+rise of 83,829 for one `strip_suffix(".kso")` on a string the measured program
+never formats: the block runs only when a DEPENDENCY fails to check, and
+`kanso check lib/json` succeeds.
+
+The container cannot compare absolute numbers with CI — different glibc,
+different rustc — but it can compare a delta on itself. Main reads 58,311,708
+there and the branch reads 58,311,720. **Twelve instructions.**
+
+A change that costs twelve instructions on one host is not doing 83,829
+instructions of work on another. That is a better layout attribution than
+this file has managed before. The entries above argue from the call graph —
+the code cannot run, therefore the move is layout — and one of them offered a
+round trip, a vein returning to a value it held earlier under a different
+diff. A two-host delta beats both, because it measures the same question
+twice and the answers differ by four orders of magnitude.
+
+It is also cheap. The measurement is `valgrind --tool=callgrind ./kanso check
+lib/json` twice in a container, about a minute, and it turns "this must be
+layout" into a number. Every compile_instructions move from here should carry
+one.

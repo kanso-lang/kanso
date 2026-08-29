@@ -3478,10 +3478,17 @@ fn compile_module_loaded(
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
-        let file = dir.to_string_lossy();
+        // The name an import writes, never the file behind it. A module in a
+        // directory read as `(module pkg)` and a module in one file as
+        // `(module one.kso)`, from two imports a reader spells the same way —
+        // and the page, which has no filesystem and keys a handed module by
+        // its import path, said `(module one)` for the second. One rule
+        // settles both: the extension is a fact about storage.
+        let named = dir.to_string_lossy();
+        let named = named.strip_suffix(".kso").unwrap_or(&named);
         let rendered: Vec<String> = diags
             .iter()
-            .map(|d| format!("error[{}]: {} (module {file})\n", d.kind, d.message))
+            .map(|d| format!("error[{}]: {} (module {named})\n", d.kind, d.message))
             .collect();
         return Err(rendered.join(""));
     }

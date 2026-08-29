@@ -1,1 +1,1 @@
-error[type]: no arm of `twice` takes a string here (arms take int) (module literal_arg_type.kso)
+error[type]: no arm of `twice` takes a string here (arms take int) (module literal_arg_type)

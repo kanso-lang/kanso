@@ -1,1 +1,1 @@
-error[syntax]: `plotted` takes 3 argument(s), and a list element is one atom — this reads as 4 separate elements. Write `(plotted …)` to call it, or `&plotted` to hold it (module a_call_that_reads_as_elements.kso)
+error[syntax]: `plotted` takes 3 argument(s), and a list element is one atom — this reads as 4 separate elements. Write `(plotted …)` to call it, or `&plotted` to hold it (module a_call_that_reads_as_elements)
