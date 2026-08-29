@@ -3437,3 +3437,100 @@ Two mutations, watched red before the gate went green. Move
 `s:Set` reads `NOBODY`.
 
 No counter moves: nothing under `src/` changed.
+
+## 2026-08-29 — the census found something within the hour
+
+#1124 counted the constructs the page-runnable corpus carries and reported the
+widening upcast `(expr):type` on one program, `examples/subtypes.kso`. That is
+a play-door file, so it is never reached as a module, and the loader's
+qualification pass had therefore never met an upcast.
+
+`rewrite_expr` in src/lib.rs qualifies the names a module owns when the module
+is imported: `Pattern::Ctor`'s `ty`, `Pattern::Annotated`'s `ty`, and every
+`Ident` and `Partial` that is not locally bound. Its `Upcast` arm descended
+into the sub-expression and left `ty` alone. So inside a module, an upcast to
+a type the module declares held the bare spelling after every declaration had
+been renamed away from it.
+
+The three engines then disagreed about what to say, which is the thing the
+differential law exists to prevent:
+
+- the interpreter answers `` `:animal` widens; this value is not a animal ``
+  at runtime, while holding a value that is one
+- the native backend refuses the module with `native backend: unknown type
+  \`animal\``
+- the page refuses it the same way, and no gap list records the refusal
+
+Written module-qualified — `(d):lib/animal` — it worked before the fix, on all
+three. So did an upcast to a builtin target like `:int`, which is why
+`examples/subtypes.kso` never showed it: that file upcasts to `int`.
+
+The fix is four lines: qualify `ty` the way `Pattern::Annotated` does. The
+fixture is `tests/golden/micro/an_upcast_names_a_type_the_module_owns.kso`,
+which widens a dog to an animal so the arm that runs changes, and prints the
+widened value so the qualified name appears in the output. It carries both
+goldens — `animal "rex"` read directly, `an_upcast_names_a_type_the_module_owns/animal "rex"`
+read as a module — which is where the rename is visible.
+
+Seven subtype fixtures were already in the micro corpus, one of them
+(`subtype_chain`) carrying an `.imported.out` twin that shows exactly this
+rename in its output. None of them upcasts. The construct and the path each
+had coverage; their intersection had none, and a per-construct census is what
+made that legible.
+
+The census golden moved by one line in the same pull request: `Upcast` went
+from one carrier to two, and `tests/golden/shapes.txt` now names both. A gate
+that moves the first time it is asked to is doing its job.
+
+The census gained the query that would have found this directly. A corpus
+program exporting `play` is staged behind a generated entry that imports it,
+which is the only way one meets the rename pass, so the census now also asks
+whether each construct has a carrier of that kind. Every construct does, now;
+`Upcast` did not before this fixture, and it was the only one. Rename the
+fixture's `pub play` to anything else and the check goes red naming `Upcast`.
+
+The two questions are worth keeping apart. The first asks whether the three
+engines are compared on a construct at all; the second asks whether they are
+compared on it down the path where names move. A construct can have plenty of
+carriers and still have none on the second — which is what a per-construct
+count buys over a program count.
+
+Two more of the same shape, found by reading the neighbouring passes rather
+than by probing. The unused-import check marks a module used by walking the
+program for qualified names; it read `Expr::Ident` and the type in a pattern
+and nothing else. So an import whose only use was `(x):shapes/num`, or
+`&shapes/make`, marked nothing and was refused as unused — and such a file
+could not be written at all, because dropping the import leaves the name
+unresolved and keeping it fails the check. Both are one arm each, in
+`used_quals`, and `tests/what_counts_as_using_an_import.rs` holds them with a
+control so widening the walk cannot pass by marking every import used.
+
+The third pass that reads an upcast's target, `door_expr`, had it right the
+whole time. Three passes ask the same question of the same node and one of
+them answered; that is what a per-variant walk costs, and there is no
+mechanism in the tree that would have paired them.
+
+`compile_instructions` rises 25,449, and the two-host method splits the diff
+rather than labelling it. The rename-pass fix reads +2,167 on the runner and
+−116 in the container: opposite signs, so layout, and `lib/json` holds no
+upcast for the new arm to run on. The unused-import fix reads +23,282 on the
+runner and +33,960 in the container: same sign, same order, so work.
+`used_quals` walks every expression of every compile, and it now marks two node
+kinds it skipped, each mark a `split_once` and a `String`. `lib/json` holds
+names, so it pays. Welfare stays at 84.10 with the floor stepped in the same
+commit.
+
+That is the first time the two-host reading has separated one branch into
+commits with different answers, and it was worth the four callgrind runs: the
+whole rise would otherwise have been attributed to whichever story was told
+first.
+
+An instrument fault on the way, which nearly shipped a false claim in three
+places. `cargo test --test compile_cost` finishes in nine hundredths of a
+second and was read as evidence that this vein had not moved — it measures
+allocations, rounds and visits, and callgrind lives in a gate script, so it
+cannot see the vein at all. Then `scripts/gates/library_box.sh` turned out to
+COPY `./target/release/kanso` rather than build it, so the first two container
+readings were the same binary twice and agreed to the digit, which read as
+confirmation of the first mistake. The claim was in a commit message and a
+pull request before CI contradicted it.

@@ -271,4 +271,35 @@
 # nothing measurable on one host moves this row on another, so the row is
 # reading the binary's shape rather than the compiler's work. Two runs of
 # callgrind in a container, about a minute, and the attribution is a number.
-compile_instructions=57764135
+#
+# 2026-08-29 (the upcast's target): 57,764,135 -> 57,789,584, a rise of 25,449
+# — and the two-host method separates it into two commits with opposite
+# answers, which is the first time it has been used to SPLIT a diff rather
+# than to label one.
+#
+#   the rename-pass fix          runner +2,167     container   -116
+#   the unused-import fix        runner +23,282    container +33,960
+#
+# The first qualifies an upcast's target when a module is imported, and
+# `lib/json` contains no upcast, so the code cannot run on the measured path.
+# The hosts disagree on the sign, which is what layout looks like here.
+#
+# The second is work, and the hosts agree on both sign and order. `used_quals`
+# walks every expression of every compile marking module qualifiers, and it
+# now marks two node kinds it skipped: an upcast's target and a held name
+# (`&mod/fn`). `lib/json` holds names, so each one is a `split_once` and a
+# `String` allocation that did not happen before.
+#
+# What it buys: a file whose only use of an import was one of those two forms
+# could not be written at all. Dropping the import left the name unresolved
+# and keeping it failed the unused-import check.
+#
+# ONE INSTRUMENT FAULT ON THE WAY, worth recording because it nearly shipped a
+# false claim. `cargo test --test compile_cost` passes in 0.09 seconds and was
+# read as evidence that this vein had not moved. It does not measure this vein
+# — callgrind lives in scripts/gates/compile_instructions.sh — so "the compile
+# veins do not move on this host" was asserted three times from a test that
+# cannot see them. `scripts/gates/library_box.sh` COPIES ./target/release/kanso
+# rather than building it, so the first two container readings were the same
+# binary twice and agreed to the digit, which read as confirmation.
+compile_instructions=57789584
