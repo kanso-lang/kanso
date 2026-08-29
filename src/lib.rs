@@ -2059,7 +2059,17 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &crate::hash::Set<String>,
             }
         }
         ast::Expr::Field { base, .. } => rewrite_expr(base, qual, owned, bound),
-        ast::Expr::Upcast { expr, .. } => rewrite_expr(expr, qual, owned, bound),
+        // The target names a type the way an annotation does, so it moves
+        // with the module the way an annotation's does. Left bare it survives
+        // every declaration being qualified away from it, and then names
+        // nothing: the interpreter reports that the value is not a `num`
+        // while holding one, and both backends refuse the module outright.
+        ast::Expr::Upcast { expr, ty, .. } => {
+            if owned.contains(ty.as_str()) {
+                *ty = format!("{qual}/{ty}");
+            }
+            rewrite_expr(expr, qual, owned, bound);
+        }
         ast::Expr::App { head, args, .. } => {
             rewrite_expr(head, qual, owned, bound);
             for a in args {

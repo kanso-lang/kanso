@@ -3437,3 +3437,50 @@ Two mutations, watched red before the gate went green. Move
 `s:Set` reads `NOBODY`.
 
 No counter moves: nothing under `src/` changed.
+
+## 2026-08-29 — the census found something within the hour
+
+#1124 counted the constructs the page-runnable corpus carries and reported the
+widening upcast `(expr):type` on one program, `examples/subtypes.kso`. That is
+a play-door file, so it is never reached as a module, and the loader's
+qualification pass had therefore never met an upcast.
+
+`rewrite_expr` in src/lib.rs qualifies the names a module owns when the module
+is imported: `Pattern::Ctor`'s `ty`, `Pattern::Annotated`'s `ty`, and every
+`Ident` and `Partial` that is not locally bound. Its `Upcast` arm descended
+into the sub-expression and left `ty` alone. So inside a module, an upcast to
+a type the module declares held the bare spelling after every declaration had
+been renamed away from it.
+
+The three engines then disagreed about what to say, which is the thing the
+differential law exists to prevent:
+
+- the interpreter answers `` `:animal` widens; this value is not a animal ``
+  at runtime, while holding a value that is one
+- the native backend refuses the module with `native backend: unknown type
+  \`animal\``
+- the page refuses it the same way, and no gap list records the refusal
+
+Written module-qualified — `(d):lib/animal` — it worked before the fix, on all
+three. So did an upcast to a builtin target like `:int`, which is why
+`examples/subtypes.kso` never showed it: that file upcasts to `int`.
+
+The fix is four lines: qualify `ty` the way `Pattern::Annotated` does. The
+fixture is `tests/golden/micro/an_upcast_names_a_type_the_module_owns.kso`,
+which widens a dog to an animal so the arm that runs changes, and prints the
+widened value so the qualified name appears in the output. It carries both
+goldens — `animal "rex"` read directly, `an_upcast_names_a_type_the_module_owns/animal "rex"`
+read as a module — which is where the rename is visible.
+
+Seven subtype fixtures were already in the micro corpus, one of them
+(`subtype_chain`) carrying an `.imported.out` twin that shows exactly this
+rename in its output. None of them upcasts. The construct and the path each
+had coverage; their intersection had none, and a per-construct census is what
+made that legible.
+
+The census golden moved by one line in the same pull request: `Upcast` went
+from one carrier to two, and `tests/golden/shapes.txt` now names both. A gate
+that moves the first time it is asked to is doing its job.
+
+Welfare holds at 84.10 and the compile veins do not move on this host — the
+new arm's body runs only for an `Upcast` node and `lib/json` has none.
