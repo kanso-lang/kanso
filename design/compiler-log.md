@@ -3311,3 +3311,23 @@ is the thing this project keeps catching in other people's specs. It would
 have run in 0.22s over all three backends and reported health it could not
 see. Not committed; recorded here so the idea stays declined and the next
 person starts from the mutation shape rather than the sweep.
+
+## 2026-08-29 — a zero-delta diff that moved compile_instructions by 2,138
+
+The backend guard cost compile_instructions 57,761,997 -> 57,764,135 on CI, a
+rise of 2,138. The guard is in `emit_call_rest`; `kanso check lib/json` never
+emits, so the code cannot run on the measured path.
+
+The container agrees, exactly: main 58,311,720, the branch 58,311,720. Byte
+identical. A delta of zero.
+
+The entry two above introduced this method with +12 against CI's +83,829, and
+this is the same finding at the limit — a diff that changes nothing at all on
+one host moves the row on another, so the row is reading the binary's shape
+rather than the compiler's work. Two callgrind runs, about a minute, and an
+attribution that used to be an argument is a number.
+
+Worth stating the shape plainly, because three of today's five entries touch
+it: `compile_instructions` is a real vein for real work and a noisy one for
+layout, and the two are indistinguishable inside a single host. The second
+host is what separates them. Nothing else in the tree can.

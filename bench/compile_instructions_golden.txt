@@ -258,4 +258,17 @@
 # layout — and the entry above added a round trip as better evidence. Two
 # hosts disagreeing by four orders of magnitude on the same diff is better
 # still, and it is cheap: the container measures the delta in a minute.
-compile_instructions=57761997
+#
+# 2026-08-29 (the backend guard): 57,761,997 -> 57,764,135, a rise of 2,138.
+# LAYOUT, and the cleanest reading this file has. The guard is in
+# `emit_call_rest`, and `kanso check lib/json` never emits, so the code
+# cannot run on the measured path. The two-host delta says so without the
+# argument: the container reads 58,311,720 for main and 58,311,720 for the
+# branch — BYTE-IDENTICAL, a delta of zero — against CI's +2,138.
+#
+# The entry above this one introduced the method with +12 against +83,829.
+# Zero against 2,138 is the same finding at the limit: a diff that changes
+# nothing measurable on one host moves this row on another, so the row is
+# reading the binary's shape rather than the compiler's work. Two runs of
+# callgrind in a container, about a minute, and the attribution is a number.
+compile_instructions=57764135
