@@ -291,22 +291,20 @@
 # breaks the fold. Measured both ways, and it is distinctness rather than
 # length — a same-length distinct string costs the same 128.
 #
-# 2026-08-29 (the three chain words): every row rises by 336 or 384 bytes —
-# jsonbench 80,930 to 81,266, encodebench 97,922 to 98,306, oneshot 98,002 to
-# 98,338, basket 89,602 to 89,986, widebench 99,010 to 99,346, deepbench
-# 63,314 to 63,666, escapebench 49,794 to 50,146, pendbench 73,938 to 74,290.
-# A rise, and the same rise everywhere, which is what says it is not any one
-# benchmark's code: src/runtime.c is embedded whole and gained five functions
-# for `bind`, `rescue` and `annotate` — k_call_on_err, k_worded_step,
-# k_annotate_wrap and the three k_b_ entry points. They are extern symbols the
-# emitter can call, so the linker keeps them whether or not a benchmark does.
-# The 48-byte spread between the two figures is the two benchmarks whose
-# alignment padding absorbed part of it.
-jsonbench text=81266
-encodebench text=98306
-oneshot text=98338
-basket text=89986
-widebench text=99346
-deepbench text=63666
-escapebench text=50146
-pendbench text=74290
+# 2026-08-29 (the three chain words): 652,512 -> 655,152, a rise of 2,640
+# spread almost evenly — every benchmark gains 320, 336 or 352 bytes. The
+# evenness is what says it is not any one benchmark's code: src/runtime.c is
+# embedded whole and gained six functions for `bind`, `rescue` and `annotate`
+# — k_call_decided, k_worded_step, k_annotate_wrap, and the three k_b_ entry
+# points, which are extern symbols the emitter can call, so the linker keeps
+# them whether a benchmark does or not. The 32-byte spread between the figures
+# is alignment padding absorbing part of it in some.
+
+jsonbench text=81250
+encodebench text=98274
+oneshot text=98322
+basket text=89954
+widebench text=99330
+deepbench text=63634
+escapebench text=50114
+pendbench text=74274

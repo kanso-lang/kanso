@@ -270,19 +270,19 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
     unsafe { k_callback(tidx, env, args) }
 }
 
-/// Call a callback with an err as its argument. `call_closure` refuses this —
-/// a failure handed to a callback comes straight back, which is what threads
-/// failures through a chain for free — and `rescue` and `annotate` are the two
-/// steps that must get past it. A group needs no help: dispatch already routes
-/// an err to the arm written for it.
-fn call_on_err(c_h: u32, failure: u32) -> u32 {
+/// `call_closure` without its argument guard, for the callers that have
+/// already decided about the argument themselves — `rescue` and `annotate`,
+/// which must hand a failure to a callback, and `bind`, whose chain step has
+/// already tested the yielded value and would otherwise pay for the test
+/// twice. The other two engines carry the same name and the same two reasons.
+fn call_decided(c_h: u32, arg: u32) -> u32 {
     let Slot::C { tidx, env, arity } = closure_slot(c_h) else {
-        return call_closure(c_h, vec![failure]);
+        return call_closure(c_h, vec![arg]);
     };
     if arity >= 0 && arity != 1 {
         die(format!("this function takes {arity} argument(s), got 1"));
     }
-    let args = push(Slot::E(Rc::new(vec![failure])));
+    let args = push(Slot::E(Rc::new(vec![arg])));
     unsafe { k_callback(tidx, env, args) }
 }
 
@@ -297,11 +297,11 @@ fn worded_step(word: &Slot, yielded: u32, callee: u32) -> u32 {
     let failed = matches!(slot(yielded), Slot::V(ref v) if is_failure(v));
     match (word, failed) {
         (Slot::Bind(..), true) | (Slot::Rescue(..), false) => yielded,
-        (Slot::Bind(..), false) => call_closure(callee, vec![yielded]),
-        (Slot::Rescue(..), true) => call_on_err(callee, yielded),
+        (Slot::Bind(..), false) => call_decided(callee, yielded),
+        (Slot::Rescue(..), true) => call_decided(callee, yielded),
         (Slot::Annotate(_, _, origin), true) => {
             let Slot::V(Value::ErrV(cause)) = slot(yielded) else { return yielded };
-            let answered = call_on_err(callee, yielded);
+            let answered = call_decided(callee, yielded);
             match slot(answered) {
                 // the callback failed on its own account, and that err already
                 // carries what it was told; wrapping it again would report the

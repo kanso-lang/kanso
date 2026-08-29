@@ -2007,14 +2007,14 @@ impl<'a> Interp<'a> {
     ) -> EvalResult {
         let Value::ErrV(cause) = yielded.clone() else {
             return match word {
-                Word::Bind => self.call(callee.clone(), vec![yielded], span, &None),
+                Word::Bind => self.call_decided(callee, yielded, span),
                 Word::Rescue | Word::Annotate => Ok(yielded),
             };
         };
         match word {
             Word::Bind => Ok(yielded),
-            Word::Rescue => self.call_on_err(callee, yielded, span),
-            Word::Annotate => match self.call_on_err(callee, yielded, span)? {
+            Word::Rescue => self.call_decided(callee, yielded, span),
+            Word::Annotate => match self.call_decided(callee, yielded, span)? {
                 // the callback failed on its own account, and that err
                 // already carries what it was told; wrapping it again would
                 // report the same failure twice
@@ -2031,19 +2031,27 @@ impl<'a> Interp<'a> {
         }
     }
 
-    /// Call a callback with an err as its argument. Ordinary application
-    /// refuses this — a failure handed to a lambda propagates instead of
-    /// entering the body, which is what threads failures through a chain for
-    /// free — and `rescue` and `annotate` are the two places that must get
-    /// past it. A group needs no help: dispatch already routes an err to the
-    /// arm written for it.
-    fn call_on_err(&self, callee: &Value, failure: Value, span: Span) -> EvalResult {
+    /// Ordinary application without its argument guard, for the callers that
+    /// have already decided about the argument themselves.
+    ///
+    /// `rescue` and `annotate` are two: a failure handed to a lambda
+    /// propagates instead of entering the body, which is what threads failures
+    /// through a chain for free, and they are the steps that must get past it.
+    /// A group needs no help; dispatch already routes an err to the arm
+    /// written for it.
+    ///
+    /// `bind` is the third, and it is there because the guard is redundant
+    /// rather than in the way: the chain step has already tested the yielded
+    /// value for failure — that test IS the difference between the worded
+    /// steps — so `call_closure`'s copy is work nobody needs. The C twin
+    /// carries the same name and the same two reasons.
+    fn call_decided(&self, callee: &Value, arg: Value, span: Span) -> EvalResult {
         match callee {
             Value::Closure(c) if c.params.len() == 1 => {
-                let env = bind(c.env.clone(), &c.params[0], failure);
+                let env = bind(c.env.clone(), &c.params[0], arg);
                 self.eval(&c.body, &env, &c.frame)
             }
-            other => self.call(other.clone(), vec![failure], span, &None),
+            other => self.call(other.clone(), vec![arg], span, &None),
         }
     }
 

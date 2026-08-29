@@ -205,12 +205,13 @@
 # each argued unreachability from the call graph and left the sign
 # unexplained; this one has the sign measured twice and coming out opposite.
 #
-# 2026-08-29 (the three chain words): 57,571,389 -> 57,568,840, a fall of
-# 2,549 (0.004%). Banked. The measured path is `kanso check`, which never
+# 2026-08-29 (the three chain words): 57,571,389 -> 57,567,033, a fall of
+# 4,356 (0.008%). Banked. The measured path is `kanso check`, which never
 # emits, so codegen.rs's new call site and wasm_backend.rs's do not run; what
 # changed in front of it is three more entries in BUILTINS and three in
 # AMBIENT, and both are read rather than walked per node. A fall of this size
 # on this vein has been layout every previous time it was chased — the +146
 # and +2,918 entries above are the two that were chased to the end — and
 # nothing here suggests a different answer.
-compile_instructions=57568840
+
+compile_instructions=57567033
