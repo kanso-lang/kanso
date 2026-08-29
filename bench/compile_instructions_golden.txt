@@ -385,4 +385,17 @@
 # touches is on the measured path.
 #
 # compile_allocs is 61,974, unchanged.
-compile_instructions=57819888
+# 2026-08-29 (a typeset only annotates): 57,819,888 -> 57,819,006, a FALL of
+# 882. LAYOUT, and the runner's side of it is the good side:
+#
+#   the runner      57,819,888 -> 57,819,006      -882
+#   the container   58,329,165 -> 58,330,347    +1,182
+#
+# Opposite signs again. The change adds `typeset_constructions` to check.rs,
+# a walk that builds a borrowed set of typeset names and returns at once when
+# the set is empty. `lib/json` declares no typeset, so the pass reads the type
+# list, finds nothing, and stops — there is no walk to pay for on the measured
+# path, and what moved is where the code sits.
+#
+# compile_allocs is 61,974, unchanged: the set holds `&str` into the program.
+compile_instructions=57819006

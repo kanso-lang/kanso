@@ -3917,3 +3917,7 @@ that could not see the message at all until its key changed. The scan reported
 
 `compile_allocs` is 61,974, unchanged — the pass borrows its names and returns
 at once when a program declares no typeset, which `lib/json` does not.
+`compile_instructions` reads -882 on the runner against +1,182 in the
+container: opposite signs on one diff, layout, and the runner's side is the
+good side. The pass reads the type list, finds nothing, and stops, so there is
+no walk to pay for on the measured path.
