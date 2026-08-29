@@ -2733,6 +2733,22 @@ impl<'a> Backend<'a> {
             seen.dedup();
             seen
         };
+        // Two different things emptied that list, and one message spoke for
+        // both. A name no declaration answers to is not a mistake here — the
+        // front door refuses an unknown name before this runs — so what is
+        // left is a name bound to a VALUE: a parameter holding a function, a
+        // local, a builtin, a record's constructor. The interpreter takes a
+        // partial over a value and settles its arity when the arguments
+        // arrive; `tests/partial.rs` specifies that. This backend writes a
+        // closure whose parameter count is fixed where the closure is, so it
+        // cannot. Saying "no `f` takes more" put that on the program.
+        if !self.program.fns.iter().any(|d| d.name == name) {
+            return Err(format!(
+                "native backend: `{name}` is a value here, and a partial over a value settles \
+                 its arity when its arguments arrive — this backend fixes it where the closure \
+                 is written"
+            ));
+        }
         // Currying past every arm is the one real error: `&` supplies without
         // running, so supplying an arm's last argument is a partial like any
         // other — the value waits to be called rather than being a call. What

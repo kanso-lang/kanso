@@ -20,8 +20,19 @@ fn interp(name: &str, source: &str) -> std::process::Output {
         .expect("kanso runs")
 }
 
+fn native(name: &str, source: &str) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["play", written(name, source).to_str().expect("utf-8")])
+        .output()
+        .expect("kanso runs")
+}
+
 fn stdout(out: &std::process::Output) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+fn stderr(out: &std::process::Output) -> String {
+    String::from_utf8_lossy(&out.stderr).trim().to_string()
 }
 
 /// The plain case: fix the first argument, hand the result around, finish it
@@ -47,6 +58,32 @@ fn a_partial_of_a_parameter_finishes_at_the_call_site() {
     );
 
     assert_eq!(stdout(&out), "14");
+}
+
+/// "Decline it out loud" is the header's claim, and until this spec existed
+/// nothing held the backend to it. The message it gave named the program's
+/// fault — `&f` holds 1 argument(s), and no `f` takes more — for a program
+/// with no fault: `f` is a parameter, and the arity the sentence asks after
+/// is not knowable until the arguments arrive, which is the feature the spec
+/// above specifies. A backend that covers less has to say so as a limit of
+/// its own, or the reader goes looking for a mistake that is not there.
+#[test]
+fn the_native_backend_declines_a_partial_over_a_value_as_its_own_limit() {
+    let program = "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\nprint \"{(foo add) 5 7}\"\n";
+    let said = stderr(&native("of_param_native", program));
+
+    assert!(
+        said.contains("`f` is a value here")
+            && said.contains("settles its arity when its arguments arrive"),
+        "the backend did not name its own limit: {said}"
+    );
+    assert!(
+        !said.contains("takes more"),
+        "the refusal still reads as the program's mistake: {said}"
+    );
+    // The oracle runs the same program, which is what makes the refusal a
+    // limit rather than a judgement about the program.
+    assert_eq!(stdout(&interp("of_param_oracle", program)), "14");
 }
 
 /// Short of every arity it stays a partial rather than dispatching early, so

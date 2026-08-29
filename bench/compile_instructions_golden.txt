@@ -345,4 +345,17 @@
 # What it buys is a file that could not be written at all. An import whose only
 # use was a bare held name was refused as unused; dropping the import leaves the
 # name unresolved and keeping it fails the check.
-compile_instructions=57811952
+#
+# 2026-08-29 (a backend's own limit): 57,811,952 -> 57,813,512, a rise of 1,560.
+# LAYOUT, on both the argument and the pair:
+#
+#   the runner      57,811,952 -> 57,813,512    +1,560
+#   the container   58,336,378 -> 58,336,242      -136
+#
+# Opposite signs, and the change is one added test in `partial_lambda` in each
+# backend. `kanso check lib/json` compiles a library and emits nothing, so
+# neither backend's partial path runs on the measured path at all. The entry
+# above this one is the contrast: same-sign, same-order, and banked as work.
+#
+# compile_allocs is 61,974, unchanged.
+compile_instructions=57813512

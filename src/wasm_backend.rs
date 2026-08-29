@@ -183,6 +183,19 @@ fn partial_lambda(
         .collect();
     arities.sort_unstable();
     arities.dedup();
+    // The same two things emptied this list, and the same one message spoke
+    // for both — see the note in codegen.rs. A name no declaration answers to
+    // is refused at the front door, so what reaches here is a name bound to a
+    // VALUE, and a partial over a value settles its arity when the arguments
+    // arrive. The interpreter does that and `tests/partial.rs` specifies it;
+    // a closure fixes its count where it is written.
+    if !program.fns.iter().any(|d| d.name == name) {
+        return Err(format!(
+            "browser backend: `{name}` is a value here, and a partial over a value settles \
+             its arity when its arguments arrive — this backend fixes it where the closure \
+             is written"
+        ));
+    }
     // `&` supplies without running, so an arm's last argument is a partial
     // like any other and the value waits to be called. Only more arguments
     // than any arm accepts is unfinishable.

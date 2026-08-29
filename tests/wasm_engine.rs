@@ -1068,3 +1068,28 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
          {read} programs read, {skipped} gapped"
     );
 }
+
+/// The page's half of the partial contract. `tests/partial.rs` holds the
+/// interpreter — the oracle runs a partial whose callee is a value and settles
+/// its arity when the arguments arrive — and the native backend, which
+/// declines it as a limit of its own. This is the third engine saying the same
+/// thing, so "the two backends decline it out loud" is a claim with a spec
+/// under it on both rather than on one.
+#[test]
+fn the_page_declines_a_partial_over_a_value_as_its_own_limit() {
+    let mut toolchain = Toolchain::load();
+    let said = match toolchain.run(
+        "of_param.kso",
+        "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\npub play = print \"{(foo add) 5 7}\"\n",
+    ) {
+        Answer::Declined(said) => said,
+        Answer::Ran(code, out) => panic!("the page ran it: {code} {out:?}"),
+        Answer::CompileError(said) => panic!("the front door refused it: {said}"),
+    };
+    assert!(
+        said.contains("`f` is a value here")
+            && said.contains("settles its arity when its arguments arrive"),
+        "the page did not name its own limit: {said}"
+    );
+    assert!(!said.contains("takes more"), "the refusal reads as the program's mistake: {said}");
+}
