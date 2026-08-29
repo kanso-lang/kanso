@@ -976,20 +976,10 @@ impl<'a> WasmBackend<'a> {
             // through the ambient group.
             _ if !self.program.fns.iter().any(|d| d.name == name)
                 && (bare == "print"
-                    || crate::codegen::BUILTIN_CALLS
-                        .iter()
-                        .any(|(b, a)| *b == bare && *a <= 4)) =>
+                    || (crate::codegen::BUILTIN_CALLS.contains(&bare)
+                        && crate::check::builtin_arity(bare).is_some_and(|a| a <= 4))) =>
             {
-                let arity = match bare {
-                    "print" => 1,
-                    _ => {
-                        crate::codegen::BUILTIN_CALLS
-                            .iter()
-                            .find(|(b, _)| *b == bare)
-                            .expect("found")
-                            .1
-                    }
-                };
+                let arity = crate::check::builtin_arity(bare).expect("a builtin takes a count");
                 let widx = self.builtin_wrapper(bare, arity)?;
                 ctx.body.i32_const(widx as i64);
                 ctx.body.i32_const(0);

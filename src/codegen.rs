@@ -319,63 +319,76 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 55] = [
-    ("net_port", 1),
-    ("start", 2),
-    ("kill", 1),
-    ("at", 2),
-    ("is_desc", 1),
-    ("append", 2),
-    ("find2", 4),
-    ("find2_below", 5),
-    ("bytes", 1),
-    ("to_bytes", 1),
-    ("bind", 2),
-    ("rescue", 2),
-    ("annotate", 2),
-    ("read_file", 1),
-    ("write", 1),
-    ("write_err", 1),
-    ("env", 1),
-    ("exists", 1),
-    ("is_dir", 1),
-    ("list_dir", 1),
-    ("make_dir", 1),
-    ("write_file", 2),
-    ("run", 2),
-    ("listen", 1),
-    ("accept", 1),
-    ("net_read", 1),
-    ("net_write", 2),
-    ("net_close", 1),
-    ("concat", 2),
-    ("utf8", 1),
-    ("char_code", 1),
-    ("chars", 1),
-    ("split", 2),
-    ("entries", 1),
-    ("filter", 2),
-    ("from_code", 1),
-    ("join", 2),
-    ("length", 1),
-    ("map", 2),
-    ("push", 2),
-    ("put", 3),
-    ("slice", 3),
-    ("sort", 1),
-    ("render_value", 1),
-    ("sqrt", 1),
-    ("bit_and", 2),
-    ("bit_or", 2),
-    ("bit_xor", 2),
-    ("bit_not", 1),
-    ("bit_shl", 2),
-    ("bit_shr", 2),
-    ("round", 1),
-    ("sum", 1),
-    ("to_float", 1),
-    ("to_int", 1),
+pub(crate) const BUILTIN_CALLS: [&str; 55] = [
+    "net_port",
+    "start",
+    "kill",
+    "at",
+    "is_desc",
+    "append",
+    "find2",
+    "find2_below",
+    "bytes",
+    "to_bytes",
+    "bind",
+    "rescue",
+    "annotate",
+    "read_file",
+    "write",
+    "write_err",
+    "env",
+    "exists",
+    "is_dir",
+    "list_dir",
+    "make_dir",
+    "write_file",
+    "run",
+    "listen",
+    "accept",
+    "net_read",
+    "net_write",
+    "net_close",
+    "concat",
+    "utf8",
+    "char_code",
+    "chars",
+    "split",
+    "entries",
+    "filter",
+    "from_code",
+    "join",
+    "length",
+    "map",
+    "push",
+    "put",
+    "slice",
+    "sort",
+    "render_value",
+    "sqrt",
+    "bit_and",
+    "bit_or",
+    "bit_xor",
+    "bit_not",
+    "bit_shl",
+    "bit_shr",
+    "round",
+    "sum",
+    "to_float",
+    "to_int",
 ];
+
+/// The count a builtin the native backend emits a direct call for takes.
+/// Membership is this file's business — which builtins get a C entry rather
+/// than an inline expansion — and the count is `check`'s, so this asks each
+/// question where it is answered instead of keeping a second copy of the
+/// counts here. That second copy is what let the backend refuse a call the
+/// front door had waved through.
+fn arity_of_emitted(name: &str) -> Option<usize> {
+    match BUILTIN_CALLS.contains(&name) {
+        true => crate::check::builtin_arity(name),
+        false => None,
+    }
+}
 
 /// Groups that are pure builtin forwarders: one arm, plain-var params,
 /// body exactly `builtin_X p1 p2 ...` in order. Call sites bypass the
@@ -2969,11 +2982,11 @@ impl<'a> Backend<'a> {
                 // over the same way a declared group is handed over. The
                 // interpreter calls it; the wrapper below is what lets a
                 // compiled `k_callN` reach the same C entry.
-                if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| *b == bare) {
-                    if (1..=4).contains(arity) {
-                        self.builtin_value_wrappers.push((bare.to_string(), *arity));
+                if let Some(arity) = arity_of_emitted(bare) {
+                    if (1..=4).contains(&arity) {
+                        self.builtin_value_wrappers.push((bare.to_string(), arity));
                         let t = f.tmp();
-                        let sym = rsym(&format!("builtin.{bare}"), *arity);
+                        let sym = rsym(&format!("builtin.{bare}"), arity);
                         f.line(&format!("{t} = call %KValue @k_fnref(ptr @{sym})"));
                         return Ok(t);
                     }
@@ -4344,8 +4357,8 @@ impl<'a> Backend<'a> {
             Some(target) => target.as_str(),
             None => name,
         };
-        if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| *b == name) {
-            if emitted.len() != *arity {
+        if let Some(arity) = arity_of_emitted(name) {
+            if emitted.len() != arity {
                 return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
             }
             // builtins scrutinize every argument; a thunk forces here (the

@@ -3093,3 +3093,56 @@ attribution in this file argued from the call graph — the code is not
 reachable, therefore the move is layout — and the entries above admit the sign
 went unexplained each time. A vein that returns to an earlier value under a
 different diff is layout showing its hand rather than being argued for.
+
+## 2026-08-29 — a builtin's count was checked by nobody at the front door
+
+DONE. `length x x` inside a function nothing calls: the interpreter printed
+the program's output and exited 0, the native backend refused the whole
+program with `native backend: `length` takes 1 argument(s)` and no span, the
+page compiled it and ran it, and `kanso check` said ok. A user function with
+the same mistake is refused by `check_call_arities` at the site, with a span,
+identically on every engine — `no 2-argument arm of `one` (arms take 1)`.
+Builtins fell through that walk because nothing in the front end knew what
+one takes.
+
+`print (wrap_err 1)` was worse than a divergence: `emit_call_rest` indexed the
+second argument of a one-argument call and the compiler panicked, exit 101
+with a Rust backtrace, on a two-word program.
+
+The counts now live in `check::BUILTIN_ARITY`, sixty-two of them, and
+`builtin_arity` answers under either spelling — a bare ambient name, or the
+`builtin_` form a std wrapper reaches a native by. `check_call_arities` reads
+it for any head no declaration and no binding claims, so a wrong count is
+refused where it is written, before any backend runs.
+
+The counts were in codegen's `BUILTIN_CALLS` as a second field. That table
+answers a different question — which builtins get a direct C call rather than
+an inline expansion — and carrying the counts too is what let the backend
+refuse a call the front door had waved through. It is a list of names now, and
+both its readers, plus the page's builtin-wrapper site, take the count from
+`check`. The page's site had a hardcoded `"print" => 1` beside its lookup
+because `print` is not in `BUILTIN_CALLS`; with one table that special case
+went.
+
+Every runtime vein is byte-identical — decode, escape, oneshot, basket, wide,
+pend, scan, encode, emitted — and the browser differential agrees on all 393
+programs. The two compile veins refuse to compare on this host; CI measures
+them.
+
+**The page test was wrong twice before it was right, and the second way is
+the one worth writing down.** The first form asked the playground prompt to
+evaluate `length [1 2] [3]`. It passed on main, because the prompt reaches
+the interpreter and the interpreter's runtime check fires there — the
+assertion read the same sentence for a different reason. The second form
+declared `fn sized xs / length xs xs` at the prompt, which the repl accepts
+on both engines: a declaration at the prompt is not a program, and no
+whole-program check runs on it. Only the third form — the compile door,
+`kanso_compile_wasm`, on a library with an entry — could tell, and on main it
+answered `Ran(0, "alive")`. Three instruments, two of which reported health
+they could not see.
+
+A corpus reads programs that RUN. The browser differential takes `examples`,
+`tests/golden/runtime` and `tests/golden/micro`, so a program refused at
+compile time is in none of them, and what the page says for a compile-time
+refusal was unread by construction. That is a gap in the corpus, not in this
+change, and one test does not close it.

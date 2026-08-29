@@ -72,6 +72,90 @@ pub const BUILTINS: [&str; 58] = [
 pub const AMBIENT: [&str; 9] =
     ["annotate", "bind", "entries", "if", "length", "print", "push", "put", "rescue"];
 
+/// What each builtin takes. `if` is absent: its count is checked where its
+/// branches are, because a guard form spells the same word with a different
+/// shape.
+///
+/// The native backend carried these counts beside its emit list and tested
+/// them in the backend, which is late and is one engine. A count the front
+/// door does not read is a count three engines answer three ways: the
+/// interpreter ran `length x x` in an unreached function and printed the
+/// program's output, the native backend refused the whole program with
+/// `native backend: `length` takes 1 argument(s)` and no span, the page
+/// died at the call, and `kanso check` said ok. So the counts live here,
+/// beside the names, and every reader takes them from one place.
+pub const BUILTIN_ARITY: [(&str, usize); 62] = [
+    ("accept", 1),
+    ("annotate", 2),
+    ("append", 2),
+    ("args", 0),
+    ("at", 2),
+    ("bind", 2),
+    ("bit_and", 2),
+    ("bit_not", 1),
+    ("bit_or", 2),
+    ("bit_shl", 2),
+    ("bit_shr", 2),
+    ("bit_xor", 2),
+    ("bytes", 1),
+    ("char_code", 1),
+    ("chars", 1),
+    ("concat", 2),
+    ("entries", 1),
+    ("env", 1),
+    ("exists", 1),
+    ("filter", 2),
+    ("find2", 4),
+    ("find2_below", 5),
+    ("from_code", 1),
+    ("is_desc", 1),
+    ("is_dir", 1),
+    ("join", 2),
+    ("kill", 1),
+    ("length", 1),
+    ("list_dir", 1),
+    ("listen", 1),
+    ("make_dir", 1),
+    ("map", 2),
+    ("net_close", 1),
+    ("net_port", 1),
+    ("net_read", 1),
+    ("net_write", 2),
+    ("now", 0),
+    ("print", 1),
+    ("push", 2),
+    ("put", 3),
+    ("random", 1),
+    ("read_file", 1),
+    ("render_value", 1),
+    ("rescue", 2),
+    ("round", 1),
+    ("run", 2),
+    ("sleep", 1),
+    ("slice", 3),
+    ("sort", 1),
+    ("split", 2),
+    ("sqrt", 1),
+    ("start", 2),
+    ("stdin", 0),
+    ("sum", 1),
+    ("to_bytes", 1),
+    ("to_float", 1),
+    ("to_int", 1),
+    ("utf8", 1),
+    ("wrap_err", 2),
+    ("write", 1),
+    ("write_err", 1),
+    ("write_file", 2),
+];
+
+/// What a builtin takes, under either spelling. A std wrapper module reaches
+/// a native through the `builtin_` prefix, and that call is a call.
+pub fn builtin_arity(name: &str) -> Option<usize> {
+    let bare = name.strip_prefix("builtin_").unwrap_or(name);
+    BUILTIN_ARITY.iter().find(|(b, _)| *b == bare).map(|(_, takes)| *takes)
+}
+
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
@@ -1804,6 +1888,17 @@ fn arity_walk_expr(
                             ),
                             *span,
                         ));
+                    }
+                }
+                if known.is_none() {
+                    if let Some(takes) = builtin_arity(name) {
+                        if args.len() != takes {
+                            diags.push(Diagnostic::new(
+                                "arity",
+                                format!("`{name}` takes {takes} argument(s), got {}", args.len()),
+                                *span,
+                            ));
+                        }
                     }
                 }
                 if let Some(known) = known {
