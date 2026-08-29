@@ -304,20 +304,6 @@ expectation flips from `slow_lane 7` to the qualified form.
 Whichever way it goes, `tests/entry_file.rs` stops being ignored — either its
 expectation changes or it starts passing.
 
-### `--explain-copies`
-
-**Cited: part-superseded, archive 2026-07-27 — the counter stack
-(`bytes_peak`, `cohort_kept`, `carry_dedup`, the trend gate, the welfare
-peak terms) served the rest. What is open is only the shape below.**
-
-The *where* half of the observability item — a diagnostic naming the
-source site of each evacuation copy. Needs span plumbing through the
-carry machinery.
-
-**RECOMMENDATION: decline it until a copy surprises somebody.** The
-counters already say how much is copied and when the number moves, and
-nobody has yet asked which line did it. Span plumbing through the carry
-machinery is a fortnight of work for a question that has not come up.
 
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
 

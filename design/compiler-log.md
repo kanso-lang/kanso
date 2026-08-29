@@ -2617,3 +2617,12 @@ Two ratchet mutations, one per opener, each watched turning the gate red and
 naming the sentence it injected.
 
 COST: no compiler source changed; the veins cannot move.
+## 2026-08-29 — gavel: --explain-copies declined
+
+Clay: "yagni violation." The flag — a diagnostic naming the source
+site of each evacuation copy — is declined until a copy surprises
+somebody. The counters already pin how much the beat machinery copies
+and CI catches the number moving; the *where* is two weeks of span
+plumbing through the carry machinery for a question nobody has asked.
+Its only realistic user today is the compiler's own memory work.
+Re-file when someone actually reaches for it.
