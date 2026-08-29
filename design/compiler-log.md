@@ -3872,21 +3872,34 @@ sentence, the page said the same thing byte for byte, and native printed
 `<mod>/shape 1` and exited 0. Native had built a one-field record whose type
 was the typeset, and a one-field record renders as its name and its field.
 
+Naming one without calling it is the quieter half of the same thing:
+
+```
+pub play = print "{shape}"
+```
+
+also compiles clean, and prints `<mod>/shape` on native against `<fn>` on the
+interpreter. Two engines, two answers, neither an error, nothing red.
+
 A typeset is annotation-only vocabulary. `type shape circle square` names a
 union a parameter can stand in, and no value is ever a `shape`, which the AST
-comment beside `members` has said since the field was added. So a call whose
-head names one is a mistake the compiler can see, and `typeset_constructions`
-in check.rs now says so where it is written. All three engines agree because
-none of them gets the call.
+comment beside `members` has said since the field was added. So the refusal is
+on the NAME — an `Ident` or a `&` partial anywhere an expression can stand —
+and the call is the case where the name is a head. `typeset_constructions` in
+check.rs says so where it is written, and all three engines agree because none
+of them gets the name.
 
-The two controls hold: a typeset as a parameter annotation still compiles, and
-a record whose type shares the typeset's members still constructs.
+Annotations are untouched, which is the point of putting it on the expression
+walk: a parameter's `:shape` is a pattern and a field's is a type list, and
+neither is an expression. Both controls hold — a typeset as a parameter
+annotation still compiles, and a record whose type is one of the typeset's
+members still constructs.
 
-**Why the interpreter's runtime test stays.** The front door refuses a typeset
-name written at a call. A typeset name reached as a held value — through `&`,
-through a binding — arrives at `construct` without an `App` head for the walk
-to see. Nothing in the corpus writes that, and removing the test to find out
-is the wrong order.
+**Why the interpreter's runtime test stays.** The walk reads the expression
+tree of every function body. A typeset name that reaches `construct` some
+other way — synthesised by a pass after this one, or through a shape the walk
+does not model — would arrive with nothing to have caught it. Nothing in the
+corpus writes that, and removing the test to find out is the wrong order.
 
 The message existed and the divergence existed, and what found them was a gate
 that could not see the message at all until its key changed. The scan reported
