@@ -2848,3 +2848,27 @@ precisely why it is written down here rather than assumed absent.
 
 `tests/golden/wasm_gaps.txt` loses the entry it gained an hour ago. The
 micro case now runs on all three engines and answers the same three lines.
+
+## 2026-08-29 — ch05 teaches the door it used to say did not exist
+
+DONE. The book's chapter on effects had a sample whose expected output is the
+endpoint message, and a paragraph explaining that an err born at the edge "does
+not knock at the continuations waiting downstream, even ones with an arm
+ready". That was the design, and this PR changed it, so the chapter that taught
+it moves in the same PR rather than after.
+
+The old sample and paragraph both stay, because both are still true of a dot
+chain: a step written with `.` carries a failure past. What follows them now is
+`rescued.kso`, the same program with the same group, reached through `rescue`
+instead — so the reader sees the arm that did not fire, then the one word that
+makes it fire, and the difference is the step rather than the group. Then a
+paragraph on the two siblings and on why `rescue` being the only door is the
+point rather than a limitation.
+
+The panel gate was watched going red on the new golden and green again, which
+is how the panel is known to be executed rather than skipped, and its exit code
+was checked to be load-bearing.
+
+ch08's boundary-language chapter still owes the same move, and it is a bigger
+one: it is queued P1 in the ledger and its whole shape assumes the failure
+channel is inferred from an arm.
