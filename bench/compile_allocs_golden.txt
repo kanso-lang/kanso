@@ -48,4 +48,10 @@
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
 # measured-on rustc=1.98.0
-compile_allocs=61981
+#
+# 2026-08-29 (the three chain words): 61,981 -> 61,974, a fall of 7. Banked
+# rather than explained in detail: the front end gained three names in
+# BUILTINS and three in AMBIENT and lost nothing, so a fall of seven
+# allocations out of sixty-two thousand is layout, in the same family as the
+# entries in the instructions golden beside it.
+compile_allocs=61974

@@ -290,11 +290,23 @@
 # `return k_err(k_str(<ptr>), NULL)` tails into one block, and a distinct one
 # breaks the fold. Measured both ways, and it is distinctness rather than
 # length — a same-length distinct string costs the same 128.
-jsonbench text=80930
-encodebench text=97922
-oneshot text=98002
-basket text=89602
-widebench text=99010
-deepbench text=63314
-escapebench text=49794
-pendbench text=73938
+#
+# 2026-08-29 (the three chain words): every row rises by 336 or 384 bytes —
+# jsonbench 80,930 to 81,266, encodebench 97,922 to 98,306, oneshot 98,002 to
+# 98,338, basket 89,602 to 89,986, widebench 99,010 to 99,346, deepbench
+# 63,314 to 63,666, escapebench 49,794 to 50,146, pendbench 73,938 to 74,290.
+# A rise, and the same rise everywhere, which is what says it is not any one
+# benchmark's code: src/runtime.c is embedded whole and gained five functions
+# for `bind`, `rescue` and `annotate` — k_call_on_err, k_worded_step,
+# k_annotate_wrap and the three k_b_ entry points. They are extern symbols the
+# emitter can call, so the linker keeps them whether or not a benchmark does.
+# The 48-byte spread between the two figures is the two benchmarks whose
+# alignment padding absorbed part of it.
+jsonbench text=81266
+encodebench text=98306
+oneshot text=98338
+basket text=89986
+widebench text=99346
+deepbench text=63666
+escapebench text=50146
+pendbench text=74290

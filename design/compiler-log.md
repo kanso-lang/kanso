@@ -2898,3 +2898,48 @@ module, which is a change with its own fixture — and the fixture is awkward,
 because reaching it needs a rescue over an EFFECT that fails on a page, and
 the only effects that fail there are the playground's own refusals, whose
 messages differ from native's by design and would need a gap entry.
+
+## 2026-08-29 — what the three chain words cost, priced across seven veins
+
+DONE. CI measured the tree the words landed in and four goldens moved. Two
+improved, seven rows worsened, and each is named here because a number that
+changes without a sentence is the thing to catch.
+
+**Improved, banked.** `compile_instructions` 57,571,389 -> 57,568,840, a fall
+of 2,549 (0.004%). `compile_allocs` 61,981 -> 61,974, a fall of 7. The measured
+path is `kanso check`, which never emits, so codegen's new call site and the
+wasm backend's do not run; what changed in front of it is three more entries in
+BUILTINS and three in AMBIENT, both read rather than walked per node. A fall of
+this size on this vein has been layout every previous time it was chased.
+
+**`text` 652,512 -> 655,344**, a rise of 2,832 spread evenly: every benchmark
+gains 336 or 384 bytes. The evenness is what says it is not any one
+benchmark's code. src/runtime.c is embedded whole and gained five functions —
+`k_call_on_err`, `k_worded_step`, `k_annotate_wrap` and three `k_b_` entry
+points — and the three entry points are extern symbols the emitter can call,
+so the linker keeps them whether a benchmark does or not.
+
+**The work vein, six rows, one mechanism.** `work_deepbench` 807,094,318 ->
+808,729,952 (+1,635,634, 0.20%) and `work_widebench` 85,209,624 -> 85,337,597
+(+127,973, 0.15%) carry almost all of it. `work_pendbench` rises 1,344.
+`work_jsonbench`, `work_encodebench` and `work_oneshot` rise by 8 or 9, which
+is one call frame. basket and escapebench do not move.
+
+It is one branch per chain step, and it is the gavel's rule rather than an
+accident. The chain loop used to hand the yielded value straight to `k_call1`;
+it now asks `k_worded_step`, which tests the value for failure before deciding
+whether the callback runs. The test cannot be dropped: `k_call1` skips a
+closure on a failure but hands one to a group, and the ruling says the failure
+channel is never inferred from the callback's shape — so a `bind` whose
+callback happens to be a group would otherwise let an err arm catch, which is
+exactly the surface the gavel retired.
+
+Marking the helper `static` so it could inline was tried and measured: local
+deepbench and widebench counts are byte-identical with and without it, because
+the optimizer already inlines within the single translation unit. So the rise
+is the check itself, at roughly one instruction per chain step, and deepbench
+is the benchmark that runs the most of them. The trade is stated rather than
+argued away: 0.2% on the chain-heaviest benchmark buys a failure channel that
+is spelled instead of deduced.
+
+Welfare holds at 84.11.
