@@ -239,9 +239,37 @@ TWO ANSWERS:
    still moves and the sentence is still required; only the welfare_floor
    attribution is dropped, because there is nothing to attribute.
 
-RECOMMENDATION: 2, narrowly — conditioned on the other three compile counters
-being byte-identical, so it cannot cover a change that did real work. If that
-condition feels like a crack, 1 is honest and the cost is small; what should
+**A THIRD ANSWER, from 2026-08-29, which is better than either.** The
+container this runs in cannot compare absolute numbers with the runner — a
+glibc revision apart, about 410 instructions on kq's rows — but its DELTAS
+match the runner's to the instruction. Four moves that day, each measured
+both places:
+
+    CI          container   what it was
+    +144,031    +141,573    work: a scan of a table per call head
+    +111,135    +110,534    work: the binary search that shipped instead
+     +83,829         +12    layout: a strip_suffix on an unemitted path
+      +2,138           0    layout: a guard in a function `check` never runs
+
+Work reproduces within 2%. Layout does not reproduce at all: twelve
+instructions against eighty-four thousand, and byte-identical against two
+thousand. The two are not distinguishable inside one host and they separate
+completely across two, which is a measurement rather than an inference from
+the other counters.
+
+So: **let the trend gate treat an instructions-only move as priced by the log
+sentence alone when the log sentence carries a second-host delta**, and
+require that delta rather than accepting an argument from the call graph.
+Two callgrind runs, about a minute, and an attribution that used to be a
+paragraph of reasoning is a number. Every layout attribution in the log
+before that date argues from reachability; the ones after it measure.
+
+RECOMMENDATION: the third answer. It gives option 2 the evidence it was
+missing — a condition that cannot be leaned on, because producing it means
+actually measuring — and it makes the log strictly more informative. If a
+required measurement feels like too much ceremony for a golden bump, 2
+narrowly conditioned on the other three counters is the fallback and 1 is
+honest; the cost is small either way. What should
 not stand is a spend ledger whose entries say no spend occurred.
 
 ### Whether `read_file` is text or bytes
