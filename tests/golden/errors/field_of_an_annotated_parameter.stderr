@@ -1,2 +1,2 @@
-error[name]: `money` has no field `text` (module field_of_an_annotated_parameter.kso)
-error[name]: `money` has no field `width` (module field_of_an_annotated_parameter.kso)
+error[name]: `money` has no field `text` (module field_of_an_annotated_parameter)
+error[name]: `money` has no field `width` (module field_of_an_annotated_parameter)

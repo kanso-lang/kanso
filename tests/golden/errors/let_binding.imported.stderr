@@ -1,1 +1,1 @@
-error[name]: `let` is not a type, so a binding cannot destructure with it — a binding is `x = …`, with no keyword (module let_binding.kso)
+error[name]: `let` is not a type, so a binding cannot destructure with it — a binding is `x = …`, with no keyword (module let_binding)

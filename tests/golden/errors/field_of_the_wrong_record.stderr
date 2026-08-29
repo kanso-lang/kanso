@@ -1,1 +1,1 @@
-error[name]: `point` has no field `name` (module field_of_the_wrong_record.kso)
+error[name]: `point` has no field `name` (module field_of_the_wrong_record)

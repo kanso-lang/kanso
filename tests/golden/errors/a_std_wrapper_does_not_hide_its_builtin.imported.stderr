@@ -1,3 +1,3 @@
-error[type]: `chars` takes a string here, not an int (module a_std_wrapper_does_not_hide_its_builtin.kso)
-error[type]: `split` takes a string here, not an int (module a_std_wrapper_does_not_hide_its_builtin.kso)
-error[type]: `bytes` takes a string here, not an int (module a_std_wrapper_does_not_hide_its_builtin.kso)
+error[type]: `chars` takes a string here, not an int (module a_std_wrapper_does_not_hide_its_builtin)
+error[type]: `split` takes a string here, not an int (module a_std_wrapper_does_not_hide_its_builtin)
+error[type]: `bytes` takes a string here, not an int (module a_std_wrapper_does_not_hide_its_builtin)

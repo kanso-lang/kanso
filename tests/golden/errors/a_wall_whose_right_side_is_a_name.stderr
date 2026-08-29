@@ -1,1 +1,1 @@
-error[type]: `>>` sequences two effects, and this side answers a plain value — bind it with `.` if you want what it answers (module a_wall_whose_right_side_is_a_name.kso)
+error[type]: `>>` sequences two effects, and this side answers a plain value — bind it with `.` if you want what it answers (module a_wall_whose_right_side_is_a_name)

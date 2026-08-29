@@ -1,1 +1,1 @@
-error[none]: a list cannot hold a none: a lookup answers "not found" with one, so an element would be indistinguishable (module none_in_list.kso)
+error[none]: a list cannot hold a none: a lookup answers "not found" with one, so an element would be indistinguishable (module none_in_list)

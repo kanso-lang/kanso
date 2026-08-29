@@ -1,1 +1,1 @@
-error[syntax]: `point` takes 2 argument(s), and a list element is one atom — this reads as 3 separate elements. Write `(point …)` to call it, or `&point` to hold it (module constructor_in_a_list.kso)
+error[syntax]: `point` takes 2 argument(s), and a list element is one atom — this reads as 3 separate elements. Write `(point …)` to call it, or `&point` to hold it (module constructor_in_a_list)
