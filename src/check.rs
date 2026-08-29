@@ -151,9 +151,24 @@ pub const BUILTIN_ARITY: [(&str, usize); 62] = [
 
 /// What a builtin takes, under either spelling. A std wrapper module reaches
 /// a native through the `builtin_` prefix, and that call is a call.
+///
+/// This walks the table, so it is for the backends, which ask it once per
+/// emitted call site. The front end asks it of every head no declaration
+/// claims, and a scan there cost 144,031 instructions on `kanso check
+/// lib/json` — measured, not guessed. `builtin_arities` is what the walk
+/// reads instead: one map, built once.
 pub fn builtin_arity(name: &str) -> Option<usize> {
     let bare = name.strip_prefix("builtin_").unwrap_or(name);
     BUILTIN_ARITY.iter().find(|(b, _)| *b == bare).map(|(_, takes)| *takes)
+}
+
+/// The same table as a map, for the one caller that reads it per call site.
+/// Built once for the process: `check_merged` runs per module, and
+/// `kanso check lib/json` has a dozen of them.
+fn builtin_arities() -> &'static crate::hash::Map<&'static str, usize> {
+    static TABLE: std::sync::LazyLock<crate::hash::Map<&'static str, usize>> =
+        std::sync::LazyLock::new(|| BUILTIN_ARITY.iter().copied().collect());
+    &TABLE
 }
 
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
@@ -1763,6 +1778,7 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
             slot.push(decl.params.len());
         }
     }
+    let builtins = builtin_arities();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -1777,7 +1793,7 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
             bound_in_stmt(stmt, &mut bound);
         }
         for stmt in &decl.body {
-            arity_walk_stmt(stmt, &arities, &fields, &bound, diags);
+            arity_walk_stmt(stmt, &arities, builtins, &fields, &bound, diags);
         }
     }
 }
@@ -1850,13 +1866,14 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
 fn arity_walk_stmt(
     stmt: &Stmt,
     arities: &HashMap<&str, Vec<usize>>,
+    builtins: &crate::hash::Map<&str, usize>,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     match stmt {
         Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            arity_walk_expr(expr, arities, fields, bound, diags)
+            arity_walk_expr(expr, arities, builtins, fields, bound, diags)
         }
     }
 }
@@ -1864,6 +1881,7 @@ fn arity_walk_stmt(
 fn arity_walk_expr(
     e: &Expr,
     arities: &HashMap<&str, Vec<usize>>,
+    builtins: &crate::hash::Map<&str, usize>,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
@@ -1891,7 +1909,8 @@ fn arity_walk_expr(
                     }
                 }
                 if known.is_none() {
-                    if let Some(takes) = builtin_arity(name) {
+                    let bare = name.strip_prefix("builtin_").unwrap_or(name.as_str());
+                    if let Some(&takes) = builtins.get(bare) {
                         if args.len() != takes {
                             diags.push(Diagnostic::new(
                                 "arity",
@@ -1920,7 +1939,9 @@ fn arity_walk_expr(
             }
         }
     }
-    crate::for_each_child(e, |child| arity_walk_expr(child, arities, fields, bound, diags));
+    crate::for_each_child(e, |child| {
+        arity_walk_expr(child, arities, builtins, fields, bound, diags)
+    });
 }
 
 /// A literal argument no arm could ever take.

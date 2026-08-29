@@ -3146,3 +3146,32 @@ A corpus reads programs that RUN. The browser differential takes `examples`,
 compile time is in none of them, and what the page says for a compile-time
 refusal was unread by construction. That is a gap in the corpus, not in this
 change, and one test does not close it.
+
+## 2026-08-29 — what the front-door count costs, and the four-fifths of it that went
+
+The first shape scanned `BUILTIN_ARITY` for every head no declaration and no
+binding claimed. CI put that at 57,567,033 -> 57,711,064 on `kanso check
+lib/json`, a rise of 144,031, and welfare sits exactly on its floor, so the
+rise had to come down before the change could land.
+
+Three shapes, measured on this host, where main reads 58,201,174:
+
+    a scan of the table, per head        58,342,747    +141,573
+    a map built per check_merged call    58,271,359     +70,185
+    a map built once for the process     58,232,625     +31,451
+
+The middle row is the one worth reading. `check_merged` runs per module and
+`kanso check lib/json` has a dozen of them, so building a sixty-two entry map
+each time cost about as much as the scans it replaced. Hoisting it to a
+`LazyLock` took the construction out of the measurement entirely and left only
+the lookup, which is what the check actually needs to do.
+
+The remaining 31,451 is one hash and one probe per builtin call site in
+lib/json and its dependencies, and it buys a compile-time refusal, with a
+span, on all three engines, for a class of error that had four different
+answers. The trade is stated rather than argued: welfare holds at 84.11 with
+the vein regenerated.
+
+The local delta is not the CI delta — this host read +141,573 where CI read
++144,031 for the same diff. Close enough to iterate on and not close enough to
+copy, so the golden carries CI's number.
