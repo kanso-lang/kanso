@@ -917,6 +917,15 @@ fn census_expr(e: &kanso::ast::Expr, census: &mut Census, program: &str) {
 /// moving it to the gap list — would retire the construct from the
 /// differential without turning anything red.
 ///
+/// A construct also has to be carried by a program reached AS A MODULE, and
+/// that is a second thing this asserts. Importing a module renames every name
+/// it owns, and a construct holding a type or a name that the rename pass
+/// forgets is broken only on that path. `Upcast` was carried by one program,
+/// which runs definitions beside statements and is therefore never imported,
+/// and the rename pass had never qualified an upcast's target: widening to a
+/// type a module declares reported at runtime that the value was not one, on
+/// the interpreter, and refused the module outright on both backends.
+///
 /// Two doors, because a corpus program is either a library exporting `play`
 /// or declarations beside bare statements, and `parse` alone refuses the
 /// second kind. A program that neither door reads fails here rather than
@@ -929,6 +938,9 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
         known_gaps().into_iter().map(|(path, _)| path).collect();
 
     let mut census = Census::new();
+    // the same census over the programs an import reaches, and therefore the
+    // programs the rename pass walks
+    let mut renamed = Census::new();
     let (mut read, mut skipped) = (0, 0);
     let mut unread = Vec::new();
     for path in corpus() {
@@ -957,11 +969,21 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
             },
         };
         read += 1;
+        // the harness stages a program exporting `play` behind a generated
+        // entry that imports it, which is the only way a corpus program meets
+        // the rename pass
+        let imported = source.contains("\npub play") || source.starts_with("pub play");
         for decl in &program.fns {
             for param in &decl.params {
                 carries(&mut census, pattern_shape(param), &listed);
+                if imported {
+                    carries(&mut renamed, pattern_shape(param), &listed);
+                }
             }
             census_stmts(&decl.body, &mut census, &listed);
+            if imported {
+                census_stmts(&decl.body, &mut renamed, &listed);
+            }
         }
     }
     assert!(unread.is_empty(), "the census could not read:\n  {}", unread.join("\n  "));
@@ -998,6 +1020,14 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
         "s:Expr",
         "s:Set",
     ];
+    let never_imported: Vec<&str> =
+        order.iter().copied().filter(|what| !renamed.contains_key(what)).collect();
+    assert!(
+        never_imported.is_empty(),
+        "carried only by programs nothing imports, so the rename an import performs \
+         has never walked {never_imported:?} — add a fixture exporting `play` that uses it"
+    );
+
     let mut here = String::new();
     for what in order {
         let carriers = census.remove(what).unwrap_or_default();

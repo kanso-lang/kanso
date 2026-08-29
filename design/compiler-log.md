@@ -3482,5 +3482,18 @@ The census golden moved by one line in the same pull request: `Upcast` went
 from one carrier to two, and `tests/golden/shapes.txt` now names both. A gate
 that moves the first time it is asked to is doing its job.
 
+The census gained the query that would have found this directly. A corpus
+program exporting `play` is staged behind a generated entry that imports it,
+which is the only way one meets the rename pass, so the census now also asks
+whether each construct has a carrier of that kind. Every construct does, now;
+`Upcast` did not before this fixture, and it was the only one. Rename the
+fixture's `pub play` to anything else and the check goes red naming `Upcast`.
+
+The two questions are worth keeping apart. The first asks whether the three
+engines are compared on a construct at all; the second asks whether they are
+compared on it down the path where names move. A construct can have plenty of
+carriers and still have none on the second — which is what a per-construct
+count buys over a program count.
+
 Welfare holds at 84.10 and the compile veins do not move on this host — the
 new arm's body runs only for an `Upcast` node and `lib/json` has none.
