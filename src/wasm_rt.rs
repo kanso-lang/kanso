@@ -1047,16 +1047,20 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
         Slot::Bind(inner, closure) => {
             Some(Rc::new(Desc::Bind(as_desc(inner)?, Value::TableFn(closure))))
         }
-        // `rescue` and `annotate` are deliberately NOT materialized, and the
-        // reason is a mechanism rather than an omission. Their callbacks
-        // receive the err, and the interpreter reaches a page closure through
-        // `call_from_interp`, which goes through `call_closure` — where a
-        // failure argument comes straight back instead of entering the body.
-        // So a materialized rescue inside a green-thread group would run its
-        // subject, skip its callback, and answer the failure the other two
-        // engines catch. Answering None refuses instead, which is the only
-        // one of the two that cannot be wrong quietly.
-        Slot::Rescue(..) | Slot::Annotate(..) => None,
+        // The scheduler runs a group's members through the interpreter's
+        // Desc, so a worded step inside one has to have a shape there. The
+        // callback rides back as a table handle, and `call_from_interp` now
+        // carries the decided call these two need — without it the subject
+        // would run, the callback would be skipped, and the page would answer
+        // the failure the other two engines catch.
+        Slot::Rescue(inner, closure) => {
+            Some(Rc::new(Desc::Rescue(as_desc(inner)?, Value::TableFn(closure))))
+        }
+        Slot::Annotate(inner, closure, origin) => Some(Rc::new(Desc::Annotate(
+            as_desc(inner)?,
+            Value::TableFn(closure),
+            raised_at(origin),
+        ))),
         _ => None,
     }
 }
@@ -1064,9 +1068,20 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
 /// The interpreter reaching back into the program module: its argument values
 /// become slots, the table entry runs, and whatever it produces returns as a
 /// value the scheduler can go on executing.
-fn call_from_interp(handle: u32, args: Vec<Value>) -> Result<Value, eval::RuntimeError> {
-    let arg_handles = args.into_iter().map(|v| push(Slot::V(v))).collect();
-    Ok(value_of(call_closure(handle, arg_handles)))
+fn call_from_interp(
+    handle: u32,
+    args: Vec<Value>,
+    decided: bool,
+) -> Result<Value, eval::RuntimeError> {
+    let mut arg_handles: Vec<u32> = args.into_iter().map(|v| push(Slot::V(v))).collect();
+    // `decided` is the worded chain steps reaching back in: the caller has
+    // already tested the argument, and `call_closure`'s guard would hand a
+    // failure straight back instead of entering the callback.
+    let answered = match (decided, arg_handles.len()) {
+        (true, 1) => call_decided(handle, arg_handles.remove(0)),
+        _ => call_closure(handle, arg_handles),
+    };
+    Ok(value_of(answered))
 }
 
 /// A handle as the interpreter wants it: a deferred shape becomes the
@@ -1125,11 +1140,13 @@ pub extern "C" fn rt_annotate(subject: u32, callback: u32, origin_lit: u32) -> u
 
 #[no_mangle]
 pub extern "C" fn rt_maybe_bind(piped: u32, closure: u32) -> u32 {
-    match slot(piped) {
-        Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..) => {
-            push(Slot::Bind(piped, closure))
-        }
-        _ => call_closure(closure, vec![piped]),
+    // `descish` rather than a list written out here: this had its own copy of
+    // the deferred shapes, so adding `rescue` and `annotate` left a chain step
+    // over one calling its callback with the description as data. The page
+    // printed `<io>` where the other two engines printed the rescued value.
+    match descish(&slot(piped)) {
+        true => push(Slot::Bind(piped, closure)),
+        false => call_closure(closure, vec![piped]),
     }
 }
 

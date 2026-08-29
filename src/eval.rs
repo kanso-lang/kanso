@@ -403,7 +403,11 @@ type Score = Vec<u8>;
 type EvalResult = Result<Value, RuntimeError>;
 
 /// Calling a closure that lives in another engine's table, by handle.
-pub type ForeignCall = fn(u32, Vec<Value>) -> EvalResult;
+/// Reaching a closure that belongs to another engine. The flag says which
+/// call rule to use: `false` guards the arguments against failure the way
+/// ordinary application does, `true` is the decided call the worded chain
+/// steps need — see `call_decided`.
+pub type ForeignCall = fn(u32, Vec<Value>, bool) -> EvalResult;
 
 /// What the browser answers when render reaches one of its cells. `None`
 /// where the handle names an ordinary function, which renders as one.
@@ -448,9 +452,9 @@ fn deferral_key(handle: u32) -> usize {
     ((handle as usize) << 1) | 1
 }
 
-fn foreign_call(handle: u32, args: Vec<Value>, span: Span) -> EvalResult {
+fn foreign_call(handle: u32, args: Vec<Value>, span: Span, decided: bool) -> EvalResult {
     match FOREIGN_CALL.with(|slot| *slot.borrow()) {
-        Some(call) => call(handle, args),
+        Some(call) => call(handle, args, decided),
         None => Err(RuntimeError {
             message: "a compiled closure escaped the engine that owns it".to_string(),
             span,
@@ -1654,7 +1658,7 @@ impl<'a> Interp<'a> {
         match callee {
             Value::FnRef(name) => self.call_named(&name, args, span, frame),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
-            Value::TableFn(handle) => foreign_call(handle, args, span),
+            Value::TableFn(handle) => foreign_call(handle, args, span, false),
             Value::Partial(callee, supplied) => {
                 // `()` runs a partial rather than supplying more to it, so an
                 // empty argument list is the call form and never an
@@ -2051,6 +2055,11 @@ impl<'a> Interp<'a> {
                 let env = bind(c.env.clone(), &c.params[0], arg);
                 self.eval(&c.body, &env, &c.frame)
             }
+            // a callback compiled into another engine's table. Without this
+            // arm the argument goes through that engine's guarded call and a
+            // failure comes straight back, so a rescue scheduled as a green
+            // thread would skip its callback — which is what the page did.
+            Value::TableFn(handle) => foreign_call(*handle, vec![arg], span, true),
             other => self.call(other.clone(), vec![arg], span, &None),
         }
     }
