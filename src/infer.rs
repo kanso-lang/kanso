@@ -848,6 +848,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "bit_and" | "bit_or" | "bit_xor" | "bit_not" | "bit_shl" | "bit_shr" => INT | fails,
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
+        // a worded chain step answers a description when its subject is one,
+        // and whatever its callback answers when the subject has settled
+        "bind" | "rescue" => TOP,
         "read_file" | "write" | "write_err" | "write_file" | "make_dir" | "sleep" | "random"
         | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" | "start" | "kill"
         | "listen" | "net_port" | "accept" | "net_read" | "net_write" | "net_close" => DESC | fails,

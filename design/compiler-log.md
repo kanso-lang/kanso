@@ -2732,3 +2732,44 @@ effect-first rider preserves. The 309 in STATUS counted differently.
 
 Welfare holds at 84.11 against its floor. compile_instructions rose 2,918
 (57,568,471 -> 57,571,389) for two Desc variants and a builtin branch.
+
+## 2026-08-29 — native learns two of the three words, and annotate says why not
+
+DONE (oracle and native for `bind` and `rescue`), OPEN (`annotate` on native,
+all three on the page). Continues the entry above in the same PR.
+
+Native needed no new struct field and no change to the beat loop's memory
+discipline. `bind` and `rescue` are one dtag apart — 6 and a new 29 — and a
+single `k_worded_step` holds the difference, mirroring the interpreter's
+function of the same shape. `k_call_on_err` is the C twin of the Rust one:
+`k_call1` returns a failure argument rather than entering a closure's body,
+which is what threads failures through a chain for free, and rescue is the
+one step that must get past it. The chain loop's flat pulse takes 29 beside 6
+rather than falling through to `k_exec`, so a rescue in a long chain costs no
+C stack.
+
+`bind` needed its own entry point rather than reusing `k_maybe_bind`, and the
+reason is the gavel: `k_maybe_bind` on a settled value calls the callback
+through `k_call1`, which skips a closure on a failure but hands one to a
+group, letting an err arm catch. The gavel says the failure channel is never
+inferred from an arm's shape, so `k_b_bind` skips the callback whatever shape
+it has.
+
+**`annotate` is the one that does not fit, and the reason is structural.** It
+builds an err of its own, and an err records where it was raised — so the
+description has to carry the site. `KDesc` is `{dtag, x, y}` and both slots
+are taken by the subject and the callback. Three ways out were considered:
+grow `KDesc` to a fourth field (48 bytes from 40, on every description in
+every program, for a field one dtag reads); carry `(callback, origin)` as a
+two-element list (an allocation per annotate step, and the origin literal
+holds an embedded NUL so it does not survive a KStr round-trip); or have
+codegen synthesise the wrapping closure so `annotate e k` compiles to a
+rescue whose callback wraps. The third costs nothing and is what should be
+built, but it means emitting a synthetic lambda that mentions `k` twice
+unless the callback is bound to a local first, and getting that wrong
+re-evaluates a callback expression the interpreter evaluates once. It is a
+separate change with its own fixture rather than a rider on this one.
+
+So native refuses `annotate` by name and speaks the other two, and
+`tests/the_three_chain_words.rs` now pins three cases on BOTH engines against
+one golden and the fourth as a refusal that names the word.

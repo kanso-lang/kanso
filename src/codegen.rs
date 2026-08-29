@@ -254,6 +254,8 @@ declare %KValue @k_b_net_read(%KValue)
 declare %KValue @k_b_net_write(%KValue, %KValue)
 declare %KValue @k_b_net_close(%KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
+declare %KValue @k_b_bind(%KValue, %KValue)
+declare %KValue @k_b_rescue(%KValue, %KValue)
 declare %KValue @k_desc_join(%KValue, %KValue)
 declare %KValue @k_desc_sleep(%KValue)
 declare %KValue @k_desc_random(%KValue)
@@ -316,7 +318,7 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 54] = [
     ("net_port", 1),
     ("start", 2),
     ("kill", 1),
@@ -327,6 +329,8 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
     ("find2_below", 5),
     ("bytes", 1),
     ("to_bytes", 1),
+    ("bind", 2),
+    ("rescue", 2),
     ("read_file", 1),
     ("write", 1),
     ("write_err", 1),

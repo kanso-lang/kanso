@@ -149,14 +149,21 @@ err itself, so a dispatch group is a legal callback. Annotate cannot resurrect
 by construction. Rescue is the sole door, its foreign-only license checked at
 the word. `.` retires from chain-step position; field access is untouched.
 
-**The three words work on the interpreter** as of 2026-08-29 (kanso#1116).
-Native and the page refuse each one by name, which is what the differential
-law asks of an engine that cannot yet speak a feature; native's chain loop is
-the beat/evacuation loop with a cost golden on it, so a new dtag there is its
-own measured change. `tests/golden/chainwords/` holds four cases and
-`tests/the_three_chain_words.rs` runs each on the oracle against a golden and
-asserts the native refusal. Three mutations were watched turning the right
-case red.
+**`bind` and `rescue` work on the oracle and on native** as of 2026-08-29
+(kanso#1116); `annotate` is oracle-only and native refuses it by name, which
+is what the differential law asks of an engine that cannot yet speak a
+feature. `tests/golden/chainwords/` holds four cases and
+`tests/the_three_chain_words.rs` pins three of them on BOTH engines against
+one golden and the fourth as a refusal. Three mutations were watched turning
+the right case red.
+
+`annotate` does not fit native yet for a structural reason worth knowing
+before anyone tries: it builds an err, an err records where it was raised, and
+a two-field description has nowhere to put the site. The cheap answer is to
+have codegen synthesise the wrapping closure so `annotate e k` compiles to a
+rescue whose callback wraps — costing nothing, but needing the callback bound
+to a local first so a synthetic lambda cannot mention it twice. The log entry
+of 2026-08-29 has the two rejected alternatives and why.
 
 `bind`, `rescue` and `annotate` are reserved names now. Two fixtures in the
 corpus had defined functions by two of those names and were renamed, which is
