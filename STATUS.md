@@ -121,26 +121,64 @@ red. #1105 had claimed in a comment that the scan already watched two
 hand-copied sentences for drift; it did not, and could not have — the copies
 are gone now anyway, dissolved by #1106's placeholder.
 
-## Next
+## Next, and the handoff
 
-**The queue is empty for the first time in a while.** The four findings the
-last version of this section left open are all closed:
+**This session hands off here.** The directive of 2026-08-26 — merged to main
+only on 2026-08-28, in #1112, having sat unmerged on the branch that carried
+it — says the running cloud session makes no further claude-code-remote tool
+calls, because it predates the checked-in allowlist and every one of them
+prompts Clay's phone. It also says the handoff happens at the natural boundary,
+current PR queue drained, and that a session started fresh inherits the merged
+`.claude/settings.json` and runs silent. The queue is drained. Nothing else
+transfers, because the repo carries it.
 
-  - the fifth file the ratchet could not see, `src/eval.rs` — #1100
-  - the fourth way the compiler writes a message, `codegen.rs`'s `format!` —
-    answered: one of the two was fixed in #1098 and the other is dead, because
-    `check_field_annotations` refuses every field annotation, so nothing
-    reaches the emitter's half. Deleting it is still not obviously right
-  - the scan's corpus taking `.stderr` only — measured and settled
-  - whether the scan should read `wasm_rt.rs` as well — #1108, yes, and the
-    week above is what it found
+One catch worth knowing: creating the successor is itself a
+claude-code-remote call, so the running session cannot start it. Clay does.
 
-**What is open is a decision, not a build.** Twenty questions in
-`design/pending-gavels.md`, one of them blocking. Nothing in the task list can
-start without a ruling.
+**The biggest buildable thing is now the err spelling, and it is ruled.**
+Gaveled 2026-08-26 and on main since #1112:
 
-**The rule that carries forward**, restated from the last version because it
-went on being true and then got sharper: a scan over a corpus enumerates the
-corpus's file types from the harness that reads it, never from the ones that
-came to mind. And its sibling, learned twice this week: a claim that a site
-cannot be reached is only as good as the program written to reach that site.
+    io/read_file path
+    bind     (text -> json/parse text)
+    annotate (e -> "config: {e.reason}")
+    rescue   when_failed
+
+Three words, all ordinary two-argument functions — `bind effect callback` —
+threaded by the chain rule already in the language. The callback receives the
+err itself, so a dispatch group is a legal callback. Annotate cannot resurrect
+by construction. Rescue is the sole door, its foreign-only license checked at
+the word. `.` retires from chain-step position; field access is untouched.
+
+The work is a front-end change plus a fleet migration: parser, checker, all
+three engines, every chain err-arm becoming `annotate`, every `.` chain step
+becoming `bind`, the differential corpus, and the book's boundary-language
+chapter. **Nothing of it is built.** `docs/compiler.html` §28 describes it and
+says so in as many words, which means the page and the compiler disagree on
+purpose until this lands — the one case where that is allowed, and it should
+not outlive the migration.
+
+**`done` is the second, smaller one.** Letter D was ruled in the same sitting:
+a succeeded effect yields `done`, not `none`. `none` means absence and nothing
+else. Chains that tested for `none` after an effect migrate.
+
+**What needs Clay, and cannot start without him:**
+
+  - the one blocking question, what a digest costs, filed with its measurement
+  - `delete_branch_on_merge=true` and the 324-branch purge (task #109), both
+    checked from here on two days and both refused by the tooling
+  - whether the err migration begins in the successor session or elsewhere
+
+**Fourteen questions wait in `design/pending-gavels.md`** — one blocking,
+thirteen open — each with a recommendation, counted from the ledger rather
+than carried forward.
+
+**The rules that carry forward**, each earned twice:
+
+  - a scan over a corpus enumerates the corpus's file types from the harness
+    that reads it, never from the ones that came to mind
+  - a claim that a site cannot be reached is only as good as the program
+    written to reach THAT site — `(opaque d).nope` is a name error and proves
+    nothing about `(opaque d).n`
+  - a branch with a ruling on it is not a record until it merges. Four gavels
+    sat unread for up to thirty-two hours, and this session reported the tree
+    settled while they did.
