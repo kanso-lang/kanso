@@ -1,0 +1,19 @@
+# Four expressions name a record type plainly enough to read a field against,
+# and the table that holds them read three. An annotation says it, a
+# constructor pattern's as-binding says it, a local construction says it — and
+# `(v):point` says it just as plainly and was not read, so this field read
+# compiled clean while the other three were refused where they stand. Both
+# engines then refuse it at run time, identically, so what was missing was the
+# diagnostic rather than the disagreement.
+type point
+  x
+  y
+
+type other
+  z
+
+fn widened v
+  p = (v):point
+  p.z
+
+pub play = print "{widened (point 1 2)}"

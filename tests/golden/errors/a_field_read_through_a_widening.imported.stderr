@@ -1,0 +1,1 @@
+error[name]: `point` has no field `z` (module a_field_read_through_a_widening)

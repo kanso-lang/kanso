@@ -3700,3 +3700,48 @@ container and +1,560 on the runner — opposite signs on the same diff, which is
 this file's layout signature, and `partial_lambda` runs on the emit path where
 `kanso check lib/json` emits nothing. The entry before it is the contrast:
 +14,934 and +10,404, same sign and order, banked as work.
+
+## 2026-08-29 — four expressions name a type plainly, and the table read three
+
+`check_field_exists` keeps a small table of which local holds which record
+type, so that `p.z` can be refused where it is written rather than where it
+runs. Four expressions say the type plainly enough to fill that table, and
+the table read three:
+
+```
+pub fn f p:point / p.z          check: `point` has no field `z`
+pub fn f r@(point x y) / r.z    check: `point` has no field `z`
+p = point a b / p.z             check: `point` has no field `z`
+p = (v):point / p.z             check: OK
+```
+
+An annotation names the type after a colon. A constructor pattern names it as
+the head of the pattern. A construction names it as the head of the call. A
+widening names it after a colon too, and `constructed_type` only knew how to
+read the head of an `App`.
+
+Nothing diverges here. Both engines refuse `p.z` at run time and print the same
+sentence, so what was missing was the diagnostic arriving at the front door
+instead of the back. The fixture pins the difference precisely: without the
+arm it yields `error[runtime]` with no span, with it `error[name]` and the
+column of the dot.
+
+The function is `type_in_hand` now, because "constructed" was the whole
+mistake — it named the one way a type reaches your hand and the reader of the
+call site had no reason to doubt it. Both call sites move: the bind loop, and
+`base_type`, which means a field read straight off a widening — `((v):point).z`
+without the bind — is covered by the same arm.
+
+Two controls hold. A real field through a widening still passes, and a widening
+to a *subtype* still passes, because subtypes are not in `plain` and the
+table has never claimed to know their fields.
+
+This is the fourth pass in two days that answered a question about names and
+read only `Expr::Ident` or `Expr::App`. The other three were the import
+rewriter, the qualifier collector and the bare-name marker. `Expr::Upcast`
+carries a type name after its colon and every one of them walked past it.
+
+`compile_allocs` is 61,974, unchanged — the arm is a branch on an existing
+walk and allocates nothing. `compile_instructions` reads -3,127 in the
+container, inside the layout band; the runner's reading goes in the golden
+header when CI reports it.
