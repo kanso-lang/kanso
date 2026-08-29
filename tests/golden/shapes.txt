@@ -22,7 +22,7 @@ Lambda	many
 BinOp	many
 Join	many
 Block	examples/if_blocks.kso tests/golden/micro/a_constant_whose_branches_bind.kso
-Upcast	examples/subtypes.kso tests/golden/micro/an_upcast_names_a_type_the_module_owns.kso
+Upcast	examples/subtypes.kso tests/golden/micro/an_upcast_names_a_type_the_module_owns.kso tests/golden/runtime/a_widening_to_a_vowel_initial_type.kso
 Build	many
 Guard	many
 p:IntLit	many

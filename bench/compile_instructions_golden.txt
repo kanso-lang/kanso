@@ -372,4 +372,17 @@
 # where the code sits.
 #
 # compile_allocs is 61,974, unchanged — the arm allocates nothing.
-compile_instructions=57816025
+# 2026-08-29 (the article on three engines): 57,816,025 -> 57,819,888, a rise
+# of 3,863. LAYOUT:
+#
+#   the runner      57,816,025 -> 57,819,888    +3,863
+#   the container   58,333,115 -> 58,329,165    -3,950
+#
+# Opposite signs. `article` moves from check.rs to diag.rs and gains two
+# callers in eval.rs and one in wasm_rt.rs; `k_article` is new in runtime.c
+# and is not in this binary at all. Both messages it feeds are runtime
+# messages, and `kanso check lib/json` runs no program, so nothing the change
+# touches is on the measured path.
+#
+# compile_allocs is 61,974, unchanged.
+compile_instructions=57819888

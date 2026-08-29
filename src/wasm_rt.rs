@@ -5,7 +5,7 @@
 //! call back into the program module through `k_callback`.
 #![cfg(target_arch = "wasm32")]
 use crate::ast::Program;
-use crate::diag::Span;
+use crate::diag::{article, Span};
 use crate::eval::{
     self, deliberate_exit, err_value, eval_binop, hop, index_value, is_failure, join_values,
     render, render_demanded, trace_lines, Cells, Desc, ErrInfo, Executor, Interp, Value,
@@ -728,7 +728,7 @@ pub extern "C" fn rt_mksub(inner: u32, tid: u32) -> u32 {
     if crate::eval::type_matches(&parent, &v) {
         push(Slot::V(Value::Sub { ty: Rc::from(name.as_str()), inner: Rc::new(v) }))
     } else {
-        die(format!("`{name}` wraps a {parent}"))
+        die(format!("`{name}` wraps {}", article(&parent)))
     }
 }
 
@@ -766,7 +766,10 @@ pub extern "C" fn rt_upcast(inner: u32, code: u32) -> u32 {
                 if crate::eval::type_matches(&want_name, other) {
                     return push(Slot::V(v.clone()));
                 }
-                return die(format!("`:{want_name}` widens; this value is not a {want_name}"));
+                return die(format!(
+                    "`:{want_name}` widens; this value is not {}",
+                    article(&want_name)
+                ));
             }
         }
     }

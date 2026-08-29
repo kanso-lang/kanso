@@ -3746,3 +3746,57 @@ walk and allocates nothing. `compile_instructions` reads -3,127 in the
 container and +2,513 on the runner: opposite signs on one diff, which is this
 file's layout signature. `lib/json` widens nothing, so the arm is never taken
 on the measured path.
+
+## 2026-08-29 — "a animal", on three engines, pinned by nothing
+
+Two runtime messages put an article in front of a type name and always chose
+`a`:
+
+```
+error[runtime]: `:int` widens; this value is not a int
+error[runtime]: `age` wraps a int
+```
+
+Six sites, two messages by three engines. Each engine wrote the sentence with
+its own format string, and none of them asked what letter the name begins
+with. `article` has been in check.rs since the demand diagnostics were
+written, and its own comment says a diagnostic that fumbles its grammar reads
+as carelessness about everything else in it.
+
+It lives in diag.rs now, which is the module that owns how a diagnostic is
+written, and both Rust engines call it. `runtime.c` has `k_article`, five
+lines, with a comment naming the Rust one so a reader finds the other half.
+
+Two fixtures in tests/golden/runtime pin both messages on all three engines.
+`("x"):int` is the widening: `int` is a builtin, so no import qualifies it and
+the fixture says the same thing whatever the file is called. `type age int`
+with `age "old"` is the wrapper, and its type name IS qualified through the
+import, so it carries an `.imported.stderr` twin.
+
+Watched red first. The widening fixture answered `not a int` against a golden
+reading `not an int`, which is the whole change and nothing else.
+
+**The gate could not see either message.** `diagnostic_coverage` keys a
+message on `head_of` — the literal up to
+its first interpolation — and drops any head under ten characters, because a
+head of one backtick would match every fixture in the corpus. `` `:{ty}`
+widens… `` has the head `` `: ``, two characters. So the scan reported 262
+literal diagnostics and 38 unpinned before this change and after it, and
+neither of these was ever in either count.
+
+Replaying the scan's seven opener families over src/*.rs and src/runtime.c
+finds 38 literals in that blind spot, these among them, and every `` `{ty}` has no field
+`{name}` `` site. Two keys were measured against tests/golden plus the book
+samples. The longest run between interpolations makes 29 of them visible and
+false-pins one: `{name} takes a list` is matched by `accept takes a listener`.
+The skeleton — every run, in order, on one line, with the same ten-character
+floor on the total — makes 30 visible, reports 25 pinned and 5 unpinned, and
+gets `field `{field}` of `{}` takes {}` right where the longest run could not
+see it at all. The five it finds unpinned are real gaps. That is its own
+change; the measurement is here so it does not have to be taken twice.
+
+`compile_allocs` is 61,974, unchanged. `compile_instructions` reads +3,863 on
+the runner and -3,950 in the container: opposite signs on one diff, layout.
+`article` moves between two modules and gains three callers, `k_article` is
+new in runtime.c and absent from this binary, and both messages they feed are
+runtime messages that `kanso check lib/json` never reaches.

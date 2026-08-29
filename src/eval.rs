@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::diag::Span;
+use crate::diag::{article, Span};
 use num_bigint::BigInt;
 use num_traits::{ToPrimitive, Zero};
 use std::cell::{Cell, RefCell};
@@ -1367,7 +1367,10 @@ impl<'a> Interp<'a> {
                         Value::Sub { inner, .. } => cur = (*inner).clone(),
                         _ => {
                             return Err(RuntimeError {
-                                message: format!("`:{ty}` widens; this value is not a {ty}"),
+                                message: format!(
+                                    "`:{ty}` widens; this value is not {}",
+                                    article(ty)
+                                ),
                                 span: *span,
                             })
                         }
@@ -1825,7 +1828,7 @@ impl<'a> Interp<'a> {
             }
             if !type_matches(parent, &inner) {
                 return Err(RuntimeError {
-                    message: format!("`{}` wraps a {}", ty.name, parent),
+                    message: format!("`{}` wraps {}", ty.name, article(parent)),
                     span,
                 });
             }
