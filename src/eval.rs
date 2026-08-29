@@ -119,10 +119,19 @@ fn frame_of(decl: &FnDecl) -> Frame {
 /// Where an err was raised, as the two things a raise records: the trace line
 /// a report prints and the package to hold responsible. They are produced
 /// together so no construction site can set one and forget the other.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Raised {
     pub at: Option<Rc<str>>,
     pub hako: Option<Rc<str>>,
+}
+
+/// Which of the three chain words a step is. They differ only in which
+/// channel the callback sees and what becomes of its answer.
+#[derive(Clone, Copy, Debug)]
+pub enum Word {
+    Bind,
+    Rescue,
+    Annotate,
 }
 
 pub fn origin_at(frame: &Frame, span: Span) -> Raised {
@@ -265,7 +274,17 @@ pub enum Desc {
     Run(String, Vec<String>),
     Start(String, Vec<String>),
     Kill(i64),
+    /// The three worded chain steps of the 2026-08-26 gavel. Each runs its
+    /// subject and then decides which channel the callback sees: `bind` hands
+    /// over the value and lets a failure past untouched, `rescue` hands over
+    /// the err and lets a value past. `annotate` reads the same channel as
+    /// `rescue` and re-wraps whatever comes back, so it can say more about a
+    /// failure and can never clear one. It carries the site it was written at
+    /// because the err it builds is a raise, and a raise records where it
+    /// happened.
     Bind(Rc<Desc>, Value),
+    Rescue(Rc<Desc>, Value),
+    Annotate(Rc<Desc>, Value, Raised),
     Await(i64),
     Listen(i64),
     SocketPort(i64),
@@ -1972,6 +1991,70 @@ impl<'a> Interp<'a> {
         }
     }
 
+    /// What a worded chain step answers once its subject has settled. This
+    /// is the whole difference between the three: `bind` calls the callback
+    /// on a value and lets a failure past, `rescue` calls it on a failure and
+    /// lets a value past, and `annotate` reads the same channel as `rescue`
+    /// but re-wraps the answer as an err with the original as cause — which
+    /// is why it cannot resurrect, with nothing checking that it doesn't.
+    fn worded_step(
+        &self,
+        word: Word,
+        yielded: Value,
+        callee: &Value,
+        raised: &Raised,
+        span: Span,
+    ) -> EvalResult {
+        let Value::ErrV(cause) = yielded.clone() else {
+            return match word {
+                Word::Bind => self.call_decided(callee, yielded, span),
+                Word::Rescue | Word::Annotate => Ok(yielded),
+            };
+        };
+        match word {
+            Word::Bind => Ok(yielded),
+            Word::Rescue => self.call_decided(callee, yielded, span),
+            Word::Annotate => match self.call_decided(callee, yielded, span)? {
+                // the callback failed on its own account, and that err
+                // already carries what it was told; wrapping it again would
+                // report the same failure twice
+                answer if is_failure(&answer) => Ok(answer),
+                reason => Ok(Value::ErrV(Rc::new(ErrInfo {
+                    reason,
+                    origin: raised.at.clone(),
+                    hako: raised.hako.clone(),
+                    hops: Vec::new(),
+                    cause: Some(cause),
+                    merged: false,
+                }))),
+            },
+        }
+    }
+
+    /// Ordinary application without its argument guard, for the callers that
+    /// have already decided about the argument themselves.
+    ///
+    /// `rescue` and `annotate` are two: a failure handed to a lambda
+    /// propagates instead of entering the body, which is what threads failures
+    /// through a chain for free, and they are the steps that must get past it.
+    /// A group needs no help; dispatch already routes an err to the arm
+    /// written for it.
+    ///
+    /// `bind` is the third, and it is there because the guard is redundant
+    /// rather than in the way: the chain step has already tested the yielded
+    /// value for failure — that test IS the difference between the worded
+    /// steps — so `call_closure`'s copy is work nobody needs. The C twin
+    /// carries the same name and the same two reasons.
+    fn call_decided(&self, callee: &Value, arg: Value, span: Span) -> EvalResult {
+        match callee {
+            Value::Closure(c) if c.params.len() == 1 => {
+                let env = bind(c.env.clone(), &c.params[0], arg);
+                self.eval(&c.body, &env, &c.frame)
+            }
+            other => self.call(other.clone(), vec![arg], span, &None),
+        }
+    }
+
     pub fn call_builtin(
         &self,
         name: &str,
@@ -2008,6 +2091,24 @@ impl<'a> Interp<'a> {
                 cause: Some(cause),
                 merged: false,
             })));
+        }
+        // The gavel's three chain words. Like `wrap_err` they must see a
+        // failure rather than be skipped by one — two of them exist to read
+        // exactly that channel — so they sit above the short-circuit below.
+        // An effect defers and becomes a chain node; a value that has already
+        // settled decides here, which is what makes a word mean the same
+        // thing called prefix-style outside a chain.
+        if let Some(word) = chain_word(name) {
+            let [subject, callback] = arity(args, name, span)?;
+            let raised = origin_at(frame, span);
+            if let Value::Desc(inner) = subject {
+                return Ok(Value::Desc(Rc::new(match word {
+                    Word::Bind => Desc::Bind(inner, callback),
+                    Word::Rescue => Desc::Rescue(inner, callback),
+                    Word::Annotate => Desc::Annotate(inner, callback, raised),
+                })));
+            }
+            return self.worded_step(word, subject, &callback, &raised, span);
         }
         if args.iter().any(is_failure) {
             return Ok(merged_failures(&args));
@@ -3055,6 +3156,17 @@ fn spelled(name: &str) -> &str {
     name.strip_prefix("bit_").unwrap_or(name)
 }
 
+/// The name of a chain word, or nothing. One table so the builtin, the
+/// checker's ambient list and a reader all read the same three.
+pub fn chain_word(name: &str) -> Option<Word> {
+    match name {
+        "bind" => Some(Word::Bind),
+        "rescue" => Some(Word::Rescue),
+        "annotate" => Some(Word::Annotate),
+        _ => None,
+    }
+}
+
 fn arity<const N: usize>(
     args: Vec<Value>,
     name: &str,
@@ -3973,7 +4085,9 @@ impl<'a> Interp<'a> {
                 executor.print(text);
                 Ok(Value::NoneV)
             }
-            Desc::Seq(..) | Desc::Bind(..) => self.execute_chain(Rc::new(desc.clone()), executor),
+            Desc::Seq(..) | Desc::Bind(..) | Desc::Rescue(..) | Desc::Annotate(..) => {
+                self.execute_chain(Rc::new(desc.clone()), executor)
+            }
             Desc::Join(_, _) => self.schedule(desc, executor),
             Desc::Sleep(ms) => {
                 executor.sleep(*ms);
@@ -4111,7 +4225,33 @@ impl<'a> Interp<'a> {
                 }
                 Desc::Bind(inner, callee) => {
                     let yielded = self.execute(inner, executor)?;
-                    match self.call(callee.clone(), vec![yielded], origin, &None)? {
+                    match self.worded_step(
+                        Word::Bind,
+                        yielded,
+                        callee,
+                        &Raised::default(),
+                        origin,
+                    )? {
+                        Value::Desc(d) => d,
+                        other => return Ok(other),
+                    }
+                }
+                Desc::Rescue(inner, callee) => {
+                    let yielded = self.execute(inner, executor)?;
+                    match self.worded_step(
+                        Word::Rescue,
+                        yielded,
+                        callee,
+                        &Raised::default(),
+                        origin,
+                    )? {
+                        Value::Desc(d) => d,
+                        other => return Ok(other),
+                    }
+                }
+                Desc::Annotate(inner, callee, raised) => {
+                    let yielded = self.execute(inner, executor)?;
+                    match self.worded_step(Word::Annotate, yielded, callee, raised, origin)? {
                         Value::Desc(d) => d,
                         other => return Ok(other),
                     }
@@ -4213,7 +4353,39 @@ impl<'a> Interp<'a> {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Bind(cont, callee.clone()))))
                 }
                 Step::Done(yielded) => {
-                    let next = self.call(callee.clone(), vec![yielded], origin, &None)?;
+                    let next =
+                        self.worded_step(Word::Bind, yielded, callee, &Raised::default(), origin)?;
+                    match next {
+                        Value::Desc(d) => self.step(&d, executor),
+                        other => Ok(Step::Done(other)),
+                    }
+                }
+            },
+            Desc::Rescue(inner, callee) => match self.step(inner, executor)? {
+                Step::Blocked(ms, cont) => {
+                    Ok(Step::Blocked(ms, Rc::new(Desc::Rescue(cont, callee.clone()))))
+                }
+                Step::Done(yielded) => {
+                    let next = self.worded_step(
+                        Word::Rescue,
+                        yielded,
+                        callee,
+                        &Raised::default(),
+                        origin,
+                    )?;
+                    match next {
+                        Value::Desc(d) => self.step(&d, executor),
+                        other => Ok(Step::Done(other)),
+                    }
+                }
+            },
+            Desc::Annotate(inner, callee, raised) => match self.step(inner, executor)? {
+                Step::Blocked(ms, cont) => Ok(Step::Blocked(
+                    ms,
+                    Rc::new(Desc::Annotate(cont, callee.clone(), raised.clone())),
+                )),
+                Step::Done(yielded) => {
+                    let next = self.worded_step(Word::Annotate, yielded, callee, raised, origin)?;
                     match next {
                         Value::Desc(d) => self.step(&d, executor),
                         other => Ok(Step::Done(other)),
@@ -4284,6 +4456,14 @@ pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Opti
         Desc::Bind(inner, _) => {
             render_plan(inner, out, force);
             out.push_str("  . <continuation>\n");
+        }
+        Desc::Rescue(inner, _) => {
+            render_plan(inner, out, force);
+            out.push_str("  rescue <continuation>\n");
+        }
+        Desc::Annotate(inner, ..) => {
+            render_plan(inner, out, force);
+            out.push_str("  annotate <continuation>\n");
         }
         Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
         Desc::Random(n) => out.push_str(&format!("  random {n}\n")),

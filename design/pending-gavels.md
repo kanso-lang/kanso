@@ -129,6 +129,73 @@ more than a hash.
 
 ## Open, not blocking
 
+### Whether a chain line keeps its leading dot
+
+**Cited: searched design/compiler-log.md for the three-forms gavel of
+2026-08-26, its `bind is a word too` amendment and its `effect first, callback
+second` rider; searched the archive and every design/*.md for a chain-line
+grammar ruling and found none. The two sources below are the gavel's own
+sample and its own sentence, and they disagree.**
+
+The gavel's sample is dotless:
+
+    io/read_file path
+    bind (text -> json/parse text)
+
+and the paragraph beside it says the first argument comes from "the chain rule
+already in the language ... the same rule that makes `(expect 1) . to (equal
+x)` feed `expect 1` into `to`". That rule is the dot. So either the dot stays
+as the continuation marker and only stops being a step in its own right —
+
+    . bind (text -> json/parse text)
+
+— or a continuation line loses it. The second needs a parser change and it
+collides with a rule already in the language: an indented line under an
+argument-taking statement is one more argument (`src/lexer.rs`), and today the
+leading `.` is the only thing telling the two apart. Removing it means an
+indented line whose head is `bind`, `annotate` or `rescue` becomes a chain
+step, which makes the three words syntax — contradicting the gavel's "nothing
+about them is syntax".
+
+346 lambda chain steps in the fleet respell either way, and the shape of the
+migration pass differs entirely between the two. The three words already work
+prefix-style on the interpreter (kanso#1116); this decides only how a chain
+line spells them.
+
+**Recommendation: keep the dot.** It is the smaller change, it keeps the three
+words ordinary functions rather than parser-known heads, and it leaves the
+existing threading form untouched. The cost is that a chain reads `. bind (f)`
+rather than `bind (f)`, which is two characters against a grammar rule that
+would otherwise have to know three names.
+
+### Whether an err gains readers a callback can use
+
+**Cited: searched design/compiler-log.md and the archive for `wrap_err`, for
+err field access and for `reason` as a reader; found the "one hole in err's
+infectiousness" (wrap_err's second argument arrives as a value) and nothing
+that opens a second one. The three-forms gavel's own sample is the source of
+the question.**
+
+The gavel writes `annotate (e -> "config: {e.reason}")`. An err has no
+`.reason` reader, and adding the field alone would not be enough: every
+operation on an err propagates it, so an interpolation that mentions one
+answers the err rather than a string. A lambda callback can therefore receive
+an err and can do nothing with it but pass it on.
+
+A group callback has no such problem — its arm destructures, binding the
+reason as a value, and that is the gavel's primary story ("a dispatch group is
+a legal callback and its arms match reason types polymorphically"). So the
+words work today; it is the lambda spelling in the ruling's own sample that
+does not.
+
+**Recommendation: give an err the readers `.reason`, `.cause` and `.origin`,
+and make reading one the second hole in infectiousness.** It is the same
+carve-out `wrap_err` already has, it makes the gavel's sample compile, and it
+keeps the alternative — telling readers to write a group for every annotation
+— from becoming the house style by accident. If that is too much surface, the
+narrower answer is to strike the lambda form from the sample and teach the
+group.
+
 ### Whether a compile_instructions move that cannot be work needs an attribution
 
 **Cited: searched design/compiler-log.md and the archive for

@@ -1,0 +1,20 @@
+# `bind` and `rescue` on a subject that has already settled — no effect, so
+# every engine including the page runs this one. json's failure is foreign
+# here, which is what lets an ordinary arm name it.
+#
+# `rescue` reads the failure channel: it answers on the first line and stands
+# aside on the third, where the decode succeeded and the list comes through
+# untouched. `bind` reads the value channel and hands the second line's
+# document to the same group.
+import "std/json"
+
+fn told (err r)
+  "rescued: {r.reason}"
+
+fn told v
+  "decoded {length v} values"
+
+pub play =
+  print (rescue (json/decode "[1, 2") told)
+  >> print (bind (json/decode "[1, 2]") told)
+  >> print (rescue (json/decode "[1, 2]") told)

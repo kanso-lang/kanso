@@ -290,11 +290,20 @@
 # `return k_err(k_str(<ptr>), NULL)` tails into one block, and a distinct one
 # breaks the fold. Measured both ways, and it is distinctness rather than
 # length — a same-length distinct string costs the same 128.
-jsonbench text=80930
-encodebench text=97922
-oneshot text=98002
-basket text=89602
-widebench text=99010
-deepbench text=63314
-escapebench text=49794
-pendbench text=73938
+#
+# 2026-08-29 (the three chain words): 652,512 -> 655,152, a rise of 2,640
+# spread almost evenly — every benchmark gains 320, 336 or 352 bytes. The
+# evenness is what says it is not any one benchmark's code: src/runtime.c is
+# embedded whole and gained six functions for `bind`, `rescue` and `annotate`
+# — k_call_decided, k_worded_step, k_annotate_wrap, and the three k_b_ entry
+# points, which are extern symbols the emitter can call, so the linker keeps
+# them whether a benchmark does or not. The 32-byte spread between the figures
+# is alignment padding absorbing part of it in some.
+jsonbench text=81250
+encodebench text=98274
+oneshot text=98322
+basket text=89954
+widebench text=99330
+deepbench text=63634
+escapebench text=50114
+pendbench text=74274

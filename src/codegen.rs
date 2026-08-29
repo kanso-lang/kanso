@@ -254,6 +254,9 @@ declare %KValue @k_b_net_read(%KValue)
 declare %KValue @k_b_net_write(%KValue, %KValue)
 declare %KValue @k_b_net_close(%KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
+declare %KValue @k_b_bind(%KValue, %KValue)
+declare %KValue @k_b_rescue(%KValue, %KValue)
+declare %KValue @k_b_annotate(%KValue, %KValue, ptr)
 declare %KValue @k_desc_join(%KValue, %KValue)
 declare %KValue @k_desc_sleep(%KValue)
 declare %KValue @k_desc_random(%KValue)
@@ -316,7 +319,7 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 55] = [
     ("net_port", 1),
     ("start", 2),
     ("kill", 1),
@@ -327,6 +330,9 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
     ("find2_below", 5),
     ("bytes", 1),
     ("to_bytes", 1),
+    ("bind", 2),
+    ("rescue", 2),
+    ("annotate", 2),
     ("read_file", 1),
     ("write", 1),
     ("write_err", 1),
@@ -4114,6 +4120,19 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_err(%KValue {}, {origin})", emitted[0]));
             f.record(&t, ERR);
+            return Ok(t);
+        }
+        // `annotate` raises an err of its own, so like `err` and `wrap_err` it
+        // is handed the site it was written at. The runtime wraps the callback
+        // in a closure holding both and hands the result to rescue's node.
+        if name == "annotate" {
+            let origin = self.origin_arg(f, span);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = call %KValue @k_b_annotate(%KValue {}, %KValue {}, {origin})",
+                emitted[0], emitted[1]
+            ));
+            f.record(&t, TOP);
             return Ok(t);
         }
         if name == "wrap_err" {

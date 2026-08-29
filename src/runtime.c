@@ -274,7 +274,7 @@ struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
-   18 is_dir, 26 start, 27 kill */
+   18 is_dir, 26 start, 27 kill, 29 rescue */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -300,6 +300,8 @@ static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
 static KValue k_list_own(KValue* items, long long n);
 KValue k_call1(KValue f, KValue a);
+KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, KValue* caps);
+KValue k_env_get(void* env, long long i);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
 /* The arena is a chain of blocks, newest first; allocation bumps in the head
@@ -4138,6 +4140,80 @@ KValue k_maybe_bind(KValue piped, KValue closure) {
     return k_call1(closure, piped);
 }
 
+/* k_call1 without its argument guard, for the two callers that have already
+   decided about the argument themselves.
+
+   `rescue` is one: k_call1 refuses to hand a failure to a closure — a failure
+   propagates instead of entering the body, which is what threads failures
+   through a chain for free — and rescue is the step that must get past it. A
+   group needs no help; dispatch already routes an err to the arm written for
+   it.
+
+   `bind` is the other, and it is there for speed rather than meaning. The
+   chain loop tests the yielded value for failure before deciding whether the
+   callback runs at all — that test IS the difference between the worded steps
+   — so k_call1's copy of it is redundant work on the hottest path in the
+   language. Measured: dropping it takes deepbench back under its pre-gavel
+   count. */
+KValue k_call_decided(KValue f, KValue a) {
+    if (!k_not_failure(f)) return f;
+    if (f.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity != 1) k_die_arity(c->arity, 1);
+        return c->fn(c->env, a);
+    }
+    return k_call1(f, a);
+}
+
+/* What a worded chain step answers once its subject has settled — the whole
+   difference between the words of the 2026-08-26 gavel. `bind` (dtag 6) reads
+   the value channel and lets a failure past untouched; `rescue` (dtag 29)
+   reads the failure channel and lets a value past. The interpreter's
+   `worded_step` is the oracle for both. */
+KValue k_worded_step(long long dtag, KValue yielded, KValue callee) {
+    int failed = !k_not_failure(yielded);
+    if (dtag == 29) return failed ? k_call_decided(callee, yielded) : yielded;
+    return failed ? yielded : k_call_decided(callee, yielded);
+}
+
+/* An effect defers and becomes a chain node; a value that has already settled
+   decides here, which is what makes a word mean the same thing called
+   prefix-style outside a chain. */
+KValue k_b_bind(KValue subject, KValue callback) {
+    if (subject.tag == K_DESC) return k_mkdesc(6, subject, callback);
+    return k_worded_step(6, subject, callback);
+}
+
+KValue k_b_rescue(KValue subject, KValue callback) {
+    if (subject.tag == K_DESC) return k_mkdesc(29, subject, callback);
+    return k_worded_step(29, subject, callback);
+}
+
+/* `annotate` is `rescue` with a wrapper around its callback, so it needs no
+   description of its own — which matters, because it is the one word that
+   builds an err, an err records where it was raised, and a description's two
+   slots are already the subject and the callback. The runtime builds the
+   wrapper here instead: a closure over the callback and the site, standing
+   where the user's callback would.
+
+   The site rides as an int payload. It is a static literal the collector
+   never owns and never traces, and a raw pointer in a payload is already how
+   `k_fnref` carries what it carries. */
+static KValue k_annotate_wrap(void* env, KValue failure) {
+    KValue callback = k_env_get(env, 0);
+    KValue site = k_env_get(env, 1);
+    return k_b_wrap_err(k_call_decided(callback, failure), failure,
+                        (const char*)(intptr_t)site.payload);
+}
+
+KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
+    KValue site; site.tag = K_INT; site.payload = (long long)(intptr_t)origin;
+    KValue caps[2]; caps[0] = callback; caps[1] = site;
+    KValue wrap = k_closure(k_annotate_wrap, 1, 2, caps);
+    if (subject.tag == K_DESC) return k_mkdesc(29, subject, wrap);
+    return k_worded_step(29, subject, wrap);
+}
+
 KValue k_desc_sleep(KValue ms) {
     if (!k_not_failure(ms)) return ms;
     if (ms.tag != K_INT) k_die_got("sleep takes milliseconds (an int)", ms);
@@ -4539,11 +4615,11 @@ static KValue k_exec(KDesc* d) {
             cur.payload = k_ptr(d);
             for (;;) {
                 KDesc* dd = k_as_desc(cur);
-                if (dd->dtag != 6) {
+                if (dd->dtag != 6 && dd->dtag != 29) {
                     return k_beat_pop(k_exec(dd));
                 }
                 KValue yielded = k_exec(k_as_desc(dd->x));
-                KValue next = k_call1(dd->y, yielded);
+                KValue next = k_worded_step(dd->dtag, yielded, dd->y);
                 if (next.tag != K_DESC) {
                     return k_beat_pop(next);
                 }
@@ -4805,13 +4881,14 @@ static KStep k_step(KDesc* d) {
             }
             return k_step(k_as_desc(right));
         }
-        case 6: {
+        case 6:
+        case 29: {
             KStep in = k_step(k_as_desc(d->x));
             if (in.blocked) {
-                KStep s = {1, in.ms, k_mkdesc(6, in.cont, d->y), k_none()};
+                KStep s = {1, in.ms, k_mkdesc(d->dtag, in.cont, d->y), k_none()};
                 return s;
             }
-            KValue next = k_call1(d->y, in.value);
+            KValue next = k_worded_step(d->dtag, in.value, d->y);
             if (next.tag == K_DESC) return k_step(k_as_desc(next));
             KStep s = {0, 0, k_none(), next};
             return s;

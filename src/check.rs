@@ -3,7 +3,8 @@ use crate::diag::{Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 55] = [
+pub const BUILTINS: [&str; 58] = [
+    "annotate",
     "append",
     "args",
     "bytes",
@@ -27,6 +28,7 @@ pub const BUILTINS: [&str; 55] = [
     "random",
     "read_file",
     "render_value",
+    "rescue",
     "run",
     "start",
     "kill",
@@ -40,6 +42,7 @@ pub const BUILTINS: [&str; 55] = [
     "bit_xor",
     "bit_not",
     "bit_shl",
+    "bind",
     "bit_shr",
     "env",
     "exists",
@@ -62,8 +65,12 @@ pub const BUILTINS: [&str; 55] = [
 ];
 
 /// The bare-name subset: what resolves without an import. Everything else
-/// in BUILTINS is internal, reached only through std wrapper modules.
-pub const AMBIENT: [&str; 6] = ["entries", "if", "length", "print", "push", "put"];
+/// in BUILTINS is internal, reached only through std wrapper modules. The
+/// three chain words are here because a chain step is written wherever an
+/// effect is, and importing a module to spell one would be a tax on the
+/// failure channel.
+pub const AMBIENT: [&str; 9] =
+    ["annotate", "bind", "entries", "if", "length", "print", "push", "put", "rescue"];
 
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);

@@ -2655,3 +2655,327 @@ So the purge and the repository setting both need somebody with push-delete
 rights. The setting is the half worth doing first: it stops the class
 recurring, which turns the purge from a chore that returns into a job done
 once.
+
+## 2026-08-29 — the executor gains a door: rescue, annotate and bind on the oracle
+
+DONE (oracle), OPEN (native, page). The three-forms gavel of 2026-08-26 and
+the amendment that made `bind` a word are built on the interpreter. What the
+build turned up is that one of the three is new capability rather than a
+respelling, which the migration sizing had not seen.
+
+**An execution-time failure could not be handled inside a chain at all.** A
+chain step over an effect synthesises a one-parameter closure around the
+step's expression (eval.rs, the `piped` branch). At execute time `Desc::Bind`
+calls that closure with whatever the subject yielded, and `call_closure`
+returns a failure argument instead of entering the body. So the failure never
+reached the callback, whatever shape the callback had — a lambda and a group
+with an `(err _)` arm were treated identically, because neither was ever
+called.
+
+`docs/book/samples/ch05/fallback.kso` is exactly that program, and its golden
+is the endpoint message. ch05 teaches it as the design: an err born at the
+edge "does not knock at the continuations waiting downstream, even ones with
+an arm ready". So the migration's err-arm half really is empty, and for a
+better reason than the three greps in #1115 gave — the chain err-arm was never
+a working surface, and the one site in the fleet that looks like one is the
+book's counter-example showing it does not fire.
+
+Two consequences the sizing owes an update: `bind`'s skip-on-failure rule was
+already what the machine did, so spelling it out changes no program; and
+`rescue` needs the executor to hand the err to a callback, which nothing did.
+
+**What landed.** `Desc::Rescue` and `Desc::Annotate` beside `Desc::Bind`, one
+`worded_step` holding the whole difference between the three, and
+`call_on_err` for the one thing ordinary application will not do — hand a
+failure to a lambda. `annotate` carries the site it was written at, because
+the err it builds is a raise and a raise records where it happened. Its
+re-wrap is unconditional, so it cannot resurrect without anything checking
+that it doesn't; a callback that answers with a failure of its own keeps that
+one rather than being wrapped twice.
+
+**The three words are reserved now.** `bind`, `rescue` and `annotate` joined
+AMBIENT, so no program may define a function by those names. Two fixtures in
+the corpus did — `tests/golden/advisory/group_identity` and
+`.../reraises` — which is evidence the names are natural ones for user code.
+They were renamed to `recover` and `relabel`. This is a cost of the gavel's
+spelling and worth saying out loud rather than discovering later.
+
+**Pinned.** `tests/golden/chainwords/` and `tests/the_three_chain_words.rs`:
+four cases, each run on the oracle against a golden AND asserted refused by
+name on native. Three mutations were watched turning the right case red —
+rescue not reading the failure channel, annotate not re-wrapping, bind reading
+the failure channel — and the corpus goes green again when each is restored.
+The micro corpus could not host these: it runs native and `--interp` and
+requires them to agree.
+
+**Not built, and why the differential law allows it.** Native and the page
+both refuse the words by name — `native backend: \`rescue\` is not yet
+supported` and the wasm backend's `unsupported call to \`rescue\``. The law
+permits a feature on fewer engines only when the others REJECT it, and both
+do. Native's chain loop is the beat/evacuation loop with a cost golden
+watching it, so a new dtag there is its own measured change rather than a
+rider on this one.
+
+**Two things the gavel's own sample needs that do not exist.** Its lambda
+form is `annotate (e -> "config: {e.reason}")`, and an err has no `.reason`
+reader — nor could an interpolation read one, since every operation on an err
+propagates it. So a lambda callback can receive an err and cannot look at it.
+A group callback can, by destructuring, which is the gavel's primary story
+("a dispatch group is a legal callback"). Whether an err gains readers that
+get past its own infectiousness, the way `wrap_err`'s second argument does, is
+a question for Clay and is filed.
+
+**The migration count is corrected.** 485 loose-dot steps in fleet code with
+comments and strings stripped, not 309: 346 are `. (lambda)`, the monadic
+steps that respell, and 139 are `. named_fn`, the threading form the
+effect-first rider preserves. The 309 in STATUS counted differently.
+
+Welfare holds at 84.11 against its floor. compile_instructions rose 2,918
+(57,568,471 -> 57,571,389) for two Desc variants and a builtin branch.
+
+## 2026-08-29 — native learns two of the three words, and annotate says why not
+
+DONE (oracle and native for `bind` and `rescue`), OPEN (`annotate` on native,
+all three on the page). Continues the entry above in the same PR.
+
+Native needed no new struct field and no change to the beat loop's memory
+discipline. `bind` and `rescue` are one dtag apart — 6 and a new 29 — and a
+single `k_worded_step` holds the difference, mirroring the interpreter's
+function of the same shape. `k_call_on_err` is the C twin of the Rust one:
+`k_call1` returns a failure argument rather than entering a closure's body,
+which is what threads failures through a chain for free, and rescue is the
+one step that must get past it. The chain loop's flat pulse takes 29 beside 6
+rather than falling through to `k_exec`, so a rescue in a long chain costs no
+C stack.
+
+`bind` needed its own entry point rather than reusing `k_maybe_bind`, and the
+reason is the gavel: `k_maybe_bind` on a settled value calls the callback
+through `k_call1`, which skips a closure on a failure but hands one to a
+group, letting an err arm catch. The gavel says the failure channel is never
+inferred from an arm's shape, so `k_b_bind` skips the callback whatever shape
+it has.
+
+**`annotate` is the one that does not fit, and the reason is structural.** It
+builds an err of its own, and an err records where it was raised — so the
+description has to carry the site. `KDesc` is `{dtag, x, y}` and both slots
+are taken by the subject and the callback. Three ways out were considered:
+grow `KDesc` to a fourth field (48 bytes from 40, on every description in
+every program, for a field one dtag reads); carry `(callback, origin)` as a
+two-element list (an allocation per annotate step, and the origin literal
+holds an embedded NUL so it does not survive a KStr round-trip); or have
+codegen synthesise the wrapping closure so `annotate e k` compiles to a
+rescue whose callback wraps. The third costs nothing and is what should be
+built, but it means emitting a synthetic lambda that mentions `k` twice
+unless the callback is bound to a local first, and getting that wrong
+re-evaluates a callback expression the interpreter evaluates once. It is a
+separate change with its own fixture rather than a rider on this one.
+
+So native refuses `annotate` by name and speaks the other two, and
+`tests/the_three_chain_words.rs` now pins three cases on BOTH engines against
+one golden and the fourth as a refusal that names the word.
+
+## 2026-08-29 — annotate reaches native after all, and the page was diverging in silence
+
+DONE (all three words on the oracle and native), OPEN (the page, which now
+refuses them by name). Supersedes the entry above on two counts, both found by
+building rather than reasoning.
+
+**annotate needed no new field and no codegen desugar.** The entry above listed
+three ways to carry the site a raise records, and all three were worse than the
+one it missed: the runtime builds the wrapper closure itself. `k_closure`
+already exists for exactly this shape, so `k_b_annotate` makes a one-parameter
+closure over the callback and the site and hands it to rescue's node. The site
+rides as an int payload — a static literal the collector never owns and never
+traces, and a raw pointer in a payload is already how `k_fnref` carries what it
+carries. `annotate` therefore has no dtag of its own.
+
+The measurement that killed the alternatives first: `rescue e (__e -> rescue
+__e k)` already works on both engines, which says `rescue` on a settled err
+reaches a group — so the whole word lowers to rescue plus wrap_err, and the
+only question left was where to put the wrapper. Building it beat arguing
+about a fourth field.
+
+**The page was compiling `rescue` and answering something else.** Not
+refusing — compiling, and then propagating the failure the other two engines
+catch. The wasm backend has no node for the words, and the names fell through
+to its generic call path instead of its `unsupported call` arm. This is the
+exact shape the differential law forbids, and it was invisible to everything
+in the tree: the chainwords corpus needs a filesystem to make an effect fail,
+and a page has none, so no program the page could run reached the words.
+
+`tests/golden/micro/a_settled_failure_meets_the_three_words.kso` closes that.
+It reaches `bind` and `rescue` through a subject that has already failed —
+json's parse failure, foreign here, no filesystem — so all three engines run
+it. It went red on the wasm harness on its first run, naming the divergence,
+and the page now refuses by name with the gap written in
+`tests/golden/wasm_gaps.txt`.
+
+Two method notes worth keeping. A probe that called `wasm_backend::compile`
+directly and asked whether it errored answered "accepted" for all three words
+with byte-identical modules, which was the front end eliding the call rather
+than the backend accepting it — an inconclusive instrument that read as a
+clean result. The corpus was the instrument that could tell. And the reason
+nothing caught this earlier is the fixture design: every case that makes an
+effect fail needs the world to refuse something, and the engine that has no
+world is the one that most needs a case.
+
+Welfare holds at 84.11.
+
+## 2026-08-29 — the page speaks the three words, and all three engines agree
+
+DONE. The gap the entry above opened closes in the same PR, so nothing carries
+a refusal forward.
+
+The page needed the same three pieces the other two engines did and nothing
+more. `Slot::Rescue` and `Slot::Annotate` beside `Slot::Bind`; one
+`worded_step` over the word; `call_on_err` as the third twin of a function
+that now exists once per engine, because `call_closure` there returns a
+failure argument for the same reason its two siblings do. `Annotate` carries
+the origin literal in the slot — the page's `Lit` table is where a literal
+already lives, so there is no equivalent of the `KDesc` problem native had.
+
+Three imports appended at the end of the backend's import list, which leaves
+every existing index where it was; there is no separate host binding table to
+keep in step, so the names resolve against wasm_rt's exports and nothing else
+needed touching.
+
+`as_desc` answers None for the two new slots. A worded step other than `bind`
+has no shape in the interpreter's `Desc`, so a program that reaches the green
+-thread scheduler through one is refused rather than quietly running a
+different chain. That is a real remaining hole and it is narrow: a `rescue`
+inside a `join` on the page. Nothing in the corpus reaches it, which is
+precisely why it is written down here rather than assumed absent.
+
+`tests/golden/wasm_gaps.txt` loses the entry it gained an hour ago. The
+micro case now runs on all three engines and answers the same three lines.
+
+## 2026-08-29 — ch05 teaches the door it used to say did not exist
+
+DONE. The book's chapter on effects had a sample whose expected output is the
+endpoint message, and a paragraph explaining that an err born at the edge "does
+not knock at the continuations waiting downstream, even ones with an arm
+ready". That was the design, and this PR changed it, so the chapter that taught
+it moves in the same PR rather than after.
+
+The old sample and paragraph both stay, because both are still true of a dot
+chain: a step written with `.` carries a failure past. What follows them now is
+`rescued.kso`, the same program with the same group, reached through `rescue`
+instead — so the reader sees the arm that did not fire, then the one word that
+makes it fire, and the difference is the step rather than the group. Then a
+paragraph on the two siblings and on why `rescue` being the only door is the
+point rather than a limitation.
+
+The panel gate was watched going red on the new golden and green again, which
+is how the panel is known to be executed rather than skipped, and its exit code
+was checked to be load-bearing.
+
+ch08's boundary-language chapter still owes the same move, and it is a bigger
+one: it is queued P1 in the ledger and its whole shape assumes the failure
+channel is inferred from an arm.
+
+## 2026-08-29 — the join hole on the page, tried and left refused, with the mechanism
+
+REVERTED, and the reason is worth more than the change would have been.
+
+The entry above records that the page's `as_desc` answers None for a rescue or
+annotate slot, so one inside a green-thread group is refused rather than
+scheduled. Making it answer Some looked like three lines, and it compiled.
+
+It is wrong, for a mechanism rather than a taste. The interpreter reaches a
+page closure through `call_from_interp`, which pushes the arguments as slots
+and goes through `call_closure` — where a failure argument comes straight back
+instead of entering the body. That is the same rule all three engines have and
+the same rule `call_on_err` exists to get past, and `call_from_interp` has no
+err-passing twin. So a materialized rescue inside a group would run its
+subject, skip its callback, and answer the failure the other two engines
+catch: a silent divergence, in the same shape as the one this PR just closed
+and in a place no fixture reaches.
+
+The refusal stays. The comment at the site now says the mechanism rather than
+"has no shape", so the next reader does not have to find it again. Closing the
+hole properly means an err-passing path from the interpreter back into the
+module, which is a change with its own fixture — and the fixture is awkward,
+because reaching it needs a rescue over an EFFECT that fails on a page, and
+the only effects that fail there are the playground's own refusals, whose
+messages differ from native's by design and would need a gap entry.
+
+## 2026-08-29 — what the three chain words cost, priced across seven veins
+
+DONE. CI measured the tree the words landed in and four goldens moved. Two
+improved, seven rows worsened, and each is named here because a number that
+changes without a sentence is the thing to catch.
+
+**Improved, banked.** `compile_instructions` 57,571,389 -> 57,568,840, a fall
+of 2,549 (0.004%). `compile_allocs` 61,981 -> 61,974, a fall of 7. The measured
+path is `kanso check`, which never emits, so codegen's new call site and the
+wasm backend's do not run; what changed in front of it is three more entries in
+BUILTINS and three in AMBIENT, both read rather than walked per node. A fall of
+this size on this vein has been layout every previous time it was chased.
+
+**`text` 652,512 -> 655,344**, a rise of 2,832 spread evenly: every benchmark
+gains 336 or 384 bytes. The evenness is what says it is not any one
+benchmark's code. src/runtime.c is embedded whole and gained five functions —
+`k_call_on_err`, `k_worded_step`, `k_annotate_wrap` and three `k_b_` entry
+points — and the three entry points are extern symbols the emitter can call,
+so the linker keeps them whether a benchmark does or not.
+
+**The work vein, six rows, one mechanism.** `work_deepbench` 807,094,318 ->
+808,729,952 (+1,635,634, 0.20%) and `work_widebench` 85,209,624 -> 85,337,597
+(+127,973, 0.15%) carry almost all of it. `work_pendbench` rises 1,344.
+`work_jsonbench`, `work_encodebench` and `work_oneshot` rise by 8 or 9, which
+is one call frame. basket and escapebench do not move.
+
+It is one branch per chain step, and it is the gavel's rule rather than an
+accident. The chain loop used to hand the yielded value straight to `k_call1`;
+it now asks `k_worded_step`, which tests the value for failure before deciding
+whether the callback runs. The test cannot be dropped: `k_call1` skips a
+closure on a failure but hands one to a group, and the ruling says the failure
+channel is never inferred from the callback's shape — so a `bind` whose
+callback happens to be a group would otherwise let an err arm catch, which is
+exactly the surface the gavel retired.
+
+Marking the helper `static` so it could inline was tried and measured: local
+deepbench and widebench counts are byte-identical with and without it, because
+the optimizer already inlines within the single translation unit. So the rise
+is the check itself, at roughly one instruction per chain step, and deepbench
+is the benchmark that runs the most of them. The trade is stated rather than
+argued away: 0.2% on the chain-heaviest benchmark buys a failure channel that
+is spelled instead of deduced.
+
+Welfare holds at 84.11.
+
+## 2026-08-29 — the check the chain loop was already paying twice
+
+DONE, and it turns the entry above's regression into a win. Welfare read the
+regenerated goldens and fell a hair under its floor: the runtime rises
+outweighed the two compile falls, and by the project's own weights that means
+the change was worse. There is nothing to argue about a term that paid, so the
+cost had to go somewhere.
+
+It went. `k_call1` guards its argument against failure before entering a
+closure's body, and the chain loop had just tested the same value for the same
+thing — that test IS the difference between the worded steps. So every bind
+step in the language was testing the yielded value twice, and had been long
+before this branch: the loop used to call `k_call1` straight, which meant the
+guard ran once, and adding `k_worded_step` made it two. Removing the redundant
+one leaves exactly one test per step, where the old code had one and the
+gavel's rule needs one.
+
+Measured locally, same host, so the deltas are exact:
+
+    deepbench  808,726,272 -> 806,982,268   -1,744,004
+    widebench   85,337,184 ->  85,273,176      -64,008
+
+Against the pre-branch baseline that puts deepbench about 108,000 BELOW where
+it started, and widebench about 64,000 above rather than 128,000. The chain
+loop is cheaper than it was before the three words existed.
+
+`k_call_on_err` is renamed `k_call_decided`, because it now has two callers
+with different reasons and one property: the caller has already decided about
+the argument. `rescue` uses it to get past the guard on purpose; `bind` uses
+it because the guard is redundant. One function, and the name says the
+contract rather than one of the two uses.
+
+CI's numbers for the four goldens are regenerated in the commit that carries
+this; the veins are host-pinned and this container cannot measure them, so
+they come from the cost-goldens job's own diff.
