@@ -398,4 +398,28 @@
 # path, and what moved is where the code sits.
 #
 # compile_allocs is 61,974, unchanged: the set holds `&str` into the program.
-compile_instructions=57819006
+# 2026-08-29 (a constructor pattern over a typeset): 57,819,006 -> 57,822,766,
+# a rise of 3,760. LAYOUT:
+#
+#   the runner      57,819,006 -> 57,822,766    +3,760
+#   the container   58,330,347 -> 58,329,928      -419
+#
+# Opposite signs. The arm is a branch on a walk that already ran, plus a
+# borrowed set of typeset names built beside the one `check_annotation_names`
+# already had. `lib/json` declares no typeset, so the set is empty and the
+# branch never fires on the measured path.
+#
+# THE OTHER READING IN THIS ENTRY IS THE ONE WORTH KEEPING. The first attempt
+# gave `Pattern::Ctor` a span so the diagnostic could point at the type name
+# rather than at the first field, and the container answered:
+#
+#   the span alone                58,330,347 -> 58,813,260   +482,913
+#   the span and the arm          58,330,347 -> 58,818,195   +487,848
+#
+# 0.83% of the front end for one caret's worth of precision, because `Pattern`
+# grows from 64 bytes to 72 and patterns move through every pass. Declined.
+# The log entry has the reasoning and the cheaper way in: `Span` is two
+# `usize` where two `u32` would hold a four-billion-line file.
+#
+# compile_allocs is 61,974, unchanged.
+compile_instructions=57822766

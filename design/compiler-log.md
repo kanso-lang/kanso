@@ -3980,4 +3980,8 @@ hold a four-billion-line file. That change pays for this one several times over
 and speeds up everything else that carries a span, which is most of the AST.
 Not attempted here; recorded so the next reader does not re-derive the trade.
 
-`compile_allocs` is 61,974, unchanged.
+`compile_allocs` is 61,974, unchanged. `compile_instructions` reads +3,760 on
+the runner against -419 in the container: opposite signs on one diff, layout.
+The arm is a branch on a walk that already ran, and `lib/json` declares no
+typeset, so the borrowed set is empty and the branch never fires on the
+measured path.
