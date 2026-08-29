@@ -3604,6 +3604,11 @@ comparison understated the shape it favoured. With one set:
 
 The fall is larger than the band this vein wanders in on its own and is not
 attributed here: `Declared` replaced three pointer arguments with one at a
-call made per declaration, which is a mechanism but not a measurement. What is
-measured is the direction, and that both counters end at or below where they
-started.
+call made per declaration, which is a mechanism but not a measurement.
+
+The runner then read the other way. `compile_instructions` goes 57,789,584 ->
+57,801,548 there, a rise of 11,964, against the container's fall of 24,120 —
+opposite signs on the same diff, which is what this file has come to treat as
+layout rather than work. `lib/json` holds no upcast, so the arm the change adds
+cannot run on the measured path at all. The golden takes the runner's number,
+as its own rule requires.
