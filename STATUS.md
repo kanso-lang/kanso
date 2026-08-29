@@ -149,9 +149,7 @@ err itself, so a dispatch group is a legal callback. Annotate cannot resurrect
 by construction. Rescue is the sole door, its foreign-only license checked at
 the word. `.` retires from chain-step position; field access is untouched.
 
-**All three words work on the oracle and on native** as of 2026-08-29
-(kanso#1116). The page refuses them by name, which is what the differential
-law asks of an engine that cannot yet speak a feature.
+**All three words work on all three engines** as of 2026-08-29 (kanso#1116).
 `tests/golden/chainwords/` holds four cases, pinned on both engines against
 one golden, and three mutations were watched turning the right case red.
 
@@ -167,9 +165,15 @@ chainwords case needs a filesystem to make an effect fail, and a page has
 none, so no program the page could run reached the words.
 `tests/golden/micro/a_settled_failure_meets_the_three_words.kso` closes that:
 it reaches them through a subject that has already failed, with no filesystem,
-so all three engines run it. It went red on the wasm harness on its first run.
-The general lesson is worth carrying: the engine with no world is the one that
-most needs a case, and a fixture that fails an effect cannot be that case.
+so all three engines run it. It went red on the wasm harness on its first run,
+and the page was built rather than left refusing. The general lesson is worth
+carrying: the engine with no world is the one that most needs a case, and a
+fixture that fails an effect cannot be that case.
+
+One narrow hole is written down rather than assumed absent: the page's
+`as_desc` answers None for a rescue or annotate slot, so a worded step other
+than `bind` inside a `join` is refused there rather than scheduled. Nothing in
+the corpus reaches it.
 
 `bind`, `rescue` and `annotate` are reserved names now. Two fixtures in the
 corpus had defined functions by two of those names and were renamed, which is

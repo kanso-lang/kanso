@@ -2820,3 +2820,31 @@ effect fail needs the world to refuse something, and the engine that has no
 world is the one that most needs a case.
 
 Welfare holds at 84.11.
+
+## 2026-08-29 — the page speaks the three words, and all three engines agree
+
+DONE. The gap the entry above opened closes in the same PR, so nothing carries
+a refusal forward.
+
+The page needed the same three pieces the other two engines did and nothing
+more. `Slot::Rescue` and `Slot::Annotate` beside `Slot::Bind`; one
+`worded_step` over the word; `call_on_err` as the third twin of a function
+that now exists once per engine, because `call_closure` there returns a
+failure argument for the same reason its two siblings do. `Annotate` carries
+the origin literal in the slot — the page's `Lit` table is where a literal
+already lives, so there is no equivalent of the `KDesc` problem native had.
+
+Three imports appended at the end of the backend's import list, which leaves
+every existing index where it was; there is no separate host binding table to
+keep in step, so the names resolve against wasm_rt's exports and nothing else
+needed touching.
+
+`as_desc` answers None for the two new slots. A worded step other than `bind`
+has no shape in the interpreter's `Desc`, so a program that reaches the green
+-thread scheduler through one is refused rather than quietly running a
+different chain. That is a real remaining hole and it is narrow: a `rescue`
+inside a `join` on the page. Nothing in the corpus reaches it, which is
+precisely why it is written down here rather than assumed absent.
+
+`tests/golden/wasm_gaps.txt` loses the entry it gained an hour ago. The
+micro case now runs on all three engines and answers the same three lines.

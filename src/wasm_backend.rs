@@ -82,6 +82,11 @@ const RT_NOT_OWN_ERR: u32 = 39;
 /// the VALUE as well as the type name, because the sentence names what the
 /// reader bound and only the runtime knows it.
 const RT_DIE_DESTRUCTURE: u32 = 40;
+/// The three worded chain steps. Appended at the end of the import list so
+/// every index above stays where it was.
+const RT_BIND: u32 = 41;
+const RT_RESCUE: u32 = 42;
+const RT_ANNOTATE: u32 = 43;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -126,6 +131,9 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_force", params: 1, returns: true },
         Import { name: "rt_not_own_err", params: 2, returns: true },
         Import { name: "rt_die_destructure", params: 2, returns: false },
+        Import { name: "rt_bind", params: 2, returns: true },
+        Import { name: "rt_rescue", params: 2, returns: true },
+        Import { name: "rt_annotate", params: 3, returns: true },
     ]
 }
 
@@ -1313,14 +1321,29 @@ impl<'a> WasmBackend<'a> {
             ctx.body.call(RT_MKERR);
             return Ok(());
         }
-        // The three worded chain steps of the 2026-08-26 gavel. The page does
-        // not speak them yet, and a refusal by name is what the differential
-        // law asks — without this the name fell through to the generic call
-        // path, where the page compiled `rescue` and then propagated the
-        // failure the other two engines rescue. That divergence was silent
-        // until micro/a_settled_failure_meets_the_three_words.kso ran here.
+        // The three worded chain steps of the 2026-08-26 gavel. Named here
+        // rather than left to the generic call path, which is where they went
+        // before: the page compiled `rescue` and then propagated the failure
+        // the other two engines catch, and nothing could see it because every
+        // other fixture for these words needs a filesystem to fail an effect.
+        // `annotate` takes the site it was written at, like `err`, because the
+        // err it builds is a raise.
         if matches!(name.as_str(), "bind" | "rescue" | "annotate") {
-            return Err(format!("unsupported call to `{name}`"));
+            if args.len() != 2 {
+                return Err(format!("`{name}` takes an effect and a callback"));
+            }
+            self.emit_expr(ctx, &args[0], false)?;
+            self.emit_expr(ctx, &args[1], false)?;
+            match name.as_str() {
+                "bind" => ctx.body.call(RT_BIND),
+                "rescue" => ctx.body.call(RT_RESCUE),
+                _ => {
+                    let origin = self.origin_lit(&ctx.prefix, &ctx.hako, span);
+                    ctx.body.i32_const(origin as i64);
+                    ctx.body.call(RT_ANNOTATE);
+                }
+            }
+            return Ok(());
         }
         if let Some(tid) = self.type_ids.get(name.as_str()).copied() {
             let is_sub = self.program.types.iter().any(|t| t.name == *name && t.parent.is_some());

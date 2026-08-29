@@ -34,7 +34,13 @@ enum Slot {
         arity: i32,
     },
     Seq(u32, u32),
+    /// The three worded chain steps of the 2026-08-26 gavel, as one slot with
+    /// the word that says which channel the callback sees. `Annotate` carries
+    /// the origin literal beside them, because the err it builds is a raise
+    /// and a raise records where it happened.
     Bind(u32, u32),
+    Rescue(u32, u32),
+    Annotate(u32, u32, u32),
 }
 
 thread_local! {
@@ -202,7 +208,14 @@ fn pop_args(n: u32) -> Vec<u32> {
 }
 
 fn descish(s: &Slot) -> bool {
-    matches!(s, Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..))
+    matches!(
+        s,
+        Slot::V(Value::Desc(_))
+            | Slot::Seq(..)
+            | Slot::Bind(..)
+            | Slot::Rescue(..)
+            | Slot::Annotate(..)
+    )
 }
 
 fn type_index(name: &str) -> Option<usize> {
@@ -255,6 +268,60 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
     }
     let args = push(Slot::E(Rc::new(arg_handles)));
     unsafe { k_callback(tidx, env, args) }
+}
+
+/// Call a callback with an err as its argument. `call_closure` refuses this —
+/// a failure handed to a callback comes straight back, which is what threads
+/// failures through a chain for free — and `rescue` and `annotate` are the two
+/// steps that must get past it. A group needs no help: dispatch already routes
+/// an err to the arm written for it.
+fn call_on_err(c_h: u32, failure: u32) -> u32 {
+    let Slot::C { tidx, env, arity } = closure_slot(c_h) else {
+        return call_closure(c_h, vec![failure]);
+    };
+    if arity >= 0 && arity != 1 {
+        die(format!("this function takes {arity} argument(s), got 1"));
+    }
+    let args = push(Slot::E(Rc::new(vec![failure])));
+    unsafe { k_callback(tidx, env, args) }
+}
+
+/// What a worded chain step answers once its subject has settled — the whole
+/// difference between the three words. `bind` reads the value channel and lets
+/// a failure past untouched; `rescue` reads the failure channel and lets a
+/// value past; `annotate` reads the same channel as `rescue` and re-wraps the
+/// answer as an err with the original as cause, which is why it cannot
+/// resurrect with nothing checking that it doesn't. The interpreter's
+/// `worded_step` is the oracle for all three.
+fn worded_step(word: &Slot, yielded: u32, callee: u32) -> u32 {
+    let failed = matches!(slot(yielded), Slot::V(ref v) if is_failure(v));
+    match (word, failed) {
+        (Slot::Bind(..), true) | (Slot::Rescue(..), false) => yielded,
+        (Slot::Bind(..), false) => call_closure(callee, vec![yielded]),
+        (Slot::Rescue(..), true) => call_on_err(callee, yielded),
+        (Slot::Annotate(_, _, origin), true) => {
+            let Slot::V(Value::ErrV(cause)) = slot(yielded) else { return yielded };
+            let answered = call_on_err(callee, yielded);
+            match slot(answered) {
+                // the callback failed on its own account, and that err already
+                // carries what it was told; wrapping it again would report the
+                // same failure twice
+                Slot::V(ref v) if is_failure(v) => answered,
+                _ => {
+                    let raised = raised_at(*origin);
+                    push(Slot::V(Value::ErrV(Rc::new(crate::eval::ErrInfo {
+                        reason: value_of(answered),
+                        origin: raised.at,
+                        hako: raised.hako,
+                        hops: Vec::new(),
+                        cause: Some(cause),
+                        merged: false,
+                    }))))
+                }
+            }
+        }
+        _ => yielded,
+    }
 }
 
 fn with_interp<T>(f: impl FnOnce(&Interp<'static>) -> T) -> T {
@@ -980,6 +1047,10 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
         Slot::Bind(inner, closure) => {
             Some(Rc::new(Desc::Bind(as_desc(inner)?, Value::TableFn(closure))))
         }
+        // A worded step other than `bind` has no shape in the interpreter's
+        // Desc, so a program that reaches the scheduler through one is
+        // refused rather than quietly running a different chain.
+        Slot::Rescue(..) | Slot::Annotate(..) => None,
         _ => None,
     }
 }
@@ -1016,6 +1087,34 @@ pub extern "C" fn rt_join(a: u32, b: u32) -> u32 {
         die("a group joins descriptions".to_string());
     };
     push(Slot::V(Value::Desc(Rc::new(Desc::Join(da, db)))))
+}
+
+/// The three worded chain steps. An effect defers and becomes a chain node; a
+/// subject that has already settled decides here, which is what makes a word
+/// mean the same thing called prefix-style outside a chain.
+#[no_mangle]
+pub extern "C" fn rt_bind(subject: u32, callback: u32) -> u32 {
+    match descish(&slot(subject)) {
+        true => push(Slot::Bind(subject, callback)),
+        false => worded_step(&Slot::Bind(subject, callback), subject, callback),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rt_rescue(subject: u32, callback: u32) -> u32 {
+    match descish(&slot(subject)) {
+        true => push(Slot::Rescue(subject, callback)),
+        false => worded_step(&Slot::Rescue(subject, callback), subject, callback),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rt_annotate(subject: u32, callback: u32, origin_lit: u32) -> u32 {
+    let word = Slot::Annotate(subject, callback, origin_lit);
+    match descish(&slot(subject)) {
+        true => push(word),
+        false => worded_step(&word, subject, callback),
+    }
 }
 
 #[no_mangle]
@@ -1235,12 +1334,14 @@ fn exec_slot(h: u32) -> Result<u32, String> {
             }
             exec_slot(right)
         }
-        Slot::Bind(inner, closure) => {
+        ref word @ (Slot::Bind(inner, closure)
+        | Slot::Rescue(inner, closure)
+        | Slot::Annotate(inner, closure, _)) => {
             let yielded = exec_slot(inner)?;
-            let next = call_closure(closure, vec![yielded]);
-            match slot(next) {
-                Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..) => exec_slot(next),
-                _ => Ok(next),
+            let next = worded_step(word, yielded, closure);
+            match descish(&slot(next)) {
+                true => exec_slot(next),
+                false => Ok(next),
             }
         }
         // Unreachable, and the argument is construction rather than a reading
@@ -1260,7 +1361,7 @@ pub fn exec_main(h: u32) -> (i32, String) {
     PRINTS.with(|p| p.borrow_mut().clear());
     ERRS.with(|e| e.borrow_mut().clear());
     let outcome = match slot(h) {
-        Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..) => match exec_slot(h) {
+        ref s if descish(s) => match exec_slot(h) {
             Ok(y) => match slot(y) {
                 // `os/exit 3` is a program saying what it meant, so the page
                 // carries the code out the way the native endpoint does
