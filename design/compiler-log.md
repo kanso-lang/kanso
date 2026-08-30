@@ -6118,3 +6118,60 @@ operations, so what is left is nine hundred mallocs, and a malloc is exactly
 the thing whose price is a property of the allocator and the machine rather
 than of the compiler. The allocation row, which is not host-dependent, agrees
 to the digit.
+
+## 2026-08-30 — two more tables that allocate a vector per group
+
+#1161 did this to `callee_first`. The same shape was in two more places, and
+between them they were worth four times as much.
+
+**`infer.rs:204`** builds the dispatch groups the fixpoint reads:
+
+```rust
+let mut by_group: HashMap<(&str, usize), Vec<usize>> = ...;
+for (i, decl) in program.fns.iter().enumerate() {
+    by_group.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
+}
+let mut group_members: Vec<usize> = Vec::with_capacity(program.fns.len());
+let groups: HashMap<(&str, usize), (u32, u32)> = by_group.into_iter().map(...).collect();
+```
+
+The flat vector and the ranges were already the destination. The per-group
+`Vec` existed for one line, to be poured into `group_members` and dropped —
+529 blocks whose only job was to be flattened. The counting pass writes
+straight into the flat vector.
+
+**`check.rs:2757`**, `check_constants`, collects each run of consecutive
+same-named declarations into a `Vec<&FnDecl>` to ask three questions of it:
+whether any arm takes no parameters, how many arms there are, and where the
+second one is. All three read off a slice of `program.fns`, so the run is
+walked in place.
+
+### The numbers
+
+    compile_instructions  44,427,648 -> 43,955,167  -472,481  -1.06%  (local)
+    compile_allocs             34,158 ->     32,856    -1,302   -3.8%
+    compile_peak_bytes                     730,120   unmoved
+    front_end_rounds 40, front_end_visits 16,806   unmoved
+
+dhat's map said 529 and 579, and 1,302 went away. The gap is the runs: dhat
+charges an allocation to the line that made it, and `vec![decl]` at
+`check.rs:2762` was reached once per RUN while the map's line was reached once
+per group — the map undercounts a site whose work is spread over a loop it
+does not name. The direction was right and the size was not, which is the
+third time this week the map has been read one way and the change measured
+another.
+
+Welfare 86.99 -> 87.13, the largest single step the compile vein has taken
+since the counters went in.
+
+### The runner's number
+
+    compile_instructions  44,100,285 -> 43,618,236  -482,049  -1.09%  (runner)
+                          44,427,648 -> 43,955,167  -472,481  -1.06%  (local)
+    compile_allocs                        32,856   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99293723322. The two hosts agree within two per cent of the
+fall — where #1161, which removed only mallocs, had them a factor of two
+apart. This change removes hash operations and vector copies as well as
+mallocs, and those cost the same on both.
