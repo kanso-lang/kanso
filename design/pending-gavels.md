@@ -173,6 +173,66 @@ it should exist. Two answers, and neither is obviously right:
 
 Nothing is blocked on this. The refusal describes itself accurately either way.
 
+### Whether an identifier's name lives inline
+
+**Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
+for `intern`, `small string`, `inline name` and `sso`. The interning decline is
+recorded twice in the live log (2026-08-30, and #1033's entry it cites) and the
+archive's only related note is 4949, where key interning is weighed for a
+runtime map and declined because the keys repeat zero times. Nothing anywhere
+weighs an INLINE name against interning, and no ruling covers the type of an
+AST name field. Searched design/*.md for an existing entry on this and found
+none.**
+
+**The measurement.** dhat on `kanso check lib/json`, at 35,643 allocation blocks,
+puts three rows on one thing:
+
+```
+3,197  parser.rs  Expr::Ident's String, cloned out of the token
+3,157  lexer.rs   the same String, built by lex_word
+  629  parser.rs  Pattern::Var's String, same source
+------
+6,983  19.6% of every allocation the front end makes
+```
+
+Every identifier in a program is heap-allocated once by the lexer and copied
+once into the AST. It is the largest single item left in the front end, and the
+two treatments for it measure very differently on the library's own sources:
+
+```
+identifier occurrences   11,870
+distinct names            1,399        ratio 8.5 : 1
+occurrences <= 22 bytes  11,869        99.99%   (one name is 63 bytes)
+distinct <= 22 bytes      1,398        99.93%
+```
+
+- **Interning** removes occurrences minus distinct — about 88%. It was DECLINED
+  in #1033 at 365 conversion sites, because every read of a name becomes a
+  lookup through a table.
+- **An inline name** — a type holding up to 22 bytes in place, longer names on
+  the heap, `Deref<Target = str>` — removes **99.99%**. More than interning, and
+  reads keep working unchanged, so the conversion surface is the CONSTRUCTION
+  sites: `Expr::Ident` (236 mentions, roughly 56 constructing), `Pattern::Var`
+  (86, roughly 12), `Expr::Partial` (51), `Tok::Ident` (55). Call it ninety
+  `.into()`s plus `PartialEq<str>` and `as_str` so comparisons and map keys read
+  as they do today.
+
+**What is being asked.** Whether to change the type of a core AST field across
+the compiler, and to hand-write the small-string type to do it — `Cargo.toml`
+carries only `num-bigint` and `num-traits`, so taking a dependency for this is a
+second question with its own answer.
+
+**Why it is not simply built.** #1033 refused the other treatment of the same
+row, on a count. This measurement does not overturn that count; it says the
+inline name is a different and smaller surface, which is a new argument rather
+than a re-run of the old one. And a field's type reaching ninety sites is the
+shape of change the log says to bring here first.
+
+**Recommendation: build it.** 19.6% of the front end's allocations for ninety
+mechanical edits is the best ratio left on the board, the reads do not move, and
+the emitted golden plus the differential suites are what would catch a mistake.
+The alternative is to leave a fifth of the traffic where it is and say why.
+
 ### Whether a chain line keeps its leading dot
 
 **Cited: searched design/compiler-log.md for the three-forms gavel of

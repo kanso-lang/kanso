@@ -5531,3 +5531,41 @@ the compile — and two declines came out of it:
   `advisory`, `beat`, `check` and `escape`. The premise holds — a `Filter`'s
   size_hint lower bound is zero, so those sets do start empty — and the
   measurement is 4,514 instructions and one allocation. Six diffs for 0.009%.
+
+## 2026-08-30 — the last per-line scratch, and a decision filed
+
+```
+compile_allocs   35,639 -> 34,945   -694   -1.9%
+compile_peak_bytes         730,120  unmoved
+```
+
+`check_needless_continuation` groups a line's tokens by the source line each one
+came from, to ask what the statement would measure written one line wide. It
+built a `Vec<(usize, usize, Span)>` to do the grouping — per line of every file
+compiled, for a scratch that dies at the end of the call, and for most lines
+after one push and the early return two statements later.
+
+One buffer for the file, cleared per line, the same treatment as #1149's gather
+vector in `callee_first`. Its two neighbours in the same loop were read and left
+alone: `check_partial_chain` and `validate_spacing` allocate nothing.
+
+That is the end of the per-line and per-declaration scratch family. Over five
+changes today the front end went from 46,998 allocation blocks to 34,945, a
+quarter of them gone, and what is left at the top of the map is one thing.
+
+### The decision that is left
+
+design/pending-gavels.md gains **"Whether an identifier's name lives inline"**,
+under Open, not blocking. The short version: `Expr::Ident`'s `String` and the
+`Tok::Ident` it is cloned from are 6,983 blocks, **19.6% of every allocation the
+front end makes**, and the two treatments measure very differently on the
+library's own sources — 11,870 identifier occurrences, 1,399 distinct, and
+**11,869 of the 11,870 are 22 bytes or shorter**. Interning removes the 88% that
+are repeats and was declined in #1033 at 365 conversion sites; an inline name
+removes 99.99% and touches only the ninety construction sites, because reads go
+through `Deref`.
+
+It is filed rather than built because it changes the type of a core AST field
+across the compiler and means hand-writing the small-string type, and because
+the other treatment of the same row was refused once already. The entry carries
+the measurement, the site counts and a recommendation.
