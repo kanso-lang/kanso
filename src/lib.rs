@@ -1930,8 +1930,7 @@ pub fn prune_unused_getters(program: &mut ast::Program) {
     // read's bare half. The keep mask exists so the borrow ends before the
     // retain needs the program mutably.
     let keep: Vec<bool> = {
-        let mut mentioned: crate::hash::Set<&str> =
-            crate::hash::Set::with_capacity_and_hasher(program.fns.len() * 2, Default::default());
+        let mut mentioned: crate::hash::Set<&str> = crate::hash::Set::default();
         for decl in &program.fns {
             if decl.is_getter() {
                 continue;
@@ -1956,9 +1955,20 @@ fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>
 fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
     match e {
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+            // Only a name that could BE a getter's is worth remembering, and
+            // every getter is synthesised in one place as `Get_{field}` — the
+            // binder that makes `is_getter` true is one no source can spell,
+            // so there is no other way for one to exist. The prefix test is
+            // four bytes; the insert it replaces was a hash of the whole name,
+            // and eleven thousand of the twelve thousand occurrences in
+            // lib/json are of names no getter can have.
+            let short = ast::split_qual(name).map(|(_, s)| s);
+            if !short.unwrap_or(name).starts_with("Get_") {
+                return;
+            }
             out.insert(name.as_str());
             // a qualified read reaches the same getter under its bare name
-            if let Some((_, short)) = ast::split_qual(name) {
+            if let Some(short) = short {
                 out.insert(short);
             }
         }

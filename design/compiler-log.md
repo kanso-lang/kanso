@@ -5762,3 +5762,42 @@ part of one. The vector's own scan is what is left.
 Copied out of job 99264116335. The runner reads the fall three per cent larger
 than the container does, the two hosts' closest agreement on this vein after
 #1154's one per cent.
+
+## 2026-08-30 — a hash per identifier, to ask about thirty-one names
+
+`prune_unused_getters` drops the field getters nothing reads. It builds a set
+of every name any non-getter body mentions, then asks that set, once per
+getter, whether the getter's name is in it. `callgrind --separate-callers=2`
+charged the building 540,464 instructions plus 84,064 in `memcmp`, the largest
+single hashing caller in the compile.
+
+Instrumented, the numbers are lopsided. `lib/json`'s largest module walks
+about twelve thousand identifier occurrences into a set that ends up holding
+**325 distinct names**, and asks it about **31 getters**. Almost every insert
+is a duplicate of one already there, and almost every entry is a name no
+getter could have.
+
+A getter is synthesised in exactly one place, as `Get_{field}`, and the binder
+that makes `is_getter` true — `Read` — is one no source can spell. So a
+declaration is a getter only if it came from there, and a name that is not
+`Get_`-prefixed can never be one. The walk tests four bytes and skips the
+insert.
+
+A qualified mention reaches the same getter under its bare half, so the test
+is on the bare half and both halves go in together when it passes. The set the
+question is asked of is unchanged; what changed is everything that was never
+going to be asked about.
+
+The reservation went with it. It was `program.fns.len() * 2` — 864 entries for
+the largest module — sized for a set that held one name per mention. It now
+holds at most two per getter.
+
+### The numbers
+
+    compile_instructions  45,764,825 -> 45,155,678  -609,147  -1.33%  (local)
+    compile_allocs             34,812 ->     34,804        -8
+    compile_peak_bytes                     730,120   unmoved
+
+The two halves were measured separately against #1155's head, where the pair
+came to 603,447: the prefix test was 601,800 of it, and dropping the
+reservation was the remaining 1,647 and all eight allocations.
