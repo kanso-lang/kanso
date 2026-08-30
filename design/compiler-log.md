@@ -4722,3 +4722,111 @@ PR. The blocking entry is gone from the ledger with no ruling recorded, because
 none was needed in the end — which is the outcome the escalation was supposed
 to have, and the reason to escalate the moment a question is found rather than
 after exhausting it.
+
+## 2026-08-30 — the text-block opener counted characters and sliced bytes
+
+`kanso check` panicked on this file, and printed a wrong diagnostic on the two
+files either side of it:
+
+```
+pub joined = pick "e"  """     compiles, prints
+pub joined = pick "é"  """     refused: "nothing follows `\"\"\"`"
+pub joined = pick "…"  """     refused: the same
+pub joined = pick "🎯" """     panic: byte index 22 is not a char boundary
+```
+
+One character apart, and the program is otherwise identical.
+
+### The cause
+
+`block_opener` scans the line a text block opens on and returns where it found
+the `"""`. It collected a `Vec<char>` and returned a CHARACTER index. All three
+of its callers use that number as a BYTE index:
+
+```rust
+if content[at..].chars().count() != 3 { ... Span::at(number, indent + at + 4) }
+let (body, consumed) = gather_block(...);
+match lex_line_with_block(&content[..at], number, indent + 1, indent + 1 + at, &body)
+```
+
+The two agree exactly while the line is ASCII, which every line in the corpus,
+the book and the standard library happens to be. One two-byte character before
+the fence puts the byte index one ahead of the character index, so
+`content[at..]` starts a byte early, reads `" \"\"\""` rather than `"\"\"\""`,
+counts four characters where three are wanted, and the block is refused for
+having something after it. Three bytes drift by two. Four bytes land inside the
+character and `str`'s slice panics.
+
+The predicate has been this way since text blocks existed. What kept it quiet
+is that the only way to reach it is to write a non-ASCII character on the same
+line as a `"""`, and nothing in the tree does.
+
+### The fix, and what it returns
+
+`block_opener` walks `content.as_bytes()` and returns a byte offset. The three
+bytes it tests for — `\`, `"`, `#` — are ASCII, and every byte inside a
+multi-byte character is at least 0x80, so those bytes match no arm of the scan
+and are walked past one at a time. `i += 2` past an escape is right for the
+same reason: it skips the backslash and the escaped character's first byte, and
+whatever remains of that character matches nothing either.
+
+The column the diagnostic points at is still counted in characters, so the one
+caller that needs it takes `content[..at].chars().count()` — which is what the
+old `at` was. Replacing that back with `at` moves the caret one column right on
+the `é` fixture, which is the pin on that half of the change.
+
+The `Vec<char>` goes with it, and it was not small: **compile_allocs 50,528 ->
+48,356**, a fall of 2,172 and 4.3% of everything the front end allocates.
+`lib/json` contains no text block at all — the vector was being built for every
+line of every file compiled, in order to answer no. `compile_peak_bytes` does
+not move (742,572), which is right for a vector that never lived past the call.
+
+### The fixtures
+
+`tests/golden/micro/a_text_block_opens_after_a_wide_character` runs one program
+holding all three widths and pins its output on both engines. It panics on the
+parent commit — "byte index 16 is not a char boundary" at lexer.rs:122 — rather
+than printing a wrong answer, which is the loudest a fixture gets.
+
+`tests/golden/errors/a_text_block_fence_after_a_wide_character` pins the column
+of the "nothing follows" diagnostic, which is the half of the fix that has
+nothing to do with slicing.
+
+### The family, swept
+
+A predicate confusing two units is worth checking the file for others, and
+`src/lexer.rs` had two more of exactly this shape. `raw.find('\t')` and
+`trimmed.find('\t')` answer in bytes, and both feed `Span::at(number, col + 1)`
+— a column. Three two-byte characters before a tab put the caret three columns
+right of it:
+
+```
+x = "ééé"	y        said column 13, the tab is the 10th character
+  ééé	z            said column 9,  the tab is the 6th
+```
+
+Both take `[..at].chars().count() + 1` now. There is no third: the only other
+byte index in the file is the leading-whitespace `indent`, and the check above
+it refuses tabs outright, so what it counts is spaces and the two units agree
+by construction.
+
+The sweep ran past the file too. Every `Span::at` in the tree outside
+`src/lexer.rs` — two in check.rs, six in eval.rs, three in lib.rs, nine in
+parser.rs, one in wasm_rt.rs — takes a literal or a token's own span, so no
+other pass computes a column from source text at all. That is the lexer's job
+and only the lexer's, which is why the confusion could only live here.
+
+These are wrong carets rather than wrong programs, which is why they had
+survived a corpus that pins every diagnostic in the tree — the pins are all
+ASCII, so the two units agreed on every one of them.
+`tests/golden/errors/a_tab_after_a_wide_character` carries both lines, and
+putting the byte offset back at either site moves that fixture's caret.
+
+### Where it came from
+
+The dhat allocation map, re-run after #1139–#1141 took the front end from
+61,974 blocks to 50,528. The lexer is the largest allocator in the new map —
+13,854 blocks over six lines, 27% of the total — and `block_opener`'s vector
+was 2,172 of them, the fourth line down. Reading the function to see whether
+the vector could go is what found the index units. The bug was not what the map
+was looking for; a map of where the work is answers questions nobody asked it.

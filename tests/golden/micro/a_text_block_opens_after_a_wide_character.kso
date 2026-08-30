@@ -1,0 +1,28 @@
+# The lexer finds the `"""` that opens a text block by scanning the line it
+# sits on, and then slices the line at what it found. The scan counted
+# CHARACTERS and the slice takes BYTES, so the two agreed only while the line
+# was ASCII. A two-byte character before the fence cut the line one byte short
+# and the block was refused as "nothing follows `\"\"\"`"; a four-byte one
+# landed off a character boundary and panicked the compiler outright.
+#
+# One fixture for all three widths, because which of them fails depends on how
+# far the count and the offset have drifted by the time the fence is reached.
+fn pick a b
+  "{a} {b}"
+
+two = pick "é" """
+  a
+  b
+"""
+
+three = pick "…" """
+  c
+  d
+"""
+
+four = pick "🎯" """
+  e
+  f
+"""
+
+pub play = print two >> print three >> print four

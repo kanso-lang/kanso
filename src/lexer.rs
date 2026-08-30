@@ -83,11 +83,14 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         let raw = raws[idx];
         let number = idx + 1;
         idx += 1;
-        if let Some(col) = raw.find('\t') {
+        // `find` answers in bytes and a column is counted in characters, the
+        // same parting of ways `block_opener` had: with `ééé` ahead of the
+        // tab the caret used to land three columns right of it.
+        if let Some(at) = raw.find('\t') {
             diags.push(Diagnostic::new(
                 "formatting",
                 "tabs are not part of the canonical grammar; indent with spaces".to_string(),
-                Span::at(number, col + 1),
+                Span::at(number, raw[..at].chars().count() + 1),
             ));
             continue;
         }
@@ -119,18 +122,23 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         // is a newline in a value, not a statement break, and a content line
         // is data the width cap has no way to re-render.
         if let Some(at) = block_opener(content) {
+            // `at` is a byte offset and a column is counted in characters, so
+            // the two part company the moment the line holds anything outside
+            // ASCII. Every column below is the character count of what
+            // precedes the fence.
+            let col = content[..at].chars().count();
             if content[at..].chars().count() != 3 {
                 diags.push(Diagnostic::new(
                     "syntax",
                     "a text block opens at the end of its line — nothing follows `\"\"\"`"
                         .to_string(),
-                    Span::at(number, indent + at + 4),
+                    Span::at(number, indent + col + 4),
                 ));
                 continue;
             }
             let (body, consumed) = gather_block(&raws, idx, indent, number, &mut diags);
             idx = consumed;
-            match lex_line_with_block(&content[..at], number, indent + 1, indent + 1 + at, &body) {
+            match lex_line_with_block(&content[..at], number, indent + 1, indent + 1 + col, &body) {
                 Ok(lexed_line) => {
                     validate_spacing(&lexed_line, number, &mut diags);
                     lines.push(Line {
@@ -287,23 +295,36 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
 /// inside a string is not an opener, so the scan tracks quoting the way the
 /// lexer does; anything after the three quotes is refused where the block is
 /// read, with a message about the shape rather than about an unclosed string.
+/// The BYTE offset of the `"""` that opens a text block on this line, if it
+/// has one. Byte, because every caller slices `content` with it. It used to
+/// count characters, and a character index and a byte index agree only while
+/// the line is ASCII: a line carrying `\u{e9}` before the fence sliced one byte
+/// short and was refused as "nothing follows", and one carrying an emoji
+/// panicked on a non-boundary.
+///
+/// Bytes also mean no `Vec<char>`, which was 2,172 of the front end's
+/// allocations. The three bytes this scan tests for are ASCII, and every byte
+/// inside a multi-byte character is >= 0x80, so those bytes match no arm and
+/// are walked past one at a time. `i += 2` past an escape is right for the
+/// same reason: it skips the backslash and the escaped character's first
+/// byte, and whatever remains of that character matches nothing.
 fn block_opener(content: &str) -> Option<usize> {
-    let chars: Vec<char> = content.chars().collect();
+    let bytes = content.as_bytes();
     let mut i = 0;
     let mut in_str = false;
-    while i < chars.len() {
-        match chars[i] {
-            '\\' if in_str => i += 2,
-            '"' if in_str => {
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' if in_str => i += 2,
+            b'"' if in_str => {
                 in_str = false;
                 i += 1;
             }
-            '"' if chars[i..].starts_with(&['"', '"', '"']) => return Some(i),
-            '"' => {
+            b'"' if bytes[i..].starts_with(b"\"\"\"") => return Some(i),
+            b'"' => {
                 in_str = true;
                 i += 1;
             }
-            '#' if !in_str => return None,
+            b'#' if !in_str => return None,
             _ => i += 1,
         }
     }
@@ -352,11 +373,11 @@ fn gather_block(
                 Span::at(number, raw.trim_end().len() + 1),
             ));
         }
-        if let Some(col) = trimmed.find('\t') {
+        if let Some(at) = trimmed.find('\t') {
             diags.push(Diagnostic::new(
                 "formatting",
                 "tabs are not part of the canonical grammar; indent with spaces".to_string(),
-                Span::at(number, col + 1),
+                Span::at(number, trimmed[..at].chars().count() + 1),
             ));
             continue;
         }

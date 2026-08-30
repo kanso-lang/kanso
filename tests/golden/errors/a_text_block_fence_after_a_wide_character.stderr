@@ -1,0 +1,12 @@
+error[syntax]: a text block opens at the end of its line — nothing follows `"""`
+  --> a_text_block_fence_after_a_wide_character.kso:9:26
+   9 | pub joined = pick "é" """ and more
+                                ^
+error[syntax]: unterminated text block — the closing `"""` sits alone at column 1
+  --> a_text_block_fence_after_a_wide_character.kso:12:1
+  12 | """
+       ^
+error[formatting]: a text block holds two or more lines; one line is written `"..."`
+  --> a_text_block_fence_after_a_wide_character.kso:12:1
+  12 | """
+       ^
