@@ -4781,6 +4781,22 @@ The `Vec<char>` goes with it, and it was not small: **compile_allocs 50,528 ->
 line of every file compiled, in order to answer no. `compile_peak_bytes` does
 not move (742,572), which is right for a vector that never lived past the call.
 
+The map was re-run against the fixed compiler, and it says the change did one
+thing:
+
+```
+total blocks   50,540 -> 48,368   (-2,172)
+block_opener    2,172 ->      0
+every other site           identical, to the block
+```
+
+Not a fall of about the right size — the same number dhat had attributed to
+that one line, with no other site moving by one allocation. (48,368 against
+`compile_allocs` 48,356 is the twelve allocations that happen before the
+counting allocator installs, which the archive already accounts for.) The other
+lexer rows only changed line numbers, because the comment above `block_opener`
+grew.
+
 ### The fixtures
 
 `tests/golden/micro/a_text_block_opens_after_a_wide_character` runs one program

@@ -551,4 +551,13 @@
 # an edit the measured path cannot reach should read as. On the way, the mask
 # alone read 54,509,454 here, so the same untouched call graph moved +1,746 and
 # then -4,843 across two edits to a file the front end does not execute.
-compile_instructions=54504611
+#
+# 2026-08-30  54,504,611 -> 53,528,219   -976,392   -1.79%, banked, and REAL
+# WORK rather than layout for once — `block_opener` runs on every line of every
+# file compiled, and it no longer builds a `Vec<char>` to do it. The allocator
+# rows in the profile fall with it: `_int_free` 3,131,672 -> 3,014,268, `free`
+# 1,415,064 -> 1,354,248, `malloc` 2,219,807 -> 2,122,067, `finish_grow`
+# 846,705 -> 790,505. compile_allocs falls 2,172 in the same change and
+# compile_peak_bytes does not move, which is the shape of a vector that never
+# lived past its call.
+compile_instructions=53528219
