@@ -2836,3 +2836,40 @@ race is still a race, and it fails on whichever test loses.
 One directory per test. The fix is four lines and the argument for it is the
 mechanism rather than a failure count, which is the honest way round for a race
 this thin.
+
+## 2026-08-30 — a word is a copy, not a re-encode
+
+`lex_word` built its `String` by collecting `&char` out of the scanner's
+`Vec<char>`, which encodes each character back into UTF-8 one at a time.
+`String::from_iter<&char>` under `lex_line` was 361,176 instructions, 0.84% of
+the front end.
+
+The scanner already receives the line as a `&str`; it kept only the `Vec<char>`
+because `pos` is the column a caret goes under. It keeps both now, with one bit
+saying whether they agree: on a line that is ascii throughout, a character index
+is a byte index, so `start` and `pos` slice `src` directly and the word is one
+copy. A line with anything wider falls back to the collect, and the check is
+`str::is_ascii` once per line — a vectorised byte scan.
+
+### The numbers
+
+    compile_instructions  43,138,593 -> 42,731,199  -407,394  -0.94%  (local)
+    compile_allocs                        29,864   unmoved
+    compile_peak_bytes       730,120 ->    728,030    -2,090   -0.29%
+
+Peak moves because a `String` built by `to_string` on a slice is allocated at
+the length it needs, where one grown a character at a time overshoots. That is
+the first fall in `compile_peak_bytes` since #1152, and it was not the point of
+the change.
+
+**This is not #1159's declined ascii scanner.** That one made the whole scan
+byte-oriented, measured 53,017 instructions by the time it was queued, and cost
+212 peak bytes. This changes one line of `lex_word` and leaves the scanner
+indexing characters everywhere else.
+
+**Gavel #159 would delete this.** The `String` this builds more cheaply is the
+one an inline name removes; if that ruling goes the inline way, `lex_word`
+stops building a `String` at all and 407,394 instructions become moot along
+with the 3,157 allocations beneath them. Recorded so the next reader knows the
+two are the same code and not a contradiction: how a `String` is filled is a
+question the compiler can answer today, and whether it exists is Clay's.
