@@ -3619,7 +3619,12 @@ fn replace_shape(e: &mut ast::Expr, shape: &str, name: &str) {
     walk_children_mut(e, &mut |c| replace_shape(c, shape, name));
 }
 
-/// Every direct sub-expression, mutably. Mirrors `for_each_child`.
+/// Every direct sub-expression, mutably. NOT the mirror of `for_each_child`
+/// it was described as: there is no arm here for a lambda, a block, a build or
+/// a guard, so a walk built on this stops at the edge of all four. Its four
+/// callers are desugar passes that run before those forms carry anything this
+/// would need to reach; a fifth caller that needs the whole tree wants a walk
+/// with the missing arms, and `inline::for_each_child_mut` is one.
 fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
     use ast::Expr;
     match e {

@@ -2023,9 +2023,7 @@ fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
     // one up needed a String built from the callee at every call expression —
     // twice, since the same key answered `forwards`. A view keyed by the
     // program's own names answers both from one lookup and allocates nothing.
-    let owned = crate::inline::aliases(program);
-    let builtins: HashMap<(&str, usize), &str> =
-        owned.iter().map(|((n, a), t)| ((n.as_str(), *a), t.as_str())).collect();
+    let builtins = crate::inline::aliases(program);
     for decl in &program.fns {
         if decl.synthetic {
             continue;
