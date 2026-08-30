@@ -6309,3 +6309,44 @@ at 1,517,265 (3.52%), where the sets that just went away were feeding it.
 
 Welfare 87.15 -> 87.32, banked with `--set`. The page's two `data-golden`
 compile figures move with it.
+
+## 2026-08-30 — three more tables that allocate a vector per key
+
+The counting pass of #1161 has now taken six tables. Three were left in
+`check.rs`, and they are the last of the shape in the front end.
+
+**Two arity tables.** `check_call_arities` and the shadow checker's `Declared`
+each built a `HashMap<&str, Vec<usize>>` of the distinct arities a name is
+declared at — a heap allocation per name, for a list that holds one number in
+almost every case. They share an `Arities` now: count the arms per name, turn
+the counts into starts, then place each declaration's arity at its name's
+cursor, skipping one already there. The counts bound the ranges from above, so
+a name declared three times at one arity leaves two cells unread between it and
+the next name; nothing iterates the flat vector whole, so the gaps cost
+nothing to carry.
+
+**The overlap checker's groups.** `check_overlapping_arms` collected each
+dispatch group into a `Vec<&FnDecl>` to compare its arms pairwise. The pairwise
+loops index a range of the flat vector instead.
+
+### The numbers
+
+    compile_instructions  43,448,641 -> 43,353,124   -95,517  -0.22%  (local)
+    compile_allocs             31,254 ->     30,406      -848   -2.7%
+    compile_peak_bytes                     730,120   unmoved
+
+Split: the two arity tables were 499 blocks and 42,087 instructions, the
+overlap groups 349 and 53,430. The group table costs more per block because its
+`Vec` was reallocated as arms were pushed, where an arity list took one
+allocation and stopped.
+
+dhat said 353 for the group table and 366 + 270 for the two arity tables. The
+group row was right to the block; the arity pair came in at 499 against 636,
+because part of what those rows held was the `fields` and `type_arity` maps
+beside them, which have not moved.
+
+Two of the shape remain: `check_literal_arguments`' `Vec<&FnDecl>` per group,
+and `advisory.rs`'s `Vec<usize>` per name. Both are read through walks that
+take the table as a parameter — five signatures in advisory's case — so
+flattening either means threading the flat vector beside the ranges and giving
+the lookup key a lifetime the walk can name. Left for now, with the reason.

@@ -955,16 +955,33 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
             None => false,
         })
     }
-    let mut groups: crate::hash::Map<(&str, usize), Vec<&FnDecl>> =
+    // The arms of each group as one flat vector and a range apiece. A `Vec`
+    // per group held two or three references and cost an allocation to say so.
+    // Count the arms per group, turn the counts into starts, then place each
+    // declaration at its group's cursor.
+    let mut groups: crate::hash::Map<(&str, usize), (u32, u32)> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
-        groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
+        groups.entry((d.name.as_str(), d.params.len())).or_insert((0, 0)).1 += 1;
     }
-    for ((name, _), decls) in groups {
-        for i in 0..decls.len() {
-            for j in i + 1..decls.len() {
-                let a = decls[i];
-                let b = decls[j];
+    let mut at = 0;
+    for slot in groups.values_mut() {
+        let count = slot.1;
+        *slot = (at, at);
+        at += count;
+    }
+    let mut members: Vec<u32> = vec![0; program.fns.len()];
+    for (i, d) in program.fns.iter().enumerate() {
+        let slot = groups.get_mut(&(d.name.as_str(), d.params.len())).expect("every arm counted");
+        members[slot.1 as usize] = i as u32;
+        slot.1 += 1;
+    }
+    for ((name, _), (start, end)) in &groups {
+        let arms = &members[*start as usize..*end as usize];
+        for i in 0..arms.len() {
+            for j in i + 1..arms.len() {
+                let a = &program.fns[arms[i] as usize];
+                let b = &program.fns[arms[j] as usize];
                 let mut a_stricter = false;
                 let mut b_stricter = false;
                 let mut overlap = true;
@@ -986,7 +1003,8 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                 // this the check is pairwise, and a covering arm the author
                 // already wrote is invisible to it.
                 let settled = overlap
-                    && decls.iter().enumerate().any(|(k, c)| {
+                    && arms.iter().enumerate().any(|(k, c)| {
+                        let c = &program.fns[*c as usize];
                         k != i && k != j && covers(c, a, &compare) && covers(c, b, &compare)
                     });
                 if overlap && a_stricter && b_stricter && !settled {
@@ -1207,14 +1225,7 @@ pub fn check_file_shadow(
     check_annotation_names(program, &declared_type_names, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
-    let mut fn_arities: crate::hash::Map<&str, Vec<usize>> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for decl in &program.fns {
-        let arities = fn_arities.entry(decl.name.as_str()).or_default();
-        if !arities.contains(&decl.params.len()) {
-            arities.push(decl.params.len());
-        }
-    }
+    let fn_arities = Arities::of(program);
     // A construction is positional and complete: `point 1` where `point`
     // declares two fields is the same mistake as calling a two-argument
     // function with one, and the compiler knows both counts. A typeset never
@@ -1831,6 +1842,49 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// The distinct arities each name is declared at, as one flat vector and a
+/// range apiece. A `Vec` per name held one or two numbers and cost an
+/// allocation to say so; two tables in this file were built that way.
+struct Arities<'a> {
+    ranges: HashMap<&'a str, (u32, u32)>,
+    flat: Vec<usize>,
+}
+
+impl<'a> Arities<'a> {
+    /// Count the arms per name, turn the counts into starts, then place each
+    /// declaration's arity at its name's cursor, skipping one already there.
+    /// The counts bound the ranges from above, so a name declared three times
+    /// at one arity leaves two cells unread between it and the next name.
+    fn of(program: &'a Program) -> Arities<'a> {
+        let mut ranges: HashMap<&str, (u32, u32)> =
+            HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+        for decl in &program.fns {
+            ranges.entry(decl.name.as_str()).or_insert((0, 0)).1 += 1;
+        }
+        let mut at = 0;
+        for slot in ranges.values_mut() {
+            let count = slot.1;
+            *slot = (at, at);
+            at += count;
+        }
+        let mut flat: Vec<usize> = vec![0; program.fns.len()];
+        for decl in &program.fns {
+            let key = decl.name.as_str();
+            let (start, end) = *ranges.get(key).expect("every name was counted");
+            let arity = decl.params.len();
+            if !flat[start as usize..end as usize].contains(&arity) {
+                flat[end as usize] = arity;
+                ranges.get_mut(key).expect("every name was counted").1 = end + 1;
+            }
+        }
+        Arities { ranges, flat }
+    }
+
+    fn get(&self, name: &str) -> Option<&[usize]> {
+        self.ranges.get(name).map(|&(start, end)| &self.flat[start as usize..end as usize])
+    }
+}
+
 fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
     // Construction is positional and complete, and the same seam hid it: a
     // type declared in one file of a module and built in another was checked
@@ -1842,14 +1896,7 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
         .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
         .map(|ty| (ty.name.as_str(), ty.fields.len()))
         .collect();
-    let mut arities: HashMap<&str, Vec<usize>> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for decl in &program.fns {
-        let slot = arities.entry(decl.name.as_str()).or_default();
-        if !slot.contains(&decl.params.len()) {
-            slot.push(decl.params.len());
-        }
-    }
+    let arities = Arities::of(program);
     let mut bound: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.synthetic {
@@ -1937,7 +1984,7 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
 
 fn arity_walk_stmt(
     stmt: &Stmt,
-    arities: &HashMap<&str, Vec<usize>>,
+    arities: &Arities,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
@@ -1951,7 +1998,7 @@ fn arity_walk_stmt(
 
 fn arity_walk_expr(
     e: &Expr,
-    arities: &HashMap<&str, Vec<usize>>,
+    arities: &Arities,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
@@ -1963,7 +2010,7 @@ fn arity_walk_expr(
             // name matching a declared group is that group, and the per-file
             // pass sees only one file of a module, which leaves every call
             // to a sibling file unchecked.
-            let known = arities.get(name.as_str());
+            let known = arities.get(name);
             if !bound.contains(name.as_str()) {
                 if let Some(count) = fields.get(name.as_str()) {
                     if args.len() != *count {
@@ -3004,7 +3051,7 @@ struct Declared<'a> {
     /// Arities of this module's own fn groups; an application of a local
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
-    fn_arities: &'a crate::hash::Map<&'a str, Vec<usize>>,
+    fn_arities: &'a Arities<'a>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
     type_arity: &'a crate::hash::Map<&'a str, usize>,
@@ -3314,7 +3361,7 @@ impl<'a> Resolver<'a> {
                                 ));
                             }
                         }
-                        if let Some(arities) = self.declared.fn_arities.get(name.as_str()) {
+                        if let Some(arities) = self.declared.fn_arities.get(name) {
                             if !arities.contains(&args.len()) && !arities.contains(&0) {
                                 let mut known: Vec<String> =
                                     arities.iter().map(|a| a.to_string()).collect();
