@@ -5242,6 +5242,29 @@ cleared, it is 1,367 blocks for two lines — the largest of the four, from the
 smallest diff, and it was the last one looked at because the map charged it to
 `infer.rs:250`, the call site.
 
+### A fifth vector, measured and declined
+
+`parse_app` accumulates a call's arguments the same way `lex_line` accumulates
+its tokens, and dhat charged 1,100 blocks to the push. Reserving eight there
+makes both counters worse:
+
+```
+compile_allocs      40,935 -> 41,649   +714    +1.7%
+compile_peak_bytes 743,564 -> 860,940  +117,376  +15.8%
+```
+
+`Vec::new()` allocates nothing until something is pushed, and most of what
+`parse_app` looks at is a bare atom with no arguments at all — reserving pays
+an allocation for every one of those, where the empty vector paid none. The
+peak is the other half: an `Expr::App` keeps its arguments for the whole
+compile, so eight slots apiece are eight slots held. The 1,100 blocks are one
+allocation per call that has arguments, and that one is not removable by
+reserving.
+
+The `tokens` vector differs on both counts. Every line has at least one token,
+so its first allocation happens regardless, and reserving only moves where the
+second one would have been.
+
 ### What the peak buys
 
 The 992 bytes are the two pooled buffers: one long source line and one large
