@@ -57,14 +57,33 @@ pub struct Provenance<'a> {
 /// about packages that are built in that aren't literally coming from
 /// different sources, but for the sake of our rule that makes sense."
 pub fn package_of(file: &str) -> &str {
-    let path = match file.split_once(".hako/") {
-        Some((_, rest)) => rest,
+    let path = match after_hako(file) {
+        Some(rest) => rest,
         None => file,
     };
     match crate::ast::last_slash(path) {
         Some(at) => &path[..at],
         None => "",
     }
+}
+
+/// What follows the first `.hako/` in a path, by a plain byte scan.
+///
+/// `str::split_once(".hako/")` builds a `StrSearcher`, and a two-way substring
+/// search spends most of a short haystack's cost setting itself up — the
+/// needle is absent from every path in a program that fetched nothing, so the
+/// setup is all there is. callgrind charged the searcher a fifth of what this
+/// function cost. `.hako/` is ascii, so the scan is over bytes and the index
+/// past it is a character boundary.
+fn after_hako(file: &str) -> Option<&str> {
+    const NEEDLE: &[u8] = b".hako/";
+    let bytes = file.as_bytes();
+    for at in 0..bytes.len().saturating_sub(NEEDLE.len() - 1) {
+        if bytes[at] == b'.' && &bytes[at..at + NEEDLE.len()] == NEEDLE {
+            return Some(&file[at + NEEDLE.len()..]);
+        }
+    }
+    None
 }
 
 fn group_of(decl: &FnDecl) -> Group<'_> {
@@ -241,15 +260,24 @@ pub fn analyze(program: &Program) -> Provenance<'_> {
     // arm was a violation, `std/testing`'s `when_failed` included, so the one
     // generic foreign rescuer the design turns on could not exist. What
     // survives is what the written call sites prove.
+
+    // Which package each declaration belongs to, decided once. Deciding it
+    // inside the loop meant `package_of` split the path and `bit` walked the
+    // table comparing strings, per declaration per round, for an answer that
+    // cannot change between rounds — and the fixpoint runs up to two hundred
+    // of them.
+    let pkgs: Vec<Pkgs> = program.fns.iter().map(|d| bit(&table, package_of(&d.file))).collect();
+    // The locals a declaration binds, borrowed by each declaration in turn. A
+    // fresh map per declaration per round allocated its table every time.
+    let mut binds: HashMap<&str, Pkgs> = HashMap::default();
     let mut rounds = 0;
     while walk.changed && rounds < 200 {
         walk.changed = false;
         rounds += 1;
-        for decl in &program.fns {
-            let pkg = bit(&table, package_of(&decl.file));
+        for (decl, &pkg) in program.fns.iter().zip(&pkgs) {
             let group = group_of(decl);
             // a parameter that matches err holds whatever callers fed it
-            let mut binds: HashMap<&str, Pkgs> = HashMap::default();
+            binds.clear();
             for (i, pattern) in decl.params.iter().enumerate() {
                 let Pattern::Annotated { name, ty, .. } = pattern else { continue };
                 if ty != "err" {
