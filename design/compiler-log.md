@@ -4846,3 +4846,53 @@ The dhat allocation map, re-run after #1139–#1141 took the front end from
 was 2,172 of them, the fourth line down. Reading the function to see whether
 the vector could go is what found the index units. The bug was not what the map
 was looking for; a map of where the work is answers questions nobody asked it.
+
+## 2026-08-30 — a token and the column it ends at are one vector
+
+`Line` carried `tokens: Vec<(Tok, Span)>` beside `end_cols: Vec<usize>`. The
+two were always the same length, and twelve places in `src/parser.rs` sliced
+them:
+
+```rust
+P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number)
+P::new(&line.tokens[1..*at],      &line.end_cols[1..*at],      line.number)
+```
+
+All twelve slice both the same way — that was checked before the change, and
+there is no bug here to fix. What there is, is a pair that has to be kept in
+step by hand, in the file where a character index and a byte index had just
+been found disagreeing. `Vec<(Tok, Span, u32)>` cannot fall out of step.
+
+### What it costs and returns
+
+```
+compile_allocs        48,356 -> 46,998    -1,358   -2.8%
+compile_peak_bytes             742,572    unmoved
+docs/kanso.wasm    1,661,716 -> 1,657,340   -4,376 bytes
+```
+
+The fall is larger than the 1,117 blocks dhat attributed to `end_cols`'
+growth, and the extra is where the map could not see it: `StrPart::Interp`
+carried the identical pair — `Interp(Vec<(Tok, Span)>, Vec<usize>)` — so every
+interpolation in the program paid it again. That variant is one field now, and
+`template_part` hands `P::new` one slice where it used to hand two.
+
+Peak does not move, which is the right answer rather than a disappointing one.
+A `(Tok, Span, u32)` pads to the same width the pair occupied across two
+allocations, so what goes is the second header and the second doubling
+sequence, not the bytes the tokens themselves need.
+
+### What did not change
+
+Every output gate is green: the emitted golden, the machine-code golden and
+all eight work rows, plus decode, encode, escape, one-shot, basket, wide,
+pending-cell and scan counters. The compiler writes the same program and every
+benchmark does the same work. This is the front end's own bookkeeping and
+nothing a user can observe, which is why it ships with no fixture of its own —
+the corpus that already pins every diagnostic in the tree is the test, and
+`check_needless_continuation` and `validate_spacing` were both rewritten
+against it.
+
+The diff is 162 lines added against 181 removed. A merge that removes more
+than it adds is the shape to expect when two things that were always equal
+stop being written down twice.

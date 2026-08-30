@@ -1,0 +1,18 @@
+# The block's lines are lexed as their own tokens and handed back as one
+# `Tok::Str`, so an interpolation inside a block goes through
+# `StrPart::Interp` — the variant that carries the block's tokens. Nothing
+# pinned that with a wide character on the opening line, which is where the
+# fence offset and the interpolation's own token vector meet.
+fn pick a b
+  "{a} {b}"
+
+n = 3
+
+label = "x{n + 1}y"
+
+block = pick "é" """
+  one {n} two
+  three
+"""
+
+pub play = print label >> print block >> print "nested {pick "a{n}" "b"}"
