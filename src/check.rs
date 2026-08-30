@@ -320,13 +320,17 @@ fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
         let widest = arities.entry(decl.name.as_str()).or_insert(0);
         *widest = (*widest).max(takes);
     }
+    // One set, cleared per declaration. Opening a fresh one each time was an
+    // allocation per declaration in each of the three passes that do this,
+    // and the capacity it had just grown to went with it.
+    let mut bound: crate::hash::Set<&str> = Default::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
         // A name bound here is this scope's, whatever a function elsewhere is
         // called: sha256 binds `first` and `list/first` is not what it means.
-        let mut bound: crate::hash::Set<&str> = Default::default();
+        bound.clear();
         for p in &decl.params {
             collect_pattern_names(p, &mut bound);
         }
@@ -1846,11 +1850,12 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
             slot.push(decl.params.len());
         }
     }
+    let mut bound: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
-        let mut bound: HashSet<&str> = HashSet::default();
+        bound.clear();
         for param in &decl.params {
             for_each_param_name(param, &mut |n| {
                 bound.insert(n);
@@ -2028,11 +2033,12 @@ fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
     // twice, since the same key answered `forwards`. A view keyed by the
     // program's own names answers both from one lookup and allocates nothing.
     let builtins = crate::inline::aliases(program);
+    let mut bound: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
-        let mut bound: HashSet<&str> = HashSet::default();
+        bound.clear();
         for param in &decl.params {
             for_each_param_name(param, &mut |n| {
                 bound.insert(n);
