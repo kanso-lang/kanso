@@ -29,12 +29,25 @@ pub const FAIL: Set = ERR;
 pub const BOOL: Set = TRUE | FALSE;
 
 pub struct Inference {
-    /// per fn-decl index: joined argument sets seen at call sites
-    pub params: Vec<Vec<Set>>,
+    /// Every declaration's argument sets, end to end, with `param_starts`
+    /// saying where each one begins. A `Vec<Set>` apiece was one heap block
+    /// per declaration for one to three `u16`, and `Set` is a `u16`. Read it
+    /// through `param` rather than by index.
+    params: Vec<Set>,
+    /// One more entry than there are declarations, so a declaration's slice is
+    /// always `params[starts[i]..starts[i + 1]]`.
+    param_starts: Vec<u32>,
     /// per fn-decl index: return set
     pub returns: Vec<Set>,
     /// per type index, per field: joined set seen at construction sites
     pub type_fields: Vec<Vec<Set>>,
+}
+
+impl Inference {
+    /// The set inferred for one parameter of one declaration.
+    pub fn param(&self, decl: usize, at: usize) -> Set {
+        self.params[self.param_starts[decl] as usize + at]
+    }
 }
 
 struct Ctx<'a> {
@@ -52,7 +65,15 @@ struct Ctx<'a> {
     /// For each function, the functions that have read its return set. A
     /// return that widens only ever changes the answer of a function that
     /// asked for it.
-    readers: Vec<crate::hash::Set<usize>>,
+    /// Who to wake when a declaration's answer changes, as a bitset: one row
+    /// of `reader_words` u64 per declaration, the row's bit `r` set when `r`
+    /// reads it. A `HashSet<usize>` apiece was 1,072 of the front end's
+    /// allocation blocks, and waking cloned one to release the borrow.
+    readers: Vec<u64>,
+    reader_words: usize,
+    /// One row, copied out so the wake loop can take `ctx` mutably. Kept
+    /// between wakes, so it allocates once.
+    reader_scratch: Vec<u64>,
     /// Functions to visit next round. A field of a declared type widening can
     /// reach any function through pattern binding, so that one blankets.
     dirty_next: Vec<bool>,
@@ -74,7 +95,8 @@ struct Ctx<'a> {
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
     type_names: HashMap<&'a str, usize>,
-    params: Vec<Vec<Set>>,
+    params: Vec<Set>,
+    param_starts: Vec<u32>,
     returns: Vec<Set>,
     type_fields: Vec<Vec<Set>>,
     changed: bool,
@@ -208,13 +230,27 @@ pub fn infer(program: &Program) -> Inference {
                 Stmt::Set { value, .. } => mentions(value, &d.name),
             })
     });
+    // A row of bits per declaration, rounded up to whole words.
+    let reader_words = program.fns.len().div_ceil(64).max(1);
+    // Where each declaration's argument sets begin in the flat vector below,
+    // with a final entry so the last declaration's slice reads the same way as
+    // every other one's.
+    let mut param_starts: Vec<u32> = Vec::with_capacity(program.fns.len() + 1);
+    let mut at = 0u32;
+    for d in &program.fns {
+        param_starts.push(at);
+        at += d.params.len() as u32;
+    }
+    param_starts.push(at);
     let mut ctx = Ctx {
         defers_into_containers,
         program,
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
         current_index: 0,
-        readers: vec![crate::hash::Set::default(); program.fns.len()],
+        readers: vec![0u64; program.fns.len() * reader_words],
+        reader_words,
+        reader_scratch: Vec::with_capacity(reader_words),
         dirty_next: vec![false; program.fns.len()],
         dirty: Vec::new(),
         field_readers,
@@ -222,7 +258,8 @@ pub fn infer(program: &Program) -> Inference {
         group_members,
         yields: HashMap::default(),
         type_names,
-        params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
+        params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
+        param_starts,
         returns: vec![0; program.fns.len()],
         type_fields: program.types.iter().map(|t| vec![0; t.fields.len()]).collect(),
         changed: true,
@@ -270,7 +307,9 @@ pub fn infer(program: &Program) -> Inference {
             ctx.yields.clear();
             env.clear();
             param_sets.clear();
-            param_sets.extend_from_slice(&ctx.params[i]);
+            param_sets.extend_from_slice(
+                &ctx.params[ctx.param_starts[i] as usize..ctx.param_starts[i + 1] as usize],
+            );
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
             }
@@ -279,15 +318,24 @@ pub fn infer(program: &Program) -> Inference {
                 ctx.returns[i] |= ret;
                 ctx.changed = true;
                 moved += 1;
-                let readers = ctx.readers[i].clone();
-                for r in readers {
-                    // This round as well as the next. A reader the sweep has
-                    // not reached yet takes the new answer now instead of
-                    // costing a whole round to hear about it, and one already
-                    // behind the cursor is simply not walked again.
-                    ctx.dirty[r] = true;
-                    ctx.dirty_next[r] = true;
+                let w = ctx.reader_words;
+                let mut scratch = std::mem::take(&mut ctx.reader_scratch);
+                scratch.clear();
+                scratch.extend_from_slice(&ctx.readers[i * w..(i + 1) * w]);
+                for (word, &row) in scratch.iter().enumerate() {
+                    let mut bits = row;
+                    while bits != 0 {
+                        let r = word * 64 + bits.trailing_zeros() as usize;
+                        bits &= bits - 1;
+                        // This round as well as the next. A reader the sweep
+                        // has not reached yet takes the new answer now instead
+                        // of costing a whole round to hear about it, and one
+                        // already behind the cursor is simply not walked again.
+                        ctx.dirty[r] = true;
+                        ctx.dirty_next[r] = true;
+                    }
                 }
+                ctx.reader_scratch = scratch;
             }
         }
         if std::env::var_os("KANSO_PHASES").is_some() {
@@ -295,7 +343,12 @@ pub fn infer(program: &Program) -> Inference {
         }
         ctx.dirty = std::mem::take(&mut ctx.dirty_next);
     }
-    Inference { params: ctx.params, returns: ctx.returns, type_fields: ctx.type_fields }
+    Inference {
+        params: ctx.params,
+        param_starts: ctx.param_starts,
+        returns: ctx.returns,
+        type_fields: ctx.type_fields,
+    }
 }
 
 /// Post-order over the call graph: every function lands after the functions
@@ -625,7 +678,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
             // constant mention evaluates; fn mention is a value (params go TOP)
             if let Some(&(start, _)) = ctx.groups.get(&(name, 0)) {
                 let i = ctx.group_members[start as usize];
-                ctx.readers[i].insert(ctx.current_index);
+                mark_reader(ctx, i);
                 // A constant naming itself inside its own body hands over its
                 // cell rather than a value — there is nothing else to hand
                 // over yet. Everything that mention flows into may therefore
@@ -652,9 +705,17 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
     }
 }
 
+/// `decl`'s answer feeds the declaration being walked, so a change to it must
+/// wake that one.
+fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
+    let at = decl * ctx.reader_words + ctx.current_index / 64;
+    ctx.readers[at] |= 1u64 << (ctx.current_index % 64);
+}
+
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
-    if ctx.params[decl][param] | set != ctx.params[decl][param] {
-        ctx.params[decl][param] |= set;
+    let at = ctx.param_starts[decl] as usize + param;
+    if ctx.params[at] | set != ctx.params[at] {
+        ctx.params[at] |= set;
         ctx.changed = true;
         ctx.dirty_next[decl] = true;
     }
@@ -771,7 +832,7 @@ fn eval_call<'a>(
             for (p, set) in arg_sets.iter().enumerate() {
                 widen_param(ctx, i, p, *set);
             }
-            ctx.readers[i].insert(ctx.current_index);
+            mark_reader(ctx, i);
             out |= ctx.returns[i];
         }
         return out | piped_bits;

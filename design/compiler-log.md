@@ -5379,3 +5379,73 @@ conversion sites. `infer.rs:225` is the call table's sibling and flattens the
 same way, except that `Inference::params` is `pub` and read as
 `inference.params[decl][i]` at seven sites outside infer.rs, so it wants an
 accessor and a wider diff than this one.
+
+## 2026-08-30 — the two tables the fixpoint kept per declaration
+
+`infer` held two `Vec<_>`-per-declaration structures for the length of a
+compile: a `HashSet<usize>` saying who to wake when a declaration's answer
+changes, and a `Vec<Set>` holding its argument sets. Four hundred declarations,
+so four hundred headers apiece, for sets that are usually a handful of small
+integers.
+
+```
+the reader bitset       38,462 -> 37,119   -1,343
+the params table        37,119 -> 36,268     -851
+                                           -2,194   -5.7%
+compile_peak_bytes     735,254 -> 741,350   +6,096   the bitset
+                       741,350 -> 733,794   -7,556   the params table
+                                            -1,460   -0.2%
+front_end_rounds 40 and front_end_visits 16,806, unmoved by both
+```
+
+The two move the peak in opposite directions and ship together for that reason:
+the bitset costs residency to buy traffic, and the params table more than pays
+it back.
+
+### What it cost to run
+
+```
+compile_instructions  50,455,686 -> 49,090,280   -1,365,406   -2.71%
+```
+
+The largest single fall this vein has taken. The allocator rows carry about
+half — `_int_malloc` 3,044,126 -> 2,808,434, `_int_free` 2,434,266 -> 2,284,655,
+`malloc` 1,684,286 -> 1,588,013, `malloc_consolidate` 940,889 -> 867,875, `free`
+1,077,244 -> 1,015,812, `__rust_alloc` 800,814 -> 769,810, some 647,000 between
+them — and the rest is hashing the bitset removed. Every `mark_reader` hashed a
+`usize` into a set; it shifts and ors now.
+
+`infer::infer` rises 87,854, which is where that work went: the wake loop scans
+`ceil(n / 64)` words per wake instead of iterating a set that knew its own
+members, and the flat params table indexes `param_starts` where it followed a
+pointer. A fifteenth of the fall.
+
+`eval_expr` moves 1,495 on two million and `check_merged` is byte-identical.
+Welfare 86.32 -> 86.58, ratcheted here.
+
+### Who to wake, as bits
+
+`readers[i]` was a `HashSet<usize>`, and waking a declaration's readers cloned
+it — the set is read while `ctx` is taken mutably, so a snapshot was the way to
+release the borrow. It is a bitset now: one row of `ceil(n / 64)` u64 per
+declaration, `mark_reader` sets bit `r`, and the wake loop copies the row into a
+scratch vector taken from `ctx` with `mem::take` and walks it with
+`trailing_zeros`. The clone goes with the hash set.
+
+`front_end_rounds` and `front_end_visits` do not move, which is the check that
+matters here: those two counters are exactly what a wake set that woke a
+different set of readers would change.
+
+The row costs `n * ceil(n / 64) * 8` bytes — 22,792 for `lib/json`'s four
+hundred declarations — in one allocation, where the sets cost 1,343 blocks.
+
+### The argument sets, flat
+
+`Inference::params` was `Vec<Vec<Set>>` and is one flat `Vec<Set>` with a
+`param_starts: Vec<u32>` beside it. `Set` is a `u16`, so a declaration of two
+parameters had a heap block for four bytes.
+
+The field is private now, behind `Inference::param(decl, at)`. Making it private
+first was the way to find the readers: the compiler named all seven — beat.rs
+four times, codegen.rs and dispatch.rs once each — and there was no need to
+guess at a grep.

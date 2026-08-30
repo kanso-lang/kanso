@@ -942,7 +942,7 @@ impl<'a> Backend<'a> {
     fn group_param_set(&self, name: &str, arity: usize, param: usize) -> Set {
         self.group_indices(name, arity)
             .iter()
-            .fold(0, |acc, i| acc | self.inference.params[*i][param])
+            .fold(0, |acc, i| acc | self.inference.param(*i, param))
     }
 
     fn group_return_set(&self, name: &str, arity: usize) -> Set {

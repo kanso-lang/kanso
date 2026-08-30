@@ -93,7 +93,7 @@ fn group_param_set(
         .iter()
         .enumerate()
         .filter(|(_, d)| d.name == name && d.params.len() == arity)
-        .fold(0, |acc, (i, _)| acc | inference.params[i][param])
+        .fold(0, |acc, (i, _)| acc | inference.param(i, param))
 }
 
 /// Every call to `name`/`arity` in the whole program passes an `at _ _` at the

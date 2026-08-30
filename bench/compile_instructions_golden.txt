@@ -641,4 +641,23 @@
 # is a `HashSet<&str>` now, so its inserts moved from one monomorphisation to
 # another and the old one sat below the threshold. `eval_expr` and
 # `check_merged` are byte-identical.
-compile_instructions=50455686
+#
+# 2026-08-30  50,455,686 -> 49,090,280   -1,365,406   -2.71%, banked, and the
+# largest single fall this vein has taken. The allocator rows carry about half —
+# `_int_malloc` 3,044,126 -> 2,808,434, `_int_free` 2,434,266 -> 2,284,655,
+# `malloc` 1,684,286 -> 1,588,013, `malloc_consolidate` 940,889 -> 867,875,
+# `free` 1,077,244 -> 1,015,812, `__rust_alloc` 800,814 -> 769,810, some 647,000
+# between them — and the rest is the hashing the bitset removed: `readers` was a
+# `HashSet<usize>` per declaration and every `mark_reader` hashed a `usize`,
+# where the bitset shifts and ors.
+#
+# `infer::infer` rises 1,251,567 -> 1,339,421 (+87,854), which is where the
+# bitset's work went: the wake loop scans ceil(n/64) words per wake instead of
+# iterating a set that knew its own members, and the flat params table indexes
+# `param_starts` where it followed a pointer. A fifteenth of the fall, and the
+# right side of the trade.
+#
+# `eval_expr` moves 1,495 on two million and `check_merged` is byte-identical,
+# which is what a change confined to two of the fixpoint's tables should read
+# as.
+compile_instructions=49090280
