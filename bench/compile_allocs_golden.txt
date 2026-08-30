@@ -54,4 +54,12 @@
 # BUILTINS and three in AMBIENT and lost nothing, so a fall of seven
 # allocations out of sixty-two thousand is layout, in the same family as the
 # entries in the instructions golden beside it.
-compile_allocs=61974
+# 2026-08-30 (a call's argument sets on the stack): 61,974 -> 57,430, a fall of
+# 4,544, or 7.3%. Banked. `eval_call` collected a call's argument sets into a
+# `Vec<Set>`, and `Set` is a `u16`: dhat's map put that one line at 8,309 of
+# the front end's blocks, the largest single line in it, holding two, four or
+# six bytes apiece. Eight fit in sixteen bytes of stack and higher arities
+# still spill. `compile_peak_bytes` does not move, because these blocks died
+# when the call was inferred and were never at the high water mark — which is
+# why nothing but the map could see them.
+compile_allocs=57430
