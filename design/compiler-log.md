@@ -5810,3 +5810,39 @@ reservation was the remaining 1,647 and all eight allocations.
     compile_peak_bytes                   730,120   unmoved, both hosts
 
 Copied out of job 99268499869. The two hosts read the same percentage.
+
+## 2026-08-30 — thirteen tables that start at nothing
+
+`check_merged` runs twenty-two whole-program checks, and a dozen of them open
+by grouping declarations: arities by name, return sets by group, discarded
+positions, handled positions, torn arms, the reference graph. Each builds its
+own map with one entry per declaration, and each starts that map empty.
+
+A `hashbrown` table doubles, and doubling means allocating the new table and
+rehashing every key already in the old one. Filling a table to twelve hundred
+entries from zero pays that seven times. `callgrind` charged
+`reserve_rehash` 654,170 instructions, and `fallible_with_capacity` under it
+another 190,355.
+
+Thirteen of these now open at `program.fns.len()`. Two are keyed by
+`(name, arity, position)` and can hold more than that, so they still grow
+once; the rest never grow at all.
+
+### Not the same verdict as the last time
+
+Pre-sizing was measured and DECLINED on 2026-08-30 for the six
+`filter().map().collect()` sets in `check.rs`, at 4,514 instructions and one
+allocation. That decline stands and this is not in tension with it: those
+collects are FILTERED, so their results are a small fraction of the
+declarations and the table they build never doubles more than once. These
+thirteen hold one entry per declaration.
+
+### The numbers
+
+    compile_instructions  45,155,678 -> 44,778,375  -377,303  -0.84%  (local)
+    compile_allocs             34,804 ->     34,682      -122
+    compile_peak_bytes                     730,120   unmoved
+
+Peak does not move, which is the answer to the obvious worry: a table sized to
+what it will hold occupies no more than one that grew into the same size, and
+the intermediate tables it does not build are the allocations that went away.

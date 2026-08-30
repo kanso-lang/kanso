@@ -298,7 +298,8 @@ fn said_plainly(op: &str, word: &str) -> String {
 /// x)` calls, and `&f` holds. Refusing the bare form costs a sigil and takes
 /// away a shape whose two meanings looked identical.
 fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut arities: crate::hash::Map<&str, usize> = Default::default();
+    let mut arities: crate::hash::Map<&str, usize> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
         let widest = arities.entry(decl.name.as_str()).or_insert(0);
         *widest = (*widest).max(decl.params.len());
@@ -522,9 +523,11 @@ fn check_effect_discarded(
     use crate::infer::DESC;
     // inference is handed in: one pass serves every check that reads it
 
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> = Default::default();
+    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     // a position every arm throws away
-    let mut discarded: crate::hash::Map<(&str, usize, usize), bool> = Default::default();
+    let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
         *returns.entry(key).or_insert(0) |= inference.returns[i];
@@ -599,8 +602,10 @@ fn check_none_exhaustive(
     // inference is handed in: one pass serves every check that reads it
 
     // group -> joined return set, and whether any arm names none at a position
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> = Default::default();
-    let mut handles: crate::hash::Map<(&str, usize, usize), bool> = Default::default();
+    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    let mut handles: crate::hash::Map<(&str, usize, usize), bool> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
         *returns.entry(key).or_insert(0) |= inference.returns[i];
@@ -946,7 +951,8 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
             None => false,
         })
     }
-    let mut groups: crate::hash::Map<(&str, usize), Vec<&FnDecl>> = crate::hash::Map::default();
+    let mut groups: crate::hash::Map<(&str, usize), Vec<&FnDecl>> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
         groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
     }
@@ -1197,7 +1203,8 @@ pub fn check_file_shadow(
     check_annotation_names(program, &declared_type_names, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
-    let mut fn_arities: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
+    let mut fn_arities: crate::hash::Map<&str, Vec<usize>> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
         let arities = fn_arities.entry(decl.name.as_str()).or_default();
         if !arities.contains(&decl.params.len()) {
@@ -1829,7 +1836,8 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
         .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
         .map(|ty| (ty.name.as_str(), ty.fields.len()))
         .collect();
-    let mut arities: HashMap<&str, Vec<usize>> = HashMap::default();
+    let mut arities: HashMap<&str, Vec<usize>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
         let slot = arities.entry(decl.name.as_str()).or_default();
         if !slot.contains(&decl.params.len()) {
@@ -2006,7 +2014,8 @@ fn arity_walk_expr(
 /// the call that could never have worked, reported where the author wrote it
 /// instead of when the value arrives.
 fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> = HashMap::default();
+    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(decl);
     }
@@ -2710,7 +2719,8 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
     let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
     let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();
     let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
-    let mut refs: HashMap<&str, Vec<&str>> = HashMap::default();
+    let mut refs: HashMap<&str, Vec<&str>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &constants {
         let out = refs.entry(decl.name.as_str()).or_default();
         for stmt in &decl.body {
@@ -2839,7 +2849,8 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
             })
             .map(|t| t.name.clone())
     };
-    let mut torn: HashMap<(&str, usize), Vec<String>> = HashMap::default();
+    let mut torn: HashMap<(&str, usize), Vec<String>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, a) in program.fns.iter().enumerate() {
         if !a.synthetic || a.name.contains('/') {
             continue;
@@ -3440,7 +3451,8 @@ fn check_wall_operands(
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::default();
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
     }
@@ -3585,7 +3597,8 @@ fn check_discarded_value(
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::default();
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
     }
