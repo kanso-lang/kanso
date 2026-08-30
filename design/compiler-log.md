@@ -5168,6 +5168,27 @@ docs/kanso.wasm                             1,654,278 -> 1,655,440  +1,162 bytes
 
 Measured one at a time, in that order, so each number is that piece's.
 
+### What it cost to run
+
+```
+compile_instructions  52,201,308 -> 51,126,817   -1,074,491   -2.06%
+```
+
+The allocator rows carry about half of it — `_int_free` 2,796,241 ->
+2,580,177, `malloc` 1,969,739 -> 1,790,546, `free` 1,258,040 -> 1,146,488,
+`__rust_alloc` 892,814 -> 852,633, some 547,000 between them. `_int_malloc` and
+`malloc_consolidate` hold, which says the fastbin churn #1148's entry describes
+did not come back when the traffic fell again.
+
+Two rows rise and both are a reused buffer's bookkeeping: `lex_line` 749,824 ->
+777,023 for taking a buffer from the pool and giving it back once a line, and
+`infer::infer` 1,167,175 -> 1,186,509 for clearing the gather vector. 46,000
+instructions against 1,074,000 saved.
+
+`eval_expr`, `check_merged` and `__memcmp_avx2_movbe` are byte-identical, which
+is what a change confined to the lexer, the parser and one function of infer
+should read as. Welfare 85.72 -> 86.06, ratcheted here.
+
 ### The scanner's line
 
 `pos` is the column a caret goes under, so `Scanner` indexes characters and has
