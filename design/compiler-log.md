@@ -4142,6 +4142,21 @@ which is the case that says the fix is a fence rather than a ban.
 lib/json has no field write inside a nested body, so the inherited set is never
 cloned there.
 
+Instructions took three versions to get right, and the ruling that welfare
+cannot fall is what forced the last two. Written as a pair of free functions
+carrying `(born, type_names, diags)`, the walk cost +21,767 on the container and
++28,556 on the runner — same sign, same order, so real work rather than layout.
+Folding the field-write check into the same `match` that picks a statement apart
+made it WORSE, +38,298: `build_walk_body` stopped being inlined and the saving
+went with it. What actually paid was the callback. This walk reaches every
+expression the front end holds and descends through `for_each_child`, whose
+callback is a `&mut dyn FnMut` — one indirect call per child — so a closure
+capturing three references writes three words at every one of them. The
+callback alone was +7,602. As a method on a struct holding the three, it
+captures one, and the whole pass now reads 58,375,759 against main's
+58,379,986: 4,227 cheaper than the code it replaces, because a `build`'s
+statements are no longer walked twice.
+
 This is the third time the pattern in `tests/golden/unpinned_diagnostics.txt`
 has paid. That file says an excuse reasoning about which check speaks first must
 name WHICH walk it is reasoning about, because a second one may not have the
