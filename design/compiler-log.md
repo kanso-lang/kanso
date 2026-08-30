@@ -5801,3 +5801,12 @@ holds at most two per getter.
 The two halves were measured separately against #1155's head, where the pair
 came to 603,447: the prefix test was 601,800 of it, and dropping the
 reservation was the remaining 1,647 and all eight allocations.
+
+### The runner's number
+
+    compile_instructions  45,468,261 -> 44,862,145  -606,116  -1.33%  (runner)
+                          45,764,825 -> 45,155,678  -609,147  -1.33%  (local)
+    compile_allocs                        34,804   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99268499869. The two hosts read the same percentage.
