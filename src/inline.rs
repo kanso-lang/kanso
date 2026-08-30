@@ -144,5 +144,68 @@ fn rewrite(expr: &mut Expr, alias: &HashMap<String, HashMap<usize, String>>) {
             }
         }
     }
-    crate::walk_children_mut(expr, &mut |child| rewrite(child, alias));
+    for_each_child_mut(expr, &mut |child| rewrite(child, alias));
+}
+
+/// Every direct sub-expression, mutably. `lib::walk_children_mut` says it
+/// mirrors `for_each_child` and does not — it has no arm for a lambda, a
+/// block, a build or a guard, so a wrapper called inside any of those would
+/// stop being inlined. Handing the children to a callback is what removes the
+/// vector this used to return per node; the coverage is unchanged.
+fn for_each_child_mut(expr: &mut Expr, f: &mut dyn FnMut(&mut Expr)) {
+    fn stmt_expr(s: &mut Stmt) -> &mut Expr {
+        match s {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+            Stmt::Set { value, .. } => value,
+        }
+    }
+    match expr {
+        Expr::App { head, args, .. } => {
+            f(head.as_mut());
+            for a in args {
+                f(a);
+            }
+        }
+        Expr::BinOp { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
+            f(lhs.as_mut());
+            f(rhs.as_mut());
+        }
+        Expr::Field { base, .. } | Expr::Upcast { expr: base, .. } => f(base.as_mut()),
+        Expr::Index { base, index, .. } => {
+            f(base.as_mut());
+            f(index.as_mut());
+        }
+        Expr::Lambda { body, .. } => f(body.as_mut()),
+        Expr::List(items, _) => {
+            for i in items {
+                f(i);
+            }
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            f(cond.as_mut());
+            f(early.as_mut());
+            for stmt in rest.iter_mut() {
+                f(stmt_expr(stmt));
+            }
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for stmt in stmts.iter_mut() {
+                f(stmt_expr(stmt));
+            }
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let TemplatePart::Interp(e) = p {
+                    f(e);
+                }
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                f(k);
+                f(v);
+            }
+        }
+        _ => {}
+    }
 }
