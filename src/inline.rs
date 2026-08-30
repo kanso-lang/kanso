@@ -29,7 +29,7 @@ use crate::hash::Map as HashMap;
 /// refused at the same compile whether the chain is one link or three. The
 /// type checker reads this map per arm; the call-site rewrite below adds the
 /// stricter only-arm condition on top.
-pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
+pub fn aliases(program: &Program) -> HashMap<(&str, usize), &str> {
     // The group sizes do not change while the fixpoint runs, so they are
     // counted once here rather than rebuilt on each pass.
     let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
@@ -46,11 +46,11 @@ pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
     }
 }
 
-fn direct_aliases(
-    program: &Program,
-    known: &HashMap<(String, usize), String>,
+fn direct_aliases<'a>(
+    program: &'a Program,
+    known: &HashMap<(&'a str, usize), &'a str>,
     counts: &HashMap<(&str, usize), usize>,
-) -> HashMap<(String, usize), String> {
+) -> HashMap<(&'a str, usize), &'a str> {
     let mut found = HashMap::default();
     for decl in &program.fns {
         let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
@@ -68,9 +68,9 @@ fn direct_aliases(
         let resolved: Option<&str> = match callee.starts_with("builtin_") {
             true => Some(callee.as_str()),
             false => known
-                .get(&(callee.clone(), args.len()))
+                .get(&(callee.as_str(), args.len()))
                 .filter(|_| counts.get(&(callee.as_str(), args.len())) == Some(&1))
-                .map(|v| v.as_str()),
+                .copied(),
         };
         let Some(target) = resolved else { continue };
         if args.len() != decl.params.len() {
@@ -96,7 +96,7 @@ fn direct_aliases(
             }
         }
         if threads {
-            found.insert((decl.name.clone(), decl.params.len()), target.to_string());
+            found.insert((decl.name.as_str(), decl.params.len()), target);
         }
     }
     found
@@ -112,8 +112,16 @@ pub fn inline_builtin_wrappers(program: &mut Program) {
     for decl in &program.fns {
         *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
     }
-    let mut alias = aliases(program);
-    alias.retain(|(name, arity), _| counts.get(&(name.as_str(), *arity)) == Some(&1));
+    // Owned, because the walk below takes `program` mutably. Nested by name
+    // then arity so the walk answers a call with two borrowed lookups: keyed
+    // by the pair, every call expression had to build a `String` from its
+    // callee first, and throw it away.
+    let mut alias: HashMap<String, HashMap<usize, String>> = HashMap::default();
+    for ((name, arity), target) in aliases(program) {
+        if counts.get(&(name, arity)) == Some(&1) {
+            alias.entry(name.to_string()).or_default().insert(arity, target.to_string());
+        }
+    }
     if alias.is_empty() {
         return;
     }
@@ -128,58 +136,13 @@ pub fn inline_builtin_wrappers(program: &mut Program) {
     }
 }
 
-fn rewrite(expr: &mut Expr, alias: &HashMap<(String, usize), String>) {
+fn rewrite(expr: &mut Expr, alias: &HashMap<String, HashMap<usize, String>>) {
     if let Expr::App { head, args, .. } = expr {
         if let Expr::Ident(name, span) = head.as_ref() {
-            if let Some(builtin) = alias.get(&(name.clone(), args.len())) {
+            if let Some(builtin) = alias.get(name.as_str()).and_then(|a| a.get(&args.len())) {
                 **head = Expr::Ident(builtin.clone(), *span);
             }
         }
     }
-    for child in children_mut(expr) {
-        rewrite(child, alias);
-    }
-}
-
-fn children_mut(expr: &mut Expr) -> Vec<&mut Expr> {
-    match expr {
-        Expr::App { head, args, .. } => {
-            let mut out: Vec<&mut Expr> = vec![head.as_mut()];
-            out.extend(args.iter_mut());
-            out
-        }
-        Expr::BinOp { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
-            vec![lhs.as_mut(), rhs.as_mut()]
-        }
-        Expr::Field { base, .. } | Expr::Upcast { expr: base, .. } => vec![base.as_mut()],
-        Expr::Index { base, index, .. } => vec![base.as_mut(), index.as_mut()],
-        Expr::Lambda { body, .. } => vec![body.as_mut()],
-        Expr::List(items, _) => items.iter_mut().collect(),
-        Expr::Guard { cond, early, rest, .. } => {
-            let mut out: Vec<&mut Expr> = vec![cond.as_mut(), early.as_mut()];
-            for stmt in rest.iter_mut() {
-                out.push(match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                    Stmt::Set { value, .. } => value,
-                });
-            }
-            out
-        }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts
-            .iter_mut()
-            .map(|s| match s {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
-            })
-            .collect(),
-        Expr::Str(parts, _) => parts
-            .iter_mut()
-            .filter_map(|p| match p {
-                TemplatePart::Interp(e) => Some(e),
-                TemplatePart::Lit(_) => None,
-            })
-            .collect(),
-        Expr::MapLit(pairs, _) => pairs.iter_mut().flat_map(|(k, v)| [k, v]).collect(),
-        _ => Vec::new(),
-    }
+    crate::walk_children_mut(expr, &mut |child| rewrite(child, alias));
 }

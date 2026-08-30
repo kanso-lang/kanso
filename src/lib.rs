@@ -3620,7 +3620,7 @@ fn replace_shape(e: &mut ast::Expr, shape: &str, name: &str) {
 }
 
 /// Every direct sub-expression, mutably. Mirrors `for_each_child`.
-fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
+pub(crate) fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
     use ast::Expr;
     match e {
         Expr::App { head, args, .. } => {
