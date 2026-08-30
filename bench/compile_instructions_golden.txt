@@ -714,4 +714,11 @@
 # `HashMap<&str, ()>::insert` is now the largest kanso-owned row after
 # inference at 1,517,265 (3.52%), where the sets that just went away were
 # feeding it.
-compile_instructions=43096058
+#
+# 2026-08-30 (three more tables that allocate a vector per key): 43,096,058 ->
+# 43,001,117, a fall of 94,941, or 0.22%, banked. The counting pass of #1161
+# took the last three of the shape in the front end: two arity tables that held
+# a `Vec<usize>` of one number per name, and the overlap checker's per-group
+# `Vec<&FnDecl>`. The container read -95,517 against this host's -94,941 —
+# six tenths of a per cent apart, the closest two hosts have come on this vein.
+compile_instructions=43001117

@@ -6350,3 +6350,16 @@ and `advisory.rs`'s `Vec<usize>` per name. Both are read through walks that
 take the table as a parameter — five signatures in advisory's case — so
 flattening either means threading the flat vector beside the ranges and giving
 the lookup key a lifetime the walk can name. Left for now, with the reason.
+
+### The runner's number
+
+    compile_instructions  43,096,058 -> 43,001,117   -94,941  -0.22%  (runner)
+                          43,448,641 -> 43,353,124   -95,517  -0.22%  (local)
+    compile_allocs                        30,406   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99303996583. Six tenths of a per cent apart on the fall,
+the closest two hosts have come on this vein.
+
+Welfare 87.32 -> 87.41, banked with `--set`. The page's two `data-golden`
+compile figures move with it.
