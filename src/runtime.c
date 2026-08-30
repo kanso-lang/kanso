@@ -1094,6 +1094,14 @@ static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
 
 static size_t k_repair_size(KValue v, const void* p, KMark* m);
 
+/* `k_copy_size` returns zero for an immediate and for nothing else without
+   looking at it, so a caller walking a container can skip the call entirely.
+   deepbench folds over lists of ints, and the call it used to make per element
+   existed only to return zero. */
+static inline int k_worth_sizing(KValue v) {
+    return k_is_heap(v.tag) || v.tag == K_THUNK;
+}
+
 static size_t k_copy_size(KValue v, KMark* m) {
     /* A thunk cell is malloc'd and survives every rewind, but what it holds
        — captured args, or a forced result — may live in the arena about to
@@ -1135,14 +1143,16 @@ static size_t k_copy_size(KValue v, KMark* m) {
             KList* l = (KList*)p;
             n += k_copy_size_ptr(l, sizeof(KList), m);
             n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
-            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            for (long long i = 0; i < l->len; i++)
+                if (k_worth_sizing(l->items[i])) n += k_copy_size(l->items[i], m);
             break;
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
             n += k_copy_size_ptr(mp, sizeof(KMap), m);
             n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
-            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            for (long long i = 0; i < 2 * mp->len; i++)
+                if (k_worth_sizing(mp->pairs[i])) n += k_copy_size(mp->pairs[i], m);
             break;
         }
         case K_SUB: {
@@ -1155,7 +1165,8 @@ static size_t k_copy_size(KValue v, KMark* m) {
             KRec* r = (KRec*)p;
             n += k_copy_size_ptr(r, sizeof(KRec), m);
             n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
-            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            for (long long i = 0; i < r->nfields; i++)
+                if (k_worth_sizing(r->fields[i])) n += k_copy_size(r->fields[i], m);
             break;
         }
         case K_CLOSURE: {
@@ -1213,21 +1224,24 @@ static size_t k_repair_size(KValue v, const void* p, KMark* m) {
             KList* l = (KList*)p;
             if (!k_survives_x(l->items, m))
                 n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
-            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            for (long long i = 0; i < l->len; i++)
+                if (k_worth_sizing(l->items[i])) n += k_copy_size(l->items[i], m);
             break;
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
             if (!k_survives_x(mp->pairs, m))
                 n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
-            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            for (long long i = 0; i < 2 * mp->len; i++)
+                if (k_worth_sizing(mp->pairs[i])) n += k_copy_size(mp->pairs[i], m);
             break;
         }
         case K_REC: {
             KRec* r = (KRec*)p;
             if (!k_survives_x(r->fields, m))
                 n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
-            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            for (long long i = 0; i < r->nfields; i++)
+                if (k_worth_sizing(r->fields[i])) n += k_copy_size(r->fields[i], m);
             break;
         }
         case K_CLOSURE: {
