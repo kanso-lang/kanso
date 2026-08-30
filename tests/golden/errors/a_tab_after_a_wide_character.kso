@@ -1,0 +1,10 @@
+# `find` answers in bytes and a column is counted in characters. With three
+# two-byte characters ahead of the tab the caret used to sit three columns
+# right of it, on the ordinary line and inside a text block body alike — two
+# separate copies of the same check, so two lines here.
+x = "ééé"	y
+
+block = """
+  ééé	z
+  plain
+"""

@@ -78,4 +78,13 @@
 # hand children to a callback. `check.rs` had worked around the third of these
 # by building a borrowed view of the map; the producer borrows now, so the
 # view is gone too.
-compile_allocs=50528
+#
+# 2026-08-30 (a text block's fence in bytes): 50,528 -> 48,356, a fall of
+# 2,172, or 4.3%. Banked, and it is one line: `block_opener` collected a
+# `Vec<char>` to scan the line a text block opens on. `lib/json` holds no text
+# block — the vector was built for every line of every file compiled, in order
+# to answer no. The scan reads bytes now, which it can because the three bytes
+# it tests for are ASCII. dhat had attributed exactly 2,172 blocks to that line
+# and re-running it after the change shows every other site identical to the
+# block, so this row moved for one reason and no other.
+compile_allocs=48356
