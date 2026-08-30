@@ -316,6 +316,67 @@ narrowly conditioned on the other three counters is the fallback and 1 is
 honest; the cost is small either way. What should
 not stand is a spend ledger whose entries say no spend occurred.
 
+**NINE MORE HOST-PAIRS, 2026-08-30, and the rule as written does not fit
+three of them.** Every compile_instructions move that day, measured on both:
+
+    change                          runner       container   read
+    a span is two u32             +382,777      +50,058      ?
+    the field-write fence, v1      +28,556      +21,767      work
+    the field-write fence, v3       +5,344       -4,227      layout
+    runtime.c's set text            -1,255      not run      layout by shape
+    the generic child walk      -1,767,533   -1,836,913      work
+    a call's argument sets      -1,027,149     -340,075      ?
+    a dispatch group is a range    -95,852     -342,880      ?
+    four lookup keys              -830,460     -852,860      work
+    the four walk arms             +19,070     -150,201      layout
+    k_is_heap as a mask             +1,746      not run      layout by shape
+
+Five fit. The three marked `?` do not, and they are the interesting ones.
+
+FIRST, THE RULE NEEDS A FOURTH ROW. `a span is two u32` is unambiguously
+work — every span construction gained a truncation — and the container reads a
+THIRTEENTH of the runner. What is different is that it moved DATA as well as
+code: `Expr` fell from 64 bytes to 56, and two hosts lay a smaller struct out
+differently. So "work reproduces within 2%" is a claim about a change to CODE,
+and it breaks when the change also moves data.
+
+SECOND, THE DISCRIMINATOR IS MAGNITUDE RATHER THAN SIGN. The four rows above
+this addition include `+83,829` against `+12` and `+2,138` against `0`, both
+same-sign and both layout. What every layout case has in common is that ONE
+HOST READS NEAR ZERO — not that the signs disagree.
+
+THIRD, AND THIS IS NEW: two rows disagree threefold with both hosts far from
+zero, and callgrind names the mechanism. `malloc_consolidate` on this workload
+steps up about 265,000 instructions, once, when the free lists change shape.
+The container took that step on `a call's argument sets` (788,221 ->
+1,058,396) and holds flat after; the runner held flat there (789,570) and took
+it on `a dispatch group is a range` (-> 1,054,967). Each host pays the same
+penalty for the same reason and only the change it lands on differs, which is
+why those two rows are large, threefold apart, and lean opposite ways. Over
+the two changes together the readings are -682,955 and -1,123,001: still
+apart, but by 1.6x where the individual rows are 3x and 3.6x.
+
+So the reading these nine support:
+
+    both hosts move together, neither near zero    work; either number estimates it
+    one host reads near zero                       that host's layout
+    the change moves DATA, not only code           the pair says nothing; measure
+                                                   the structure instead
+    both move, far apart, neither near zero        read the allocator lines before
+                                                   calling it anything
+
+The last row is the one worth adding to the proposal, because it is cheap and
+it worked: `callgrind_annotate` on both profiles, reading malloc, free,
+_int_malloc, _int_free, __rust_alloc, __rust_dealloc, malloc_consolidate and
+unlink_chunk. That was available on all four rows above this addition and was
+done on none of them, and doing it turned "layout, unexplained" into a
+mechanism with a number.
+
+None of this changes the recommendation — the third answer still stands — but
+a required second-host delta should come with the note that a threefold gap is
+a prompt to read the allocator lines rather than a verdict, and that a change
+moving struct sizes is outside what the pair can decide.
+
 ### Whether `read_file` is text or bytes
 
 **Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
