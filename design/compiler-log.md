@@ -2807,3 +2807,22 @@ loop-carried accumulator pinning a region for the length of a call):
 Option 3 (builtin) stays available as the fallback the entry named,
 but only after the survey and an honest attempt at 1 fail. The
 tests/sha256_peak.rs pins stand so the next move is visible.
+
+## 2026-08-29 — gavel: read_file is text, read_bytes is bytes, per precedent
+
+Clay, handed a three-option menu: "seriously? can't you just look at
+what go or rust do?" They agree: Rust ships fs::read (bytes) beside
+fs::read_to_string (text, refuses invalid utf-8); Go ships os.ReadFile
+(bytes) with text as explicit validated conversion. Two readers, each
+naming what it reads. So: `read_file` reads text and refuses non-utf-8
+on every engine identically — the interpreter's current refusal
+becomes the law rather than a divergence — and a byte-transparent
+`read_bytes` lands in the same change, since native's callers
+(scripts/fingerprint among them) read binary today and keep working by
+renaming their call. The bytes value is the one the archive already
+ruled real.
+
+The meta-ruling, second of the sitting: a library-surface question
+that mainstream precedent settles unanimously is presented as "X and Y
+both do Z; copying it" — one line — or handled by the implementer
+citing the precedent in the log, not brought as a menu.
