@@ -1215,7 +1215,7 @@ fn scalar_elem(
                     .iter()
                     .position(|pat| matches!(pat, Pattern::Var(v, _) if v == n))
                     .is_some_and(|j| {
-                        let set = inference.params[decl_index][j];
+                        let set = inference.param(decl_index, j);
                         set != 0 && set & !FAIL & !SCALAR == 0
                     })
         }
@@ -1401,7 +1401,7 @@ fn arg_ok(
     if let Expr::Ident(p, _) = arg {
         let own = decl.params.iter().position(|pat| matches!(pat, Pattern::Var(n, _) if n == p));
         if let Some(j) = own {
-            let set = inference.params[decl_index][j];
+            let set = inference.param(decl_index, j);
             if set & !FAIL & !THREADED == 0 {
                 return true;
             }
@@ -1413,7 +1413,7 @@ fn arg_ok(
     // bytes hold no pointers, so nothing in it can dangle across a rewind —
     // which is why this license reads BYTES and no other heap set.
     if let Some(Pattern::Var(own, _)) = decl.params.first() {
-        let set0 = inference.params[decl_index][0];
+        let set0 = inference.param(decl_index, 0);
         let locals = local_binds(decl);
         let folds = crate::linear::fold_spellings(program);
         if set0 != 0
@@ -1427,7 +1427,7 @@ fn arg_ok(
     // the first parameter: a fold written `go n xs` carries its counter first
     // and the list it is building second, which is the ordinary shape.
     if let Some(Pattern::Var(own, _)) = decl.params.get(position) {
-        let set = inference.params[decl_index][position];
+        let set = inference.param(decl_index, position);
         let locals = local_binds(decl);
         if set != 0
             && set & !FAIL & !LIST == 0
@@ -1464,7 +1464,7 @@ fn group_param_set(
         .iter()
         .enumerate()
         .filter(|(_, d)| d.name == name && d.params.len() == arity)
-        .fold(0, |acc, (i, _)| acc | inference.params[i][position])
+        .fold(0, |acc, (i, _)| acc | inference.param(i, position))
 }
 
 /// Does `name` appear as a function value — an identifier outside call-head

@@ -150,4 +150,19 @@
 # declaration for what that declaration calls, and holds one flat vector plus a
 # start per declaration now. It takes 8,310 bytes off compile_peak_bytes with
 # it, where the other three leave the peak alone.
-compile_allocs=38462
+#
+# 2026-08-30 (the two tables the fixpoint kept per declaration): 38,462 ->
+# 36,268, a fall of 2,194, or 5.7%. Banked, two pieces measured one at a time:
+#
+#   readers becomes a bitset               -1,343
+#   Inference::params goes flat              -851
+#
+# `readers[i]` was a `HashSet<usize>` per declaration saying who to wake, and
+# waking cloned it to release the borrow. It is one row of ceil(n/64) u64 per
+# declaration now. `Inference::params` was a `Vec<Set>` per declaration for one
+# to three `u16`, and is one flat vector plus starts.
+#
+# The two move compile_peak_bytes in opposite directions — the bitset costs
+# 6,096 bytes and the params table gives 7,556 back — and ship together for
+# that reason.
+compile_allocs=36268

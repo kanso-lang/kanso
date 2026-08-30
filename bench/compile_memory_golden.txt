@@ -62,6 +62,17 @@
 # The three borrowed-name pieces in the same change leave this row alone, which
 # is right: a `String` built to answer a question and dropped is traffic rather
 # than residency, and compile_allocs is the row that sees it.
+#
+# 2026-08-30 (the two tables the fixpoint kept per declaration): 735,254 ->
+# 733,794, a fall of 1,460, or 0.2%, and it is two moves that nearly cancel.
+# The reader bitset COSTS 6,096 bytes: n rows of ceil(n/64) u64 is 22,792 bytes
+# for lib/json's four hundred declarations, held for the compile where the hash
+# sets it replaces were sparse. Flattening `Inference::params` gives 7,556 back,
+# because a `Vec<Set>` per declaration was a header and a padded block for one
+# to three `u16`.
+#
+# Rounds and visits do not move, which is the check on the bitset: those two
+# counters are exactly what a wake set that woke a different set would change.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=735254
+compile_peak_bytes=733794
