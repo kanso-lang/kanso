@@ -356,10 +356,27 @@ pub fn infer(program: &Program) -> Inference {
 /// fresh where the graph is acyclic, and a cycle costs rounds only for its
 /// own knot.
 fn callee_first(program: &Program) -> Vec<usize> {
-    let mut by_name: HashMap<&str, Vec<usize>> =
+    // The declarations sharing a name, as one flat vector and a range apiece.
+    // `by_name.entry(..).or_default().push(i)` allocated a `Vec` per DISTINCT
+    // name — 937 blocks for a table that is built once and only ever read.
+    // Sorting the pairs groups the arms of a name together, and within a name
+    // the indices stay ascending, which is the order the push loop gave them.
+    let mut by_name: HashMap<&str, (u32, u32)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for decl in &program.fns {
+        by_name.entry(decl.name.as_str()).or_insert((0, 0)).1 += 1;
+    }
+    let mut at = 0;
+    for slot in by_name.values_mut() {
+        let count = slot.1;
+        *slot = (at, at);
+        at += count;
+    }
+    let mut members: Vec<usize> = vec![0; program.fns.len()];
     for (i, decl) in program.fns.iter().enumerate() {
-        by_name.entry(decl.name.as_str()).or_default().push(i);
+        let slot = by_name.get_mut(decl.name.as_str()).expect("every name was counted");
+        members[slot.1 as usize] = i;
+        slot.1 += 1;
     }
     fn gather<'a>(expr: &'a Expr, names: &mut Vec<&'a str>) {
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
@@ -392,8 +409,8 @@ fn callee_first(program: &Program) -> Vec<usize> {
         names.dedup();
         starts.push(flat.len() as u32);
         for name in &names {
-            if let Some(targets) = by_name.get(name) {
-                flat.extend(targets);
+            if let Some(&(start, end)) = by_name.get(name) {
+                flat.extend_from_slice(&members[start as usize..end as usize]);
             }
         }
     }

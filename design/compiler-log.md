@@ -6038,3 +6038,83 @@ of the three was put in front of the mutation it exists to catch:
 
 The first mutation is exactly what a binding-power table would do. It costs
 nothing to write and the corpus said nothing about it until now.
+
+## 2026-08-30 — a vector per name, for a table that is only read
+
+dhat's map of the front end's remaining 34,682 allocation blocks put 937 of
+them on one line: `infer.rs:287`, the call to `callee_first`. That function
+builds the callee-first visit order the fixpoint sweeps in, and it opens with
+
+```rust
+let mut by_name: HashMap<&str, Vec<usize>> = ...;
+for (i, decl) in program.fns.iter().enumerate() {
+    by_name.entry(decl.name.as_str()).or_default().push(i);
+}
+```
+
+which is one `Vec` per DISTINCT declaration name. `lib/json` has about nine
+hundred of them, the table is built once and afterwards only read, and every
+one of those vectors holds a handful of `usize`.
+
+It is a flat `Vec<usize>` and a range per name now, the shape #1140 gave the
+dispatch table and #1150 gave the call table. The arms of a name land in it by
+a counting pass: count per name, turn the counts into starts, then walk the
+declarations once placing each index at its name's cursor. Within a name the
+indices come out ascending, which is the order `push` gave them, so the flat
+callee list the fixpoint reads is byte-identical.
+
+### The sort that did not work
+
+The obvious way to group is to sort `(name, index)` pairs, and that was
+measured first: allocations fell by 519 and instructions rose by **117,356**.
+Twelve hundred string comparisons through a comparison sort cost more than the
+nine hundred allocations they removed. The counting pass does the same
+grouping with two hash lookups per declaration and no comparisons.
+
+    the sort               44,608,501   34,163 allocs
+    the counting pass      44,427,648   34,158 allocs
+    as it stood            44,491,145   34,682 allocs
+
+### The numbers
+
+    compile_instructions  44,491,145 -> 44,427,648   -63,497  -0.14%  (local)
+    compile_allocs             34,682 ->     34,158      -524
+    compile_peak_bytes                     730,120   unmoved
+    front_end_rounds 40, front_end_visits 16,806   unmoved
+
+Both terms move the right way, which is what makes this one uncomplicated:
+welfare 86.94 -> 86.99.
+
+### Where the rest of the blocks are
+
+The same map, for the record, since two of the top four are gavel territory:
+
+    3,197  parser.rs:2127   the `String` in `Expr::Ident`, charged at parse_atom_base
+    3,157  lexer.rs:631     the `String` `lex_word` returns
+    1,100  parser.rs:2114   an application's argument vector, reserved and DECLINED
+    1,067  parser.rs:2121   the `Box` on an application's head
+      959  lib.rs:607       the prelude and the synthesised getters
+      937  infer.rs:287     this entry
+      644  trmc.rs:180      a `Vec` per group, the same shape as this one
+
+`trmc.rs:180` is left alone deliberately: its map is ITERATED to build the
+rewritten arms, so the order the table hands its keys back is part of what the
+compiler emits, and changing the value type changes that order. The emitted
+golden would catch it, but a reordering is not what 644 allocations are worth.
+
+### The runner's number
+
+    compile_instructions  44,130,291 -> 44,100,285   -30,006  -0.07%  (runner)
+                          44,491,145 -> 44,427,648   -63,497  -0.14%  (local)
+    compile_allocs                        34,158   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99289426525. The runner reads less than half the fall the
+container does, the widest the two have parted all day — every earlier change
+today agreed within a fifth. What differs between the hosts here is the cost
+of an allocation, and this change is almost entirely allocations: the
+counting pass and the `or_default().push` do nearly the same number of hash
+operations, so what is left is nine hundred mallocs, and a malloc is exactly
+the thing whose price is a property of the allocator and the machine rather
+than of the compiler. The allocation row, which is not host-dependent, agrees
+to the digit.
