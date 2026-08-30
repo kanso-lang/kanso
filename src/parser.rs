@@ -27,12 +27,12 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             }
             continue;
         }
-        if let Some((Tok::KwPub, _)) = line.tokens.first() {
+        if let Some((Tok::KwPub, _, _)) = line.tokens.first() {
             // pointing `play` at a pub-play library is a wrong-verb
             // mistake, not a wrong-file one; say which door to use
             let says_play = matches!(
                 line.tokens.get(1),
-                Some((Tok::Ident(name), _)) if name == "play"
+                Some((Tok::Ident(name), _, _)) if name == "play"
             );
             let said = match says_play {
                 true => {
@@ -62,7 +62,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         // a library's job — needing one is where a little program graduates
         // to `kanso run`.
         let declares =
-            matches!(line.tokens.first(), Some((Tok::KwImport | Tok::KwFn | Tok::KwType, _)));
+            matches!(line.tokens.first(), Some((Tok::KwImport | Tok::KwFn | Tok::KwType, _, _)));
         in_decl = declares;
         match declares {
             true => decl_lines.push(line.clone()),
@@ -131,7 +131,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             continue;
         }
         match line.tokens.first() {
-            Some((Tok::KwImport, _)) => {
+            Some((Tok::KwImport, _, _)) => {
                 if first_stmt.is_some() {
                     diags.push(Diagnostic::new(
                         "formatting",
@@ -155,7 +155,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                     Err(d) => diags.push(d),
                 }
             }
-            Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _)) => {
+            Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _, _)) => {
                 diags.push(Diagnostic::new(
                     "syntax",
                     "an entry file holds statements only; definitions live in \
@@ -188,7 +188,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         for line in &lexed.lines[start..] {
             if line.indent != 0
                 && lexed.blank_lines.contains(&(line.number - 1))
-                && matches!(line.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _)))
+                && matches!(line.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _, _)))
             {
                 diags.push(Diagnostic::new(
                     "formatting",
@@ -259,27 +259,27 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             }
         }
         let body = &lexed.lines[body_start..body_end];
-        if !matches!(line.tokens.first(), Some((Tok::KwImport, _))) {
+        if !matches!(line.tokens.first(), Some((Tok::KwImport, _, _))) {
             past_imports = true;
         }
         let head_idx = match line.tokens.first() {
-            Some((Tok::KwPub, _)) => 1,
+            Some((Tok::KwPub, _, _)) => 1,
             _ => 0,
         };
         let is_constant = matches!(
             (line.tokens.get(head_idx), line.tokens.get(head_idx + 1)),
-            (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
+            (Some((Tok::Ident(_), _, _)), Some((Tok::Bind, _, _)))
         );
         match line.tokens.get(head_idx) {
-            Some((Tok::KwFn, _)) => match parse_fn(line, body) {
+            Some((Tok::KwFn, _, _)) => match parse_fn(line, body) {
                 Ok(decl) => fns.push(decl),
                 Err(d) => diags.push(d),
             },
-            Some((Tok::KwType, _)) => match parse_type(line, body) {
+            Some((Tok::KwType, _, _)) => match parse_type(line, body) {
                 Ok(decl) => types.push(decl),
                 Err(d) => diags.push(d),
             },
-            Some((Tok::KwImport, _)) => {
+            Some((Tok::KwImport, _, _)) => {
                 match parse_import(line, body) {
                     Ok(import) => {
                         if past_imports {
@@ -305,12 +305,12 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 i = body_end;
                 continue;
             }
-            Some((Tok::Ident(_), _)) if is_constant => match parse_constant(line, body) {
+            Some((Tok::Ident(_), _, _)) if is_constant => match parse_constant(line, body) {
                 Ok(decl) => fns.push(decl),
                 Err(d) => diags.push(d),
             },
             // `pub name` / `pub theirs:yours` — a re-export, nothing else
-            Some((Tok::Ident(_), _)) if head_idx == 1 => match parse_reexport(line, body) {
+            Some((Tok::Ident(_), _, _)) if head_idx == 1 => match parse_reexport(line, body) {
                 Ok(reexport) => reexports.push(reexport),
                 Err(d) => diags.push(d),
             },
@@ -321,7 +321,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             _ => diags.push(Diagnostic::new(
                 "syntax",
                 match line.tokens.first() {
-                    Some((Tok::Ident(_), _)) => {
+                    Some((Tok::Ident(_), _, _)) => {
                         "a file with declarations is a library, and a library has no \
                          statements to run — `kanso play` runs declarations beside \
                          statements in one file"
@@ -355,21 +355,21 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
         _ => Err(Diagnostic::new("syntax", "an import path is a plain string".to_string(), span)),
     };
     match line.tokens.as_slice() {
-        [(Tok::KwImport, _), (Tok::Str(parts), span)] => {
+        [(Tok::KwImport, _, _), (Tok::Str(parts), span, _)] => {
             let path = plain_path(parts, *span)?;
             Ok(Import { path, span: *span, alias: None, renames: Vec::new() })
         }
         // import t "path" — alias the qualifier
-        [(Tok::KwImport, _), (Tok::Ident(alias), _), (Tok::Str(parts), span)] => {
+        [(Tok::KwImport, _, _), (Tok::Ident(alias), _, _), (Tok::Str(parts), span, _)] => {
             let path = plain_path(parts, *span)?;
             Ok(Import { path, span: *span, alias: Some(alias.clone()), renames: Vec::new() })
         }
         // import { theirs:yours ... } "path" — renames only; a bare word in
         // braces is redundant (the compiler prunes; bare access is default)
-        [(Tok::KwImport, _), (Tok::LBrace, brace_span), rest @ ..] => {
+        [(Tok::KwImport, _, _), (Tok::LBrace, brace_span, _), rest @ ..] => {
             let (renames, i) = parse_renames(rest, *brace_span)?;
             match rest.get(i) {
-                Some((Tok::Str(parts), span)) if rest.len() == i + 1 && !renames.is_empty() => {
+                Some((Tok::Str(parts), span, _)) if rest.len() == i + 1 && !renames.is_empty() => {
                     let path = plain_path(parts, *span)?;
                     Ok(Import { path, span: *span, alias: None, renames })
                 }
@@ -381,10 +381,11 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
             }
         }
         // import t { theirs:yours ... } "path" — alias and renames combined
-        [(Tok::KwImport, _), (Tok::Ident(alias), _), (Tok::LBrace, brace_span), rest @ ..] => {
+        [(Tok::KwImport, _, _), (Tok::Ident(alias), _, _), (Tok::LBrace, brace_span, _), rest @ ..] =>
+        {
             let (renames, i) = parse_renames(rest, *brace_span)?;
             match rest.get(i) {
-                Some((Tok::Str(parts), span)) if rest.len() == i + 1 && !renames.is_empty() => {
+                Some((Tok::Str(parts), span, _)) if rest.len() == i + 1 && !renames.is_empty() => {
                     let path = plain_path(parts, *span)?;
                     Ok(Import { path, span: *span, alias: Some(alias.clone()), renames })
                 }
@@ -406,25 +407,25 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
 /// The brace body of an import: `theirs:yours` pairs, tight colons, closed
 /// by `}`. Returns the pairs and the index just past the closing brace.
 fn parse_renames(
-    rest: &[(Tok, Span)],
+    rest: &[(Tok, Span, u32)],
     brace_span: Span,
 ) -> Result<(Vec<(String, String)>, usize), Diagnostic> {
     let mut renames = Vec::new();
     let mut i = 0;
     loop {
         match rest.get(i) {
-            Some((Tok::RBrace, _)) => {
+            Some((Tok::RBrace, _, _)) => {
                 i += 1;
                 break;
             }
-            Some((Tok::Ident(theirs), _)) => match rest.get(i + 1) {
-                Some((Tok::Colon, _)) => match rest.get(i + 2) {
-                    Some((Tok::Ident(yours), _)) => {
+            Some((Tok::Ident(theirs), _, _)) => match rest.get(i + 1) {
+                Some((Tok::Colon, _, _)) => match rest.get(i + 2) {
+                    Some((Tok::Ident(yours), _, _)) => {
                         renames.push((theirs.clone(), yours.clone()));
                         i += 3;
                     }
                     other => {
-                        let span = other.map(|(_, s)| *s).unwrap_or(brace_span);
+                        let span = other.map(|(_, s, _)| *s).unwrap_or(brace_span);
                         return Err(Diagnostic::new(
                             "syntax",
                             "a rename is theirs:yours".to_string(),
@@ -433,7 +434,7 @@ fn parse_renames(
                     }
                 },
                 other => {
-                    let span = other.map(|(_, s)| *s).unwrap_or(brace_span);
+                    let span = other.map(|(_, s, _)| *s).unwrap_or(brace_span);
                     return Err(Diagnostic::new(
                         "syntax",
                         "an unrenamed selection is redundant — the compiler \
@@ -445,7 +446,7 @@ fn parse_renames(
                 }
             },
             other => {
-                let span = other.map(|(_, s)| *s).unwrap_or(brace_span);
+                let span = other.map(|(_, s, _)| *s).unwrap_or(brace_span);
                 return Err(Diagnostic::new(
                     "syntax",
                     "braces hold theirs:yours renames".to_string(),
@@ -468,10 +469,10 @@ fn parse_reexport(line: &Line, body: &[Line]) -> Result<crate::ast::Reexport, Di
         ));
     }
     match line.tokens.as_slice() {
-        [(Tok::KwPub, _), (Tok::Ident(name), span)] => {
+        [(Tok::KwPub, _, _), (Tok::Ident(name), span, _)] => {
             Ok(crate::ast::Reexport { name: name.clone(), rename: None, span: *span })
         }
-        [(Tok::KwPub, _), (Tok::Ident(theirs), span), (Tok::Colon, _), (Tok::Ident(yours), _)] => {
+        [(Tok::KwPub, _, _), (Tok::Ident(theirs), span, _), (Tok::Colon, _, _), (Tok::Ident(yours), _, _)] => {
             Ok(crate::ast::Reexport {
                 name: theirs.clone(),
                 rename: Some(yours.clone()),
@@ -487,7 +488,7 @@ fn parse_reexport(line: &Line, body: &[Line]) -> Result<crate::ast::Reexport, Di
 }
 
 fn head_span(line: &Line) -> Span {
-    line.tokens.first().map(|(_, s)| *s).unwrap_or(Span::at(line.number, 1))
+    line.tokens.first().map(|(_, s, _)| *s).unwrap_or(Span::at(line.number, 1))
 }
 
 fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
@@ -518,19 +519,19 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
             .iter()
             .filter(|b| **b > pair[0].number && **b < pair[1].number)
             .count();
-        let both_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _)))
-            && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _)));
+        let both_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _, _)))
+            && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _, _)));
         let decl_start =
-            matches!(pair[1].tokens.first(), Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _)))
+            matches!(pair[1].tokens.first(), Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _, _)))
                 || matches!(
                     (pair[1].tokens.first(), pair[1].tokens.get(1)),
-                    (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
+                    (Some((Tok::Ident(_), _, _)), Some((Tok::Bind, _, _)))
                 );
         // A top-level line that declares nothing is a statement, and a module
         // has no room for one. The parse names that and names the verb that
         // does; a blank-line complaint here would describe a rule the author
         // did not break.
-        let imports_here = matches!(pair[1].tokens.first(), Some((Tok::KwImport, _)));
+        let imports_here = matches!(pair[1].tokens.first(), Some((Tok::KwImport, _, _)));
         if pair[1].indent == 0 && !decl_start && !imports_here {
             continue;
         }
@@ -553,7 +554,7 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
 }
 
 fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
-    let mut p = P::new(&header.tokens, &header.end_cols, header.number);
+    let mut p = P::new(&header.tokens, header.number);
     let is_pub = p.consume_pub();
     p.expect_kw_fn()?;
     let (name, span) = match p.peek() {
@@ -586,22 +587,22 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
 }
 
 fn is_else_line(line: &Line) -> bool {
-    matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
+    matches!(line.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "else")
 }
 
 /// `name = if cond` / `pub name = build`, the constant forms that open a block.
-fn is_block_head(tokens: &[(Tok, Span)]) -> bool {
-    let off = usize::from(matches!(tokens.first(), Some((Tok::KwPub, _))));
+fn is_block_head(tokens: &[(Tok, Span, u32)]) -> bool {
+    let off = usize::from(matches!(tokens.first(), Some((Tok::KwPub, _, _))));
     matches!(
         tokens.get(off..off + 3),
-        Some([(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _)]) if w == "if" || w == "build"
+        Some([(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _)]) if w == "if" || w == "build"
     )
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
-    let is_pub = matches!(header.tokens.first(), Some((Tok::KwPub, _)));
+    let is_pub = matches!(header.tokens.first(), Some((Tok::KwPub, _, _)));
     let off = usize::from(is_pub);
-    let Some((Tok::Ident(name), span)) = header.tokens.get(off) else {
+    let Some((Tok::Ident(name), span, _)) = header.tokens.get(off) else {
         return Err(Diagnostic::new(
             "syntax",
             "expected a constant name".to_string(),
@@ -642,7 +643,6 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             number: header.number,
             indent: header.indent,
             tokens: header.tokens[off..].to_vec(),
-            end_cols: header.end_cols[off..].to_vec(),
         };
         let stmt = parse_block_construct(&bare, children, else_children)?;
         let Stmt::Bind { expr, .. } = stmt else {
@@ -665,7 +665,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             head_span(&body[0]),
         ));
     }
-    let mut p = P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number);
+    let mut p = P::new(&header.tokens[off + 2..], header.number);
     let expr = p.parse_expr()?;
     p.expect_done()?;
     Ok(FnDecl {
@@ -680,7 +680,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
-    let mut p = P::new(&header.tokens, &header.end_cols, header.number);
+    let mut p = P::new(&header.tokens, header.number);
     let is_pub = p.consume_pub();
     p.expect_kw_type()?;
     let (name, span) = p.expect_ident("a type name")?;
@@ -746,7 +746,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
-    let mut p = P::new(&line.tokens, &line.end_cols, line.number);
+    let mut p = P::new(&line.tokens, line.number);
     let (name, span) = p.expect_ident("a field name")?;
     // an unannotated field is unconstrained, the same thing an unnamed
     // parameter's absent annotation says
@@ -780,7 +780,7 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
 /// folds everything after it into the untaken branch of a compiler-built
 /// conditional — the body below a fired guard is unreachable, not skipped.
 fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
-    let is_return = |line: &Line| matches!(line.tokens.first(), Some((Tok::KwReturn, _)));
+    let is_return = |line: &Line| matches!(line.tokens.first(), Some((Tok::KwReturn, _, _)));
     // a construct owns the deeper lines beneath it, so the leading run is
     // walked at the top indent and skips past a block's body
     // each unit is a leading line plus whatever it owns beneath it, so a
@@ -805,7 +805,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             }
             // an `else` at the header's own indent belongs to the block above
             let is_else_line =
-                |l: &Line| matches!(l.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
+                |l: &Line| matches!(l.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "else");
             if body.get(i).is_some_and(|l| l.indent == base && is_else_line(l)) {
                 i += 1;
                 while i < body.len() && body[i].indent > base {
@@ -856,7 +856,7 @@ fn parse_return(line: &Line) -> Result<(Expr, Expr, Span), Diagnostic> {
     let span = line.tokens[0].1;
     let mut depth = 0usize;
     let mut splits = Vec::new();
-    for (i, (tok, _)) in line.tokens.iter().enumerate().skip(1) {
+    for (i, (tok, _, _)) in line.tokens.iter().enumerate().skip(1) {
         match tok {
             Tok::LParen | Tok::LGroup | Tok::LBracket | Tok::LBrace => depth += 1,
             Tok::RParen | Tok::RGroup | Tok::RBracket | Tok::RBrace => {
@@ -873,10 +873,10 @@ fn parse_return(line: &Line) -> Result<(Expr, Expr, Span), Diagnostic> {
         };
         return Err(Diagnostic::new("formatting", message.to_string(), span));
     };
-    let mut early_p = P::new(&line.tokens[1..*at], &line.end_cols[1..*at], line.number);
+    let mut early_p = P::new(&line.tokens[1..*at], line.number);
     let early = early_p.parse_expr()?;
     early_p.expect_done()?;
-    let mut cond_p = P::new(&line.tokens[*at + 1..], &line.end_cols[*at + 1..], line.number);
+    let mut cond_p = P::new(&line.tokens[*at + 1..], line.number);
     let cond = cond_p.parse_expr()?;
     cond_p.expect_done()?;
     Ok((cond, early, span))
@@ -894,7 +894,7 @@ fn parse_effect_body(body: &[Line], lead_binds: &[Line]) -> Result<Vec<Stmt>, Di
 /// `else` at its own indent and the stray-continuation fallback.
 fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_else =
-        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
+        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "else");
     let mut out = Vec::new();
     let mut idx = 0;
     while idx < body.len() {
@@ -909,15 +909,15 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             continue;
         }
         let children = &body[idx + 1..j];
-        let head_is_block = matches!(body[idx].tokens.as_slice(), [(Tok::Ident(w), _), ..] if w == "if" || w == "build")
+        let head_is_block = matches!(body[idx].tokens.as_slice(), [(Tok::Ident(w), _, _), ..] if w == "if" || w == "build")
             || matches!(
                 body[idx].tokens.as_slice(),
-                [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _), ..] if w == "if" || w == "build"
+                [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _), ..] if w == "if" || w == "build"
             );
         if !head_is_block
             && children
                 .iter()
-                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _))))
+                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _, _))))
         {
             out.push(parse_stmt(&body[idx])?);
             idx += 1;
@@ -941,9 +941,9 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
 }
 
 fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
-    let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _)]);
+    let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _, _)]);
     let is_else =
-        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
+        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "else");
     // group lines into units: a wall line, or a statement that may own the
     // deeper lines under it (an if/else block construct)
     enum Unit<'a> {
@@ -967,7 +967,7 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             ));
         }
         if j == idx + 1 {
-            match is_wall(line) || matches!(line.tokens.first(), Some((Tok::SeqOp, _))) {
+            match is_wall(line) || matches!(line.tokens.first(), Some((Tok::SeqOp, _, _))) {
                 true => units.push(Unit::Wall(line)),
                 false => units.push(Unit::Parsed(parse_stmt(line)?)),
             }
@@ -978,15 +978,15 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
         // chain-led deeper lines under a non-`if` head are stray
         // continuations, diagnosed elsewhere — keep them flat units so the
         // real diagnostic stands alone
-        let head_is_if = matches!(body[idx].tokens.as_slice(), [(Tok::Ident(w), _), ..] if w == "if")
+        let head_is_if = matches!(body[idx].tokens.as_slice(), [(Tok::Ident(w), _, _), ..] if w == "if")
             || matches!(
                 body[idx].tokens.as_slice(),
-                [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _), ..] if w == "if"
+                [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _), ..] if w == "if"
             );
         if !head_is_if
             && children
                 .iter()
-                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _))))
+                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _, _))))
         {
             units.push(Unit::Parsed(parse_stmt(line)?));
             idx += 1;
@@ -1104,7 +1104,8 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 continue;
             }
         };
-        let fused = matches!(line.tokens.first(), Some((Tok::SeqOp, _))) && line.tokens.len() > 1;
+        let fused =
+            matches!(line.tokens.first(), Some((Tok::SeqOp, _, _))) && line.tokens.len() > 1;
         let span = line.tokens[0].1;
         if segments.last().is_some_and(Vec::is_empty) {
             return Err(Diagnostic::new(
@@ -1120,7 +1121,7 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             true => {
                 // `>> expr` is a COMPLETE sequential step: wall plus its one
                 // member, closed — nothing may silently join it
-                let mut p = P::new(&line.tokens[1..], &line.end_cols[1..], line.number);
+                let mut p = P::new(&line.tokens[1..], line.number);
                 let expr = p.parse_expr()?;
                 p.expect_done()?;
                 reject_never_effect(&expr, is_final_unit)?;
@@ -1178,15 +1179,15 @@ fn parse_block_construct(
     children: &[Line],
     else_children: Option<&[Line]>,
 ) -> Result<Stmt, Diagnostic> {
-    let head_is_if = matches!(head.tokens.as_slice(), [(Tok::Ident(w), _), ..] if w == "if")
+    let head_is_if = matches!(head.tokens.as_slice(), [(Tok::Ident(w), _, _), ..] if w == "if")
         || matches!(
             head.tokens.as_slice(),
-            [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _), ..] if w == "if"
+            [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _), ..] if w == "if"
         );
-    let head_is_build = matches!(head.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "build")
+    let head_is_build = matches!(head.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "build")
         || matches!(
             head.tokens.as_slice(),
-            [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _)] if w == "build"
+            [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _)] if w == "build"
         );
     if head_is_build {
         return parse_build(head, children, else_children);
@@ -1225,7 +1226,7 @@ fn parse_block_construct(
         None => {
             let mut args = Vec::new();
             for child in children {
-                if child.tokens.iter().any(|(t, _)| matches!(t, Tok::Bind)) {
+                if child.tokens.iter().any(|(t, _, _)| matches!(t, Tok::Bind)) {
                     return Err(Diagnostic::new(
                         "formatting",
                         "a branch that binds names needs the block form: put \
@@ -1234,7 +1235,7 @@ fn parse_block_construct(
                         head_span(child),
                     ));
                 }
-                let mut p = P::new(&child.tokens, &child.end_cols, child.number);
+                let mut p = P::new(&child.tokens, child.number);
                 let expr = p.parse_expr()?;
                 p.expect_done()?;
                 args.push(expr);
@@ -1303,7 +1304,7 @@ fn parse_build(
         ));
     }
     let stmts = parse_build_body(children)?;
-    if let [(Tok::Ident(name), nspan), (Tok::Bind, _), _] = head.tokens.as_slice() {
+    if let [(Tok::Ident(name), nspan, _), (Tok::Bind, _, _), _] = head.tokens.as_slice() {
         return Err(Diagnostic::new(
             "syntax",
             format!(
@@ -1318,12 +1319,12 @@ fn parse_build(
 
 fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_else =
-        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
+        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "else");
     let mut stmts = Vec::new();
     let mut idx = 0;
     while idx < body.len() {
         let line = &body[idx];
-        if matches!(line.tokens.first(), Some((Tok::SeqOp, _))) {
+        if matches!(line.tokens.first(), Some((Tok::SeqOp, _, _))) {
             return Err(Diagnostic::new(
                 "syntax",
                 "a `build` body already runs top to bottom; `>>` walls have \
@@ -1429,7 +1430,7 @@ fn expr_span(e: &Expr) -> Span {
 fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
     let mut depth = 0usize;
     let mut bind_at = None;
-    for (i, (tok, _)) in line.tokens.iter().enumerate() {
+    for (i, (tok, _, _)) in line.tokens.iter().enumerate() {
         match tok {
             Tok::LParen | Tok::LGroup | Tok::LBracket | Tok::LBrace => depth += 1,
             Tok::RParen | Tok::RGroup | Tok::RBracket | Tok::RBrace => {
@@ -1443,23 +1444,25 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
         }
     }
     let Some(i) = bind_at else {
-        let mut p = P::new(&line.tokens, &line.end_cols, line.number);
+        let mut p = P::new(&line.tokens, line.number);
         let expr = p.parse_expr()?;
         p.expect_done()?;
         return Ok(Stmt::Expr(expr));
     };
     // `a.next = b` writes a field. Mutation lives in a build block and nowhere
     // else, which the checker enforces exactly as it does for the older form.
-    if let [(Tok::Ident(target), _), (Tok::Dot, _), (Tok::Ident(field), span)] = &line.tokens[..i] {
-        let mut rhs = P::new(&line.tokens[i + 1..], &line.end_cols[i + 1..], line.number);
+    if let [(Tok::Ident(target), _, _), (Tok::Dot, _, _), (Tok::Ident(field), span, _)] =
+        &line.tokens[..i]
+    {
+        let mut rhs = P::new(&line.tokens[i + 1..], line.number);
         let value = rhs.parse_expr()?;
         rhs.expect_done()?;
         return Ok(Stmt::Set { target: target.clone(), field: field.clone(), value, span: *span });
     }
-    let mut lhs = P::new(&line.tokens[..i], &line.end_cols[..i], line.number);
+    let mut lhs = P::new(&line.tokens[..i], line.number);
     let pattern = lhs.parse_bind_target()?;
     lhs.expect_done()?;
-    let mut rhs = P::new(&line.tokens[i + 1..], &line.end_cols[i + 1..], line.number);
+    let mut rhs = P::new(&line.tokens[i + 1..], line.number);
     let expr = rhs.parse_expr()?;
     rhs.expect_done()?;
     Ok(Stmt::Bind { pattern, expr })
@@ -1567,8 +1570,7 @@ fn level(op: &str) -> u8 {
 }
 
 pub struct P<'a> {
-    toks: &'a [(Tok, Span)],
-    ends: &'a [usize],
+    toks: &'a [(Tok, Span, u32)],
     pub pos: usize,
     line: usize,
     /// The loosest operator consumed since the enclosing `(`. A paren scope
@@ -1578,7 +1580,7 @@ pub struct P<'a> {
 
 impl<'a> P<'a> {
     fn tok_at(&self, i: usize) -> Option<&Tok> {
-        self.toks.get(i).map(|(tok, _)| tok)
+        self.toks.get(i).map(|(tok, _, _)| tok)
     }
 
     /// An operator was taken at this level; the loosest one inside the
@@ -1587,26 +1589,26 @@ impl<'a> P<'a> {
         self.loosest = self.loosest.min(level);
     }
 
-    pub fn new(toks: &'a [(Tok, Span)], ends: &'a [usize], line: usize) -> Self {
-        P { toks, ends, pos: 0, line, loosest: ATOM }
+    pub fn new(toks: &'a [(Tok, Span, u32)], line: usize) -> Self {
+        P { toks, pos: 0, line, loosest: ATOM }
     }
 
     fn last_end(&self) -> usize {
         match self.pos {
             0 => 0,
-            n => self.ends.get(n - 1).copied().unwrap_or(0),
+            n => self.toks.get(n - 1).map_or(0, |t| t.2 as usize),
         }
     }
 
     fn peek(&self) -> Option<&Tok> {
-        self.toks.get(self.pos).map(|(t, _)| t)
+        self.toks.get(self.pos).map(|(t, _, _)| t)
     }
 
     fn span_here(&self) -> Span {
         self.toks
             .get(self.pos)
             .or_else(|| self.toks.last())
-            .map(|(_, s)| *s)
+            .map(|(_, s, _)| *s)
             .unwrap_or(Span::at(self.line, 1))
     }
 
@@ -1625,7 +1627,7 @@ impl<'a> P<'a> {
         // A lambda is always parenthesised, so a bare one leaves its arrow
         // where nothing can take it. Saying only that something is left over
         // sends the reader looking at the body.
-        let message = match self.toks.get(self.pos).map(|(t, _)| t) {
+        let message = match self.toks.get(self.pos).map(|(t, _, _)| t) {
             Some(Tok::Arrow) => {
                 "a lambda is parenthesised: `f = (x -> …)`, not `f = x -> …`".to_string()
             }
@@ -1666,7 +1668,7 @@ impl<'a> P<'a> {
 
     fn expect_ident(&mut self, what: &str) -> Result<(String, Span), Diagnostic> {
         match self.toks.get(self.pos) {
-            Some((Tok::Ident(name), span)) => {
+            Some((Tok::Ident(name), span, _)) => {
                 self.pos += 1;
                 Ok((name.clone(), *span))
             }
@@ -1744,7 +1746,7 @@ impl<'a> P<'a> {
 
     pub fn parse_pattern(&mut self) -> Result<Pattern, Diagnostic> {
         let span = self.span_here();
-        match self.toks.get(self.pos).map(|(t, _)| t.clone()) {
+        match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
             Some(Tok::Int(n)) => {
                 self.pos += 1;
                 Ok(Pattern::IntLit(n, span))
@@ -2084,7 +2086,7 @@ impl<'a> P<'a> {
         // `_.name` is an atom; a bare `_` is not, so the pipe hole and the
         // wildcard pattern keep the meanings they already have
         if matches!(self.peek(), Some(Tok::Underscore))
-            && matches!(self.toks.get(self.pos + 1).map(|(t, _)| t), Some(Tok::Dot))
+            && matches!(self.toks.get(self.pos + 1).map(|(t, _, _)| t), Some(Tok::Dot))
         {
             return true;
         }
@@ -2125,7 +2127,8 @@ impl<'a> P<'a> {
             if matches!(self.peek(), Some(Tok::Dot)) {
                 let span = self.span_here();
                 self.pos += 1;
-                let Some(Tok::Ident(name)) = self.toks.get(self.pos).map(|(t, _)| t.clone()) else {
+                let Some(Tok::Ident(name)) = self.toks.get(self.pos).map(|(t, _, _)| t.clone())
+                else {
                     return Err(self.err("a field name follows the dot".to_string()));
                 };
                 self.pos += 1;
@@ -2138,7 +2141,7 @@ impl<'a> P<'a> {
             // with something in it is the C-shaped call the lexer refuses.
             let runs = matches!(self.peek(), Some(Tok::LParen))
                 && self.span_here().col as usize == self.last_end()
-                && matches!(self.toks.get(self.pos + 1).map(|(t, _)| t), Some(Tok::RParen));
+                && matches!(self.toks.get(self.pos + 1).map(|(t, _, _)| t), Some(Tok::RParen));
             if runs {
                 let span = self.span_here();
                 self.pos += 2;
@@ -2174,14 +2177,14 @@ impl<'a> P<'a> {
         // not one a program can write, which is what keeps a field from
         // taking a name away from anything else.
         if matches!(self.peek(), Some(Tok::Underscore))
-            && matches!(self.toks.get(self.pos + 1).map(|(t, _)| t), Some(Tok::Dot))
+            && matches!(self.toks.get(self.pos + 1).map(|(t, _, _)| t), Some(Tok::Dot))
         {
-            if let Some((Tok::Ident(field), _)) = self.toks.get(self.pos + 2).cloned() {
+            if let Some((Tok::Ident(field), _, _)) = self.toks.get(self.pos + 2).cloned() {
                 self.pos += 3;
                 return Ok(Expr::Ident(crate::ast::getter_name(&field), span));
             }
         }
-        match self.toks.get(self.pos).map(|(t, _)| t.clone()) {
+        match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
             Some(Tok::Int(n)) => {
                 self.pos += 1;
                 Ok(Expr::Int(n, span))
@@ -2196,7 +2199,7 @@ impl<'a> P<'a> {
             }
             Some(Tok::Op("&")) => {
                 self.pos += 1;
-                match self.toks.get(self.pos).map(|(t, _)| t.clone()) {
+                match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
                     Some(Tok::Ident(name)) => {
                         self.pos += 1;
                         Ok(Expr::Partial(name, span))
@@ -2277,7 +2280,7 @@ impl<'a> P<'a> {
                 if let Some(arrow_end) = self.lambda_lookahead() {
                     let mut params = Vec::new();
                     while self.pos < arrow_end {
-                        if let Some((Tok::Underscore, uspan)) = self.toks.get(self.pos) {
+                        if let Some((Tok::Underscore, uspan, _)) = self.toks.get(self.pos) {
                             params.push(("_".to_string(), *uspan));
                             self.pos += 1;
                             continue;
@@ -2393,11 +2396,11 @@ impl<'a> P<'a> {
     fn lambda_lookahead(&self) -> Option<usize> {
         let mut i = self.pos;
         while matches!(
-            self.toks.get(i).map(|(t, _)| t),
+            self.toks.get(i).map(|(t, _, _)| t),
             Some(Tok::Ident(_)) | Some(Tok::Underscore)
         ) {
             i += 1;
-            if let Some(Tok::Arrow) = self.toks.get(i).map(|(t, _)| t) {
+            if let Some(Tok::Arrow) = self.toks.get(i).map(|(t, _, _)| t) {
                 return Some(i);
             }
         }
@@ -2419,8 +2422,8 @@ fn literal_string(parts: &[StrPart]) -> Option<String> {
 fn template_part(part: &StrPart, line: usize) -> Result<TemplatePart, Diagnostic> {
     match part {
         StrPart::Lit(s) => Ok(TemplatePart::Lit(s.clone())),
-        StrPart::Interp(tokens, ends) => {
-            let mut p = P::new(tokens, ends, line);
+        StrPart::Interp(tokens) => {
+            let mut p = P::new(tokens, line);
             let expr = p.parse_expr()?;
             p.expect_done()?;
             Ok(TemplatePart::Interp(expr))

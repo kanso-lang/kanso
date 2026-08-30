@@ -4846,3 +4846,80 @@ The dhat allocation map, re-run after #1139–#1141 took the front end from
 was 2,172 of them, the fourth line down. Reading the function to see whether
 the vector could go is what found the index units. The bug was not what the map
 was looking for; a map of where the work is answers questions nobody asked it.
+
+## 2026-08-30 — a token and the column it ends at are one vector
+
+`Line` carried `tokens: Vec<(Tok, Span)>` beside `end_cols: Vec<usize>`. The
+two were always the same length, and twelve places in `src/parser.rs` sliced
+them:
+
+```rust
+P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number)
+P::new(&line.tokens[1..*at],      &line.end_cols[1..*at],      line.number)
+```
+
+All twelve slice both the same way — that was checked before the change, and
+there is no bug here to fix. What there is, is a pair that has to be kept in
+step by hand, in the file where a character index and a byte index had just
+been found disagreeing. `Vec<(Tok, Span, u32)>` cannot fall out of step.
+
+### What it costs and returns
+
+```
+compile_allocs        48,356 -> 46,998    -1,358   -2.8%
+compile_peak_bytes             742,572    unmoved
+docs/kanso.wasm    1,661,716 -> 1,657,340   -4,376 bytes
+```
+
+The fall is larger than the 1,117 blocks dhat attributed to `end_cols`'
+growth, and the extra is where the map could not see it: `StrPart::Interp`
+carried the identical pair — `Interp(Vec<(Tok, Span)>, Vec<usize>)` — so every
+interpolation in the program paid it again. That variant is one field now, and
+`template_part` hands `P::new` one slice where it used to hand two.
+
+Peak does not move, which is the right answer rather than a disappointing one.
+A `(Tok, Span, u32)` pads to the same width the pair occupied across two
+allocations, so what goes is the second header and the second doubling
+sequence, not the bytes the tokens themselves need.
+
+### What did not change
+
+Every output gate is green: the emitted golden, the machine-code golden and
+all eight work rows, plus decode, encode, escape, one-shot, basket, wide,
+pending-cell and scan counters. The compiler writes the same program and every
+benchmark does the same work. This is the front end's own bookkeeping and
+nothing a user can observe, which is why it ships with no fixture of its own —
+the corpus that already pins every diagnostic in the tree is the test, and
+`check_needless_continuation` and `validate_spacing` were both rewritten
+against it.
+
+The diff is 162 lines added against 181 removed. A merge that removes more
+than it adds is the shape to expect when two things that were always equal
+stop being written down twice.
+
+### The neighbouring vector is DECLINED, and the reason is the same family
+
+`lex_line` builds a `Vec<char>` per source line — 1,997 allocation blocks, the
+next item down the map after this one. It stays, and the reason is one line:
+
+```rust
+fn span(&self) -> Span { Span::at(self.line, self.col_offset + self.pos) }
+```
+
+`pos` IS the column. The vector is not indexing convenience; it is what makes
+every token's column a character count, which is what a caret under a source
+line has to be. Three ways to remove it were considered and all three are
+worse:
+
+- **Byte offsets alone.** Every token's column goes wrong by the number of
+  multi-byte characters before it on the line. That is the bug this file was
+  just fixed for twice, reintroduced at every token rather than at one fence.
+- **Compute the column when a span is made**, `content[..byte].chars().count()`.
+  O(byte) per token, so quadratic in line length, to save one linear collect.
+- **Carry a byte position beside the character one.** Fourteen sites advance
+  `pos`, two of them by two characters at a time, and the byte width of what
+  they skip is not known at the site. That is the shape this entry removes,
+  at fourteen places instead of twelve, with a harder invariant.
+
+So the vector is the cheapest way to have the thing it buys, and this is a
+declined idea rather than an open one.
