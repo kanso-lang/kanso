@@ -497,6 +497,40 @@ struct Scanner {
     col_offset: usize,
 }
 
+thread_local! {
+    /// Character buffers a `Scanner` borrows and gives back.
+    ///
+    /// `pos` is the column a caret goes under, so the scanner indexes
+    /// characters rather than bytes and has to have the line as a `Vec<char>`
+    /// to do it. Collecting a fresh one per line was 1,997 of the front end's
+    /// allocation blocks, for a vector that dies at the end of the line it was
+    /// built for.
+    ///
+    /// A pool rather than one buffer, because scanners nest: an interpolation
+    /// lexes its inner text with a scanner of its own while the outer scanner
+    /// still holds the line the interpolation is written on. The pool ends up
+    /// holding one buffer per level of nesting reached, each grown to the
+    /// longest line it ever took.
+    static CHAR_BUFS: std::cell::RefCell<Vec<Vec<char>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+impl Scanner {
+    fn new(content: &str, line: usize, col_offset: usize) -> Scanner {
+        let mut chars = CHAR_BUFS.with(|pool| pool.borrow_mut().pop()).unwrap_or_default();
+        chars.extend(content.chars());
+        Scanner { chars, pos: 0, line, col_offset }
+    }
+}
+
+impl Drop for Scanner {
+    fn drop(&mut self) {
+        let mut chars = std::mem::take(&mut self.chars);
+        chars.clear();
+        CHAR_BUFS.with(|pool| pool.borrow_mut().push(chars));
+    }
+}
+
 /// A statement whose last token is a text block: the part before the `"""`
 /// lexes as an ordinary line, and the block's lines become one string token
 /// spanning them. The token's own span stays on the opening line, where the
@@ -513,7 +547,7 @@ fn lex_line_with_block(
     let mut parts = Vec::new();
     let mut lit = String::new();
     for (number, text) in body {
-        let mut s = Scanner { chars: text.chars().collect(), pos: 0, line: *number, col_offset: 1 };
+        let mut s = Scanner::new(text, *number, 1);
         s.block_text(&mut parts, &mut lit)?;
         lit.push('\n');
     }
@@ -532,8 +566,12 @@ fn lex_line_with_block(
 }
 
 fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, Diagnostic> {
-    let mut s = Scanner { chars: content.chars().collect(), pos: 0, line, col_offset };
-    let mut tokens = Vec::new();
+    let mut s = Scanner::new(content, line, col_offset);
+    // Eight, because a `Vec` starting empty reaches four and then doubles, and
+    // the doubling was 434 allocation blocks on lib/json. Sixteen takes 156
+    // more and puts 9.7% on compile_peak_bytes, which a line vector kept for
+    // the whole parse pays for; eight leaves the peak where it was.
+    let mut tokens = Vec::with_capacity(8);
     while s.pos < s.chars.len() {
         let c = s.chars[s.pos];
         let span = s.span();

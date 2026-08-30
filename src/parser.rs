@@ -1746,15 +1746,16 @@ impl<'a> P<'a> {
 
     pub fn parse_pattern(&mut self) -> Result<Pattern, Diagnostic> {
         let span = self.span_here();
-        match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
+        match self.toks.get(self.pos).map(|(t, _, _)| t) {
             Some(Tok::Int(n)) => {
+                let n = n.clone();
                 self.pos += 1;
                 Ok(Pattern::IntLit(n, span))
             }
             Some(Tok::Str(parts)) => {
-                self.pos += 1;
-                let lit = literal_string(&parts)
+                let lit = literal_string(parts)
                     .ok_or_else(|| self.err("string patterns may not interpolate".to_string()))?;
+                self.pos += 1;
                 Ok(Pattern::StrLit(lit, span))
             }
             Some(Tok::Underscore) => {
@@ -1789,6 +1790,7 @@ impl<'a> P<'a> {
                 Ok(Pattern::Wildcard(span))
             }
             Some(Tok::Ident(name)) => {
+                let name = name.clone();
                 self.pos += 1;
                 if matches!(self.peek(), Some(Tok::Colon)) {
                     let colon_span = self.span_here();
@@ -2184,23 +2186,29 @@ impl<'a> P<'a> {
                 return Ok(Expr::Ident(crate::ast::getter_name(&field), span));
             }
         }
-        match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
+        // `self.toks` is a `&'a [_]`, so the token this reads out borrows the
+        // slice rather than `self`, and the arms below are free to move `pos`.
+        // Cloning the token to match on it copied the `String` inside every
+        // identifier — 3,788 of the front end's allocation blocks — for the
+        // three arms that go on to want it, and for every arm that does not.
+        match self.toks.get(self.pos).map(|(t, _, _)| t) {
             Some(Tok::Int(n)) => {
                 self.pos += 1;
-                Ok(Expr::Int(n, span))
+                Ok(Expr::Int(n.clone(), span))
             }
             Some(Tok::Float(x)) => {
                 self.pos += 1;
-                Ok(Expr::Float(x, span))
+                Ok(Expr::Float(*x, span))
             }
             Some(Tok::Ident(name)) => {
                 self.pos += 1;
-                Ok(Expr::Ident(name, span))
+                Ok(Expr::Ident(name.clone(), span))
             }
             Some(Tok::Op("&")) => {
                 self.pos += 1;
-                match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
+                match self.toks.get(self.pos).map(|(t, _, _)| t) {
                     Some(Tok::Ident(name)) => {
+                        let name = name.clone();
                         self.pos += 1;
                         Ok(Expr::Partial(name, span))
                     }

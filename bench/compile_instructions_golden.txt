@@ -605,4 +605,21 @@
 # up, because compile speed reads the mean of this row's ratio and
 # compile_allocs's, and 2.4% off the allocations outweighs 0.056% on the
 # instructions several times over.
-compile_instructions=52201308
+#
+# 2026-08-30  52,201,308 -> 51,126,817   -1,074,491   -2.06%, banked, and it
+# is the four per-iteration vectors: 3,985 fewer allocations, and the allocator
+# rows move the way that predicts. `_int_free` 2,796,241 -> 2,580,177, `malloc`
+# 1,969,739 -> 1,790,546, `free` 1,258,040 -> 1,146,488, `__rust_alloc` 892,814
+# -> 852,633 — 547,000 between them, half the fall. `_int_malloc` and
+# `malloc_consolidate` hold, which is what says the fastbin churn the previous
+# entry describes did not come back.
+#
+# Two rows rise and both are the price of a reused buffer: `lex_line` 749,824
+# -> 777,023 (+27,199) for taking a buffer from the pool and giving it back per
+# line, and `infer::infer` 1,167,175 -> 1,186,509 (+19,334) for clearing the
+# gather vector. 46,000 instructions of bookkeeping against 1,074,000 saved.
+#
+# `eval_expr`, `check_merged` and `__memcmp_avx2_movbe` are byte-identical,
+# which is right for a change no pass but the lexer, the parser and one
+# function of infer can see.
+compile_instructions=51126817

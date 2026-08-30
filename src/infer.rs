@@ -315,8 +315,14 @@ fn callee_first(program: &Program) -> Vec<usize> {
         crate::for_each_child(expr, |child| gather(child, names));
     }
     let mut calls: Vec<Vec<usize>> = vec![Vec::new(); program.fns.len()];
+    // Outside the loop and cleared, rather than built inside it. The vector
+    // holds borrowed names and dies at the end of each declaration, so a fresh
+    // one per declaration was 1,367 allocation blocks for a buffer that is the
+    // same size and shape every time round. Reused, it grows once to the
+    // largest declaration and stays there.
+    let mut names: Vec<&str> = Vec::new();
     for (i, decl) in program.fns.iter().enumerate() {
-        let mut names: Vec<&str> = Vec::new();
+        names.clear();
         for stmt in &decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => gather(expr, &mut names),
@@ -325,7 +331,7 @@ fn callee_first(program: &Program) -> Vec<usize> {
         }
         names.sort_unstable();
         names.dedup();
-        for name in names {
+        for name in &names {
             if let Some(targets) = by_name.get(name) {
                 calls[i].extend(targets);
             }
