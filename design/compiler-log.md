@@ -4659,3 +4659,66 @@ in the file — one other line groups heap tags, and it renders `K_CLOSURE` and
 `K_FNREF` alike as `<fn>`, which is a display question and not a lifetime one.
 The deep copier already had its `K_SUB` arm; only the predicate that decides
 whether to call it was short.
+
+### What the repair cost, and what a second look returned
+
+The one-case fix is not free, and the reason is the opposite of what a reader
+would guess. `k_is_heap` is inlined into `k_slots_survive` and through it into
+`k_copy_size`, which is 36% of deepbench — so the predicate's SHAPE decides how
+that walk compiles. Five shapes were measured in the container:
+
+    with the bug                            806,982,208
+    the switch, plus one `case K_SUB:`      856,510,441   +6.14%
+    a mask carrying a bounds branch         878,869,219   +8.90%
+    `k_slots_survive` given its own switch  856,510,441   +6.14%
+    the mask that ships                     850,361,281   +5.38%
+
+deepbench never makes a subtype — `k_sub` appears nowhere in its profile, and
+`k_survives_x` and `k_ptrmap_at` are byte-identical across the change. Same
+walk, same calls, same counts, more instructions. A tenth `case` was worth
+49,528,233 instructions on a benchmark that cannot reach the tag.
+
+That 5.38% cost welfare 0.03, and the ruling in `scripts/welfare/welfare.kso`
+is that welfare cannot fall. The entry went to design/pending-gavels.md as a
+blocking question. It has been WITHDRAWN, unruled, because looking one level
+further down dissolved it.
+
+`k_copy_size` returns zero for an immediate and for nothing else without
+looking at it, so a caller walking a container can skip the call entirely.
+deepbench folds over lists of ints; the call it made per element existed only
+to return zero. Six sites — three in `k_copy_size`, three in `k_repair_size` —
+now test `k_worth_sizing` first:
+
+    with the bug                     806,982,208
+    the fix alone                    850,361,281   +5.38%
+    the fix and the skip             760,471,453   -5.77% against the bug
+
+Against origin/main, on the runner:
+
+    work_deepbench    806,985,948 -> 760,475,193   -46,510,755   -5.76%
+    work_widebench     85,273,589 ->  83,967,604    -1,305,985   -1.53%
+    work_encodebench 9,866,843,915 -> 9,866,614,705   -229,210
+    work_basket        57,436,178 ->  57,392,199       -43,979
+    work_pendbench    987,907,671 -> 988,282,947      +375,276   +0.038%
+    work_escapebench  258,574,097 -> 258,583,100        +9,003
+    work_jsonbench  2,910,241,430 -> 2,910,241,528          +98
+    work_oneshot       47,277,061 ->  47,277,156          +95
+
+`work_pendbench` is the only row that pays for the skip rather than the mask,
+and it pays for exactly what it is: the lazy benchmark's slots hold thunks,
+`k_worth_sizing` answers yes for a thunk, so every element takes the new test
+AND still makes the call. 392,848 instructions of a test that never saves one,
+against 46.5 million saved on the benchmark whose slots are ints. The other
+three risers — `work_escapebench`, `work_jsonbench`, `work_oneshot` — are
+identical between the fix alone and the fix with the skip, so their movement is
+the predicate's shape in programs whose copy walk is cold, not the skip.
+
+`compile_instructions` falls 3,097 (54,507,708 -> 54,504,611) and the machine
+code falls 1,328 bytes net: the mask removes about four hundred bytes from
+every benchmark and `k_worth_sizing` adds back 240 to each.
+
+Welfare is 85.22 against a floor of 85.19, and the floor is moved in this same
+PR. The blocking entry is gone from the ledger with no ruling recorded, because
+none was needed in the end — which is the outcome the escalation was supposed
+to have, and the reason to escalate the moment a question is found rather than
+after exhausting it.

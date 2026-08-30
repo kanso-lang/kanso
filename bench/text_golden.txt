@@ -312,11 +312,20 @@
 # Banked. The predicate is inlined into `k_slots_survive` and through it into
 # `k_copy_size`, so the table was emitted into every program that links the
 # runtime.
-jsonbench text=80850
-encodebench text=97874
-oneshot text=97922
-basket text=89554
-widebench text=98930
-deepbench text=63250
-escapebench text=49666
-pendbench text=73858
+#
+# 2026-08-30 (the sizing walk's skip): 653,824 across the eight, a rise of
+# 1,920 — 240 bytes in every one of them, to the byte. `k_worth_sizing` is a
+# new inline predicate and six call sites in `k_copy_size` and
+# `k_repair_size` gained a test before their recursive call. The evenness is
+# the same reason as the entry above: src/runtime.c is embedded whole, so
+# every program that links the runtime carries the same added bytes whether
+# its own walk reaches them or not. Bought 89,889,828 instructions on
+# deepbench.
+jsonbench text=81090
+encodebench text=98114
+oneshot text=98162
+basket text=89794
+widebench text=99170
+deepbench text=63490
+escapebench text=49906
+pendbench text=74098
