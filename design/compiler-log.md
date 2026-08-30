@@ -3985,3 +3985,47 @@ the runner against -419 in the container: opposite signs on one diff, layout.
 The arm is a branch on a walk that already ran, and `lib/json` declares no
 typeset, so the borrowed set is empty and the branch never fires on the
 measured path.
+## 2026-08-29 — `fields.is_empty()` is not the same question as "is this a value"
+
+The typeset sweep turned up a second divergence one name over. `type age int`
+is a subtype, and:
+
+```
+pub play = print "{age}"
+```
+
+compiles clean, prints `<fn>` on the interpreter, and prints `<mod>/age` on
+native. The page refuses the name outright — "unsupported name `<mod>/age`" —
+which is what the differential law permits and what native was not doing.
+
+The emitter's test for "this name IS a value" was `fields.is_empty()`, meant
+for `type unit`: a record type with no fields describes one thing, and naming
+it builds it. A subtype has no fields either, and so does a typeset, so both
+were emitted as nullary records of their own type id. A one-field record
+renders as its name and its field, and a zero-field one renders as its name,
+which is why the output looked like an echo of the program.
+
+The test asks for three things now — no fields, no parent, no members — and a
+subtype falls through to the refusal native has always given for a record type
+that HAS fields. Three programs pin it: the subtype, the nullary record that
+must keep working, and the record-with-fields whose older refusal the new one
+borrows.
+
+The sweep that found both is worth its four lines. Every name a program can
+write bare, on both engines:
+
+```
+length          <fn>   <fn>      a builtin
+list/map        <fn>   <fn>      an imported group
+twice           <fn>   <fn>      a declared group
+err             refused, identically, by both — it has no line to record
+point           refused by native as its own limit; `<fn>` on the oracle
+&point, &age    refused by native, the sentence kanso#1128 wrote
+unit            `unit` on both — a nullary record IS a value
+shape           `<mod>/shape` on native, `<fn>` on the oracle  (typeset)
+age             `<mod>/age`   on native, `<fn>` on the oracle  (subtype)
+```
+
+Nine shapes, two wrong, and both wrong the same way: a type name that carries
+no fields and is not a nullary record. The typeset half is refused at the
+front door by the entry above; this is the other half.

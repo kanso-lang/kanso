@@ -2939,7 +2939,22 @@ impl<'a> Backend<'a> {
                 if let Some(temp) = f.lookup(name) {
                     return Ok(temp);
                 }
-                if self.program.types.iter().any(|t| t.name == *name && t.fields.is_empty()) {
+                // A record type with no fields IS a value: `type unit` names one
+                // thing and naming it builds it. A subtype and a typeset also
+                // carry no fields, and neither is that — a subtype's name takes
+                // one argument, and a typeset never constructs at all. Both
+                // reached this arm and were emitted as nullary records, so
+                // `print "{age}"` for `type age int` printed `<mod>/age` where
+                // the oracle prints `<fn>` and the page refuses the name. It
+                // falls through to the bare-value refusal below now, which is
+                // what native already said for a record type that HAS fields.
+                let nullary_record = |t: &crate::ast::TypeDecl| {
+                    t.name == *name
+                        && t.fields.is_empty()
+                        && t.parent.is_none()
+                        && t.members.is_empty()
+                };
+                if self.program.types.iter().any(nullary_record) {
                     let id = self.type_ids[name.as_str()];
                     let arr = f.tmp();
                     f.line(&format!("{arr} = alloca [1 x %KValue]"));
