@@ -5894,6 +5894,18 @@ wrong import.
 Smaller than #1154's, and it should be: two of the twenty-four run per
 identifier occurrence and the rest run once per declaration.
 
+### The runner's number
+
+    compile_instructions  44,483,421 -> 44,130,291  -353,130  -0.79%  (runner)
+                          44,778,375 -> 44,491,145  -287,230  -0.64%  (local)
+    compile_allocs                        34,682   unmoved, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99276951052. The runner reads the fall a fifth larger than
+the container does, the widest the two have parted on this vein today; both
+directions of the slash family are pattern-search setup, and setup is where a
+host divergence lands.
+
 ## 2026-08-30 — DECLINED: the ascii fast path in the scanner
 
 `Scanner::new` turns a line of source into the `Vec<char>` the lexer reads with
