@@ -265,8 +265,13 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             Err(d) => diags.push(d),
         }
     }
+    // One buffer for the whole file. `check_needless_continuation` groups a
+    // line's tokens by source line to measure what the statement would be one
+    // line wide, and it wants a vector to do it; a fresh one per line was 702
+    // allocation blocks for a scratch that dies at the end of the call.
+    let mut pieces = Vec::new();
     for line in &lines {
-        check_needless_continuation(line, &mut diags);
+        check_needless_continuation(line, &mut pieces, &mut diags);
         check_partial_chain(line, &mut diags);
     }
     if diags.is_empty() {
@@ -428,8 +433,12 @@ fn check_partial_chain(line: &Line, diags: &mut Vec<Diagnostic>) {
 
 /// One meaning, one rendering: a statement split across `.` continuation
 /// lines is only legal when the spliced one-line form would not fit.
-fn check_needless_continuation(line: &Line, diags: &mut Vec<Diagnostic>) {
-    let mut pieces: Vec<(usize, usize, Span)> = Vec::new();
+fn check_needless_continuation(
+    line: &Line,
+    pieces: &mut Vec<(usize, usize, Span)>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    pieces.clear();
     for (_, span, end) in &line.tokens {
         let end = *end as usize;
         match pieces.last_mut() {

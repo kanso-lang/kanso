@@ -184,4 +184,14 @@
 # nothing. Two declarations' worth of room per declaration was measured against
 # eight, and eight is WORSE (49,336,704 against 49,348,198 local instructions)
 # because a larger table probes further.
-compile_allocs=35639
+#
+# 2026-08-30 (the last per-line scratch): 35,639 -> 34,945, a fall of 694, or
+# 1.9%. Banked. `check_needless_continuation` groups a line's tokens by source
+# line to ask what the statement would measure one line wide, and built a
+# `Vec<(usize, usize, Span)>` to do it — per line of every file compiled, for a
+# scratch that dies at the end of the call, and usually after one push and an
+# early return. One buffer for the file, cleared per line.
+#
+# Its two neighbours in the same loop were read and left: `check_partial_chain`
+# and `validate_spacing` allocate nothing at all.
+compile_allocs=34945

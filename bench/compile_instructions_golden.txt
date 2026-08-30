@@ -673,4 +673,16 @@
 #
 # `lex_line`, `eval_expr` and `memrchr` are byte-identical. Nothing here touches
 # the lexer or the fixpoint.
-compile_instructions=48743776
+#
+# 2026-08-30  48,743,776 -> 48,582,098   -161,678   -0.33%, banked. 694 fewer
+# allocations, and the allocator rows are the whole of it: `_int_free`
+# 2,284,655 -> 2,210,015, `malloc` 1,588,013 -> 1,529,690, `_int_malloc`
+# 2,808,434 -> 2,788,486, `free` 998,200 -> 978,768, `__rust_alloc` 755,343 ->
+# 739,381, some 190,000 between them against a fall of 161,678, with the
+# difference being the vector's own bookkeeping now paid once per file rather
+# than once per line.
+#
+# `lex_line` is byte-identical at 777,023, which is right: the vector this
+# removes was built in the loop AFTER lexing, not inside it. `eval_expr`,
+# `check_merged` and `infer` are byte-identical too.
+compile_instructions=48582098
