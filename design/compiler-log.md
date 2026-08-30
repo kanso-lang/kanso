@@ -2805,3 +2805,34 @@ for a pointer chase was not.
 Welfare 87.4654 -> 87.4740, banked with `--set` — three hundredths of a point
 on the compile-speed term, which is what a 0.39% fall is worth at this end of
 the satiation curve. The page's two `data-golden` compile figures move with it.
+
+## 2026-08-30 — two playground tests, one file
+
+`tests/playground.rs` failed once during a full run with
+`the interpreter failed on the hello example: a play file needs at least one
+statement to run`. The example is one line and runs fine; the file the
+subprocess read was empty.
+
+`written` staged every example into one fixed directory,
+`kanso-playground-test/<name>.kso`. Two of the three tests in that binary write
+files, they run on separate threads of one process, and both write the same
+fourteen names. `std::fs::write` truncates and then fills, so a subprocess
+spawned by one test can read the file the other is part-way through rewriting.
+
+### The chain, each link measured
+
+- an empty `.kso` produces exactly that diagnostic, byte for byte;
+- the truncate window is wide — a reader racing a rewriter on this filesystem
+  saw an empty file on 28,055 of 35,205 reads, 79.7%;
+- the two tests write the same paths, which is plain from the code.
+
+What the window does not explain on its own is the rate: running the playground
+suite alone, twelve times, fails zero times either way. The tests spend almost
+all of their time in subprocesses rather than inside `written`, so the two
+threads are rarely in that window together — the observed failure came during a
+full `cargo test` with a valgrind run and two compiles alongside it. A rare
+race is still a race, and it fails on whichever test loses.
+
+One directory per test. The fix is four lines and the argument for it is the
+mechanism rather than a failure count, which is the honest way round for a race
+this thin.
