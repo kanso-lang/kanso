@@ -2704,3 +2704,43 @@ before, whitespace normalised.
 `scripts/page_drift` counts `+## ` lines in the log's diff since the page's
 last commit, so a trim — which only deletes from that file — cannot move its
 number. It reads 0/3 here because the page moved in #1165.
+
+## 2026-08-30 — the last two tables of the shape
+
+#1165's entry named two that were left, and said what stood in the way:
+`check_literal_arguments`' `Vec<&FnDecl>` per group and `advisory.rs`'s
+`Vec<usize>` per name, both read through walks that take the table as a
+parameter. Both are done, and the obstacle was smaller than it read.
+
+**A tuple key cannot be probed with a borrowed name; a `&str` key can.**
+`HashMap<&'a str, V>::get` accepts any `&str` because `&'a str: Borrow<str>`,
+so a struct with a named lifetime still answers a lookup from a shorter one.
+`HashMap<(&'a str, usize), V>` gets no such implementation, which is why the
+literal-argument groups had to be rekeyed rather than merely flattened: the
+ranges are keyed by NAME, and each arm's arity travels beside its index in the
+flat vector, so `arms(name, arity)` slices the name's range and filters. Group
+sizes are two or three, so the filter is cheaper than the second hash the tuple
+key would have cost.
+
+**advisory's table needed only the flattening.** It was already keyed by name,
+and it skips synthetic declarations — so the counts are an upper bound and a
+group whose synthetic arms were dropped leaves cells nothing reads, the same
+slack the arity tables carry.
+
+### The numbers
+
+    compile_instructions  43,353,124 -> 43,302,778   -50,346  -0.12%  (local)
+    compile_allocs             30,406 ->     29,876      -530   -1.7%
+    compile_peak_bytes                     730,120   unmoved
+
+Split: the literal-argument groups 349 blocks and 10,222 instructions, the
+advisory groups 181 and 40,124. The instruction split runs opposite to the
+block split, and the reason is where each table is read. advisory's is asked
+once per identifier in every expression the door analysis types; the
+literal-argument one is asked only at applications whose callee is a bare
+name. A table's cost is the reads, and the allocations are what building it
+happened to take.
+
+No table in the front end now holds a `Vec` per key. Eight of them went over
+four changes — #1161, #1162, #1165 and this one — for 3,204 allocation blocks
+between them: 524, 1,302, 848 and 530.

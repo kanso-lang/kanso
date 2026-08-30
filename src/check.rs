@@ -2067,12 +2067,54 @@ fn arity_walk_expr(
 /// and says nothing where an argument is anything else. What it catches is
 /// the call that could never have worked, reported where the author wrote it
 /// instead of when the value arrives.
-fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for decl in &program.fns {
-        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(decl);
+/// The arms of each dispatch group, keyed by NAME so a `&str` borrows for the
+/// lookup, with each arm's arity carried beside its index. A `Vec<&FnDecl>`
+/// per (name, arity) was an allocation for a list of two or three references,
+/// and a tuple key cannot be probed with a borrowed name the way a `&str` can.
+struct LiteralGroups<'a> {
+    ranges: HashMap<&'a str, (u32, u32)>,
+    flat: Vec<(usize, u32)>,
+    fns: &'a [FnDecl],
+}
+
+impl<'a> LiteralGroups<'a> {
+    fn of(program: &'a Program) -> LiteralGroups<'a> {
+        let mut ranges: HashMap<&str, (u32, u32)> =
+            HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+        for decl in &program.fns {
+            ranges.entry(decl.name.as_str()).or_insert((0, 0)).1 += 1;
+        }
+        let mut at = 0;
+        for slot in ranges.values_mut() {
+            let count = slot.1;
+            *slot = (at, at);
+            at += count;
+        }
+        let mut flat = vec![(0usize, 0u32); program.fns.len()];
+        for (i, decl) in program.fns.iter().enumerate() {
+            let slot = ranges.get_mut(decl.name.as_str()).expect("every arm was counted");
+            flat[slot.1 as usize] = (decl.params.len(), i as u32);
+            slot.1 += 1;
+        }
+        LiteralGroups { ranges, flat, fns: &program.fns }
     }
+
+    /// The arms of `name` that take `arity` parameters, in declaration order.
+    fn arms(&self, name: &str, arity: usize) -> impl Iterator<Item = &FnDecl> + '_ {
+        let (start, end) = self.ranges.get(name).copied().unwrap_or((0, 0));
+        self.flat[start as usize..end as usize]
+            .iter()
+            .filter(move |(a, _)| *a == arity)
+            .map(|(_, i)| &self.fns[*i as usize])
+    }
+
+    fn has(&self, name: &str, arity: usize) -> bool {
+        self.arms(name, arity).next().is_some()
+    }
+}
+
+fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let groups = LiteralGroups::of(program);
     let types: HashMap<&str, &TypeDecl> =
         program.types.iter().map(|t| (t.name.as_str(), t)).collect();
     // Borrowed for the walk: the map is keyed by an owned name, and looking
@@ -2218,7 +2260,7 @@ fn type_admits(ty: &str, kind: LitKind, types: &HashMap<&str, &TypeDecl>) -> boo
 
 fn literal_walk_stmt(
     stmt: &Stmt,
-    groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
+    groups: &LiteralGroups,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
     builtins: &HashMap<(&str, usize), &str>,
@@ -2233,7 +2275,7 @@ fn literal_walk_stmt(
 
 fn literal_walk_expr(
     e: &Expr,
-    groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
+    groups: &LiteralGroups,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
     builtins: &HashMap<(&str, usize), &str>,
@@ -2262,7 +2304,7 @@ fn literal_walk_expr(
                 // `text/chars 5` answered a bare runtime string: not a
                 // decision, an accident of which names have wrappers.
                 let forwards = alias.is_some();
-                let shadowed = !forwards && groups.contains_key(&(name.as_str(), args.len()));
+                let shadowed = !forwards && groups.has(name, args.len());
                 for (i, arg) in args.iter().enumerate() {
                     let Some(kind) = literal_kind(arg) else { continue };
                     let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {
@@ -2282,15 +2324,15 @@ fn literal_walk_expr(
                         ));
                     }
                 }
-                if let Some(arms) = groups.get(&(name.as_str(), args.len())) {
+                if groups.has(name, args.len()) {
                     for (i, arg) in args.iter().enumerate() {
                         let Some(kind) = literal_kind(arg) else { continue };
-                        let admitted = arms.iter().any(|a| {
+                        let admitted = groups.arms(name, args.len()).any(|a| {
                             a.params.get(i).is_some_and(|p| pattern_admits(p, kind, types))
                         });
                         if !admitted {
-                            let wanted: Vec<String> = arms
-                                .iter()
+                            let wanted: Vec<String> = groups
+                                .arms(name, args.len())
                                 .filter_map(|a| a.params.get(i))
                                 .map(describe_pattern)
                                 .collect();
