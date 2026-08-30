@@ -272,7 +272,7 @@ pub fn infer(program: &Program) -> Inference {
     // count in the twenties turns a clone here into thousands of allocations
     // that only ever serve as a lookup key.
     let fns = &program.fns;
-    let mut env: HashMap<&str, Set> = HashMap::default();
+    let mut env = Env::default();
     let mut param_sets: Vec<Set> = Vec::new();
     // Every function is visited the first round; after that only the ones a
     // change can reach. Four fifths of the visits in a settled fixpoint find
@@ -427,12 +427,55 @@ fn callee_first(program: &Program) -> Vec<usize> {
     order
 }
 
+/// The locals a declaration has bound, newest last.
+///
+/// This was a `HashMap<&str, Set>`, and it is the wrong shape for what it
+/// holds: a declaration binds a handful of names, and hashing a five-byte
+/// string costs more than walking a handful of them. Every child scope —
+/// a block, a lambda, a guard's untaken side — took a clone of it, which
+/// allocated a table and rehashed every entry into it; the clone is a
+/// memcpy now.
+///
+/// A bind pushes rather than replaces, so a name written twice appears
+/// twice and the search reads back to front. Lookup answers the same as
+/// the map did, and the vector cannot grow past the bind sites written in
+/// the declaration.
+#[derive(Clone, Default)]
+struct Env<'a>(Vec<(&'a str, Set)>);
+
+impl<'a> Env<'a> {
+    fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    fn insert(&mut self, name: &'a str, set: Set) {
+        self.0.push((name, set));
+    }
+
+    fn get(&self, name: &str) -> Option<Set> {
+        self.0.iter().rev().find(|(n, _)| *n == name).map(|&(_, s)| s)
+    }
+
+    fn contains_key(&self, name: &str) -> bool {
+        self.get(name).is_some()
+    }
+
+    /// A child scope: these bindings, with room for the ones it will add.
+    /// A plain clone sizes the vector to what it copied, so the child's
+    /// first bind reallocated it — 216 allocations over a compile.
+    fn child(&self, extra: usize) -> Env<'a> {
+        let mut out = Vec::with_capacity(self.0.len() + extra);
+        out.extend_from_slice(&self.0);
+        Env(out)
+    }
+}
+
 fn bind_pattern<'a>(
     pattern: &'a Pattern,
     joined: Set,
     type_fields: &[Vec<Set>],
     type_names: &HashMap<&'a str, usize>,
-    env: &mut HashMap<&'a str, Set>,
+    env: &mut Env<'a>,
 ) {
     match pattern {
         // generics never bind failures
@@ -480,7 +523,7 @@ fn pattern_catches(pat: &Pattern) -> Set {
     }
 }
 
-fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str, Set>) -> Set {
+fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut Env<'a>) -> Set {
     let mut result = NONE;
     for (index, stmt) in body.iter().enumerate() {
         match stmt {
@@ -510,7 +553,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
     result
 }
 
-fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, Set>) -> Set {
+fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
     work::visit();
     match expr {
         Expr::Int(..) => INT,
@@ -518,7 +561,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             // a child scope: block binds stay local to the branch
-            let mut env = env.clone();
+            let mut env = env.child(stmts.len());
             let mut result = NONE;
             for stmt in stmts {
                 match stmt {
@@ -604,7 +647,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
             DESC | (a & FAIL) | (b & FAIL)
         }
         Expr::Lambda { body, params, .. } => {
-            let mut inner = env.clone();
+            let mut inner = env.child(params.len());
             for (p, _) in params {
                 inner.insert(p, TOP & !FAIL);
             }
@@ -628,7 +671,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
         }
         Expr::Guard { cond, early, rest, .. } => {
             let c = eval_expr(ctx, cond, env);
-            let mut benv = env.clone();
+            let mut benv = env.child(rest.len());
             let taken = eval_expr(ctx, early, env);
             let not_taken = eval_body(ctx, rest, &mut benv);
             (c & FAIL) | taken | not_taken
@@ -659,9 +702,9 @@ fn numeric_result(a: Set, b: Set) -> Set {
     out
 }
 
-fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Set>) -> Set {
+fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
     if let Some(set) = env.get(name) {
-        return *set;
+        return set;
     }
     match name.strip_prefix("builtin_").unwrap_or(name) {
         "true" => TRUE,
@@ -725,7 +768,7 @@ fn eval_call<'a>(
     ctx: &mut Ctx<'a>,
     head: &'a Expr,
     args: &'a [Expr],
-    env: &mut HashMap<&'a str, Set>,
+    env: &mut Env<'a>,
     piped: bool,
 ) -> Set {
     // A `Set` is a u16 and a call's arity is almost always small, so the
@@ -766,7 +809,7 @@ fn eval_call<'a>(
     // crossed the ABI as a smuggled pointer. Step the beta: bind the
     // argument sets and walk the body.
     if let Expr::Lambda { params, body, .. } = head {
-        let mut inner = env.clone();
+        let mut inner = env.child(params.len());
         for ((p, _), set) in params.iter().zip(arg_sets.iter()) {
             inner.insert(p, *set & !FAIL);
         }

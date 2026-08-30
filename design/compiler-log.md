@@ -5702,3 +5702,51 @@ Copied out of job 99257297594, which also confirmed the allocation and peak
 rows to the digit. The two hosts disagree by 0.17 points of the fall — the
 container's glibc is the same version but the CPU is not, and the searcher's
 setup is where a host divergence would land.
+
+## 2026-08-30 — a hash map for four names
+
+Inference carries the locals a declaration has bound in a
+`HashMap<&str, Set>`, and asks it a question for every identifier in every
+body it walks. `callgrind --separate-callers=2` put three rows on it:
+
+    668,032  HashMap::get'infer::eval_expr'infer::infer
+    479,552  HashMap::insert'infer::bind_pattern'infer::infer
+    359,917  HashMap::contains_key'infer::eval_expr'infer::infer
+
+1.51 million instructions, 3.2% of the compile, for a map that is almost
+always tiny. Instrumented, `lib/json`'s deepest scope holds **seven** entries
+and the average lookup would walk 2.39 of them. The repo's own kanso programs
+agree: `scripts/welfare` peaks at 30 and averages 2.89, `prose_check` at 11 and
+2.77, `fingerprint` at 11 and 2.70, `trend_gate` at 16 and 2.41. The mean stays
+under three even where the maximum is thirty, because the name a body asks
+about is usually the one it just bound.
+
+So `Env` is a `Vec<(&str, Set)>` read back to front. A bind pushes rather than
+replaces, which gives shadowing for free and cannot grow past the bind sites
+written in the declaration. Lookup answers exactly what the map answered.
+
+### The clone was the point
+
+Every child scope — a block, a lambda's body, a guard's untaken side, an
+applied lambda's beta step — took `env.clone()`, and a `HashMap`'s clone
+allocates a table and rehashes every entry into it. A `Vec`'s clone is a
+memcpy.
+
+The first cut of this regressed allocations by 216, which is the sort of thing
+the counter is for. `Vec::clone` sizes to what it copied, so the child's first
+bind reallocated; the map's clone had carried its source's load-factor headroom
+and usually did not. `Env::child(extra)` takes the count the caller already
+knows — a block's statement count, a lambda's parameter count — and allocates
+once. Allocations come back to identical.
+
+### The numbers
+
+    compile_instructions  46,878,322 -> 45,764,825  -1,113,497  -2.38%  (local)
+    compile_allocs                        34,812   unmoved
+    compile_peak_bytes                   730,120   unmoved
+    front_end_rounds 40, front_end_visits 16,806   unmoved
+
+The three rows above held 1.51 million and the change returned 1.11 million, so
+this one read HIGH — the opposite of #1154, and for the same reason in reverse:
+a `HashMap::get` row is the whole lookup, where the searcher rows were only
+part of one. The vector's own scan is what is left.
