@@ -50,81 +50,11 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### What a digest costs, and whether it stays written in kanso
-
-**Cited: searched design/compiler-log.md (no sha256 entry), the archive (five
-entries, `A digest, and the import path that broke it` is the one that rules on
-this), and every design/*.md (none mention it). The rationale below is quoted
-from that archive entry; nothing has revisited it since.**
-
-`sha256/hex` holds the whole message. Peak arena is linear in the input at
-about six and a half thousand bytes per byte hashed, deterministic to the byte:
-
-    message   arena_peak_bytes   per byte
-      1,024          7,340,032      7,168
-      2,048         14,680,064      7,168
-      4,096         27,262,976      6,656
-      8,192         54,525,952      6,656
-     16,384         108,003,328      6,592
-     32,768         216,006,672      6,592
-     65,536         428,867,600      6,544
-
-The per-byte figure falls slowly and converges near 6,544, which is what a
-fixed per-block overhead amortising against a growing message looks like — one
-more piece of evidence that the cost is per-block retention rather than
-anything quadratic. At that rate `docs/kanso.wasm`, 1,604,098 bytes, predicts
-about 10.5 GB for the hash ALONE. The kernel's out-of-memory report for the
-whole `scripts/fingerprint` run read 13,954,684 kB, and the difference is the
-rest of that run — the byte list, the padded copy, the other assets, the site's
-pages. The two figures corroborate.
-
-A hash reads 64 bytes at a time and carries eight words of state, so peak
-should be flat. `cohort_frees=0` and `alloc_bytes` within half a per cent of
-`arena_peak_bytes` say what is happening: nothing is reclaimed for the length
-of the call. Eight candidate causes have been built as small programs and
-measured, and all eight hold the arena at the one-block floor — the in-place
-append (93.8% of appends already take the fast path), the module boundary, a
-list read while appended to, a long-lived indexed message, per-iteration list
-literals, and, tested inside the module itself, both forcing the state
-accumulator and removing the per-block thunk entirely. That last one takes
-`thunk_live_exit` from one-per-block to zero and moves peak by nothing. The log
-entry carries the full table. So the leak needs the real combination, and
-whoever takes this on has eight fewer places to look.
-
-WHY IT BLOCKS. `scripts/fingerprint` digests `docs/kanso.wasm`, now 1,604,098
-bytes, in the asset-digests CI job. That run was OOM-killed in a container at
-anon-rss 13,954,684 kB. It passes on the runner, so the runner has more
-headroom — but the headroom falls by about seven kilobytes for every byte added
-to the blob, and the blob has grown 23% since the archive entry was written.
-`tests/sha256_peak.rs` pins the figures so the next move is visible; it does
-not buy any headroom back.
-
-THE RATIONALE ON THE RECORD, verbatim from the archive: "a builtin would buy
-speed on a path that runs once per built file and nothing else." That entry
-measured the wall clock at 2.6 seconds and did not measure memory. The claim is
-sound about speed and silent about the dimension that turned out to bind.
-
-THREE ANSWERS, and this is the choice:
-
-1. **Reclaim inside a long call chain.** The most general, and it would pay
-   everywhere rather than here. Also the largest, and it touches the collector.
-2. **Restructure the block loop** in `lib/sha256/sha256.kso`. Contained, and it
-   keeps the module in kanso, which is the property the original entry was
-   protecting. TRIED, TWICE, AND IT MOVES NOTHING — see the recommendation.
-3. **Make the digest a builtin.** Smallest and surest, and it spends the thing
-   the archive entry declined to spend.
-
-RECOMMENDATION CHANGED, and the change is the point. It was 2, on the reasoning
-that a contained fix inside the module was cheap to try. Two versions of 2 have
-now been tried and both moved the peak by zero digits, which is what the eight
-killed hypotheses above amount to: the cost is not in a shape the module
-chooses, so rewriting the module is unlikely to reach it.
-
-So: **1**, and 3 only if 1 is judged too large to be worth one digest. The
-question that decides it is whether the arena's failure to rewind here is
-specific to this call or general, and nothing in the tree answers that today —
-which is itself an argument for looking, because a general answer is worth much
-more than a hash.
+Nothing. The section stays so the next entry has somewhere to land.
+(The sha256 digest question sat here briefly and was bounced on
+2026-08-29: performance questions with no surface area are the
+implementer's, per this file's own charter. The log carries the
+research mandate it left with.)
 
 
 ## Open, not blocking

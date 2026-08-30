@@ -2768,3 +2768,42 @@ type — and dispatch matches effect-typed values like any values. The
 `e:<config>effect` spelling exists for when an author wants to state
 the shape, never as a requirement. The intent bits stay at the words;
 nothing about this ruling ever lands in a signature.
+
+## 2026-08-29 — the digest question bounces: performance is never a gavel
+
+Clay, on being handed the sha256 arena question as "blocking": "you
+just have to figure it out, 'algorithmically'. this isn't a call that
+involves me. it doesn't affect the language surface area, it's just
+about performance and welfare metrics and you have the entirety of the
+field of computer science to draw from... if you iterate on this for
+an hour or two and cannot devise a solution from your vastly search
+ability across the totality of the internet, then that might call for
+my intervening. but i highly doubt that's going to happen."
+
+The entry violated the ledger's own charter — implementation details
+do not come to Clay — and the "blocking" label does not change whose
+question it is. It leaves the ledger and returns to the implementer
+with a mandate: survey the literature before touching the collector.
+Starting points the field already offers for exactly this shape (a
+loop-carried accumulator pinning a region for the length of a call):
+
+- MLKit's region inference with STORAGE MODE ANALYSIS — the classic
+  answer to "a region grows under iteration": infer where a store can
+  be `attop` (reset the region) rather than `atbot` (extend it). The
+  sha256 state accumulator is the textbook case.
+- Tofte–Talpin region resetting generally, and Aiken–Fähndrich–Levien
+  early deallocation, which decouples region death from lexical scope.
+- Koka's answer is Perceus: precise refcounting with drop-reuse, which
+  turns a functional update into an in-place one when the count is 1
+  — the same "this block is dead the moment the next one exists" fact
+  the eight killed hypotheses were circling. kanso declined refcounts,
+  but FBIP ("functional but in place") describes the target shape the
+  beat machinery could reach by its own means.
+- The project's own beat rewind is already a region reset at loop
+  granularity; the open engineering question is only why the digest's
+  per-block garbage is not being caught by it, and the eight measured
+  non-causes have narrowed where to look.
+
+Option 3 (builtin) stays available as the fallback the entry named,
+but only after the survey and an honest attempt at 1 fail. The
+tests/sha256_peak.rs pins stand so the next move is visible.
