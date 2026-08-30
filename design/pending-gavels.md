@@ -184,16 +184,24 @@ weighs an INLINE name against interning, and no ruling covers the type of an
 AST name field. Searched design/*.md for an existing entry on this and found
 none.**
 
-**The measurement.** dhat on `kanso check lib/json`, at 35,643 allocation blocks,
-puts three rows on one thing:
+**The measurement.** dhat on `kanso check lib/json` puts three rows on one
+thing, and they have not moved all day while everything around them has:
 
 ```
 3,197  parser.rs  Expr::Ident's String, cloned out of the token
 3,157  lexer.rs   the same String, built by lex_word
   629  parser.rs  Pattern::Var's String, same source
 ------
-6,983  19.6% of every allocation the front end makes
+6,983  21.3% of every allocation the front end makes
 ```
+
+The share is the part that moves. It read 19.6% of 35,643 blocks when this was
+filed; eight changes later dhat attributes 32,860 and these three rows are
+byte-identical, so the same 6,983 is now more than a fifth of what is left.
+(`compile_allocs` reads 32,856 on the same head — four blocks dhat's leaf-first
+attribution and the counter disagree about, which has held all day.) Every
+other item the map named has either been taken or been declined with a number.
+This is what the queue has run out of ways around.
 
 Every identifier in a program is heap-allocated once by the lexer and copied
 once into the AST. It is the largest single item left in the front end, and the
