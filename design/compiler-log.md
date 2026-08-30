@@ -4981,3 +4981,53 @@ the larger one: `discard.get(&(callee.clone(), args.len()))` fires at every
 `App` node the walk visits, where the build side fires once per declaration.
 Its borrow is easier than this one's — `discard_positions` already takes
 `&Program`.
+
+## 2026-08-30 — where the welfare headroom actually is
+
+The score is used two ways: as a gate, and afterwards to say which term paid.
+It answers a third question nobody had put to it — where work should go — and
+the answer is not what a day of this session's choices assumed.
+
+Each dimension's earned score against its ceiling, from the weights and
+satiations in `scripts/welfare/welfare.kso` and the goldens at `fb5bf7bc`:
+
+```
+dimension        ratio   satisf.   earns   ON TABLE
+run speed        28.72    0.935    28.05     1.95
+run memory      112.44    0.983    29.48     0.52
+compile speed     1.20    0.706    19.77     8.23
+compile memory    1.10    0.688     8.26     3.74
+                                   85.56
+```
+
+The total reproduces the live score to the digit, which is what says the
+reading is of the function rather than of an approximation to it.
+
+**11.97 of the 14.44 points still available sit in the two compile
+dimensions.** The benchmarks are 28.7 and 112.4 times their baselines and
+satiate at 2.0, so between them they hold 2.47 points. Compile speed sits at
+ratio 1.20 — barely off its baseline — and holds 8.23 alone, early satiation
+and all, because satiation only bites once a dimension has moved.
+
+This explains a scoreboard that otherwise reads backwards. Today's four
+changes:
+
+```
+#1143  a use-after-free repair, deepbench -5.76%     +0.03
+#1145  the text-block fence, compile_allocs -4.3%    +0.19
+#1146  one vector, compile_allocs -2.8%              +0.15
+#1147  trmc's keys borrow, compile_allocs -2.1%      +0.08
+```
+
+The runtime change is the largest single measurement of the four and worth the
+least, because a benchmark thirty times better than its baseline has almost
+nothing left to give the index. Three modest front-end changes outscore it
+six to one.
+
+What this licenses is choosing between two pieces of work that are both sound.
+It does not say a decoder regression stops mattering — the per-counter goldens
+are the tripwire for that and are untouched by any of this — and it cannot say
+anything about wall time, which the function leaves out and therefore weights
+at zero. The function is provisional and says so. But asked which end of the
+compiler to spend the next hour on, it has a clear answer, and the answer is
+the front end.
