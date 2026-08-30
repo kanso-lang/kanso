@@ -63,7 +63,13 @@ struct Ctx<'a> {
     /// Per declared type, the functions whose patterns destructure it — see
     /// `field_readers`. A field's set growing wakes these and nothing else.
     field_readers: Vec<Vec<usize>>,
-    groups: HashMap<(&'a str, usize), Vec<usize>>,
+    /// The arms a (name, arity) dispatches over, as a half-open range into
+    /// `group_members`. A range is two words and copies, so a call site can
+    /// take one and leave `ctx` free to be borrowed mutably while it walks
+    /// the arms — where holding the group itself meant cloning its `Vec` on
+    /// every call the pass inferred, 2,693 heap blocks on `lib/json`.
+    groups: HashMap<(&'a str, usize), (u32, u32)>,
+    group_members: Vec<usize>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
@@ -170,11 +176,20 @@ fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Ve
 
 pub fn infer(program: &Program) -> Inference {
     work::pass();
-    let mut groups: HashMap<(&str, usize), Vec<usize>> =
+    let mut by_group: HashMap<(&str, usize), Vec<usize>> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, decl) in program.fns.iter().enumerate() {
-        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
+        by_group.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
     }
+    let mut group_members: Vec<usize> = Vec::with_capacity(program.fns.len());
+    let groups: HashMap<(&str, usize), (u32, u32)> = by_group
+        .into_iter()
+        .map(|(key, arms)| {
+            let start = group_members.len() as u32;
+            group_members.extend(arms);
+            (key, (start, group_members.len() as u32))
+        })
+        .collect();
     let type_names: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
     let field_readers = field_readers(program, &type_names);
@@ -204,6 +219,7 @@ pub fn infer(program: &Program) -> Inference {
         dirty: Vec::new(),
         field_readers,
         groups,
+        group_members,
         yields: HashMap::default(),
         type_names,
         params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
@@ -591,8 +607,8 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
                 }
             }
             // constant mention evaluates; fn mention is a value (params go TOP)
-            if let Some(decls) = ctx.groups.get(&(name, 0)) {
-                let i = decls[0];
+            if let Some(&(start, _)) = ctx.groups.get(&(name, 0)) {
+                let i = ctx.group_members[start as usize];
                 ctx.readers[i].insert(ctx.current_index);
                 // A constant naming itself inside its own body hands over its
                 // cell rather than a value — there is nothing else to hand
@@ -721,20 +737,21 @@ fn eval_call<'a>(
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
         return REC | fails | piped_bits;
     }
-    if let Some(decls) = ctx.groups.get(&(name.as_str(), args.len())) {
-        let decls = decls.clone();
+    if let Some(&(start, end)) = ctx.groups.get(&(name.as_str(), args.len())) {
+        let (start, end) = (start as usize, end as usize);
         let mut out: Set = 0;
         // pass-through: a failure in arg `pos` reaches the result only when no arm
         // catches it there. an arm whose pattern is `none`/`(err _)` handles that
         // failure (e.g. `_is_ws none -> false`), so it must not contaminate the
         // result — that spurious `none` is what kept scanner positions off `int`.
         for (pos, arg) in arg_sets.iter().enumerate() {
-            let caught = decls.iter().fold(0, |acc, &i| {
+            let caught = ctx.group_members[start..end].iter().fold(0, |acc, &i| {
                 acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
             });
             out |= (arg & FAIL) & !caught;
         }
-        for i in decls {
+        for k in start..end {
+            let i = ctx.group_members[k];
             for (p, set) in arg_sets.iter().enumerate() {
                 widen_param(ctx, i, p, *set);
             }
