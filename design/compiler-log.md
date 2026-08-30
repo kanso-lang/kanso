@@ -5293,6 +5293,30 @@ docs/kanso.wasm                    1,655,440 -> 1,654,157  -1,283 bytes
 
 Measured one at a time, in that order.
 
+### What it cost to run
+
+```
+compile_instructions  51,126,817 -> 50,455,686   -671,131   -1.31%
+```
+
+The allocator rows carry 478,000 of it: `_int_free` 2,580,177 -> 2,434,266,
+`malloc` 1,790,546 -> 1,684,286, `_int_malloc` 3,123,992 -> 3,044,126, `free`
+1,146,488 -> 1,077,244, `__rust_alloc` 852,633 -> 800,814, `malloc_consolidate`
+966,246 -> 940,889. The rest is the `String` construction and drop that
+callgrind's 90% threshold leaves without rows of its own.
+
+`infer::infer` rises 65,058, and that is the flat call table's price: the
+topological walk indexes `starts` twice per step where it followed one pointer.
+A sixth of what the allocator gave back, for 630 blocks and 8,310 bytes.
+
+The row named `HashMap<&str, ()>::insert` reads +69,302 and is a renaming rather
+than a rise — `flush_unused`'s set was a `HashSet<String>` and is a
+`HashSet<&str>` now, so its inserts moved from one monomorphisation to another
+and the old one sat below the threshold. `eval_expr` and `check_merged` are
+byte-identical.
+
+Welfare 86.06 -> 86.32, ratcheted here.
+
 ### The shadow checker
 
 `flush_unused` collected the names it had already reported into a
