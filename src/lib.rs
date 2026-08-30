@@ -637,6 +637,12 @@ fn synthesize_getters(program: &mut ast::Program) {
             continue;
         }
         for (index, (field, _, span)) in ty.fields.iter().enumerate() {
+            // Asked before the arm is built. A field that already has a getter
+            // used to pay for the whole pattern vector and the binder's name
+            // first and throw them away on the next line.
+            if already.contains(&(field.as_str(), ty.name.as_str())) {
+                continue;
+            }
             let bound = ty
                 .fields
                 .iter()
@@ -646,9 +652,6 @@ fn synthesize_getters(program: &mut ast::Program) {
                     false => ast::Pattern::Wildcard(*span),
                 })
                 .collect();
-            if already.contains(&(field.as_str(), ty.name.as_str())) {
-                continue;
-            }
             arms.push(ast::FnDecl {
                 name: ast::getter_name(field),
                 is_pub: true,

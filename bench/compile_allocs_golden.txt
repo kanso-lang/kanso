@@ -194,4 +194,15 @@
 #
 # Its two neighbours in the same loop were read and left: `check_partial_chain`
 # and `validate_spacing` allocate nothing at all.
-compile_allocs=32856
+#
+# 2026-08-30 (three sets opened once per declaration): 32,856 -> 31,316, a fall
+# of 1,540, or 4.7%. Banked. check.rs walks program.fns in three separate
+# passes and each opened a fresh HashSet<&str> of the declaration's bound names
+# before walking the body — one allocation on the first insert, and the
+# capacity it grew to dropped with it. One set per pass, cleared per iteration.
+#
+# 2026-08-30 (a guard asked one line too late): 31,316 -> 31,254, a fall of 62.
+# Banked. `synthesize_getters` built each candidate arm's pattern vector and
+# the binder's name and THEN asked whether that (type, field) already had a
+# getter. The question moved above the construction.
+compile_allocs=31254
