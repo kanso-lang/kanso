@@ -5459,6 +5459,23 @@ used_globals deleted                    36,234 -> 35,639   -595
 compile_peak_bytes                     733,794 -> 730,120  -3,674   -0.5%
 ```
 
+### What it cost to run
+
+```
+compile_instructions  49,090,280 -> 48,743,776   -346,504   -0.71%
+```
+
+The two pieces show separately. The reservation is
+`RawTable<(&str, ())>::reserve_rehash` 753,484 -> 654,170, a fall of 99,314 —
+`prune_unused_getters`'s set no longer doubling its way up from nothing. The
+deletion is in the allocator rows, `free` 1,015,812 -> 998,200, `__rust_alloc`
+769,810 -> 755,343, `malloc_consolidate` 867,875 -> 861,041, plus the 595
+`String`s no longer built and dropped, which the 90% threshold leaves without
+rows of their own.
+
+`lex_line`, `eval_expr` and `memrchr` are byte-identical: nothing here touches
+the lexer or the fixpoint. Welfare 86.58 -> 86.66, ratcheted here.
+
 ### The set nobody read
 
 `Resolver::used_globals` was a `HashSet<String>`, threaded through
