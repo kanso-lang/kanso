@@ -5662,8 +5662,11 @@ block.
 
 With the recomputation gone, `package_of` still ran twice per declaration —
 once in `intern`, once building the table above — and callgrind still charged
-108,446 instructions to it. A fifth of that was `StrSearcher::new`, the setup
-for `split_once(".hako/")`. Two-way substring search is built for haystacks
+108,446 instructions to its own row. `StrSearcher::new`, the setup for
+`split_once(".hako/")`, had a row of its own at 230,143 with
+`core::slice::memchr::memchr_aligned` at 171,128 under it: the searcher cost
+more than twice the function it served, beside it rather than inside it.
+Two-way substring search is built for haystacks
 that justify its preprocessing; a source path is forty bytes and the needle is
 absent from every one of them in a program that fetched nothing, so the search
 never gets past its own setup. `after_hako` is a byte scan that tests the first
@@ -5810,3 +5813,48 @@ reservation was the remaining 1,647 and all eight allocations.
     compile_peak_bytes                   730,120   unmoved, both hosts
 
 Copied out of job 99268499869. The two hosts read the same percentage.
+
+## 2026-08-30 — thirteen tables that start at nothing
+
+`check_merged` runs twenty-two whole-program checks, and a dozen of them open
+by grouping declarations: arities by name, return sets by group, discarded
+positions, handled positions, torn arms, the reference graph. Each builds its
+own map with one entry per declaration, and each starts that map empty.
+
+A `hashbrown` table doubles, and doubling means allocating the new table and
+rehashing every key already in the old one. Filling a table to twelve hundred
+entries from zero pays that seven times. `callgrind` charged
+`reserve_rehash` 654,170 instructions, and `fallible_with_capacity` under it
+another 190,355.
+
+Thirteen of these now open at `program.fns.len()`. Two are keyed by
+`(name, arity, position)` and can hold more than that, so they still grow
+once; the rest never grow at all.
+
+### Not the same verdict as the last time
+
+Pre-sizing was measured and DECLINED on 2026-08-30 for the six
+`filter().map().collect()` sets in `check.rs`, at 4,514 instructions and one
+allocation. That decline stands and this is not in tension with it: those
+collects are FILTERED, so their results are a small fraction of the
+declarations and the table they build never doubles more than once. These
+thirteen hold one entry per declaration.
+
+### The numbers
+
+    compile_instructions  45,155,678 -> 44,778,375  -377,303  -0.84%  (local)
+    compile_allocs             34,804 ->     34,682      -122
+    compile_peak_bytes                     730,120   unmoved
+
+Peak does not move, which is the answer to the obvious worry: a table sized to
+what it will hold occupies no more than one that grew into the same size, and
+the intermediate tables it does not build are the allocations that went away.
+
+### The runner's number
+
+    compile_instructions  44,862,145 -> 44,483,421  -378,724  -0.84%  (runner)
+                          45,155,678 -> 44,778,375  -377,303  -0.84%  (local)
+    compile_allocs                        34,682   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99272811720.
