@@ -2755,20 +2755,23 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
 }
 
 fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut groups: Vec<(&str, Vec<&FnDecl>)> = Vec::new();
-    for decl in &program.fns {
-        match groups.last_mut() {
-            Some((name, decls)) if *name == decl.name => decls.push(decl),
-            _ => groups.push((&decl.name, vec![decl])),
+    // A run of consecutive declarations sharing a name, walked in place. Each
+    // run used to be collected into a `Vec<&FnDecl>` of its own — 579
+    // allocation blocks for three facts: whether any arm takes no parameters,
+    // how many arms there are, and where the second one is.
+    let mut at = 0;
+    while at < program.fns.len() {
+        let name = &program.fns[at].name;
+        let start = at;
+        while at < program.fns.len() && program.fns[at].name == *name {
+            at += 1;
         }
-    }
-    for (name, decls) in groups {
-        let has_constant = decls.iter().any(|d| d.params.is_empty());
-        if has_constant && decls.len() > 1 {
+        let arms = &program.fns[start..at];
+        if arms.len() > 1 && arms.iter().any(|d| d.params.is_empty()) {
             diags.push(Diagnostic::new(
                 "dispatch",
                 format!("`{name}` is a constant (arity 0); a constant admits no overloads"),
-                decls[1].span,
+                arms[1].span,
             ));
         }
     }

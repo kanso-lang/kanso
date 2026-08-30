@@ -198,20 +198,31 @@ fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Ve
 
 pub fn infer(program: &Program) -> Inference {
     work::pass();
-    let mut by_group: HashMap<(&str, usize), Vec<usize>> =
+    // The arms of each dispatch group, as one flat vector and a range apiece.
+    // The range table is what the fixpoint reads; the per-group `Vec` this
+    // used to build on the way to it was 529 allocation blocks that existed
+    // only to be flattened on the next line. The counting pass of #1161: count
+    // per group, turn the counts into starts, then place each declaration at
+    // its group's cursor. Arms come out in declaration order either way.
+    let mut groups: HashMap<(&str, usize), (u32, u32)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, decl) in program.fns.iter().enumerate() {
-        by_group.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
+    for decl in &program.fns {
+        groups.entry((decl.name.as_str(), decl.params.len())).or_insert((0, 0)).1 += 1;
     }
-    let mut group_members: Vec<usize> = Vec::with_capacity(program.fns.len());
-    let groups: HashMap<(&str, usize), (u32, u32)> = by_group
-        .into_iter()
-        .map(|(key, arms)| {
-            let start = group_members.len() as u32;
-            group_members.extend(arms);
-            (key, (start, group_members.len() as u32))
-        })
-        .collect();
+    let mut at = 0;
+    for slot in groups.values_mut() {
+        let count = slot.1;
+        *slot = (at, at);
+        at += count;
+    }
+    let mut group_members: Vec<usize> = vec![0; program.fns.len()];
+    for (i, decl) in program.fns.iter().enumerate() {
+        let slot = groups
+            .get_mut(&(decl.name.as_str(), decl.params.len()))
+            .expect("every group was counted");
+        group_members[slot.1 as usize] = i;
+        slot.1 += 1;
+    }
     let type_names: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
     let field_readers = field_readers(program, &type_names);

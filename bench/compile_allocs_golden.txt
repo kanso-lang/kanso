@@ -194,4 +194,4 @@
 #
 # Its two neighbours in the same loop were read and left: `check_partial_chain`
 # and `validate_spacing` allocate nothing at all.
-compile_allocs=34158
+compile_allocs=32856
