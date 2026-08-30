@@ -4366,3 +4366,61 @@ the hosts disagree, the SMALLER reading is not automatically the work. Here
 the smaller reading is the work minus a penalty one host pays and the other
 does not, and both numbers are honest measurements of the same change on
 different allocators. The rule wants a fourth row for that.
+
+## 2026-08-30 — a dispatch group is a range, not a cloned vector
+
+Re-running the map after the entry above put `eval_call`'s dispatch lookup at
+2,693 blocks, 4.7% of what the front end allocates and the largest line left
+with kanso's name on it.
+
+```rust
+if let Some(decls) = ctx.groups.get(&(name.as_str(), args.len())) {
+    let decls = decls.clone();
+```
+
+The clone answers to the borrow checker and to nothing else. `decls` borrows
+`ctx`, and three lines down the loop calls `widen_param(ctx, ..)`, so the group
+is copied to a fresh `Vec<usize>` on every call the pass infers — a group
+holding, typically, one index. `groups` is built once in `infer` and never
+written again, so a group can be a half-open range into one flat
+`group_members: Vec<usize>`. A range is two words and it copies.
+
+```
+compile_allocs        57,430 -> 54,747          -2,683   -4.7%
+compile_peak_bytes    763,868 -> 742,572        -21,296  -2.8%
+compile_instructions  55,414,950 -> 55,319,098  -95,852  -0.17%  (runner)
+compile_rounds        40        unchanged
+compile_visits        16,806    unchanged
+```
+
+Welfare 84.66 -> 84.89, banked. Peak moves as well as traffic this time: the
+table used to hold one heap vector per (name, arity) for the length of the
+compile, and those are one vector now.
+
+### The consolidation step, and where each host takes it
+
+The entry above blamed a host disagreement on `malloc_consolidate` and left it
+there. This change disagrees too, by three and a half times and leaning the
+other way — the container reads -342,880 where the runner reads -95,852 — and
+the two rows read together say what one could not.
+
+```
+malloc_consolidate      before #1139   after #1139   after #1140
+container                    788,221     1,058,396     1,055,975
+runner                             —       789,570     1,054,967
+```
+
+Consolidation on this workload steps up about 265,000 instructions, once, when
+the free lists change shape. The container took that step on the previous
+change and holds flat through this one; the runner held flat there and takes it
+here. Each host pays the same penalty for the same reason and only the change
+it lands on differs, which is why the per-change gaps are large and lean
+opposite ways. Over the two changes together the readings are -682,955 and
+-1,123,001: still apart, but by 1.6x where the individual rows are 3x and 3.6x.
+
+That is a fourth shape for the attribution question, and it is not in the
+ledger entry's table. Two hosts can disagree by a factor of three on a change
+where both are measuring real work, correctly, and neither number is the
+answer on its own. What made it legible was measuring the allocator lines
+rather than the total — which is available on any row, and was not done on any
+of the eight rows before these two.

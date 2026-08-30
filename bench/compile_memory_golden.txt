@@ -32,6 +32,13 @@
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
 # measured-on rustc=1.98.0
+#
+# 2026-08-30 (a dispatch group is a range): 763,868 -> 742,572, a fall of
+# 21,296 or 2.8%. Banked. `infer`'s dispatch table held one heap `Vec<usize>`
+# per (name, arity) for the length of the compile; the arms are one flat
+# vector now and the table holds ranges into it. This row and the traffic row
+# move together for once — the same change removed a per-call clone of those
+# vectors, which `compile_allocs` sees and this cannot.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=763868
+compile_peak_bytes=742572

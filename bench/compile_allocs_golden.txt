@@ -62,4 +62,11 @@
 # still spill. `compile_peak_bytes` does not move, because these blocks died
 # when the call was inferred and were never at the high water mark — which is
 # why nothing but the map could see them.
-compile_allocs=57430
+#
+# 2026-08-30 (a dispatch group is a range): 57,430 -> 54,747, a fall of 2,683,
+# or 4.7%. Banked. `eval_call` cloned its dispatch group's `Vec<usize>` on
+# every call it inferred, to release the borrow on `ctx` before the loop below
+# takes it mutably. A group is a half-open range into one flat vector now, and
+# a range copies. `compile_peak_bytes` falls 21,296 with it, because the table
+# it cloned from was itself one heap vector per (name, arity).
+compile_allocs=54747
