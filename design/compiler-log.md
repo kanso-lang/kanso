@@ -2840,3 +2840,14 @@ Clay-shaped fragment inside it, whether to take a dependency for the
 small-string type, is answered by the file's own precedent: Cargo.toml
 carries two crates by policy, so hand-write it. The entry's removal
 from the ledger rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: the chain line keeps its dot
+
+On "Whether a chain line keeps its leading dot", Clay: "the
+combinators look and act like regular functions." So a chain
+continuation spells them the way it spells any function — `. bind (f)`
+— and the leading dot stays the one continuation marker the grammar
+has. No parser knows the names bind, annotate or rescue; an indented
+line without the dot remains one more argument, per the existing rule.
+The 346-step migration takes the keep-the-dot shape. The ledger
+entry's removal rides the next reconciliation with main.
