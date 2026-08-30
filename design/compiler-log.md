@@ -2744,3 +2744,20 @@ happened to take.
 No table in the front end now holds a `Vec` per key. Eight of them went over
 four changes — #1161, #1162, #1165 and this one — for 3,204 allocation blocks
 between them: 524, 1,302, 848 and 530.
+
+### The runner's number
+
+    compile_instructions  43,001,117 -> 42,914,281   -86,836  -0.20%  (runner)
+                          43,353,124 -> 43,302,778   -50,346  -0.12%  (local)
+    compile_allocs                        29,876   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99309718552. The widest the two hosts have been on this vein
+since #1161, and in the direction where the runner gains more. Both changes
+trade an allocation and a pointer chase for a short linear scan of a flat
+vector, and the two hosts price that trade differently — a scan that stays in
+cache costs what the machine's cache costs. The allocation row agrees to the
+digit either way, which is the point of having both.
+
+Welfare 87.41 -> 87.47, banked with `--set`. The page's two `data-golden`
+compile figures move with it.
