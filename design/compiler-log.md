@@ -5273,3 +5273,109 @@ compile speed at 0.28 and compile memory at 0.12, and 8.9% off the traffic
 against 0.13% on the residency is not a close call. Rounds and visits do not
 move at all — nothing here changes what the compiler decides, only what it
 allocates while deciding it.
+
+## 2026-08-30 — four allocations the front end made per declaration
+
+Three of these built a `String` out of a name the program was already holding —
+the family #1141 opened, and these are the last of it on the measured path. The
+fourth is #1140's: a `Vec` per declaration where one flat vector and a start
+would do.
+
+```
+flush_unused's shadowed set borrows   40,935 -> 40,231   -704
+Local.name borrows                    40,231 -> 39,527   -704
+synthesize_getters keys on the field  39,527 -> 39,092   -435
+callee_first's call table goes flat   39,092 -> 38,462   -630
+                                                       -2,473   -6.0%
+compile_peak_bytes                   743,564 -> 735,254  -8,310   -1.1%
+docs/kanso.wasm                    1,655,440 -> 1,654,157  -1,283 bytes
+```
+
+Measured one at a time, in that order.
+
+### What it cost to run
+
+```
+compile_instructions  51,126,817 -> 50,455,686   -671,131   -1.31%
+```
+
+The allocator rows carry 478,000 of it: `_int_free` 2,580,177 -> 2,434,266,
+`malloc` 1,790,546 -> 1,684,286, `_int_malloc` 3,123,992 -> 3,044,126, `free`
+1,146,488 -> 1,077,244, `__rust_alloc` 852,633 -> 800,814, `malloc_consolidate`
+966,246 -> 940,889. The rest is the `String` construction and drop that
+callgrind's 90% threshold leaves without rows of its own.
+
+`infer::infer` rises 65,058, and that is the flat call table's price: the
+topological walk indexes `starts` twice per step where it followed one pointer.
+A sixth of what the allocator gave back, for 630 blocks and 8,310 bytes.
+
+The row named `HashMap<&str, ()>::insert` reads +69,302 and is a renaming rather
+than a rise — `flush_unused`'s set was a `HashSet<String>` and is a
+`HashSet<&str>` now, so its inserts moved from one monomorphisation to another
+and the old one sat below the threshold. `eval_expr` and `check_merged` are
+byte-identical.
+
+Welfare 86.06 -> 86.32, ratcheted here.
+
+### The shadow checker
+
+`flush_unused` collected the names it had already reported into a
+`HashSet<String>` — one `String` per binding in every scope the checker leaves.
+The set can borrow from `self.locals`, which the loop only reads; the truncation
+happens after it. The two fields are taken apart before the loop so that reading
+one and writing the other is not one borrow doing both, and the set is scoped so
+its own borrow ends before `self.locals.truncate`.
+
+`Local` then gave up its owned name for a `&'a str`. `Resolver<'_>` became
+`impl<'a> Resolver<'a>`, and `bind_pattern`, `bind_target`, `bind_target_field`
+and `resolve_expr` take `&'a` of what they walk. Six signatures, and the
+compiler named every one of them in turn.
+
+### The getter synthesiser
+
+```rust
+if already.contains(&(ast::getter_name(field), ty.name.clone())) {
+```
+
+Inside a loop over every field of every declared type, to ask a question.
+`getter_name` and `getter_field` are inverse, so the set can be keyed on the
+field name rather than the getter's, and both halves of the key then borrow. The
+`format!` and the clone move to the arms actually synthesised, where a new
+declaration genuinely needs an owned name.
+
+### The call table
+
+`callee_first` built `vec![Vec::new(); program.fns.len()]` and filled each
+declaration's vector completely before moving to the next — which is exactly the
+shape that flattens. One `Vec<usize>` and a `starts: Vec<u32>` replace four
+hundred headers, and the topological walk below reads
+`&flat[starts[i]..starts[i + 1]]` where it read `calls[i]`.
+
+This is the only one of the four that moves `compile_peak_bytes`, and it moves
+it a long way: 8,310 bytes, which takes back the 992 that #1149's two pooled
+buffers cost and 7,318 more. The three borrowed names leave the peak alone,
+which is right — a `String` built to answer a question and dropped is traffic
+rather than residency.
+
+### What the map says is left
+
+dhat before this change put 39,096 blocks against the counter's 39,092. The
+eight largest lines, and what each one is:
+
+```
+3,197  parser.rs:2127   Expr::Ident's String — interning, declined in #1033
+3,157  lexer.rs:622     the same String, built in lex_word
+1,567  infer.rs:250     the call table this entry flattens
+1,100  parser.rs:2114   an App's arguments — reserving measured worse, #1149
+1,072  infer.rs:580     eval_call
+1,067  parser.rs:2121   Box::new(head)
+  959  lib.rs:610       the getter arms themselves
+  861  infer.rs:225     one Vec<Set> per declaration for its parameter sets
+```
+
+The top two are one `String`, built once per identifier and copied once into the
+AST, and the treatment for both is interning. That stays declined at 365
+conversion sites. `infer.rs:225` is the call table's sibling and flattens the
+same way, except that `Inference::params` is `pub` and read as
+`inference.params[decl][i]` at seven sites outside infer.rs, so it wants an
+accessor and a wider diff than this one.

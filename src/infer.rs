@@ -314,14 +314,20 @@ fn callee_first(program: &Program) -> Vec<usize> {
         }
         crate::for_each_child(expr, |child| gather(child, names));
     }
-    let mut calls: Vec<Vec<usize>> = vec![Vec::new(); program.fns.len()];
+    // One flat vector and a start per declaration, rather than a `Vec<usize>`
+    // apiece. The loop below fills each declaration's slice completely before
+    // moving to the next, so appending to the flat vector and recording where
+    // each one began is the same walk with one allocation instead of four
+    // hundred. #1140 did this to the dispatch table for the same reason.
+    let mut flat: Vec<usize> = Vec::new();
+    let mut starts: Vec<u32> = Vec::with_capacity(program.fns.len() + 1);
     // Outside the loop and cleared, rather than built inside it. The vector
     // holds borrowed names and dies at the end of each declaration, so a fresh
     // one per declaration was 1,367 allocation blocks for a buffer that is the
     // same size and shape every time round. Reused, it grows once to the
     // largest declaration and stays there.
     let mut names: Vec<&str> = Vec::new();
-    for (i, decl) in program.fns.iter().enumerate() {
+    for decl in &program.fns {
         names.clear();
         for stmt in &decl.body {
             match stmt {
@@ -331,15 +337,19 @@ fn callee_first(program: &Program) -> Vec<usize> {
         }
         names.sort_unstable();
         names.dedup();
+        starts.push(flat.len() as u32);
         for name in &names {
             if let Some(targets) = by_name.get(name) {
-                calls[i].extend(targets);
+                flat.extend(targets);
             }
         }
     }
-    let mut order = Vec::with_capacity(calls.len());
-    let mut state = vec![0u8; calls.len()];
-    for root in 0..calls.len() {
+    starts.push(flat.len() as u32);
+    let calls = |i: usize| &flat[starts[i] as usize..starts[i + 1] as usize];
+    let n = program.fns.len();
+    let mut order = Vec::with_capacity(n);
+    let mut state = vec![0u8; n];
+    for root in 0..n {
         if state[root] != 0 {
             continue;
         }
@@ -347,9 +357,9 @@ fn callee_first(program: &Program) -> Vec<usize> {
         let mut stack = vec![(root, 0usize)];
         while let Some(frame) = stack.last_mut() {
             let (node, next) = *frame;
-            if next < calls[node].len() {
+            if next < calls(node).len() {
                 frame.1 += 1;
-                let child = calls[node][next];
+                let child = calls(node)[next];
                 if state[child] == 0 {
                     state[child] = 1;
                     stack.push((child, 0));

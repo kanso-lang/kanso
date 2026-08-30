@@ -136,4 +136,18 @@
 # `<Tok as Clone>::clone`, and the log entry says where the other 3,592 went:
 # into the arms that build `Expr::Ident` and `Pattern::Var`, which need an
 # owned name and clone it there instead. The allocation moved frames.
-compile_allocs=40935
+#
+# 2026-08-30 (four allocations the front end made per declaration): 40,935 ->
+# 38,462, a fall of 2,473, or 6.0%. Banked, four pieces measured one at a time:
+#
+#   flush_unused's shadowed set borrows      -704
+#   Local.name borrows                       -704
+#   synthesize_getters keys on the field     -435
+#   callee_first's call table goes flat      -630
+#
+# The first three are the owned-name family #1141 opened, finishing on this
+# path. The fourth is #1140's: `callee_first` held one `Vec<usize>` per function
+# declaration for what that declaration calls, and holds one flat vector plus a
+# start per declaration now. It takes 8,310 bytes off compile_peak_bytes with
+# it, where the other three leave the peak alone.
+compile_allocs=38462

@@ -614,12 +614,18 @@ fn synthesize_getters(program: &mut ast::Program) {
     // Keyed by the type as well as the field. One getter group holds an arm
     // per type that has the field, and skipping on the name alone would let
     // the first type through and leave every later one unreadable.
-    let already: crate::hash::Set<(String, String)> = program
+    // Keyed on the FIELD rather than the getter, and borrowed. `getter_name`
+    // and `getter_field` are inverse, so asking about a field costs a
+    // `strip_prefix` on each existing getter once instead of a `format!` and a
+    // clone on every (type, field) pair the loop below considers.
+    let already: crate::hash::Set<(&str, &str)> = program
         .fns
         .iter()
         .filter(|f| f.is_getter())
         .filter_map(|f| match f.params.first() {
-            Some(ast::Pattern::Ctor { ty, .. }) => Some((f.name.clone(), ty.clone())),
+            Some(ast::Pattern::Ctor { ty, .. }) => {
+                ast::getter_field(&f.name).map(|field| (field, ty.as_str()))
+            }
             _ => None,
         })
         .collect();
@@ -643,7 +649,7 @@ fn synthesize_getters(program: &mut ast::Program) {
                     false => ast::Pattern::Wildcard(*span),
                 })
                 .collect();
-            if already.contains(&(ast::getter_name(field), ty.name.clone())) {
+            if already.contains(&(field.as_str(), ty.name.as_str())) {
                 continue;
             }
             arms.push(ast::FnDecl {

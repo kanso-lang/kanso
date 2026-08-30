@@ -622,4 +622,23 @@
 # `eval_expr`, `check_merged` and `__memcmp_avx2_movbe` are byte-identical,
 # which is right for a change no pass but the lexer, the parser and one
 # function of infer can see.
-compile_instructions=51126817
+#
+# 2026-08-30  51,126,817 -> 50,455,686   -671,131   -1.31%, banked. 2,473 fewer
+# allocations and 8,310 fewer bytes held, and the allocator rows move the way
+# that predicts: `_int_free` 2,580,177 -> 2,434,266, `malloc` 1,790,546 ->
+# 1,684,286, `_int_malloc` 3,123,992 -> 3,044,126, `free` 1,146,488 ->
+# 1,077,244, `__rust_alloc` 852,633 -> 800,814, `malloc_consolidate` 966,246 ->
+# 940,889 — 478,000 between them, and the rest is the `String` construction and
+# drop that callgrind's 90% threshold leaves without rows.
+#
+# `infer::infer` rises 1,186,509 -> 1,251,567 (+65,058), which is the flat call
+# table: the topological walk indexes `starts` twice per step where it followed
+# one pointer. That is the trade the 630 blocks and 8,310 bytes bought, and it
+# is a sixth of what the allocator gave back.
+#
+# The row named `HashMap<&str, ()>::insert` reads +69,302, and that is a
+# renaming rather than a rise: `flush_unused`'s set was a `HashSet<String>` and
+# is a `HashSet<&str>` now, so its inserts moved from one monomorphisation to
+# another and the old one sat below the threshold. `eval_expr` and
+# `check_merged` are byte-identical.
+compile_instructions=50455686
