@@ -4923,3 +4923,111 @@ worse:
 
 So the vector is the cheapest way to have the thing it buys, and this is a
 declined idea rather than an open one.
+
+## 2026-08-30 — the tail-call rewriter's group map cloned a name per declaration
+
+`trmc::rewrite` opens by grouping declarations:
+
+```rust
+let mut groups: HashMap<(String, usize), Vec<usize>> = HashMap::default();
+for (i, decl) in program.fns.iter().enumerate() {
+    groups.entry((decl.name.clone(), decl.params.len())).or_default().push(i);
+}
+```
+
+A `String` per function declaration, built to look one up, out of names the
+program is holding open in front of it. That is #1141's finding one file over,
+and the map put 1,634 blocks on this site.
+
+The keys borrow now. What made the same fix hard in #1140 — `rewrite` takes
+`&mut Program` — turns out not to apply here: nothing in the body writes to
+`program`. The rewritten arms accumulate in a local `new_fns` and go on at the
+end, `program.fns.extend(new_fns)`, after both loops have finished with the
+borrow. One `FnDecl` the rewriter builds does need an owned name, and takes
+`name.to_string()` — once per rewritten group rather than once per declaration.
+
+```
+compile_allocs   46,998 -> 46,008   -990   -2.1%
+compile_peak_bytes        742,572   unmoved
+```
+
+The 990 against dhat's 1,634 is the split, and it says where the rest is: the
+`Vec<usize>` each group collects its members into, and the `Vec<&FnDecl>` the
+body collects them back out into. Those are #1140's treatment — a half-open
+range into one flat vector — and they are NOT taken here. Restructuring the
+tail-call rewriter for the remaining 644 is a worse trade than a one-line
+borrow for 990, and the emitted golden is what would catch it going wrong: the
+group iteration order decides the order arms are rewritten in.
+
+`scripts/trmc_differential` passes — 23 shapes, three of which the license
+refuses, at four depths each, rewritten and not, agreeing on both engines — and
+the emitted golden is unchanged, so the compiler writes the same program.
+
+### The sweep this came out of, and the nine sites it refused
+
+The shape is `(name.clone(), arity)` as a map key. A grep finds eleven more:
+codegen.rs:399 and :425, demand.rs:211, dispatch.rs:46, escape.rs:51 and :89,
+linear.rs:86, :88, :979 and :1131, provenance.rs:315.
+
+dhat attributes ZERO blocks to codegen.rs, dispatch.rs, escape.rs and
+linear.rs on `kanso check lib/json` — a check never runs those passes. Nine of
+the eleven would have been diffs that cost a reader time and returned nothing.
+The map usually earns its keep by finding work; here it earned it by refusing
+some.
+
+What is left on the measured path is demand.rs at 1,614 blocks and
+provenance.rs at 633. demand.rs has the shape on both sides, and the lookup is
+the larger one: `discard.get(&(callee.clone(), args.len()))` fires at every
+`App` node the walk visits, where the build side fires once per declaration.
+Its borrow is easier than this one's — `discard_positions` already takes
+`&Program`.
+
+## 2026-08-30 — where the welfare headroom actually is
+
+The score is used two ways: as a gate, and afterwards to say which term paid.
+It answers a third question nobody had put to it — where work should go — and
+the answer is not what a day of this session's choices assumed.
+
+Each dimension's earned score against its ceiling, from the weights and
+satiations in `scripts/welfare/welfare.kso` and the goldens at `fb5bf7bc`:
+
+```
+dimension        ratio   satisf.   earns   ON TABLE
+run speed        28.72    0.935    28.05     1.95
+run memory      112.44    0.983    29.48     0.52
+compile speed     1.20    0.706    19.77     8.23
+compile memory    1.10    0.688     8.26     3.74
+                                   85.56
+```
+
+The total reproduces the live score to the digit, which is what says the
+reading is of the function rather than of an approximation to it.
+
+**11.97 of the 14.44 points still available sit in the two compile
+dimensions.** The benchmarks are 28.7 and 112.4 times their baselines and
+satiate at 2.0, so between them they hold 2.47 points. Compile speed sits at
+ratio 1.20 — barely off its baseline — and holds 8.23 alone, early satiation
+and all, because satiation only bites once a dimension has moved.
+
+This explains a scoreboard that otherwise reads backwards. Today's four
+changes:
+
+```
+#1143  a use-after-free repair, deepbench -5.76%     +0.03
+#1145  the text-block fence, compile_allocs -4.3%    +0.19
+#1146  one vector, compile_allocs -2.8%              +0.15
+#1147  trmc's keys borrow, compile_allocs -2.1%      +0.08
+```
+
+The runtime change is the largest single measurement of the four and worth the
+least, because a benchmark thirty times better than its baseline has almost
+nothing left to give the index. Three modest front-end changes outscore it
+six to one.
+
+What this licenses is choosing between two pieces of work that are both sound.
+It does not say a decoder regression stops mattering — the per-counter goldens
+are the tripwire for that and are untouched by any of this — and it cannot say
+anything about wall time, which the function leaves out and therefore weights
+at zero. The function is provisional and says so. But asked which end of the
+compiler to spend the next hour on, it has a clear answer, and the answer is
+the front end.

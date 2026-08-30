@@ -568,4 +568,19 @@
 # `lex_line` 785,322 -> 749,824 — while `eval_expr` and `check_merged` are
 # byte-identical, which is right for a change no pass but the lexer and parser
 # can see. compile_allocs falls 1,358 and compile_peak_bytes holds at 742,572.
-compile_instructions=52510153
+#
+# 2026-08-30  52,510,153 -> 52,172,225   -337,928   -0.64%, banked. 990 fewer
+# allocations. The four allocator rows account for 208,685 of it, 61.8%:
+# `_int_malloc` 3,268,747 -> 3,195,886, `_int_free` 2,930,351 -> 2,865,636,
+# `malloc` 2,060,969 -> 2,017,580, `free` 1,316,224 -> 1,288,504; `__rust_alloc`
+# 940,608 -> 917,838 brings it to 68.5%. The remaining third is the `String`'s
+# own construction and drop — the copy of the name bytes and the length
+# bookkeeping — which callgrind's 90% threshold leaves without rows of their
+# own. Counting only what has a row and calling it the whole would have
+# overstated the attribution by a third. `eval_expr`,
+# `check_merged`, `infer` and `lex_line` are byte-identical, which is what a
+# change confined to one pass's map keys should read as. The `&str` keys hash
+# exactly as the `String` keys did — `Hash for String` forwards to `str` — so
+# the map's iteration order is unchanged by construction, and the emitted
+# golden confirms it.
+compile_instructions=52172225

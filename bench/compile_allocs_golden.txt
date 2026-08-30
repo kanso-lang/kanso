@@ -97,4 +97,14 @@
 # the identical pair and every interpolation paid it again — the map could not
 # separate that. compile_peak_bytes does not move: the triple pads to the width
 # the pair occupied across two allocations, so what goes is the second header.
-compile_allocs=46998
+#
+# 2026-08-30 (trmc's group keys borrow): 46,998 -> 46,008, a fall of 990, or
+# 2.1%. Banked. `trmc::rewrite` built a `String` per function declaration to
+# key its group map, out of names the program already holds — #1141's finding
+# one file over. `rewrite` takes `&mut Program`, which is what blocked the same
+# fix in #1140, but nothing in the body writes to it: the rewritten arms
+# accumulate in a local and go on at the end, after both loops are done with
+# the borrow. dhat put 1,634 on the site; the remaining 644 is the per-group
+# `Vec<usize>` and the `Vec<&FnDecl>` the body collects back out, and those are
+# declined — group iteration order decides the order arms are rewritten in.
+compile_allocs=46008
