@@ -5580,3 +5580,49 @@ It is filed rather than built because it changes the type of a core AST field
 across the compiler and means hand-writing the small-string type, and because
 the other treatment of the same row was refused once already. The entry carries
 the measurement, the site counts and a recommendation.
+
+## 2026-08-30 — the last slash, found by hand
+
+```
+compile_instructions  48,942,128 -> 47,651,194   -1,290,934   -2.64%   (local)
+compile_allocs                       34,945   unmoved
+compile_peak_bytes                  730,120   unmoved
+front_end_rounds 40, front_end_visits 16,806   unmoved
+```
+
+A kanso name is qualified with a slash — `json/decode`, `std/io/read_file` — and
+eighteen places in the compiler split one on the last slash to get at its owner
+or its bare half. Every one of them wrote `name.rsplit_once('/')` or
+`path.rfind('/')`, and those go through `str`'s `CharSearcher`, which lands in
+`memrchr`'s vector path.
+
+That path is built to scan kilobytes. The average identifier in `lib/json` and
+the standard library it imports is **five bytes** — the length histogram over
+11,870 occurrences puts 7,589 of them at four bytes or fewer — so the setup is
+most of what a call costs, and there is nothing for the vector loop to do.
+
+`ast::last_slash` is a backward byte loop, and `ast::split_qual` is the pair it
+returns. A `/` is one byte and cannot appear inside a multi-byte character, so
+the scan is over bytes and the index it hands back is a character boundary.
+
+### What the profile said, and what it missed
+
+`callgrind --separate-callers=2` put 794,000 instructions on three callers:
+`mentions_in_expr` at 377,352, `provenance::package_of` at 209,540 and
+`provenance::Walk::expr` at 206,628. Converting exactly those three measured
+**1,095,492** — three hundred thousand more than the rows named, because the
+searcher's own construction is charged to the caller rather than to `memrchr`.
+Converting the other fifteen took it to 1,290,934.
+
+That is the third time in two days the map has been read one way and the fix
+measured another. Twice the rows read HIGH — `Tok::clone`'s 3,788 returned 196,
+and `infer.rs:590` turned out to be a hash set rather than the call it was
+attributed to. This one read LOW, and for the same underlying reason: a
+profile's rows are where the cost was charged, and the fix moves whatever the
+charge was standing in for.
+
+### What did not move
+
+Allocations, peak, rounds and visits are all identical, and so is the emitted
+golden. Nothing here changes what the compiler decides or writes — only how it
+finds a byte it was already looking for.

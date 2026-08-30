@@ -1241,7 +1241,7 @@ fn check_predicates(
     for (i, decl) in program.fns.iter().enumerate() {
         // test functions are assertions the test verb consumes — their own
         // convention, not questions
-        let short = decl.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&decl.name);
+        let short = crate::ast::split_qual(&decl.name).map(|(_, s)| s).unwrap_or(&decl.name);
         // a getter takes its field's name, so this rule would reach past the
         // function and rename the field — a language question (should a
         // boolean field be `drained?`) that is not this check's to answer
@@ -1263,7 +1263,7 @@ fn check_predicates(
     let mut groups: Vec<_> = groups.into_iter().collect();
     groups.sort_by_key(|(name, (_, span))| (span.line, span.col, *name));
     for (name, (set, span)) in groups {
-        let short = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
+        let short = crate::ast::split_qual(name).map(|(_, s)| s).unwrap_or(name);
         let is_question = short.ends_with('?');
         // only err rides along (a predicate over fallible work is still a
         // predicate). none is not an answer a question may give — when the
@@ -1790,7 +1790,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
         if let Expr::App { head, .. } = e {
             if let Expr::Ident(name, span) = &**head {
                 if foreign.contains(name.as_str()) {
-                    let (owner, base) = name.rsplit_once('/').unwrap_or(("", name));
+                    let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
                     diags.push(Diagnostic::new(
                         "opacity",
                         format!(
@@ -2181,8 +2181,9 @@ fn literal_walk_expr(
                 // a std wrapper is a rename over a builtin, so the builtin's
                 // demand is the one that will actually be met
                 let alias = builtins.get(&(name.as_str(), args.len())).copied();
-                let bare =
-                    alias.unwrap_or_else(|| name.rsplit_once('/').map(|(_, n)| n).unwrap_or(name));
+                let bare = alias.unwrap_or_else(|| {
+                    crate::ast::split_qual(name).map(|(_, n)| n).unwrap_or(name)
+                });
                 let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
                 // A program that declares its own `run` calls its own `run`,
                 // and the arms below say what those take. Without this, every
@@ -3707,7 +3708,7 @@ fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
 
 /// `to_int` and `to_float` given a literal that will not parse.
 fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>) {
-    let bare = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
+    let bare = crate::ast::split_qual(name).map(|(_, s)| s).unwrap_or(name);
     let Some(Expr::Str(parts, span)) = args.first() else { return };
     let [TemplatePart::Lit(text)] = parts.as_slice() else { return };
     let refuses = match bare {
