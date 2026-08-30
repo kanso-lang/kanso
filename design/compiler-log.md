@@ -5893,3 +5893,39 @@ wrong import.
 
 Smaller than #1154's, and it should be: two of the twenty-four run per
 identifier occurrence and the rest run once per declaration.
+
+## 2026-08-30 — DECLINED: the ascii fast path in the scanner
+
+`Scanner::new` turns a line of source into the `Vec<char>` the lexer reads with
+`chars.extend(content.chars())`, and `Chars` decodes every character whether or
+not there is anything to decode. `str::is_ascii` answers in one pass over eight
+bytes at a time, and when it says yes the widening loop is straight-line. The
+row it was aimed at: 298,362 instructions on the fold under `lex_line` and
+242,520 on the extend beneath it.
+
+Measured against #1156's head it took 150,938 instructions. Measured against
+this branch's head, four merges later, the same patch takes **53,017**:
+
+    compile_instructions  44,491,145 -> 44,438,128   -53,017  -0.12%
+    compile_allocs             34,682 ->     34,680        -2
+    compile_peak_bytes        730,120 ->    730,332      +212
+
+Nothing about the patch changed. What changed is everything around it — the
+getter prefix test, thirteen sized tables, twenty-four byte scans — and with
+them the inlining and layout the lexer's own code gets. **A micro-change
+measured against a moving baseline is measured once, and the number is only
+about the tree it was taken in.** This one lost two thirds of itself while
+sitting in a queue.
+
+Peak goes UP by 212 bytes, and not because of the fast path itself: a byte
+slice's iterator reports an exact size where `Chars` reports a lower bound of a
+quarter of the length, so `extend` reserves exactly what it needs and the
+pooled buffer settles at a capacity the doubling schedule would not have
+reached. Replacing `extend` with a plain `push` loop to dodge the size hint
+made it worse on both counts — 44,557,543 instructions, one more allocation,
+and the peak still up at 730,312.
+
+Welfare reads 86.94 either way. The sum does not move, the memory term pays,
+and the rule is that a term getting worse is only defensible when the sum goes
+up. So this is declined, and it stays declined unless the lexer is reworked in
+a way that makes the decode itself the question.
