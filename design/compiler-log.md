@@ -5078,24 +5078,31 @@ came from the pre-#1139 map and was carried forward without being re-read.
 lines:
 
 ```
-3,592  lexer.rs:7      Tok::Ident(String) — the name in every identifier token
-3,157  lexer.rs:584    tokens.push, the per-line vector's doubling
+3,592  lexer.rs:7      <Tok as Clone>::clone — the String inside Tok::Ident,
+                       copied when a caller clones the token
+3,157  lexer.rs:584    let tok = s.lex_word()? — the same String, built; the
+                       allocation is inside lex_word and lands on the inlined
+                       call site
 1,997  lexer.rs:535    Scanner's Vec<char> per line
 1,689  infer.rs:250
 1,394  lib.rs:610
 1,375  lib.rs:2897
-1,117  lexer.rs:585    tokens.push again, same vector
+1,117  lexer.rs:585    tokens.push — the per-line token vector
 1,100  parser.rs:2112
 1,072  infer.rs:574
 1,067  parser.rs:2119
 ```
 
 The lexer holds four of the ten and 9,863 blocks between them, which is 22% of
-the front end. Two of those four are one vector: `lex_line` starts
-`tokens` empty and lets it double, once per line of every file compiled. That
-is the next measurement, and it is a reservation rather than a rewrite.
+the front end. Read the frames rather than the line numbers: 6,749 of the 9,863
+are one `String`, the name in `Tok::Ident`, built once at 584 and copied 3,592
+times at 7. Building it is what interning would remove, and interning is
+declined — #1033, 365 conversion sites for one AST field of twenty-nine.
+Copying it is a separate question with a separate answer, because a clone
+happens at a caller that could have matched on `&Tok`.
 
-`lexer.rs:7` is the name inside `Tok::Ident`, and the treatment for it is
-interning, declined in #1033 at 365 conversion sites for one AST field of
-twenty-nine. The count says what declining it costs; the count is not an
-argument for revisiting it.
+That leaves 3,114 blocks in two vectors the lexer builds per line and neither
+of which a reader ever sees: `Scanner`'s `Vec<char>` at 1,997 and the token
+vector at 1,117. The `Vec<char>` was declined in #1145 on the grounds that
+`pos` is the column, which remains true and is a reason to keep indexing
+characters rather than a reason to allocate a fresh vector for each line.
