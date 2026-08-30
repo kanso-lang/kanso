@@ -5031,3 +5031,71 @@ anything about wall time, which the function leaves out and therefore weights
 at zero. The function is provisional and says so. But asked which end of the
 compiler to spend the next hour on, it has a clear answer, and the answer is
 the front end.
+
+## 2026-08-30 — the demand pass's lookup keys
+
+`discard_positions` keyed its map on `(String, usize)`, and `collect_uses` built
+the same pair every time it read one:
+
+```rust
+Expr::Ident(callee, _) => discard.get(&(callee.clone(), args.len())),
+```
+
+The build side allocates once per function declaration. The lookup side fires
+at every `App` node the demand walk visits and throws the `String` away as soon
+as the map has answered. Both sides borrow now, which the pass can do because
+`discard_positions` takes `&Program` and the map dies inside `analyze`.
+
+```
+compile_allocs        46,008 -> 44,920    -1,088   -2.4%
+compile_peak_bytes               742,572  unmoved
+docs/kanso.wasm    1,656,573 -> 1,654,278  -2,295 bytes
+```
+
+### The sibling that measures zero
+
+`use_targets` has the identical shape one function down — it collects
+`Vec<(String, usize, usize)>` and pushes `callee.clone()` — and borrowing it
+moves `compile_allocs` by nothing at all. Built, measured at 44,920 both ways,
+reverted. It runs only for a binding that has already passed the lazy vote, and
+`lib/json` produces none, so the clone is on a path the vein cannot see. A
+program in the lazy fragment would reach it; the mem tier is where that would
+show, and those fixtures are a dozen statements each.
+
+### What #1147's entry got wrong about provenance
+
+That entry named `provenance.rs` at 633 blocks as the other site left on the
+measured path. A dhat run on the current binary attributes **zero** blocks to
+`provenance.rs` at any depth, and reading the file says why: `Provenance` keys
+its parameter map on `Group<'a>`, borrowed already, and the `decl.name.clone()`
+at line 315 is inside the license diagnostic — reached only by a declaration
+with an arm for an err its own package raised. `lib/json` has none. The 633
+came from the pre-#1139 map and was carried forward without being re-read.
+
+### The front end's allocations after the day
+
+44,923 blocks by dhat against 44,920 by the counting allocator. The ten largest
+lines:
+
+```
+3,592  lexer.rs:7      Tok::Ident(String) — the name in every identifier token
+3,157  lexer.rs:584    tokens.push, the per-line vector's doubling
+1,997  lexer.rs:535    Scanner's Vec<char> per line
+1,689  infer.rs:250
+1,394  lib.rs:610
+1,375  lib.rs:2897
+1,117  lexer.rs:585    tokens.push again, same vector
+1,100  parser.rs:2112
+1,072  infer.rs:574
+1,067  parser.rs:2119
+```
+
+The lexer holds four of the ten and 9,863 blocks between them, which is 22% of
+the front end. Two of those four are one vector: `lex_line` starts
+`tokens` empty and lets it double, once per line of every file compiled. That
+is the next measurement, and it is a reservation rather than a rewrite.
+
+`lexer.rs:7` is the name inside `Tok::Ident`, and the treatment for it is
+interning, declined in #1033 at 365 conversion sites for one AST field of
+twenty-nine. The count says what declining it costs; the count is not an
+argument for revisiting it.
