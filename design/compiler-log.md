@@ -5941,3 +5941,44 @@ Welfare reads 86.94 either way. The sum does not move, the memory term pays,
 and the rule is that a term getting worse is only defensible when the sum goes
 up. So this is declined, and it stays declined unless the lexer is reworked in
 a way that makes the decode itself the question.
+
+## 2026-08-30 — DECLINED: the operator table's two-character key
+
+`lex_line` searches `OPS` by text, and built the text to search for out of the
+current character and its successor:
+
+```rust
+let two = [c, s.peek(1).unwrap_or(' ')].iter().collect::<String>();
+```
+
+A two-character `String` is a heap allocation, made and dropped once per
+character that reaches this line. Removing it removes **163** allocations from
+`lib/json`'s compile — and costs instructions:
+
+    the String, as it stands                44,491,145   34,682 allocs
+    a stack buffer and `str::from_utf8`     44,552,688   34,519
+    a byte compare against `op.as_bytes()`  44,521,443   34,519
+    the table read as a `match (c, next)`   44,521,899   34,519
+
+Three shapes, one answer: whatever replaces the `String`, the compile does
+about thirty thousand instructions MORE. The search is not the cause — the byte
+compare and the match agree to within five hundred, and they search in quite
+different ways. Something about the surrounding code compiles differently once
+the allocation leaves, and 163 allocations at roughly two hundred instructions
+apiece do not pay for it.
+
+Welfare prices the trade at +0.01, because allocations and instructions share a
+dimension and the allocation fall is proportionally the larger. That is a real
+gain by the objective and it is also inside the noise of what a day's merges do
+to this file's inlining — the ascii scanner above lost two thirds of its value
+to exactly that. Declined on those grounds: a change that makes the compiler do
+more work, cannot say where the work went, and buys a hundredth of a point is
+not worth the line it changes.
+
+The row it was aimed at is still there and still worth a better idea:
+`String as FromIterator<&char>` under `lex_line` is 361,176 instructions with
+another 156,728 in `finish_grow` beneath it, from the four sites that build a
+token's text out of the scanner's `Vec<char>` one character at a time. The fix
+for those is not a faster copy; it is a scanner that keeps the source `&str`
+and hands out slices of it, which is the shape gavel "whether an identifier's
+name lives inline" is about.
