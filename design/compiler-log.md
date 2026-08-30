@@ -5584,11 +5584,20 @@ the measurement, the site counts and a recommendation.
 ## 2026-08-30 — the last slash, found by hand
 
 ```
-compile_instructions  48,942,128 -> 47,651,194   -1,290,934   -2.64%   (local)
+compile_instructions  48,582,098 -> 47,302,573   -1,279,525   -2.63%   (runner)
+                      48,942,128 -> 47,651,194   -1,290,934   -2.64%   (local)
 compile_allocs                       34,945   unmoved
 compile_peak_bytes                  730,120   unmoved
 front_end_rounds 40, front_end_visits 16,806   unmoved
+welfare                       86.73 -> 86.79
 ```
+
+The two hosts agree to within one per cent of the fall, which is the closest
+they have come on this vein.
+
+`memrchr` and `__memcmp_avx2_movbe` both leave the profile's top fifteen, and
+`parser::parse` enters it at 593,309 having not moved at all. `lex_line`,
+`eval_expr` and every allocator row are byte-identical.
 
 A kanso name is qualified with a slash — `json/decode`, `std/io/read_file` — and
 eighteen places in the compiler split one on the last slash to get at its owner
