@@ -4546,8 +4546,15 @@ eval.rs:1408 and wasm_backend.rs:764, and `"!="` at codegen.rs:3571,
 eval.rs:3656 and wasm_backend.rs:897. Both forms in all four positions on both
 engines answer correctly and identically.
 
-`compile_allocs` and `compile_peak_bytes` do not move. The instruction count
-does, by the arms themselves.
+`compile_allocs` and `compile_peak_bytes` do not move, and neither do rounds or
+visits. `compile_instructions` rises 54,488,638 -> 54,507,708 on the runner,
+19,070 instructions or 0.035%, and that is the arms themselves: four passes
+descend into bodies they used to stop at, and two of them had to. It is a
+LAYOUT row by this project's own reading — the container reads 55,000,527 ->
+54,850,326, a FALL of 150,201, against the runner's small rise. Opposite signs,
+both under three tenths of a per cent, on a change that adds four match arms to
+one function. The fifth host-pair for the attribution ledger, and the cleanest
+layout case in it.
 
 The general lesson is about the comment. "Mirrors `for_each_child`" was a claim
 nothing tested, and two passes were built on it. #1137 went after four
