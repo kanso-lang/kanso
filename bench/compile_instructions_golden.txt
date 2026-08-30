@@ -497,4 +497,23 @@
 # nearly the whole gross saving instead. So the work is real and the
 # disagreement is the allocator's — the first row here whose host gap has a
 # named mechanism rather than a shrug at layout.
-compile_instructions=55414950
+#
+# 2026-08-30  55,414,950 -> 55,319,098   -95,852   -0.17%
+# `eval_call` cloned its dispatch group's `Vec<usize>` on every call, for the
+# borrow checker. Groups are ranges into one flat vector now. compile_allocs
+# falls 57,430 -> 54,747 and compile_peak_bytes 763,868 -> 742,572; rounds and
+# visits do not move.
+#
+# The hosts disagree again, by a factor of three and a half, and this time in
+# the OTHER direction: the container reads -342,880 where the runner reads
+# -95,852. The row above blamed `malloc_consolidate`, and the two rows read
+# together say more than either alone. Consolidation on this workload steps up
+# about 265,000 instructions, once, when the free lists change shape — and the
+# hosts take that step on different changes. The container took it at the row
+# above (788,221 -> 1,058,396) and holds flat here (1,058,396 -> 1,055,975).
+# The runner held flat there (789,570) and takes it here (789,570 ->
+# 1,054,967). Each host pays the same penalty for the same reason; only the
+# change it lands on differs, which is why the per-change gaps are large and
+# lean opposite ways. Over the two changes together the readings are -682,955
+# and -1,123,001, still apart but by 1.6x rather than 3.6x.
+compile_instructions=55319098
