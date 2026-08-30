@@ -4215,3 +4215,9 @@ one call site with `RT_CHECK_ERR` and a `br_if` two instructions above it, the
 beat-mark disagreement is an arena invariant no program can ask for, and the
 process cap is the fourth of its family, needing 64 live children on the runner
 to reach.
+
+`compile_instructions` moves 58,210,887 -> 58,209,632, a fall of 1,255.
+runtime.c is embedded in the compiler's binary, so editing its text shifts the
+data section and the row with it; `kanso check lib/json` emits nothing and never
+runs a line of it. compile_allocs, compile_peak_bytes, rounds and visits do not
+move. Layout, in the direction that costs nothing.

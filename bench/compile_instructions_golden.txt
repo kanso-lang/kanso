@@ -458,4 +458,11 @@
 # of 5,344. Opposite signs, so the remainder is the two hosts laying the binary
 # out differently rather than work either way. compile_allocs and
 # compile_peak_bytes do not move at all.
-compile_instructions=58210887
+#
+# 2026-08-30  58,210,887 -> 58,209,632   -1,255   -0.002%
+# `k_set_field` in runtime.c says the sentence the other two engines say.
+# runtime.c is embedded in the compiler's binary, so editing its text moves the
+# data section and the row with it; `kanso check lib/json` emits nothing and
+# never runs a line of it. compile_allocs, compile_peak_bytes, rounds and
+# visits are all unchanged. Layout, in the direction that costs nothing.
+compile_instructions=58209632
