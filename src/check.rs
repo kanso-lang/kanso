@@ -2970,8 +2970,11 @@ fn other_span(pattern: &Pattern) -> Span {
     }
 }
 
-struct Local {
-    name: String,
+struct Local<'a> {
+    /// Borrowed from the pattern that bound it. The declaration this walk
+    /// reads outlives the walk, so owning the name meant a `String` per
+    /// binding for a vector that is truncated at the end of every scope.
+    name: &'a str,
     span: Span,
     used: bool,
 }
@@ -2995,7 +2998,7 @@ struct Declared<'a> {
 
 struct Resolver<'a> {
     globals: &'a HashSet<&'a str>,
-    locals: Vec<Local>,
+    locals: Vec<Local<'a>>,
     used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
     shadowable: &'a HashSet<String>,
@@ -3064,8 +3067,8 @@ fn check_fn_body_shadow(
     diags.append(&mut resolver.diags);
 }
 
-impl Resolver<'_> {
-    fn bind_pattern(&mut self, pattern: &Pattern) {
+impl<'a> Resolver<'a> {
+    fn bind_pattern(&mut self, pattern: &'a Pattern) {
         match pattern {
             Pattern::Var(name, span) => self.push_local(name, *span),
             Pattern::Annotated { name, span, .. } => self.push_local(name, *span),
@@ -3081,7 +3084,7 @@ impl Resolver<'_> {
         }
     }
 
-    fn bind_target(&mut self, pattern: &Pattern) {
+    fn bind_target(&mut self, pattern: &'a Pattern) {
         match pattern {
             Pattern::Var(name, span) => self.rebind(name, *span),
             Pattern::Ctor { fields, .. } => {
@@ -3112,7 +3115,7 @@ impl Resolver<'_> {
         }
     }
 
-    fn bind_target_field(&mut self, pattern: &Pattern) {
+    fn bind_target_field(&mut self, pattern: &'a Pattern) {
         match pattern {
             Pattern::Var(name, span) => self.rebind(name, *span),
             Pattern::Ctor { fields, .. } => {
@@ -3136,7 +3139,7 @@ impl Resolver<'_> {
         }
     }
 
-    fn push_local(&mut self, name: &str, span: Span) {
+    fn push_local(&mut self, name: &'a str, span: Span) {
         if self.globals.contains(name) && !self.shadowable.contains(name) {
             self.diags.push(Diagnostic::new(
                 "name",
@@ -3144,10 +3147,10 @@ impl Resolver<'_> {
                 span,
             ));
         }
-        self.locals.push(Local { name: name.to_string(), span, used: false });
+        self.locals.push(Local { name, span, used: false });
     }
 
-    fn rebind(&mut self, name: &str, span: Span) {
+    fn rebind(&mut self, name: &'a str, span: Span) {
         if let Some(local) = self.locals.iter().rev().find(|l| l.name == name) {
             if !local.used {
                 self.diags.push(Diagnostic::new(
@@ -3161,25 +3164,34 @@ impl Resolver<'_> {
     }
 
     fn flush_unused(&mut self, from: usize) {
-        let mut shadowed: HashSet<String> = HashSet::default();
-        for local in self.locals[from..].iter().rev() {
-            // `_:type` ascribes without binding: there is no name to use
-            if local.name == "_" {
-                continue;
+        // The set borrows from `self.locals`, which is why the two fields are
+        // taken apart here: the loop reads one and writes the other, and
+        // reaching them through `self` would be one borrow doing both. Owning
+        // the names instead was a `String` per binding in every scope the
+        // checker left.
+        {
+            let mut shadowed: HashSet<&str> = HashSet::default();
+            let locals = &self.locals;
+            let diags = &mut self.diags;
+            for local in locals[from..].iter().rev() {
+                // `_:type` ascribes without binding: there is no name to use
+                if local.name == "_" {
+                    continue;
+                }
+                if !local.used && !shadowed.contains(local.name) {
+                    diags.push(Diagnostic::new(
+                        "unused",
+                        format!("unused binding `{}`", local.name),
+                        local.span,
+                    ));
+                }
+                shadowed.insert(local.name);
             }
-            if !local.used && !shadowed.contains(&local.name) {
-                self.diags.push(Diagnostic::new(
-                    "unused",
-                    format!("unused binding `{}`", local.name),
-                    local.span,
-                ));
-            }
-            shadowed.insert(local.name.clone());
         }
         self.locals.truncate(from);
     }
 
-    fn resolve_expr(&mut self, expr: &Expr) {
+    fn resolve_expr(&mut self, expr: &'a Expr) {
         match expr {
             Expr::Int(..) | Expr::Float(..) => {}
             // `&f` reads f exactly as a bare mention does
@@ -3272,7 +3284,7 @@ impl Resolver<'_> {
                     self.resolve_expr(arg);
                 }
                 if let Expr::Ident(name, span) = &**head {
-                    let local = self.locals.iter().any(|l| &l.name == name);
+                    let local = self.locals.iter().any(|l| l.name == name.as_str());
                     if !local {
                         if let Some(fields) = self.declared.type_arity.get(name.as_str()) {
                             if args.len() != *fields {

@@ -51,6 +51,17 @@
 #
 # Rounds and visits do not move: nothing here changes what the compiler decides,
 # only what it allocates deciding it.
+#
+# 2026-08-30 (four allocations the front end made per declaration): 743,564 ->
+# 735,254, a fall of 8,310, or 1.1%. Banked, and one of the four did all of it:
+# `callee_first` held a `Vec<usize>` per function declaration and holds one flat
+# vector plus a start per declaration now, so four hundred headers become one.
+# That also takes back the 992 bytes #1149's two pooled buffers cost, and 7,318
+# more.
+#
+# The three borrowed-name pieces in the same change leave this row alone, which
+# is right: a `String` built to answer a question and dropped is traffic rather
+# than residency, and compile_allocs is the row that sees it.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=743564
+compile_peak_bytes=735254
