@@ -5539,6 +5539,17 @@ compile_allocs   35,639 -> 34,945   -694   -1.9%
 compile_peak_bytes         730,120  unmoved
 ```
 
+```
+compile_instructions  48,743,776 -> 48,582,098   -161,678   -0.33%
+```
+
+The allocator rows are the whole of it — `_int_free` 2,284,655 -> 2,210,015,
+`malloc` 1,588,013 -> 1,529,690, `_int_malloc` 2,808,434 -> 2,788,486, `free`
+998,200 -> 978,768, `__rust_alloc` 755,343 -> 739,381 — and `lex_line` is
+byte-identical at 777,023, which is right: the vector this removes was built in
+the loop AFTER lexing rather than inside it. Welfare 86.66 -> 86.73, ratcheted
+here.
+
 `check_needless_continuation` groups a line's tokens by the source line each one
 came from, to ask what the statement would measure written one line wide. It
 built a `Vec<(usize, usize, Span)>` to do the grouping — per line of every file
