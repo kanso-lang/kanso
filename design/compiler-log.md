@@ -4923,3 +4923,61 @@ worse:
 
 So the vector is the cheapest way to have the thing it buys, and this is a
 declined idea rather than an open one.
+
+## 2026-08-30 — the tail-call rewriter's group map cloned a name per declaration
+
+`trmc::rewrite` opens by grouping declarations:
+
+```rust
+let mut groups: HashMap<(String, usize), Vec<usize>> = HashMap::default();
+for (i, decl) in program.fns.iter().enumerate() {
+    groups.entry((decl.name.clone(), decl.params.len())).or_default().push(i);
+}
+```
+
+A `String` per function declaration, built to look one up, out of names the
+program is holding open in front of it. That is #1141's finding one file over,
+and the map put 1,634 blocks on this site.
+
+The keys borrow now. What made the same fix hard in #1140 — `rewrite` takes
+`&mut Program` — turns out not to apply here: nothing in the body writes to
+`program`. The rewritten arms accumulate in a local `new_fns` and go on at the
+end, `program.fns.extend(new_fns)`, after both loops have finished with the
+borrow. One `FnDecl` the rewriter builds does need an owned name, and takes
+`name.to_string()` — once per rewritten group rather than once per declaration.
+
+```
+compile_allocs   46,998 -> 46,008   -990   -2.1%
+compile_peak_bytes        742,572   unmoved
+```
+
+The 990 against dhat's 1,634 is the split, and it says where the rest is: the
+`Vec<usize>` each group collects its members into, and the `Vec<&FnDecl>` the
+body collects them back out into. Those are #1140's treatment — a half-open
+range into one flat vector — and they are NOT taken here. Restructuring the
+tail-call rewriter for the remaining 644 is a worse trade than a one-line
+borrow for 990, and the emitted golden is what would catch it going wrong: the
+group iteration order decides the order arms are rewritten in.
+
+`scripts/trmc_differential` passes — 23 shapes, three of which the license
+refuses, at four depths each, rewritten and not, agreeing on both engines — and
+the emitted golden is unchanged, so the compiler writes the same program.
+
+### The sweep this came out of, and the nine sites it refused
+
+The shape is `(name.clone(), arity)` as a map key. A grep finds eleven more:
+codegen.rs:399 and :425, demand.rs:211, dispatch.rs:46, escape.rs:51 and :89,
+linear.rs:86, :88, :979 and :1131, provenance.rs:315.
+
+dhat attributes ZERO blocks to codegen.rs, dispatch.rs, escape.rs and
+linear.rs on `kanso check lib/json` — a check never runs those passes. Nine of
+the eleven would have been diffs that cost a reader time and returned nothing.
+The map usually earns its keep by finding work; here it earned it by refusing
+some.
+
+What is left on the measured path is demand.rs at 1,614 blocks and
+provenance.rs at 633. demand.rs has the shape on both sides, and the lookup is
+the larger one: `discard.get(&(callee.clone(), args.len()))` fires at every
+`App` node the walk visits, where the build side fires once per declaration.
+Its borrow is easier than this one's — `discard_positions` already takes
+`&Program`.

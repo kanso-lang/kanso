@@ -170,9 +170,14 @@ fn bound_names(p: &Pattern, out: &mut Vec<String>) {
 }
 
 pub fn rewrite(program: &mut Program) {
-    let mut groups: HashMap<(String, usize), Vec<usize>> = HashMap::default();
+    // Keys borrowed from the program, which already holds every one of these
+    // names. `program` is `&mut`, but nothing here writes to it: the arms are
+    // accumulated in `new_fns` and extended on at the end, which is what makes
+    // the borrow hold for the whole walk. Cloning a name per declaration to
+    // look one up was 990 blocks of the front end's allocations.
+    let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::default();
     for (i, decl) in program.fns.iter().enumerate() {
-        groups.entry((decl.name.clone(), decl.params.len())).or_default().push(i);
+        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
     }
     let mut new_fns: Vec<FnDecl> = Vec::new();
     for ((name, arity), idxs) in &groups {
@@ -292,7 +297,7 @@ pub fn rewrite(program: &mut Program) {
             (0..*arity).map(|i| Expr::Ident(format!("trmcp{i}"), span)).collect();
         wrapper_args.push(Expr::Int(identity, span));
         new_fns.push(FnDecl {
-            name: name.clone(),
+            name: name.to_string(),
             is_pub: decls.iter().any(|d| d.is_pub),
             span,
             params: wrapper_params,
