@@ -4239,9 +4239,11 @@ any_child::{{closure}}               39,771   0.07%
                                   4,107,549   7.04%
 ```
 
-Making it generic is one line, and monomorphises it across the forty call
-sites — twenty-one in check.rs, fourteen in lib.rs, three in infer.rs, two in
-codegen.rs, one each in eval.rs, linear.rs and wasm_backend.rs:
+`walk_children` has exactly two callers, `for_each_child` and `any_child`, and
+those are called from thirty-nine sites: twenty in check.rs, eleven in lib.rs,
+three in infer.rs, two in codegen.rs, and one each in eval.rs, linear.rs and
+wasm_backend.rs. Making it generic is one line, and gives it one instance per
+distinct closure type across all of them:
 
 ```
                         runner                    container
