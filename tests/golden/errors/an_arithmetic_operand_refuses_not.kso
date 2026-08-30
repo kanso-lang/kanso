@@ -1,0 +1,9 @@
+# `not` sits between `and` and the comparison, so it is reachable only where
+# an `and` operand is expected. An arithmetic operand comes from the
+# multiplication level, six rungs tighter, and never reaches it: `1 + not
+# true` has no expression after the `+`.
+#
+# Pinned for the same reason as a_comparison_refuses_a_bitwise_tail: a parser
+# that read one binding-power table would admit `not` anywhere a prefix is
+# allowed, and nothing else in the corpus says it may not appear here.
+print "{1 + not true}"

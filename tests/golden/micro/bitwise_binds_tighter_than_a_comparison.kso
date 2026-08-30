@@ -1,0 +1,10 @@
+# `6 & 3 < 1` is `(6 & 3) < 1`: a comparison takes its left side from the
+# bitwise level, one rung tighter. The other order has no reading at all —
+# tests/golden/errors/a_comparison_refuses_a_bitwise_tail pins the refusal —
+# because a comparison's RIGHT side comes from the addition level, tighter
+# still, and a `&` after one has nothing to attach to.
+#
+# The pair exists because those two rungs are asymmetric, and a parser that
+# read a single binding-power table would make them symmetric without anyone
+# noticing. `6 & 3` is 2, and 2 is not below 1.
+pub play = print "{6 & 3 < 1}"

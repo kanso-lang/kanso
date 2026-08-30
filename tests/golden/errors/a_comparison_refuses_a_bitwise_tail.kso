@@ -1,0 +1,12 @@
+# The comparison level takes its left side from the bitwise level and its
+# right side from the ADDITION level, one rung tighter, so `&` may stand to
+# the left of a comparison and not to the right. `6 & 3 < 1` is `(6 & 3) < 1`
+# and answers false; the line below has nothing to attach the `& 1` to and
+# the statement ends with tokens left over.
+#
+# This is pinned because the asymmetry is invisible in the grammar's shape and
+# a precedence-climbing parser — one binding-power table, one loop — would
+# quietly accept it as `6 < (3 & 1)`. That rewrite was measured at 681,679
+# instructions, 1.53% of a compile, and declined on the strength of this
+# fixture and its companion.
+print "{6 < 3 & 1}"
