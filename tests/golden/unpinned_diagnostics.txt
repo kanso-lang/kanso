@@ -468,3 +468,52 @@ error[license]: `{}` has an arm for an err raised in {}, and
 # is pinned by a_field_typeset_naming_no_type; this is the runtime twin of a
 # check that has already happened.
 field `{}` of `{}` takes {}
+
+# ==========================================================================
+# THREE THE COMMENT-STRIPPING FOUND, 2026-08-30.
+#
+# The scan's wide corpus read tests/*.rs whole. A comment is a mention and an
+# `assert!` string is a pin, and a substring search cannot tell them apart —
+# which is the reasoning that already narrowed the DRIVER corpus above, applied
+# to the other one at last. Four messages were resting on prose:
+#
+#   no such field       a doc comment in getter_identity.rs listing "the three
+#                       ways a read can fail". That one was a DIVERGENCE: the
+#                       interpreter and the page both said `` `{ty}` has no
+#                       field `{name}` `` where native said four words naming
+#                       neither. Native says the shared sentence now and the
+#                       case is pinned at tests/golden/runtime/
+#                       a_field_write_names_a_field_the_type_lacks.
+#   not an err          the words "not an error." in make_dir.rs's module
+#                       comment, which is about `mkdir -p`
+#   a beat mark ...     carry_repair.rs:37 QUOTES it as what used to happen
+#   too many processes  many_handles.rs:52 does the same
+#
+# The last two are the sharpest thing in this file. Each is a regression test
+# that names the bug it fixed and then asserts the fix — `stdout == "gathered
+# 4\n"` and `"answered 41\n"` — an assertion that the message NEVER appears,
+# read by the scan as a pin of the message. All four could have been reworded
+# in the runtime with nothing going red.
+#
+# THE PAGE'S ERR READ, dead by construction, and the emitter says so rather
+# than a reading of the runtime. `rt_err_inner` has exactly one call site,
+# wasm_backend.rs:548, and the two instructions above it are `RT_CHECK_ERR`
+# and `br_if(0)`: the arm is entered only on a value the runtime has just
+# confirmed IS an err. Nothing else in the module names the import.
+not an err
+
+# AN ARENA INVARIANT, which is not a program's error at all. The beat rewind
+# compares the mark's pointer and remaining count against the end of its block,
+# one comparison per rewind, and a disagreement means the compiler or the
+# runtime handed out memory past a block end. A program cannot ask for it; what
+# it reports is a defect in the code below the program. tests/carry_repair.rs
+# is the regression test, and it asserts the message never appears.
+a beat mark and the arena disagree about the room that is left
+
+# A FOURTH RESOURCE CAP, joining the three above it for the same reason: it is
+# reachable in principle and the fixture costs more than it proves. The handle
+# table is K_SOCKETS, 64, shared with the sockets — so the fixture spawns 64
+# live child processes on the runner, which is what sockets_serve.rs's header
+# records a day of wedged suites for. tests/many_handles.rs is the regression
+# test, and it asserts the message never appears.
+too many processes at once

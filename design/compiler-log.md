@@ -4169,3 +4169,49 @@ has paid. That file says an excuse reasoning about which check speaks first must
 name WHICH walk it is reasoning about, because a second one may not have the
 rule at all. It was written about the unused-expression rule and a `build` body.
 Reading it as a sweep rather than a note is what found this.
+
+## 2026-08-30 — a regression test's account of the bug it fixed, read as a pin
+
+The diagnostic scan keeps two corpora and narrowed only one of them. Its own
+comment says why: "a substring search cannot tell an assertion from a mention",
+written after four of the driver family's six pins turned out to be text in
+tests/*.rs that checked no compiler message at all. The driver corpus became
+`.stderr` plus `module_differential`. The wide corpus went on reading tests/*.rs
+whole, comments included.
+
+Four messages were resting on prose. Every one checked by hand:
+
+```
+no such field          getter_identity.rs:78, a doc comment listing "the three
+                       ways a read can fail — no such field anywhere, ..."
+not an err             make_dir.rs:7, the words "not an error." in a module
+                       comment about `mkdir -p`
+a beat mark and the    carry_repair.rs:37 quotes the message as what used to
+arena disagree ...     happen, then asserts stdout == "gathered 4\n"
+too many processes     many_handles.rs:52 quotes it, then asserts
+at once                stdout == "answered 41\n"
+```
+
+The last two are the sharpest thing this file has turned up. Each is a
+regression test that names the bug it fixed and then asserts the fix — an
+assertion that the message never appears — and the scan read the narrative as a
+pin of the message. All four could have been reworded in the runtime with
+nothing going red.
+
+One of them was already wrong. `k_set_field` in runtime.c refused a write to a
+field the record does not declare with `no such field`, naming neither the type
+nor the field, where the interpreter and the page both say `` `node` has no
+field `nope` `` — the sentence runtime.c itself prints for a failed field READ,
+at the two sites above `k_set_field` in the same file. Native says it now, and
+the program that shows it is in the runtime corpus, which requires both engines
+to write the same stderr.
+
+The scan drops comment lines from tests/*.rs before they join the wide corpus.
+A Rust test is still a legitimate pin for the handful of diagnostics a corpus of
+programs cannot express — the precedent is `an_empty_branch_is_refused.rs` —
+and what it asserts is what pins them. 310 literal diagnostics became 309, and
+the three that are left have their mechanisms written: the page's err read has
+one call site with `RT_CHECK_ERR` and a `br_if` two instructions above it, the
+beat-mark disagreement is an arena invariant no program can ask for, and the
+process cap is the fourth of its family, needing 64 live children on the runner
+to reach.

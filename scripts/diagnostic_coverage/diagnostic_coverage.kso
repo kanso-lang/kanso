@@ -587,7 +587,37 @@ fn read_test _ false rest parts
   test_sources rest parts
 
 fn read_test name true rest parts
-  os/read_file "tests/{name}" . (t -> test_sources rest (push parts t))
+  os/read_file "tests/{name}" . (t -> kept_source rest parts t)
+
+fn kept_source rest parts t
+  test_sources rest (push parts (uncommented t))
+
+# A COMMENT IS A MENTION AND AN `assert!` STRING IS A PIN, and a substring
+# search cannot tell them apart. That is why the driver corpus below is
+# .stderr plus module_differential: four of its six pins came from tests/*.rs
+# and every one was false. The wide corpus keeps tests/*.rs, because the
+# handful of diagnostics a corpus of programs cannot express ARE legitimately
+# pinned by a Rust test, and drops the commentary, because four more were
+# resting on prose:
+#
+#   no such field                  a doc comment in getter_identity.rs listing
+#                                  "the three ways a read can fail"
+#   not an err                     the words "not an error." in make_dir.rs's
+#                                  module comment, about mkdir -p
+#   a beat mark and the arena ...  carry_repair.rs:37 quotes it as history
+#   too many processes at once     many_handles.rs:52 quotes it as history
+#
+# The last two are the sharpest. Each is a regression test that names the bug
+# it fixed and then asserts the fix: `stdout == "gathered 4\n"` and
+# `"answered 41\n"` — an assertion that the message never appears, read by the
+# scan as a pin of the message. All four could be reworded in the runtime with
+# nothing going red, and one of them, `no such field`, was a live divergence.
+fn uncommented src
+  lines = list/select (text/split src "\n") (l -> code? l)
+  text/join (list/to_list lines) "\n"
+
+fn code? line
+  text/slice (squeezed line) 1 2 != "//"
 
 fn corpus_of dir parts
   os/list_dir dir . (names -> in_dir dir (list/to_list names) parts)
