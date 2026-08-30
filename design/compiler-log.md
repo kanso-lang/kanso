@@ -4635,3 +4635,27 @@ The fixture is `tests/golden/entryfile/a_subtype_stored_across_the_entry`:
 three primitive parents by two containers, pinned as one output on both
 engines. Which line comes back wrong depends on what the arena held, so the
 whole output is the pin rather than any line of it.
+
+### The rest of the list, swept
+
+A predicate that enumerates tags is worth checking the moment one of them is
+found short, so the other ten were walked against the enum.
+
+```
+K_INT K_FLOAT K_TRUE K_FALSE K_NONE   immediates; the payload is the value
+K_FNREF                               a pointer, and correctly absent: it is
+                                      always `ptr @<global>` — codegen emits
+                                      `k_fnref(ptr @rsym)` at all three call
+                                      sites and the helper's own comment calls
+                                      it "the static a `k_fnref` value points
+                                      at". A static cannot be rewound.
+K_THUNK                               a pointer, spelled out at the call site
+K_STR K_ERR K_REC K_DESC K_LIST
+K_MAP K_CLOSURE K_BYTES K_SUB         on the list
+```
+
+So the list is complete now, and `k_is_heap` is the only predicate of its shape
+in the file — one other line groups heap tags, and it renders `K_CLOSURE` and
+`K_FNREF` alike as `<fn>`, which is a display question and not a lifetime one.
+The deep copier already had its `K_SUB` arm; only the predicate that decides
+whether to call it was short.
