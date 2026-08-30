@@ -5849,3 +5849,12 @@ thirteen hold one entry per declaration.
 Peak does not move, which is the answer to the obvious worry: a table sized to
 what it will hold occupies no more than one that grew into the same size, and
 the intermediate tables it does not build are the allocations that went away.
+
+### The runner's number
+
+    compile_instructions  44,862,145 -> 44,483,421  -378,724  -0.84%  (runner)
+                          45,155,678 -> 44,778,375  -377,303  -0.84%  (local)
+    compile_allocs                        34,682   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99272811720.
