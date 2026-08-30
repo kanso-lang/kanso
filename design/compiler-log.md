@@ -4296,3 +4296,73 @@ either: the rise was +1,254,345 before this change and +1,237,258 after.
 That leaves the trade as measured, with no cheaper route through this door:
 5.5% of the front end's peak for 2.19% of its instructions, +0.08 welfare.
 Left unshipped, and now characterised rather than open.
+
+## 2026-08-30 — the largest line in the allocation map held two bytes
+
+The dhat map from the entry before last put one line of `infer.rs` at 8,309
+blocks, 13.4% of every allocation the front end makes on `kanso check
+lib/json`, and more than twice the next line down. It is `eval_call`
+collecting a call's argument sets:
+
+```rust
+let mut arg_sets: Vec<Set> = args.iter().map(|a| eval_expr(ctx, a, env)).collect();
+```
+
+`Set` is a `u16`. Arity in real source is one, two or three, so the great
+majority of those 8,309 heap blocks held two, four or six bytes. Eight of them
+are an array on the stack now, and arities above eight still spill to a `Vec`,
+so nothing a program may write changes.
+
+```
+compile_allocs        61,974 -> 57,430          -4,544    -7.3%
+compile_instructions  56,442,099 -> 55,414,950  -1,027,149  -1.82%  (runner)
+compile_peak_bytes    763,868   unchanged
+compile_rounds        40        unchanged
+compile_visits        16,806    unchanged
+```
+
+Welfare 84.37 -> 84.66, banked. Nothing rises.
+
+`compile_peak_bytes` does not move, and that is the argument for having a map
+at all. A call's argument sets die when the call is inferred, so these blocks
+were never what the arena held at its high water mark: the peak vein could not
+see them and `compile_allocs` could only say there were sixty-two thousand of
+something. dhat is what named the line.
+
+### Two hosts, three times apart, and a mechanism for it
+
+They agree exactly on the allocations — both read 57,430 — and disagree by a
+factor of three on what the allocations cost. The container reads -340,075
+where the runner reads -1,027,149. Same sign, neither near zero, so by the
+pending gavel's reading this is part work; callgrind says which part.
+
+```
+                        before        after       delta
+malloc               2,712,344    2,521,016    -191,328
+_int_malloc          3,356,980    3,367,739     +10,759
+free                 1,735,552    1,608,320    -127,232
+_int_free            3,754,476    3,509,501    -244,975
+arena.c:free           185,952      172,320     -13,632
+__rust_alloc         1,220,817    1,116,305    -104,512
+__rust_dealloc          97,638       88,550      -9,088
+                                               -680,008
+
+malloc_consolidate     788,221    1,058,396    +270,175
+unlink_chunk           362,013      481,793    +119,780
+                                               +389,955
+```
+
+The calls that went away saved 680,008 instructions and the free lists took
+back 389,955 of it. Removing 4,544 small short-lived blocks changes the shape
+of the heap, and this glibc revision pays for the change at consolidation.
+What is left, -290,053, plus about fifty thousand in `eval_call` itself, is
+the container's -340,075. The runner's 2.39-0ubuntu8.8 does not pay it and
+banks nearly the whole gross saving.
+
+Every earlier row where the hosts disagreed ended in "layout" — true, and
+unsatisfying, because layout is a name for not having looked. This one has a
+mechanism, and the mechanism says something the gavel's rule does not: when
+the hosts disagree, the SMALLER reading is not automatically the work. Here
+the smaller reading is the work minus a penalty one host pays and the other
+does not, and both numbers are honest measurements of the same change on
+different allocators. The rule wants a fourth row for that.

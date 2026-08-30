@@ -476,4 +476,25 @@
 # the runner reads -1,767,533 (-3.04%), same sign and within four per cent of
 # each other. That is what work looks like across a host pair, against the
 # +382,777/+50,058 of the Span change eight rows up.
-compile_instructions=56442099
+#
+# 2026-08-30  56,442,099 -> 55,414,950   -1,027,149   -1.82%
+# `eval_call` collected a call's argument sets into a `Vec<Set>`, and `Set` is
+# a `u16`. Eight of them are an array on the stack now; arities above eight
+# still spill to a `Vec`. compile_allocs falls 61,974 -> 57,430 with it;
+# compile_peak_bytes, rounds and visits do not move.
+#
+# The two hosts agree on the allocations to the block — both read 57,430 — and
+# disagree by a factor of three on what the allocations cost: the container
+# reads -340,075 where the runner reads -1,027,149. Same sign, neither near
+# zero, so this is a part-work row, and callgrind says which part. In the
+# container the lines that do the allocating fall by 680,008 — malloc,
+# _int_malloc, free, _int_free, arena free, __rust_alloc, __rust_dealloc — and
+# `malloc_consolidate` and `unlink_chunk` RISE by 389,955. Removing 4,544
+# small short-lived blocks changes the shape of the free lists, and on this
+# glibc revision consolidation takes back 57% of what the removed calls saved.
+# The remaining -290,053 plus about fifty thousand in `eval_call` itself is the
+# container's -340,075. The runner's 2.39-0ubuntu8.8 does not pay it, and banks
+# nearly the whole gross saving instead. So the work is real and the
+# disagreement is the allocator's — the first row here whose host gap has a
+# named mechanism rather than a shrug at layout.
+compile_instructions=55414950
