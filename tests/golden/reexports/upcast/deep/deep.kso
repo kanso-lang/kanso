@@ -1,0 +1,4 @@
+pub type shape int
+
+pub fn made n
+  shape n

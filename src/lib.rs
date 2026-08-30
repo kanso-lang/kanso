@@ -3666,7 +3666,27 @@ fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
                 }
             }
         }
+        Expr::Lambda { body, .. } => f(body),
+        Expr::Guard { cond, early, rest, .. } => {
+            f(cond);
+            f(early);
+            for stmt in rest {
+                f(stmt_expr_mut(stmt));
+            }
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for stmt in stmts {
+                f(stmt_expr_mut(stmt));
+            }
+        }
         _ => {}
+    }
+}
+
+fn stmt_expr_mut(s: &mut ast::Stmt) -> &mut ast::Expr {
+    match s {
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
+        ast::Stmt::Set { value, .. } => value,
     }
 }
 

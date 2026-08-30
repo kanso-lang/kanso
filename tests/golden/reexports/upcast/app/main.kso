@@ -1,0 +1,7 @@
+import "./lib"
+
+print "top {lib/at_top (lib/one 1)}"
+print "lambda {lib/in_lambda (lib/one 2)}"
+print "block {lib/in_block (lib/one 3)}"
+print "build {lib/in_build (lib/one 4)}"
+print "guard {lib/below_guard (lib/one 5)}"
