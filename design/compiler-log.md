@@ -2862,3 +2862,17 @@ operation on an err still propagates it. This makes the gavels' own
 lambda samples (`annotate e (err -> "config: {err.reason}")`) compile;
 dispatch-group callbacks keep destructuring as before. The ledger
 entry's removal rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: the drop question closes — explicitness IS the guarantee
+
+On "What happens to an effect nobody eliminates", Clay ruled the
+premise backwards: "it's the exact opposite of that. the fact that
+you have to explicitly call e.g. bind makes it all the more obvious
+that effects can't be dropped." An effect is a value in hand, and the
+language already refuses unused values — an unused binding is a
+compile error, and a value nothing consumes has nowhere to go. So a
+dropped effect is already unspellable under existing discipline,
+and visibly so, where the railway's guarantee was ambient machinery
+a reader could not see. No new checker rule and no io-edge rule is
+minted; the recommendation is declined as solving a non-problem. The
+entry leaves the ledger with this commit.

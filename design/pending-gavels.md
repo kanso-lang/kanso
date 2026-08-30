@@ -214,25 +214,6 @@ rewriting on explicit elimination. Half two lands when the typed-effect
 surface is implemented, present tense as always. compiler.html entry 23
 owes a rewrite or retirement in the same campaign.
 
-### What happens to an effect nobody eliminates
-
-**Cited: opened by the 2026-08-29 effects-are-types gavel, which made
-`<t>effect` a first-class passable box with bind/annotate/rescue as sole
-eliminators and retired the ambient railway. The search predates the
-construct; nothing rules on it.**
-
-A box that is bound and unused is already refused (unused bindings are
-errors). The open case is a box in tail position or otherwise discarded
-without elimination — under the old railway a failure could never be
-dropped; under explicit elimination, an unhandled box is how one could
-be. Candidate answers: refusing any expression-statement of effect type;
-treating an uneliminated failed box reaching the io edge as the
-program's failure; or both.
-
-**RECOMMENDATION: both.** Refuse the silent discard syntactically where
-the checker can see it, and define the io edge as demanding every box so
-a failure that arrives there is the program's result. Together they
-restore the can't-drop guarantee the railway used to give for free.
 
 ### An assert hako
 
