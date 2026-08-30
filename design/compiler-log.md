@@ -6175,3 +6175,72 @@ Copied out of job 99293723322. The two hosts agree within two per cent of the
 fall — where #1161, which removed only mallocs, had them a factor of two
 apart. This change removes hash operations and vector copies as well as
 mallocs, and those cost the same on both.
+
+## 2026-08-30 — eight changes, and what they did to gavel #159
+
+#1155 through #1162 all went at the front end, each small enough to state in a
+sentence. Together:
+
+    compile_instructions  47,302,573 -> 43,618,236  -3,684,337  -7.79%  (runner)
+    compile_allocs             34,945 ->     32,856     -2,089   -5.98%
+    compile_peak_bytes                     730,120   unmoved across all eight
+    welfare                     86.79 ->      87.15
+
+The falls came from four shapes, and the queue is now out of instances of all
+four.
+
+**A decision hoisted out of a loop.** `package_of` ran once per declaration per
+fixpoint round; it runs once per declaration now, and the `.hako/` search that
+fed it is a byte scan rather than a substring searcher (#1155, -686,335).
+
+**A map replaced by a vector when the map was small.** Infer's scope holds a
+handful of names and was a hash map; it is a flat vector with a reverse linear
+scan (#1156, -1,147,977).
+
+**A necessary condition tested before the expensive one.** Only `Get_`-prefixed
+names can name a getter, so `prune_unused_getters` no longer builds a set of
+every identifier in the module to ask about thirty-one of them (#1157,
+-606,116).
+
+**A table of per-group vectors flattened by a counting pass.** Count per key,
+turn the counts into starts, then place each item at its key's cursor: one
+`Vec` and a range per key instead of a `Vec` per key. Three tables took it —
+`callee_first` in #1161, `by_group` and `check_constants` in #1162 — for
+512,055 instructions and 1,826 blocks between them.
+
+Two changes were the same idea applied twice with no cleverness: thirteen maps
+in `check.rs` sized at construction (#1158, -378,724) and twenty-four
+`find('/')` calls replaced with a forward byte scan (#1159, -353,130).
+
+Three things were built, measured and declined, each with its number: the ascii
+fast path in `Scanner::new`, the operator table's two-character `String`, and
+the precedence-climbing rewrite of the expression parser. The last was worth
+681,679 instructions and was declined because two of the grammar's precedence
+asymmetries were observable and unpinned; #1160 pinned them with three
+fixtures, so the decline is a decision somebody can revisit rather than a
+hazard.
+
+### What is left
+
+dhat on the new head. The three rows gavel #159 names have not moved a byte
+across any of the eight:
+
+```
+3,197  parser.rs:2127  Expr::Ident's String, cloned out of the token
+3,157  lexer.rs:631    the same String, built by lex_word
+  629  parser.rs:1793  Pattern::Var's String, same source
+------
+6,983
+```
+
+The share moved because the denominator did. These were 19.6% of 35,643 blocks
+when the gavel was filed and they are 21.3% of 32,860 now. Below them the map
+is a long tail: 1,100 at parser.rs:2114 (the App args vector, measured and declined
+earlier today), 1,067 at parser.rs:2121, 959 at lib.rs:607, then nothing over
+750. `trmc.rs:180` (644)
+is deliberately left alone — its map is iterated to build the rewritten arms,
+so key order is part of what the compiler emits.
+
+The gavel entry has been refreshed with the current share. Nothing else in it
+changed: the two treatments measure the way they did, and the ruling is still
+Clay's.
