@@ -542,4 +542,9 @@
 # cent. The change adds four match arms to one function — the code grew, the
 # work it does on this input barely moved, and the two hosts placed the result
 # differently. Neither number is an estimate of anything but its own host.
-compile_instructions=54507708
+#
+# 2026-08-30  54,507,708 -> 54,509,454   +1,746   +0.003%
+# `k_is_heap` became a bit mask so `K_SUB` could join it. runtime.c is embedded
+# in the compiler's binary, so its text moves this row; the front end never
+# runs a line of it. compile_allocs and compile_peak_bytes do not move.
+compile_instructions=54509454

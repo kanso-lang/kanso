@@ -51,6 +51,38 @@
 # withdrawn with it rather than disproven: nothing re-measured it against the
 # shape that matters.
 # 2026-08-13: basket 56,597,311 to 55,987,313, a fall of 609,998 and 1.08%.
+#
+# 2026-08-30 — `K_SUB` joined `k_is_heap`, which had left a returned subtype to
+# be freed under the caller. Two rows pay and three fall:
+#
+#   deepbench     806,985,948 -> 850,365,021   +43,379,073   +5.38%
+#   widebench      85,273,589 ->  86,559,596    +1,286,007   +1.51%
+#   escapebench   258,574,097 -> 258,583,100        +9,003
+#   jsonbench   2,910,241,430 -> 2,910,241,528          +98
+#   oneshot        47,277,061 ->  47,277,156          +95
+#   pendbench     987,907,671 -> 987,890,099      -17,572
+#   basket         57,436,178 ->  57,392,199      -43,979
+#   encodebench 9,866,843,915 -> 9,866,613,836     -230,079
+#
+# deepbench NEVER MAKES A SUBTYPE — `k_sub` appears nowhere in its profile, and
+# `k_survives_x` and `k_ptrmap_at` are byte-identical across the change. The
+# whole delta is inside `k_copy_size`, which is 36% of that benchmark: the
+# predicate is inlined into `k_slots_survive` and through it into the copy
+# walk, so its shape decides how that function compiles. Same walk, same calls,
+# same counts, more instructions.
+#
+# Four shapes were measured in the container before this one was taken:
+#
+#   with the bug                            806,982,208
+#   the switch, plus one `case K_SUB:`      856,510,441   +6.14%
+#   a mask carrying a bounds branch         878,869,219   +8.90%
+#   `k_slots_survive` given its own switch  856,510,441   +6.14%
+#   the mask that ships                     850,361,281   +5.38%
+#
+# The container and the runner agree to 3,740 instructions on the last, and
+# agreed to the instruction on the second. This is not a host disagreement; it
+# is what the correct predicate costs, and the mask is the cheapest correct
+# shape found.
 # jsonbench +5 and oneshot +10 are noise; encodebench rises 4,414. An accumulator
 # handed round a cycle is no longer re-seeded on every hop, and seeding copies the
 # whole string, so the work removed is larger than the carry's new flag and
@@ -118,21 +150,21 @@
 # Marking the helper static so it could inline was tried and measured
 # separately: byte-identical, because the optimizer already inlines within the
 # single translation unit.
-jsonbench 2910241430
+jsonbench 2910241528
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 9866843915
-oneshot 47277061
-basket 57436178
-widebench 85273589
-deepbench 806985948
-escapebench 258574097
+encodebench 9866613836
+oneshot 47277156
+basket 57392199
+widebench 86559596
+deepbench 850365021
+escapebench 258583100
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
-pendbench 987907671
+pendbench 987890099
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around

@@ -299,11 +299,24 @@
 # points, which are extern symbols the emitter can call, so the linker keeps
 # them whether a benchmark does or not. The 32-byte spread between the figures
 # is alignment padding absorbing part of it in some.
-jsonbench text=81250
-encodebench text=98274
-oneshot text=98322
-basket text=89954
-widebench text=99330
-deepbench text=63634
-escapebench text=50114
-pendbench text=74274
+#
+# 2026-08-30 — `k_is_heap` became a bit mask where it was a nine-case switch,
+# so `K_SUB` could join it without the jump table. Every benchmark's text
+# shrinks by about four hundred bytes:
+#
+#   jsonbench 81,250 -> 80,850     encodebench 98,274 -> 97,874
+#   oneshot   98,322 -> 97,922     basket      89,954 -> 89,554
+#   widebench 99,330 -> 98,930     deepbench   63,634 -> 63,250
+#   escapebench 50,114 -> 49,666   pendbench   74,274 -> 73,858
+#
+# Banked. The predicate is inlined into `k_slots_survive` and through it into
+# `k_copy_size`, so the table was emitted into every program that links the
+# runtime.
+jsonbench text=80850
+encodebench text=97874
+oneshot text=97922
+basket text=89554
+widebench text=98930
+deepbench text=63250
+escapebench text=49666
+pendbench text=73858

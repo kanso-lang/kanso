@@ -127,6 +127,68 @@ which is itself an argument for looking, because a general answer is worth much
 more than a hash.
 
 
+### Whether a use-after-free repair may lower welfare by 0.03
+
+**Cited: searched design/compiler-log.md (the 2026-08-30 `K_SUB` entry is this
+change and states the measurements), design/log/compiler-log-archive.md (no
+entry on the welfare floor against a correctness fix), and every design/*.md.
+The welfare ruling in scripts/welfare/welfare.kso is the text this asks about;
+nothing has revisited it since it was written.**
+
+`k_is_heap` did not list `K_SUB`, whose payload is a `KSub*`, so `k_cohort_pop`
+rewound the beat's arena under a returned subtype and handed the caller a
+dangling pointer. Native printed a different denormal double on every run where
+the interpreter printed the value. kanso#1143 fixes it; the fixture is
+`tests/golden/entryfile/a_subtype_stored_across_the_entry`.
+
+The fix costs welfare 0.03, and the ruling is that welfare cannot fall — the
+change is optimised until it does not, and if that is impossible the work stops
+and the question comes here. It has been optimised. Five shapes, measured in
+the container:
+
+    with the bug                            806,982,208
+    the switch, plus one `case K_SUB:`      856,510,441   +6.14%
+    a mask carrying a bounds branch         878,869,219   +8.90%
+    `k_slots_survive` given its own switch  856,510,441   +6.14%
+    the mask that ships                     850,361,281   +5.38%
+
+and a sixth that is not a shape but a scope: naming `K_SUB` at
+`k_cohort_pop`'s call site and leaving the predicate alone. That one is free
+and does not work — `k_slots_survive` decides whether a node is shareable and
+has the same hole, so the fixture still prints a denormal.
+
+WHAT THE COST ACTUALLY IS, and why it is strange. deepbench never makes a
+subtype: `k_sub` appears nowhere in its profile, and `k_survives_x` and
+`k_ptrmap_at` are byte-identical across the change. The entire delta sits
+inside `k_copy_size`, which is 36% of that benchmark. The predicate is inlined
+into `k_slots_survive` and through it into the copy walk, so its shape decides
+how that function compiles. Same walk, same calls, same counts, more
+instructions. The mask also shrinks every benchmark's machine code by about
+four hundred bytes, because the jump table is gone.
+
+So the 0.03 is not the price of carrying subtypes out of arenas. It is the
+price of one predicate compiling differently in a program that never uses the
+feature.
+
+**Recommendation: let it fall, and record the fall against this change.** The
+floor's own doctrine says it is "absolute against work that leaves the language
+alone, permeable to work that changes it". A miscompilation repair is neither
+of those as written — it does not add a feature, and it does not leave the
+language alone either, because the language did not previously mean what it
+now means on these programs. The reading that seems right is that a correctness
+fix is permeable for the same reason a feature is: the old number was cheaper
+partly because the compiler was doing something wrong, and refusing the fix to
+protect the number is the index governing the compiler rather than describing
+it.
+
+The alternative that does not need a ruling is to leave the use-after-free in
+place, which is not a real alternative.
+
+If the answer is instead that the WEIGHTS are wrong — that a 5.38% rise on one
+benchmark should not cost 0.03 when the same change shrinks every program's
+machine code — that is a different edit and a bigger one, and it should be made
+about the weights rather than about this change.
+
 ## Open, not blocking
 
 ### Whether the backends should build a partial over a value
