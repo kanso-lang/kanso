@@ -6163,3 +6163,15 @@ another.
 
 Welfare 86.99 -> 87.13, the largest single step the compile vein has taken
 since the counters went in.
+
+### The runner's number
+
+    compile_instructions  44,100,285 -> 43,618,236  -482,049  -1.09%  (runner)
+                          44,427,648 -> 43,955,167  -472,481  -1.06%  (local)
+    compile_allocs                        32,856   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99293723322. The two hosts agree within two per cent of the
+fall — where #1161, which removed only mallocs, had them a factor of two
+apart. This change removes hash operations and vector copies as well as
+mallocs, and those cost the same on both.
