@@ -732,4 +732,13 @@
 # gains more. Both changes trade an allocation and a pointer chase for a short
 # linear scan of a flat vector, and the two hosts price that trade differently.
 # The allocation row agrees to the digit either way.
-compile_instructions=42914281
+#
+# 2026-08-30 (the bare-name walk asks what it already knows): 42,914,281 ->
+# 42,748,207, a fall of 166,074, or 0.39%, banked. mark_bare_quals collected
+# every bare identifier occurrence in the module into a set it then asked only
+# about the surfaced names and the import rename targets; it tests that
+# membership before inserting now, which is #1157's move in a different pass.
+# The container read -164,185 against this host's -166,074, one per cent apart.
+# This one is a hash lookup traded for a hash insert, and the two hosts agree
+# about that the way they agreed about #1162's.
+compile_instructions=42748207

@@ -2790,3 +2790,18 @@ sixty times that. The set was not costing much to hold; it was costing to fill.
 `HashMap<&str, ()>::insert` under `walk_children` under `mark_bare_quals` was
 267,972 instructions on the previous head — the largest single insert caller in
 the compile — and it is a lookup in a small table now.
+
+### The runner's number
+
+    compile_instructions  42,914,281 -> 42,748,207  -166,074  -0.39%  (runner)
+                          43,302,778 -> 43,138,593  -164,185  -0.38%  (local)
+    compile_allocs                        29,864   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99313216447. One per cent apart on the fall. A hash lookup
+traded for a hash insert is the same trade on both hosts, where #1167's scan
+for a pointer chase was not.
+
+Welfare 87.4654 -> 87.4740, banked with `--set` — three hundredths of a point
+on the compile-speed term, which is what a 0.39% fall is worth at this end of
+the satiation curve. The page's two `data-golden` compile figures move with it.
