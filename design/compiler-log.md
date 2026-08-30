@@ -5635,3 +5635,70 @@ charge was standing in for.
 Allocations, peak, rounds and visits are all identical, and so is the emitted
 golden. Nothing here changes what the compiler decides or writes — only how it
 finds a byte it was already looking for.
+
+## 2026-08-30 — an answer the fixpoint recomputed forty times
+
+The provenance pass runs a fixpoint over the call graph, and on `lib/json` it
+takes forty rounds. Every round walked every declaration, and the first thing
+it did for each was ask which package the declaration belongs to:
+
+```rust
+let pkg = bit(&table, package_of(&decl.file));
+```
+
+`package_of` splits a path on `.hako/` and then on its last slash; `bit` walks
+the interned package table comparing strings until one matches. A declaration's
+file does not change between rounds and neither does the table, so the answer
+is fixed from the moment `intern` finishes. It was computed forty times anyway,
+once per declaration per round.
+
+It is a `Vec<Pkgs>` built before the loop now, indexed by zipping the
+declarations against it. The `binds` map each declaration fills with its
+err-carrying locals moved out too — it was a fresh `HashMap` per declaration
+per round, and clearing one costs nothing where allocating a table costs a
+block.
+
+### The searcher under `package_of`
+
+With the recomputation gone, `package_of` still ran twice per declaration —
+once in `intern`, once building the table above — and callgrind still charged
+108,446 instructions to it. A fifth of that was `StrSearcher::new`, the setup
+for `split_once(".hako/")`. Two-way substring search is built for haystacks
+that justify its preprocessing; a source path is forty bytes and the needle is
+absent from every one of them in a program that fetched nothing, so the search
+never gets past its own setup. `after_hako` is a byte scan that tests the first
+character before comparing the rest, and `.hako/` is ascii, so the index it
+returns is a character boundary.
+
+Reading the row afterwards is instructive in the same way #1154 was:
+`package_of` went UP, 108,446 to 130,437, because the searcher's cost moved
+from its own row into the caller that now does the work inline. The program
+went down 315,908.
+
+### The numbers
+
+Measured in the box, container host, same binary either side:
+
+| | instructions |
+|---|---|
+| main | 47,651,194 |
+| the package table hoisted | 47,194,917 |
+| the byte scan as well | 46,878,322 |
+
+−772,872 in total, −1.62%. Allocations 34,945 → 34,812, the `binds` tables.
+Peak, rounds and visits are unchanged: the pass decides exactly what it decided
+before, and the emitted golden is byte-identical.
+
+### The runner's number
+
+    compile_instructions  47,302,573 -> 46,616,238   -686,335   -1.45%  (runner)
+                          47,651,194 -> 46,878,322   -772,872   -1.62%  (local)
+    compile_allocs            34,945 ->     34,812       -133   -0.38%  (both)
+    compile_peak_bytes                     730,120   unmoved
+    front_end_rounds 40, front_end_visits 16,806     unmoved
+    welfare                            86.79 -> 86.83
+
+Copied out of job 99257297594, which also confirmed the allocation and peak
+rows to the digit. The two hosts disagree by 0.17 points of the fall — the
+container's glibc is the same version but the CPU is not, and the searcher's
+setup is where a host divergence would land.
