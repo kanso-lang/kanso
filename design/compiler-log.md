@@ -5750,3 +5750,15 @@ The three rows above held 1.51 million and the change returned 1.11 million, so
 this one read HIGH — the opposite of #1154, and for the same reason in reverse:
 a `HashMap::get` row is the whole lookup, where the searcher rows were only
 part of one. The vector's own scan is what is left.
+
+### The runner's number
+
+    compile_instructions  46,616,238 -> 45,468,261  -1,147,977  -2.46%  (runner)
+                          46,878,322 -> 45,764,825  -1,113,497  -2.38%  (local)
+    compile_allocs                        34,812   unmoved, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+    front_end_rounds 40, front_end_visits 16,806   unmoved
+
+Copied out of job 99264116335. The runner reads the fall three per cent larger
+than the container does, the two hosts' closest agreement on this vein after
+#1154's one per cent.

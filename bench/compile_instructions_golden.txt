@@ -702,4 +702,4 @@
 # The local A/B on rustc 1.94.1 read -1,290,934 against this host's -1,279,525:
 # the two agree to within one per cent of the fall, which is the closest two
 # hosts have come on this vein.
-compile_instructions=46616238
+compile_instructions=45468261
