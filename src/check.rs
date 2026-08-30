@@ -179,10 +179,9 @@ pub fn builtin_arity(name: &str) -> Option<usize> {
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
-    let mut used = HashSet::default();
     let mut diags = resolve_markers(program, &markers);
     diags.extend(check_typesets(program, &type_names));
-    diags.extend(check_file(program, &HashSet::default(), &mut used));
+    diags.extend(check_file(program, &HashSet::default()));
     if require_entry {
         check_entry(program, &mut diags);
     }
@@ -1170,14 +1169,9 @@ pub fn declared_names(program: &Program) -> HashSet<&str> {
 }
 
 /// Per-file checks: canonical order plus name resolution against this file's
-/// globals extended with the rest of the module. Records which module-level
-/// names the file uses, for the unused-private check.
-pub fn check_file(
-    program: &Program,
-    extern_globals: &HashSet<&str>,
-    used_globals: &mut HashSet<String>,
-) -> Vec<Diagnostic> {
-    check_file_shadow(program, extern_globals, used_globals, &HashSet::default())
+/// globals extended with the rest of the module.
+pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diagnostic> {
+    check_file_shadow(program, extern_globals, &HashSet::default())
 }
 
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
@@ -1186,7 +1180,6 @@ pub fn check_file(
 pub fn check_file_shadow(
     program: &Program,
     extern_globals: &HashSet<&str>,
-    used_globals: &mut HashSet<String>,
     shadowable: &HashSet<String>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
@@ -1225,7 +1218,7 @@ pub fn check_file_shadow(
     let declared =
         Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: &declared_type_names };
     for decl in &program.fns {
-        check_fn_body_shadow(decl, &globals, used_globals, &mut diags, shadowable, &declared);
+        check_fn_body_shadow(decl, &globals, &mut diags, shadowable, &declared);
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -2999,7 +2992,6 @@ struct Declared<'a> {
 struct Resolver<'a> {
     globals: &'a HashSet<&'a str>,
     locals: Vec<Local<'a>>,
-    used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
     shadowable: &'a HashSet<String>,
     declared: &'a Declared<'a>,
@@ -3011,7 +3003,6 @@ struct Resolver<'a> {
 fn check_fn_body_shadow(
     decl: &FnDecl,
     globals: &HashSet<&str>,
-    used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &HashSet<String>,
     declared: &Declared,
@@ -3019,7 +3010,6 @@ fn check_fn_body_shadow(
     let mut resolver = Resolver {
         globals,
         locals: Vec::new(),
-        used_globals,
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
         shadowable,
@@ -3382,9 +3372,12 @@ impl<'a> Resolver<'a> {
             }
         }
         match self.globals.contains(name) {
-            true => {
-                self.used_globals.insert(name.to_string());
-            }
+            // The name resolves; nothing more to say about it here. A set of
+            // which globals a file used was recorded at this line for an
+            // unused-private check that has since moved to `lib::private_uses`,
+            // and nothing read it after the move — a `String` per mention, for
+            // a set that was dropped.
+            true => {}
             false if name == "set" => {
                 self.diags.push(Diagnostic::new(
                     "name",

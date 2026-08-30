@@ -73,6 +73,12 @@
 #
 # Rounds and visits do not move, which is the check on the bitset: those two
 # counters are exactly what a wake set that woke a different set would change.
+#
+# 2026-08-30 (a set nobody read): 733,794 -> 730,120, a fall of 3,674, or 0.5%.
+# Banked, and it is one piece of the two in that change: `Resolver::used_globals`
+# held a `String` per global mention for the length of a file's check, and
+# nothing ever read the set. The reservation in `prune_unused_getters` beside it
+# does not move this row, because that set is transient.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=733794
+compile_peak_bytes=730120

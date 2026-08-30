@@ -5449,3 +5449,68 @@ The field is private now, behind `Inference::param(decl, at)`. Making it private
 first was the way to find the readers: the compiler named all seven — beat.rs
 four times, codegen.rs and dispatch.rs once each — and there was no need to
 guess at a grep.
+
+## 2026-08-30 — a set nobody read, and one that grew from empty
+
+```
+prune_unused_getters reserves its set   36,268 -> 36,234    -34
+used_globals deleted                    36,234 -> 35,639   -595
+                                                           -629   -1.7%
+compile_peak_bytes                     733,794 -> 730,120  -3,674   -0.5%
+```
+
+### The set nobody read
+
+`Resolver::used_globals` was a `HashSet<String>`, threaded through
+`check_file`, `check_file_shadow`, `check_fn_body_shadow` and the `Resolver`
+struct, and filled here:
+
+```rust
+match self.globals.contains(name) {
+    true => {
+        self.used_globals.insert(name.to_string());
+    }
+```
+
+A `String` for every mention in the program that resolves to a module-level
+name. A grep over `src/` and `tests/` finds eight occurrences of the field: one
+insert, one struct field, four parameters, one pass-through, one initialiser.
+None of them a read. At all four call sites the caller writes `let mut used =
+Set::default()`, hands over `&mut used`, and never looks at it again.
+
+`check_file`'s own doc comment says what it was for — "Records which
+module-level names the file uses, for the unused-private check" — and that check
+lives in `lib::private_uses` now, working from the imports rather than from this
+set. The recording stayed behind when the check moved. #1072's family, and the
+same treatment.
+
+### The set that grew from empty
+
+`prune_unused_getters` walks every statement of every non-getter declaration and
+collects each identifier occurrence into a borrowed set, to ask afterwards which
+getters were mentioned. `collect`-shaped growth from capacity nothing costs a
+rehash sequence over a set that ends up holding every distinct name in the
+program.
+
+Two declarations' worth of room per declaration was measured against eight, and
+eight is worse — 49,348,198 local instructions against 49,336,704 — because a
+larger table probes further for the same contents. The number is a measurement
+rather than a guess, and the comment beside it says so.
+
+### What the sweep that found this cost, and what it refused
+
+`callgrind --separate-callers=2` was run to answer a different question: which
+of the compiler's `HashSet<&str>` inserts the profile's 2,075,915-instruction
+row belongs to. The answer was ten callers with no owner — the largest 1.11% of
+the compile — and two declines came out of it:
+
+- **Filtering `prune_unused_getters`'s mentions against the getter names.** The
+  walk already pays exactly one hash per mention, which is the floor for this
+  shape; a filter pays one for the `contains` and then the insert anyway. It
+  also cannot be a `Get_` prefix test, because `FnDecl::is_getter` reads the
+  BODY (`[Stmt::Expr(Expr::Ident(name)) if name == GETTER_BINDER]`), so a
+  hand-written function whose body is just `Read` is a getter under any name.
+- **Pre-sizing the six `iter().filter(..).map(..).collect()` sets** in
+  `advisory`, `beat`, `check` and `escape`. The premise holds — a `Filter`'s
+  size_hint lower bound is zero, so those sets do start empty — and the
+  measurement is 4,514 instructions and one allocation. Six diffs for 0.009%.
