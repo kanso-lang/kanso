@@ -345,7 +345,7 @@ pub fn violations(
             // The package is a path; a reader thinks in modules, so name the
             // last segment — `json`, `testing`, `own_err` — and fall back to
             // "this program" for a file at the root with no directory above it.
-            let module = pkg.rsplit('/').next().unwrap_or("");
+            let module = crate::ast::bare_name(pkg);
             let whose = match module {
                 "" => "this program".to_string(),
                 other => format!("`{other}`"),

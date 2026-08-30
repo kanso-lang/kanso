@@ -5858,3 +5858,127 @@ the intermediate tables it does not build are the allocations that went away.
     compile_peak_bytes                   730,120   unmoved, both hosts
 
 Copied out of job 99272811720.
+
+## 2026-08-30 — the other direction
+
+#1154 replaced eighteen backward slash searches with `ast::last_slash`, a
+plain byte scan, and took 1,279,525 instructions off the compile. It left the
+forward family alone. There are twenty-four of those: `name.contains('/')`
+across `advisory.rs`, `check.rs`, `lib.rs` and `trmc.rs`, `split_once('/')`
+in `used_quals`, and four `rsplit('/').next()` chains that want the last
+segment and pay a full pattern search to get it.
+
+`contains` and `split_once` on a `char` go through `memchr` the way the
+backward pair went through `memrchr`, and the argument is the same: the
+average identifier in the shipped library is five bytes, and a routine built
+to scan kilobytes spends most of that setting itself up.
+
+`ast` gains `first_slash`, `has_slash`, `split_module` and `bare_name`, and
+every one of the twenty-four sites reads one of them.
+
+### Why `split_module` is not `split_qual`
+
+They cut in different places and mean different things. An owner is everything
+before the LAST slash — `std/net/http/get` belongs to `std/net/http` — which
+is what `split_qual` gives. A qualifier is the FIRST segment, the module name
+an import wrote, so `used_quals` credits `std`. Folding the two together would
+have been the kind of change that passes every test and quietly credits the
+wrong import.
+
+### The numbers
+
+    compile_instructions  44,778,375 -> 44,491,145  -287,230  -0.64%  (local)
+    compile_allocs                        34,682   unmoved
+    compile_peak_bytes                   730,120   unmoved
+
+Smaller than #1154's, and it should be: two of the twenty-four run per
+identifier occurrence and the rest run once per declaration.
+
+### The runner's number
+
+    compile_instructions  44,483,421 -> 44,130,291  -353,130  -0.79%  (runner)
+                          44,778,375 -> 44,491,145  -287,230  -0.64%  (local)
+    compile_allocs                        34,682   unmoved, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99276951052. The runner reads the fall a fifth larger than
+the container does, the widest the two have parted on this vein today; both
+directions of the slash family are pattern-search setup, and setup is where a
+host divergence lands.
+
+## 2026-08-30 — DECLINED: the ascii fast path in the scanner
+
+`Scanner::new` turns a line of source into the `Vec<char>` the lexer reads with
+`chars.extend(content.chars())`, and `Chars` decodes every character whether or
+not there is anything to decode. `str::is_ascii` answers in one pass over eight
+bytes at a time, and when it says yes the widening loop is straight-line. The
+row it was aimed at: 298,362 instructions on the fold under `lex_line` and
+242,520 on the extend beneath it.
+
+Measured against #1156's head it took 150,938 instructions. Measured against
+this branch's head, four merges later, the same patch takes **53,017**:
+
+    compile_instructions  44,491,145 -> 44,438,128   -53,017  -0.12%
+    compile_allocs             34,682 ->     34,680        -2
+    compile_peak_bytes        730,120 ->    730,332      +212
+
+Nothing about the patch changed. What changed is everything around it — the
+getter prefix test, thirteen sized tables, twenty-four byte scans — and with
+them the inlining and layout the lexer's own code gets. **A micro-change
+measured against a moving baseline is measured once, and the number is only
+about the tree it was taken in.** This one lost two thirds of itself while
+sitting in a queue.
+
+Peak goes UP by 212 bytes, and not because of the fast path itself: a byte
+slice's iterator reports an exact size where `Chars` reports a lower bound of a
+quarter of the length, so `extend` reserves exactly what it needs and the
+pooled buffer settles at a capacity the doubling schedule would not have
+reached. Replacing `extend` with a plain `push` loop to dodge the size hint
+made it worse on both counts — 44,557,543 instructions, one more allocation,
+and the peak still up at 730,312.
+
+Welfare reads 86.94 either way. The sum does not move, the memory term pays,
+and the rule is that a term getting worse is only defensible when the sum goes
+up. So this is declined, and it stays declined unless the lexer is reworked in
+a way that makes the decode itself the question.
+
+## 2026-08-30 — DECLINED: the operator table's two-character key
+
+`lex_line` searches `OPS` by text, and built the text to search for out of the
+current character and its successor:
+
+```rust
+let two = [c, s.peek(1).unwrap_or(' ')].iter().collect::<String>();
+```
+
+A two-character `String` is a heap allocation, made and dropped once per
+character that reaches this line. Removing it removes **163** allocations from
+`lib/json`'s compile — and costs instructions:
+
+    the String, as it stands                44,491,145   34,682 allocs
+    a stack buffer and `str::from_utf8`     44,552,688   34,519
+    a byte compare against `op.as_bytes()`  44,521,443   34,519
+    the table read as a `match (c, next)`   44,521,899   34,519
+
+Three shapes, one answer: whatever replaces the `String`, the compile does
+about thirty thousand instructions MORE. The search is not the cause — the byte
+compare and the match agree to within five hundred, and they search in quite
+different ways. Something about the surrounding code compiles differently once
+the allocation leaves, and 163 allocations at roughly two hundred instructions
+apiece do not pay for it.
+
+Welfare prices the trade at +0.01, because allocations and instructions share a
+dimension and the allocation fall is proportionally the larger. That is a real
+gain by the objective and it is also inside the noise of what a day's merges do
+to this file's inlining — the ascii scanner above lost two thirds of its value
+to exactly that. Declined on those grounds: a change that makes the compiler do
+more work, cannot say where the work went, and buys a hundredth of a point is
+not worth the line it changes.
+
+The row it was aimed at is still there and still worth a better idea:
+`String as FromIterator<&char>` under `lex_line` is 361,176 instructions with
+another 156,728 in `finish_grow` beneath it, from the four sites that build a
+token's text out of the scanner's `Vec<char>` one character at a time. The fix
+for those is not a faster copy; it is a scanner that keeps the source `&str`
+and hands out slices of it, which is the shape gavel "whether an identifier's
+name lives inline" is about.

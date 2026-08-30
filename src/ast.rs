@@ -216,6 +216,45 @@ pub fn split_qual(name: &str) -> Option<(&str, &str)> {
     last_slash(name).map(|at| (&name[..at], &name[at + 1..]))
 }
 
+/// The byte index of the first `/` in a name, by a plain forward byte scan.
+///
+/// The forward half of `last_slash`, and for the same reason: `contains('/')`
+/// and `split_once('/')` go through `memchr`, which is built to scan kilobytes
+/// and spends most of a five-byte name setting itself up.
+pub fn first_slash(name: &str) -> Option<usize> {
+    let bytes = name.as_bytes();
+    let mut at = 0;
+    while at < bytes.len() {
+        if bytes[at] == b'/' {
+            return Some(at);
+        }
+        at += 1;
+    }
+    None
+}
+
+/// Is this name qualified at all?
+pub fn has_slash(name: &str) -> bool {
+    first_slash(name).is_some()
+}
+
+/// The MODULE a qualified name names, and the rest: `json/decode` is
+/// `("json", "decode")`, and `std/net/http/get` is `("std", "net/http/get")`.
+/// A qualifier is the first segment where an owner is everything before the
+/// last slash, which is why this is not `split_qual`.
+pub fn split_module(name: &str) -> Option<(&str, &str)> {
+    first_slash(name).map(|at| (&name[..at], &name[at + 1..]))
+}
+
+/// The last segment of a name: the bare half of a qualified one, or the whole
+/// of a bare one.
+pub fn bare_name(name: &str) -> &str {
+    match last_slash(name) {
+        Some(at) => &name[at + 1..],
+        None => name,
+    }
+}
+
 pub fn getter_name(field: &str) -> String {
     format!("Get_{field}")
 }

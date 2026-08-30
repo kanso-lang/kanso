@@ -901,7 +901,7 @@ fn desc_yield_of(ctx: &Ctx, e: &Expr) -> Set {
 fn desc_yield(e: &Expr) -> Set {
     fn base(n: &str) -> &str {
         let n = n.strip_prefix("builtin_").unwrap_or(n);
-        n.rsplit('/').next().unwrap_or(n)
+        crate::ast::bare_name(n)
     }
     match e {
         // the io constants referenced bare: stdin yields the input string,

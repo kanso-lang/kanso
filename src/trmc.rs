@@ -181,7 +181,7 @@ pub fn rewrite(program: &mut Program) {
     }
     let mut new_fns: Vec<FnDecl> = Vec::new();
     for ((name, arity), idxs) in &groups {
-        if name.contains('/') || *arity == 0 {
+        if crate::ast::has_slash(name) || *arity == 0 {
             continue;
         }
         let decls: Vec<&FnDecl> = idxs.iter().map(|i| &program.fns[*i]).collect();
