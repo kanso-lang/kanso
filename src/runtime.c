@@ -1848,15 +1848,28 @@ KValue k_caf_complete(KValue built, KValue seeded) {
    which on the fixtures below is a pointer rendered as a double. `K_THUNK` is
    spelled out at that call site rather than here because a thunk is a promise
    and not a value; every other pointer tag belongs in this list. */
+/* Every tag whose payload is a pointer — K_ERR K_STR K_REC K_DESC K_LIST
+   K_MAP K_CLOSURE K_BYTES K_SUB — as bit positions in the enum above. `tag`
+   is masked to the enum's width so the shift is defined for any input; every
+   tag a value can carry is already in range.
+
+   `K_SUB` was absent until 2026-08-30 and its payload is a `KSub*`, so a
+   returned subtype was taken for a scalar by `k_cohort_pop` and by
+   `k_slots_survive` alike: the arena went back to the mark under it and the
+   caller kept a dangling pointer.
+
+   A mask rather than the switch this used to be, because the switch is inlined
+   into `k_slots_survive` and through it into `k_copy_size`, which is 36% of
+   deepbench. A tenth `case` cost that benchmark 49,528,233 instructions —
+   6.14%, all of it inside `k_copy_size`, on both hosts to the instruction —
+   on a program that never makes a subtype: `k_survives_x` and `k_ptrmap_at`
+   are byte-identical across the change, so it is the same walk compiled
+   differently. The mask gives 6,149,160 of that back. Two other shapes were
+   measured and were worse: a mask carrying a bounds branch reads 878,869,219,
+   and giving `k_slots_survive` its own copy of the switch reads exactly what
+   the shared switch does. */
 static int k_is_heap(long long tag) {
-    switch (tag) {
-        case K_STR: case K_ERR: case K_REC: case K_DESC:
-        case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
-        case K_SUB:
-            return 1;
-        default:
-            return 0;
-    }
+    return (int)((0xAFE0U >> (tag & 15)) & 1U);
 }
 
 /* Diagnostics color from the site palette, only when stderr is a tty and
