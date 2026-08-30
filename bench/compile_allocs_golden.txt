@@ -69,4 +69,13 @@
 # takes it mutably. A group is a half-open range into one flat vector now, and
 # a range copies. `compile_peak_bytes` falls 21,296 with it, because the table
 # it cloned from was itself one heap vector per (name, arity).
-compile_allocs=54747
+#
+# 2026-08-30 (four lookup keys the program holds): 54,747 -> 50,528, a fall of
+# 4,219, or 7.7%. Banked. `inline.rs` built a `String` in order to look one up,
+# in three places — the alias fixpoint's keys and values, and the callee at
+# every `App` node the rewrite walked — and kept a private child walk that
+# returned a fresh vector per node. All four now borrow from the program or
+# hand children to a callback. `check.rs` had worked around the third of these
+# by building a borrowed view of the map; the producer borrows now, so the
+# view is gone too.
+compile_allocs=50528

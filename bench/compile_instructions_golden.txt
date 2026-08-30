@@ -516,4 +516,16 @@
 # change it lands on differs, which is why the per-change gaps are large and
 # lean opposite ways. Over the two changes together the readings are -682,955
 # and -1,123,001, still apart but by 1.6x rather than 3.6x.
-compile_instructions=55319098
+#
+# 2026-08-30  55,319,098 -> 54,488,638   -830,460   -1.50%
+# Four lookup keys `inline.rs` was building a `String` for, and a private child
+# walk that returned a vector per node. compile_allocs falls 54,747 -> 50,528;
+# compile_peak_bytes, rounds and visits do not move.
+#
+# The hosts agree on this one: -852,860 in the container against -830,460 on
+# the runner, 2.7% apart and the same sign. That is what the two rows above
+# predict. `malloc_consolidate` steps up once when the free lists change shape,
+# the container took its step two rows up and the runner one row up, and with
+# both steps spent neither host pays here — so the readings converge. The row
+# is work, and either number estimates it.
+compile_instructions=54488638

@@ -4424,3 +4424,70 @@ where both are measuring real work, correctly, and neither number is the
 answer on its own. What made it legible was measuring the allocator lines
 rather than the total — which is available on any row, and was not done on any
 of the eight rows before these two.
+
+## 2026-08-30 — four lookup keys the program already holds, and a walk that was not a mirror
+
+`inline.rs` built a `String` in order to look one up, in three places, and kept
+a private copy of the mutable child walk that returns a fresh vector per node.
+
+`aliases` returned `HashMap<(String, usize), String>`, so the fixpoint owned a
+name and a target for every alias it found on every round, and `direct_aliases`
+cloned the callee at every candidate it tested. Both keys and both values
+borrow from the program now. `check.rs` had already diagnosed this at the
+consumer and worked around it — it built a borrowed view of the owned map, with
+a comment saying the lookup "needed a String built from the callee at every call
+expression" — so the view and the workaround are gone with it. `inline::rewrite`
+cloned the callee at every `App` node; its map has to be owned, because the walk
+takes `program` mutably, but nesting it by name and then arity means both
+lookups borrow.
+
+```
+compile_allocs        54,747 -> 50,528          -4,219   -7.7%
+compile_instructions  55,319,098 -> 54,488,638  -830,460 -1.50%  (runner)
+compile_peak_bytes    742,572   unchanged
+compile_rounds        40        unchanged
+compile_visits        16,806    unchanged
+```
+
+Welfare 84.89 -> 85.19, banked. The hosts agree on this row — -852,860 in the
+container against -830,460 on the runner, 2.7% apart and the same sign — which
+is what the two entries above predict. Consolidation steps up once when the
+free lists change shape; the container took its step two changes ago and the
+runner one change ago, and with both spent neither pays here.
+
+Three rounds off one allocation map now: 61,974 blocks to 50,528, 18.5%, with
+instructions down 3.5% and peak down 2.8% beside it.
+
+### The walk that said it was a mirror
+
+The fourth piece of that change was wrong, and CI caught it. `inline::children_mut`
+looked like a duplicate of `lib::walk_children_mut`, which carries the comment
+"Mirrors `for_each_child`". Swapping one for the other turned the emitted,
+machine-code and work veins red: `walk_children_mut` has no arm for
+`Expr::Lambda`, `Expr::Block`, `Expr::Build` or `Expr::Guard`, where
+`for_each_child` handles all four. A wrapper called inside any of them stopped
+being inlined.
+
+So `inline.rs` keeps its own walk, now as `for_each_child_mut`: the coverage
+`children_mut` had, handing children to a callback instead of returning a
+vector. That was the whole allocation saving — `compile_allocs` reads 50,528
+either way — and the swap bought nothing it did not also break.
+
+Two things worth keeping from it. The comment was load-bearing and false, which
+is the shape #1137 went after; it says what the function does not do now. And
+the veins that caught it were the runtime ones. The compile veins were happily
+reporting a win on a compiler that had quietly stopped inlining, because
+compiling less work is cheaper. A cost golden cannot tell a saving from an
+omission; only a golden over the OUTPUT can.
+
+What the four callers of `walk_children_mut` do with the missing arms is a
+separate question, and two of them are answered. `desugar_expr` (field read to
+getter call) and `deny_expr` (`!=` to `if (==) false true`) are normalisations
+rather than requirements: `Expr::Field` is handled directly at codegen.rs:3090,
+eval.rs:1408 and wasm_backend.rs:764, and `"!="` at codegen.rs:3571,
+eval.rs:3656 and wasm_backend.rs:897. A field read and a `!=` inside a lambda
+body, an if-block arm, a build body and below a guard — four shapes on two
+engines — answer correctly and identically. `replace_shape` is the hoister,
+where an unreached site is a hoist not taken. `door_expr` is the one still
+open: it rewrites an upcast's type from a door spelling to the owner's, and an
+upcast inside any of the four would keep the door spelling.
