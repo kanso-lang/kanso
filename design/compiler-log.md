@@ -5858,3 +5858,38 @@ the intermediate tables it does not build are the allocations that went away.
     compile_peak_bytes                   730,120   unmoved, both hosts
 
 Copied out of job 99272811720.
+
+## 2026-08-30 — the other direction
+
+#1154 replaced eighteen backward slash searches with `ast::last_slash`, a
+plain byte scan, and took 1,279,525 instructions off the compile. It left the
+forward family alone. There are twenty-four of those: `name.contains('/')`
+across `advisory.rs`, `check.rs`, `lib.rs` and `trmc.rs`, `split_once('/')`
+in `used_quals`, and four `rsplit('/').next()` chains that want the last
+segment and pay a full pattern search to get it.
+
+`contains` and `split_once` on a `char` go through `memchr` the way the
+backward pair went through `memrchr`, and the argument is the same: the
+average identifier in the shipped library is five bytes, and a routine built
+to scan kilobytes spends most of that setting itself up.
+
+`ast` gains `first_slash`, `has_slash`, `split_module` and `bare_name`, and
+every one of the twenty-four sites reads one of them.
+
+### Why `split_module` is not `split_qual`
+
+They cut in different places and mean different things. An owner is everything
+before the LAST slash — `std/net/http/get` belongs to `std/net/http` — which
+is what `split_qual` gives. A qualifier is the FIRST segment, the module name
+an import wrote, so `used_quals` credits `std`. Folding the two together would
+have been the kind of change that passes every test and quietly credits the
+wrong import.
+
+### The numbers
+
+    compile_instructions  44,778,375 -> 44,491,145  -287,230  -0.64%  (local)
+    compile_allocs                        34,682   unmoved
+    compile_peak_bytes                   730,120   unmoved
+
+Smaller than #1154's, and it should be: two of the twenty-four run per
+identifier occurrence and the rest run once per declaration.

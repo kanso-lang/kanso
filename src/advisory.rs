@@ -24,11 +24,11 @@ pub fn door_advisories(program: &Program) -> Vec<String> {
     let mut advisories = Vec::new();
     let mut seen = HashSet::default();
     for (i, decl) in program.fns.iter().enumerate() {
-        if !decl.is_pub || decl.name.contains('/') || decl.synthetic {
+        if !decl.is_pub || crate::ast::has_slash(&decl.name) || decl.synthetic {
             continue;
         }
         for ty in &returns[i] {
-            if !ty.contains('/') || accepted.contains(ty) {
+            if !crate::ast::has_slash(ty) || accepted.contains(ty) {
                 continue;
             }
             if seen.insert((decl.name.as_str(), *ty)) {
@@ -155,7 +155,7 @@ fn accepted_types<'a>(
     groups: &HashMap<&'a str, Vec<usize>>,
 ) -> HashSet<&'a str> {
     let mut surface_groups: HashSet<&str> =
-        pub_names.iter().copied().filter(|n| !n.contains('/')).collect();
+        pub_names.iter().copied().filter(|n| !crate::ast::has_slash(n)).collect();
     for decl in &program.fns {
         if !surface_groups.contains(decl.name.as_str()) {
             continue;
@@ -169,7 +169,7 @@ fn accepted_types<'a>(
                 },
                 _ => None,
             };
-            if let Some(name) = target.filter(|n| n.contains('/')) {
+            if let Some(name) = target.filter(|n| crate::ast::has_slash(n)) {
                 surface_groups.insert(name);
             }
         }

@@ -742,19 +742,19 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     // sibling: the canon is that a local import wears `./` or `../`, so a name
     // beside this module and a name from the cache can never be confused, and
     // a reader knows which they are looking at without leaving the line.
-    if !path.contains('/') && base.join(format!("{path}.kso")).is_file() {
+    if !ast::has_slash(path) && base.join(format!("{path}.kso")).is_file() {
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a bare path names a hako, \
              and `{path}.kso` sits beside this module: write \"./{path}\"\n"
         ));
     }
-    if !path.contains('/') && base.join(path).is_dir() {
+    if !ast::has_slash(path) && base.join(path).is_dir() {
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a bare path names a hako, \
              and `{path}/` sits beside this module: write \"./{path}\"\n"
         ));
     }
-    let first = path.split('/').next().unwrap_or_default();
+    let first = ast::split_module(path).map_or(path, |(head, _)| head);
     if first.contains('.') {
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a dot in the first segment \
@@ -797,7 +797,7 @@ fn hako_cache() -> std::path::PathBuf {
 /// The last path segment names the module at use sites: `import "std/json"`
 /// qualifies as `json/...`.
 fn short_name(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
+    ast::bare_name(path)
 }
 
 /// Names a pattern binds, borrowed from the program.
@@ -943,7 +943,7 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     let mut by_name: HashMap<&str, (bool, HashSet<&str>)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
-        if d.name.contains('/') {
+        if ast::has_slash(&d.name) {
             continue;
         }
         let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::default()));
@@ -1701,7 +1701,7 @@ fn qualify(
     let owned: crate::hash::Set<String> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(*n))
-        .filter(|n| !n.contains('/'))
+        .filter(|n| !ast::has_slash(n))
         .filter(|n| *n != MATH_FAILURE && *n != DIVIDE_BY_ZERO)
         .map(String::from)
         .collect();
@@ -1718,9 +1718,9 @@ fn qualify(
     // Left in, a typeset member or a parent spelled `shape/blank` picks up a
     // second prefix and names a type nothing declares.
     let own_types: crate::hash::Set<String> =
-        dep.types.iter().map(|t| t.name.clone()).filter(|n| !n.contains('/')).collect();
+        dep.types.iter().map(|t| t.name.clone()).filter(|n| !ast::has_slash(n)).collect();
     for ty in &mut dep.types {
-        if ty.name.contains('/') {
+        if ast::has_slash(&ty.name) {
             // GAVEL 51: one module, and a qualified name IS its identity, so
             // a second arrival is the same declaration rather than a rival.
             // Its visibility is what the routes grant between them — a sealed
@@ -1770,7 +1770,7 @@ fn qualify(
             // GAVEL 51: an already-qualified name enrolls under the spelling
             // it already has. Composing `{qual}/` onto it would register the
             // route rather than the identity.
-            let key = match f.name.contains('/') {
+            let key = match ast::has_slash(&f.name) {
                 true => f.name.clone(),
                 false => format!("{qual}/{}", f.name),
             };
@@ -1783,7 +1783,7 @@ fn qualify(
             // spelling. Reading the second arrival as a rival claim turned
             // `shape/describe` into an opacity refusal on the very program
             // the ruling exists to make work.
-            let own_claim = !f.name.contains('/');
+            let own_claim = !ast::has_slash(&f.name);
             match (taken, f.synthetic) {
                 // The same declaration arriving by a second route. One
                 // module, so its visibility is what the importer's routes
@@ -1805,7 +1805,7 @@ fn qualify(
             // from this module's own dependency and keeps its canonical
             // spelling — it still enrolls, it just does not get a second
             // prefix.
-            if !f.name.contains('/') {
+            if !ast::has_slash(&f.name) {
                 f.name = format!("{qual}/{}", f.name);
             }
         }
@@ -2628,7 +2628,7 @@ fn mark_bare_quals(
         // import and the name does not resolve, keep it and this reads it as
         // unused.
         if let ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) = e {
-            if !name.contains('/') {
+            if !ast::has_slash(name) {
                 bare.insert(name.as_str());
             }
         }
@@ -2664,7 +2664,7 @@ fn mark_bare_quals(
 /// `json` as used, in expressions, patterns, and typeset members alike.
 fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
     fn mark(name: &str, quals: &mut crate::hash::Set<String>) {
-        if let Some((qual, _)) = name.split_once('/') {
+        if let Some((qual, _)) = ast::split_module(name) {
             quals.insert(qual.to_string());
         }
     }
@@ -2738,7 +2738,7 @@ fn unused_imports(
 fn foreign_destructures(program: &ast::Program, diags: &mut Vec<diag::Diagnostic>) {
     fn walk(p: &ast::Pattern, diags: &mut Vec<diag::Diagnostic>, span: diag::Span) {
         if let ast::Pattern::Ctor { ty, fields, .. } = p {
-            if ty.contains('/') && !fields.is_empty() {
+            if ast::has_slash(ty) && !fields.is_empty() {
                 diags.push(diag::Diagnostic::new(
                     "opacity",
                     format!(

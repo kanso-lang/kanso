@@ -1764,7 +1764,7 @@ fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
         crate::for_each_child(e, |child| walk(child, annotating, diags));
     }
     for decl in &program.fns {
-        if decl.synthetic || decl.name.contains('/') {
+        if decl.synthetic || crate::ast::has_slash(&decl.name) {
             continue;
         }
         for stmt in &decl.body {
@@ -1787,7 +1787,9 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
     let foreign: HashSet<&str> = program
         .types
         .iter()
-        .filter(|ty| ty.name.contains('/') && (!ty.fields.is_empty() || ty.parent.is_some()))
+        .filter(|ty| {
+            crate::ast::has_slash(&ty.name) && (!ty.fields.is_empty() || ty.parent.is_some())
+        })
         .map(|ty| ty.name.as_str())
         .collect();
     if foreign.is_empty() {
@@ -1812,7 +1814,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
         crate::for_each_child(e, |child| walk(child, foreign, diags));
     }
     for decl in &program.fns {
-        if decl.synthetic || decl.name.contains('/') {
+        if decl.synthetic || crate::ast::has_slash(&decl.name) {
             continue;
         }
         for stmt in &decl.body {
@@ -2616,7 +2618,9 @@ const BUILT_IN_TYPES: [&str; 8] =
 fn undeclared_in(ty: &str, declared: &HashSet<&str>) -> Vec<String> {
     annotation_names(ty)
         .into_iter()
-        .filter(|n| !n.contains('/') && !BUILT_IN_TYPES.contains(n) && !declared.contains(n))
+        .filter(|n| {
+            !crate::ast::has_slash(n) && !BUILT_IN_TYPES.contains(n) && !declared.contains(n)
+        })
         .map(str::to_string)
         .collect()
 }
@@ -2852,7 +2856,7 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
     let mut torn: HashMap<(&str, usize), Vec<String>> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, a) in program.fns.iter().enumerate() {
-        if !a.synthetic || a.name.contains('/') {
+        if !a.synthetic || crate::ast::has_slash(&a.name) {
             continue;
         }
         for b in program.fns.iter().skip(i + 1) {
@@ -2906,7 +2910,7 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
         crate::for_each_child(e, |child| walk(child, torn, diags));
     }
     for d in &program.fns {
-        if d.synthetic || d.name.contains('/') {
+        if d.synthetic || crate::ast::has_slash(&d.name) {
             continue;
         }
         let bound: crate::hash::Set<&str> = d
