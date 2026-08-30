@@ -307,19 +307,37 @@ expectation changes or it starts passing.
 
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
 
-**RE-PREMISED 2026-08-29 by the supersession gavel: the later ruling
-(fa834a71 and its amendments, 2026-08-27) replaced the no-explicit-bind
-surface of compiler.html entry 23.** The call-site story the book owes
-is the three explicit words — `bind`, `annotate`, `rescue` as ordinary
-two-argument functions (effect first, callback second) threaded by the
-chain rule, `.` retired from chain position, callbacks receiving the
-err itself for polymorphic dispatch. Half one is DONE (ch04 "nothing
-is asked of the signature", 2026-08-26) and survives: the words are
-call-site spelling, not type-level tracking, so no signature carries
-anything. Half two is no longer gated on an elaborator — there is no
-elaborator — and lands when the three words are implemented, in the
-present tense as always. compiler.html entry 23 owes a rewrite or
-retirement in the same campaign.
+**RE-PREMISED AGAIN 2026-08-29 by the effects-are-types gavel, which
+supersedes the three-chain-words form.** The call-site story the book
+owes is now: `<t>effect` as a first-class passable outcome type;
+`bind`, `annotate`, `rescue` as ordinary effect-first functions and the
+sole eliminators; no automatic bind — a box where the unwrapped type is
+expected is refused, and propagation is bind's contract. Half one (ch04
+"nothing is asked of the signature") DOES NOT survive as written: its
+short-circuit-at-the-call story describes the retired railway and needs
+rewriting on explicit elimination. Half two lands when the typed-effect
+surface is implemented, present tense as always. compiler.html entry 23
+owes a rewrite or retirement in the same campaign.
+
+### What happens to an effect nobody eliminates
+
+**Cited: opened by the 2026-08-29 effects-are-types gavel, which made
+`<t>effect` a first-class passable box with bind/annotate/rescue as sole
+eliminators and retired the ambient railway. The search predates the
+construct; nothing rules on it.**
+
+A box that is bound and unused is already refused (unused bindings are
+errors). The open case is a box in tail position or otherwise discarded
+without elimination — under the old railway a failure could never be
+dropped; under explicit elimination, an unhandled box is how one could
+be. Candidate answers: refusing any expression-statement of effect type;
+treating an uneliminated failed box reaching the io edge as the
+program's failure; or both.
+
+**RECOMMENDATION: both.** Refuse the silent discard syntactically where
+the checker can see it, and define the io edge as demanding every box so
+a failure that arrives there is the program's result. Together they
+restore the can't-drop guarantee the railway used to give for free.
 
 ### An assert hako
 

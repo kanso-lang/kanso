@@ -2694,3 +2694,77 @@ The three-explicit-forms gavel stands, having survived its strongest
 challenger. Koka's row-tracking was examined in the same sitting and
 declined on the standing doctrine: the row is signature infection made
 ergonomic, and nothing is asked of the signature here.
+
+## 2026-08-29 — gavel: effects are types, and the words are the only doors
+
+The sitting that began at Koka ends with a ruling that supersedes both
+the three-chain-words form (fa834a71 and its amendments) and the
+procedural bind-sugar proposal (offered this sitting, never gaveled).
+Clay's derivation, in his own words: with the combinator form "we'd
+have Effect types that are basically indistinguishable. to get
+anything you can match/branch on, you'd need to call
+bind/annotate/rescue to get a _type_... passing the actual value is a
+syntactic sugar for doing: bind my_effect (x -> do_something_with_x x).
+but one might argue you _should_ be able to match on something like
+<int>effect." And the gavel: "it might be 'convenient' to have bind be
+automatic and just not allow passing effects, but it's inconsistent
+and threatens to make the language confusing, when our overarching
+goal is simplicity. so i think that's a gavel."
+
+The ruling:
+
+- **The effect is a first-class parameterized type.** `<int>effect` is
+  the unresolved outcome of an operation: will be an int, or a
+  failure. It can be bound, passed, stored, and received — a parameter
+  declared `e:<int>effect` takes the box as data. Holding is not
+  opening.
+- **The three words are the sole eliminators, and they are explicit.**
+  `bind effect callback`, `annotate effect callback`,
+  `rescue effect callback` — ordinary functions, effect first
+  (per the effect-first rider), the only ways from box to branchable
+  value. There is NO automatic bind: passing a `<text>effect` where a
+  `text` is expected is refused, not silently skipped. The old
+  err-in-err-out railway at ordinary calls retires with the sugar
+  that would have implied it; propagation is bind's contract — a
+  failed effect handed to bind skips the callback and stays a failed
+  effect.
+- **The box is outcome, not deferral.** `<t>effect` answers "did it
+  work"; the `>>` wall's deferred description answers "has it run".
+  They stay distinct so holding a result can never delay work.
+- **The box is opaque to dispatch.** No arm may match
+  "failed `<int>effect`" against "succeeded `<int>effect`" — that
+  would be a third, unmarked eliminator. One shape; the words open it.
+- Everything the words already carry stands unchanged: annotate always
+  re-wraps with the original as cause (resurrection unspellable, the
+  callback's return becomes the new reason — string, record, or a
+  domain type for downstream dispatch); rescue is the sole exit with
+  the foreign-only license checked at the word against the callback
+  arms' provenance; callbacks receive the err itself, so dispatch
+  groups route by reason type; simultaneous failures merge per the
+  2026-08-05 ruling.
+- **Why passing must be allowed** (the coherence Clay named): a helper
+  can now take `e:<config>effect` and annotate it — the abstraction
+  Haskell gets from Either-as-value — without reopening any unmarked
+  door, because the parameter type is an explicit spelling of "I hold
+  the channel," and the words remain the only openers.
+
+Consequences owed by implementation and record, filed rather than
+decided here: ch04's "nothing is asked of the signature" and the
+passed-through-label story describe the retired railway and need
+re-premising on explicit bind; the provenance hop-per-function now
+accrues at binds rather than at skipped calls, which moves the
+eta-reduction argument's ground; and what becomes of a box that is
+never eliminated (the drop question) needs an answer — the existing
+refusal of unused bindings covers the bound case, and the unbound
+tail-position case goes to the ledger.
+
+Rider, same sitting, Clay: "effect arguments should work just like any
+other type. no superfluous type annotations on functions. if you pass
+an effect to foo, and it does rescue or whatever, and it passes the
+value to a matching arm, then it Just Works." So `<t>effect` earns no
+special ceremony: a parameter that receives an effect needs no
+annotation — inference types it from use, the same as every other
+type — and dispatch matches effect-typed values like any values. The
+`e:<config>effect` spelling exists for when an author wants to state
+the shape, never as a requirement. The intent bits stay at the words;
+nothing about this ruling ever lands in a signature.
