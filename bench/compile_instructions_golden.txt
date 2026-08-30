@@ -422,4 +422,21 @@
 # `usize` where two `u32` would hold a four-billion-line file.
 #
 # compile_allocs is 61,974, unchanged.
-compile_instructions=57822766
+#
+# 2026-08-30  57,822,766 -> 58,205,543   +382,777   +0.66%
+# `Span` became two `u32` — the cheaper way in the entry above named. `Expr`
+# falls from 64 bytes to 56, `Stmt` from 136 to 120, and compile_peak_bytes
+# falls 7.1%, from 822,004 to 763,868. This row is what that cost.
+#
+# The container read +50,058 for the same change, an eighth of what the runner
+# reads. Same sign, different order — so some of this is work and some is the
+# two hosts laying the binary out differently, and neither number decomposes
+# it. Callgrind will not say either: it puts the container's rise almost
+# entirely in `walk_children`, which does no span arithmetic, and a probe
+# build with the same `u32` fields padded back to 16 bytes rises by the same
+# amount overall while attributing it to `parse_atom` instead. What the probe
+# DOES settle is the memory: padded back to 16, peak returns to 822,004 to the
+# byte, so the fall is the struct size and nothing else.
+#
+# compile_allocs stays 61,974: the same objects are allocated, smaller.
+compile_instructions=58205543

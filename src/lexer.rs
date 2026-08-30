@@ -74,7 +74,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         diags.push(Diagnostic::new(
             "formatting",
             "file must end with exactly one newline".to_string(),
-            Span { line: source.lines().count(), col: 1 },
+            Span::at(source.lines().count(), 1),
         ));
     }
     let raws: Vec<&str> = source.lines().collect();
@@ -87,7 +87,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             diags.push(Diagnostic::new(
                 "formatting",
                 "tabs are not part of the canonical grammar; indent with spaces".to_string(),
-                Span { line: number, col: col + 1 },
+                Span::at(number, col + 1),
             ));
             continue;
         }
@@ -95,7 +95,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             diags.push(Diagnostic::new(
                 "formatting",
                 "trailing whitespace is not part of the canonical grammar".to_string(),
-                Span { line: number, col: raw.trim_end().len() + 1 },
+                Span::at(number, raw.trim_end().len() + 1),
             ));
         }
         let trimmed = raw.trim_end();
@@ -108,7 +108,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             diags.push(Diagnostic::new(
                 "formatting",
                 format!("a line holds at most {MAX_WIDTH} characters — this one has {width}"),
-                Span { line: number, col: MAX_WIDTH + 1 },
+                Span::at(number, MAX_WIDTH + 1),
             ));
         }
         let indent = trimmed.len() - trimmed.trim_start().len();
@@ -124,7 +124,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                     "syntax",
                     "a text block opens at the end of its line — nothing follows `\"\"\"`"
                         .to_string(),
-                    Span { line: number, col: indent + at + 4 },
+                    Span::at(number, indent + at + 4),
                 ));
                 continue;
             }
@@ -167,7 +167,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                     "a `.` continuation line sits directly under its statement, \
                      indented two spaces deeper"
                         .to_string(),
-                    Span { line: number, col: 1 },
+                    Span::at(number, 1),
                 ));
                 continue;
             }
@@ -234,17 +234,15 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                 Ok(lexed_line) => {
                     validate_spacing(&lexed_line, number, &mut diags);
                     let parent = lines.last_mut().expect("cont_indent_ok checked");
-                    let open_span = Span { line: number, col: 1 };
-                    let close_span = Span {
-                        line: number,
-                        col: lexed_line.end_cols.last().copied().unwrap_or(1),
-                    };
+                    let open_span = Span::at(number, 1);
+                    let close_span =
+                        Span::at(number, lexed_line.end_cols.last().copied().unwrap_or(1));
                     parent.tokens.push((Tok::LGroup, open_span));
                     parent.end_cols.push(1);
                     parent.tokens.extend(lexed_line.tokens);
                     parent.end_cols.extend(lexed_line.end_cols);
                     parent.tokens.push((Tok::RGroup, close_span));
-                    parent.end_cols.push(close_span.col);
+                    parent.end_cols.push(close_span.col as usize);
                 }
                 Err(d) => diags.push(d),
             }
@@ -254,7 +252,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             diags.push(Diagnostic::new(
                 "formatting",
                 format!("indentation must be 0 or 2 spaces, found {indent}"),
-                Span { line: number, col: 1 },
+                Span::at(number, 1),
             ));
             continue;
         }
@@ -343,7 +341,7 @@ fn gather_block(
             diags.push(Diagnostic::new(
                 "syntax",
                 said.to_string(),
-                Span { line: number, col: trimmed.len() - trimmed.trim_start().len() + 1 },
+                Span::at(number, trimmed.len() - trimmed.trim_start().len() + 1),
             ));
             return (body, at);
         }
@@ -351,14 +349,14 @@ fn gather_block(
             diags.push(Diagnostic::new(
                 "formatting",
                 "trailing whitespace is not part of the canonical grammar".to_string(),
-                Span { line: number, col: raw.trim_end().len() + 1 },
+                Span::at(number, raw.trim_end().len() + 1),
             ));
         }
         if let Some(col) = trimmed.find('\t') {
             diags.push(Diagnostic::new(
                 "formatting",
                 "tabs are not part of the canonical grammar; indent with spaces".to_string(),
-                Span { line: number, col: col + 1 },
+                Span::at(number, col + 1),
             ));
             continue;
         }
@@ -373,7 +371,7 @@ fn gather_block(
                  it — this one is at column {}",
                 found + 1
             );
-            diags.push(Diagnostic::new("syntax", said, Span { line: number, col: found + 1 }));
+            diags.push(Diagnostic::new("syntax", said, Span::at(number, found + 1)));
             return (body, at - 1);
         }
         body.push((number, trimmed[inner..].to_string()));
@@ -382,7 +380,7 @@ fn gather_block(
         "unterminated text block — the closing `\"\"\"` sits alone at column {}",
         indent + 1
     );
-    diags.push(Diagnostic::new("syntax", said, Span { line: open_line, col: indent + 1 }));
+    diags.push(Diagnostic::new("syntax", said, Span::at(open_line, indent + 1)));
     (body, at)
 }
 
@@ -390,7 +388,7 @@ fn gather_block(
 /// own line: no step shares a line with another (partial chaining).
 fn check_partial_chain(line: &Line, diags: &mut Vec<Diagnostic>) {
     let leads_line = |i: usize, span: &Span| {
-        i > 0 && line.tokens[i - 1].1.line != span.line && span.line != line.number
+        i > 0 && line.tokens[i - 1].1.line != span.line && span.line as usize != line.number
     };
     let wrapped = line
         .tokens
@@ -429,7 +427,7 @@ fn check_needless_continuation(line: &Line, diags: &mut Vec<Diagnostic>) {
     for ((_, span), end) in line.tokens.iter().zip(&line.end_cols) {
         match pieces.last_mut() {
             Some(piece) if piece.2.line == span.line => piece.1 = *end,
-            _ => pieces.push((span.col, *end, *span)),
+            _ => pieces.push((span.col as usize, *end, *span)),
         }
     }
     if pieces.len() < 2 {
@@ -519,10 +517,10 @@ fn lex_line_with_block(
         return Err(Diagnostic::new(
             "formatting",
             "a text block holds two or more lines; one line is written `\"...\"`".to_string(),
-            Span { line, col: open_col },
+            Span::at(line, open_col),
         ));
     }
-    lexed.tokens.push((Tok::Str(parts), Span { line, col: open_col }));
+    lexed.tokens.push((Tok::Str(parts), Span::at(line, open_col)));
     lexed.end_cols.push(open_col + 3);
     Ok(lexed)
 }
@@ -546,7 +544,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
         }
         if c.is_ascii_digit() {
             tokens.push((s.lex_int()?, span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         // a prefix minus folds into the literal: `-1` is a number, not an
@@ -573,13 +571,13 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
                     other => other,
                 };
                 tokens.push((tok, span));
-                end_cols.push(s.span().col);
+                end_cols.push(s.span().col as usize);
                 continue;
             }
         }
         if c.is_ascii_lowercase() || c == '_' {
             tokens.push((s.lex_word()?, span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         if c.is_ascii_uppercase() {
@@ -591,7 +589,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
         }
         if c == '"' {
             tokens.push((s.lex_string()?, span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         if c == ',' {
@@ -639,25 +637,25 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
         if let Some(tok) = tok {
             s.pos += 1;
             tokens.push((tok, span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         if c == '-' && s.peek(1) == Some('>') {
             s.pos += 2;
             tokens.push((Tok::Arrow, span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         if c == '>' && s.peek(1) == Some('>') {
             s.pos += 2;
             tokens.push((Tok::SeqOp, span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         if c == '=' && s.peek(1) != Some('=') {
             s.pos += 1;
             tokens.push((Tok::Bind, span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         let two = [c, s.peek(1).unwrap_or(' ')].iter().collect::<String>();
@@ -665,7 +663,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
         {
             s.pos += op.len();
             tokens.push((Tok::Op(op), span));
-            end_cols.push(s.span().col);
+            end_cols.push(s.span().col as usize);
             continue;
         }
         return Err(Diagnostic::new("syntax", format!("unexpected character `{c}`"), span));
@@ -675,7 +673,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
 
 impl Scanner {
     fn span(&self) -> Span {
-        Span { line: self.line, col: self.col_offset + self.pos }
+        Span::at(self.line, self.col_offset + self.pos)
     }
 
     fn peek(&self, ahead: usize) -> Option<char> {
@@ -917,13 +915,13 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
     {
         let (prev, _) = &pair[0];
         let (next, next_span) = &pair[1];
-        let gap = next_span.col.saturating_sub(*prev_end);
+        let gap = (next_span.col as usize).saturating_sub(*prev_end);
         if matches!(prev, Tok::Colon) {
             if gap > 1 {
                 diags.push(Diagnostic::new(
                     "formatting",
                     "canonical form requires at most one space here".to_string(),
-                    Span { line, col: next_span.col },
+                    Span::at(line, next_span.col as usize),
                 ));
             }
             continue;
@@ -936,7 +934,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
                 diags.push(Diagnostic::new(
                     "formatting",
                     "canonical form requires at most one space here".to_string(),
-                    Span { line, col: next_span.col },
+                    Span::at(line, next_span.col as usize),
                 ));
             }
             continue;
@@ -959,7 +957,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
                          `{name}(x)` reads as `{name}` applied to nothing, then a \
                          parenthesised `x`"
                     ),
-                    Span { line, col: next_span.col },
+                    Span::at(line, next_span.col as usize),
                 ));
                 continue;
             }
@@ -1011,7 +1009,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
             diags.push(Diagnostic::new(
                 "formatting",
                 format!("canonical form requires {wanted} here"),
-                Span { line, col: next_span.col },
+                Span::at(line, next_span.col as usize),
             ));
         }
     }

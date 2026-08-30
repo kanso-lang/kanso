@@ -1006,9 +1006,11 @@ impl<'a> Backend<'a> {
         // inside the bracket: converted outside it, the header sits below the
         // mark and the join finds a string that is not a builder.
         let carried = match arg {
-            Some(Expr::Ident(_, span)) => {
-                self.builder_carried.contains(&(f.file.clone(), span.line, span.col))
-            }
+            Some(Expr::Ident(_, span)) => self.builder_carried.contains(&(
+                f.file.clone(),
+                span.line as usize,
+                span.col as usize,
+            )),
             _ => false,
         };
         let entering = self.builder_params.contains(&(callee.to_string(), arity, i))
@@ -2850,8 +2852,11 @@ impl<'a> Backend<'a> {
                 Ok(t)
             }
             Expr::Str(parts, span) => {
-                let joins_builder =
-                    self.builder_joins.contains(&(f.file.clone(), span.line, span.col));
+                let joins_builder = self.builder_joins.contains(&(
+                    f.file.clone(),
+                    span.line as usize,
+                    span.col as usize,
+                ));
                 let mut acc: Option<Vec<String>> = None;
                 let mut fails: Set = 0;
                 for part in parts {
@@ -4281,7 +4286,7 @@ impl<'a> Backend<'a> {
             // a record this call is the last reader of can be built into
             let victim = self
                 .reusable_records
-                .get(&(f.file.clone(), span.line, span.col))
+                .get(&(f.file.clone(), span.line as usize, span.col as usize))
                 .and_then(|name| f.lookup(name));
             match victim {
                 Some(v) => f.line(&format!(
@@ -4425,7 +4430,11 @@ impl<'a> Backend<'a> {
             }
             // A push the linearity analysis proved unique extends its list in
             // place instead of allocating a fresh header.
-            let in_place = self.in_place_pushes.contains(&(f.file.clone(), span.line, span.col));
+            let in_place = self.in_place_pushes.contains(&(
+                f.file.clone(),
+                span.line as usize,
+                span.col as usize,
+            ));
             let sym = if name == "push" && in_place {
                 "push_mut"
             } else if name == "put" && in_place {

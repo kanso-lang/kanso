@@ -382,7 +382,11 @@ fn is_chain(
             Expr::Ident(n, _)
                 if matches!(n.as_str(), "append" | "builtin_append")
                     && args.len() == 2
-                    && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
+                    && mut_sites.contains(&(
+                        decl.file.clone(),
+                        span.line as usize,
+                        span.col as usize,
+                    )) =>
             {
                 is_chain(&args[0], own, decl, locals, mut_sites, chains, folds)
             }
@@ -1303,7 +1307,11 @@ fn map_chain_rest(
             Expr::Ident(n, _)
                 if matches!(n.as_str(), "put" | "builtin_put")
                     && args.len() == 3
-                    && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
+                    && mut_sites.contains(&(
+                        decl.file.clone(),
+                        span.line as usize,
+                        span.col as usize,
+                    )) =>
             {
                 literal_key(&args[1])
                     && scalar_elem(&args[2], program, own, decl, inference, decl_index)
@@ -1356,7 +1364,11 @@ fn is_scalar_list_chain(
             Expr::Ident(n, _)
                 if matches!(n.as_str(), "push" | "builtin_push")
                     && args.len() == 2
-                    && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
+                    && mut_sites.contains(&(
+                        decl.file.clone(),
+                        span.line as usize,
+                        span.col as usize,
+                    )) =>
             {
                 scalar_elem(&args[1], program, own, decl, inference, decl_index)
                     && is_scalar_list_chain(

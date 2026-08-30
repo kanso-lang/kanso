@@ -4029,3 +4029,68 @@ age             `<mod>/age`   on native, `<fn>` on the oracle  (subtype)
 Nine shapes, two wrong, and both wrong the same way: a type name that carries
 no fields and is not a nullary record. The typeset half is refused at the
 front door by the entry above; this is the other half.
+
+## 2026-08-30 — a span was sixteen bytes and needed eight
+
+`Span` held two `usize`. Every `Expr`, every `Stmt`, most patterns and every
+diagnostic carry one, and a few carry two, so the width of that struct sets the
+width of the whole AST. Four billion lines is a limit no source file reaches,
+and a `u32` pair is half the size:
+
+```
+Span     16 -> 8
+Expr     64 -> 56
+Stmt    136 -> 120
+Pattern  64 -> 64   (unchanged — its largest arm is not span-bound)
+```
+
+The lexer and the passes still count in `usize`, so the narrowing happens at one
+place: `Span::at(line, col)`, which is what every construction site calls now.
+`render` widens back for the source-line lookup.
+
+Measured, `kanso check lib/json`. The runner's rows, which are the goldens:
+
+```
+compile_peak_bytes   822,004 -> 763,868       -58,136   -7.1%
+compile_instructions 57,822,766 -> 58,205,543  +382,777  +0.66%
+compile_allocs       61,974 -> 61,974          unchanged
+```
+
+`compile_peak_bytes` reads 763,868 on the container and 763,868 on the runner,
+so that counter is host-invariant. The allocation count does not move because
+the same objects are allocated; they are smaller.
+
+The memory fall is the struct size and nothing else. A build with the same
+`u32` fields and two words of explicit padding — same casts, same side tables,
+`Span` back at 16 and `Expr` back at 64 — reads `compile_peak_bytes=822004`,
+the baseline to the byte.
+
+Where the instructions went is not settled. The container reads +50,058 for
+the same change, an eighth of the runner's +382,777 — same sign, different
+order — so some of this is work and some is two hosts laying the binary out
+differently, and neither number decomposes it.
+
+Callgrind will not decompose it either. It puts the container's rise almost
+entirely in `walk_children` (+343k gross, against falls elsewhere), which
+touches no span arithmetic at all; the padded probe rises by the same amount
+overall, +47,430, and attributes it to `parse_atom` and `parse_stmt` instead,
+with `walk_children` unchanged. Same total, disjoint explanations. About twenty
+side tables key on `(String, usize, usize)` — beat.rs, check.rs, codegen.rs,
+demand.rs, dispatch.rs, escape.rs — so a narrowed span is widened again to
+build a key; the cast count is the right order of magnitude, and there is no
+evidence for it beyond that.
+
+Welfare: 84.10 -> 84.27, banked. The instruction term costs 0.074 points and
+the memory term more than pays for it.
+
+The next eight bytes were measured too, and they are a worse trade. `Expr` sits
+at 56 because `Guard`'s payload is exactly 48 with no spare byte for the tag,
+and `Guard.rest` is a `Vec<Stmt>` built at one site. As a `Box<[Stmt]>` it is
+16 bytes instead of 24, `Expr` falls to 48 and `Stmt` to 112, and
+`compile_peak_bytes` falls again, 763,868 -> 721,652, another 5.5%. It costs
+1,254,345 container instructions, +2.1%, and that rise is real work rather than
+layout: it lands positive on every walker that matches an `Expr` — eval_expr,
+wants_prelude, provenance, field_reads_expr, desugar_expr, mentions_in_expr,
+check_merged — which is what a changed discriminant encoding looks like. Net
+welfare is +0.08 on top of this entry. Left unshipped: 2.1% of the front end
+for 0.08 points wants the encoding understood first.
