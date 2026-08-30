@@ -465,4 +465,15 @@
 # data section and the row with it; `kanso check lib/json` emits nothing and
 # never runs a line of it. compile_allocs, compile_peak_bytes, rounds and
 # visits are all unchanged. Layout, in the direction that costs nothing.
-compile_instructions=58209632
+#
+# 2026-08-30  58,209,632 -> 56,442,099   -1,767,533   -3.04%
+# `walk_children` took its callback as `&mut dyn FnMut`, so every child visit
+# in the front end went through a vtable. Generic, it monomorphises across the
+# forty call sites. compile_allocs, compile_peak_bytes, rounds and visits are
+# all unchanged — only the dispatch is gone.
+#
+# The two hosts agree for once: the container reads -1,836,913 (-3.15%) where
+# the runner reads -1,767,533 (-3.04%), same sign and within four per cent of
+# each other. That is what work looks like across a host pair, against the
+# +382,777/+50,058 of the Span change eight rows up.
+compile_instructions=56442099
