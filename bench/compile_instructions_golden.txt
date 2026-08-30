@@ -741,4 +741,14 @@
 # The container read -164,185 against this host's -166,074, one per cent apart.
 # This one is a hash lookup traded for a hash insert, and the two hosts agree
 # about that the way they agreed about #1162's.
-compile_instructions=42748207
+#
+# 2026-08-30 (a word is a copy, not a re-encode): 42,748,207 -> 42,297,878, a
+# fall of 450,329, or 1.05%, banked. lex_word built its String by collecting
+# &char out of the scanner's Vec<char>, re-encoding each character; on a line
+# that is ascii throughout the scanner now slices the &str it was given, and
+# the word is one copy. The container read -407,394 against this host's
+# -450,329, ten per cent apart on the fall — the widest yet, and a memcpy
+# against a per-character encode loop is exactly the kind of trade two
+# machines price differently. compile_peak_bytes fell 2,090 on both hosts to
+# the byte, because a String sized at its length does not overshoot.
+compile_instructions=42297878

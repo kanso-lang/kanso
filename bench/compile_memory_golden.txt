@@ -79,6 +79,13 @@
 # held a `String` per global mention for the length of a file's check, and
 # nothing ever read the set. The reservation in `prune_unused_getters` beside it
 # does not move this row, because that set is transient.
+#
+# 2026-08-30 (a word is a copy, not a re-encode): 730,120 -> 728,030, a fall of
+# 2,090, or 0.29%. Banked, and it was not the point of the change — lex_word
+# slices the line's &str on an ascii line instead of collecting &char, and a
+# String built by to_string on a slice is allocated at the length it needs
+# where one grown a character at a time overshoots. The first fall in this row
+# since #1152. Both hosts read 728,030, as this row's two hosts always have.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=730120
+compile_peak_bytes=728030

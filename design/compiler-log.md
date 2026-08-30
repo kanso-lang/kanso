@@ -2873,3 +2873,20 @@ stops building a `String` at all and 407,394 instructions become moot along
 with the 3,157 allocations beneath them. Recorded so the next reader knows the
 two are the same code and not a contradiction: how a `String` is filled is a
 question the compiler can answer today, and whether it exists is Clay's.
+
+### The runner's number
+
+    compile_instructions  42,748,207 -> 42,297,878  -450,329  -1.05%  (runner)
+                          43,138,593 -> 42,731,199  -407,394  -0.94%  (local)
+    compile_peak_bytes       730,120 ->    728,030    -2,090   both hosts
+    compile_allocs                        29,864   unmoved, both hosts
+
+Copied out of job 99320841238. Ten per cent apart on the instruction fall, the
+widest the two hosts have been on this vein — a memcpy against a per-character
+encode loop is the kind of trade two machines price differently, where a malloc
+removed is the kind they agree on. The peak row agrees to the byte, as it always
+has.
+
+Welfare 87.4740 -> 87.4996, banked with `--set`. The page's `data-golden`
+instruction figure moves with it; the allocation figure does not, because
+allocations did not.
