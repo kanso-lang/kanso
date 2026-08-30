@@ -439,4 +439,23 @@
 # byte, so the fall is the struct size and nothing else.
 #
 # compile_allocs stays 61,974: the same objects are allocated, smaller.
-compile_instructions=58205543
+#
+# 2026-08-30  58,205,543 -> 58,210,887   +5,344   +0.009%
+# `check_build_blocks` walks nested statement lists now — an `if` arm, a
+# `build` body inside one, and everything below a fired guard — because a field
+# write in any of the three was checked by nobody.
+#
+# It cost +28,556 written as a pair of free functions carrying their state, and
+# welfare fell, which is not allowed. Folding the check into the same `match`
+# that picks a statement apart made it worse still, +38,298: the body stopped
+# being inlined. What paid was the callback. The walk descends through
+# `for_each_child`, whose callback is a `&mut dyn FnMut` — one indirect call
+# per child — so a closure capturing three references writes three words at
+# every one of them; as a method on a struct holding the three, it captures one.
+#
+# What is left disagrees between the hosts: the container reads 58,375,759
+# against a 58,379,986 baseline, a FALL of 4,227, where the runner reads a rise
+# of 5,344. Opposite signs, so the remainder is the two hosts laying the binary
+# out differently rather than work either way. compile_allocs and
+# compile_peak_bytes do not move at all.
+compile_instructions=58210887

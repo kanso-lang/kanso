@@ -4094,3 +4094,78 @@ wants_prelude, provenance, field_reads_expr, desugar_expr, mentions_in_expr,
 check_merged — which is what a changed discriminant encoding looks like. Net
 welfare is +0.08 on top of this entry. Left unshipped: 2.1% of the front end
 for 0.08 points wants the encoding understood first.
+
+## 2026-08-30 — the one mutation the language has, written where nobody was looking
+
+`x.f = v` is the only mutation kanso has, and two rules fence it: it lives in a
+`build` block, and it writes only what that block built. Both rules were applied
+by walks that between them saw one level of a function body.
+
+The parser refuses a `Set` statement it parses at the top of a body.
+`check_build_blocks` refuses a `Set` it finds at the top of a body, and inside a
+`build` it checks the target against the names the build constructed. Neither
+descended into a nested statement list, and there are three of them: an `if`
+arm's `Block`, a `build`'s own body when it sits inside one, and `Guard.rest` —
+everything below a fired guard.
+
+Three programs, each of which used to compile:
+
+```
+fn tagged x            fn tagged x           fn tagged old
+  n = node x             n = node x            build
+  q = if true            return n if false       n = node 9
+    n.id = 2             n.id = 2                q = if true
+    n                    n                         old.id = 2
+  else                                             n
+    n                                            else
+  q                                               n
+                                                q
+```
+
+The first ran the write and printed `node 2`, with no `build` anywhere in the
+file. The second printed `node 2` on the interpreter and killed the native
+backend: `emit_fn_body` met an `unreachable!` reading "`set` parses only inside
+`build`" — the invariant stated where it could not be enforced, panicking rather
+than diagnosing. The third is the one that matters most. `old` is a parameter,
+so the value belongs to the caller, and the born-check exists to say so; written
+through an `if` arm it went unrefused and the caller's record changed under it.
+The program printed `node 9 node 2`, the second being the argument the caller
+still held.
+
+`check_build_blocks` walks statements now, with the enclosing build carried
+along: absent outside a build, and inside one a set of block-born names that a
+nested `Block` or a guard's remainder inherits and may extend. So the legitimate
+shape — a write inside an `if` arm to something the build made — still compiles,
+which is the case that says the fix is a fence rather than a ban.
+
+`compile_allocs` is 61,974 and `compile_peak_bytes` 763,868, both unchanged:
+lib/json has no field write inside a nested body, so the inherited set is never
+cloned there.
+
+Instructions took three versions to get right, and the ruling that welfare
+cannot fall is what forced the last two. Written as a pair of free functions
+carrying `(born, type_names, diags)`, the walk cost +21,767 on the container and
++28,556 on the runner — same sign, same order, so real work rather than layout.
+Folding the field-write check into the same `match` that picks a statement apart
+made it WORSE, +38,298: `build_walk_body` stopped being inlined and the saving
+went with it. What actually paid was the callback. This walk reaches every
+expression the front end holds and descends through `for_each_child`, whose
+callback is a `&mut dyn FnMut` — one indirect call per child — so a closure
+capturing three references writes three words at every one of them. The
+callback alone was +7,602. As a method on a struct holding the three, it
+captures one, and the whole pass now reads 58,375,759 against main's
+58,379,986: 4,227 cheaper than the code it replaces, because a `build`'s
+statements are no longer walked twice.
+
+`compile_instructions` still ends at 58,210,887 against 58,205,543 on the
+runner, +5,344, and the two hosts disagree about the sign: the container reads
+a fall of 4,227 where the runner reads a rise. Opposite signs, so what is left
+is the two of them laying the binary out differently rather than work on either
+one. `compile_allocs` and `compile_peak_bytes` do not move at all, welfare
+holds at 84.27, and the floor's history carries the entry saying so.
+
+This is the third time the pattern in `tests/golden/unpinned_diagnostics.txt`
+has paid. That file says an excuse reasoning about which check speaks first must
+name WHICH walk it is reasoning about, because a second one may not have the
+rule at all. It was written about the unused-expression rule and a `build` body.
+Reading it as a sweep rather than a note is what found this.

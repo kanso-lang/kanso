@@ -2299,59 +2299,115 @@ fn dedup_join(mut names: Vec<String>) -> String {
 /// Values born before the block stay immutable, which is what keeps every
 /// cycle inside one birth cohort.
 fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let type_names: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    let mut scan = BuildScan {
+        type_names: program.types.iter().map(|t| t.name.as_str()).collect(),
+        born: None,
+        diags,
+    };
     for decl in &program.fns {
-        for stmt in &decl.body {
-            build_walk_stmt(stmt, &type_names, diags);
-        }
+        scan.body(&decl.body);
     }
 }
 
-fn build_walk_stmt(stmt: &Stmt, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
-    // a `Set` reached here is one no `build` block enclosed: writing a field is
-    // the one mutation the language has, and it lives in a build block only
-    if let Stmt::Set { target, field, span, .. } = stmt {
-        diags.push(Diagnostic::new(
-            "build",
-            format!(
-                "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
-            ),
-            *span,
-        ));
-    }
-    match stmt {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            build_walk_expr(expr, type_names, diags);
-        }
-    }
+/// `born` names what the enclosing `build` block has constructed so far, and
+/// its absence means no `build` encloses these statements at all. That
+/// distinction is the whole rule: outside a build a field write is refused,
+/// inside one it is refused unless the target was made there.
+///
+/// The three fields travel together because this walk reaches every expression
+/// the front end holds, and it descends through `for_each_child`, whose
+/// callback is a `&mut dyn FnMut` — one indirect call per child. A closure
+/// capturing three references writes three words at every one of those calls; a
+/// method on this struct captures one. Carrying the state as free variables
+/// instead cost 7,602 retired instructions in the callback alone on
+/// `kanso check lib/json`, measured.
+struct BuildScan<'a, 'd> {
+    type_names: HashSet<&'a str>,
+    born: Option<HashSet<&'a str>>,
+    diags: &'d mut Vec<Diagnostic>,
 }
 
-fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
-    if let Expr::Build(stmts, _) = expr {
-        let mut born: HashSet<&str> = HashSet::default();
+impl<'a> BuildScan<'a, '_> {
+    /// A statement list, in order. A construction binds a name the statements
+    /// below it may write, so the set grows as the walk goes, and a write above
+    /// the construction that gives it is refused — which is what reading in
+    /// order buys.
+    fn body(&mut self, stmts: &'a [Stmt]) {
         for stmt in stmts {
             match stmt {
                 Stmt::Bind { pattern, expr } => {
-                    if let (Pattern::Var(name, _), true) = (pattern, constructs(expr, type_names)) {
-                        born.insert(name);
+                    self.expr(expr);
+                    if let (Some(born), Pattern::Var(name, _)) = (self.born.as_mut(), pattern) {
+                        if constructs(expr, &self.type_names) {
+                            born.insert(name);
+                        }
                     }
                 }
-                Stmt::Set { target, field, span, .. } if !born.contains(target.as_str()) => {
-                    diags.push(Diagnostic::new(
-                        "build",
-                        format!(
-                            "`{target}.{field} = ...` writes only block-born values: \
-                             `{target}` is not a construction made in this `build` \
-                             block, so it stays immutable"
-                        ),
-                        *span,
-                    ));
+                Stmt::Expr(expr) => self.expr(expr),
+                Stmt::Set { target, field, value, span } => {
+                    self.wrote_a_field(target, field, *span);
+                    self.expr(value);
                 }
-                _ => {}
             }
         }
     }
-    crate::for_each_child(expr, |child| build_walk_expr(child, type_names, diags));
+
+    fn wrote_a_field(&mut self, target: &str, field: &str, span: Span) {
+        match &self.born {
+            // writing a field is the one mutation the language has, and it
+            // lives in a build block only
+            None => self.diags.push(Diagnostic::new(
+                "build",
+                format!(
+                    "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
+                ),
+                span,
+            )),
+            Some(born) if !born.contains(target) => self.diags.push(Diagnostic::new(
+                "build",
+                format!(
+                    "`{target}.{field} = ...` writes only block-born values: \
+                     `{target}` is not a construction made in this `build` \
+                     block, so it stays immutable"
+                ),
+                span,
+            )),
+            Some(_) => {}
+        }
+    }
+
+    fn expr(&mut self, expr: &'a Expr) {
+        match expr {
+            // a `build` opens the one scope a field write may live in, and it
+            // opens it with nothing born
+            Expr::Build(stmts, _) => {
+                let outer = self.born.replace(HashSet::default());
+                self.body(stmts);
+                self.born = outer;
+            }
+            // An `if` arm and the remainder below a guard are statement lists
+            // too, and they carry whatever build they sit in. Until this walk
+            // reached them a field write in one was checked by nobody: outside
+            // a build it ran and mutated a value the language calls immutable,
+            // and after a guard line the native backend did not even get that
+            // far — `emit_fn_body` reached an `unreachable!` reading "`set`
+            // parses only inside `build`", which is this rule stated as an
+            // invariant somewhere that could not enforce it.
+            Expr::Block(stmts, _) => {
+                let outer = self.born.clone();
+                self.body(stmts);
+                self.born = outer;
+            }
+            Expr::Guard { cond, early, rest, .. } => {
+                self.expr(cond);
+                self.expr(early);
+                let outer = self.born.clone();
+                self.body(rest);
+                self.born = outer;
+            }
+            _ => crate::for_each_child(expr, |child| self.expr(child)),
+        }
+    }
 }
 
 /// A call that merely returns a record may hand back something older.

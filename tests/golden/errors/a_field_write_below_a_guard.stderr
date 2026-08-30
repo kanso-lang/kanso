@@ -1,0 +1,4 @@
+error[build]: `n.id = ...` writes a field, and only a `build` block may do that
+  --> a_field_write_below_a_guard.kso:13:5
+  13 |   n.id = 2
+           ^

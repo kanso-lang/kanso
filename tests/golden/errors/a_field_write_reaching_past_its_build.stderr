@@ -1,0 +1,4 @@
+error[build]: `old.id = ...` writes only block-born values: `old` is not a construction made in this `build` block, so it stays immutable
+  --> a_field_write_reaching_past_its_build.kso:13:11
+  13 |       old.id = 2
+                 ^

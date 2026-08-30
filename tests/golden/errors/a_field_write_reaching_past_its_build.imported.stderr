@@ -1,0 +1,1 @@
+error[build]: `old.id = ...` writes only block-born values: `old` is not a construction made in this `build` block, so it stays immutable (module a_field_write_reaching_past_its_build)

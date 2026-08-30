@@ -1,0 +1,16 @@
+# The same hole, reached through a guard. Everything below a fired guard is
+# folded into `Guard.rest`, which is a third statement list neither walk
+# descended into — so this program reached the native backend, and
+# `emit_fn_body` met an `unreachable!` reading "`set` parses only inside
+# `build`". The invariant was stated where it could not be enforced. The
+# interpreter meanwhile ran the write and printed `node 2`.
+type node
+  id
+
+fn tagged x
+  n = node x
+  return n if false
+  n.id = 2
+  n
+
+pub play = print "{tagged 1}"
