@@ -4491,3 +4491,72 @@ engines — answer correctly and identically. `replace_shape` is the hoister,
 where an unreached site is a hoist not taken. `door_expr` is the one still
 open: it rewrites an upcast's type from a door spelling to the owner's, and an
 upcast inside any of the four would keep the door spelling.
+
+## 2026-08-30 — the walk with four holes in it, and the two bugs behind them
+
+`lib::walk_children_mut` said it mirrored `for_each_child` and had no arm for
+`Expr::Lambda`, `Expr::Block`, `Expr::Build` or `Expr::Guard`. The entry above
+found that by accident, swapping `inline`'s own walk for it and watching three
+runtime veins go red. Its own four callers were the open question, and two of
+them were wrong.
+
+### A door spelling stopped at the edge of a nested body
+
+`door_expr` rewrites `Expr::Upcast`'s type from a door — the qualified second
+spelling a re-export opens — to the owner's canonical name. Recursing through
+the holed walk, it reached every statement of a function body and nothing
+nested inside one, so an upcast written in a lambda, a block, a build or a
+guard kept the door spelling. `kanso check` passed the program and the
+widening failed at run time against a name no declaration answers.
+
+Five positions, same value, same upcast, on main:
+
+```
+statement level    prints 1
+inside a lambda    error[runtime]: `:mid/shape` widens; this value is not a mid/shape
+inside an if-block same
+inside a build     same
+below a guard      same
+```
+
+Exactly the four missing arms and nothing else — `(v):deep/shape`, the
+canonical spelling, runs in all five. Native and the interpreter fail alike,
+so this was never a divergence, which is why nine differential sweeps never
+saw it. `tests/golden/reexports/upcast` is the five positions in one program.
+
+### The hoister emitted bindings it could not use
+
+`collect_hoistable` finds a repeated interpolation with `for_each_child` — the
+full walk. `replace_shape` substitutes it with `walk_children_mut` — the holed
+one. So a repeat found inside a block, a build or a guard got its `onceN`
+binding emitted and not one of its uses rewritten. Dead code, in every program
+that repeats an interpolation inside a nested body.
+
+That is what the emitted vein reports: scanbench falls 3,745 -> 3,743 calls,
+2,216 -> 2,214 branches, 20,023 -> 20,019 lines. Two dead bindings in one
+benchmark. Both functions refuse a lambda outright, so the lambda arm changes
+nothing for the hoister.
+
+### The two that were fine, and why
+
+`desugar_expr` (a field read to a getter call) and `deny_expr` (`!=` to
+`if (==) false true`) are normalisations rather than requirements: every engine
+handles the un-normalised form directly — `Expr::Field` at codegen.rs:3090,
+eval.rs:1408 and wasm_backend.rs:764, and `"!="` at codegen.rs:3571,
+eval.rs:3656 and wasm_backend.rs:897. Both forms in all four positions on both
+engines answer correctly and identically.
+
+`compile_allocs` and `compile_peak_bytes` do not move, and neither do rounds or
+visits. `compile_instructions` rises 54,488,638 -> 54,507,708 on the runner,
+19,070 instructions or 0.035%, and that is the arms themselves: four passes
+descend into bodies they used to stop at, and two of them had to. It is a
+LAYOUT row by this project's own reading — the container reads 55,000,527 ->
+54,850,326, a FALL of 150,201, against the runner's small rise. Opposite signs,
+both under three tenths of a per cent, on a change that adds four match arms to
+one function. The fifth host-pair for the attribution ledger, and the cleanest
+layout case in it.
+
+The general lesson is about the comment. "Mirrors `for_each_child`" was a claim
+nothing tested, and two passes were built on it. #1137 went after four
+diagnostics resting on prose; this is the same failure in a walk, and the same
+answer applies — the fixture is the pin.

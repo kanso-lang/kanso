@@ -528,4 +528,18 @@
 # the container took its step two rows up and the runner one row up, and with
 # both steps spent neither host pays here — so the readings converge. The row
 # is work, and either number estimates it.
-compile_instructions=54488638
+#
+# 2026-08-30  54,488,638 -> 54,507,708   +19,070   +0.035%
+# `lib::walk_children_mut` gained arms for a lambda, a block, a build and a
+# guard, which it had claimed to have and did not. Four passes descend further
+# now; two of them were wrong without it (the door rewrite silently, the
+# hoister into dead code). compile_allocs and compile_peak_bytes do not move,
+# and rounds and visits do not either.
+#
+# LAYOUT, by this file's own rule, and the clearest case of it yet: the
+# container reads 55,000,527 -> 54,850,326, a FALL of 150,201, where the runner
+# reads a rise of 19,070. Opposite signs and both under three tenths of a per
+# cent. The change adds four match arms to one function — the code grew, the
+# work it does on this input barely moved, and the two hosts placed the result
+# differently. Neither number is an estimate of anything but its own host.
+compile_instructions=54507708

@@ -1,0 +1,40 @@
+# `mid/shape` is a door: a second spelling for `deep/shape`, opened because
+# `mid` re-exports the type. `open_qualified_doors` rewrites the door spelling
+# to the owner's canonical one everywhere a program can write it — and until
+# this fixture, "everywhere" meant every statement of a function body and
+# nothing nested inside one. The walk it recursed through had no arm for a
+# lambda, a block, a build or a guard, so an upcast written in any of those
+# kept the door spelling, and the widening then failed at run time against a
+# type name no declaration answered.
+#
+# `kanso check` passed each of these. They compiled, and died running.
+import "../mid"
+import "std/list"
+
+type circle mid/shape
+
+pub fn one n
+  circle (mid/made n)
+
+pub fn at_top c
+  "{(c):mid/shape}"
+
+pub fn in_lambda c
+  ys = list/map [c] (v -> "{(v):mid/shape}")
+  "{list/to_list ys}"
+
+pub fn in_block c
+  if (1 < 2)
+    w = (c):mid/shape
+    "{w}"
+  else
+    "no"
+
+pub fn in_build c
+  build
+    w = (c):mid/shape
+  "{w}"
+
+pub fn below_guard c
+  return "neg" if false
+  "{(c):mid/shape}"
