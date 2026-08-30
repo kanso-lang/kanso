@@ -5402,6 +5402,27 @@ The two move the peak in opposite directions and ship together for that reason:
 the bitset costs residency to buy traffic, and the params table more than pays
 it back.
 
+### What it cost to run
+
+```
+compile_instructions  50,455,686 -> 49,090,280   -1,365,406   -2.71%
+```
+
+The largest single fall this vein has taken. The allocator rows carry about
+half — `_int_malloc` 3,044,126 -> 2,808,434, `_int_free` 2,434,266 -> 2,284,655,
+`malloc` 1,684,286 -> 1,588,013, `malloc_consolidate` 940,889 -> 867,875, `free`
+1,077,244 -> 1,015,812, `__rust_alloc` 800,814 -> 769,810, some 647,000 between
+them — and the rest is hashing the bitset removed. Every `mark_reader` hashed a
+`usize` into a set; it shifts and ors now.
+
+`infer::infer` rises 87,854, which is where that work went: the wake loop scans
+`ceil(n / 64)` words per wake instead of iterating a set that knew its own
+members, and the flat params table indexes `param_starts` where it followed a
+pointer. A fifteenth of the fall.
+
+`eval_expr` moves 1,495 on two million and `check_merged` is byte-identical.
+Welfare 86.32 -> 86.58, ratcheted here.
+
 ### Who to wake, as bits
 
 `readers[i]` was a `HashSet<usize>`, and waking a declaration's readers cloned
