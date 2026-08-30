@@ -107,4 +107,13 @@
 # the borrow. dhat put 1,634 on the site; the remaining 644 is the per-group
 # `Vec<usize>` and the `Vec<&FnDecl>` the body collects back out, and those are
 # declined — group iteration order decides the order arms are rewritten in.
-compile_allocs=46008
+#
+# 2026-08-30 (the demand pass's lookup keys): 46,008 -> 44,920, a fall of
+# 1,088, or 2.4%. Banked. `demand::discard_positions` keyed its map on
+# `(String, usize)` and `collect_uses` built the same pair to read it, at every
+# `App` node the demand walk visits. Both sides borrow from the program now.
+# The identical shape one function down in `use_targets` was built, measured at
+# 44,920 either way and reverted: it runs only for a binding that has already
+# passed the lazy vote, and lib/json produces none, so the clone sits on a path
+# this row cannot see.
+compile_allocs=44920

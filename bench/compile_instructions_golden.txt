@@ -583,4 +583,26 @@
 # exactly as the `String` keys did — `Hash for String` forwards to `str` — so
 # the map's iteration order is unchanged by construction, and the emitted
 # golden confirms it.
-compile_instructions=52172225
+#
+# 2026-08-30  52,172,225 -> 52,201,308   +29,083   +0.056%. A RISE, and it is
+# glibc's free-list maintenance rather than the compiler's work. Every kanso
+# frame and every allocator entry point fell — `_int_malloc` 3,196,519 ->
+# 3,120,043, `_int_free` 2,865,445 -> 2,796,140, `malloc` 2,017,580 ->
+# 1,969,739, `free` 1,288,504 -> 1,258,040, `__rust_alloc` 917,838 -> 892,814,
+# `String::clone` 311,018 -> 275,114, which is 326,000 of work removed — and
+# two rows rose past it: `malloc_consolidate` 721,213 -> 967,024 (+245,811) and
+# `unlink_chunk` 340,268 -> 448,044 (+107,776).
+#
+# Removing 1,088 short-lived allocations of one size changed which chunks sat
+# in the fastbins when glibc came to consolidate them, and it consolidated more.
+# The compiler asks the allocator for less and the allocator charges more for
+# the asking. `kanso::demand::analyze` itself moves 174 instructions on 112,706,
+# which is the noise floor of this measurement.
+#
+# Banked as a rise with a cause, not waved through as layout: it reproduces on
+# both hosts and with the same sign — +20,355 here under rustc 1.94.1, +29,083
+# on the runner under 1.98.0 — where a layout accident would not. Welfare goes
+# up, because compile speed reads the mean of this row's ratio and
+# compile_allocs's, and 2.4% off the allocations outweighs 0.056% on the
+# instructions several times over.
+compile_instructions=52201308

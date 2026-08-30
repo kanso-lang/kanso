@@ -5031,3 +5031,120 @@ anything about wall time, which the function leaves out and therefore weights
 at zero. The function is provisional and says so. But asked which end of the
 compiler to spend the next hour on, it has a clear answer, and the answer is
 the front end.
+
+## 2026-08-30 — the demand pass's lookup keys
+
+`discard_positions` keyed its map on `(String, usize)`, and `collect_uses` built
+the same pair every time it read one:
+
+```rust
+Expr::Ident(callee, _) => discard.get(&(callee.clone(), args.len())),
+```
+
+The build side allocates once per function declaration. The lookup side fires
+at every `App` node the demand walk visits and throws the `String` away as soon
+as the map has answered. Both sides borrow now, which the pass can do because
+`discard_positions` takes `&Program` and the map dies inside `analyze`.
+
+```
+compile_allocs        46,008 -> 44,920    -1,088   -2.4%
+compile_peak_bytes               742,572  unmoved
+docs/kanso.wasm    1,656,573 -> 1,654,278  -2,295 bytes
+```
+
+### compile_instructions rose, and the rise is glibc's
+
+```
+compile_instructions  52,172,225 -> 52,201,308   +29,083   +0.056%
+```
+
+A rise on a change that removes 1,088 allocations, which reads backwards until
+the profile is diffed. Everything kanso does got cheaper and so did every
+allocator entry point:
+
+```
+_int_malloc     3,196,519 -> 3,120,043    -76,476
+_int_free       2,865,445 -> 2,796,140    -69,305
+malloc          2,017,580 -> 1,969,739    -47,841
+String::clone     311,018 ->   275,114    -35,904
+free            1,288,504 -> 1,258,040    -30,464
+__rust_alloc      917,838 ->   892,814    -25,024
+```
+
+That is about 326,000 instructions of work removed. Two rows rose past it, and
+both are glibc's free-list maintenance:
+
+```
+malloc_consolidate  721,213 -> 967,024   +245,811
+unlink_chunk        340,268 -> 448,044   +107,776
+```
+
+Removing 1,088 short-lived allocations of one size changed which chunks sat in
+the fastbins when glibc came to consolidate them, and it consolidated more. The
+compiler asks the allocator for less and the allocator charges more for the
+asking. `kanso::demand::analyze` itself moves 174 instructions on 112,706,
+which is this measurement's noise floor.
+
+It is banked as a rise with a cause rather than waved through as layout,
+because it reproduces on both toolchains and with the same sign: +20,355 here
+under rustc 1.94.1, +29,083 on the runner under 1.98.0. A layout accident would
+not do that.
+
+Welfare goes up, 85.64 -> 85.72, ratcheted here. Compile speed reads the mean of
+this row's ratio and `compile_allocs`'s, and 2.4% off the allocations is worth
+several times 0.056% on the instructions.
+
+### The sibling that measures zero
+
+`use_targets` has the identical shape one function down — it collects
+`Vec<(String, usize, usize)>` and pushes `callee.clone()` — and borrowing it
+moves `compile_allocs` by nothing at all. Built, measured at 44,920 both ways,
+reverted. It runs only for a binding that has already passed the lazy vote, and
+`lib/json` produces none, so the clone is on a path the vein cannot see. A
+program in the lazy fragment would reach it; the mem tier is where that would
+show, and those fixtures are a dozen statements each.
+
+### What #1147's entry got wrong about provenance
+
+That entry named `provenance.rs` at 633 blocks as the other site left on the
+measured path. A dhat run on the current binary attributes **zero** blocks to
+`provenance.rs` at any depth, and reading the file says why: `Provenance` keys
+its parameter map on `Group<'a>`, borrowed already, and the `decl.name.clone()`
+at line 315 is inside the license diagnostic — reached only by a declaration
+with an arm for an err its own package raised. `lib/json` has none. The 633
+came from the pre-#1139 map and was carried forward without being re-read.
+
+### The front end's allocations after the day
+
+44,923 blocks by dhat against 44,920 by the counting allocator. The ten largest
+lines:
+
+```
+3,592  lexer.rs:7      <Tok as Clone>::clone — the String inside Tok::Ident,
+                       copied when a caller clones the token
+3,157  lexer.rs:584    let tok = s.lex_word()? — the same String, built; the
+                       allocation is inside lex_word and lands on the inlined
+                       call site
+1,997  lexer.rs:535    Scanner's Vec<char> per line
+1,689  infer.rs:250
+1,394  lib.rs:610
+1,375  lib.rs:2897
+1,117  lexer.rs:585    tokens.push — the per-line token vector
+1,100  parser.rs:2112
+1,072  infer.rs:574
+1,067  parser.rs:2119
+```
+
+The lexer holds four of the ten and 9,863 blocks between them, which is 22% of
+the front end. Read the frames rather than the line numbers: 6,749 of the 9,863
+are one `String`, the name in `Tok::Ident`, built once at 584 and copied 3,592
+times at 7. Building it is what interning would remove, and interning is
+declined — #1033, 365 conversion sites for one AST field of twenty-nine.
+Copying it is a separate question with a separate answer, because a clone
+happens at a caller that could have matched on `&Tok`.
+
+That leaves 3,114 blocks in two vectors the lexer builds per line and neither
+of which a reader ever sees: `Scanner`'s `Vec<char>` at 1,997 and the token
+vector at 1,117. The `Vec<char>` was declined in #1145 on the grounds that
+`pos` is the column, which remains true and is a reason to keep indexing
+characters rather than a reason to allocate a fresh vector for each line.
