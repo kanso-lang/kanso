@@ -6101,3 +6101,20 @@ The same map, for the record, since two of the top four are gavel territory:
 rewritten arms, so the order the table hands its keys back is part of what the
 compiler emits, and changing the value type changes that order. The emitted
 golden would catch it, but a reordering is not what 644 allocations are worth.
+
+### The runner's number
+
+    compile_instructions  44,130,291 -> 44,100,285   -30,006  -0.07%  (runner)
+                          44,491,145 -> 44,427,648   -63,497  -0.14%  (local)
+    compile_allocs                        34,158   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99289426525. The runner reads less than half the fall the
+container does, the widest the two have parted all day — every earlier change
+today agreed within a fifth. What differs between the hosts here is the cost
+of an allocation, and this change is almost entirely allocations: the
+counting pass and the `or_default().push` do nearly the same number of hash
+operations, so what is left is nine hundred mallocs, and a malloc is exactly
+the thing whose price is a property of the allocator and the machine rather
+than of the compiler. The allocation row, which is not host-dependent, agrees
+to the digit.
