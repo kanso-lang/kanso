@@ -5688,3 +5688,17 @@ Measured in the box, container host, same binary either side:
 −772,872 in total, −1.62%. Allocations 34,945 → 34,812, the `binds` tables.
 Peak, rounds and visits are unchanged: the pass decides exactly what it decided
 before, and the emitted golden is byte-identical.
+
+### The runner's number
+
+    compile_instructions  47,302,573 -> 46,616,238   -686,335   -1.45%  (runner)
+                          47,651,194 -> 46,878,322   -772,872   -1.62%  (local)
+    compile_allocs            34,945 ->     34,812       -133   -0.38%  (both)
+    compile_peak_bytes                     730,120   unmoved
+    front_end_rounds 40, front_end_visits 16,806     unmoved
+    welfare                            86.79 -> 86.83
+
+Copied out of job 99257297594, which also confirmed the allocation and peak
+rows to the digit. The two hosts disagree by 0.17 points of the fall — the
+container's glibc is the same version but the CPU is not, and the searcher's
+setup is where a host divergence would land.
