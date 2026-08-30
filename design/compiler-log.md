@@ -2890,3 +2890,16 @@ namespace a consumer cannot write; module_differential's known-defect
 one-line version silently re-exporting std's arm under dep's name —
 is the case the implementation must hold a red spec against. The
 ledger entry's removal rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: records print qualified, everywhere
+
+On "What a record prints as, when its module is imported", Clay:
+"sure, qualified everywhere is fine." A record prints its qualified
+name regardless of how the program was entered — Go's `main.T`
+precedent, already this project's package rule. `slow_lane 7` becomes
+`lane/slow_lane 7` in both entry paths; the root module needs a name
+for the prefix to exist; cross_module_fields' pins were right all
+along and stay; tests/entry_file.rs flips its expectation to the
+qualified form and stops being ignored. The entry-path divergence —
+the actual defect — dies with the ruling. The ledger entry's removal
+rides the next reconciliation with main.
