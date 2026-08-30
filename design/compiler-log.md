@@ -2851,3 +2851,14 @@ has. No parser knows the names bind, annotate or rescue; an indented
 line without the dot remains one more argument, per the existing rule.
 The 346-step migration takes the keep-the-dot shape. The ledger
 entry's removal rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: an err has readers
+
+On "Whether an err gains readers a callback can use", Clay took the
+recommendation. An err gains `.reason`, `.cause` and `.origin`, and
+reading one is the second deliberate hole in infectiousness — the
+same carve-out `wrap_err`'s second argument already has. Every other
+operation on an err still propagates it. This makes the gavels' own
+lambda samples (`annotate e (err -> "config: {err.reason}")`) compile;
+dispatch-group callbacks keep destructuring as before. The ledger
+entry's removal rides the next reconciliation with main.
