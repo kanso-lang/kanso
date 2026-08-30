@@ -2876,3 +2876,17 @@ and visibly so, where the railway's guarantee was ambient machinery
 a reader could not see. No new checker rule and no io-edge rule is
 minted; the recommendation is declined as solving a non-problem. The
 entry leaves the ledger with this commit.
+
+## 2026-08-29 — gavel: a qualified name is its module's declaration
+
+On "Which claim owns `dep/join`", Clay: "yeah of course take the go
+option." A qualified name means the named module's own declaration and
+nothing else — `dep/join` is dep's `pub fn join`, never a clone of an
+import's arm, and an author's right to declare a name an import
+happens to export is unconditional. The enrolled clones leave the
+qualified namespace; the bare overload space gets an internal
+namespace a consumer cannot write; module_differential's known-defect
+`w1` leaves the defect ledger with the fix. The measured hazard — the
+one-line version silently re-exporting std's arm under dep's name —
+is the case the implementation must hold a red spec against. The
+ledger entry's removal rides the next reconciliation with main.
