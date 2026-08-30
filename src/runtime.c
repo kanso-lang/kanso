@@ -1840,10 +1840,19 @@ KValue k_caf_complete(KValue built, KValue seeded) {
 }
 
 
+/* Every tag whose payload is a pointer. `K_SUB` was absent until 2026-08-30,
+   and `k_cohort_pop` reads this to decide whether a beat's result has to be
+   carried out of the arena before the rewind: a returned subtype was taken for
+   a scalar, the arena went back to the mark under it, and the caller got a
+   dangling `KSub*`. The value read back as whatever the arena was reused for,
+   which on the fixtures below is a pointer rendered as a double. `K_THUNK` is
+   spelled out at that call site rather than here because a thunk is a promise
+   and not a value; every other pointer tag belongs in this list. */
 static int k_is_heap(long long tag) {
     switch (tag) {
         case K_STR: case K_ERR: case K_REC: case K_DESC:
         case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
+        case K_SUB:
             return 1;
         default:
             return 0;

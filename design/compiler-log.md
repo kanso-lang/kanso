@@ -4560,3 +4560,78 @@ The general lesson is about the comment. "Mirrors `for_each_child`" was a claim
 nothing tested, and two passes were built on it. #1137 went after four
 diagnostics resting on prose; this is the same failure in a walk, and the same
 answer applies — the fixture is the pin.
+
+## 2026-08-30 — a subtype of a primitive is a heap value, and one list did not say so
+
+Native printed a different denormal double on every run where the interpreter
+printed the value. A use-after-free that produced silent wrong answers, live on
+main since subtypes of primitives existed, and found by accident while building
+the fixtures for the entry above.
+
+```
+type shape int              native 6.90351265195293e-310   interp 3
+type shape string           native 6.9464150267249e-310    interp hi
+type shape float64          native 3.5                     interp 3.5
+```
+
+### The cause
+
+`runtime.c`'s `k_is_heap` lists every tag whose payload is a pointer:
+
+```c
+case K_STR: case K_ERR: case K_REC: case K_DESC:
+case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
+    return 1;
+```
+
+`K_SUB` was not on it, and a `K_SUB` payload is a `KSub*`. `k_cohort_pop` reads
+that predicate to decide whether a beat's result has to be carried out of the
+arena before the rewind:
+
+```c
+if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
+    k_beat_depth--;
+    k_beat_rewind(m);     /* the arena goes back to the mark */
+    return r;             /* r points into what was just freed */
+}
+```
+
+So a returned subtype was taken for a scalar, the arena went back under it and
+the caller kept a dangling pointer. The fix is one case label.
+
+`K_THUNK` is spelled out at that call site rather than in the list, which is
+what says the list was known to be the gate — and that it had already been
+found short once.
+
+### Why the conditions looked so strange
+
+Three ingredients, each checked against the unfixed compiler. The value has to
+be MADE in one call and STORED by another, both written in the entry, so
+`k_cohort_pop` sees it cross — `lib/both 3`, the same chain inside the library,
+is correct. It has to go into a container, because a value rendered on the spot
+is read before the arena is reused. And the parent has to be `int` or `string`:
+`float64` survived every arrangement, structurally, because a float payload is
+the double itself and has nothing to dangle.
+
+None of the module boundary, the re-export, the build block or the seed value
+mattered, and all four were in the first reproduction.
+
+Valgrind reports zero errors on the failing binary, which is worth saying
+plainly: the arena block is still mapped and still initialised, so the read is
+well-defined and merely stale. A memory checker was never going to find this.
+What found it was the interpreter disagreeing.
+
+### What it costs, and what it does not
+
+Every runtime counter gate is green — decode, encode, escape, one-shot, basket,
+wide, pending-cell and scan all unchanged. None of the benchmarks returns a
+subtype across a beat, which is also why nothing caught this.
+
+The page engine cannot have it: `wasm_rt.rs` has no beat and no cohort at all,
+so the arena rewind is native's alone. That is a structural answer rather than
+a test, and better than one.
+
+The fixture is `tests/golden/entryfile/a_subtype_stored_across_the_entry`:
+three primitive parents by two containers, pinned as one output on both
+engines. Which line comes back wrong depends on what the arena held, so the
+whole output is the pin rather than any line of it.
