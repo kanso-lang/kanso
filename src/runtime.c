@@ -2460,8 +2460,13 @@ KValue k_set_field(KValue target, const char* name, KValue v) {
             KValue none; none.tag = K_NONE; none.payload = 0; return none;
         }
     }
-    k_die("no such field");
-    KValue none; none.tag = K_NONE; none.payload = 0; return none;
+    /* The sentence the other two engines print, and the one `k_keyed_field`
+       and `k_no_field` above already print for a READ. This site said "no such
+       field" — naming neither the type nor the field, and diverging from the
+       oracle on a program a user can write. */
+    fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
+            k_type_name(r->type_id), name);
+    exit(1);
 }
 
 KValue k_keyed_field(KValue v, const char* name) {
