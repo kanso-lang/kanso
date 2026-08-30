@@ -1003,7 +1003,7 @@ impl<'a> Interp<'a> {
                 .map(|t| (t.name.clone(), t.members.clone()))
                 .collect();
         });
-        let origin = Span { line: 0, col: 0 };
+        let origin = Span::at(0, 0);
         let entry_decl = TypeDecl {
             parent: None,
             members: Vec::new(),
@@ -3003,12 +3003,8 @@ impl<'a> Interp<'a> {
                 Some(overloads),
             ) => {
                 let overloads = overloads.clone();
-                let result = self.dispatch(
-                    "render/to_string",
-                    &overloads,
-                    vec![value],
-                    Span { line: 0, col: 0 },
-                )?;
+                let result =
+                    self.dispatch("render/to_string", &overloads, vec![value], Span::at(0, 0))?;
                 if matches!(result, Value::ErrV(_)) {
                     return Ok(Err(result));
                 }
@@ -3088,7 +3084,7 @@ impl<'a> Interp<'a> {
         if matches!(&value, Value::Thunk(answered) if Rc::ptr_eq(answered, &cell)) {
             return Err(RuntimeError {
                 message: "a lazy binding demands its own value".to_string(),
-                span: Span { line: 0, col: 0 },
+                span: Span::at(0, 0),
             });
         }
         *cell.borrow_mut() = ThunkState::Forced(value.clone());
@@ -3123,7 +3119,7 @@ impl<'a> Interp<'a> {
                 ThunkState::Blackhole => {
                     return Err(RuntimeError {
                         message: "a lazy binding demands its own value".to_string(),
-                        span: Span { line: 0, col: 0 },
+                        span: Span::at(0, 0),
                     })
                 }
             }
@@ -4221,7 +4217,7 @@ impl<'a> Interp<'a> {
     }
 
     fn execute_chain(&self, start: Rc<Desc>, executor: &mut dyn Executor) -> EvalResult {
-        let origin = Span { line: 0, col: 0 };
+        let origin = Span::at(0, 0);
         let mut current = start;
         loop {
             let next = match &*current {
@@ -4328,7 +4324,7 @@ impl<'a> Interp<'a> {
     /// through `Seq` and `Bind`, so the continuation is always the remaining
     /// description — no saved stack, no coroutine.
     fn step(&self, desc: &Rc<Desc>, executor: &mut dyn Executor) -> Result<Step, RuntimeError> {
-        let origin = Span { line: 0, col: 0 };
+        let origin = Span::at(0, 0);
         match &**desc {
             Desc::Sleep(ms) => Ok(Step::Blocked(*ms, Rc::new(Desc::Nil))),
             // A fiber waiting for a connection is a fiber with nothing to do:

@@ -62,7 +62,7 @@ thread_local! {
     static INTERP: RefCell<Option<&'static Interp<'static>>> = const { RefCell::new(None) };
 }
 
-const SPAN0: Span = Span { line: 0, col: 0 };
+const SPAN0: Span = Span::at(0, 0);
 
 pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
     let parents: Vec<(String, String)> = program

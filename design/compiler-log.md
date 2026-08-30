@@ -4029,3 +4029,43 @@ age             `<mod>/age`   on native, `<fn>` on the oracle  (subtype)
 Nine shapes, two wrong, and both wrong the same way: a type name that carries
 no fields and is not a nullary record. The typeset half is refused at the
 front door by the entry above; this is the other half.
+
+## 2026-08-30 — a span was sixteen bytes and needed eight
+
+`Span` held two `usize`. Every `Expr`, every `Stmt`, most patterns and every
+diagnostic carry one, and a few carry two, so the width of that struct sets the
+width of the whole AST. Four billion lines is a limit no source file reaches,
+and a `u32` pair is half the size:
+
+```
+Span     16 -> 8
+Expr     64 -> 56
+Stmt    136 -> 120
+Pattern  64 -> 64   (unchanged — its largest arm is not span-bound)
+```
+
+The lexer and the passes still count in `usize`, so the narrowing happens at one
+place: `Span::at(line, col)`, which is what every construction site calls now.
+`render` widens back for the source-line lookup.
+
+Measured on the container, `kanso check lib/json`:
+
+```
+compile_peak_bytes   822,004 -> 763,868   -58,136   -7.1%
+compile_instructions 58,329,928 -> 58,379,986  +50,058  +0.086%
+compile_allocs       61,974 -> 61,974      unchanged
+```
+
+`compile_peak_bytes` reads 822,004 here and 822,004 in the runner's golden, so
+that counter is host-invariant and the fall is the real number rather than this
+box's layout. The allocation count does not move because the same objects are
+allocated; they are smaller.
+
+The instruction rise is the cast at the boundary. About twenty side tables key
+on `(String, usize, usize)` — beat.rs, check.rs, codegen.rs, demand.rs,
+dispatch.rs, escape.rs — so a span that has been narrowed is widened again to
+build a key and narrowed again to store one. Carrying `u32` through those tables
+would recover most of the 50,058; that is a larger change than this one.
+
+Welfare reads the trade the way the weights say to: 84.10 -> 84.29, +0.19, the
+largest single move measured this week.

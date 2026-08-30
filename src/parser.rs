@@ -75,7 +75,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         diags.push(Diagnostic::new(
             "syntax",
             "a play file needs at least one statement to run".to_string(),
-            Span { line: 1, col: 1 },
+            Span::at(1, 1),
         ));
     }
     // The declaration half is interleaved with statements, so its lines are
@@ -109,7 +109,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         Ok(body) => body,
         Err(d) => return Err(vec![d]),
     };
-    let span = stmt_lines.first().map(head_span).unwrap_or(Span { line: 1, col: 1 });
+    let span = stmt_lines.first().map(head_span).unwrap_or(Span::at(1, 1));
     program.fns.push(FnDecl {
         name: crate::ast::ENTRY.to_string(),
         params: Vec::new(),
@@ -179,7 +179,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         diags.push(Diagnostic::new(
             "syntax",
             "an entry file needs at least one statement".to_string(),
-            Span { line: 1, col: 1 },
+            Span::at(1, 1),
         ));
     }
     // a continuation line may not restart after a blank: the chain it would
@@ -210,7 +210,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     if !diags.is_empty() {
         return Err(diags);
     }
-    let span = stmt_lines.first().map(head_span).unwrap_or(Span { line: 1, col: 1 });
+    let span = stmt_lines.first().map(head_span).unwrap_or(Span::at(1, 1));
     let main = FnDecl {
         name: crate::ast::ENTRY.to_string(),
         params: Vec::new(),
@@ -487,7 +487,7 @@ fn parse_reexport(line: &Line, body: &[Line]) -> Result<crate::ast::Reexport, Di
 }
 
 fn head_span(line: &Line) -> Span {
-    line.tokens.first().map(|(_, s)| *s).unwrap_or(Span { line: line.number, col: 1 })
+    line.tokens.first().map(|(_, s)| *s).unwrap_or(Span::at(line.number, 1))
 }
 
 fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
@@ -497,7 +497,7 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
             diags.push(Diagnostic::new(
                 "formatting",
                 "the file may not begin with a blank line".to_string(),
-                Span { line: *blank, col: 1 },
+                Span::at(*blank, 1),
             ));
         }
     }
@@ -507,7 +507,7 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
                 diags.push(Diagnostic::new(
                     "formatting",
                     "the file may not end with a blank line".to_string(),
-                    Span { line: *blank, col: 1 },
+                    Span::at(*blank, 1),
                 ));
             }
         }
@@ -547,11 +547,7 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
                 1 => "exactly one blank line separates top-level declarations".to_string(),
                 _ => "blank lines may not appear inside a body".to_string(),
             };
-            diags.push(Diagnostic::new(
-                "formatting",
-                message,
-                Span { line: pair[1].number, col: 1 },
-            ));
+            diags.push(Diagnostic::new("formatting", message, Span::at(pair[1].number, 1)));
         }
     }
 }
@@ -1611,7 +1607,7 @@ impl<'a> P<'a> {
             .get(self.pos)
             .or_else(|| self.toks.last())
             .map(|(_, s)| *s)
-            .unwrap_or(Span { line: self.line, col: 1 })
+            .unwrap_or(Span::at(self.line, 1))
     }
 
     fn done(&self) -> bool {
@@ -1794,7 +1790,7 @@ impl<'a> P<'a> {
                 self.pos += 1;
                 if matches!(self.peek(), Some(Tok::Colon)) {
                     let colon_span = self.span_here();
-                    let tight_before = colon_span.col == span.col + name.len();
+                    let tight_before = colon_span.col as usize == span.col as usize + name.len();
                     self.pos += 1;
                     let ty_span = self.span_here();
                     let tight_after = ty_span.col == colon_span.col + 1;
@@ -2141,7 +2137,7 @@ impl<'a> P<'a> {
             // an index does, and it is empty by construction: a parenthesis
             // with something in it is the C-shaped call the lexer refuses.
             let runs = matches!(self.peek(), Some(Tok::LParen))
-                && self.span_here().col == self.last_end()
+                && self.span_here().col as usize == self.last_end()
                 && matches!(self.toks.get(self.pos + 1).map(|(t, _)| t), Some(Tok::RParen));
             if runs {
                 let span = self.span_here();
@@ -2150,7 +2146,7 @@ impl<'a> P<'a> {
                 continue;
             }
             let tight = matches!(self.peek(), Some(Tok::LBracket))
-                && self.span_here().col == self.last_end();
+                && self.span_here().col as usize == self.last_end();
             if !tight {
                 return Ok(expr);
             }

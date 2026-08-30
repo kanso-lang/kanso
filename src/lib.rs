@@ -589,7 +589,7 @@ fn install_prelude(program: &mut ast::Program) {
     if !wants_prelude(program) {
         return;
     }
-    let at = diag::Span { line: 0, col: 0 };
+    let at = diag::Span::at(0, 0);
     for (name, parent) in [(MATH_FAILURE, "string"), (DIVIDE_BY_ZERO, MATH_FAILURE)] {
         program.types.push(ast::TypeDecl {
             name: name.to_string(),
@@ -927,7 +927,12 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     for twin in &program.fns {
         if !twin.synthetic {
             at_site
-                .entry((twin.file.as_str(), twin.span.line, twin.span.col, twin.params.len()))
+                .entry((
+                    twin.file.as_str(),
+                    twin.span.line as usize,
+                    twin.span.col as usize,
+                    twin.params.len(),
+                ))
                 .or_default()
                 .push(twin.name.as_str());
         }
@@ -941,9 +946,12 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
         let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::default()));
         entry.0 &= d.synthetic;
         if d.synthetic {
-            if let Some(twins) =
-                at_site.get(&(d.file.as_str(), d.span.line, d.span.col, d.params.len()))
-            {
+            if let Some(twins) = at_site.get(&(
+                d.file.as_str(),
+                d.span.line as usize,
+                d.span.col as usize,
+                d.params.len(),
+            )) {
                 for name in twins {
                     // `qual/name`, asked without building the needle. A
                     // `format!("/{}", d.name)` here cost a String per
@@ -2217,7 +2225,7 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
     if !imports.iter().any(|i| i.path == "std/render") {
         imports.push(ast::Import {
             path: "std/render".to_string(),
-            span: diag::Span { line: 0, col: 0 },
+            span: diag::Span::at(0, 0),
             alias: None,
             renames: Vec::new(),
         });
@@ -3396,7 +3404,7 @@ fn compile_module_loaded(
                     "`{qual}` is not imported here — a module's files share \
                      their declarations, not their imports"
                 ),
-                diag::Span { line: 1, col: 1 },
+                diag::Span::at(1, 1),
             ));
         }
         if !diags.is_empty() {

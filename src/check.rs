@@ -2901,7 +2901,7 @@ fn check_entry(program: &Program, diags: &mut Vec<Diagnostic>) {
         diags.push(Diagnostic::new(
             "name",
             "a directory runs through `main.kso`, and this module has none".to_string(),
-            Span { line: 1, col: 1 },
+            Span::at(1, 1),
         ));
     }
 }
@@ -2912,7 +2912,7 @@ fn other_span(pattern: &Pattern) -> Span {
         Pattern::Annotated { span, .. } | Pattern::Keyed { span, .. } => *span,
         Pattern::Var(_, s) => *s,
         Pattern::Wildcard(s) => *s,
-        Pattern::Ctor { .. } => Span { line: 0, col: 0 },
+        Pattern::Ctor { .. } => Span::at(0, 0),
     }
 }
 
