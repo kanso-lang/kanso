@@ -1,0 +1,20 @@
+# `x.f = v` is the one mutation the language has, and it belongs to a `build`
+# block. The refusal for a write outside one was applied by two walks that
+# between them saw only the top level of a function body: the parser refused a
+# `Set` statement it parsed there, and `check_build_blocks` refused a `Set` it
+# found there. An `if` arm is a statement list too, and neither walk descended
+# into one, so this program used to compile on all three engines and mutate the
+# record it built — with no `build` anywhere in the file.
+type node
+  id
+
+fn tagged x
+  n = node x
+  q = if true
+    n.id = 2
+    n
+  else
+    n
+  q
+
+pub play = print "{tagged 1}"

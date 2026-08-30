@@ -1,0 +1,4 @@
+error[build]: `n.id = ...` writes a field, and only a `build` block may do that
+  --> a_field_write_inside_an_if_arm.kso:14:7
+  14 |     n.id = 2
+             ^
