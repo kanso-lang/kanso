@@ -5052,6 +5052,48 @@ compile_peak_bytes               742,572  unmoved
 docs/kanso.wasm    1,656,573 -> 1,654,278  -2,295 bytes
 ```
 
+### compile_instructions rose, and the rise is glibc's
+
+```
+compile_instructions  52,172,225 -> 52,201,308   +29,083   +0.056%
+```
+
+A rise on a change that removes 1,088 allocations, which reads backwards until
+the profile is diffed. Everything kanso does got cheaper and so did every
+allocator entry point:
+
+```
+_int_malloc     3,196,519 -> 3,120,043    -76,476
+_int_free       2,865,445 -> 2,796,140    -69,305
+malloc          2,017,580 -> 1,969,739    -47,841
+String::clone     311,018 ->   275,114    -35,904
+free            1,288,504 -> 1,258,040    -30,464
+__rust_alloc      917,838 ->   892,814    -25,024
+```
+
+That is about 326,000 instructions of work removed. Two rows rose past it, and
+both are glibc's free-list maintenance:
+
+```
+malloc_consolidate  721,213 -> 967,024   +245,811
+unlink_chunk        340,268 -> 448,044   +107,776
+```
+
+Removing 1,088 short-lived allocations of one size changed which chunks sat in
+the fastbins when glibc came to consolidate them, and it consolidated more. The
+compiler asks the allocator for less and the allocator charges more for the
+asking. `kanso::demand::analyze` itself moves 174 instructions on 112,706,
+which is this measurement's noise floor.
+
+It is banked as a rise with a cause rather than waved through as layout,
+because it reproduces on both toolchains and with the same sign: +20,355 here
+under rustc 1.94.1, +29,083 on the runner under 1.98.0. A layout accident would
+not do that.
+
+Welfare goes up, 85.64 -> 85.72, ratcheted here. Compile speed reads the mean of
+this row's ratio and `compile_allocs`'s, and 2.4% off the allocations is worth
+several times 0.056% on the instructions.
+
 ### The sibling that measures zero
 
 `use_targets` has the identical shape one function down — it collects
