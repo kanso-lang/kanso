@@ -4244,7 +4244,9 @@ sites — twenty-one in check.rs, fourteen in lib.rs, three in infer.rs, two in
 codegen.rs, one each in eval.rs, linear.rs and wasm_backend.rs:
 
 ```
-compile_instructions  58,373,255 -> 56,536,342   -1,836,913   -3.15%
+                        runner                    container
+compile_instructions  58,209,632 -> 56,442,099   -1,767,533   -3.04%
+                      58,373,255 -> 56,536,342   -1,836,913   -3.15%
 compile_allocs        61,974      unchanged
 compile_peak_bytes    763,868     unchanged
 compile_rounds        40          unchanged
@@ -4254,7 +4256,11 @@ docs/kanso.wasm       +32,823 bytes   +2.0%
 ```
 
 Every counter that measures work is identical and only the instruction count
-falls, which is what removing dispatch looks like. The sibling
+falls, which is what removing dispatch looks like. The two hosts agree for
+once — same sign, within four per cent of each other — which is what the
+pending gavel on attribution says work looks like across a host pair, and
+nothing like the +382,777 against +50,058 the `Span` change read three entries
+up. Welfare 84.27 -> 84.37, banked. The sibling
 `walk_children_mut` keeps its `&mut dyn`: it does not appear in the profile at
 all, because its four callers inline it, and the whole desugar family is under
 one per cent.
