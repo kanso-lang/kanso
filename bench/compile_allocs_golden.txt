@@ -211,4 +211,9 @@
 # last three of the shape in the front end: the two arity tables, which held a
 # `Vec<usize>` of one number per name, and the overlap checker's per-group
 # `Vec<&FnDecl>`. The arity pair was 499 blocks, the overlap groups 349.
-compile_allocs=30406
+#
+# 2026-08-30 (the last two tables of the shape): 30,406 -> 29,876, a fall of
+# 530, or 1.7%. Banked. check_literal_arguments' Vec<&FnDecl> per group, rekeyed
+# by name so a borrowed &str can probe it, and advisory.rs's Vec<usize> per
+# name. 349 blocks and 181. No table in the front end holds a Vec per key now.
+compile_allocs=29876

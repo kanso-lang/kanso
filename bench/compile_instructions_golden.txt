@@ -721,4 +721,15 @@
 # a `Vec<usize>` of one number per name, and the overlap checker's per-group
 # `Vec<&FnDecl>`. The container read -95,517 against this host's -94,941 —
 # six tenths of a per cent apart, the closest two hosts have come on this vein.
-compile_instructions=43001117
+#
+# 2026-08-30 (the last two tables of the shape): 43,001,117 -> 42,914,281, a
+# fall of 86,836, or 0.20%, banked. check_literal_arguments' Vec<&FnDecl> per
+# group, rekeyed by name so a borrowed &str can probe it, and advisory.rs's
+# Vec<usize> per name. No table in the front end holds a Vec per key now.
+#
+# The container read -50,346 against this host's -86,836 — the widest the two
+# have been on this vein since #1161, and in the direction where the runner
+# gains more. Both changes trade an allocation and a pointer chase for a short
+# linear scan of a flat vector, and the two hosts price that trade differently.
+# The allocation row agrees to the digit either way.
+compile_instructions=42914281
