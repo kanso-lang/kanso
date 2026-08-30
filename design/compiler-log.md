@@ -4061,11 +4061,24 @@ that counter is host-invariant and the fall is the real number rather than this
 box's layout. The allocation count does not move because the same objects are
 allocated; they are smaller.
 
-The instruction rise is the cast at the boundary. About twenty side tables key
-on `(String, usize, usize)` — beat.rs, check.rs, codegen.rs, demand.rs,
-dispatch.rs, escape.rs — so a span that has been narrowed is widened again to
-build a key and narrowed again to store one. Carrying `u32` through those tables
-would recover most of the 50,058; that is a larger change than this one.
+The memory fall is the struct size and nothing else. A build with the same
+`u32` fields and two words of explicit padding — same casts, same side tables,
+`Span` back at 16 and `Expr` back at 64 — reads `compile_peak_bytes=822004`,
+the baseline to the byte.
+
+Where the 50,058 instructions went is not settled, and the profile will not
+say. Callgrind attributes the unpadded build's rise almost entirely to
+`walk_children` (+343k gross, against falls elsewhere), which touches no span
+arithmetic at all; the padded build rises by the same amount overall, +47,430,
+and attributes it to `parse_atom` and `parse_stmt` instead, with
+`walk_children` unchanged. Two builds, the same total, disjoint explanations:
+that is what code layout looks like in this profiler, and it is why the
+two-host rule exists. About twenty side tables key on `(String, usize, usize)`
+— beat.rs, check.rs, codegen.rs, demand.rs, dispatch.rs, escape.rs — so a
+narrowed span is widened again to build a key, and the cast count is the right
+order of magnitude for 50,058; that is a hypothesis with no evidence behind it
+yet. The runner's number decides: a rise there too is work, a fall is this
+box's layout.
 
 Welfare reads the trade the way the weights say to: 84.10 -> 84.29, +0.19, the
 largest single move measured this week.
