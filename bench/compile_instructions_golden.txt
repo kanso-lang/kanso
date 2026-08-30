@@ -660,4 +660,17 @@
 # `eval_expr` moves 1,495 on two million and `check_merged` is byte-identical,
 # which is what a change confined to two of the fixpoint's tables should read
 # as.
-compile_instructions=49090280
+#
+# 2026-08-30  49,090,280 -> 48,743,776   -346,504   -0.71%, banked, and the two
+# pieces are visible separately in the profile. The reservation shows as
+# `RawTable<(&str, ())>::reserve_rehash` 753,484 -> 654,170, a fall of 99,314:
+# that is `prune_unused_getters`'s set no longer doubling its way up from
+# nothing. The deletion shows in the allocator rows — `free` 1,015,812 ->
+# 998,200, `__rust_alloc` 769,810 -> 755,343, `malloc_consolidate` 867,875 ->
+# 861,041 — plus the `String` construction and drop that the 90% threshold
+# leaves without rows, which is where the balance of the fall is: 595 fewer
+# `String`s built and dropped.
+#
+# `lex_line`, `eval_expr` and `memrchr` are byte-identical. Nothing here touches
+# the lexer or the fixpoint.
+compile_instructions=48743776

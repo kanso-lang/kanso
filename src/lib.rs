@@ -138,10 +138,9 @@ fn compile_parsed_entry(
         .map(|d| d.name.clone())
         .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
         .collect();
-    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -297,10 +296,9 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     let mut all_type_names: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
-    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
     if drop_unused {
         diags.retain(|d| d.kind != "unused");
     }
@@ -378,10 +376,9 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let mut all_type_names: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
-    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -1935,7 +1932,8 @@ pub fn prune_unused_getters(program: &mut ast::Program) {
     // read's bare half. The keep mask exists so the borrow ends before the
     // retain needs the program mutably.
     let keep: Vec<bool> = {
-        let mut mentioned: crate::hash::Set<&str> = crate::hash::Set::default();
+        let mut mentioned: crate::hash::Set<&str> =
+            crate::hash::Set::with_capacity_and_hasher(program.fns.len() * 2, Default::default());
         for decl in &program.fns {
             if decl.is_getter() {
                 continue;
@@ -3464,7 +3462,6 @@ fn compile_module_loaded(
         .map(|d| d.name.clone())
         .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
         .collect();
-    let mut used = crate::hash::Set::default();
     for (file, source, program) in &mut parsed {
         // Every name in the build except this file's own, as references into
         // `all_names`. This used to clone the whole set per file and then
@@ -3476,7 +3473,7 @@ fn compile_module_loaded(
         };
         let mut diags = check::resolve_markers(program, &all_markers);
         diags.extend(check::check_typesets(program, &all_type_names));
-        diags.extend(check::check_file_shadow(program, &extern_globals, &mut used, &shadowable));
+        diags.extend(check::check_file_shadow(program, &extern_globals, &shadowable));
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {
             return Err(diag::render(&diags, file, source));

@@ -165,4 +165,23 @@
 # The two move compile_peak_bytes in opposite directions — the bitset costs
 # 6,096 bytes and the params table gives 7,556 back — and ship together for
 # that reason.
-compile_allocs=36268
+#
+# 2026-08-30 (a set nobody read, and one that grew from empty): 36,268 ->
+# 35,639, a fall of 629, or 1.7%. Banked, two pieces:
+#
+#   used_globals deleted                     -595
+#   prune_unused_getters reserves its set     -34
+#
+# `Resolver::used_globals` was a `HashSet<String>` threaded through four
+# signatures and filled with `name.to_string()` on every mention that resolved
+# to a global. Nothing read it: eight occurrences in the tree, one of them the
+# insert, none of them a read. It recorded which globals a file used for an
+# unused-private check that moved to `lib::private_uses`, and the recording
+# stayed behind — #1072's family.
+#
+# `prune_unused_getters` collects every identifier occurrence into a borrowed
+# set to ask which getters are mentioned, and that set started at capacity
+# nothing. Two declarations' worth of room per declaration was measured against
+# eight, and eight is WORSE (49,336,704 against 49,348,198 local instructions)
+# because a larger table probes further.
+compile_allocs=35639
