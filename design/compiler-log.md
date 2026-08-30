@@ -2826,3 +2826,17 @@ The meta-ruling, second of the sitting: a library-surface question
 that mainstream precedent settles unanimously is presented as "X and Y
 both do Z; copying it" — one line — or handled by the implementer
 citing the precedent in the log, not brought as a menu.
+
+## 2026-08-29 — the inline-name entry bounces the same way the digest did
+
+Main's ledger gained "Whether an identifier's name lives inline" — a
+22-byte small-string type for AST name fields, 21.3% of front-end
+allocations, ninety mechanical edits, recommendation already "build
+it". Zero surface area: no program can tell how the compiler stores a
+name. Per the same-day ruling that performance questions with no
+surface are the implementer's, it leaves the ledger unruled — build
+it, and answer for it in the log beside the numbers. The one
+Clay-shaped fragment inside it, whether to take a dependency for the
+small-string type, is answered by the file's own precedent: Cargo.toml
+carries two crates by policy, so hand-write it. The entry's removal
+from the ledger rides the next reconciliation with main.
