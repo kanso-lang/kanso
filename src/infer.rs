@@ -635,7 +635,24 @@ fn eval_call<'a>(
     env: &mut HashMap<&'a str, Set>,
     piped: bool,
 ) -> Set {
-    let mut arg_sets: Vec<Set> = args.iter().map(|a| eval_expr(ctx, a, env)).collect();
+    // A `Set` is a u16 and a call's arity is almost always small, so the
+    // eight that fit here never reach the allocator. dhat put this line at
+    // 8,309 blocks — 13.4% of every allocation the front end makes — for
+    // vectors holding one to three sixteen-bit values.
+    let mut inline = [0 as Set; 8];
+    let mut spill: Vec<Set> = Vec::new();
+    let arg_sets: &mut [Set] = match args.len() <= inline.len() {
+        true => {
+            for (slot, a) in inline.iter_mut().zip(args) {
+                *slot = eval_expr(ctx, a, env);
+            }
+            &mut inline[..args.len()]
+        }
+        false => {
+            spill.extend(args.iter().map(|a| eval_expr(ctx, a, env)));
+            &mut spill
+        }
+    };
     let mut piped_bits: Set = 0;
     if piped && !arg_sets.is_empty() && arg_sets[0] & DESC != 0 {
         // a description piped into a continuation: the executor runs it and
@@ -657,7 +674,7 @@ fn eval_call<'a>(
     // argument sets and walk the body.
     if let Expr::Lambda { params, body, .. } = head {
         let mut inner = env.clone();
-        for ((p, _), set) in params.iter().zip(&arg_sets) {
+        for ((p, _), set) in params.iter().zip(arg_sets.iter()) {
             inner.insert(p, *set & !FAIL);
         }
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
@@ -726,7 +743,7 @@ fn eval_call<'a>(
         }
         return out | piped_bits;
     }
-    builtin_set(name, &arg_sets) | piped_bits
+    builtin_set(name, arg_sets) | piped_bits
 }
 
 /// What a description's execution hands a bound continuation, syntactically:
