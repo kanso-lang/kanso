@@ -4221,3 +4221,70 @@ runtime.c is embedded in the compiler's binary, so editing its text shifts the
 data section and the row with it; `kanso check lib/json` emits nothing and never
 runs a line of it. compile_allocs, compile_peak_bytes, rounds and visits do not
 move. Layout, in the direction that costs nothing.
+
+## 2026-08-30 — one indirect call per child, across the whole front end
+
+`walk_children` is how every pass reaches a sub-expression. It took its
+callback as `&mut dyn FnMut(&'a Expr) -> bool`, so every child visit in the
+compiler went through a vtable. The machinery is 7.04% of
+`kanso check lib/json`:
+
+```
+walk_children'2                   1,801,053   3.09%
+walk_children                       983,259   1.68%
+for_each_child::{{closure}}         672,707   1.15%
+for_each_child::{{closure}}'2       565,642   0.97%
+any_child::{{closure}}'2             45,117   0.08%
+any_child::{{closure}}               39,771   0.07%
+                                  4,107,549   7.04%
+```
+
+Making it generic is one line, and monomorphises it across the forty call
+sites — twenty-one in check.rs, fourteen in lib.rs, three in infer.rs, two in
+codegen.rs, one each in eval.rs, linear.rs and wasm_backend.rs:
+
+```
+compile_instructions  58,373,255 -> 56,536,342   -1,836,913   -3.15%
+compile_allocs        61,974      unchanged
+compile_peak_bytes    763,868     unchanged
+compile_rounds        40          unchanged
+compile_visits        16,806      unchanged
+native binary         +17,944 bytes   +0.43%
+docs/kanso.wasm       +32,823 bytes   +2.0%
+```
+
+Every counter that measures work is identical and only the instruction count
+falls, which is what removing dispatch looks like. The sibling
+`walk_children_mut` keeps its `&mut dyn`: it does not appear in the profile at
+all, because its four callers inline it, and the whole desugar family is under
+one per cent.
+
+The route here was the field-write fence two entries above. Its first version
+cost +28,556 instructions and the cause turned out to be its closure's three
+captured references, one indirect call per child. That is a property of
+`walk_children` rather than of that pass, and the same tax was being paid
+forty times over.
+
+### The eight bytes below `Expr`, determined
+
+`Expr` sits at 56 because `Guard`'s payload is exactly 48 with no spare byte
+for the tag. `Guard.rest` as a `Box<[Stmt]>` takes it to 48 and `Stmt` to 112,
+and `compile_peak_bytes` falls 763,868 -> 721,652, another 5.5%, for +2.19%
+instructions. Two probes say where that rise lives, both measured with
+`walk_children` already generic so the changes could not confound each other:
+
+```
+Guard.rest          Expr   instructions   peak
+Vec<Stmt>            56     56,536,342    763,868
+Box<[Stmt]> + pad    56     56,528,428    763,748
+Box<[Stmt]>          48     57,773,600    721,652
+```
+
+Padding `Guard` so `Expr` stays 56 while `rest` is still a boxed slice reads
+7,914 BELOW the `Vec` version, on 120 bytes less peak. So the indirection is
+free, and the whole +1,237,258 is the 48-byte layout. It is not dispatch
+either: the rise was +1,254,345 before this change and +1,237,258 after.
+
+That leaves the trade as measured, with no cheaper route through this door:
+5.5% of the front end's peak for 2.19% of its instructions, +0.08 welfare.
+Left unshipped, and now characterised rather than open.

@@ -2914,7 +2914,7 @@ pub fn any_child<'a>(e: &'a ast::Expr, mut p: impl FnMut(&'a ast::Expr) -> bool)
 }
 
 /// Every direct sub-expression, in source order, until `f` answers false.
-fn walk_children<'a>(e: &'a ast::Expr, f: &mut dyn FnMut(&'a ast::Expr) -> bool) {
+fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut F) {
     let stmt_expr = |st: &'a ast::Stmt| match st {
         ast::Stmt::Bind { expr, .. }
         | ast::Stmt::Expr(expr)
