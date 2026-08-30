@@ -7,16 +7,20 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: two.** "What a digest costs, and
+only indexes it. **Blocking right now: one.** "What a digest costs, and
 whether it stays written in kanso" — `sha256/hex` holds the whole message,
 peak arena is linear in the input at about six and a half thousand bytes per
 byte hashed, and the asset-digests job's headroom falls as `docs/kanso.wasm`
-grows. And "Whether a chain line keeps its leading dot", which is the only
-thing standing between the shipped `bind`/`rescue`/`annotate` and the
-346-site respelling of the fleet.
+grows.
+
+The chain-line grammar used to be counted here as a second. It is not: the
+ledger files it under Open, and the criterion that section states is that a
+fixture, gate, or merge is waiting. Nothing in the tree is red for it and the
+346-site respelling has not started, so it waits without blocking. The bullet
+list further down had it right all along and only these prose counts drifted.
 
 **Seventeen questions are waiting, and every one of them carries a
-recommendation** — two blocking, fifteen open but not blocking. Counted
+recommendation** — one blocking, sixteen open but not blocking. Counted
 from the ledger, which is the only place that count is true; this file said
 fourteen in one paragraph and sixteen in another until 2026-08-29. The July
 letters are closed: Clay ruled the last five in one sitting on 2026-08-26, and
@@ -27,13 +31,17 @@ gathering things and then you ask me the same question 10 to 20 more times."*
 So each entry now cites the search behind it and proposes an answer, and a
 sitting can be a yes or a no rather than a fresh design conversation.
 
-**The thirteen open, not blocking** — whether a `compile_instructions` move that
+**The sixteen open, not blocking** — whether a `compile_instructions` move that
 cannot be work needs a spend attribution, asked after three such moves in two
-days; whether `read_file` is text or bytes, which
-is one reader with no way to say which you meant and two engines that answer
-differently; which claim owns a qualified name when a module declares one of
-its imports' names, whose filing pointed at a gavel that has since fallen; what
-a record prints as when its module is imported;
+days; whether a chain line keeps its leading dot, which stands between the
+shipped `bind`/`rescue`/`annotate` and a 346-site respelling nobody has begun;
+whether the backends should build a partial whose callee is a value; whether an
+err gains readers a callback can use; whether `read_file` is text or bytes,
+which is one reader with no way to say which you meant and two engines that
+answer differently; which claim owns a qualified name when a module declares
+one of its imports' names, whose filing pointed at a gavel that has since
+fallen; what a record prints as when its module is imported; the book teaching
+the boundary language, queued P1 by Clay on 2026-08-26;
 `--explain-copies`; the assert hako's surface; the
 bare-call cross-module tie whose interim ruling is still live and still called
 interim; whether a dependency's render arms join the root group; `first coll n`;
@@ -264,11 +272,11 @@ else. Chains that tested for `none` after an effect migrate.
   - the one blocking question, what a digest costs, filed with its measurement
   - `delete_branch_on_merge=true` and the 324-branch purge (task #109), both
     checked from here on two days and both refused by the tooling
-  - the chain-line grammar above, which blocks the 346-site respelling
+  - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Seventeen questions wait in `design/pending-gavels.md`** — two blocking,
-fifteen open — each with a recommendation, counted from the ledger rather
+**Seventeen questions wait in `design/pending-gavels.md`** — one blocking,
+sixteen open — each with a recommendation, counted from the ledger rather
 than carried forward. Three are new today: the chain-line grammar, whether
 an err gains readers a callback can use, and whether the backends should
 build a partial whose callee is a value.
