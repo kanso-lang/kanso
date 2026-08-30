@@ -5982,3 +5982,59 @@ token's text out of the scanner's `Vec<char>` one character at a time. The fix
 for those is not a faster copy; it is a scanner that keeps the source `&str`
 and hands out slices of it, which is the shape gavel "whether an identifier's
 name lives inline" is about.
+
+## 2026-08-30 — DECLINED: the precedence ladder, and two fixtures that say why
+
+Expression parsing descends ten levels — pipe, join, or, and, not, cmp, bits,
+add, mul, app, atom — and on `lib/json` the descent itself costs **681,679**
+instructions, 1.53% of a compile:
+
+    parse_pipe   2,963,379  inclusive
+    parse_atom   2,281,700  inclusive
+
+Everything between is a frame entered to find no operator of its precedence.
+Precedence climbing collapses the middle into one frame with a binding-power
+table, and that is the standard answer.
+
+It is the wrong answer here, and two programs say so.
+
+    print "{6 < 3 & 1}"     error[syntax]: unexpected trailing tokens
+    print "{1 + not true}"  error[syntax]: expected an expression
+
+`parse_cmp` takes its left side from `parse_bits` and its right side from
+`parse_add`, one rung TIGHTER, so `&` may stand to the left of a comparison
+and not to the right. `6 & 3 < 1` is `(6 & 3) < 1` and answers false; `6 < 3 &
+1` has nothing to attach the `& 1` to. And `parse_not` is reachable only where
+an `and` operand is expected, six rungs looser than an arithmetic operand, so
+`1 + not true` has no expression after the `+`.
+
+A single binding-power table makes both of those symmetric. `6 < 3 & 1` would
+become `6 < (3 & 1)` and `1 + not true` would parse, and neither change would
+show up anywhere: no fixture covered either, so the whole differential corpus,
+the error corpus and 77 suites would have stayed green while the language
+quietly grew two readings it does not have.
+
+So the rewrite is declined, and the gap it exposed is closed instead:
+
+- `tests/golden/errors/a_comparison_refuses_a_bitwise_tail`
+- `tests/golden/errors/an_arithmetic_operand_refuses_not`
+- `tests/golden/micro/bitwise_binds_tighter_than_a_comparison`
+
+Two refusals and the reading that survives. If the ladder is ever regularised
+these three go red, which is the point: whether the grammar SHOULD be uniform
+here is a question for the gavel, and a performance change is not the place to
+answer it.
+
+### Watched fail, each for its own reason
+
+A fixture written after the fact is a guess about what the code does, so each
+of the three was put in front of the mutation it exists to catch:
+
+| mutation | fixture | what it did |
+|---|---|---|
+| `parse_cmp`'s right side from `parse_bits`, symmetric | a_comparison_refuses_a_bitwise_tail | printed `false`, exit 0, where the golden is a syntax error and exit 2 |
+| `not` admitted as a prefix in `parse_app` | an_arithmetic_operand_refuses_not | reached the runtime and failed on `+`, exit 1, where the golden refuses at parse time |
+| `parse_cmp`'s left side from `parse_add` | bitwise_binds_tighter_than_a_comparison | `6 & 3 < 1` became a syntax error where the golden is `false` |
+
+The first mutation is exactly what a binding-power table would do. It costs
+nothing to write and the corpus said nothing about it until now.
