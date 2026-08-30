@@ -702,4 +702,16 @@
 # The local A/B on rustc 1.94.1 read -1,290,934 against this host's -1,279,525:
 # the two agree to within one per cent of the fall, which is the closest two
 # hosts have come on this vein.
-compile_instructions=43618236
+#
+# 2026-08-30 (three sets opened once per declaration): 43,618,236 -> 43,096,058,
+# a fall of 522,178, or 1.20%, banked. check.rs's three per-declaration passes
+# each opened a fresh HashSet<&str> for the names a declaration binds; they
+# share one set apiece now, cleared per iteration. The container read -506,526
+# on rustc 1.94.1 against this host's -522,178, three per cent apart on the
+# fall. The saving is a malloc, a free and the rehashes a set that starts empty
+# pays on the way up, and all three cost about the same on both hosts.
+#
+# `HashMap<&str, ()>::insert` is now the largest kanso-owned row after
+# inference at 1,517,265 (3.52%), where the sets that just went away were
+# feeding it.
+compile_instructions=43096058

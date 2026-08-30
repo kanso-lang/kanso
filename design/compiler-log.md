@@ -6292,3 +6292,20 @@ had a getter and threw the arm away. The question moved above the construction.
 It is worth 62 allocation blocks on `lib/json`, where most fields do not
 already have one; on a program built mostly of imported types it is worth more.
 Recorded here at its measured size rather than its imagined one.
+
+### The runner's number
+
+    compile_instructions  43,618,236 -> 43,096,058  -522,178  -1.20%  (runner)
+                          43,955,167 -> 43,448,641  -506,526  -1.15%  (local)
+    compile_allocs                        31,254   confirmed, both hosts
+    compile_peak_bytes                   730,120   unmoved, both hosts
+
+Copied out of job 99301368868. Three per cent apart on the fall — the saving is
+a malloc, a free and the rehashes a set that starts empty pays on the way up,
+and all three cost about the same on both hosts.
+
+`HashMap<&str, ()>::insert` is now the largest kanso-owned row after inference
+at 1,517,265 (3.52%), where the sets that just went away were feeding it.
+
+Welfare 87.15 -> 87.32, banked with `--set`. The page's two `data-golden`
+compile figures move with it.
