@@ -116,4 +116,24 @@
 # 44,920 either way and reverted: it runs only for a binding that has already
 # passed the lazy vote, and lib/json produces none, so the clone sits on a path
 # this row cannot see.
-compile_allocs=44920
+#
+# 2026-08-30 (four vectors the front end rebuilt per iteration): 44,920 ->
+# 40,935, a fall of 3,985, or 8.9%. Banked, and it is four independent pieces
+# measured one at a time:
+#
+#   Scanner's Vec<char> comes from a pool          -1,988
+#   lex_line reserves `tokens` at eight              -434
+#   the parser matches on &Tok instead of cloning    -196
+#   callee_first hoists `names` out of its loop    -1,367
+#
+# The two pooled buffers cost 992 bytes of compile_peak_bytes between them,
+# because a reused buffer stays at the size of the largest thing it ever held
+# where a fresh one dies with its iteration. Sixteen slots for `tokens` rather
+# than eight takes 156 more allocations and puts 9.7% on the peak; that one was
+# measured and declined.
+#
+# The parser piece returns 196 of the 3,788 blocks dhat put on
+# `<Tok as Clone>::clone`, and the log entry says where the other 3,592 went:
+# into the arms that build `Expr::Ident` and `Pattern::Var`, which need an
+# owned name and clone it there instead. The allocation moved frames.
+compile_allocs=40935

@@ -5148,3 +5148,84 @@ of which a reader ever sees: `Scanner`'s `Vec<char>` at 1,997 and the token
 vector at 1,117. The `Vec<char>` was declined in #1145 on the grounds that
 `pos` is the column, which remains true and is a reason to keep indexing
 characters rather than a reason to allocate a fresh vector for each line.
+
+## 2026-08-30 — four vectors the front end rebuilt on every iteration
+
+Each of these builds a heap vector inside a loop, uses it for one iteration and
+drops it. None of them is visible in the language, the diagnostics or the
+emitted code, and together they were 3,985 of the front end's 44,920 allocation
+blocks.
+
+```
+Scanner's Vec<char> comes from a pool          44,920 -> 42,932   -1,988
+lex_line reserves `tokens` at eight            42,932 -> 42,498     -434
+the parser matches on &Tok instead of cloning  42,498 -> 42,302     -196
+callee_first hoists `names` out of its loop    42,302 -> 40,935   -1,367
+                                                                 -3,985   -8.9%
+compile_peak_bytes                            742,572 -> 743,564    +992   +0.13%
+docs/kanso.wasm                             1,654,278 -> 1,655,440  +1,162 bytes
+```
+
+Measured one at a time, in that order, so each number is that piece's.
+
+### The scanner's line
+
+`pos` is the column a caret goes under, so `Scanner` indexes characters and has
+to hold the line as a `Vec<char>`. #1145 settled that and it still holds. What
+goes is collecting a fresh one per line.
+
+Scanners nest — an interpolation lexes its inner text with a scanner of its own
+while the outer one still holds the line the interpolation was written on — so
+the buffers come from a pool rather than a single slot. A `Scanner` takes one at
+construction and gives it back in `Drop`, and the pool ends up holding one
+buffer per level of nesting reached, each grown to the longest line it ever
+took.
+
+### The token vector, and why eight
+
+`tokens` starts empty, reaches four and doubles from there. Eight covers most
+lines outright. Sixteen takes 156 more allocations and puts **9.7%** on
+`compile_peak_bytes`, which is a bad trade for a vector a `Line` keeps for the
+whole parse; that was measured and declined.
+
+### 3,788 blocks on Tok::clone, and the 196 they return
+
+```rust
+match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
+```
+
+Two places did this, in `parse_atom_base` and `parse_pattern`, and dhat put
+3,788 blocks on `<Tok as Clone>::clone` between them. `self.toks` is a
+`&'a [_]`, so a token read out of it borrows the slice rather than `self`, and
+the arms are free to move `pos` while holding one. Matching on `&Tok` compiles
+as it stands.
+
+It returns 196. A dhat run after the change puts **zero** on
+`<Tok as Clone>::clone`, 3,197 on `parser.rs:2127` and 629 on `parser.rs:1793`
+— the arms that build `Expr::Ident` and `Pattern::Var`, which need an owned name
+and clone it there instead. The allocation moved to a different frame. What went
+away is the clone for `Underscore`, `LParen`, `LBrace`, `LBracket`, the `Str`
+arm of `parse_pattern` that only read its parts, and every path that matched
+none of them.
+
+That is the second time in a day a line in the map read high because the frame
+above it was doing the allocating; #1148's entry corrected `lexer.rs:584` the
+same way. **Read the frames before costing a fix.** A line number says where an
+allocation was charged, not whether deleting the code there would remove it.
+
+### The gather buffer
+
+`callee_first` builds `let mut names: Vec<&str> = Vec::new()` inside its
+per-declaration loop, fills it, sorts it, reads it and drops it. Hoisted out and
+cleared, it is 1,367 blocks for two lines — the largest of the four, from the
+smallest diff, and it was the last one looked at because the map charged it to
+`infer.rs:250`, the call site.
+
+### What the peak buys
+
+The 992 bytes are the two pooled buffers: one long source line and one large
+declaration, held for the process rather than for an iteration. Welfare weighs
+compile speed at 0.28 and compile memory at 0.12, and 8.9% off the traffic
+against 0.13% on the residency is not a close call. Rounds and visits do not
+move at all — nothing here changes what the compiler decides, only what it
+allocates while deciding it.

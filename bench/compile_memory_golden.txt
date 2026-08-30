@@ -39,6 +39,18 @@
 # vector now and the table holds ranges into it. This row and the traffic row
 # move together for once — the same change removed a per-call clone of those
 # vectors, which `compile_allocs` sees and this cannot.
+#
+# 2026-08-30 (four vectors the front end rebuilt per iteration): 742,572 ->
+# 743,564, a RISE of 992, or 0.13%. Banked as the price of a much larger fall
+# on the traffic row: compile_allocs 44,920 -> 40,935, down 8.9%. Two of the
+# four vectors are reused across iterations now — the `Vec<char>` a `Scanner`
+# lexes a line with, and the `Vec<&str>` `callee_first` gathers a
+# declaration's mentions into — and a reused buffer stays at the size of the
+# largest thing it ever held where a fresh one dies with its iteration. 992
+# bytes is one long source line and one large declaration.
+#
+# Rounds and visits do not move: nothing here changes what the compiler decides,
+# only what it allocates deciding it.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=742572
+compile_peak_bytes=743564
