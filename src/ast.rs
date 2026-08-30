@@ -191,6 +191,31 @@ pub fn frame_name(name: &str) -> &str {
     }
 }
 
+/// The byte index of the last `/` in a name, by a plain backward byte scan.
+///
+/// `str::rsplit_once('/')` and `str::rfind('/')` go through `CharSearcher`,
+/// which lands in `memrchr`'s vector path — and that path's setup is most of
+/// the cost when the average identifier in a kanso program is five bytes long.
+/// callgrind put 794,000 instructions on three callers of it, 1.6% of a check.
+/// A `/` is one byte and cannot appear inside a multi-byte character, so the
+/// scan is over bytes and the index it returns is a character boundary.
+pub fn last_slash(name: &str) -> Option<usize> {
+    let bytes = name.as_bytes();
+    let mut at = bytes.len();
+    while at > 0 {
+        at -= 1;
+        if bytes[at] == b'/' {
+            return Some(at);
+        }
+    }
+    None
+}
+
+/// The owner and the bare half of a qualified name, or `None` when it is bare.
+pub fn split_qual(name: &str) -> Option<(&str, &str)> {
+    last_slash(name).map(|at| (&name[..at], &name[at + 1..]))
+}
+
 pub fn getter_name(field: &str) -> String {
     format!("Get_{field}")
 }

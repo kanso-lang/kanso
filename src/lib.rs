@@ -1152,11 +1152,11 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         .iter()
         .filter(|d| d.file.starts_with("std/list"))
         .map(|d| {
-            d.name.rsplit_once('/').map(|(_, s)| s.to_string()).unwrap_or_else(|| d.name.clone())
+            ast::split_qual(&d.name).map(|(_, s)| s.to_string()).unwrap_or_else(|| d.name.clone())
         })
         .collect();
     for d in &program.fns {
-        let short = d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name);
+        let short = ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name);
         if std_names.contains(short) {
             shorts.insert(d.name.clone(), short.to_string());
         }
@@ -1169,7 +1169,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         .find(|d| {
             d.file.starts_with("std/list")
                 && !d.synthetic
-                && d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name) == "fold"
+                && ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name) == "fold"
         })
         .map(|d| d.name.clone())
     else {
@@ -1184,9 +1184,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         .iter()
         .filter(|d| d.file.starts_with("std/list") && !d.synthetic)
         .map(|d| {
-            let short = d
-                .name
-                .rsplit_once('/')
+            let short = ast::split_qual(&d.name)
                 .map(|(_, s)| s.to_string())
                 .unwrap_or_else(|| d.name.clone());
             (short, d.name.clone())
@@ -1832,7 +1830,7 @@ fn qualify(
         .map(|f| &f.name)
         .chain(dep.types.iter().filter(|t| t.is_pub).map(|t| &t.name));
     for name in pubs {
-        let (owner, bare) = match name.rsplit_once('/') {
+        let (owner, bare) = match ast::split_qual(name) {
             Some((owner, bare)) => (owner, bare),
             None => ("", name.as_str()),
         };
@@ -1960,7 +1958,7 @@ fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
             out.insert(name.as_str());
             // a qualified read reaches the same getter under its bare name
-            if let Some((_, short)) = name.rsplit_once('/') {
+            if let Some((_, short)) = ast::split_qual(name) {
                 out.insert(short);
             }
         }
@@ -2144,7 +2142,7 @@ fn enroll_bare(
             continue;
         }
         if exports.get(&f.name).copied().unwrap_or(false) && !renamed.contains(&f.name) {
-            if let Some((_, short)) = f.name.rsplit_once('/') {
+            if let Some((_, short)) = ast::split_qual(&f.name) {
                 let mut clone = f.clone();
                 clone.name = short.to_string();
                 clone.synthetic = true;
@@ -2156,7 +2154,7 @@ fn enroll_bare(
     let mut bare_types = Vec::new();
     for t in &dep_program.types {
         if exports.get(&t.name).copied().unwrap_or(false) && !renamed.contains(&t.name) {
-            if let Some((_, short)) = t.name.rsplit_once('/') {
+            if let Some((_, short)) = ast::split_qual(&t.name) {
                 let mut clone = t.clone();
                 clone.name = short.to_string();
                 clone.synthetic = true;
@@ -2796,7 +2794,7 @@ fn private_uses(
     ) {
         if let ast::Expr::Ident(name, span) = e {
             if let Some(false) = exports.get(name.as_str()) {
-                let (module, base) = name.rsplit_once('/').unwrap_or(("", name));
+                let (module, base) = ast::split_qual(name).unwrap_or(("", name));
                 let shadow = format!(
                     "`{module}` declares `{base}` pub, but an import of `{module}` exports `{base}` too and took the name — rename that import inside `{module}`"
                 );

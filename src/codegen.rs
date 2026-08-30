@@ -4342,8 +4342,8 @@ impl<'a> Backend<'a> {
             // they can carry thunks whose forced values would die under a
             // cell the caller still holds.
             let arg_heapish = heapish & !BYTES;
-            let caller_mod = f.group.rsplit_once('/').map(|(m, _)| m).unwrap_or("");
-            let callee_mod = name.rsplit_once('/').map(|(m, _)| m).unwrap_or("");
+            let caller_mod = crate::ast::split_qual(&f.group).map(|(m, _)| m).unwrap_or("");
+            let callee_mod = crate::ast::split_qual(name).map(|(m, _)| m).unwrap_or("");
             let crosses_down = callee_mod.len() > caller_mod.len()
                 && callee_mod.starts_with(caller_mod)
                 && (caller_mod.is_empty() || callee_mod.as_bytes()[caller_mod.len()] == b'/');

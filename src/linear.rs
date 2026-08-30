@@ -47,7 +47,7 @@ pub fn fold_spellings(program: &Program) -> HashSet<String> {
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/list") && d.params.len() == 3)
-        .filter(|d| d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name) == "fold")
+        .filter(|d| crate::ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name) == "fold")
         .map(|d| d.name.clone())
         .collect()
 }

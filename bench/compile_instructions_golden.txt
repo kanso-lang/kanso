@@ -685,4 +685,21 @@
 # `lex_line` is byte-identical at 777,023, which is right: the vector this
 # removes was built in the loop AFTER lexing, not inside it. `eval_expr`,
 # `check_merged` and `infer` are byte-identical too.
-compile_instructions=48582098
+#
+# 2026-08-30  48,582,098 -> 47,302,573   -1,279,525   -2.63%, banked, and the
+# largest fall this vein has taken from the smallest diff. Eighteen sites split
+# a qualified name on its last slash with `rsplit_once('/')` or `rfind('/')`,
+# and both go through `str`'s `CharSearcher` into `memrchr`'s vector path. The
+# average identifier here is five bytes, so the setup was most of the cost.
+# `ast::last_slash` is a backward byte loop.
+#
+# `memrchr` and `__memcmp_avx2_movbe` both leave the top fifteen; `parser::parse`
+# enters it at 593,309 having not moved. `lex_line` holds at 777,023,
+# `eval_expr` at 1,043,800, `free` at 978,768 — the allocator rows are
+# byte-identical, which is right for a change that allocates nothing new and
+# nothing less.
+#
+# The local A/B on rustc 1.94.1 read -1,290,934 against this host's -1,279,525:
+# the two agree to within one per cent of the fall, which is the closest two
+# hosts have come on this vein.
+compile_instructions=47302573

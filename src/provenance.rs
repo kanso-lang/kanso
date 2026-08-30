@@ -61,7 +61,7 @@ pub fn package_of(file: &str) -> &str {
         Some((_, rest)) => rest,
         None => file,
     };
-    match path.rfind('/') {
+    match crate::ast::last_slash(path) {
         Some(at) => &path[..at],
         None => "",
     }
@@ -120,7 +120,7 @@ impl<'a> Walk<'a> {
                 let Expr::Ident(name, _) = head.as_ref() else {
                     return 0;
                 };
-                let bare = name.rsplit_once('/').map(|(_, n)| n).unwrap_or(name);
+                let bare = crate::ast::split_qual(name).map(|(_, n)| n).unwrap_or(name);
                 // a raise is this package's, however the reason was named:
                 // provenance is where the err was made, not what it carries
                 if bare == "err" || bare == "wrap_err" {
