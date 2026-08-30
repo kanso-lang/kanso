@@ -1094,6 +1094,14 @@ static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
 
 static size_t k_repair_size(KValue v, const void* p, KMark* m);
 
+/* `k_copy_size` returns zero for an immediate and for nothing else without
+   looking at it, so a caller walking a container can skip the call entirely.
+   deepbench folds over lists of ints, and the call it used to make per element
+   existed only to return zero. */
+static inline int k_worth_sizing(KValue v) {
+    return k_is_heap(v.tag) || v.tag == K_THUNK;
+}
+
 static size_t k_copy_size(KValue v, KMark* m) {
     /* A thunk cell is malloc'd and survives every rewind, but what it holds
        — captured args, or a forced result — may live in the arena about to
@@ -1135,14 +1143,16 @@ static size_t k_copy_size(KValue v, KMark* m) {
             KList* l = (KList*)p;
             n += k_copy_size_ptr(l, sizeof(KList), m);
             n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
-            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            for (long long i = 0; i < l->len; i++)
+                if (k_worth_sizing(l->items[i])) n += k_copy_size(l->items[i], m);
             break;
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
             n += k_copy_size_ptr(mp, sizeof(KMap), m);
             n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
-            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            for (long long i = 0; i < 2 * mp->len; i++)
+                if (k_worth_sizing(mp->pairs[i])) n += k_copy_size(mp->pairs[i], m);
             break;
         }
         case K_SUB: {
@@ -1155,7 +1165,8 @@ static size_t k_copy_size(KValue v, KMark* m) {
             KRec* r = (KRec*)p;
             n += k_copy_size_ptr(r, sizeof(KRec), m);
             n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
-            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            for (long long i = 0; i < r->nfields; i++)
+                if (k_worth_sizing(r->fields[i])) n += k_copy_size(r->fields[i], m);
             break;
         }
         case K_CLOSURE: {
@@ -1213,21 +1224,24 @@ static size_t k_repair_size(KValue v, const void* p, KMark* m) {
             KList* l = (KList*)p;
             if (!k_survives_x(l->items, m))
                 n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
-            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            for (long long i = 0; i < l->len; i++)
+                if (k_worth_sizing(l->items[i])) n += k_copy_size(l->items[i], m);
             break;
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
             if (!k_survives_x(mp->pairs, m))
                 n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
-            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            for (long long i = 0; i < 2 * mp->len; i++)
+                if (k_worth_sizing(mp->pairs[i])) n += k_copy_size(mp->pairs[i], m);
             break;
         }
         case K_REC: {
             KRec* r = (KRec*)p;
             if (!k_survives_x(r->fields, m))
                 n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
-            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            for (long long i = 0; i < r->nfields; i++)
+                if (k_worth_sizing(r->fields[i])) n += k_copy_size(r->fields[i], m);
             break;
         }
         case K_CLOSURE: {
@@ -1840,14 +1854,36 @@ KValue k_caf_complete(KValue built, KValue seeded) {
 }
 
 
+/* Every tag whose payload is a pointer. `K_SUB` was absent until 2026-08-30,
+   and `k_cohort_pop` reads this to decide whether a beat's result has to be
+   carried out of the arena before the rewind: a returned subtype was taken for
+   a scalar, the arena went back to the mark under it, and the caller got a
+   dangling `KSub*`. The value read back as whatever the arena was reused for,
+   which on the fixtures below is a pointer rendered as a double. `K_THUNK` is
+   spelled out at that call site rather than here because a thunk is a promise
+   and not a value; every other pointer tag belongs in this list. */
+/* Every tag whose payload is a pointer — K_ERR K_STR K_REC K_DESC K_LIST
+   K_MAP K_CLOSURE K_BYTES K_SUB — as bit positions in the enum above. `tag`
+   is masked to the enum's width so the shift is defined for any input; every
+   tag a value can carry is already in range.
+
+   `K_SUB` was absent until 2026-08-30 and its payload is a `KSub*`, so a
+   returned subtype was taken for a scalar by `k_cohort_pop` and by
+   `k_slots_survive` alike: the arena went back to the mark under it and the
+   caller kept a dangling pointer.
+
+   A mask rather than the switch this used to be, because the switch is inlined
+   into `k_slots_survive` and through it into `k_copy_size`, which is 36% of
+   deepbench. A tenth `case` cost that benchmark 49,528,233 instructions —
+   6.14%, all of it inside `k_copy_size`, on both hosts to the instruction —
+   on a program that never makes a subtype: `k_survives_x` and `k_ptrmap_at`
+   are byte-identical across the change, so it is the same walk compiled
+   differently. The mask gives 6,149,160 of that back. Two other shapes were
+   measured and were worse: a mask carrying a bounds branch reads 878,869,219,
+   and giving `k_slots_survive` its own copy of the switch reads exactly what
+   the shared switch does. */
 static int k_is_heap(long long tag) {
-    switch (tag) {
-        case K_STR: case K_ERR: case K_REC: case K_DESC:
-        case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
-            return 1;
-        default:
-            return 0;
-    }
+    return (int)((0xAFE0U >> (tag & 15)) & 1U);
 }
 
 /* Diagnostics color from the site palette, only when stderr is a tty and

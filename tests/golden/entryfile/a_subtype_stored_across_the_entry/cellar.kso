@@ -1,0 +1,50 @@
+# A nominal subtype of a primitive is a `K_SUB` at run time and its payload is
+# a pointer to a `KSub`. `k_is_heap` did not say so until 2026-08-30, and
+# `k_cohort_pop` reads that predicate to decide whether a beat's result must be
+# carried out of the arena before the rewind. So a subtype returned across the
+# entry was taken for a scalar: the arena went back to the mark under it and
+# the caller kept a dangling pointer, which read back as whatever the arena was
+# reused for.
+#
+# The three ingredients are all here and all needed. The value has to be MADE
+# in one call and STORED by another, both written in the entry beside it, so
+# `k_cohort_pop` sees it cross; and it has to go into a container, because a
+# value rendered on the spot is read before the arena is reused.
+#
+# WHICH of the six lines comes back wrong depends on what the arena held, so
+# the pin is the whole output rather than any one line. On the parent commit
+# the first is `6.898943556335e-310` where it should be `3` — a `KSub*`
+# rendered as an f64, which is the shape that named the cause. Five lines
+# reading correctly there is not the bug being narrow; it is a use-after-free
+# reading memory that happened to still hold the right thing.
+#
+# `float64` was the parent that survived every arrangement, and that is
+# structural: a float payload is the double itself, so there is nothing to
+# dangle.
+import "std/list"
+
+type tick int
+
+type note string
+
+type gauge float64
+
+type chest
+  held
+
+pub fn a_tally n
+  tick n
+
+pub fn a_label s
+  note s
+
+pub fn a_measure x
+  gauge x
+
+pub fn in_a_field v
+  c = chest v
+  "{c.held}"
+
+pub fn in_a_list v
+  xs = [v]
+  "{list/to_list xs}"

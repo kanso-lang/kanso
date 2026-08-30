@@ -4560,3 +4560,165 @@ The general lesson is about the comment. "Mirrors `for_each_child`" was a claim
 nothing tested, and two passes were built on it. #1137 went after four
 diagnostics resting on prose; this is the same failure in a walk, and the same
 answer applies — the fixture is the pin.
+
+## 2026-08-30 — a subtype of a primitive is a heap value, and one list did not say so
+
+Native printed a different denormal double on every run where the interpreter
+printed the value. A use-after-free that produced silent wrong answers, live on
+main since subtypes of primitives existed, and found by accident while building
+the fixtures for the entry above.
+
+```
+type shape int              native 6.90351265195293e-310   interp 3
+type shape string           native 6.9464150267249e-310    interp hi
+type shape float64          native 3.5                     interp 3.5
+```
+
+### The cause
+
+`runtime.c`'s `k_is_heap` lists every tag whose payload is a pointer:
+
+```c
+case K_STR: case K_ERR: case K_REC: case K_DESC:
+case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
+    return 1;
+```
+
+`K_SUB` was not on it, and a `K_SUB` payload is a `KSub*`. `k_cohort_pop` reads
+that predicate to decide whether a beat's result has to be carried out of the
+arena before the rewind:
+
+```c
+if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
+    k_beat_depth--;
+    k_beat_rewind(m);     /* the arena goes back to the mark */
+    return r;             /* r points into what was just freed */
+}
+```
+
+So a returned subtype was taken for a scalar, the arena went back under it and
+the caller kept a dangling pointer. The fix is one case label.
+
+`K_THUNK` is spelled out at that call site rather than in the list, which is
+what says the list was known to be the gate — and that it had already been
+found short once.
+
+### Why the conditions looked so strange
+
+Three ingredients, each checked against the unfixed compiler. The value has to
+be MADE in one call and STORED by another, both written in the entry, so
+`k_cohort_pop` sees it cross — `lib/both 3`, the same chain inside the library,
+is correct. It has to go into a container, because a value rendered on the spot
+is read before the arena is reused. And the parent has to be `int` or `string`:
+`float64` survived every arrangement, structurally, because a float payload is
+the double itself and has nothing to dangle.
+
+None of the module boundary, the re-export, the build block or the seed value
+mattered, and all four were in the first reproduction.
+
+Valgrind reports zero errors on the failing binary, which is worth saying
+plainly: the arena block is still mapped and still initialised, so the read is
+well-defined and merely stale. A memory checker was never going to find this.
+What found it was the interpreter disagreeing.
+
+### What it costs, and what it does not
+
+Every runtime counter gate is green — decode, encode, escape, one-shot, basket,
+wide, pending-cell and scan all unchanged. None of the benchmarks returns a
+subtype across a beat, which is also why nothing caught this.
+
+The page engine cannot have it: `wasm_rt.rs` has no beat and no cohort at all,
+so the arena rewind is native's alone. That is a structural answer rather than
+a test, and better than one.
+
+The fixture is `tests/golden/entryfile/a_subtype_stored_across_the_entry`:
+three primitive parents by two containers, pinned as one output on both
+engines. Which line comes back wrong depends on what the arena held, so the
+whole output is the pin rather than any line of it.
+
+### The rest of the list, swept
+
+A predicate that enumerates tags is worth checking the moment one of them is
+found short, so the other ten were walked against the enum.
+
+```
+K_INT K_FLOAT K_TRUE K_FALSE K_NONE   immediates; the payload is the value
+K_FNREF                               a pointer, and correctly absent: it is
+                                      always `ptr @<global>` — codegen emits
+                                      `k_fnref(ptr @rsym)` at all three call
+                                      sites and the helper's own comment calls
+                                      it "the static a `k_fnref` value points
+                                      at". A static cannot be rewound.
+K_THUNK                               a pointer, spelled out at the call site
+K_STR K_ERR K_REC K_DESC K_LIST
+K_MAP K_CLOSURE K_BYTES K_SUB         on the list
+```
+
+So the list is complete now, and `k_is_heap` is the only predicate of its shape
+in the file — one other line groups heap tags, and it renders `K_CLOSURE` and
+`K_FNREF` alike as `<fn>`, which is a display question and not a lifetime one.
+The deep copier already had its `K_SUB` arm; only the predicate that decides
+whether to call it was short.
+
+### What the repair cost, and what a second look returned
+
+The one-case fix is not free, and the reason is the opposite of what a reader
+would guess. `k_is_heap` is inlined into `k_slots_survive` and through it into
+`k_copy_size`, which is 36% of deepbench — so the predicate's SHAPE decides how
+that walk compiles. Five shapes were measured in the container:
+
+    with the bug                            806,982,208
+    the switch, plus one `case K_SUB:`      856,510,441   +6.14%
+    a mask carrying a bounds branch         878,869,219   +8.90%
+    `k_slots_survive` given its own switch  856,510,441   +6.14%
+    the mask that ships                     850,361,281   +5.38%
+
+deepbench never makes a subtype — `k_sub` appears nowhere in its profile, and
+`k_survives_x` and `k_ptrmap_at` are byte-identical across the change. Same
+walk, same calls, same counts, more instructions. A tenth `case` was worth
+49,528,233 instructions on a benchmark that cannot reach the tag.
+
+That 5.38% cost welfare 0.03, and the ruling in `scripts/welfare/welfare.kso`
+is that welfare cannot fall. The entry went to design/pending-gavels.md as a
+blocking question. It has been WITHDRAWN, unruled, because looking one level
+further down dissolved it.
+
+`k_copy_size` returns zero for an immediate and for nothing else without
+looking at it, so a caller walking a container can skip the call entirely.
+deepbench folds over lists of ints; the call it made per element existed only
+to return zero. Six sites — three in `k_copy_size`, three in `k_repair_size` —
+now test `k_worth_sizing` first:
+
+    with the bug                     806,982,208
+    the fix alone                    850,361,281   +5.38%
+    the fix and the skip             760,471,453   -5.77% against the bug
+
+Against origin/main, on the runner:
+
+    work_deepbench    806,985,948 -> 760,475,193   -46,510,755   -5.76%
+    work_widebench     85,273,589 ->  83,967,604    -1,305,985   -1.53%
+    work_encodebench 9,866,843,915 -> 9,866,614,705   -229,210
+    work_basket        57,436,178 ->  57,392,199       -43,979
+    work_pendbench    987,907,671 -> 988,282,947      +375,276   +0.038%
+    work_escapebench  258,574,097 -> 258,583,100        +9,003
+    work_jsonbench  2,910,241,430 -> 2,910,241,528          +98
+    work_oneshot       47,277,061 ->  47,277,156          +95
+
+`work_pendbench` is the only row that pays for the skip rather than the mask,
+and it pays for exactly what it is: the lazy benchmark's slots hold thunks,
+`k_worth_sizing` answers yes for a thunk, so every element takes the new test
+AND still makes the call. 392,848 instructions of a test that never saves one,
+against 46.5 million saved on the benchmark whose slots are ints. The other
+three risers — `work_escapebench`, `work_jsonbench`, `work_oneshot` — are
+identical between the fix alone and the fix with the skip, so their movement is
+the predicate's shape in programs whose copy walk is cold, not the skip.
+
+`compile_instructions` falls 3,097 (54,507,708 -> 54,504,611) and the machine
+code falls 1,328 bytes net: the mask removes about four hundred bytes from
+every benchmark and `k_worth_sizing` adds back 240 to each.
+
+Welfare is 85.22 against a floor of 85.19, and the floor is moved in this same
+PR. The blocking entry is gone from the ledger with no ruling recorded, because
+none was needed in the end — which is the outcome the escalation was supposed
+to have, and the reason to escalate the moment a question is found rather than
+after exhausting it.

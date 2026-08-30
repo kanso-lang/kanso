@@ -542,4 +542,13 @@
 # cent. The change adds four match arms to one function — the code grew, the
 # work it does on this input barely moved, and the two hosts placed the result
 # differently. Neither number is an estimate of anything but its own host.
-compile_instructions=54507708
+#
+# 2026-08-30  54,507,708 -> 54,504,611   -3,097   -0.006%, banked as layout.
+# `k_is_heap` became a bit mask so `K_SUB` could join it, and six sites in the
+# sizing walk gained a `k_worth_sizing` test. runtime.c is embedded in the
+# compiler's binary, so its text moves this row; the front end never runs a
+# line of it. compile_allocs and compile_peak_bytes do not move, which is what
+# an edit the measured path cannot reach should read as. On the way, the mask
+# alone read 54,509,454 here, so the same untouched call graph moved +1,746 and
+# then -4,843 across two edits to a file the front end does not execute.
+compile_instructions=54504611
