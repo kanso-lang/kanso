@@ -205,4 +205,10 @@
 # Banked. `synthesize_getters` built each candidate arm's pattern vector and
 # the binder's name and THEN asked whether that (type, field) already had a
 # getter. The question moved above the construction.
-compile_allocs=31254
+#
+# 2026-08-30 (three more tables that allocate a vector per key): 31,254 ->
+# 30,406, a fall of 848, or 2.7%. Banked. The counting pass of #1161 took the
+# last three of the shape in the front end: the two arity tables, which held a
+# `Vec<usize>` of one number per name, and the overlap checker's per-group
+# `Vec<&FnDecl>`. The arity pair was 499 blocks, the overlap groups 349.
+compile_allocs=30406
