@@ -2761,3 +2761,32 @@ digit either way, which is the point of having both.
 
 Welfare 87.41 -> 87.47, banked with `--set`. The page's two `data-golden`
 compile figures move with it.
+
+## 2026-08-30 — the bare-name walk asks a question it already knows the answer to
+
+`mark_bare_quals` decides which import qualifiers a file actually uses. It
+walks every expression of every declaration, collects every bare identifier
+occurrence into a set, and then asks that set two questions: is each surfaced
+name in it, and is any import rename's target in it.
+
+The set therefore holds every distinct bare name in the module, and is asked
+about the surfaced names and the rename targets — a much smaller list. A name
+outside that list can never answer either question, so the walk tests
+membership in the asked-about set before inserting.
+
+This is #1157's move in a different pass. There the necessary condition was a
+`Get_` prefix, cheap enough to test on four bytes; here it is membership in a
+set built once from the two readers' own inputs. What makes both exact is the
+same thing: the condition is on the MENTION, and the readers are known.
+
+### The numbers
+
+    compile_instructions  43,302,778 -> 43,138,593  -164,185  -0.38%  (local)
+    compile_allocs             29,876 ->     29,864       -12
+    compile_peak_bytes                     730,120   unmoved
+
+The allocation move is twelve blocks, and the instruction move is a hundred and
+sixty times that. The set was not costing much to hold; it was costing to fill.
+`HashMap<&str, ()>::insert` under `walk_children` under `mark_bare_quals` was
+267,972 instructions on the previous head — the largest single insert caller in
+the compile — and it is a lookup in a small table now.

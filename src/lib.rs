@@ -2620,29 +2620,47 @@ fn mark_bare_quals(
     surfaced: &Surfaced,
     quals: &mut crate::hash::Set<String>,
 ) {
+    // The two loops below are the only readers, and between them they ask
+    // about exactly the surfaced names and the targets of import renames.
+    // A bare name outside that set can never be the answer to either
+    // question, so the walk skips it — the same necessary condition the
+    // getter walk tests, applied to a different question.
+    let mut asked: crate::hash::Set<&str> = crate::hash::Set::default();
+    for name in surfaced.keys() {
+        asked.insert(name.as_str());
+    }
+    for import in &program.imports {
+        for (_, yours) in &import.renames {
+            asked.insert(yours.as_str());
+        }
+    }
     // Borrowed from the program: this walks every expression of every
     // declaration and used to keep a `String` per bare identifier OCCURRENCE,
     // for a set that is asked two questions below and dropped.
     let mut bare: crate::hash::Set<&str> = crate::hash::Set::default();
-    fn collect<'a>(e: &'a ast::Expr, bare: &mut crate::hash::Set<&'a str>) {
+    fn collect<'a>(
+        e: &'a ast::Expr,
+        asked: &crate::hash::Set<&str>,
+        bare: &mut crate::hash::Set<&'a str>,
+    ) {
         // `&select` names the import the way `select` does; the sigil holds
         // the name rather than changing it. Left out, a file whose only use of
         // an import was a held name could not be written at all: drop the
         // import and the name does not resolve, keep it and this reads it as
         // unused.
         if let ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) = e {
-            if !ast::has_slash(name) {
+            if !ast::has_slash(name) && asked.contains(name.as_str()) {
                 bare.insert(name.as_str());
             }
         }
-        for_each_child(e, |child| collect(child, bare));
+        for_each_child(e, |child| collect(child, asked, bare));
     }
     for decl in &program.fns {
         for stmt in &decl.body {
             match stmt {
                 ast::Stmt::Bind { expr, .. }
                 | ast::Stmt::Expr(expr)
-                | ast::Stmt::Set { value: expr, .. } => collect(expr, &mut bare),
+                | ast::Stmt::Set { value: expr, .. } => collect(expr, &asked, &mut bare),
             }
         }
     }

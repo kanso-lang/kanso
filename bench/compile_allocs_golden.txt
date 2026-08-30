@@ -216,4 +216,11 @@
 # 530, or 1.7%. Banked. check_literal_arguments' Vec<&FnDecl> per group, rekeyed
 # by name so a borrowed &str can probe it, and advisory.rs's Vec<usize> per
 # name. 349 blocks and 181. No table in the front end holds a Vec per key now.
-compile_allocs=29876
+#
+# 2026-08-30 (the bare-name walk asks what it already knows): 29,876 -> 29,864,
+# a fall of 12. Banked, and the allocation row is the small half of this one —
+# it is worth 164,185 instructions, because the set was costing to fill rather
+# than to hold. mark_bare_quals collected every bare identifier in the module
+# into a set it then asked about the surfaced names and the rename targets
+# only; it tests that membership before inserting now.
+compile_allocs=29864
