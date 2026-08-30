@@ -87,4 +87,14 @@
 # it tests for are ASCII. dhat had attributed exactly 2,172 blocks to that line
 # and re-running it after the change shows every other site identical to the
 # block, so this row moved for one reason and no other.
-compile_allocs=48356
+#
+# 2026-08-30 (a token and its end column in one vector): 48,356 -> 46,998, a
+# fall of 1,358, or 2.8%. Banked. `Line` carried `tokens: Vec<(Tok, Span)>`
+# beside `end_cols: Vec<usize>`, always the same length, sliced in step by hand
+# in twelve places. One `Vec<(Tok, Span, u32)>` pays one header and one
+# doubling sequence where a line used to pay two. The fall is larger than the
+# 1,117 blocks dhat attributed to `end_cols`, because `StrPart::Interp` carried
+# the identical pair and every interpolation paid it again — the map could not
+# separate that. compile_peak_bytes does not move: the triple pads to the width
+# the pair occupied across two allocations, so what goes is the second header.
+compile_allocs=46998

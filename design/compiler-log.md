@@ -4896,3 +4896,30 @@ against it.
 The diff is 162 lines added against 181 removed. A merge that removes more
 than it adds is the shape to expect when two things that were always equal
 stop being written down twice.
+
+### The neighbouring vector is DECLINED, and the reason is the same family
+
+`lex_line` builds a `Vec<char>` per source line — 1,997 allocation blocks, the
+next item down the map after this one. It stays, and the reason is one line:
+
+```rust
+fn span(&self) -> Span { Span::at(self.line, self.col_offset + self.pos) }
+```
+
+`pos` IS the column. The vector is not indexing convenience; it is what makes
+every token's column a character count, which is what a caret under a source
+line has to be. Three ways to remove it were considered and all three are
+worse:
+
+- **Byte offsets alone.** Every token's column goes wrong by the number of
+  multi-byte characters before it on the line. That is the bug this file was
+  just fixed for twice, reintroduced at every token rather than at one fence.
+- **Compute the column when a span is made**, `content[..byte].chars().count()`.
+  O(byte) per token, so quadratic in line length, to save one linear collect.
+- **Carry a byte position beside the character one.** Fourteen sites advance
+  `pos`, two of them by two characters at a time, and the byte width of what
+  they skip is not known at the site. That is the shape this entry removes,
+  at fourteen places instead of twelve, with a harder invariant.
+
+So the vector is the cheapest way to have the thing it buys, and this is a
+declined idea rather than an open one.

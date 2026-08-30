@@ -560,4 +560,12 @@
 # 846,705 -> 790,505. compile_allocs falls 2,172 in the same change and
 # compile_peak_bytes does not move, which is the shape of a vector that never
 # lived past its call.
-compile_instructions=53528219
+#
+# 2026-08-30  53,528,219 -> 52,510,153   -1,018,066   -1.90%, banked, and real
+# work: one fewer vector to grow, per line and per interpolation. The profile's
+# own rows move the way that predicts — `finish_grow` 790,505 -> 736,825,
+# `_int_free` 3,014,268 -> 2,930,351, `free` 1,354,248 -> 1,316,224,
+# `lex_line` 785,322 -> 749,824 — while `eval_expr` and `check_merged` are
+# byte-identical, which is right for a change no pass but the lexer and parser
+# can see. compile_allocs falls 1,358 and compile_peak_bytes holds at 742,572.
+compile_instructions=52510153
