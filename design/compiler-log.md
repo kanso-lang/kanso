@@ -4157,6 +4157,13 @@ captures one, and the whole pass now reads 58,375,759 against main's
 58,379,986: 4,227 cheaper than the code it replaces, because a `build`'s
 statements are no longer walked twice.
 
+`compile_instructions` still ends at 58,210,887 against 58,205,543 on the
+runner, +5,344, and the two hosts disagree about the sign: the container reads
+a fall of 4,227 where the runner reads a rise. Opposite signs, so what is left
+is the two of them laying the binary out differently rather than work on either
+one. `compile_allocs` and `compile_peak_bytes` do not move at all, welfare
+holds at 84.27, and the floor's history carries the entry saying so.
+
 This is the third time the pattern in `tests/golden/unpinned_diagnostics.txt`
 has paid. That file says an excuse reasoning about which check speaks first must
 name WHICH walk it is reasoning about, because a second one may not have the
