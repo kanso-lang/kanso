@@ -3369,3 +3369,46 @@ exclusion, and read the compile veins and the sha256 peak together.
 The four A/B models in the entry above are not wasted. They are what proves
 the exclusion is the only thing holding the digest, because every one of them
 is the same shape without the `std/` import and every one reclaims.
+
+## 2026-08-31 — the measurement the entry above asked for: the exclusion costs eleven lines
+
+Stripping the imported-group exclusion entirely — `.filter(|_d| false)` in
+place of the path-prefix test — and reading every vein the tree has, on this
+container:
+
+    sha256 via std/, arena_peak_bytes   90,177,536 -> 1,048,576   (86x)
+    sha256 via std/, allocs                713,523 ->   713,807   (+284)
+
+    compile_allocs        25,394   unchanged
+    compile_peak_bytes   713,606   unchanged
+    compile_rounds            40   unchanged
+    compile_visits        16,806   unchanged
+
+    decode, encode, one-shot, basket, escape, wide and pending-cell
+    counters: all seven byte-identical
+    machine code: byte-identical
+    kq's three allocation cost goldens: byte-identical
+    welfare: 74.33, unchanged
+
+    emitted code: scanbench calls 3,743 -> 3,753, lines 20,019 -> 20,030.
+    Every other benchmark byte-identical.
+
+Eleven emitted lines in one benchmark is the whole measurable price, and the
++284 allocations are the evacuation copies the carry rewind pays for. The
+compile veins do not move at all, which answers the worry the entry above
+raised about `kanso check lib/json`: the library's own groups either never
+wanted a carry or were already getting one.
+
+The rule's stated hazard — a shared library driver threading its caller's
+invariant source through the loop, so carrying copies an unbounded value per
+iteration — does not appear anywhere in the corpus. That is a finding in its
+own right and cuts both ways: it is evidence the exclusion is over-broad, and
+it is evidence that nothing in the tree would catch the hazard if it were
+real. A fixture that exercises it is owed either way, and it does not exist.
+
+So the naive strip is measured and cheap, and it is deliberately NOT what
+ships next. What ships next is the marker: `d.file` is a diagnostic field and
+reading it as a semantic one is what made a directory name change a program.
+Whether the exclusion then survives on a real marker is the question the
+fixture above has to be written before answering, because a rule kept for a
+hazard nothing demonstrates is a rule kept on faith.
