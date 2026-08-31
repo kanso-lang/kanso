@@ -3225,3 +3225,68 @@ the same one #1186 attributed: the compiler's own binary rearranges when its
 source does, and `Name::new` is small enough for the inliner to change its
 mind about. The shorter source is kept because it is the right code; the
 number is recorded so a later reader does not go looking for a regression.
+
+## 2026-08-31 — MEASURED, OPEN: a digest holds every block it walked
+
+Task #82 asked whether sha256 wants an arena. It has one; the arena never
+rewinds inside the walk, and that is the whole answer.
+
+Measured in the container against files, so the input is read rather than
+built — an earlier attempt grew the message by repeated interpolation and
+half the peak was the benchmark's own quadratic copying:
+
+    input      allocs    arena_peak_bytes   bytes of arena per input byte
+     8,800    713,523        90,177,536          10,247
+    88,000  7,118,218       889,192,464          10,104
+
+Ten times the input for ten times everything, and 849 MB of resident set to
+digest 88 KB. `alloc_bytes` and `arena_peak_bytes` agree to within one per
+cent at both sizes, which is the finding stated exactly: nothing is reclaimed
+between blocks, so the peak IS the total. A megabyte would want about ten
+gigabytes.
+
+sha256 is streaming. Its working set is sixty-four schedule words and eight
+state words, and everything a block builds is dead the moment the next block
+starts. The peak should be flat.
+
+massif attributes it to two owners, both inside the walk:
+
+    66.21%  59,769,744  k_b_push_into_proven
+    32.52%  29,360,576  k_b_concat, 31.36% of it from sha256/compress
+
+`compress` builds an eight-element list literal on each of its sixty-four
+rounds; `schedule`, `first_sixteen` and `padded_bytes` do the pushing.
+
+KANSO_BEAT_REPORT says why nothing sweeps. `sha256/digested`, `sha256/blocked`,
+`sha256/compress` and `sha256/turned` all read "bracketed with its cluster",
+where `sha256/filled` — the one self-recursive loop in the file — reads
+"rewinds every iteration". The outer block walk and the inner sixty-four-round
+compression are in ONE cluster, so the only place a mark can go is outside
+both.
+
+Two hypotheses were built and killed before that one, and both are worth
+recording because they are the obvious guesses:
+
+- "A trampoline defeats the rewind." A loop written self-recursively and the
+  same loop written as the two-function trampoline the library uses everywhere
+  both hold one arena block over 500,000 iterations and 1,000,002 allocations.
+  Bracketing on its own reclaims fine.
+- "Carrying a list rather than a scalar defeats it." A loop carrying an
+  eight-element list rebuilt every round reads "carry beat: rewinds every
+  iteration, evacuating argument 1" and also holds one block, with 1,000,000
+  evacuations. The machinery handles that case.
+
+So it is neither the spelling nor the carried type. It is the cluster spanning
+two nested loops, and the next step is to find out whether beat can split a
+cluster at a call that is not part of the recursion.
+
+`tests/golden/mem/a_digest_holds_every_block_it_walked` pins the constant at
+one block — 1,980 allocations and 424,369 bytes for forty-four bytes of
+message, which is forty-five allocations per input byte before any
+accumulation. A fixture that ran at the sizes above would cost the golden
+suite minutes, so the slope lives in this entry and the constant lives in the
+vein. Watched, not frozen.
+
+The arena question in #82 is answered and closed. What replaces it is a
+narrower one with a reproduction: can the beat analysis put a mark inside a
+cluster that contains a nested loop?
