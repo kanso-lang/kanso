@@ -751,7 +751,7 @@
 # against a per-character encode loop is exactly the kind of trade two
 # machines price differently. compile_peak_bytes fell 2,090 on both hosts to
 # the byte, because a String sized at its length does not overshoot.
-compile_instructions=42299530
+compile_instructions=42297011
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more
@@ -761,3 +761,12 @@ compile_instructions=42299530
 # src/runtime.c, which main.rs holds as an include_str! and hashes for the
 # build cache key; a longer string takes longer to hash. compile_allocs,
 # compile_peak_bytes, rounds and visits do not move.
+# 2026-08-31: -2,519, and the note above it on 2026-08-31 was wrong about why
+# this row moves at all. It said a longer src/runtime.c costs more to hash for
+# the build cache key. That hash is in `cached_program_binary`, which is on the
+# run and build paths; `kanso check lib/json` never reaches it. What actually
+# moves is layout: `include_str!("runtime.c")` is a static in the binary, and
+# changing its length shifts what follows it. The direction does not follow the
+# length either — twenty added lines read +1,630 and 713 added bytes read
+# -2,519. compile_allocs, compile_peak_bytes, rounds and visits are unmoved
+# across all three, which is what says the front end's work did not change.

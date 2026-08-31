@@ -163,22 +163,22 @@
 # the call. escapebench, jsonbench and oneshot are identical between the fix
 # alone and the fix with the skip, so their few thousand instructions are the
 # predicate's shape in programs whose copy walk is cold.
-jsonbench 2862072778
+jsonbench 2862072931
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 8708075665
-oneshot 44059561
-basket 57083993
-widebench 84031604
-deepbench 760475193
+encodebench 8713108067
+oneshot 44072143
+basket 57198013
+widebench 84031648
+deepbench 760475924
 escapebench 258583100
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
-pendbench 957236511
-indexbench 5266934
+pendbench 957236647
+indexbench 5266960
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -422,3 +422,22 @@ indexbench 5266934
 # reading a string forward one character at a time, over an alphabet mixing
 # one-, two-, three- and four-byte characters. On the unfixed runtime it reads
 # 2,570,995,073 — 488 times what it reads here.
+# 2026-08-31 (the runner's numbers): the seek cursor is forgotten when a beat
+# rewinds the arena, because it named its string by an address the rewind
+# hands back. Native answered `g` where the interpreter answered `e`; welfare
+# does not weigh a change that makes the engines agree.
+#
+#   work_basket          57,083,993 ->    57,198,013   +114,020   +0.1997%
+#   work_encodebench  8,708,075,665 -> 8,713,108,067  +5,032,402   +0.0578%
+#   work_oneshot         44,059,561 ->    44,072,143    +12,582   +0.0286%
+#   work_deepbench      760,475,193 ->   760,475,924       +731   +0.0001%
+#   work_jsonbench    2,862,072,778 -> 2,862,072,931       +153   +0.0000%
+#   work_pendbench      957,236,511 ->   957,236,647       +136   +0.0000%
+#   work_widebench       84,031,604 ->    84,031,648        +44   +0.0001%
+#   work_indexbench       5,266,934 ->     5,266,960        +26   +0.0005%
+#   work_escapebench                                    unmoved
+#
+# The rise is not the store. It is the cursor hits that stop happening: a
+# sweep crossing a beat boundary used to resume where it left off and now
+# restarts at the front. basket carries the most of it because it sweeps text
+# across beats; the five rows under a thousandth are the store itself.

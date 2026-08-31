@@ -3311,3 +3311,44 @@ the harness runs it on both engines. Removing the store turns `ec/ec` into
 started this.
 
 DONE.
+
+## 2026-08-31 — the runner's numbers for the cursor fix, and a wrong note corrected
+
+```
+    work_basket          57,083,993 ->    57,198,013   +114,020   +0.1997%
+    work_encodebench  8,708,075,665 -> 8,713,108,067  +5,032,402   +0.0578%
+    work_oneshot         44,059,561 ->    44,072,143    +12,582   +0.0286%
+    work_deepbench      760,475,193 ->   760,475,924       +731   +0.0001%
+    work_jsonbench    2,862,072,778 -> 2,862,072,931       +153   +0.0000%
+    work_pendbench      957,236,511 ->   957,236,647       +136   +0.0000%
+    work_widebench       84,031,604 ->    84,031,648        +44   +0.0001%
+    work_indexbench       5,266,934 ->     5,266,960        +26   +0.0005%
+    work_escapebench                                    unmoved
+    text                    716,626 ->       716,754      +128
+    compile_instructions 42,299,530 ->    42,297,011     -2,519
+```
+
+Every work row rises except escapebench, and the rise is not the store. It is
+the cursor hits that stop happening: a sweep crossing a beat boundary used to
+resume where it left off and now restarts at the front. basket carries most of
+it because it sweeps text across beats; the five rows under a thousandth are
+the store itself, and `text` is its sixteen bytes in each of eight binaries.
+
+**Welfare rose, and the reason is not the fix.** 87.511217 -> 87.511303, all of
+it from `compile_instructions` falling 2,519, which is layout. Recorded with
+`--set` because the rule says a rise is held rather than banked, and recorded
+here as a ratchet step to spend back when `src/runtime.c`'s length next moves.
+The fix itself costs runtime instructions and would have been right to ship at
+a fall: welfare does not weigh a change that makes the engines agree.
+
+**A note from #1172 was wrong and is corrected in the golden.** It said
+`compile_instructions` moves when `src/runtime.c` changes length because
+`main.rs` holds the file as an `include_str!` and hashes it for the build cache
+key. That hash is in `cached_program_binary`, which is on the run and build
+paths; `kanso check lib/json` never reaches it. What moves is layout — the
+static's length shifts what follows it — and the direction does not follow the
+length: twenty added lines read +1,630 and 713 added bytes read −2,519.
+`compile_allocs`, `compile_peak_bytes`, rounds and visits are unmoved across
+all three, which is what says the front end's work did not change.
+
+DONE.
