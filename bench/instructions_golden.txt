@@ -163,21 +163,21 @@
 # the call. escapebench, jsonbench and oneshot are identical between the fix
 # alone and the fix with the skip, so their few thousand instructions are the
 # predicate's shape in programs whose copy walk is cold.
-jsonbench 2910241528
+jsonbench 2862072778
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 9866614705
-oneshot 47277156
-basket 57392199
-widebench 83967604
+encodebench 8715312865
+oneshot 44077654
+basket 57118035
+widebench 84047604
 deepbench 760475193
 escapebench 258583100
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
-pendbench 988282947
+pendbench 957236511
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -379,3 +379,25 @@ pendbench 988282947
 # What it buys is an honest vein. escapebench pinned bytes_malloc=0 against
 # bytes_freed=3000 — three thousand frees of buffers the counters said were
 # never allocated — and reads 12,000 against 12,000 now.
+# 2026-08-31 (the runner's numbers): two byte-level costs in the runtime. The
+# character count reads a word at a time instead of walking, and an append of
+# one byte writes the byte instead of calling memcpy.
+#
+#   jsonbench    2,910,241,528 -> 2,862,072,778   -48,168,750   -1.655%
+#   encodebench  9,866,614,705 -> 8,715,312,865 -1,151,301,840  -11.669%
+#   oneshot         47,277,156 ->    44,077,654    -3,199,502   -6.767%
+#   pendbench      988,282,947 ->   957,236,511   -31,046,436   -3.141%
+#   basket          57,392,199 ->    57,118,035      -274,164   -0.478%
+#   widebench       83,967,604 ->    84,047,604       +80,000   +0.095%
+#   deepbench, escapebench                              unmoved
+#
+# widebench is the only rise and it is one number: k_str_chars costs +4.000
+# instructions on a string shorter than eight bytes, which pays for the word
+# loop's guard and its closing subtraction and reaches neither. jsonbench pays
+# the same +4 on 898,500 calls and takes 51.8M back from the append, ending
+# well under where it started. encode_instructions was the welfare term
+# furthest below its baseline of 9,283,777,698; it ends 6.1% above it.
+#
+# The local box (glibc 2.39-0ubuntu8.7 against this file's 8.8) reads
+# deepbench -3,680 and escapebench -399 where the runner reads neither, which
+# is why these rows come out of the job log and not from here.

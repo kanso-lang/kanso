@@ -3024,3 +3024,48 @@ this way: `core::str::count::do_count_chars` and `char_count_general_case`
 together are 99,709 instructions of the front end, 0.23%. Nothing to take.
 
 DONE.
+
+## 2026-08-31 — the runner's numbers for the pair, and what welfare made of them
+
+```
+    work_jsonbench    2,910,241,528 -> 2,862,072,778   -48,168,750   -1.655%
+    work_encodebench  9,866,614,705 -> 8,715,312,865 -1,151,301,840  -11.669%
+    work_oneshot         47,277,156 ->    44,077,654    -3,199,502   -6.767%
+    work_pendbench      988,282,947 ->   957,236,511   -31,046,436   -3.141%
+    work_basket          57,392,199 ->    57,118,035      -274,164   -0.478%
+    work_widebench       83,967,604 ->    84,047,604       +80,000   +0.095%
+    work_deepbench, work_escapebench                            unmoved
+    compile_instructions 42,297,878 ->    42,297,900          +22
+```
+
+**work_widebench is the one rise, and it is the character count's four
+instructions.** widebench asks for a string's length on strings shorter than
+eight bytes, so every call pays for the word loop's guard and its closing
+subtraction and enters neither; nothing in that benchmark appends a single
+byte, so the second change has nothing to give it back. jsonbench pays the
+same +4 on 898,500 calls and takes 51.8M back from the append, which is why
+the two shipped together and widebench is left where it is.
+
+The local box reads deepbench −3,680 and escapebench −399 where the runner
+reads neither, and its glibc is 2.39-0ubuntu8.7 against the golden's 8.8. The
+runner's rows are the ones in the file.
+
+`compile_instructions` moves 22 and none of it is the front end. `k_utf8_chars`
+is twenty lines added to `src/runtime.c`; `main.rs` holds that file as an
+`include_str!` and hashes it for the build cache key, and a longer string takes
+twenty-two more instructions to hash. Allocations, peak, rounds and visits are
+byte-identical.
+
+**Welfare moved 87.50170 to 87.51104 — nine thousandths.** Worth writing down
+because the size is surprising: #1170 bought 0.0277 for a 1.05% fall in
+compile instructions, and this bought a third of that for an 11.7% fall in
+encode. Two things make it so. Runtime satiates at 2.0, so a term already
+better than baseline gains little from getting better still — encode crosses
+from 5.9% below to 6.5% above and the crossing itself is most of the value.
+And the five runtime speed counters share a weight with wide, deep and pending,
+whose ratios are 138, 29 and 28 times baseline and therefore contribute almost
+their whole allowance already. The model is doing what it was written to do.
+Nothing is being argued here; the observation is that the encoder had a lot of
+room and the index says the project had already been paid for most of it.
+
+DONE.
