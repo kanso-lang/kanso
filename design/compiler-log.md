@@ -2903,3 +2903,18 @@ along and stay; tests/entry_file.rs flips its expectation to the
 qualified form and stops being ignored. The entry-path divergence —
 the actual defect — dies with the ruling. The ledger entry's removal
 rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: an instruction is a cost, whoever put it there
+
+On "Whether a compile_instructions move that cannot be work needs an
+attribution", Clay declined the waiver: "if it's a different
+instruction stream then that's a real cost so what's your question?"
+Option 1 stands — every rise in the vein pays the full ritual: golden,
+page figure, log sentence, and a welfare_floor attribution. The
+correction is to the attributions, not the rule: an entry never again
+says "nothing was spent"; it names the cause — rustc codegen movement
+from an unrelated edit, when that is what the evidence shows. A ledger
+accumulating that attribution repeatedly is the case for attacking the
+cause (pinning inlining, splitting the crate), which a waiver would
+have hidden. The ledger entry's removal rides the next reconciliation
+with main.
