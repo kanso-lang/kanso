@@ -3352,3 +3352,71 @@ length: twenty added lines read +1,630 and 713 added bytes read −2,519.
 all three, which is what says the front end's work did not change.
 
 DONE.
+
+## 2026-08-31 — the welfare number's leverage sits in one benchmark, and the reason is where satiation is applied
+
+The gavel filed an hour ago named the right question and got the mechanism
+wrong. Its "why it happens" paragraph described a weighted ratio of costs, and
+the script does not compute one. Corrected in design/pending-gavels.md, with
+the arithmetic, and repeated here because the log is where the number's
+history is read.
+
+`dimension_score` averages the counters' ratios and satiates the average:
+
+```
+  mean = list/sum ratios / (1.0 * length ratios)
+  satisfaction mean t.satiation * t.weight
+```
+
+Satiation therefore applies to no counter. A counter's raw ratio enters the
+average linearly and without bound, so the counter furthest past its baseline
+carries the term. Run speed at today's floor:
+
+```
+    wide_instructions        ratio  138.37     68.45% of the mean
+    deep_instructions        ratio   29.88     14.78%
+    pending_instructions     ratio   29.22     14.45%
+    oneshot_instructions     ratio    1.46      0.72%
+    decode_instructions      ratio    1.14      0.56%
+    encode_instructions      ratio    1.07      0.53%
+    basket_instructions      ratio    0.99      0.49%
+```
+
+The model that produced those shares reads the live goldens and returns
+87.511303209 against a recorded floor of 87.511303209, so it is the script's
+arithmetic rather than a description of it.
+
+**A second change is held behind the gavel.** `k_b_append_into` wrote its grow
+path twice — once taking arena storage when the header dies at the innermost
+rewind, once taking malloc — and the two differed in the allocator and in the
+sign of the cap and in nothing else. One tail serves both. Measured on this
+container, same sitting, callgrind, nine benchmarks:
+
+```
+    encodebench  8,713,107,668 -> 8,670,774,068   -42,333,600   -0.4859%
+    jsonbench    2,862,072,518 -> 2,860,449,668    -1,622,850   -0.0567%
+    oneshot         44,071,744 ->    43,955,091      -116,653   -0.2647%
+    widebench       84,031,235 ->    84,111,235       +80,000   +0.0952%
+    basket, deepbench, escapebench, pendbench, indexbench: identical
+```
+
+widebench's 80,000 is 5 instructions across its 16,000 grows. It is the only
+benchmark in the tree where half the appends grow, because
+`text/append (text/bytes lead) "  "` builds a fresh accumulator per element
+and the first append onto one has no spare capacity to write into.
+
+Priced two ways:
+
+```
+    as written    (average the ratios, then satiate)   -0.001096   held
+    per counter   (satiate each ratio, then average)   +0.008015   ships
+```
+
+The sign turns on the order of those two operations. Under the index as
+written the rule is unambiguous and the change is held: the sum is the
+objective and it falls. What it does is written above in enough detail to
+redo — hoist the allocator choice above the copy, keep one tail, carry the
+regime in the sign of a local — and it is thirty fewer lines than what it
+replaces.
+
+HELD.
