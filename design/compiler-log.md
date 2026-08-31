@@ -2970,3 +2970,13 @@ must be proven. The book's sentence — everything born in the block,
 nothing escaping — was the decision; the syntactic fence was the
 checker falling short of it. Ships with red-first fixtures for the
 newly admitted shapes and the escape cases that must stay refused.
+
+## 2026-08-29 — gavel: the ambiguous-bare-call refusal is final
+
+Clay, confirming: "I thought we decided this in a pretty reasonable
+way and I don't know why you're considering it not final." The
+INTERIM stamp from the 2026-07-27 committee ruling retires: a bare
+call that two imports answer alike is refused, permanently, and the
+qualified name is the fix — the Go-inspired shape, with kanso's
+namespacing doing what Go's aliases do. Import order never decides
+semantics. check_bare_ambiguity stands as built.
