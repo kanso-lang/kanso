@@ -3077,3 +3077,14 @@ is attribution (which change grew the emission, and whether the
 growth is the win's cost or a separable side effect), not a revert.
 If the two turn out inseparable, that is a welfare trade to present
 with numbers, and the weights arbitrate as always.
+
+## 2026-08-29 — the binary-size directive, softened to its real shape
+
+Clay, immediately after: "a slightly larger binary size is a pretty
+small price to pay. i just want to make sure it's not a fixable
+issue." So the directive is attribution, not a target: find which
+change grew the emission and answer one question — incidental or the
+price? If the growth is separable from the wins (a duplicated
+specialization, a dropped dedup, dead emission), fix it. If it is the
+genuine cost of the run-instructions and compile-memory gains, keep
+it and record the trade; no campaign to force the number back down.
