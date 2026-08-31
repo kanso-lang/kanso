@@ -3143,46 +3143,67 @@ separate change with its own reasoning.
 
 DONE.
 
-## 2026-08-31 — the append's grow path moves out of line
+## 2026-08-31 — the append's grow path, built and HELD by the welfare number
 
-Same PR, and the third thing today that a disassembly answered and a profile
-could not. `k_b_append_mut` was still 26.5% of encodebench after the one-byte
-store landed — 42,318,000 calls at 54.6 instructions of self cost — and the
-first eight of those instructions were this:
+Built, measured, and taken back out of the branch it was written on, because
+the project's own scalar prices it negative. Recorded here so it is not
+rediscovered.
+
+`k_b_append_mut` is 26.5% of encodebench, and the first eight instructions of
+every call were six callee-saved pushes and a frame:
 
 ```
     push %rbp / %r15 / %r14 / %r13 / %r12 / %rbx
     sub  $0x28,%rsp
 ```
 
-Six callee-saved registers and a frame, on every append, because one function
-held both the frontier check and the growth. The fast path — two failure
-tests, a tag dispatch, a capacity comparison and a store — needs two registers.
-The growth needs eight: it decides which allocator the new buffer comes from,
-copies twice, and frees the old header.
-
-`k_b_append_grow` is that second half, `noinline`, taking the six things it
-needs. The prologue is three pushes now.
+One function holds both the frontier check and the growth. The fast path — two
+failure tests, a tag dispatch, a capacity comparison, a store — needs two
+registers; the growth needs eight, because it decides which allocator the new
+buffer comes from, copies twice and frees the old header. Every append pays
+for both. A `noinline` `k_b_append_grow` taking the six things it needs
+reduces the prologue to three pushes.
 
 ```
-    work_encodebench  8,708,075,266 -> 8,400,333,666  -307,741,600  -3.534%
-    work_jsonbench    2,862,072,365 -> 2,841,642,965   -20,429,400  -0.714%
-    work_oneshot         44,059,162 ->    43,153,612      -905,550  -2.055%
-    work_basket                                              unmoved
+    work_encodebench  8,708,075,266 -> 8,400,334,065  -314,978,800  -3.614%   (runner)
+    work_jsonbench    2,862,072,778 -> 2,841,643,378   -20,429,400  -0.714%
+    work_oneshot         44,077,654 ->    43,154,011      -923,643  -2.096%
+    work_widebench       84,047,604 ->    84,271,604      +224,000  +0.267%
 ```
 
-307,741,600 over 42,318,000 appends is 7.27 instructions each, which is the
-three pushes and three pops with the smaller frame beside them. `text` rises
-96 bytes in the four binaries that reach the grow path and nothing in the
-other five — a call and a small frame against what it removes from every
-caller.
+**widebench is why it is held, and the number is exact.** Its counters read
+`append_fast=16000` and `append_grow=16000` — the only benchmark in the tree
+where half the appends grow — and 224,000 over 16,000 grows is 14.0
+instructions each, which is the call frame the grow path now enters. Every
+other benchmark grows a handful of times against millions of fast appends, so
+they take the three fewer pushes and pay nothing for the call.
 
-The counters do not move: `append_fast` and `append_grow` count the same
-events, and the nine runtime counter gates plus `native_checksum` are green.
+The index disagrees with the arithmetic that looks obvious:
 
-This is the same shape as the fast/slow split the allocator already uses, and
-the reason it went unnoticed is that a profile attributes by function. Both
-halves were one function, so the row said `k_b_append_mut` and nothing said
-that a third of the row was register traffic for a branch almost never taken.
+```
+    floor after #1171                              87.511035
+    the string index alone                         87.511654    +0.000619
+    the string index and the outlining together    87.508343    -0.002692
+```
 
-DONE.
+Bisected by holding one row at a time. **widebench's 0.267% rise costs 0.003311
+points on its own, where encodebench's 3.6% fall, jsonbench's 0.7%, oneshot's
+2.1% and basket's 0.06% together earn 0.000619.** So the package falls below
+the floor and the rule is unambiguous: the sum is the objective, a fall means
+the change is worse by the weights as written, and the floor does not move to
+accommodate it.
+
+**What is worth asking, and is Clay's to answer, is whether the weights are
+right about this.** wide_instructions sits at 138 times its baseline. A term
+that far out contributes nearly its whole allowance already, so on the shape
+of the curve a small move there should be worth almost nothing — and it is
+worth five times what an eleven per cent improvement in encode was worth an
+hour earlier. Either the model means that and the reason is worth writing down
+beside the weights, or one benchmark 138x better than its baseline has more
+leverage over the score than the two rows the front page makes claims about.
+Filed in design/pending-gavels.md.
+
+The change itself is small and its measurements are above; whoever picks it up
+does not have to find it again.
+
+HELD.

@@ -275,12 +275,13 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Eighteen questions wait in `design/pending-gavels.md`** — one blocking,
-seventeen open — each with a recommendation, counted from the ledger rather
-than carried forward. Four are new today: the chain-line grammar, whether
+**Nineteen questions wait in `design/pending-gavels.md`** — one blocking,
+eighteen open — each with a recommendation, counted from the ledger rather
+than carried forward. Five are new today: the chain-line grammar, whether
 an err gains readers a callback can use, whether the backends should
-build a partial whose callee is a value, and whether an identifier's name
-lives inline.
+build a partial whose callee is a value, whether an identifier's name
+lives inline, and whether welfare's weights mean what they say about a term
+already 138 times better than its baseline.
 
 **The rules that carry forward**, each earned twice:
 

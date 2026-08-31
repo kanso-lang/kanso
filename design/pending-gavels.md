@@ -719,6 +719,66 @@ since it was set, the accumulator rewrite removed the case that used to hit
 it, and both limits are documented. If a program ever needs more, that
 program is the reason to revisit it.
 
+### Whether welfare's weights mean what they say about a saturated term
+
+**Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
+for `welfare`, `satiation`, `weights` and `wide_instructions`. The weights and
+satiations are argued in scripts/welfare/welfare.kso's own comments and in the
+entries that set them; the archive records the two rulings that added the
+compile dimensions. Nothing anywhere asks what a move in a term already many
+times better than its baseline is worth, and no ruling covers it. Searched
+design/*.md for an existing entry and found none.**
+
+**The measurement.** A change that made the encoder 3.6% faster, the decoder
+0.7% faster and the one-shot 2.1% faster, at the cost of 0.267% on widebench,
+scores below the floor:
+
+```
+    floor after #1171                              87.511035
+    the string index alone                         87.511654    +0.000619
+    the string index and the outlining together    87.508343    -0.002692
+```
+
+Bisected by holding one golden row at a time. widebench's 224,000 instructions
+cost 0.003311 points on their own. encodebench's 314,978,800, jsonbench's
+20,429,400, oneshot's 923,643 and basket's 34,042 together earn 0.000619.
+**A rise of 224 thousand outweighs a fall of 336 million, by a factor of five.**
+
+The hour before, an eleven per cent fall in encode_instructions moved the
+number 0.0093. So a quarter of a per cent on widebench is worth a third of
+what eleven per cent on encode is worth.
+
+**Why it happens.** `wide_instructions` reads 84,047,604 against a baseline of
+11,627,314,301 — 138 times better. `decode_instructions` and
+`encode_instructions` read 1.15 and 1.11 times better. The score is a ratio of
+weighted costs, and a term whose current cost is a 138th of its baseline
+contributes almost nothing to the denominator, so its *proportional* moves
+land on a very small number and its *absolute* moves land on the baseline
+scale. The three shape benchmarks — wide, deep and pending — are all in that
+regime, at 138, 30 and 29 times.
+
+**What is being asked.** Whether that is the intended reading. Two answers are
+coherent and they differ:
+
+- **It is intended.** A term that has improved 138-fold has banked that
+  improvement, and giving any of it back is exactly what the ratchet exists to
+  refuse, however small the fraction. Then the note belongs beside the weights
+  so the next reader is not surprised, and changes like the one above are
+  correctly held.
+- **It is an artefact.** The three shape rows are 138x, 30x and 29x better
+  because they were pathological when the baseline was taken, not because the
+  project bought 138 times the value there. If so they dominate the score for a
+  historical reason, and the two rows the front page makes claims about —
+  decode and encode — have less leverage than a benchmark nobody quotes.
+
+**Nothing is blocked.** kanso#1172 ships the string index alone and stays above
+the floor. The outlining is written down in design/compiler-log.md with its
+measurements, held rather than lost, and costs nothing to pick up again.
+
+**Recommendation: rebaseline the three shape counters, or say in the weights
+why 138x is load-bearing.** The second is cheaper and may well be right. The
+first is a change to the objective and needs this entry ruled first either way.
+
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
 EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,
