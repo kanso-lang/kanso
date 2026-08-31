@@ -60,10 +60,20 @@ impl Name {
 
     pub fn as_str(&self) -> &str {
         match &self.0 {
-            // The bytes came from a `&str` and the length came with them, so
-            // this range is the same utf-8 it was constructed from.
             Repr::Inline { len, buf } => {
-                std::str::from_utf8(&buf[..*len as usize]).expect("the bytes came from a str")
+                // SAFETY: `Repr` is private to this module and `Repr::Inline`
+                // is built in exactly one place — `Name::new`, which copies
+                // `s.as_bytes()` for a `&str` and records that slice's length.
+                // So `buf[..len]` is a whole `&str` re-read, never a cut
+                // through a multi-byte character.
+                //
+                // Checking it here instead cost 13,295,370 instructions
+                // compiling lib/json — 23.5% of the whole front end, and more
+                // than the change that introduced this type was ever going to
+                // save. `a_name_holds_every_encoding` reads the range back
+                // through the public door for one-, two-, three- and
+                // four-byte characters, at the boundary and over it.
+                unsafe { std::str::from_utf8_unchecked(&buf[..*len as usize]) }
             }
             Repr::Heap(s) => s,
         }
@@ -171,5 +181,48 @@ impl std::fmt::Debug for Name {
 impl Default for Name {
     fn default() -> Self {
         Name(Repr::Inline { len: 0, buf: [0u8; INLINE] })
+    }
+}
+
+/// A name that has to become an owned `String` — a diagnostic building a
+/// sentence, a backend writing a symbol — says so at the site rather than
+/// through `Deref` and a `to_string` a reader has to notice.
+impl From<Name> for String {
+    fn from(n: Name) -> String {
+        n.as_str().to_string()
+    }
+}
+
+impl From<&Name> for String {
+    fn from(n: &Name) -> String {
+        n.as_str().to_string()
+    }
+}
+
+/// Both directions, because the front end compares names against owned
+/// strings held in tables as often as the other way round, and a comparison
+/// that has to be spelled with an `.as_str()` on one side only is a comparison
+/// somebody writes backwards.
+impl PartialEq<String> for Name {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<Name> for String {
+    fn eq(&self, other: &Name) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<Name> for &str {
+    fn eq(&self, other: &Name) -> bool {
+        *self == other.as_str()
+    }
+}
+
+impl PartialEq<Name> for str {
+    fn eq(&self, other: &Name) -> bool {
+        self == other.as_str()
     }
 }

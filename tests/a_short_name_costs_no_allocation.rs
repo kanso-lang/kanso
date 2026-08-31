@@ -162,3 +162,38 @@ fn a_multibyte_name_is_not_cut_by_the_byte_threshold() {
     assert!(!n.is_inline());
     assert_eq!(n.as_str(), spilled);
 }
+
+/// The read is unchecked, so the range it hands back is the whole invariant.
+///
+/// `as_str` calls `from_utf8_unchecked` because validating cost 13,295,370
+/// instructions compiling lib/json — 23.5% of the front end. What makes that
+/// sound is `Repr` being private and `Name::new` copying `s.as_bytes()`
+/// whole, and this reads the range back through the public door for all four
+/// utf-8 widths: at the longest length that still fits inline, and again one
+/// character over, where the spill has to keep the same text.
+///
+/// A one-byte error either way is what would go wrong — a length recorded in
+/// characters rather than bytes, or a threshold compared before the copy — and
+/// either cuts a multi-byte character in half. Under the checked read that was
+/// a panic; under the unchecked one it is a `&str` that is not utf-8, so the
+/// corpus has to ask rather than trust the range.
+#[test]
+fn a_name_holds_every_encoding() {
+    // one, two, three and four bytes per character
+    for ch in ["a", "é", "日", "𝄞"] {
+        let w = ch.len();
+        let fits = kanso::name::INLINE / w;
+        let inline = ch.repeat(fits);
+        assert!(inline.len() <= kanso::name::INLINE);
+        let n = Name::new(&inline);
+        assert!(n.is_inline(), "{inline:?} is {} bytes and should be inline", inline.len());
+        assert_eq!(n.as_str(), inline);
+        assert_eq!(n.as_str().as_bytes(), inline.as_bytes());
+        assert_eq!(n.as_str().chars().count(), fits);
+
+        let over = ch.repeat(fits + 1);
+        let n = Name::new(&over);
+        assert_eq!(n.as_str(), over);
+        assert_eq!(n.as_str().chars().count(), fits + 1);
+    }
+}

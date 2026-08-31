@@ -149,7 +149,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
                 match arg {
                     Expr::Ident(id, _) if id == name => {
                         if let Expr::Ident(callee, _) = head.as_ref() {
-                            out.push((callee.clone(), args.len(), i));
+                            out.push((callee.to_string(), args.len(), i));
                         }
                     }
                     _ => use_targets(arg, name, out),

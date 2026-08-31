@@ -1,10 +1,11 @@
 use crate::diag::{Diagnostic, Span};
+use crate::name::Name;
 use num_bigint::BigInt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tok {
     Bang,
-    Ident(String),
+    Ident(Name),
     Int(BigInt),
     Float(f64),
     Str(Vec<StrPart>),
@@ -806,7 +807,7 @@ impl Scanner<'_> {
             "type" => Tok::KwType,
             "pub" => Tok::KwPub,
             "import" => Tok::KwImport,
-            _ => Tok::Ident(word),
+            _ => Tok::Ident(Name::new(&word)),
         })
     }
 

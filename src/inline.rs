@@ -11,6 +11,7 @@
 //!
 //! So the rename is undone before anything looks: a call to such a wrapper
 //! becomes the call it stands for, at the site that made it.
+use crate::name::Name;
 
 use crate::ast::*;
 
@@ -140,7 +141,7 @@ fn rewrite(expr: &mut Expr, alias: &HashMap<String, HashMap<usize, String>>) {
     if let Expr::App { head, args, .. } = expr {
         if let Expr::Ident(name, span) = head.as_ref() {
             if let Some(builtin) = alias.get(name.as_str()).and_then(|a| a.get(&args.len())) {
-                **head = Expr::Ident(builtin.clone(), *span);
+                **head = Expr::Ident(Name::new(&builtin.clone()), *span);
             }
         }
     }

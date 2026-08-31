@@ -362,7 +362,7 @@ impl<'a> Analysis<'a> {
                     if !takes_acc_first_with(args, acc, builtin) {
                         return false;
                     }
-                    builtin || self.returns_unique.contains(&(callee.clone(), args.len()))
+                    builtin || self.returns_unique.contains(&(callee.to_string(), args.len()))
                 }
                 _ => false,
             },
@@ -452,7 +452,7 @@ impl<'a> Analysis<'a> {
                 // was missing only because a type is not a declaration and
                 // `returns_unique` is built from declarations
                 Expr::Ident(n, _) if self.types.contains(n.as_str()) => true,
-                Expr::Ident(n, _) => self.returns_unique.contains(&(n.clone(), args.len())),
+                Expr::Ident(n, _) => self.returns_unique.contains(&(n.to_string(), args.len())),
                 _ => false,
             },
             Expr::Ident(name, _) => self.is_unique_source(name, ctx, scoped, exempt),
@@ -832,7 +832,7 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
         if candidate.is_some() {
             return None;
         }
-        candidate = Some(name.clone());
+        candidate = Some(name.to_string());
     }
     candidate
 }
@@ -870,7 +870,7 @@ fn collect_bound_names(e: &Expr, out: &mut HashSet<String>) {
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 if let Stmt::Bind { pattern: Pattern::Var(n, _), .. } = stmt {
-                    out.insert(n.clone());
+                    out.insert(n.to_string());
                 }
             }
         }
@@ -895,7 +895,7 @@ fn hands_over_fresh(arg: &Expr, lambda_bound: Option<&HashSet<String>>) -> bool 
 
 fn collect_idents_here(e: &Expr, out: &mut Vec<String>) {
     if let Expr::Ident(name, _) = e {
-        out.push(name.clone());
+        out.push(name.to_string());
     }
     for child in child_exprs(e) {
         collect_idents_here(child, out);
@@ -1005,7 +1005,7 @@ fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
         .filter_map(|s| match s {
             Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => joins
                 .contains(&(decl.file.clone(), span.line as usize, span.col as usize))
-                .then(|| name.clone()),
+                .then(|| name.to_string()),
             _ => None,
         })
         .collect()
@@ -1037,7 +1037,7 @@ fn param_names(decl: &FnDecl) -> Vec<(usize, String)> {
         .iter()
         .enumerate()
         .filter_map(|(j, p)| match p {
-            Pattern::Var(n, _) => Some((j, n.clone())),
+            Pattern::Var(n, _) => Some((j, n.to_string())),
             _ => None,
         })
         .collect()
@@ -1070,7 +1070,7 @@ fn walk_forwards(carrying: &Sites, e: &Expr, name: &str, found: &mut bool) {
         if let Expr::Ident(callee, _) = head.as_ref() {
             for (i, arg) in args.iter().enumerate() {
                 if matches!(arg, Expr::Ident(n, _) if n == name)
-                    && carrying.contains(&(callee.clone(), args.len(), i))
+                    && carrying.contains(&(callee.to_string(), args.len(), i))
                 {
                     *found = true;
                 }
@@ -1092,11 +1092,11 @@ fn collect_carried(
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(callee, _) = head.as_ref() {
             for (i, arg) in args.iter().enumerate() {
-                if !carrying.contains(&(callee.clone(), args.len(), i)) {
+                if !carrying.contains(&(callee.to_string(), args.len(), i)) {
                     continue;
                 }
                 if let Expr::Ident(n, span) = arg {
-                    let holds = built.contains(n)
+                    let holds = built.contains(n.as_str())
                         || param_names(decl).into_iter().any(|(j, p)| {
                             &p == n && carrying.contains(&(decl.name.clone(), decl.params.len(), j))
                         });
