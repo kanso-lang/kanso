@@ -2980,3 +2980,25 @@ call that two imports answer alike is refused, permanently, and the
 qualified name is the fix — the Go-inspired shape, with kanso's
 namespacing doing what Go's aliases do. Import order never decides
 semantics. check_bare_ambiguity stands as built.
+
+## 2026-08-29 — gavel: arms travel with the type, under the ownership rule
+
+The "dependency render arms stay out" recommendation died in dialog on
+the pass-down case: a value handed to a library that never imported
+its type would render as a bare record there, so one value would print
+two ways in one program depending on whose code called print — and no
+import anyone can write fixes it, since a library cannot import every
+type its callers might pass.
+
+The ruling, in the general form Clay recalled agreeing to: **an arm is
+legal when at least one of its parameter types is owned by the
+declaring hako, and legal arms travel with the type — globally active
+wherever the value goes.** Render is the special case where the group
+is render: money's author writes `render m:money` and every module,
+importer or not, prints money the owner's way; `render s:string` from
+money is an orphan and is refused, so no third party ever restyles a
+type it does not own. The same ownership principle as this morning's
+dep/join gavel: a name is its module's declaration, a behavior for a
+type is its owner's. If the archive holds the original agreement this
+restates, the citation joins this entry at reconciliation; either way
+this entry is now the ruling. The ledger entry leaves with it.

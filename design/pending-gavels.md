@@ -247,22 +247,6 @@ conservative direction — a refused program can be given meaning by a later
 gavel, and a silently-resolved one is a commitment nobody made. It has
 shipped for a month without a complaint. One word retires the "interim".
 
-### Dependency modules' render arms stay out of the root group
-
-**Cited: recorded once, archive 2026-07-27 — "whether they should is a
-surface question for Clay" — in a render-plan.md that no longer exists. The
-search found nothing else, and no ruling.**
-
-A module's render arms join its own root group across its files, so an arm
-in show.kso matches a type in types.kso. Arms from a *dependency* stay
-qualified and never join. A program that imports a hako defining a money
-type therefore does not get that hako's rendering for free.
-
-**RECOMMENDATION: keep them out.** Rendering is a visible property of a
-value, and a dependency silently changing how a caller's output looks is
-the kind of action at a distance the hako boundary exists to stop. The
-owning module can export a render arm deliberately, and then the caller can
-read that it did.
 
 ### `first coll n`
 
