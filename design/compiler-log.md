@@ -3412,3 +3412,61 @@ reading it as a semantic one is what made a directory name change a program.
 Whether the exclusion then survives on a real marker is the question the
 fixture above has to be written before answering, because a rule kept for a
 hazard nothing demonstrates is a rule kept on faith.
+
+## 2026-08-31 — CORRECTION: the exclusion has a pin, and it is about correctness
+
+The entry above says the rule's stated hazard "does not appear anywhere in the
+corpus" and reasons from there that the exclusion is over-broad. That is wrong,
+and the way it was wrong is worth more than the conclusion was.
+
+`beat::tests::json_decode_loops_stay_conservative` in src/beat.rs is the
+corpus statement of it:
+
+    assert_eq!(licensed, vec![("encode_items", 3), ("encode_pairs", 3)],
+        "only the byte-builder encoders may rewind; scanners threading
+         records or lists stay on the grow-only arena");
+
+with a comment that argues safety rather than cost: the two encoders thread a
+byte builder by pointer identity, "raw bytes hold no pointers, so nothing in
+the accumulator can dangle across a rewind." Removing the exclusion admits
+`list/bisect`, `list/found_in`, `list/holds_all?` and `list/holds_any?` to the
+carry tier and turns that assertion red.
+
+I missed it by searching design/compiler-log.md and the archive and not the
+test suite. The filing gate in design/pending-gavels.md names three places to
+search before calling a question unanswered, and all three are prose. A pin
+lives in code, and this one carries an argument no log entry repeats.
+
+So the naive strip is refused, and it should be. What looked like a
+performance heuristic with no evidence behind it is a boundary on what may
+rewind at all, and a carried list of records is on the far side of it. Whether
+the carry machinery's evacuation already covers the case the comment worries
+about — `k_carry_stage` and `k_carry_take` exist precisely so a carried value
+survives a rewind — is a real question, and it is a question about pointer
+lifetime that wants a differential fixture rather than my reading of a
+comment.
+
+What the measurements above still say, unaffected:
+
+- Peak goes from linear in the message to flat when a digest's walk may
+  rewind: 108,003,328 bytes to 1,048,576 at ten kilobytes, 426,770,448 to
+  4,194,320 at forty-three, for 0.04% more allocations.
+- At forty-four bytes — one padded block, nothing to reclaim — the same change
+  costs 1,980 allocations to 5,259 on the interpreter and four natively. The
+  rewinds are pure overhead when there is only one block.
+- Only the digest fixture moves in the whole mem corpus, and only scanbench in
+  the emitted vein (+10 calls) and the scan counters (beat_iters 15 -> 16).
+- The compile veins, the seven runtime counter veins, machine code, kq's three
+  allocation goldens and welfare are all unmoved.
+
+And the defect is untouched and still real: `d.file.starts_with("lib/")` is a
+relative path prefix, so a program built from a directory called `lib` gets a
+different program. Fixing THAT without touching the boundary needs the marker,
+because the `lib/` arm is what makes the repo's own `lib/json` behave like an
+installed module — this very test compiles `lib/json` directly and depends on
+it. A marker set where imports are resolved would have to answer for a module
+compiled as a root as well as one reached through an import, and that is the
+design question, stated properly at last.
+
+Nothing shipped from this. The branch is reverted to main and the fixture, the
+bisection and these measurements are the whole product.
