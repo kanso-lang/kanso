@@ -21,13 +21,16 @@
 //! exact — about ten thousand bytes of arena for every byte hashed, at every
 //! size. The new one still grows, and how it grows is not characterised.
 //! Natively, from a file: one 1 MiB block from 1 KB through 32 KB, 4,194,320
-//! bytes at 64 KB and at 100 KB, 12,582,944 at 200 KB. That is 1,048 bytes per
-//! input byte at the small end and 63 at the large, so the rate falls across
-//! the range; the last doubling took the peak up threefold, which is not a
-//! rate falling. Holding the message and doing nothing with it reads one block
-//! at 100 KB, so what remains belongs to the walk rather than the input. The
-//! wasm blob was not re-measured: a 100 KB digest takes about forty seconds in
-//! this container.
+//! bytes at 64 KB and at 100 KB, 12,582,944 at 200 KB, 13,631,520 at 400 KB —
+//! 1,048 bytes per input byte at the small end and 34 at the large.
+//!
+//! What is left is `sha256/padded_bytes`, which opens with `list/to_list b`
+//! and so holds the message as a list of integers, sixteen arena bytes an
+//! input byte, for as long as the walk indexes it. The steps are that list's
+//! buffer doubling past a power of two. It is the library's to fix and this
+//! spec does not pin it: the sizes below are small enough that the walk, not
+//! the message, is what they measure. The wasm blob was not re-measured — a
+//! 100 KB digest takes about forty seconds in this container.
 //!
 //! The peak is pinned exactly rather than as a ratio. A ratio stays green if
 //! both numbers grow together, which is the shape this spec exists to catch,

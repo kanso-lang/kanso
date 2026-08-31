@@ -3559,8 +3559,23 @@ byte at 1 KB against 63 at 200 KB, where the old code held about ten thousand
 at every size — but the last doubling took the peak up threefold, so calling
 the remainder sublinear would be reading four points as a law. Holding the
 message and doing nothing with it reads one block at 100 KB, so what is left
-belongs to the walk. **OPEN:** what the residual is. A 100 KB digest takes
-about forty seconds here, which is why the series stops where it does.
+is not the arena failing to reclaim.
+
+What it is, run down rather than left open: `sha256/padded_bytes` opens with
+`list/to_list b`, so the message is re-expressed as a list of integers at
+sixteen arena bytes per input byte and held for the whole walk, because
+`digested` indexes into it. massif at 64 KB puts 46.17% of the peak —
+2,097,184 bytes — on `k_b_push_into_proven` under `d_list/fold_3`, which is
+the buffer that list is grown into; the rest is two 1 MiB base blocks. The
+steps at 64 KB and at 200 KB are that buffer's doubling crossing a power of
+two, and the 400 KB reading settles it: 13,631,520 bytes, so doubling the
+input from 200 KB added one megabyte, and the rate is 34 bytes an input byte
+where it was ten thousand.
+
+So the remaining growth belongs to lib/sha256 rather than to the beat
+machinery. **OPEN, and it is a library change:** the digest could walk the
+bytes value it is handed instead of materialising a list of it, and the peak
+would be a constant. Nothing here is in the way of that.
 `tests/sha256_peak.rs` pinned the old shape and said in its own header that the
 assertion was the thing to delete when the hash learned to stream; it now reads
 1,048,576 at 1,024, 2,048 and 4,096 bytes. Three sizes rather than two, because
