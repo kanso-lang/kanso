@@ -3069,3 +3069,76 @@ Nothing is being argued here; the observation is that the encoder had a lot of
 room and the index says the project had already been paid for most of it.
 
 DONE.
+
+## 2026-08-31 — the string index gets the cursor the slice already had
+
+`s[i]` on a string counts characters, so finding the ith one means walking the
+text until you have passed i characters. `k_b_at` started that walk at byte
+zero every time, which makes reading a string one character at a time
+quadratic in its length:
+
+```
+    2,000 characters    27,591,142 instructions
+    4,000 characters   106,971,148            a doubling for 3.88x the work
+```
+
+`k_b_slice` solved this and left the comment saying so — "starting the walk at
+zero every time is what made reading a page one character at a time quadratic"
+— and it has two shortcuts for it. A string whose characters are all one byte
+skips the walk entirely, because then a position is an offset. Anything wider
+uses a remembered cursor: one string, one character index, one byte offset, so
+the next question resumes where the last one stopped rather than from the
+front, walking backward to it when the question moves back.
+
+`k_b_at` had neither. The two are now `k_str_seek`, which the index calls and
+the slice does not: the slice needs both ends of a run out of one pass and
+would cross the text twice if it went through here. They share the cursor,
+which is the part that matters — a sweep alternating `s[i]` and `text/slice`
+over one subject stays linear because both hands move it.
+
+```
+    2,000 characters     1,690,119   -93.9%
+    4,000 characters     3,169,125   -97.0%    a doubling for 1.875x the work
+```
+
+**The corpus had no home for this, which is why it survived.** Two were added.
+
+`bench/indexbench` reads a string of twenty thousand characters forward, one
+index at a time, over an alphabet mixing one-, two-, three- and four-byte
+characters. It reads 5,266,521 instructions here and 2,570,995,073 on the
+unfixed runtime — 488 times. No other benchmark asks `s[i]` of multibyte text;
+they all read through slices or byte scans, which is precisely why nothing
+went red for a year.
+
+`tests/golden/micro/a_string_index_counts_characters` is the behaviour, on
+both engines: forward through the string, backward through it, both ends, past
+both ends, and an ascii subject for the direct path. It was watched red twice.
+Resuming at `k_seek_char - 1` instead of `k_seek_char` — the off-by-one this
+kind of cursor invites — turns `aé😀b€z` into `a 😀 € <none>` and the reversed
+walk into `<none><none><none>zzz`. Writing the ascii bound as `from >= s->len`
+loses the last character of an ascii string. Both are mistakes available in
+these fifteen lines.
+
+**What it costs, by the name each vein watches it under.** `text` rises 704
+bytes in seven binaries and 688 in deepbench, which is `k_str_seek`;
+escapebench indexes nothing, so the linker drops the function and its row does
+not move. `emitted_other_defines`, `emitted_other_calls`,
+`emitted_other_branches` and `emitted_other_lines` all rise because
+indexbench's own 35, 159, 76 and 1,104 join a file that is a sum over
+programs — a new benchmark is arithmetic there, not a regression, and the four
+totals will rise again the next time one is added.
+
+The instruction rows FALL slightly across the board — encodebench 7,237,599
+(0.083%), which is 1.0001 instructions for each of its 7,237,200 `k_b_at`
+calls: the list and bytes branches got a smaller function to sit in when the
+string walk moved out of line.
+
+**Not fixed, and worth writing down.** The cursor is compared by pointer, and a
+`KStr` freed and reallocated at the same address with `cap != 0` would match
+it. The guard added here is `k_seek_byte < s->len`, which turns the dangerous
+case into a miss rather than a wrong character, but it is not a proof. The
+same exposure has been in `k_b_slice` since the cursor landed. Closing it
+properly means invalidating the cursor when a string dies, and that is a
+separate change with its own reasoning.
+
+DONE.

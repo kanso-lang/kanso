@@ -69,7 +69,7 @@ lower_g = ["compile_instructions" "compile_allocs"]
 # was read from. `text` is the machine-code vein, summed over the binaries.
 lower_h = ["jsonbench" "encodebench" "oneshot" "basket" "widebench"]
 
-lower_i = ["deepbench" "escapebench" "pendbench" "text"]
+lower_i = ["deepbench" "escapebench" "pendbench" "indexbench" "text"]
 
 lower_ab = text/concat lower_a lower_b
 

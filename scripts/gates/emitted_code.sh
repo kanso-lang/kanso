@@ -23,7 +23,8 @@ grep -v '^#' bench/emitted_golden.txt > emitted_want.txt
 # gate was built to catch could have happened in any of them unseen. They sit
 # in a second file so the decoder's history — which its comments are — stays
 # one series.
-for b in encodebench oneshot basket widebench deepbench escapebench pendbench scanbench; do
+for b in encodebench oneshot basket widebench deepbench escapebench pendbench scanbench \
+         indexbench; do
   printf '%s defines=%s calls=%s branches=%s lines=%s\n' "$b" \
     "$(grep -c '^define' $b.ll)" "$(grep -c 'call ' $b.ll)" \
     "$(grep -c '^  br \|^  switch' $b.ll)" "$(wc -l < $b.ll | tr -d ' ')"
