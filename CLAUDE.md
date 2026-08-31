@@ -68,12 +68,22 @@ and the memory repo is private.
   Eisel-Lemire from main and nothing noticed.
 - **Counters changed → regenerate every vein in the same PR**: all .mem
   files, all four cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
-  then book panels — and the SIBLINGS, which keep veins of their own. kq has
-  `bench/cost_golden.txt`, `bench/cost_golden_decode.txt` and a
-  `bench/numbers_stamp.txt` keyed to the first. Adding `evac_allocs` broke kq's
-  gating check for exactly this reason: the counter was new everywhere, and
-  only kanso's veins had been regenerated. A purely additive counter still
-  moves those files.
+  then book panels — and the SIBLINGS, which keep veins of their own. kq keeps
+  FIVE, and reading a short list of them is how a pin goes stale: allocation
+  counters in `bench/cost_golden.txt`, `bench/cost_golden_decode.txt` and
+  `bench/cost_golden_escapes.txt`, RETIRED INSTRUCTIONS in
+  `bench/instructions_golden.txt`, and a `bench/numbers_stamp.txt` keyed to the
+  first. The instructions vein is the one to remember, because it is the one
+  most changes reach: a change that moves no allocation counter at all still
+  moves it, and a session that checks only the allocation counters will
+  conclude kq is unaffected and be wrong. Read off the repo on 2026-08-31, kq's
+  pin sits at kanso#1120 with 59 commits behind it, several of which moved
+  runtime instructions and no allocation counter. Why it drifted is not
+  recorded; that this list would licence the drift is checkable and is the
+  reason it is corrected here. Adding `evac_allocs` broke kq's
+  gating check for a related reason: the counter was new everywhere, and only
+  kanso's veins had been regenerated. A purely additive counter still moves
+  those files.
 - **`bench/emitted_golden.txt` counts what the compiler WROTE for the decoder**,
   where the cost goldens count what it allocates. The decoder gained 20% more
   calls over a fortnight with every allocation counter byte-identical, and
