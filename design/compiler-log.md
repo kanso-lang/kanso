@@ -3420,3 +3420,23 @@ regime in the sign of a local — and it is thirty fewer lines than what it
 replaces.
 
 HELD.
+
+## 2026-08-31 — a deliberate exit's two tests staged one file
+
+Found while running the suite for something else: `cargo test --release` went
+red on `the_interpreter_agrees`, which asserted the shell saw 3 and got 2.
+
+Two is what the compiler exits with. Both tests in
+tests/a_deliberate_exit_carries_its_code.rs stage their fixture at
+`/tmp/kanso-deliberate-exit/main.kso`, cargo runs them on separate threads, and
+`fs::write` truncates before it writes — so one test could read the file while
+the other was inside that call and compile an empty program.
+
+Measured back to back, twenty runs each: two failures before, none after. That
+is often enough to redden an unrelated pull request and rare enough to be read
+as something else, which is how it survived. kanso#1169 fixed the same shape in
+the playground tests and this pair was missed.
+
+One directory per test, named by the caller.
+
+DONE.
