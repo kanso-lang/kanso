@@ -3002,3 +3002,12 @@ dep/join gavel: a name is its module's declaration, a behavior for a
 type is its owner's. If the archive holds the original agreement this
 restates, the citation joins this entry at reconciliation; either way
 this entry is now the ruling. The ledger entry leaves with it.
+
+## 2026-08-29 — gavel: no `first coll n`; `take` is the answer
+
+Clay confirmed the recommendation. `first` keeps one arity and answers
+one question — the element, or none. A count belongs to `take`, which
+answers with a list. A second arity on `first` would make the return
+shape depend on the argument count: the same name answering two
+questions, the disease the `done` gavel cured in the effect world.
+The enumerable spec's §9.3 question closes.
