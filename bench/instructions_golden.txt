@@ -163,15 +163,15 @@
 # the call. escapebench, jsonbench and oneshot are identical between the fix
 # alone and the fix with the skip, so their few thousand instructions are the
 # predicate's shape in programs whose copy walk is cold.
-jsonbench 2862072931
+jsonbench 2860868131
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 8713108067
-oneshot 44072143
-basket 57198013
-widebench 84031648
+encodebench 8714005635
+oneshot 44066375
+basket 56781353
+widebench 67553998
 deepbench 760475924
 escapebench 258583100
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only

@@ -3515,21 +3515,34 @@ length and never reaches the vector pass. A run that is not ascii falls
 through and the wide pass reads it from the start, so the scan is the only
 waste.
 
+The runner's rows, which are the ones the golden carries. Every delta matches
+what this container measured to the instruction; only the absolute values
+differ, because the two hosts run different glibc:
+
 ```
-    widebench     84,031,235 -> 67,553,585   -16,477,650   -19.6090%
-    basket          57,197,600 ->    56,780,940     -416,660    -0.7285%
-    jsonbench    2,862,072,518 -> 2,860,867,718   -1,204,800    -0.0421%
-    oneshot          44,071,744 ->    44,065,976       -5,768    -0.0131%
-    encodebench   8,713,107,668 -> 8,714,005,236     +897,568    +0.0103%
+    widebench       84,031,648 ->    67,553,998  -16,477,650   -19.6090%
+    basket          57,198,013 ->    56,781,353     -416,660    -0.7285%
+    jsonbench    2,862,072,931 -> 2,860,868,131   -1,204,800    -0.0421%
+    oneshot         44,072,143 ->    44,066,375       -5,768    -0.0131%
+    encodebench  8,713,108,067 -> 8,714,005,635     +897,568    +0.0103%
     deepbench, escapebench, pendbench, indexbench: identical
 ```
+
+`compile_instructions` rises 678, and it is layout for the third time this
+week: `include_str!("runtime.c")` changed length, so what follows it in the
+binary moved. compile_allocs, compile_peak_bytes, rounds and visits are
+byte-identical.
+
+The floor is 87.773793, up 0.262490 — the largest single rise the index has
+taken.
 
 Held apart, so the two are separable: the float render alone is widebench
 -19.019% and welfare +0.253991; the ascii pre-scan alone is basket -0.7241%,
 widebench -0.5900%, jsonbench -0.0421% and welfare +0.007426.
 
-encodebench's rise is 1.003 instructions per ryu_render and no counter it owns
-moves; it is layout, and it is under a hundredth of a per cent.
+`work_encodebench` rises 897,568, which is 1.003 instructions per ryu_render
+and no counter encodebench owns moves; it is layout, and it is under a
+hundredth of a per cent.
 
 `text` rises, and it is bought rather than explained away: 128 bytes of .text
 on the five benchmarks that link both changed functions, 80 to 96 on the four
