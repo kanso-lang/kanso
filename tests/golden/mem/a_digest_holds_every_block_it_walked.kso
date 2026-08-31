@@ -23,12 +23,14 @@
 #                                  builds an eight-element list literal on
 #                                  each of its sixty-four rounds
 #
-# KANSO_BEAT_REPORT says why nothing sweeps: sha256/digested, sha256/blocked,
-# sha256/compress and sha256/turned are all "bracketed with its cluster",
-# where sha256/filled — the one self-recursive loop in the file — "rewinds
-# every iteration". The outer block walk and the inner sixty-four-round
-# compression are in ONE cluster, so the only place a mark can go is outside
-# both of them.
+# KANSO_BEAT_REPORT reports sha256/digested, sha256/blocked, sha256/compress
+# and sha256/turned as "bracketed with its cluster", where sha256/filled — the
+# one self-recursive loop in the file — "rewinds every iteration". That looks
+# like the answer and is not: four models of the shape, up to and including an
+# outer walk carrying a list around an inner sixty-four-round loop returning
+# one, all read the same verdict and all hold a single arena block. The log
+# entry for 2026-08-31 has the four and what each ruled out. What holds here is
+# narrower than any of them and is not identified yet.
 #
 # The message here is forty-four bytes — ONE padded block — because a fixture
 # that ran at the sizes above would take a golden suite minutes. So this pins

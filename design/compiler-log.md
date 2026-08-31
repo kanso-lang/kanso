@@ -3264,8 +3264,8 @@ where `sha256/filled` — the one self-recursive loop in the file — reads
 compression are in ONE cluster, so the only place a mark can go is outside
 both.
 
-Two hypotheses were built and killed before that one, and both are worth
-recording because they are the obvious guesses:
+Five hypotheses were built and killed, and every one is worth recording
+because each is an obvious guess that a reader would otherwise make again:
 
 - "A trampoline defeats the rewind." A loop written self-recursively and the
   same loop written as the two-function trampoline the library uses everywhere
@@ -3276,9 +3276,24 @@ recording because they are the obvious guesses:
   iteration, evacuating argument 1" and also holds one block, with 1,000,000
   evacuations. The machinery handles that case.
 
-So it is neither the spelling nor the carried type. It is the cluster spanning
-two nested loops, and the next step is to find out whether beat can split a
-cluster at a call that is not part of the recursion.
+- "A cluster spanning two NESTED loops defeats it." An outer walk with an
+  inner sixty-four-round loop, all four functions reading "bracketed with its
+  cluster", holds one block over 1,024,002 allocations.
+- "The nested shape with lists on both sides defeats it." The same, with the
+  inner returning a fresh eight-element list and the outer folding it into its
+  own, reads 6,864 allocations for 512,000 iterations — the uniqueness
+  analysis turns the literals into in-place writes and there is nothing left
+  to reclaim.
+- "Building one long list by repeated `push` is quadratic, as `padded_bytes`
+  does it." Ten allocations for eight thousand pushes; the growth doubles and
+  the arena holds one block at 2,000, 4,000 and 8,000.
+
+So it is not the spelling, not the carried type, not the nesting, and not the
+growth path. Four reproductions that ought to show the habit do not, which
+means the cause is narrower than any of them and the next session should start
+by bisecting sha256 itself rather than by building a fifth model of it. The
+attribution above is the place to start: `k_b_push_into_proven` at 66% and
+`sha256/compress`'s list literal at 31%, with the whole thing in one cluster.
 
 `tests/golden/mem/a_digest_holds_every_block_it_walked` pins the constant at
 one block — 1,980 allocations and 424,369 bytes for forty-four bytes of
@@ -3287,6 +3302,9 @@ accumulation. A fixture that ran at the sizes above would cost the golden
 suite minutes, so the slope lives in this entry and the constant lives in the
 vein. Watched, not frozen.
 
-The arena question in #82 is answered and closed. What replaces it is a
-narrower one with a reproduction: can the beat analysis put a mark inside a
-cluster that contains a nested loop?
+The arena question in #82 is answered and closed: sha256 has an arena and the
+arena does not rewind inside the walk, at 10,000 bytes of it per input byte.
+What replaces it is narrower and still open — WHICH of sha256's sites holds,
+given that four models of the shape all reclaim. The way in is to bisect the
+file: run the walk with `compress` stubbed to return its state unchanged, then
+with `schedule` stubbed, and see which stub flattens the peak.
