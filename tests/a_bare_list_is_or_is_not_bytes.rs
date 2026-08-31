@@ -27,8 +27,22 @@
 use std::process::Command;
 
 /// What each engine says for one expression, as (native, interp).
+///
+/// The directory is named by a hash of the expression rather than by its
+/// LENGTH, which is what it used to be and which collides: `text/to_float [1]`
+/// and `text/utf8 [97 98]` are both seventeen characters, as are
+/// `text/find2_below [97] 0 97 98 1` and `text/to_float (text/bytes "ab")` at
+/// thirty-one. Cargo runs the two tests on separate threads, each writes
+/// `run.kso` into the shared directory and each removes the directory when it
+/// is done, so one could delete the other's program between the write and the
+/// run. Five runs in twenty failed. kanso#1169 and kanso#1175 fixed the same
+/// shape where the name was a constant; here it was a name that was not as
+/// unique as it looked.
 fn both(expr: &str) -> (String, String) {
-    let dir = std::env::temp_dir().join(format!("kanso-bytes-{}", expr.len()));
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(expr, &mut hasher);
+    let key = std::hash::Hasher::finish(&hasher);
+    let dir = std::env::temp_dir().join(format!("kanso-bytes-{key:x}"));
     std::fs::create_dir_all(&dir).expect("a directory to run in");
     std::fs::write(dir.join("run.kso"), format!("import \"std/text\"\n\nprint \"{{{expr}}}\"\n"))
         .expect("the program writes");

@@ -751,7 +751,7 @@
 # against a per-character encode loop is exactly the kind of trade two
 # machines price differently. compile_peak_bytes fell 2,090 on both hosts to
 # the byte, because a String sized at its length does not overshoot.
-compile_instructions=42297011
+compile_instructions=42297689
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more
@@ -770,3 +770,9 @@ compile_instructions=42297011
 # length either — twenty added lines read +1,630 and 713 added bytes read
 # -2,519. compile_allocs, compile_peak_bytes, rounds and visits are unmoved
 # across all three, which is what says the front end's work did not change.
+# 2026-08-31: +678, and layout again — the same effect the note above
+# describes. The float render lost two `snprintf` call sites and the utf-8
+# validator gained a word loop, so `include_str!("runtime.c")` is a different
+# length and what follows it in the binary moves. compile_allocs,
+# compile_peak_bytes, rounds and visits are byte-identical, which is what says
+# the front end's work did not change.

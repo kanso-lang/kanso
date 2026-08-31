@@ -321,15 +321,15 @@
 # every program that links the runtime carries the same added bytes whether
 # its own walk reaches them or not. Bought 89,889,828 instructions on
 # deepbench.
-jsonbench text=82594
-encodebench text=99618
-oneshot text=99666
-basket text=92034
-widebench text=100674
-deepbench text=64562
-escapebench text=50274
-pendbench text=75186
-indexbench text=52146
+jsonbench text=82722
+encodebench text=99746
+oneshot text=99794
+basket text=92162
+widebench text=100802
+deepbench text=64642
+escapebench text=50370
+pendbench text=75282
+indexbench text=52242
 # 2026-08-31: the word-at-a-time character count. 752 bytes wherever it is
 # inlined twice and 368 where it is inlined once; basket takes 1,520 because
 # it holds four copies. The tail loop is told not to vectorise — it trips at
