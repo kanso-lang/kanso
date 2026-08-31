@@ -499,8 +499,14 @@ fn kanso_form_for(head: &str) -> Option<&'static str> {
     }
 }
 
-struct Scanner {
+struct Scanner<'a> {
     chars: Vec<char>,
+    /// The line as it was written. `pos` indexes characters, so this is only
+    /// safe to slice with when the two agree — which `ascii` records.
+    src: &'a str,
+    /// Every byte of the line is one character wide, so a character index is
+    /// a byte index and a word can be copied rather than re-encoded.
+    ascii: bool,
     pos: usize,
     line: usize,
     col_offset: usize,
@@ -524,15 +530,15 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
-impl Scanner {
-    fn new(content: &str, line: usize, col_offset: usize) -> Scanner {
+impl<'a> Scanner<'a> {
+    fn new(content: &'a str, line: usize, col_offset: usize) -> Scanner<'a> {
         let mut chars = CHAR_BUFS.with(|pool| pool.borrow_mut().pop()).unwrap_or_default();
         chars.extend(content.chars());
-        Scanner { chars, pos: 0, line, col_offset }
+        Scanner { chars, src: content, ascii: content.is_ascii(), pos: 0, line, col_offset }
     }
 }
 
-impl Drop for Scanner {
+impl Drop for Scanner<'_> {
     fn drop(&mut self) {
         let mut chars = std::mem::take(&mut self.chars);
         chars.clear();
@@ -718,7 +724,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
     Ok(LexedLine { tokens })
 }
 
-impl Scanner {
+impl Scanner<'_> {
     fn span(&self) -> Span {
         Span::at(self.line, self.col_offset + self.pos)
     }
@@ -770,7 +776,15 @@ impl Scanner {
         if self.chars.get(self.pos).is_some_and(|c| *c == '!' || *c == '?') {
             self.pos += 1;
         }
-        let word: String = self.chars[start..self.pos].iter().collect();
+        // A word is built from ascii characters by the loop above, so on a
+        // line that is ascii throughout, `start` and `pos` are byte offsets
+        // into `src` and the word is one copy rather than a re-encode per
+        // character. `String::from_iter<&char>` under `lex_line` was 361,176
+        // instructions before this.
+        let word: String = match self.ascii {
+            true => self.src[start..self.pos].to_string(),
+            false => self.chars[start..self.pos].iter().collect(),
+        };
         if word.len() > 1 && word.starts_with('_') {
             return Err(Diagnostic::new(
                 "naming",
