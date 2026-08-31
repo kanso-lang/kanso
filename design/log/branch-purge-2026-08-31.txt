@@ -1,9 +1,16 @@
-# Branches deleted 2026-08-31, and the commit each pointed at.
+# The 319 landed branches this sweep identified, and the commit each
+# points at. Read `scripts/purge_merged_branches.sh` for the deletion.
+#
+# NOT YET DELETED. The session that built this list could not execute it:
+# a ref-deletion push from inside the container is refused by the agent
+# proxy with HTTP 403, and the GitHub tools available there expose no
+# delete-ref call. So this file is the sweep's finding, and the script
+# beside it is the sweep, waiting on a shell that can push a deletion.
 #
 # GitHub's auto-delete-on-merge was turned on this week, which covers
 # every merge from now on and none of the 388 that had accumulated. This
-# is the one-time sweep of those, and this file is what makes it
-# reversible: any row can be put back with
+# names those. It is also what makes the sweep reversible: any row goes
+# back with
 #
 #     git push origin <sha>:refs/heads/<name>
 #
@@ -20,7 +27,7 @@
 # forward-slash-scan, the-chart-gains-the-work, the-chart-has-to-draw,
 # welfare-reads-the-work.
 #
-# 63 branches the test could not confirm are left on the remote.
+# 63 branches the test could not confirm are left alone.
 
 c0aab836f17a4c09b3053b13881bed4a36ef9e78 a-backend-that-indexes-an-argument-it-never-counted
 ccafdd5bf065d7eca2694601efe76d92933de46e a-bare-subtype-name-is-not-a-record

@@ -2844,7 +2844,21 @@ match to be luck — `a-record-field-waits-too`, `curly-maps`,
 `forward-slash-scan`, `the-chart-gains-the-work`, `the-chart-has-to-draw`,
 `welfare-reads-the-work`. That leaves 319 deleted and 69 standing.
 
-`design/log/branch-purge-2026-08-31.txt` holds every deleted name beside
-the commit it pointed at, so each one goes back with a single push. A
-sweep that cannot be undone is a sweep nobody should run, and the record
-costs 21 KB.
+The deletion did not run from here, and that is the honest state of it.
+A ref-deletion push from the container is refused by the agent proxy with
+HTTP 403 — `git push origin :refs/heads/beat-differential` gets "RPC
+failed; HTTP 403" and the branch is still there — and the GitHub tools
+this session has expose create_branch and no delete. The proxy's own
+README says to report a 403 rather than route around it, so that is what
+this is.
+
+What ships instead is the sweep itself, ready to run:
+`design/log/branch-purge-2026-08-31.txt` names all 319 beside the commit
+each points at, and `scripts/purge_merged_branches.sh` reads that file
+and does the deletion in batches. It re-reads the remote first and keeps
+any branch whose tip has moved since the list was written, because a
+branch somebody has pushed to is a branch with work on it; that guard was
+watched refusing a row before it was trusted. Every row carries its
+commit, so a branch deleted by it goes back with a single push. A sweep
+that cannot be undone is a sweep nobody should run, and the record costs
+21 KB.
