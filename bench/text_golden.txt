@@ -321,11 +321,20 @@
 # every program that links the runtime carries the same added bytes whether
 # its own walk reaches them or not. Bought 89,889,828 instructions on
 # deepbench.
-jsonbench text=81090
-encodebench text=98114
-oneshot text=98162
-basket text=89794
-widebench text=99170
-deepbench text=63490
-escapebench text=49906
-pendbench text=74098
+jsonbench text=81874
+encodebench text=98898
+oneshot text=98946
+basket text=91314
+widebench text=99954
+deepbench text=63858
+escapebench text=50274
+pendbench text=74466
+# 2026-08-31: the word-at-a-time character count. 752 bytes wherever it is
+# inlined twice and 368 where it is inlined once; basket takes 1,520 because
+# it holds four copies. The tail loop is told not to vectorise — it trips at
+# most seven times, and letting clang widen it was another 368 bytes per copy
+# of code the processor never reaches. The word loop IS vectorised, and that
+# is worth 186,305,200 instructions on encodebench, so it stays.
+# 2026-08-31 (same PR, second change): a one-byte append writes the byte.
+# Only +32 bytes wherever it lands — one compare and one store against the
+# call it replaces.

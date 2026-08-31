@@ -2890,3 +2890,182 @@ has.
 Welfare 87.4740 -> 87.4996, banked with `--set`. The page's `data-golden`
 instruction figure moves with it; the allocation figure does not, because
 allocations did not.
+
+## 2026-08-31 — a character count is a population count
+
+`length` on a string counts characters, and `k_str_chars` counted them by
+walking: read a byte, decide from it how wide the character is, step that far,
+add one. A branch per byte, about 8.9 instructions each on this box.
+
+The shape that pays for it is asking a document its length. encodebench's
+harness does exactly that — `rounds v (n - 1) (acc + length (encode v))` —
+four hundred times over 188,698 bytes, and the cost golden had the numbers all
+along: `str_scans=400`, `str_scan_bytes=75479200`. That one call was
+671,356,000 instructions, 6.8% of the benchmark, and it read as
+`k_b_length` in the profile rather than as anything the encoder does.
+
+A character's first byte is any byte whose top two bits are not `10`, so the
+count is the byte length minus the number of continuation bytes and nothing
+has to be decoded. Eight bytes at a time: load a word, mark the bytes with bit
+7 set and bit 6 clear, population count. About one instruction per byte.
+
+```
+    encodebench  9,866,614,705 -> 9,254,332,066  -612,282,639  -6.206%   (local)
+    pendbench      988,282,947 ->   957,236,125   -31,046,822  -3.141%
+    oneshot         47,277,156 ->    45,769,889    -1,507,267  -3.188%
+    basket          57,392,199 ->    57,117,622      -274,577  -0.478%
+    jsonbench    2,910,241,528 -> 2,913,835,115    +3,593,587  +0.123%
+    widebench       83,967,604 ->    84,031,191       +63,587  +0.076%
+```
+
+**The two rises are one number.** jsonbench makes 898,500 `k_str_chars` calls,
+all from `k_b_slice`'s test for whether a string is one byte per character,
+and each costs +4.000 instructions — 898,500 × 4 is the whole 3,593,587 to the
+unit. The strings are shorter than eight bytes, so the word loop never runs
+and they pay only for its guard and the closing subtraction. Traded knowingly:
+the four benchmarks that improved are the ones that ask a document its length,
+and the decoder's four instructions buy the encoder six per cent.
+
+Three shapes were measured, not two. A plain branch-free byte loop —
+`conts += (p[i] & 0xc0) == 0x80`, no word at all — leaves jsonbench exactly
+where it was and gives encodebench only 3.55%; clang does not vectorise it,
+so it lands at 4.3 instructions per byte instead of 8.9. Disabling
+vectorisation on the *word* loop costs 186,305,200 instructions on
+encodebench, which is what the SIMD popcount is worth, so it stays. The tail
+loop is told not to vectorise: it trips at most seven times, and clang's
+widening of it was 368 bytes of prologue per copy against a loop the processor
+barely enters.
+
+That last one is the text vein's whole movement: +752 bytes wherever the
+function is inlined twice, +368 where once, +1,520 on basket, which holds four
+copies. Regenerated with the reason in the file.
+
+**The harness came second, and says so.** `scripts/utf8_differential` already
+extracts the validator's text from `src/runtime.c` at run time rather than
+copying it; it extracts `k_utf8_chars` the same way now, under a name of its
+own, and checks it against a reference in `scripts/utf8/harness.c` that walks
+the text a character at a time from the rfc 3629 widths. Two routes to the
+same answer on valid utf-8. The sweep is every arrangement of character widths
+that fits in twenty-four bytes — three whole words plus the tails either side
+of each — and then two hundred thousand valid strings over code points the
+four representatives do not reach: 8,346,016 counts, 0 mismatches.
+
+It was watched red before it was believed. Writing the mask as
+`w & ~(w >> 1)` gives 7,036,227 mismatches; stopping the tail one byte short
+gives 2,079,600. Both are the mistakes actually available in this function.
+
+The counter this kernel is present by is `str_scans` / `str_scan_bytes`, which
+already existed and did not move — they count scans and bytes, never words or
+lanes, so they say the same thing on a host with no popcount instruction.
+
+`k_chars_list` twenty lines above does the same scan to size the list it is
+about to build. Left alone deliberately: it allocates a string per character
+straight afterwards, so the count is not what that path pays for.
+
+Not measured, and worth saying: the interpreter counts characters in Rust and
+is untouched, so this moves native only. Whether the same shape helps the
+front end is a separate question — the compiler asks for character counts too,
+and `compile_instructions` will say.
+
+DONE.
+
+## 2026-08-31 — a one-byte append writes the byte
+
+Same PR, and the second time in an hour that a byte-level operation in the
+runtime turned out to be paying a call to move less than a register's worth.
+
+`k_b_append_mut` is 23.24% of encodebench on its own: 42,318,000 calls at 54.2
+instructions each, and 48,945,694 calls into `__memcpy_avx_unaligned_erms`
+beneath it at 17.6 apiece. The encoder's commonest append is one byte — a
+comma between elements, a colon between key and value, the brace that opens a
+map — and `elem_onto` writes it as `text/append acc 44`. Moving one byte
+through libc's dispatcher costs more than the move.
+
+```c
+if (n == 1) ((unsigned char*)a->data)[a->len] = *src;
+else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
+```
+
+```
+    jsonbench    2,913,835,115 -> 2,862,072,365   -51,762,750  -1.777%
+    encodebench  9,254,332,066 -> 8,715,312,466  -539,019,600  -5.824%
+    oneshot         45,769,889 ->    44,077,255    -1,692,634  -3.698%
+    widebench       84,031,191 ->    84,047,191       +16,000  +0.019%
+```
+
+The other four rows do not move. **This pays back the character count's
+decoder cost and then some**: jsonbench ends the pair at −48,169,163 against
+main, −1.655%, where the counter alone had left it +0.123%. The two changes
+land together for that reason.
+
+The obvious generalisation is worse. A byte loop for every `n <= 8` — which
+would also catch `"true"`, `"null"` and `"[]"` — reads encodebench at
+8,878,376,066, jsonbench at 2,874,946,565 and oneshot at 44,570,742: worse
+than the single byte on all three, because clang's memcpy for a known-small
+dynamic length beats an explicit loop everywhere except at one. Measured, not
+assumed.
+
++32 bytes of text wherever it lands, which is one compare and one store
+against the call it replaces.
+
+**And a refuted one, worth writing down because it looks free.** Two counters
+on this fast path — `k_stat_append_fast++` and `k_stat_append_grow++` — are
+incremented unconditionally, where most of the runtime's statistics sit behind
+`__builtin_expect(k_stats_on > 0, 0)`. Putting them behind the same guard
+costs +42,323,600 on encodebench and +4,016,400 on jsonbench: exactly +1.0001
+instructions per fast append. Loading the flag and branching on it is one
+instruction more than incrementing a counter that is already in cache, so the
+guard buys nothing and is not a saving waiting to be taken.
+
+The thread the entry above left open is closed too. The front end asks for
+character counts as well — `trimmed.chars().count()` runs on every line of
+every source file for the eighty-column cap — but rust's std already counts
+this way: `core::str::count::do_count_chars` and `char_count_general_case`
+together are 99,709 instructions of the front end, 0.23%. Nothing to take.
+
+DONE.
+
+## 2026-08-31 — the runner's numbers for the pair, and what welfare made of them
+
+```
+    work_jsonbench    2,910,241,528 -> 2,862,072,778   -48,168,750   -1.655%
+    work_encodebench  9,866,614,705 -> 8,715,312,865 -1,151,301,840  -11.669%
+    work_oneshot         47,277,156 ->    44,077,654    -3,199,502   -6.767%
+    work_pendbench      988,282,947 ->   957,236,511   -31,046,436   -3.141%
+    work_basket          57,392,199 ->    57,118,035      -274,164   -0.478%
+    work_widebench       83,967,604 ->    84,047,604       +80,000   +0.095%
+    work_deepbench, work_escapebench                            unmoved
+    compile_instructions 42,297,878 ->    42,297,900          +22
+```
+
+**work_widebench is the one rise, and it is the character count's four
+instructions.** widebench asks for a string's length on strings shorter than
+eight bytes, so every call pays for the word loop's guard and its closing
+subtraction and enters neither; nothing in that benchmark appends a single
+byte, so the second change has nothing to give it back. jsonbench pays the
+same +4 on 898,500 calls and takes 51.8M back from the append, which is why
+the two shipped together and widebench is left where it is.
+
+The local box reads deepbench −3,680 and escapebench −399 where the runner
+reads neither, and its glibc is 2.39-0ubuntu8.7 against the golden's 8.8. The
+runner's rows are the ones in the file.
+
+`compile_instructions` moves 22 and none of it is the front end. `k_utf8_chars`
+is twenty lines added to `src/runtime.c`; `main.rs` holds that file as an
+`include_str!` and hashes it for the build cache key, and a longer string takes
+twenty-two more instructions to hash. Allocations, peak, rounds and visits are
+byte-identical.
+
+**Welfare moved 87.50170 to 87.51104 — nine thousandths.** Worth writing down
+because the size is surprising: #1170 bought 0.0277 for a 1.05% fall in
+compile instructions, and this bought a third of that for an 11.7% fall in
+encode. Two things make it so. Runtime satiates at 2.0, so a term already
+better than baseline gains little from getting better still — encode crosses
+from 5.9% below to 6.5% above and the crossing itself is most of the value.
+And the five runtime speed counters share a weight with wide, deep and pending,
+whose ratios are 138, 29 and 28 times baseline and therefore contribute almost
+their whole allowance already. The model is doing what it was written to do.
+Nothing is being argued here; the observation is that the encoder had a lot of
+room and the index says the project had already been paid for most of it.
+
+DONE.

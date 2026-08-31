@@ -12,6 +12,11 @@ import "std/text"
 #
 # Exhaustive over every string of three bytes or fewer, then sampled over the
 # lengths that straddle the sixteen-byte vector boundary.
+#
+# The character counter travels with it. It reads eight bytes at a time, so
+# its edges are the lengths either side of a word and the characters that
+# straddle one, and the harness walks every arrangement of character widths
+# that fits in twenty-four bytes.
 sig_head = "static KValue k_utf8_bad(const char* data, long long len,"
 
 sig_tail = " const char* origin) \{"
@@ -19,6 +24,17 @@ sig_tail = " const char* origin) \{"
 signature = "{sig_head}{sig_tail}"
 
 harness_sig = "static int harness_utf8_ok(const char* data, long long len) \{"
+
+# The character counter, extracted the same way and for the same reason. It
+# reaches the harness under a name of its own so the reference beside it can
+# be a different function rather than the same one twice.
+sig_chars_head = "static long long k_utf8_chars(const unsigned char* p,"
+
+chars_sig = "{sig_chars_head} long long len) \{"
+
+chars_head = "static long long harness_utf8_chars(const unsigned char* p,"
+
+harness_chars_sig = "{chars_head} long long len) \{"
 
 extracted_path = "target/extracted.h"
 
@@ -33,9 +49,9 @@ header = """
   #endif
 """
 
-fn body_of src
-  parts = text/split src signature
-  start = "{signature}{parts[2]!}"
+fn body_of src sig
+  parts = text/split src sig
+  start = "{sig}{parts[2]!}"
   text/slice start 1 (closing_brace start 0 1)
 
 # The function ends at the brace that closes the one its signature opens.
@@ -70,11 +86,12 @@ fn swapped src from to
   text/join (text/split src from) to
 
 fn as_harness src
-  body = no_err (body_of src)
+  body = no_err (body_of src signature)
   named = swapped body signature harness_sig
   ok = swapped named "return k_none();" "return 1;"
   counted = swapped ok "k_stat_utf8_bytes += len;" ""
-  "{header}{counted}\n"
+  chars = swapped (body_of src chars_sig) chars_sig harness_chars_sig
+  "{header}{counted}\n{chars}\n"
 
 # The validator's x86 path is written in ssse3 intrinsics, which clang refuses
 # to compile unless the target is told it has them.
@@ -121,10 +138,10 @@ fn reported r
   io/write "{trimmed r.stdout}\n" . (_ -> verdict r.status)
 
 fn verdict 0
-  io/write "PASS  the validator agrees with the reference everywhere checked\n"
+  io/write "PASS  both agree with their references everywhere checked\n"
 
 fn verdict _
-  io/write_err "FAIL  the validator and the reference disagree\n"
+  io/write_err "FAIL  a function and its reference disagree\n"
     . (_ -> os/exit 1)
 
 pub play = os/read_file "src/runtime.c" . (src -> written (as_harness src))
