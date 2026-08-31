@@ -1,0 +1,62 @@
+# The 49 landed branches the 2026-08-31 sweep could not flag, and the
+# commit each pointed at. Deleted the same day, from a shell that can
+# push a ref deletion.
+#
+# The first list identified a landed branch by its commit subjects: a
+# squash commit on main carries the branch's own subject with `(#N)`
+# appended. These 49 fail that test because their squash titles were
+# rewritten at merge, so no subject on main matches any subject on the
+# branch. Each was verified against the pull-request record instead:
+# every branch here is the head of a pull request GitHub reports as
+# MERGED. Any row goes back with
+#
+#     git push origin <sha>:refs/heads/<name>
+5b0dd2def76291674a2ba2f27ab8a177f8907229 a-comment-is-not-a-pin
+066c429449bb8aec69c0dd63de9fec0e1189a768 a-deliberate-exit-in-a-page
+ea81d7a5139945a30184aa31b948e0a901611d6c a-field-write-in-a-nested-body
+8bb258c2ce5d7e8d6c1048224d58a102950c1421 a-record-field-waits-too
+c70456f5d6a990d32f019ca5d06b86cee5d381b2 a-span-is-two-u32
+5689bfd4a5d789fd25aa67f153bf6118689d82fa a-typeset-only-annotates
+69234741ccbaa39c76ddc98097ffffbd66201e24 beat-placement
+86e0705e3b1963eacd3563477f58b428e07e41ad builtin-migration
+4e683957544409bb7f2da5ae529aba01a84cfad3 carry-tenure
+cf8b9810753f9e19cf80fb7a1452be09a60fab39 ch05-io-completion
+8c017f14f1fa43d1894cc2962561494a78c911bd curly-maps
+d2bfecad49ba5980a017bb2ee6cd2f5ce7fefa0f defer-the-wall
+b6679495a3b1f006af1a7ab7f1e9f31c296a6580 error-corpus-ratchet-v2
+d338fb90c749970856be428c6943d7e2a9a6ecd6 field-census-record
+942df462867de9d46913031376e4cfa328b5ae1a field-cooccurrence
+4146daa7b6b6a95203c75a0847dca56e06039a78 forward-slash-scan
+8f6c2979656987466dd31bfc3d8d5355643f2622 front-end-profile
+0f21effa530ce6acd7dbb416e1223f33d801cb85 gavel-compile-memory
+601bb6718c82c27bd01340d902f369e9613bc9f1 gavel-undemanded-knot
+0890ea87a77a7265a11fee7fef47890e2db64011 gavel-welfare-cost
+63e0887aa09c32376c9ceea6aa6a374fdbb46287 gavels-landed
+245f24f0c3a92e796ed58e04f5b2675f950912ca import-incarnation
+988b7ce007eda5d38363240c2583c3ffe2860ecb kernel-pins
+b33bf03a6f32c45109e925d6a50aab1de8cfd81d knot-equality
+dd2ad8eb9c416ed25a07f47b3b16a0ec1fe05b25 lazy-campaign-mem-goldens
+73e0b229b529340abe8f493fbf1f7ee986f691bb lazy-v1-fragment
+b1c0d69d235fc750838fa69d1cb263dd5543a4d4 lazy-v1-page-receipts
+8a92dc62215180412c6c6cae1544d8f16b4a59a3 night-cap
+4c38a988e0840cf0dc2073016d27767febd6b332 no-python-is-a-gate
+aecc6dc94eb35b7e6f0d37b32c71b0904481e68f precedence-asymmetries-pinned
+0dee70154284af540a55b544e4ba6d4f855aa98b qualified-door
+72a62fcbf3244641972b6a0eccb58cbfe8e49483 render-embedded-std
+4a43b7b0ba8764fa89836228bfdf6141f13bccb6 render-group
+e5b2dfce6dee269a1616697fccfbdd4912733054 repl-overload-arms
+bdaae5cd7911426d440b337f3bac6e43b6ef9fa3 scalar-through-a-call
+3ca898a0dd8aadde3e4e614d447bc45bb06dfd69 std-effects-text
+b06ef1abbc77e65d243346e36d27e01bb3ea1448 testing-hako
+9e93eba229a35d97ec0e6423faae399a066f75dd the-carry-skips-a-small-step
+ec34527cb277bb967b4191b7dfec6cb455aeada2 the-chart-gains-the-work
+f80693033825d4f10d1dd0c929e1d390c1fafaa8 the-chart-has-to-draw
+a6793db6833bbe3783aa6fd41f34000f255fea72 the-escaped-buffer-comes-back
+baafc83af16d9a3c4101c5b07a667436169cf81f the-executor-gains-a-door
+580628bb9bbf78095c09dab23689fdb4c0e2a598 the-fold-lands-clean
+52fa844062b331ef1c691f3408a9487a7023a2e9 the-memo-only-pays-on-long-lists
+e5d96e1dbdf50c054f3832268d2d93ce8b7b9e2a the-shape-the-corpus-cannot-hold
+68a747c8a066caf2d19968c8149ac2f33a775635 trmc-group-keys-borrow
+b92fe46b35ff6f2195e219e9a1aa9318dc197746 typeset-arm-own-err
+75c57c47913f436fefca1d33b7942abcaf863f45 unboxed-dispatch
+d9167f18f553f021049c5af13a9f380f44c48ae5 utf8-char-count
