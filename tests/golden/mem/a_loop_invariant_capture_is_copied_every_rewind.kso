@@ -10,14 +10,25 @@ import "std/io"
 # where the carry shares it: the twin fixture beside this one is the same
 # program with that one line moved, and it evacuates 192 bytes. Build it inside
 # the chain — as this does, and as a program that decodes inside `read_file`'s
-# continuation does — and the whole list travels forward once per rewind, for
-# 32,672.
+# continuation does — and the list travels forward, for 16,448.
+#
+# It travelled twice, for 32,672, until the tenure test learned to answer for
+# an interior pointer. A list's elements sit in a buffer the header points
+# into, so the copy that tenured the list put the header at an allocation
+# start and the elements at an offset; the membership hash held starts only,
+# answered no for the buffer, and evacuated all of it again on the next
+# rewind. A walk of the tenured blocks answers on ranges and shares it.
 #
 # So this pins a cost rather than an answer: evac_bytes here is the list's
-# storage times the number of rewinds, and it grows with the list while the
-# loop's own work does not. The fixture exists because nothing else in the
-# corpus watches the beat carry, which is where every remaining evacuation on
-# the benchmark shelves is spent.
+# storage times the number of rewinds it is not yet tenured for, and it grows
+# with the list while the loop's own work does not. The fixture exists because
+# nothing else in the corpus watches the beat carry, which is where every
+# remaining evacuation on the benchmark shelves is spent.
+#
+# It is also the only fixture in this corpus that answers the tenure question
+# at all: reverting the walk to the hash moves these five numbers, and so does
+# the older attempt at positional membership that put the tenured block in the
+# arena chain. Nothing else here moves under either.
 fn built n acc
   more n acc (n < 1)
 

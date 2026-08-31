@@ -892,8 +892,6 @@ static KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
 
 typedef struct KTenBlock { struct KTenBlock* next; size_t cap; size_t used; char* data; } KTenBlock;
 static KTenBlock* k_ten_blocks[K_BEAT_MAX];
-static KPtrMap k_ten_set[K_BEAT_MAX];
-static size_t k_ten_live[K_BEAT_MAX];
 static size_t k_ten_bytes[K_BEAT_MAX];
 /* Past this a program stops tenuring and behaves as it did before, so no loop
    can grow without bound on storage that is only freed at the pop. */
@@ -902,14 +900,25 @@ static size_t k_ten_bytes[K_BEAT_MAX];
 static int k_ten_on = 0;
 
 /* Is this pointer tenured, at this beat depth or any outer one? A value
-   promoted by an outer loop is outside the arena for an inner one too. */
-static int k_ten_holds(const void* p) {
-    for (long long d = 0; d < k_beat_depth && d < K_BEAT_MAX; d++) {
-        KPtrMap* t = &k_ten_set[d];
-        if (!t->slots) continue;
-        size_t i = k_ptrmap_probe(t, p);
-        if (t->slots[i].gen == t->gen && t->slots[i].key == p) return 1;
-    }
+   promoted by an outer loop is outside the arena for an inner one too.
+
+   A walk of the blocks, which is only affordable because each block doubles
+   the one before it: 64 MiB of tenured storage is eleven blocks, not the
+   thousand that a fixed 64 KiB would make, and K_TEN_CAP means there is never
+   a twelfth. That bound is what pays for deleting the hash set this used to
+   be — a set that cost a probe here AND an insert on every single tenured
+   allocation, where the walk costs neither.
+
+   No cache in front of it. A one-entry memo of the block that answered last
+   was built and measured: it takes 16,080 of widebench's 96,496 asks, and it
+   costs the other 80,416 a load and two compares before they walk two blocks
+   anyway. That is 634,925 instructions spent to save 16,080 short walks, so
+   the memo went. */
+static __attribute__((noinline)) int k_ten_holds(const void* p) {
+    const char* q = (const char*)p;
+    for (long long d = 0; d < k_beat_depth && d < K_BEAT_MAX; d++)
+        for (KTenBlock* b = k_ten_blocks[d]; b; b = b->next)
+            if (q >= b->data && q < b->data + b->used) return 1;
     return 0;
 }
 
@@ -944,7 +953,14 @@ static void* k_ten_alloc(size_t n) {
     long long d = k_beat_depth - 1;
     KTenBlock* b = k_ten_blocks[d];
     if (!b || b->cap - b->used < n) {
-        size_t cap = n > K_TEN_BLOCK ? n : K_TEN_BLOCK;
+        /* Each block is twice the one before it. That is what keeps the list
+           short enough for k_ten_holds to walk: K_TEN_CAP is 64 MiB, so
+           doubling from 64 KiB runs out of licence after eleven blocks.
+           The tail of the last block is address space rather than pages —
+           malloc mmaps anything this size and untouched pages are never
+           resident — so the peak this costs is not memory. */
+        size_t grow = b ? b->cap * 2 : (size_t)K_TEN_BLOCK;
+        size_t cap = n > grow ? n : grow;
         KTenBlock* nb = malloc(sizeof(KTenBlock));
         if (!nb) { fputs("out of memory\n", stderr); exit(1); }
         nb->data = malloc(cap);
@@ -959,12 +975,6 @@ static void* k_ten_alloc(size_t n) {
     b->used += n;
     k_ten_bytes[d] += n;
     k_ten_any = 1;
-    if (!k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
-    KPtrSlot* slot = k_ptrmap_at(&k_ten_set[d], out, &k_ten_live[d]);
-    k_ten_live[d]++;
-    slot->gen = k_ten_set[d].gen;
-    slot->key = out;
-    slot->val = NULL;
     return out;
 }
 
@@ -979,7 +989,6 @@ static void k_ten_release(long long d) {
     k_ten_bytes[d] = 0;
     k_ten_any = 0;
     for (long long i = 0; i < K_BEAT_MAX; i++) if (k_ten_blocks[i]) k_ten_any = 1;
-    if (k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
 }
 
 static size_t k_copy_seen_live;

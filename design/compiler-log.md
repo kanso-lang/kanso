@@ -3609,3 +3609,133 @@ binary in the tree was then run repeatedly to find the rest by failure rather
 than by reading, because reading is what missed this one twice.
 
 DONE.
+
+## 2026-08-31 — the tenure test answered for objects, and the question was about regions
+
+kanso#1177 left a note naming the carry evacuation as what remained in
+widebench: `k_survives_x` at 7,522,206 instructions, about 29% of the
+benchmark. Instrumenting it said the shape was nothing like the guess in that
+note. The arena walk is one step every time — widebench holds a single block —
+so `k_survives` is already O(1) and costs nothing. Of 120,418 asks, 16,079 are
+answered by the arena and 104,339 fall through to the tenure test, and **80,415
+of those, 83%, are the tenure test proving a pointer is NOT tenured.** The cost
+was the hash probe on the miss, at roughly 40 instructions a time.
+
+An address-span filter — reject anything outside [lowest tenured byte, highest]
+before probing — rejected 1 ask of 96,496. The two tenured blocks sit 45 TB
+apart, because glibc mmaps one and takes the other off the heap, and the arena
+lands between them.
+
+**Two blocks.** That is the whole finding. The block list is short, so the
+membership question can be a walk, and a walk answers on ranges where a hash
+answers on allocation bases. `k_ten_alloc` now doubles each block instead of
+taking a fixed 64 KiB, which bounds the list: K_TEN_CAP is 64 MiB, so doubling
+from 64 KiB runs out of licence after eleven blocks and there is never a
+twelfth. That bound is what pays for deleting the hash set, which cost a probe
+on every ask AND an insert on every single tenured allocation.
+
+A one-entry cache of the block that answered last was built and DROPPED. The
+instrumentation said it would take 16,080 of widebench's 96,496 asks on its
+own, and it does; it also costs the other 80,416 a load and two compares before
+they walk anyway, and the walk is two blocks. Measured: 65,170,283 with the
+cache against 64,535,358 without, so it cost widebench 634,925 instructions to
+save 16,080 walks of length two. Dropping it also retires a second question —
+the cache had to carry the beat depth it was filled at, because `k_beat_pop`
+releases tenured storage on its way out but three other sites lower
+`k_beat_depth` without releasing, and a cache naming a block the walk would no
+longer reach would answer where the walk says no. That check was another
+257,197 instructions on widebench. Neither is in the code.
+
+Answering on ranges is the behaviour change, not a side effect of it. A list's
+elements sit in a buffer the header points into, so the copy that tenured the
+list put the header at an allocation start and the elements at an offset; the
+hash answered no for the buffer and the next rewind evacuated all of it again.
+`a_loop_invariant_capture_is_copied_every_rewind` goes 32,672 evacuated bytes
+to 16,448 — the list stops travelling forward a second time. widebench's
+`evac_bytes` goes 1,032,336 to 519,728 and its `beat_iters` 43 to 40, because
+the size walk that decides whether a chain step stages or leaves its value now
+sees the tenured storage as surviving and three steps come out under the
+threshold.
+
+    jsonbench     2,860,867,718 -> 2,858,844,840     -0.0707%
+    encodebench   8,714,005,236 -> 8,704,347,511     -0.1108%
+    oneshot          44,065,976 ->    44,000,222     -0.1492%
+    basket           56,780,940 ->    56,457,649     -0.5694%
+    widebench        67,553,585 ->    64,535,358     -4.4679%
+    deepbench       760,472,244 ->   726,483,254     -4.4695%
+    escapebench     258,582,701 ->   253,818,697     -1.8424%
+    pendbench       957,236,261 ->   946,377,688     -1.1344%
+    indexbench        5,266,547 ->     5,244,328     -0.4219%
+
+Nine benchmarks, nine falls. Container numbers on both sides, measured the same
+sitting; the runner's rows are in bench/instructions_golden.txt.
+
+**Half of that is one attribute.** `k_ten_holds` is `noinline` now. Inlined, it
+was pulled into `k_survives_x`, which is inlined into `k_born_this_beat`, which
+is inlined into `k_b_push_mut` — so a program that never tenures still carried
+the whole tenure test inside its hottest fast path. escapebench, deepbench and
+jsonbench never call `k_ten_holds` at all: the symbol does not appear in their
+profiles. Their falls are entirely the fast path being compiled better once
+the cold code is out of it. Measured separately: `noinline` alone on the
+unchanged hash gives deepbench -4.44% and escapebench -1.84%, and the walk adds
+the rest on the benchmarks that tenure. Without it the walk COST escapebench
+1.38%, at exactly +3 instructions per push with every call count identical.
+
+`text` rises 2,528 bytes on all nine binaries. It is the optimiser, not the
+change: `k_survives_x` shrinks 346 bytes to 118 once the tenure test is out of
+line, and then inlines into more of its callers — `k_copy_size` +1,911,
+`k_repair_interior` +800, `k_slots_survive` +267, `k_interior_survives` +263,
+`k_deep_copy` +252, against `k_repair_size` -940 inlined away entirely. Bigger
+code, fewer instructions executed, on every benchmark. Only one of the nine,
+widebench, calls `k_ten_holds` at all — `basket` reads -0.57% here and the
+symbol does not appear in its profile, so that row is layout like the rest.
+
+**The archive declines positional membership by name, and this is not it.**
+design/log/compiler-log-archive.md, under "Declined by measurement: the same
+idea as an arena block": appending a KBlock at the tail of the arena chain was
+built three times and reached 91,241,398,272 bytes of resident set. The reason
+given is that positional membership recognises every pointer inside a block
+where a hash recognises only bases, and a text accumulator handed through an
+intermediate function is the shape that turns that into unbounded growth.
+
+That variant put the answer in `k_survives` — the narrow walk the mutation fast
+paths ask per append. This one is only in `k_survives_x`, which the copy
+machinery and `k_born_this_beat` ask and no mutation path does. The split
+between the two was made in that same archived entry, for this reason. Checked
+rather than argued:
+
+- `book_panels --write` runs clean under `ulimit -v 8000000`, rewriting 0
+  panels. The declined variant killed it.
+- `effect_push_shape.mem`, the fixture the declined variant broke, does not
+  move. One file in the 51-fixture mem corpus moves, and it is the carry one.
+- Peak RSS across the nine benchmarks: -100 KB to +16 KB, widebench and
+  deepbench byte-identical.
+- The accumulator shape itself, built and run at n = 1,000 / 2,000 / 4,000 /
+  8,000: 20,864 / 71,900 / 267,912 / 659,492 KB on main against 20,844 /
+  71,916 / 267,876 / 659,560 with the change. The curve is superlinear and it
+  is superlinear on both sides, unchanged to a tenth of a per cent.
+
+Running the declined variant's own shape — the tenure answer moved back inside
+`k_survives` — moves exactly one fixture in the mem corpus, the same carry one.
+So the corpus can no longer see the thing that cost 91 GB. That is a gap, and
+it is recorded rather than fixed here: an attempt to fill it with a text
+accumulator crossing a beat was written, generated its goldens, and was DELETED
+because it read identically on main, on this change, and under the declined
+variant. A golden that cannot go red is worse than no golden.
+
+All nine differential sweeps agree, the beat and utf-8 ones included. The whole
+Rust suite passes. `evac_bytes` in two veins is what pins the walk: revert it
+and both go red, which is how this was watched before it was believed.
+
+**A fourth staging collision, folded in.** Running the suite to validate the
+above turned it up, which is the point of running it repeatedly rather than
+reading it. `tests/a_toolchain_the_path_cannot_reach.rs` staged both its tests
+into `/tmp/kanso-no-clang`, and `fs::write` truncates before it writes: one
+test emptied `main.kso` while the other test's `kanso` was reading it, so the
+build reported `an entry file needs at least one statement` instead of the
+message under test. One failure in twenty; none in forty with a directory per
+test. kanso#1169, kanso#1175 and kanso#1177 are the same defect at three other
+sites, and this is the second of those four found by a suite going red rather
+than by anybody looking.
+
+DONE.
