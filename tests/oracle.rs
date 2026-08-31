@@ -236,9 +236,7 @@ fn mem_corpus_interp_matches_the_semantic_counters() {
         // always were.
         let semantic: String = expected(&program, "mem")
             .lines()
-            .filter(|line| {
-                line.starts_with("thunk_allocs") || line.starts_with("thunk_forces")
-            })
+            .filter(|line| line.starts_with("thunk_allocs") || line.starts_with("thunk_forces"))
             .map(|line| format!("{line}\n"))
             .collect();
 
