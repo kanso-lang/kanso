@@ -7,46 +7,32 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one.** "What a digest costs, and
-whether it stays written in kanso" — `sha256/hex` holds the whole message,
-peak arena is linear in the input at about six and a half thousand bytes per
-byte hashed, and the asset-digests job's headroom falls as `docs/kanso.wasm`
-grows.
+only indexes it. **Blocking right now: nothing.** The digest question — what a
+digest costs, and whether it stays written in kanso — sat here and was bounced
+on 2026-08-29: a performance question with no surface area is the
+implementer's, per the ledger's own charter, and the log carries the research
+mandate it left with.
 
-The chain-line grammar used to be counted here as a second. It is not: the
-ledger files it under Open, and the criterion that section states is that a
-fixture, gate, or merge is waiting. Nothing in the tree is red for it and the
-346-site respelling has not started, so it waits without blocking. The bullet
-list further down had it right all along and only these prose counts drifted.
+**Two questions are waiting, and both carry a recommendation** — neither
+blocking. Counted from the ledger, which is the only place that count is true;
+this file said fourteen in one paragraph and sixteen in another until the
+2026-08-29 sitting ruled the rest. The July letters are closed: Clay ruled the
+last five in one sitting on 2026-08-26, and that ruling reached main only on
+2026-08-28, on a branch that had been sitting unmerged.
 
-**Seventeen questions are waiting, and every one of them carries a
-recommendation** — one blocking, sixteen open but not blocking. Counted
-from the ledger, which is the only place that count is true; this file said
-fourteen in one paragraph and sixteen in another until 2026-08-29. The July
-letters are closed: Clay ruled the last five in one sitting on 2026-08-26, and
-that ruling reached main only on 2026-08-28, on a branch that had been sitting
-unmerged. Counted from the ledger rather than carried forward. That is the point of the 2026-08-25 sweep: Clay's ask was
-*"the goal here would be to not have anything left to gavel. I feel like I keep
-gathering things and then you ask me the same question 10 to 20 more times."*
-So each entry now cites the search behind it and proposes an answer, and a
-sitting can be a yes or a no rather than a fresh design conversation.
+That sitting is what the 2026-08-25 sweep was for. Clay's ask was *"the goal
+here would be to not have anything left to gavel. I feel like I keep gathering
+things and then you ask me the same question 10 to 20 more times."* So each
+entry cites the search behind it and proposes an answer, and a sitting can be a
+yes or a no rather than a fresh design conversation. On 2026-08-29 every
+remaining question was ruled in one pass.
 
-**The sixteen open, not blocking** — whether a `compile_instructions` move that
-cannot be work needs a spend attribution, asked after three such moves in two
-days; whether a chain line keeps its leading dot, which stands between the
-shipped `bind`/`rescue`/`annotate` and a 346-site respelling nobody has begun;
-whether the backends should build a partial whose callee is a value; whether an
-err gains readers a callback can use; whether `read_file` is text or bytes,
-which is one reader with no way to say which you meant and two engines that
-answer differently; which claim owns a qualified name when a module declares
-one of its imports' names, whose filing pointed at a gavel that has since
-fallen; what a record prints as when its module is imported; the book teaching
-the boundary language, queued P1 by Clay on 2026-08-26;
-`--explain-copies`; the assert hako's surface; the
-bare-call cross-module tie whose interim ruling is still live and still called
-interim; whether a dependency's render arms join the root group; `first coll n`;
-where `std/` comes from; block-born as a dataflow property; and the
-ten-thousand-frame guard, which is a standing offer rather than a question.
+**The two open, not blocking** — the book teaching the boundary language,
+queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types gavel,
+so half one of ch04 does not survive as written and compiler.html entry 23 owes
+a rewrite in the same campaign; and the assert hako's surface shape, whose
+licence half was ruled in the archive on 2026-08-17 and which waits on nothing
+but its own design pass.
 
 **The July letters are closed.** C struck, `done` minted for D, G struck on the
 July provenance measurement, Z confirmed declined, AA explicit-cast only. Every

@@ -20,6 +20,492 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
+## 2026-08-29 — gavel: --explain-copies declined
+
+Clay: "yagni violation." The flag — a diagnostic naming the source
+site of each evacuation copy — is declined until a copy surprises
+somebody. The counters already pin how much the beat machinery copies
+and CI catches the number moving; the *where* is two weeks of span
+plumbing through the carry machinery for a question nobody has asked.
+Its only realistic user today is the compiler's own memory work.
+Re-file when someone actually reaches for it.
+
+## 2026-08-29 — supersession: the three words replace the no-bind surface
+
+Clay's rule, stated when the fork surfaced: "there cannot be
+incompatible rulings. a later ruling REPLACES an older one." The
+timeline, by commit timestamp:
+
+- 2026-08-26 13:58 PDT — #1054 lands compiler.html entry 23, "why
+  there is no bind": combinator words off the surface, handling as
+  ordinary arms, signature-directed elaboration.
+- 2026-08-27 — fa834a71, "three explicit forms": Clay rules `bind`,
+  `annotate`, `rescue` as explicit chain steps, chain err-arms retire.
+- 2026-08-27 and after — 61774d65 makes bind a word parallel with the
+  others (`.` retires from chain position), and the effect-first rider
+  fixes the signature: `bind effect callback`.
+
+The later ruling wins. The three-explicit-words design is the
+language; entry 23's no-surface-combinators argument is superseded and
+the page owes a rewrite or retirement. Consequences:
+
+- The dispatch-vs-elaborator machinery question dissolves in the
+  words' favor: the foreign-only license is checked at `rescue`, the
+  re-wrap at `annotate`, so the per-arm provenance machinery (the
+  fixpoint, `k_not_own_err` at every match) has a smaller home —
+  which is what #1054 called World B, now with the words on the
+  surface rather than hidden.
+- The queued book story ("the boundary language") re-premises on the
+  three words; nothing is gated on an elaborator, because there is no
+  elaborator to wait for.
+- "Nothing is asked of the signature" survives unchanged: the words
+  are call-site spelling, not type-level tracking; no signature
+  carries an effect row.
+
+## 2026-08-29 — the one-keyword world, explored and declined
+
+After the supersession, Clay probed whether the combinators could go:
+"I'd love to not need combinators but i don't see any clean way to
+prevent the developer from bypassing effects." The exploration, so it
+stays explored:
+
+The requirements split three ways. Can't-drop needs no words — the
+railway already makes discard unspellable. Can't-handle-your-own needs
+no words — provenance already skips own-origin errs at match time. The
+irreducible part is replace-vs-recover: one bit of intent with no
+footprint in code shape, since a buggy annotation and a legal rescue
+are the same program.
+
+The candidate for carrying that bit without chain words: key on the
+arm's declaration — any arm with an err-typed parameter is a handling
+site; unmarked, its result is auto-rewrapped (annotation by
+construction); a `rescue` keyword in the declaration is the sole door.
+Enforcement is sound: bare parameters already refuse errs, so the
+err-pattern arms are the exhaustive entry points.
+
+DECLINED, by Clay: "that feels awkward and imprecise. to just say it
+any argument matches err." The imprecision is real — with several
+parameters nothing says which err is the cause; an arm wanting an err
+as plain data (a log formatter, a matcher) is neither annotating nor
+rescuing and the rule has no place for it; and a parameter's type
+reaching over to rewrite what the return value means is action at a
+distance inside one signature. The explicit words are the repair:
+`annotate effect callback` and `rescue effect callback` attach the
+intent to exactly one effect and one callback.
+
+The three-explicit-forms gavel stands, having survived its strongest
+challenger. Koka's row-tracking was examined in the same sitting and
+declined on the standing doctrine: the row is signature infection made
+ergonomic, and nothing is asked of the signature here.
+
+## 2026-08-29 — gavel: effects are types, and the words are the only doors
+
+The sitting that began at Koka ends with a ruling that supersedes both
+the three-chain-words form (fa834a71 and its amendments) and the
+procedural bind-sugar proposal (offered this sitting, never gaveled).
+Clay's derivation, in his own words: with the combinator form "we'd
+have Effect types that are basically indistinguishable. to get
+anything you can match/branch on, you'd need to call
+bind/annotate/rescue to get a _type_... passing the actual value is a
+syntactic sugar for doing: bind my_effect (x -> do_something_with_x x).
+but one might argue you _should_ be able to match on something like
+<int>effect." And the gavel: "it might be 'convenient' to have bind be
+automatic and just not allow passing effects, but it's inconsistent
+and threatens to make the language confusing, when our overarching
+goal is simplicity. so i think that's a gavel."
+
+The ruling:
+
+- **The effect is a first-class parameterized type.** `<int>effect` is
+  the unresolved outcome of an operation: will be an int, or a
+  failure. It can be bound, passed, stored, and received — a parameter
+  declared `e:<int>effect` takes the box as data. Holding is not
+  opening.
+- **The three words are the sole eliminators, and they are explicit.**
+  `bind effect callback`, `annotate effect callback`,
+  `rescue effect callback` — ordinary functions, effect first
+  (per the effect-first rider), the only ways from box to branchable
+  value. There is NO automatic bind: passing a `<text>effect` where a
+  `text` is expected is refused, not silently skipped. The old
+  err-in-err-out railway at ordinary calls retires with the sugar
+  that would have implied it; propagation is bind's contract — a
+  failed effect handed to bind skips the callback and stays a failed
+  effect.
+- **The box is outcome, not deferral.** `<t>effect` answers "did it
+  work"; the `>>` wall's deferred description answers "has it run".
+  They stay distinct so holding a result can never delay work.
+- **The box is opaque to dispatch.** No arm may match
+  "failed `<int>effect`" against "succeeded `<int>effect`" — that
+  would be a third, unmarked eliminator. One shape; the words open it.
+- Everything the words already carry stands unchanged: annotate always
+  re-wraps with the original as cause (resurrection unspellable, the
+  callback's return becomes the new reason — string, record, or a
+  domain type for downstream dispatch); rescue is the sole exit with
+  the foreign-only license checked at the word against the callback
+  arms' provenance; callbacks receive the err itself, so dispatch
+  groups route by reason type; simultaneous failures merge per the
+  2026-08-05 ruling.
+- **Why passing must be allowed** (the coherence Clay named): a helper
+  can now take `e:<config>effect` and annotate it — the abstraction
+  Haskell gets from Either-as-value — without reopening any unmarked
+  door, because the parameter type is an explicit spelling of "I hold
+  the channel," and the words remain the only openers.
+
+Consequences owed by implementation and record, filed rather than
+decided here: ch04's "nothing is asked of the signature" and the
+passed-through-label story describe the retired railway and need
+re-premising on explicit bind; the provenance hop-per-function now
+accrues at binds rather than at skipped calls, which moves the
+eta-reduction argument's ground; and what becomes of a box that is
+never eliminated (the drop question) needs an answer — the existing
+refusal of unused bindings covers the bound case, and the unbound
+tail-position case goes to the ledger.
+
+Rider, same sitting, Clay: "effect arguments should work just like any
+other type. no superfluous type annotations on functions. if you pass
+an effect to foo, and it does rescue or whatever, and it passes the
+value to a matching arm, then it Just Works." So `<t>effect` earns no
+special ceremony: a parameter that receives an effect needs no
+annotation — inference types it from use, the same as every other
+type — and dispatch matches effect-typed values like any values. The
+`e:<config>effect` spelling exists for when an author wants to state
+the shape, never as a requirement. The intent bits stay at the words;
+nothing about this ruling ever lands in a signature.
+
+## 2026-08-29 — the digest question bounces: performance is never a gavel
+
+Clay, on being handed the sha256 arena question as "blocking": "you
+just have to figure it out, 'algorithmically'. this isn't a call that
+involves me. it doesn't affect the language surface area, it's just
+about performance and welfare metrics and you have the entirety of the
+field of computer science to draw from... if you iterate on this for
+an hour or two and cannot devise a solution from your vastly search
+ability across the totality of the internet, then that might call for
+my intervening. but i highly doubt that's going to happen."
+
+The entry violated the ledger's own charter — implementation details
+do not come to Clay — and the "blocking" label does not change whose
+question it is. It leaves the ledger and returns to the implementer
+with a mandate: survey the literature before touching the collector.
+Starting points the field already offers for exactly this shape (a
+loop-carried accumulator pinning a region for the length of a call):
+
+- MLKit's region inference with STORAGE MODE ANALYSIS — the classic
+  answer to "a region grows under iteration": infer where a store can
+  be `attop` (reset the region) rather than `atbot` (extend it). The
+  sha256 state accumulator is the textbook case.
+- Tofte–Talpin region resetting generally, and Aiken–Fähndrich–Levien
+  early deallocation, which decouples region death from lexical scope.
+- Koka's answer is Perceus: precise refcounting with drop-reuse, which
+  turns a functional update into an in-place one when the count is 1
+  — the same "this block is dead the moment the next one exists" fact
+  the eight killed hypotheses were circling. kanso declined refcounts,
+  but FBIP ("functional but in place") describes the target shape the
+  beat machinery could reach by its own means.
+- The project's own beat rewind is already a region reset at loop
+  granularity; the open engineering question is only why the digest's
+  per-block garbage is not being caught by it, and the eight measured
+  non-causes have narrowed where to look.
+
+Option 3 (builtin) stays available as the fallback the entry named,
+but only after the survey and an honest attempt at 1 fail. The
+tests/sha256_peak.rs pins stand so the next move is visible.
+
+## 2026-08-29 — gavel: read_file is text, read_bytes is bytes, per precedent
+
+Clay, handed a three-option menu: "seriously? can't you just look at
+what go or rust do?" They agree: Rust ships fs::read (bytes) beside
+fs::read_to_string (text, refuses invalid utf-8); Go ships os.ReadFile
+(bytes) with text as explicit validated conversion. Two readers, each
+naming what it reads. So: `read_file` reads text and refuses non-utf-8
+on every engine identically — the interpreter's current refusal
+becomes the law rather than a divergence — and a byte-transparent
+`read_bytes` lands in the same change, since native's callers
+(scripts/fingerprint among them) read binary today and keep working by
+renaming their call. The bytes value is the one the archive already
+ruled real.
+
+The meta-ruling, second of the sitting: a library-surface question
+that mainstream precedent settles unanimously is presented as "X and Y
+both do Z; copying it" — one line — or handled by the implementer
+citing the precedent in the log, not brought as a menu.
+
+## 2026-08-29 — the inline-name entry bounces the same way the digest did
+
+Main's ledger gained "Whether an identifier's name lives inline" — a
+22-byte small-string type for AST name fields, 21.3% of front-end
+allocations, ninety mechanical edits, recommendation already "build
+it". Zero surface area: no program can tell how the compiler stores a
+name. Per the same-day ruling that performance questions with no
+surface are the implementer's, it leaves the ledger unruled — build
+it, and answer for it in the log beside the numbers. The one
+Clay-shaped fragment inside it, whether to take a dependency for the
+small-string type, is answered by the file's own precedent: Cargo.toml
+carries two crates by policy, so hand-write it. The entry's removal
+from the ledger rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: the chain line keeps its dot
+
+On "Whether a chain line keeps its leading dot", Clay: "the
+combinators look and act like regular functions." So a chain
+continuation spells them the way it spells any function — `. bind (f)`
+— and the leading dot stays the one continuation marker the grammar
+has. No parser knows the names bind, annotate or rescue; an indented
+line without the dot remains one more argument, per the existing rule.
+The 346-step migration takes the keep-the-dot shape. The ledger
+entry's removal rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: an err has readers
+
+On "Whether an err gains readers a callback can use", Clay took the
+recommendation. An err gains `.reason`, `.cause` and `.origin`, and
+reading one is the second deliberate hole in infectiousness — the
+same carve-out `wrap_err`'s second argument already has. Every other
+operation on an err still propagates it. This makes the gavels' own
+lambda samples (`annotate e (err -> "config: {err.reason}")`) compile;
+dispatch-group callbacks keep destructuring as before. The ledger
+entry's removal rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: the drop question closes — explicitness IS the guarantee
+
+On "What happens to an effect nobody eliminates", Clay ruled the
+premise backwards: "it's the exact opposite of that. the fact that
+you have to explicitly call e.g. bind makes it all the more obvious
+that effects can't be dropped." An effect is a value in hand, and the
+language already refuses unused values — an unused binding is a
+compile error, and a value nothing consumes has nowhere to go. So a
+dropped effect is already unspellable under existing discipline,
+and visibly so, where the railway's guarantee was ambient machinery
+a reader could not see. No new checker rule and no io-edge rule is
+minted; the recommendation is declined as solving a non-problem. The
+entry leaves the ledger with this commit.
+
+## 2026-08-29 — gavel: a qualified name is its module's declaration
+
+On "Which claim owns `dep/join`", Clay: "yeah of course take the go
+option." A qualified name means the named module's own declaration and
+nothing else — `dep/join` is dep's `pub fn join`, never a clone of an
+import's arm, and an author's right to declare a name an import
+happens to export is unconditional. The enrolled clones leave the
+qualified namespace; the bare overload space gets an internal
+namespace a consumer cannot write; module_differential's known-defect
+`w1` leaves the defect ledger with the fix. The measured hazard — the
+one-line version silently re-exporting std's arm under dep's name —
+is the case the implementation must hold a red spec against. The
+ledger entry's removal rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: records print qualified, everywhere
+
+On "What a record prints as, when its module is imported", Clay:
+"sure, qualified everywhere is fine." A record prints its qualified
+name regardless of how the program was entered — Go's `main.T`
+precedent, already this project's package rule. `slow_lane 7` becomes
+`lane/slow_lane 7` in both entry paths; the root module needs a name
+for the prefix to exist; cross_module_fields' pins were right all
+along and stay; tests/entry_file.rs flips its expectation to the
+qualified form and stops being ignored. The entry-path divergence —
+the actual defect — dies with the ruling. The ledger entry's removal
+rides the next reconciliation with main.
+
+## 2026-08-29 — gavel: an instruction is a cost, whoever put it there
+
+On "Whether a compile_instructions move that cannot be work needs an
+attribution", Clay declined the waiver: "if it's a different
+instruction stream then that's a real cost so what's your question?"
+Option 1 stands — every rise in the vein pays the full ritual: golden,
+page figure, log sentence, and a welfare_floor attribution. The
+correction is to the attributions, not the rule: an entry never again
+says "nothing was spent"; it names the cause — rustc codegen movement
+from an unrelated edit, when that is what the evidence shows. A ledger
+accumulating that attribution repeatedly is the case for attacking the
+cause (pinning inlining, splitting the crate), which a waiver would
+have hidden. The ledger entry's removal rides the next reconciliation
+with main.
+
+## 2026-08-29 — gavel: the backends build the partial over a value
+
+On "Whether the backends should build a partial over a value", Clay
+rejected leave-it in the strongest terms: "the whole point is when you
+write a library including a language you're writing it for an unknown
+future use case... you are deciding what features they are allowed to
+use up front." So: BUILD IT. Native and wasm gain the runtime shape
+the interpreter already speaks — a partial whose arity resolves when
+the arguments arrive — and `&f` over a value callee works on all three
+engines, pinned by the differential goldens like everything else.
+
+The meta-line this draws, so the next entry applies the right
+precedent: yagni governs additive tooling (a diagnostic flag can land
+the day somebody wants it — the --explain-copies ruling), and never
+governs language surface. A feature one engine speaks and two refuse
+is a transition state under the differential law, not a resting place;
+a user meeting the refusal cannot file the use case, they conclude the
+language is broken. The ledger entry's removal rides the next
+reconciliation with main.
+
+## 2026-08-29 — correction: the yagni axis, in Clay's words
+
+The previous entry's meta-line (yagni governs tooling, never surface)
+drew the wrong axis. Clay: "there really is no such thing as yagni in
+language design. there may be something you don't have any evidence
+you need yet and if the user base or you yourself end up wanting it
+then fine you add it at that time. but if there's a feature you say is
+important enough to add then you are deciding it's important enough to
+add and make usable right now."
+
+So the axis is undecided versus half-shipped. A thing with no
+evidence of need waits for the evidence — that is the --explain-copies
+ruling, and it needs no other justification. A feature the language
+has admitted is a decision already made, and it is finished now:
+every engine speaks it, or the decision was not made. "Refuse
+honestly" is the differential law's transition state, never a place a
+decided feature rests.
+
+## 2026-08-29 — gavel: block-born is the whole cohort
+
+Clay: "okay whole cohort it is." Block-born becomes a dataflow
+property: anything the checker can prove was born in the block can be
+knotted — through aliases, conditionals, indexes of block-born
+collections, fields of block-born nodes — so cyclic structures sized
+by data (a graph parsed from input, N linked nodes from a map) gain a
+spelling. The theorem's obligation is unchanged: prove the birthday,
+or be refused; the analysis widens how the proof is found, never what
+must be proven. The book's sentence — everything born in the block,
+nothing escaping — was the decision; the syntactic fence was the
+checker falling short of it. Ships with red-first fixtures for the
+newly admitted shapes and the escape cases that must stay refused.
+
+## 2026-08-29 — gavel: the ambiguous-bare-call refusal is final
+
+Clay, confirming: "I thought we decided this in a pretty reasonable
+way and I don't know why you're considering it not final." The
+INTERIM stamp from the 2026-07-27 committee ruling retires: a bare
+call that two imports answer alike is refused, permanently, and the
+qualified name is the fix — the Go-inspired shape, with kanso's
+namespacing doing what Go's aliases do. Import order never decides
+semantics. check_bare_ambiguity stands as built.
+
+## 2026-08-29 — gavel: arms travel with the type, under the ownership rule
+
+The "dependency render arms stay out" recommendation died in dialog on
+the pass-down case: a value handed to a library that never imported
+its type would render as a bare record there, so one value would print
+two ways in one program depending on whose code called print — and no
+import anyone can write fixes it, since a library cannot import every
+type its callers might pass.
+
+The ruling, in the general form Clay recalled agreeing to: **an arm is
+legal when at least one of its parameter types is owned by the
+declaring hako, and legal arms travel with the type — globally active
+wherever the value goes.** Render is the special case where the group
+is render: money's author writes `render m:money` and every module,
+importer or not, prints money the owner's way; `render s:string` from
+money is an orphan and is refused, so no third party ever restyles a
+type it does not own. The same ownership principle as this morning's
+dep/join gavel: a name is its module's declaration, a behavior for a
+type is its owner's. If the archive holds the original agreement this
+restates, the citation joins this entry at reconciliation; either way
+this entry is now the ruling. The ledger entry leaves with it.
+
+## 2026-08-29 — gavel: no `first coll n`; `take` is the answer
+
+Clay confirmed the recommendation. `first` keeps one arity and answers
+one question — the element, or none. A count belongs to `take`, which
+answers with a list. A second arity on `first` would make the return
+shape depend on the argument count: the same name answering two
+questions, the disease the `done` gavel cured in the effect world.
+The enumerable spec's §9.3 question closes.
+
+## 2026-08-29 — gavel: std ships inside the binary
+
+Clay took the recommendation. `std/` is welded into the toolchain: the
+compiler version is the std version, one number in every bug report,
+one version axis under every differential golden. Go's shape, for
+Go's reason. A pinnable std waits for a demonstrated need, which
+would be a new entry, not a reopening. design/hako.md's observation-
+clause question closes.
+
+## 2026-08-29 — gavel: the frame guard's standing offer closes
+
+Clay, after the Rust/Haskell/Python comparison: "you've convinced me."
+The interpreter keeps its 10,000-frame guard — a deterministic frame
+count, Python's mechanism at 10x the number, refusing the same
+program at the same depth on every build where a byte limit would
+drift with frame size and optimization level, which matters here
+because the differential law cannot tolerate engines disagreeing
+about how deep a program may recurse. Native stays under the OS byte
+ceiling; both are documented. The offer to revisit the constant
+closes; a program that needs more depth reopens it with evidence.
+
+## 2026-08-29 — gavel: saturate each counter, then average (task #184)
+
+Clay, on the welfare aggregation question: "you do the log or whatever
+function it is on each term before averaging." The saturation curve
+applies to each counter's ratio individually, and the term is the
+equal-weighted average of the saturated values — never the saturation
+of an averaged ratio. So the curve reaches every counter, successive
+doublings of any single benchmark pay less as the philosophy says, no
+counter dominates a term by raw magnitude (widebench's 68% share of
+run speed ends), and the two held improvements are scored under the
+new definition. The switch is a change to the objective, so it lands
+the way a weights change lands: recorded, and the floor re-set in the
+same commit.
+
+The compile_instructions noise observation folds in here rather than
+becoming its own gavel, as the session suspected: the attribution
+ritual was ruled earlier this sitting (an instruction is a real cost,
+full ritual, causes named honestly), and per-counter saturation stops
+layout jitter from leveraging a whole term. Both rulings reach the
+session in this branch's sweep.
+
+## 2026-08-29 — auto-delete of merged branches is on
+
+Clay flipped "Automatically delete head branches" in the repo
+settings, which no session could do — the GitHub proxy refuses
+repository-settings writes (the 403 task #109 kept hitting). Every
+branch merged from now on deletes itself. Task #109 closes on this;
+what remains is the one-time purge of branches that merged before the
+setting existed, which is ordinary API work any session can do.
+
+## 2026-08-29 — directive: bring binary size back down, keeping the wins
+
+Clay, reading the trend chart: "the recent numbers are mind-blowing.
+if we can just get that binary size back down to where it was, the
+recent wins on compile memory and run instructions are just
+astonishing." So binary size is the next priority target: return it
+to its earlier level WITHOUT giving back the run-instructions and
+compile-memory gains. The chart's shape is a lead — the size spike
+lands beside the big run-instructions drop, which is what a speed win
+bought with inlining or specialization looks like — so the first move
+is attribution (which change grew the emission, and whether the
+growth is the win's cost or a separable side effect), not a revert.
+If the two turn out inseparable, that is a welfare trade to present
+with numbers, and the weights arbitrate as always.
+
+## 2026-08-29 — the binary-size directive, softened to its real shape
+
+Clay, immediately after: "a slightly larger binary size is a pretty
+small price to pay. i just want to make sure it's not a fixable
+issue." So the directive is attribution, not a target: find which
+change grew the emission and answer one question — incidental or the
+price? If the growth is separable from the wins (a duplicated
+specialization, a dropped dedup, dead emission), fix it. If it is the
+genuine cost of the run-instructions and compile-memory gains, keep
+it and record the trade; no campaign to force the number back down.
+
+## 2026-08-29 — the memory repo never existed; the phantom is cut out
+
+Task #146's mystery closed with a screenshot: the kanso-lang org holds
+kanso, kq, kanso-json, vse and homebrew-tap — no `memory`. The
+"Clay's memory, in a container" section of CLAUDE.md, and
+.claude/sync-memory.sh beside it, described machinery whose one
+manual step (creating the private repo) was never run. Every session
+that "was refused the attach" was asking for a repository that does
+not exist, and then reporting itself as running without instructions
+that also do not exist. CLAUDE.md now states the truth — this file is
+the complete instruction set a container gets — and the sync script
+is deleted. #146 closes: there was never anything to attach. If a
+cross-project memory is ever really wanted, it starts by actually
+creating the repo, and the section comes back with it.
 ## 2026-08-30 — the last per-line scratch, and a decision filed
 
 ```
