@@ -22,8 +22,13 @@ use std::process::Command;
 
 const BYTES: [u8; 3] = [b'a', 0xFF, b'b'];
 
-fn fixture() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join("kanso-not-text");
+/// One directory per test. They share nothing but the bytes: both write
+/// `run.kso` and cargo runs them at the same time, so a shared directory let
+/// one test read the other's half-written file — `an entry file needs at least
+/// one statement`, at random, on a file that has one. The same collision
+/// kanso#1169 fixed for the two playground tests.
+fn fixture(who: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("kanso-not-text-{who}"));
     std::fs::create_dir_all(&dir).expect("a directory to run in");
     std::fs::write(dir.join("three.bin"), BYTES).expect("the fixture writes");
     // The path is RELATIVE and the program is run from the directory holding
@@ -38,8 +43,8 @@ fn fixture() -> std::path::PathBuf {
     dir
 }
 
-fn run(interp: bool) -> (String, Vec<u8>) {
-    let dir = fixture();
+fn run(who: &str, interp: bool) -> (String, Vec<u8>) {
+    let dir = fixture(who);
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_kanso"));
     cmd.arg("run").arg("run.kso").current_dir(&dir);
     if interp {
@@ -52,7 +57,7 @@ fn run(interp: bool) -> (String, Vec<u8>) {
 /// Native hands the bytes back untouched, the invalid one included.
 #[test]
 fn native_reads_a_file_that_is_not_text() {
-    let (said, out) = run(false);
+    let (said, out) = run("native", false);
     assert_eq!(out, BYTES, "native changed the bytes; it said: {said}");
 }
 
@@ -61,7 +66,7 @@ fn native_reads_a_file_that_is_not_text() {
 /// sitting right there.
 #[test]
 fn the_interpreter_refuses_and_names_the_reason() {
-    let (said, _) = run(true);
+    let (said, _) = run("interp", true);
     assert!(said.contains("the bytes are not text"), "the refusal did not name the reason: {said}");
     assert!(!said.contains("no such file"), "the refusal still claims the file is absent: {said}");
 }

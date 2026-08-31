@@ -3500,3 +3500,159 @@ it exists so the change that admits them has something to be wrong against.
 The corpus had nothing in this shape. Every mem fixture pins allocation counts
 and every micro fixture that touches records reads them without a rewind in
 between.
+
+## 2026-08-31 — the carry exclusion goes, and it was never what it said it was
+
+SEARCHED FIRST, because the last entry on this thread was a correction for not
+doing it: design/compiler-log.md, design/log/compiler-log-archive.md,
+design/*.md, and — this time — the test suite, `beat.rs` itself, and the two
+runtime functions the exclusion's comment made a claim about. The pin the
+correction found is `beat::tests::json_decode_loops_stay_conservative`, and it
+is the reason this entry is possible rather than an obstacle to it.
+
+The exclusion is gone. `d.file.starts_with("std/") || d.file.starts_with("lib/")`
+kept whole modules out of the carry tier, and three separate things were wrong
+with it.
+
+**The field is a diagnostic.** `file` is what error origins are built from, so
+`std/sha256` and a user directory called `lib` read alike. The same package
+compiled from `lib/app` held 27,262,976 arena bytes where the same sources
+under `elsewhere/app` held 1,048,576. `tests/a_program_is_not_its_directory.rs`
+is that measurement as a spec — it copies `lib/sha256/sha256.kso` into the
+package and imports it as `./digest`, because a `std/sha256` import reads
+`std/` in both arms and passes either way. Two earlier drafts of it did exactly
+that and proved nothing; the file's header says so, so the third is not
+re-derived.
+
+**The premise was false.** The comment said a shared library driver threads its
+caller's invariant source through the loop, so carrying it copies an unbounded
+value per iteration. `k_beat_iter_carry` copies only what lies above the mark
+and a loop's mark is pushed at entry, so the caller's source is always below it
+and always shared. Measured, not read: a fold over a list built through
+`std/list` allocates 556,768 bytes at two thousand elements and 2,223,856 at
+eight thousand. Linear.
+
+**And the pin's own worry was never being enforced by it.** With the exclusion
+removed, the licensed list for `lib/json` gains `list/bisect`, `list/found_in`,
+`list/holds_all?` and `list/holds_any?` — three boolean predicates and a binary
+search, all in `std/list`, none of which accumulates — and *every group json
+itself declares reads the same on both sides*. json's scanners are refused by
+the classifier, which is what the pin's sentence is about; the exclusion was
+refusing four search predicates and sha256's cluster, and nothing else in the
+tree. `fold_go`, `fold_flat`, `drain` and `next_skipped` are "grow-only:
+another group tail-calls it" with or without it.
+
+WHAT IT BOUGHT, on the digest, native, `KANSO_COUNTERS`:
+
+| message | arena peak before | after | allocations before | after |
+|--------:|------------------:|------:|-------------------:|------:|
+|  1,000 B |        10,485,760 | 1,048,576 |  81,147 |  81,181 |
+|  2,000 B |        20,971,520 | 1,048,576 | 162,091 | 162,157 |
+|  4,000 B |        39,845,888 | 1,048,576 | 318,921 | 319,049 |
+|  8,000 B |        79,691,776 | 1,048,576 | 637,638 | 637,892 |
+
+0.04% more allocations, and the peak comes off the message at these sizes. It
+does NOT become a constant, and the first draft of this entry said it did.
+Run further: 1,048,576 at 16 KB and 32 KB, 4,194,320 at 64 KB and at 100 KB,
+12,582,944 at 200 KB. The rate falls across the range — 1,048 bytes per input
+byte at 1 KB against 63 at 200 KB, where the old code held about ten thousand
+at every size — but the last doubling took the peak up threefold, so calling
+the remainder sublinear would be reading four points as a law. Holding the
+message and doing nothing with it reads one block at 100 KB, so what is left
+belongs to the walk. **OPEN:** what the residual is. A 100 KB digest takes
+about forty seconds here, which is why the series stops where it does.
+`tests/sha256_peak.rs` pinned the old shape and said in its own header that the
+assertion was the thing to delete when the hash learned to stream; it now reads
+1,048,576 at 1,024, 2,048 and 4,096 bytes. Three sizes rather than two, because
+two points fit any line.
+
+WHAT IT COST, and it is the same trade seen from the small end. The mem fixture
+digests forty-four bytes — one padded block — so the rewinds happen and there
+is nothing to give back: allocs 1,980 -> 5,259, alloc_bytes 424,369 -> 638,865,
+beat_iters 11 -> 141, evac_allocs 26 -> 290, peak unmoved at one block.
+`thunk_evals` 1 -> 64 with `thunk_forces` unchanged, which is `k_memo_outlives`
+working as documented: a memo whose result the rewind would reclaim is declined
+and recomputed. The golden is regenerated with all of that in its header.
+
+The rest of the veins, in full: `bench/emitted_golden_others.txt` scanbench
+3,743 -> 3,753 calls and 20,019 -> 20,030 lines; `bench/cost_golden_scan.txt`
+beat_iters 15 -> 16. Nothing else. Decode, encode, oneshot, basket, escape,
+wide and pend counters byte-identical; machine code byte-identical;
+compile_allocs 25,394, compile_peak_bytes 713,606, rounds 40 and visits 16,806
+all unchanged, which is right — this changes what the analysis decides, not
+what deciding costs.
+
+WELFARE DOES NOT MOVE. 74.33 against a floor of 74.33, and that is worth saying
+out loud rather than passing over: the largest memory result in weeks is
+invisible to the objective, because no benchmark in the suite streams. Every
+program welfare weighs either holds its whole subject on purpose (the decoder,
+the encoder) or is small enough to sit in one block. The number is not wrong;
+it cannot see this. **OPEN:** a digest-shaped benchmark, so the next change
+that trades this dimension has something to trade against.
+
+The marker task (#199) closes with the exclusion rather than with a marker.
+There is no "imported" question left to answer because nothing in `beat_loops`
+asks where a declaration came from any more, and the direction that question
+was heading was wrong on its own terms: a module compiled as a root and the
+same module reached through an import are the same code, and a boundary that
+answered differently for them would be the directory defect in a second
+coordinate.
+
+STILL OPEN, and unchanged by this: `k_carry_stage_kept` is the only thing that
+keeps a grow-only accumulator from being deep-copied per iteration, and its
+license comes from `linear::in_place_pushes`. A carried builder the linear
+analysis cannot prove would be quadratic. Nothing in the corpus has that shape
+today — `tests/golden/micro/a_library_scanner_threads_records_across_a_rewind`
+is the nearest, and it carries a bounded window — and the classifier is what
+stands between a program and it. That is a boundary worth a fixture of its own.
+
+## 2026-08-31 — thunk_evals was never engine-shared, and a benchmark had been saying so
+
+Found while landing the entry above: the carry removal turned
+`mem_corpus_interp_matches_the_semantic_counters` red on the digest fixture,
+interp `thunk_evals=1` against native `thunk_evals=64`. The first reading was
+that the change had introduced a divergence. It had not.
+
+Measured on main, before any of today's work, on a 1,000-byte sha256:
+
+- native, `KANSO_COUNTERS=1 ./dg` — `thunk_allocs=16 thunk_forces=1024
+  thunk_evals=1024`
+- the same program interpreted, `kanso play` — `thunk_allocs=17
+  thunk_forces=1088 thunk_evals=17`
+
+Sixty-four evaluations for one, on both engines' own numbers, on a shape that
+has been in the tree for weeks. `k_memo_outlives` declines the memo when the
+answer was built inside the innermost beat, because the loop rewinds between
+iterations and the cell would say "forced" while pointing at reclaimed arena.
+The interpreter has no arena to rewind and answers from the memo. The mem
+corpus simply had no fixture where a deferred value is forced inside a beat,
+so the oracle test's classification — `allocs/forces/evals` engine-shared,
+`frees/escaped/live_exit` native-only — had never been asked the question.
+
+`thunk_evals` moves to the native-only side. The reason is not that the gate
+was inconvenient: the language is pure, so how many times a value is COMPUTED
+is not something a program can observe, and `thunk_forces` beside it pins what
+the program actually did. The remaining assertion was mutated to check it still
+bites — `forces + 2` instead of `forces + 1` in eval.rs turns the digest
+fixture red on the right line.
+
+**OPEN, and it is a real cost rather than a classification.** The value native
+recomputes here is sha256's message schedule: sixty-four words, built once per
+block, read once per compress round, rebuilt on every read. 8,064 evaluations
+where 126 would do, on an 8 KB message. It does not show in `allocs` because
+the schedule's storage is reused inside the block, but it is sixty-four times
+the arithmetic. Two shapes of fix, neither built:
+
+- Tenure the answer. `k_ten_alloc` already gives a per-beat-depth region that
+  survives rewinds and is freed at `k_beat_pop`, which is exactly the lifetime
+  a per-block value wants. `k_survives_x` already consults it.
+- Force the thunk before `k_beat_push`. The comment on `k_memo_outlives` says
+  the call site that opens a beat "promises its arguments are already
+  evaluated — a thunk is the one argument that is not"; making good on the
+  promise puts the answer below the mark, where it survives every rewind.
+  This one changes when work happens, so it runs into the 2026-08-23 ruling on
+  undemanded knots and wants a gavel rather than a patch.
+
+Freezing into permanent storage is the wrong shape and is recorded so nobody
+re-derives it: the schedule is per block, so a `k_caf_freeze` would be linear
+in the message and would put back the exact peak the entry above removed.

@@ -159,29 +159,45 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             }
         }
     }
-    // A carried beat evacuates its slots every iteration, and a shared
-    // library driver threads its caller's invariant source through the loop
-    // — carrying that copies an unbounded value per iteration, so imported
-    // groups stay out of the carry tier. A plain beat carries nothing: its
-    // rewind is a pointer reset, and a module loop that earned one keeps
-    // it. Groups with a synthetic arm stay out of everything — a bare clone
-    // is a second spelling the analyses cannot see through.
+    // Groups with a synthetic arm stay out of everything — a bare clone is a
+    // second spelling the analyses cannot see through.
+    //
+    // Nothing else here asks where a declaration came from. A second filter
+    // did until 2026-08-31: groups whose `file` began `std/` or `lib/` were
+    // kept out of the carry tier, on the reasoning that a shared library
+    // driver threads its caller's invariant source through the loop and
+    // carrying that would copy an unbounded value per iteration. Three
+    // things were wrong with it.
+    //
+    // The field is a diagnostic. `file` is what error origins are built
+    // from, so `std/sha256` and a user directory called `lib` read the same,
+    // and the same sources compiled from `lib/app` held eighty-six times the
+    // peak they held from anywhere else. A program's memory behaviour
+    // followed where its author kept it.
+    //
+    // The premise is false. `k_beat_iter_carry` copies only what lies above
+    // the mark, and a loop's mark is pushed at entry, so the caller's
+    // invariant source is always below it and always shared. Folding a list
+    // built through `std/list` allocates 556,768 bytes at two thousand
+    // elements and 2,223,856 at eight thousand — linear, measured.
+    //
+    // It cost the streaming shape everything. sha256 is a block algorithm:
+    // sixty-four schedule words and eight state words, all dead when the
+    // next block starts. Without a carry the arena never rewound between
+    // blocks, so an 8 KB message held 79,691,776 bytes; with it the same
+    // message holds 1,048,576 at every size, for 254 more allocations in
+    // 637,892.
+    //
+    // What it bought, in the whole tree, was to strip four `std/list` search
+    // predicates — `bisect`, `found_in`, `holds_all?`, `holds_any?` — of a
+    // rewind, and sha256's cluster of its own. lib/json's scanners are
+    // refused by the classifier and were never reached by it; the license
+    // list in `json_decode_loops_stay_conservative` reads the same either
+    // way for every group json declares.
     let has_synthetic: crate::hash::Set<&str> =
         program.fns.iter().filter(|d| d.synthetic).map(|d| d.name.as_str()).collect();
-    let imported: crate::hash::Set<&str> = program
-        .fns
-        .iter()
-        .filter(|d| d.file.starts_with("std/") || d.file.starts_with("lib/"))
-        .map(|d| d.name.as_str())
-        .collect();
     ids.retain(|(name, _), _| !has_synthetic.contains(name.as_str()));
-    let carried_needed: crate::hash::Set<(String, usize)> = carried.keys().cloned().collect();
-    carried.retain(|(name, _), _| {
-        !has_synthetic.contains(name.as_str()) && !imported.contains(name.as_str())
-    });
-    // an id whose carry was just stripped must not stay armed as a carry
-    // beat with nothing staged: drop imported ids that needed their carry
-    ids.retain(|g, _| !imported.contains(g.0.as_str()) || !carried_needed.contains(g));
+    carried.retain(|(name, _), _| !has_synthetic.contains(name.as_str()));
 
     // A demoted pair lives or dies with its target loop, never with the
     // caller's name: a user loop entered through a group that shares its
@@ -1982,12 +1998,23 @@ mod tests {
     #[test]
     fn json_decode_loops_stay_conservative() {
         // kanso-json's scanners are mutually recursive and thread record and
-        // list accumulators — those stay out. The two encoders thread a byte
-        // builder by pointer identity, which is exactly what the chain
-        // license admits: raw bytes hold no pointers, so nothing in the
-        // accumulator can dangle across a rewind. The string scanners share
-        // the licence but not the entry: they are reached by a tail call,
-        // and a demoted entry buys a plain beat, never a carried one.
+        // list accumulators — those stay out, and the classifier is what
+        // keeps them out. The two encoders thread a byte builder by pointer
+        // identity, which is exactly what the chain license admits: raw bytes
+        // hold no pointers, so nothing in the accumulator can dangle across a
+        // rewind. The string scanners share the licence but not the entry:
+        // they are reached by a tail call, and a demoted entry buys a plain
+        // beat, never a carried one.
+        //
+        // The four `std/list` groups are search predicates that json's
+        // scanners call. They carry the list they are searching, which is
+        // the caller's and so below the loop's mark, and they return an
+        // index or a boolean — nothing accumulates. They entered this list
+        // on 2026-08-31 when the source-path exclusion above went: they had
+        // been refused for being declared under `lib/`, which is also what
+        // cost sha256 a flat peak. Every group JSON ITSELF declares reads
+        // the same on both sides of that change, which is the measurement
+        // that says the exclusion was never what kept json's scanners out.
         let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
@@ -1995,9 +2022,17 @@ mod tests {
         licensed.sort();
         assert_eq!(
             licensed,
-            vec![("encode_items".to_string(), 3), ("encode_pairs".to_string(), 3)],
-            "only the byte-builder encoders may rewind; scanners threading \
-             records or lists stay on the grow-only arena"
+            vec![
+                ("encode_items".to_string(), 3),
+                ("encode_pairs".to_string(), 3),
+                ("list/bisect".to_string(), 5),
+                ("list/found_in".to_string(), 2),
+                ("list/holds_all?".to_string(), 2),
+                ("list/holds_any?".to_string(), 2),
+            ],
+            "of json's own groups only the byte-builder encoders may rewind; \
+             its scanners thread records and lists and stay on the grow-only \
+             arena"
         );
     }
 }

@@ -26,6 +26,13 @@
 # bindings of dead code in this program, and the pattern in any program that
 # repeats an interpolation inside a nested body. The walk has the arms now and
 # the two agree.
+# 2026-08-31: scanbench 3743 -> 3753 calls, 20019 -> 20030 lines. A RISE, and
+# it is the whole emitted cost of removing the source-path exclusion from
+# beat.rs: four `std/list` search predicates get a carry rewind again, and each
+# emits its stage/rewind/take. Nothing else in this file moves, nor any of the
+# eight runtime counter veins, nor the machine-code gate. What it bought is on
+# the other side of the tree: an 8 KB sha256 digest goes from 79,691,776 arena
+# bytes to 1,048,576, and stops being proportional to the message.
 encodebench defines=153 calls=1663 branches=1014 lines=10466
 oneshot defines=154 calls=1779 branches=1159 lines=11469
 basket defines=118 calls=1324 branches=726 lines=7181
@@ -33,7 +40,7 @@ widebench defines=169 calls=1884 branches=1116 lines=11507
 deepbench defines=92 calls=840 branches=520 lines=5046
 escapebench defines=29 calls=97 branches=48 lines=708
 pendbench defines=106 calls=1250 branches=611 lines=6169
-scanbench defines=307 calls=3743 branches=2214 lines=20019
+scanbench defines=307 calls=3753 branches=2214 lines=20030
 indexbench defines=35 calls=159 branches=76 lines=1104
 # 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
 # 1,104 lines. It reads a string forward one character at a time, which is the

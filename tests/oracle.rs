@@ -211,20 +211,46 @@ fn mem_corpus_interp_matches_the_semantic_counters() {
     for program in kso_files(&manifest_dir().join("tests/golden/mem")) {
         let compiled = compile_case(&program);
         let run = evaluate(&compiled, Vec::new());
-        // allocs/forces/evals are evaluation semantics, engine-shared;
-        // frees/escaped/live_exit are allocator behavior, native-only.
+        // How many cells a program makes and how many times it demands them
+        // are semantics, engine-shared. How many of those demands actually ran
+        // the computation is not, and `thunk_evals` was on the wrong side of
+        // that line until 2026-08-31 — nothing in the corpus had ever asked.
+        //
+        // `k_memo_outlives` declines the memo when the answer was built inside
+        // the innermost beat: the loop rewinds between iterations and the cell
+        // would be pointing at reclaimed arena while saying it was forced. So
+        // native recomputes where the interpreter, which has no arena to
+        // rewind, answers from the memo. Measured on main before the fixture
+        // that caught it existed: a 1,000-byte sha256, native
+        // `thunk_forces=1024 thunk_evals=1024`, the same program interpreted
+        // `thunk_forces=1088 thunk_evals=17`. Sixty-four to one, on a
+        // benchmark that had been running for weeks.
+        //
+        // That gap is a real cost and it is recorded as one in
+        // design/compiler-log.md — a per-block schedule rebuilt once per read.
+        // It is not a semantic difference: the language is pure, so how many
+        // times a value is computed is not something a program can observe,
+        // and `thunk_forces` beside it pins what the program actually did.
+        //
+        // frees/escaped/live_exit are allocator behavior, native-only, and
+        // always were.
         let semantic: String = expected(&program, "mem")
             .lines()
             .filter(|line| {
-                line.starts_with("thunk_allocs")
-                    || line.starts_with("thunk_forces")
-                    || line.starts_with("thunk_evals")
+                line.starts_with("thunk_allocs") || line.starts_with("thunk_forces")
             })
             .map(|line| format!("{line}\n"))
             .collect();
 
+        let said: String = run
+            .thunk_stats
+            .lines()
+            .filter(|line| line.starts_with("thunk_allocs") || line.starts_with("thunk_forces"))
+            .map(|line| format!("{line}\n"))
+            .collect();
+
         assert_eq!(run.stdout, expected(&program, "stdout"), "stdout mismatch for {program:?}");
-        assert_eq!(run.thunk_stats, semantic, "semantic counters diverged for {program:?}");
+        assert_eq!(said, semantic, "semantic counters diverged for {program:?}");
         assert_eq!(run.status, 0, "expected success for {program:?}");
     }
 }
