@@ -44,21 +44,37 @@ fn freshness() -> Result<(), String> {
     let Ok(built) = art.metadata().and_then(|m| m.modified()) else {
         return Err("docs/kanso.wasm is missing".to_string());
     };
-    let mut newer = Vec::new();
+    let (mut newer, mut total, mut widest) = (Vec::new(), 0, std::time::Duration::ZERO);
     for entry in std::fs::read_dir(root().join("src")).map_err(|e| e.to_string())? {
         let path = entry.map_err(|e| e.to_string())?.path();
         if path.extension().is_none_or(|x| x != "rs") {
             continue;
         }
+        total += 1;
         let touched = path.metadata().and_then(|m| m.modified()).map_err(|e| e.to_string())?;
         if touched > built {
+            widest = widest.max(touched.duration_since(built).unwrap_or_default());
             newer.push(path.file_name().unwrap_or_default().to_string_lossy().to_string());
         }
     }
-    match newer.is_empty() {
-        true => Ok(()),
-        false => Err(format!("docs/kanso.wasm predates {}", newer.join(", "))),
+    if newer.is_empty() {
+        return Ok(());
     }
+    // A checkout writes the whole tree at once, in path order, and `docs/`
+    // sorts before `src/`: measured in a fresh worktree, the blob lands 28ms
+    // before every source file. So EVERY fresh clone trips this, and saying
+    // the blob "predates" the sources sends the reader looking for an edit
+    // that never happened — the same wrong reason kanso#1084 and kanso#1086
+    // took out of two other refusals. The refusal itself is right either way:
+    // the blob is not known to match these sources.
+    if newer.len() == total && widest < std::time::Duration::from_secs(1) {
+        return Err(format!(
+            "docs/kanso.wasm is {}ms older than all {total} sources, which is what a \
+             checkout looks like rather than an edit",
+            widest.as_millis()
+        ));
+    }
+    Err(format!("docs/kanso.wasm predates {}", newer.join(", ")))
 }
 
 struct Toolchain {
