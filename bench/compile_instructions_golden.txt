@@ -204,4 +204,575 @@
 # attribution. The +167, -251, +1,954, -159, +81,855, -3,364 and +146 above
 # each argued unreachability from the call graph and left the sign
 # unexplained; this one has the sign measured twice and coming out opposite.
-compile_instructions=57571389
+#
+# 2026-08-29 (the three chain words): 57,571,389 -> 57,569,314, a fall of
+# 2,075 (0.004%). Banked. The measured path is `kanso check`, which never
+# emits, so codegen.rs's new call site and wasm_backend.rs's do not run; what
+# changed in front of it is three more entries in BUILTINS and three in
+# AMBIENT, and both are read rather than walked per node. A fall of this size
+# on this vein has been layout every previous time it was chased — the +146
+# and +2,918 entries above are the two that were chased to the end — and
+# nothing here suggests a different answer.
+# 2026-08-29 (the group fix): 57,569,314 -> 57,567,033, a fall of 2,281, and
+# it lands on a number this vein already held today. The chain-words branch
+# read 57,567,033 before a pure rename moved it to 57,569,314; this commit
+# changes eval.rs and wasm_rt.rs again and it comes back. Four moves in one
+# day on three changes, none of which touches `kanso check`'s path — the
+# measured run never emits, and neither a rename nor a call-hook flag nor a
+# predicate call reaches it.
+#
+# That round trip is the strongest thing this file has said about itself. An
+# attribution to layout has usually been an argument from the call graph; a
+# vein that returns to an earlier value under a different diff is layout
+# showing its hand.
+#
+# 2026-08-29 (a builtin's count at the front door): 57,567,033 -> 57,678,168,
+# a rise of 111,135. Work, not layout. `check_call_arities` now asks what a
+# builtin takes for every head no declaration and no binding claims — 335
+# times on this program, counted rather than guessed — and each ask is a
+# binary search of a sixty-two entry table.
+#
+# The first shape scanned that table and cost 144,031. A map built once for
+# the process cost only 33,772 and did not ship: it holds 3,216 bytes for the
+# life of the process, compile_peak_bytes moved with it, and welfare prices a
+# byte held about five times what it prices an instruction spent, which put
+# the number under its floor at 84.10. This shape holds nothing and welfare
+# stays at 84.11. design/compiler-log.md, same date, has all four readings.
+#
+# What it buys: a wrong count refused where it is written, with a span, on
+# all three engines. It used to be four answers, one of them a compiler panic.
+#
+# 2026-08-29 (a module is named the way an import writes it): 57,678,168 ->
+# 57,761,997, a rise of 83,829. LAYOUT, and this one has two-host evidence
+# rather than an argument.
+#
+# The diff is one `strip_suffix(".kso")` on a string that is only formatted
+# when a DEPENDENCY fails to check. `kanso check lib/json` succeeds, so the
+# block never runs. The container that cannot compare absolute numbers can
+# still compare a delta on itself, and it read main 58,311,708 against the
+# branch 58,311,720: **twelve instructions**. The same diff is 83,829 here.
+#
+# A change that costs twelve instructions on one host is not doing 83,829
+# instructions of work on another. Every earlier layout attribution in this
+# file argued from the call graph — the code cannot run, therefore the move is
+# layout — and the entry above added a round trip as better evidence. Two
+# hosts disagreeing by four orders of magnitude on the same diff is better
+# still, and it is cheap: the container measures the delta in a minute.
+#
+# 2026-08-29 (the backend guard): 57,761,997 -> 57,764,135, a rise of 2,138.
+# LAYOUT, and the cleanest reading this file has. The guard is in
+# `emit_call_rest`, and `kanso check lib/json` never emits, so the code
+# cannot run on the measured path. The two-host delta says so without the
+# argument: the container reads 58,311,720 for main and 58,311,720 for the
+# branch — BYTE-IDENTICAL, a delta of zero — against CI's +2,138.
+#
+# The entry above this one introduced the method with +12 against +83,829.
+# Zero against 2,138 is the same finding at the limit: a diff that changes
+# nothing measurable on one host moves this row on another, so the row is
+# reading the binary's shape rather than the compiler's work. Two runs of
+# callgrind in a container, about a minute, and the attribution is a number.
+#
+# 2026-08-29 (the upcast's target): 57,764,135 -> 57,789,584, a rise of 25,449
+# — and the two-host method separates it into two commits with opposite
+# answers, which is the first time it has been used to SPLIT a diff rather
+# than to label one.
+#
+#   the rename-pass fix          runner +2,167     container   -116
+#   the unused-import fix        runner +23,282    container +33,960
+#
+# The first qualifies an upcast's target when a module is imported, and
+# `lib/json` contains no upcast, so the code cannot run on the measured path.
+# The hosts disagree on the sign, which is what layout looks like here.
+#
+# The second is work, and the hosts agree on both sign and order. `used_quals`
+# walks every expression of every compile marking module qualifiers, and it
+# now marks two node kinds it skipped: an upcast's target and a held name
+# (`&mod/fn`). `lib/json` holds names, so each one is a `split_once` and a
+# `String` allocation that did not happen before.
+#
+# What it buys: a file whose only use of an import was one of those two forms
+# could not be written at all. Dropping the import left the name unresolved
+# and keeping it failed the unused-import check.
+#
+# ONE INSTRUMENT FAULT ON THE WAY, worth recording because it nearly shipped a
+# false claim. `cargo test --test compile_cost` passes in 0.09 seconds and was
+# read as evidence that this vein had not moved. It does not measure this vein
+# — callgrind lives in scripts/gates/compile_instructions.sh — so "the compile
+# veins do not move on this host" was asserted three times from a test that
+# cannot see them. `scripts/gates/library_box.sh` COPIES ./target/release/kanso
+# rather than building it, so the first two container readings were the same
+# binary twice and agreed to the digit, which read as confirmation.
+#
+# 2026-08-29 (four positions, one checked): 57,789,584 -> 57,801,548, a rise of
+# 11,964. LAYOUT, and the two hosts disagree on the sign, which is the reading
+# this file trusts most.
+#
+#   the runner      57,789,584 -> 57,801,548    +11,964
+#   the container   58,345,564 -> 58,321,444    -24,120
+#
+# The change asks, in `resolve_expr`, whether an upcast's target names a type.
+# `lib/json` contains no upcast, so the new arm's body never runs on the
+# measured path; what it also does is replace three pointer arguments to
+# `check_fn_body_shadow` with one `Declared`, at a call made per declaration,
+# which is a plausible mechanism for the container's fall and is not offered as
+# a measurement of it.
+#
+# `compile_allocs` is the reason this entry has two numbers rather than one. It
+# went red on the first push of this branch and it measures front-end work
+# rather than the binary's shape, so the fault was the change's and not the
+# runner's: the resolver was handed its own `HashSet` of declared type names
+# built beside the one `check_annotation_names` already built, the same collect
+# over the same iterator twice per compile. One set, and the counter is
+# 61,974 again — byte-identical on both hosts. The vein that cannot be blamed
+# on layout is the one that caught it.
+#
+# 2026-08-29 (a held name is a use): 57,801,548 -> 57,811,952, a rise of
+# 10,404. WORK, and both hosts say so:
+#
+#   the runner      57,801,548 -> 57,811,952    +10,404
+#   the container   58,321,444 -> 58,336,378    +14,934
+#
+# Same sign, same order — which is what this file has come to expect of work,
+# against the opposite signs it has come to expect of layout. The arm is one
+# pattern widened in `mark_bare_quals`, so a bare `&make` marks its import used
+# the way a bare `make` does, and `lib/json` holds bare partials, so it runs.
+#
+# compile_allocs does not move: the set holds borrowed `&str` rather than a
+# `String` per occurrence, which the comment above that walk says was the point
+# of an earlier change, and this arm inherits the property rather than spending
+# it.
+#
+# What it buys is a file that could not be written at all. An import whose only
+# use was a bare held name was refused as unused; dropping the import leaves the
+# name unresolved and keeping it fails the check.
+#
+# 2026-08-29 (a backend's own limit): 57,811,952 -> 57,813,512, a rise of 1,560.
+# LAYOUT, on both the argument and the pair:
+#
+#   the runner      57,811,952 -> 57,813,512    +1,560
+#   the container   58,336,378 -> 58,336,242      -136
+#
+# Opposite signs, and the change is one added test in `partial_lambda` in each
+# backend. `kanso check lib/json` compiles a library and emits nothing, so
+# neither backend's partial path runs on the measured path at all. The entry
+# above this one is the contrast: same-sign, same-order, and banked as work.
+#
+# compile_allocs is 61,974, unchanged.
+#
+# 2026-08-29 (a widening names its type): 57,813,512 -> 57,816,025, a rise of
+# 2,513. LAYOUT:
+#
+#   the runner      57,813,512 -> 57,816,025    +2,513
+#   the container   58,336,242 -> 58,333,115    -3,127
+#
+# Opposite signs, this file's layout signature. The change is one `if let` at
+# the top of `type_in_hand` in check.rs, reading an `Expr::Upcast`'s target,
+# plus a rename of that function and its two call sites. `lib/json` widens
+# nothing, so the arm is never taken on the measured path and what moved is
+# where the code sits.
+#
+# compile_allocs is 61,974, unchanged — the arm allocates nothing.
+# 2026-08-29 (the article on three engines): 57,816,025 -> 57,819,888, a rise
+# of 3,863. LAYOUT:
+#
+#   the runner      57,816,025 -> 57,819,888    +3,863
+#   the container   58,333,115 -> 58,329,165    -3,950
+#
+# Opposite signs. `article` moves from check.rs to diag.rs and gains two
+# callers in eval.rs and one in wasm_rt.rs; `k_article` is new in runtime.c
+# and is not in this binary at all. Both messages it feeds are runtime
+# messages, and `kanso check lib/json` runs no program, so nothing the change
+# touches is on the measured path.
+#
+# compile_allocs is 61,974, unchanged.
+# 2026-08-29 (a typeset only annotates): 57,819,888 -> 57,819,006, a FALL of
+# 882. LAYOUT, and the runner's side of it is the good side:
+#
+#   the runner      57,819,888 -> 57,819,006      -882
+#   the container   58,329,165 -> 58,330,347    +1,182
+#
+# Opposite signs again. The change adds `typeset_constructions` to check.rs,
+# a walk that builds a borrowed set of typeset names and returns at once when
+# the set is empty. `lib/json` declares no typeset, so the pass reads the type
+# list, finds nothing, and stops — there is no walk to pay for on the measured
+# path, and what moved is where the code sits.
+#
+# compile_allocs is 61,974, unchanged: the set holds `&str` into the program.
+# 2026-08-29 (a constructor pattern over a typeset): 57,819,006 -> 57,822,766,
+# a rise of 3,760. LAYOUT:
+#
+#   the runner      57,819,006 -> 57,822,766    +3,760
+#   the container   58,330,347 -> 58,329,928      -419
+#
+# Opposite signs. The arm is a branch on a walk that already ran, plus a
+# borrowed set of typeset names built beside the one `check_annotation_names`
+# already had. `lib/json` declares no typeset, so the set is empty and the
+# branch never fires on the measured path.
+#
+# THE OTHER READING IN THIS ENTRY IS THE ONE WORTH KEEPING. The first attempt
+# gave `Pattern::Ctor` a span so the diagnostic could point at the type name
+# rather than at the first field, and the container answered:
+#
+#   the span alone                58,330,347 -> 58,813,260   +482,913
+#   the span and the arm          58,330,347 -> 58,818,195   +487,848
+#
+# 0.83% of the front end for one caret's worth of precision, because `Pattern`
+# grows from 64 bytes to 72 and patterns move through every pass. Declined.
+# The log entry has the reasoning and the cheaper way in: `Span` is two
+# `usize` where two `u32` would hold a four-billion-line file.
+#
+# compile_allocs is 61,974, unchanged.
+#
+# 2026-08-30  57,822,766 -> 58,205,543   +382,777   +0.66%
+# `Span` became two `u32` — the cheaper way in the entry above named. `Expr`
+# falls from 64 bytes to 56, `Stmt` from 136 to 120, and compile_peak_bytes
+# falls 7.1%, from 822,004 to 763,868. This row is what that cost.
+#
+# The container read +50,058 for the same change, an eighth of what the runner
+# reads. Same sign, different order — so some of this is work and some is the
+# two hosts laying the binary out differently, and neither number decomposes
+# it. Callgrind will not say either: it puts the container's rise almost
+# entirely in `walk_children`, which does no span arithmetic, and a probe
+# build with the same `u32` fields padded back to 16 bytes rises by the same
+# amount overall while attributing it to `parse_atom` instead. What the probe
+# DOES settle is the memory: padded back to 16, peak returns to 822,004 to the
+# byte, so the fall is the struct size and nothing else.
+#
+# compile_allocs stays 61,974: the same objects are allocated, smaller.
+#
+# 2026-08-30  58,205,543 -> 58,210,887   +5,344   +0.009%
+# `check_build_blocks` walks nested statement lists now — an `if` arm, a
+# `build` body inside one, and everything below a fired guard — because a field
+# write in any of the three was checked by nobody.
+#
+# It cost +28,556 written as a pair of free functions carrying their state, and
+# welfare fell, which is not allowed. Folding the check into the same `match`
+# that picks a statement apart made it worse still, +38,298: the body stopped
+# being inlined. What paid was the callback. The walk descends through
+# `for_each_child`, whose callback is a `&mut dyn FnMut` — one indirect call
+# per child — so a closure capturing three references writes three words at
+# every one of them; as a method on a struct holding the three, it captures one.
+#
+# What is left disagrees between the hosts: the container reads 58,375,759
+# against a 58,379,986 baseline, a FALL of 4,227, where the runner reads a rise
+# of 5,344. Opposite signs, so the remainder is the two hosts laying the binary
+# out differently rather than work either way. compile_allocs and
+# compile_peak_bytes do not move at all.
+#
+# 2026-08-30  58,210,887 -> 58,209,632   -1,255   -0.002%
+# `k_set_field` in runtime.c says the sentence the other two engines say.
+# runtime.c is embedded in the compiler's binary, so editing its text moves the
+# data section and the row with it; `kanso check lib/json` emits nothing and
+# never runs a line of it. compile_allocs, compile_peak_bytes, rounds and
+# visits are all unchanged. Layout, in the direction that costs nothing.
+#
+# 2026-08-30  58,209,632 -> 56,442,099   -1,767,533   -3.04%
+# `walk_children` took its callback as `&mut dyn FnMut`, so every child visit
+# in the front end went through a vtable. Generic, it monomorphises across the
+# forty call sites. compile_allocs, compile_peak_bytes, rounds and visits are
+# all unchanged — only the dispatch is gone.
+#
+# The two hosts agree for once: the container reads -1,836,913 (-3.15%) where
+# the runner reads -1,767,533 (-3.04%), same sign and within four per cent of
+# each other. That is what work looks like across a host pair, against the
+# +382,777/+50,058 of the Span change eight rows up.
+#
+# 2026-08-30  56,442,099 -> 55,414,950   -1,027,149   -1.82%
+# `eval_call` collected a call's argument sets into a `Vec<Set>`, and `Set` is
+# a `u16`. Eight of them are an array on the stack now; arities above eight
+# still spill to a `Vec`. compile_allocs falls 61,974 -> 57,430 with it;
+# compile_peak_bytes, rounds and visits do not move.
+#
+# The two hosts agree on the allocations to the block — both read 57,430 — and
+# disagree by a factor of three on what the allocations cost: the container
+# reads -340,075 where the runner reads -1,027,149. Same sign, neither near
+# zero, so this is a part-work row, and callgrind says which part. In the
+# container the lines that do the allocating fall by 680,008 — malloc,
+# _int_malloc, free, _int_free, arena free, __rust_alloc, __rust_dealloc — and
+# `malloc_consolidate` and `unlink_chunk` RISE by 389,955. Removing 4,544
+# small short-lived blocks changes the shape of the free lists, and on this
+# glibc revision consolidation takes back 57% of what the removed calls saved.
+# The remaining -290,053 plus about fifty thousand in `eval_call` itself is the
+# container's -340,075. The runner's 2.39-0ubuntu8.8 does not pay it, and banks
+# nearly the whole gross saving instead. So the work is real and the
+# disagreement is the allocator's — the first row here whose host gap has a
+# named mechanism rather than a shrug at layout.
+#
+# 2026-08-30  55,414,950 -> 55,319,098   -95,852   -0.17%
+# `eval_call` cloned its dispatch group's `Vec<usize>` on every call, for the
+# borrow checker. Groups are ranges into one flat vector now. compile_allocs
+# falls 57,430 -> 54,747 and compile_peak_bytes 763,868 -> 742,572; rounds and
+# visits do not move.
+#
+# The hosts disagree again, by a factor of three and a half, and this time in
+# the OTHER direction: the container reads -342,880 where the runner reads
+# -95,852. The row above blamed `malloc_consolidate`, and the two rows read
+# together say more than either alone. Consolidation on this workload steps up
+# about 265,000 instructions, once, when the free lists change shape — and the
+# hosts take that step on different changes. The container took it at the row
+# above (788,221 -> 1,058,396) and holds flat here (1,058,396 -> 1,055,975).
+# The runner held flat there (789,570) and takes it here (789,570 ->
+# 1,054,967). Each host pays the same penalty for the same reason; only the
+# change it lands on differs, which is why the per-change gaps are large and
+# lean opposite ways. Over the two changes together the readings are -682,955
+# and -1,123,001, still apart but by 1.6x rather than 3.6x.
+#
+# 2026-08-30  55,319,098 -> 54,488,638   -830,460   -1.50%
+# Four lookup keys `inline.rs` was building a `String` for, and a private child
+# walk that returned a vector per node. compile_allocs falls 54,747 -> 50,528;
+# compile_peak_bytes, rounds and visits do not move.
+#
+# The hosts agree on this one: -852,860 in the container against -830,460 on
+# the runner, 2.7% apart and the same sign. That is what the two rows above
+# predict. `malloc_consolidate` steps up once when the free lists change shape,
+# the container took its step two rows up and the runner one row up, and with
+# both steps spent neither host pays here — so the readings converge. The row
+# is work, and either number estimates it.
+#
+# 2026-08-30  54,488,638 -> 54,507,708   +19,070   +0.035%
+# `lib::walk_children_mut` gained arms for a lambda, a block, a build and a
+# guard, which it had claimed to have and did not. Four passes descend further
+# now; two of them were wrong without it (the door rewrite silently, the
+# hoister into dead code). compile_allocs and compile_peak_bytes do not move,
+# and rounds and visits do not either.
+#
+# LAYOUT, by this file's own rule, and the clearest case of it yet: the
+# container reads 55,000,527 -> 54,850,326, a FALL of 150,201, where the runner
+# reads a rise of 19,070. Opposite signs and both under three tenths of a per
+# cent. The change adds four match arms to one function — the code grew, the
+# work it does on this input barely moved, and the two hosts placed the result
+# differently. Neither number is an estimate of anything but its own host.
+#
+# 2026-08-30  54,507,708 -> 54,504,611   -3,097   -0.006%, banked as layout.
+# `k_is_heap` became a bit mask so `K_SUB` could join it, and six sites in the
+# sizing walk gained a `k_worth_sizing` test. runtime.c is embedded in the
+# compiler's binary, so its text moves this row; the front end never runs a
+# line of it. compile_allocs and compile_peak_bytes do not move, which is what
+# an edit the measured path cannot reach should read as. On the way, the mask
+# alone read 54,509,454 here, so the same untouched call graph moved +1,746 and
+# then -4,843 across two edits to a file the front end does not execute.
+#
+# 2026-08-30  54,504,611 -> 53,528,219   -976,392   -1.79%, banked, and REAL
+# WORK rather than layout for once — `block_opener` runs on every line of every
+# file compiled, and it no longer builds a `Vec<char>` to do it. The allocator
+# rows in the profile fall with it: `_int_free` 3,131,672 -> 3,014,268, `free`
+# 1,415,064 -> 1,354,248, `malloc` 2,219,807 -> 2,122,067, `finish_grow`
+# 846,705 -> 790,505. compile_allocs falls 2,172 in the same change and
+# compile_peak_bytes does not move, which is the shape of a vector that never
+# lived past its call.
+#
+# 2026-08-30  53,528,219 -> 52,510,153   -1,018,066   -1.90%, banked, and real
+# work: one fewer vector to grow, per line and per interpolation. The profile's
+# own rows move the way that predicts — `finish_grow` 790,505 -> 736,825,
+# `_int_free` 3,014,268 -> 2,930,351, `free` 1,354,248 -> 1,316,224,
+# `lex_line` 785,322 -> 749,824 — while `eval_expr` and `check_merged` are
+# byte-identical, which is right for a change no pass but the lexer and parser
+# can see. compile_allocs falls 1,358 and compile_peak_bytes holds at 742,572.
+#
+# 2026-08-30  52,510,153 -> 52,172,225   -337,928   -0.64%, banked. 990 fewer
+# allocations. The four allocator rows account for 208,685 of it, 61.8%:
+# `_int_malloc` 3,268,747 -> 3,195,886, `_int_free` 2,930,351 -> 2,865,636,
+# `malloc` 2,060,969 -> 2,017,580, `free` 1,316,224 -> 1,288,504; `__rust_alloc`
+# 940,608 -> 917,838 brings it to 68.5%. The remaining third is the `String`'s
+# own construction and drop — the copy of the name bytes and the length
+# bookkeeping — which callgrind's 90% threshold leaves without rows of their
+# own. Counting only what has a row and calling it the whole would have
+# overstated the attribution by a third. `eval_expr`,
+# `check_merged`, `infer` and `lex_line` are byte-identical, which is what a
+# change confined to one pass's map keys should read as. The `&str` keys hash
+# exactly as the `String` keys did — `Hash for String` forwards to `str` — so
+# the map's iteration order is unchanged by construction, and the emitted
+# golden confirms it.
+#
+# 2026-08-30  52,172,225 -> 52,201,308   +29,083   +0.056%. A RISE, and it is
+# glibc's free-list maintenance rather than the compiler's work. Every kanso
+# frame and every allocator entry point fell — `_int_malloc` 3,196,519 ->
+# 3,120,043, `_int_free` 2,865,445 -> 2,796,140, `malloc` 2,017,580 ->
+# 1,969,739, `free` 1,288,504 -> 1,258,040, `__rust_alloc` 917,838 -> 892,814,
+# `String::clone` 311,018 -> 275,114, which is 326,000 of work removed — and
+# two rows rose past it: `malloc_consolidate` 721,213 -> 967,024 (+245,811) and
+# `unlink_chunk` 340,268 -> 448,044 (+107,776).
+#
+# Removing 1,088 short-lived allocations of one size changed which chunks sat
+# in the fastbins when glibc came to consolidate them, and it consolidated more.
+# The compiler asks the allocator for less and the allocator charges more for
+# the asking. `kanso::demand::analyze` itself moves 174 instructions on 112,706,
+# which is the noise floor of this measurement.
+#
+# Banked as a rise with a cause, not waved through as layout: it reproduces on
+# both hosts and with the same sign — +20,355 here under rustc 1.94.1, +29,083
+# on the runner under 1.98.0 — where a layout accident would not. Welfare goes
+# up, because compile speed reads the mean of this row's ratio and
+# compile_allocs's, and 2.4% off the allocations outweighs 0.056% on the
+# instructions several times over.
+#
+# 2026-08-30  52,201,308 -> 51,126,817   -1,074,491   -2.06%, banked, and it
+# is the four per-iteration vectors: 3,985 fewer allocations, and the allocator
+# rows move the way that predicts. `_int_free` 2,796,241 -> 2,580,177, `malloc`
+# 1,969,739 -> 1,790,546, `free` 1,258,040 -> 1,146,488, `__rust_alloc` 892,814
+# -> 852,633 — 547,000 between them, half the fall. `_int_malloc` and
+# `malloc_consolidate` hold, which is what says the fastbin churn the previous
+# entry describes did not come back.
+#
+# Two rows rise and both are the price of a reused buffer: `lex_line` 749,824
+# -> 777,023 (+27,199) for taking a buffer from the pool and giving it back per
+# line, and `infer::infer` 1,167,175 -> 1,186,509 (+19,334) for clearing the
+# gather vector. 46,000 instructions of bookkeeping against 1,074,000 saved.
+#
+# `eval_expr`, `check_merged` and `__memcmp_avx2_movbe` are byte-identical,
+# which is right for a change no pass but the lexer, the parser and one
+# function of infer can see.
+#
+# 2026-08-30  51,126,817 -> 50,455,686   -671,131   -1.31%, banked. 2,473 fewer
+# allocations and 8,310 fewer bytes held, and the allocator rows move the way
+# that predicts: `_int_free` 2,580,177 -> 2,434,266, `malloc` 1,790,546 ->
+# 1,684,286, `_int_malloc` 3,123,992 -> 3,044,126, `free` 1,146,488 ->
+# 1,077,244, `__rust_alloc` 852,633 -> 800,814, `malloc_consolidate` 966,246 ->
+# 940,889 — 478,000 between them, and the rest is the `String` construction and
+# drop that callgrind's 90% threshold leaves without rows.
+#
+# `infer::infer` rises 1,186,509 -> 1,251,567 (+65,058), which is the flat call
+# table: the topological walk indexes `starts` twice per step where it followed
+# one pointer. That is the trade the 630 blocks and 8,310 bytes bought, and it
+# is a sixth of what the allocator gave back.
+#
+# The row named `HashMap<&str, ()>::insert` reads +69,302, and that is a
+# renaming rather than a rise: `flush_unused`'s set was a `HashSet<String>` and
+# is a `HashSet<&str>` now, so its inserts moved from one monomorphisation to
+# another and the old one sat below the threshold. `eval_expr` and
+# `check_merged` are byte-identical.
+#
+# 2026-08-30  50,455,686 -> 49,090,280   -1,365,406   -2.71%, banked, and the
+# largest single fall this vein has taken. The allocator rows carry about half —
+# `_int_malloc` 3,044,126 -> 2,808,434, `_int_free` 2,434,266 -> 2,284,655,
+# `malloc` 1,684,286 -> 1,588,013, `malloc_consolidate` 940,889 -> 867,875,
+# `free` 1,077,244 -> 1,015,812, `__rust_alloc` 800,814 -> 769,810, some 647,000
+# between them — and the rest is the hashing the bitset removed: `readers` was a
+# `HashSet<usize>` per declaration and every `mark_reader` hashed a `usize`,
+# where the bitset shifts and ors.
+#
+# `infer::infer` rises 1,251,567 -> 1,339,421 (+87,854), which is where the
+# bitset's work went: the wake loop scans ceil(n/64) words per wake instead of
+# iterating a set that knew its own members, and the flat params table indexes
+# `param_starts` where it followed a pointer. A fifteenth of the fall, and the
+# right side of the trade.
+#
+# `eval_expr` moves 1,495 on two million and `check_merged` is byte-identical,
+# which is what a change confined to two of the fixpoint's tables should read
+# as.
+#
+# 2026-08-30  49,090,280 -> 48,743,776   -346,504   -0.71%, banked, and the two
+# pieces are visible separately in the profile. The reservation shows as
+# `RawTable<(&str, ())>::reserve_rehash` 753,484 -> 654,170, a fall of 99,314:
+# that is `prune_unused_getters`'s set no longer doubling its way up from
+# nothing. The deletion shows in the allocator rows — `free` 1,015,812 ->
+# 998,200, `__rust_alloc` 769,810 -> 755,343, `malloc_consolidate` 867,875 ->
+# 861,041 — plus the `String` construction and drop that the 90% threshold
+# leaves without rows, which is where the balance of the fall is: 595 fewer
+# `String`s built and dropped.
+#
+# `lex_line`, `eval_expr` and `memrchr` are byte-identical. Nothing here touches
+# the lexer or the fixpoint.
+#
+# 2026-08-30  48,743,776 -> 48,582,098   -161,678   -0.33%, banked. 694 fewer
+# allocations, and the allocator rows are the whole of it: `_int_free`
+# 2,284,655 -> 2,210,015, `malloc` 1,588,013 -> 1,529,690, `_int_malloc`
+# 2,808,434 -> 2,788,486, `free` 998,200 -> 978,768, `__rust_alloc` 755,343 ->
+# 739,381, some 190,000 between them against a fall of 161,678, with the
+# difference being the vector's own bookkeeping now paid once per file rather
+# than once per line.
+#
+# `lex_line` is byte-identical at 777,023, which is right: the vector this
+# removes was built in the loop AFTER lexing, not inside it. `eval_expr`,
+# `check_merged` and `infer` are byte-identical too.
+#
+# 2026-08-30  48,582,098 -> 47,302,573   -1,279,525   -2.63%, banked, and the
+# largest fall this vein has taken from the smallest diff. Eighteen sites split
+# a qualified name on its last slash with `rsplit_once('/')` or `rfind('/')`,
+# and both go through `str`'s `CharSearcher` into `memrchr`'s vector path. The
+# average identifier here is five bytes, so the setup was most of the cost.
+# `ast::last_slash` is a backward byte loop.
+#
+# `memrchr` and `__memcmp_avx2_movbe` both leave the top fifteen; `parser::parse`
+# enters it at 593,309 having not moved. `lex_line` holds at 777,023,
+# `eval_expr` at 1,043,800, `free` at 978,768 — the allocator rows are
+# byte-identical, which is right for a change that allocates nothing new and
+# nothing less.
+#
+# The local A/B on rustc 1.94.1 read -1,290,934 against this host's -1,279,525:
+# the two agree to within one per cent of the fall, which is the closest two
+# hosts have come on this vein.
+#
+# 2026-08-30 (three sets opened once per declaration): 43,618,236 -> 43,096,058,
+# a fall of 522,178, or 1.20%, banked. check.rs's three per-declaration passes
+# each opened a fresh HashSet<&str> for the names a declaration binds; they
+# share one set apiece now, cleared per iteration. The container read -506,526
+# on rustc 1.94.1 against this host's -522,178, three per cent apart on the
+# fall. The saving is a malloc, a free and the rehashes a set that starts empty
+# pays on the way up, and all three cost about the same on both hosts.
+#
+# `HashMap<&str, ()>::insert` is now the largest kanso-owned row after
+# inference at 1,517,265 (3.52%), where the sets that just went away were
+# feeding it.
+#
+# 2026-08-30 (three more tables that allocate a vector per key): 43,096,058 ->
+# 43,001,117, a fall of 94,941, or 0.22%, banked. The counting pass of #1161
+# took the last three of the shape in the front end: two arity tables that held
+# a `Vec<usize>` of one number per name, and the overlap checker's per-group
+# `Vec<&FnDecl>`. The container read -95,517 against this host's -94,941 —
+# six tenths of a per cent apart, the closest two hosts have come on this vein.
+#
+# 2026-08-30 (the last two tables of the shape): 43,001,117 -> 42,914,281, a
+# fall of 86,836, or 0.20%, banked. check_literal_arguments' Vec<&FnDecl> per
+# group, rekeyed by name so a borrowed &str can probe it, and advisory.rs's
+# Vec<usize> per name. No table in the front end holds a Vec per key now.
+#
+# The container read -50,346 against this host's -86,836 — the widest the two
+# have been on this vein since #1161, and in the direction where the runner
+# gains more. Both changes trade an allocation and a pointer chase for a short
+# linear scan of a flat vector, and the two hosts price that trade differently.
+# The allocation row agrees to the digit either way.
+#
+# 2026-08-30 (the bare-name walk asks what it already knows): 42,914,281 ->
+# 42,748,207, a fall of 166,074, or 0.39%, banked. mark_bare_quals collected
+# every bare identifier occurrence in the module into a set it then asked only
+# about the surfaced names and the import rename targets; it tests that
+# membership before inserting now, which is #1157's move in a different pass.
+# The container read -164,185 against this host's -166,074, one per cent apart.
+# This one is a hash lookup traded for a hash insert, and the two hosts agree
+# about that the way they agreed about #1162's.
+#
+# 2026-08-30 (a word is a copy, not a re-encode): 42,748,207 -> 42,297,878, a
+# fall of 450,329, or 1.05%, banked. lex_word built its String by collecting
+# &char out of the scanner's Vec<char>, re-encoding each character; on a line
+# that is ascii throughout the scanner now slices the &str it was given, and
+# the word is one copy. The container read -407,394 against this host's
+# -450,329, ten per cent apart on the fall — the widest yet, and a memcpy
+# against a per-character encode loop is exactly the kind of trade two
+# machines price differently. compile_peak_bytes fell 2,090 on both hosts to
+# the byte, because a String sized at its length does not overshoot.
+compile_instructions=42299748
+# 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
+# lines added to src/runtime.c, which main.rs holds as an include_str! and
+# hashes for the build cache key; a longer string takes twenty-two more
+# instructions to hash. compile_allocs, compile_peak_bytes, rounds and visits
+# do not move at all.
+# 2026-08-31: +1,630, and none of it is the front end. k_str_seek adds lines to
+# src/runtime.c, which main.rs holds as an include_str! and hashes for the
+# build cache key; a longer string takes longer to hash. compile_allocs,
+# compile_peak_bytes, rounds and visits do not move.
+# 2026-08-31: -2,519, and the note above it on 2026-08-31 was wrong about why
+# this row moves at all. It said a longer src/runtime.c costs more to hash for
+# the build cache key. That hash is in `cached_program_binary`, which is on the
+# run and build paths; `kanso check lib/json` never reaches it. What actually
+# moves is layout: `include_str!("runtime.c")` is a static in the binary, and
+# changing its length shifts what follows it. The direction does not follow the
+# length either — twenty added lines read +1,630 and 713 added bytes read
+# -2,519. compile_allocs, compile_peak_bytes, rounds and visits are unmoved
+# across all three, which is what says the front end's work did not change.
+# 2026-08-31: +678, and layout again — the same effect the note above
+# describes. The float render lost two `snprintf` call sites and the utf-8
+# validator gained a word loop, so `include_str!("runtime.c")` is a different
+# length and what follows it in the binary moves. compile_allocs,
+# compile_peak_bytes, rounds and visits are byte-identical, which is what says
+# the front end's work did not change.

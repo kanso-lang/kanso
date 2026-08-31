@@ -1,0 +1,5 @@
+import "./alpha"
+import "./beta"
+import "std/io"
+
+io/write "{twice 21}"

@@ -1,0 +1,16 @@
+# Writing a field a record does not declare. Native alone said "no such field",
+# naming neither the type nor the field, where the interpreter and the page both
+# say `` `node` has no field `nope` `` — the same sentence a failed field READ
+# gets, from the two sites beside this one in runtime.c. Nothing pinned it: the
+# coverage scan read "no such field" as covered because those four words appear
+# inside a doc comment in tests/getter_identity.rs.
+pub type node
+  id
+
+pub fn tagged x
+  build
+    n = node x
+    n.nope = 2
+  n
+
+pub play = print "{tagged 1}"

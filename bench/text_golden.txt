@@ -290,11 +290,59 @@
 # `return k_err(k_str(<ptr>), NULL)` tails into one block, and a distinct one
 # breaks the fold. Measured both ways, and it is distinctness rather than
 # length — a same-length distinct string costs the same 128.
-jsonbench text=80930
-encodebench text=97922
-oneshot text=98002
-basket text=89602
-widebench text=99010
-deepbench text=63314
-escapebench text=49794
-pendbench text=73938
+#
+# 2026-08-29 (the three chain words): 652,512 -> 655,152, a rise of 2,640
+# spread almost evenly — every benchmark gains 320, 336 or 352 bytes. The
+# evenness is what says it is not any one benchmark's code: src/runtime.c is
+# embedded whole and gained six functions for `bind`, `rescue` and `annotate`
+# — k_call_decided, k_worded_step, k_annotate_wrap, and the three k_b_ entry
+# points, which are extern symbols the emitter can call, so the linker keeps
+# them whether a benchmark does or not. The 32-byte spread between the figures
+# is alignment padding absorbing part of it in some.
+#
+# 2026-08-30 — `k_is_heap` became a bit mask where it was a nine-case switch,
+# so `K_SUB` could join it without the jump table. Every benchmark's text
+# shrinks by about four hundred bytes:
+#
+#   jsonbench 81,250 -> 80,850     encodebench 98,274 -> 97,874
+#   oneshot   98,322 -> 97,922     basket      89,954 -> 89,554
+#   widebench 99,330 -> 98,930     deepbench   63,634 -> 63,250
+#   escapebench 50,114 -> 49,666   pendbench   74,274 -> 73,858
+#
+# Banked. The predicate is inlined into `k_slots_survive` and through it into
+# `k_copy_size`, so the table was emitted into every program that links the
+# runtime.
+#
+# 2026-08-30 (the sizing walk's skip): 653,824 across the eight, a rise of
+# 1,920 — 240 bytes in every one of them, to the byte. `k_worth_sizing` is a
+# new inline predicate and six call sites in `k_copy_size` and
+# `k_repair_size` gained a test before their recursive call. The evenness is
+# the same reason as the entry above: src/runtime.c is embedded whole, so
+# every program that links the runtime carries the same added bytes whether
+# its own walk reaches them or not. Bought 89,889,828 instructions on
+# deepbench.
+# 2026-08-31: the word-at-a-time character count. 752 bytes wherever it is
+# inlined twice and 368 where it is inlined once; basket takes 1,520 because
+# it holds four copies. The tail loop is told not to vectorise — it trips at
+# most seven times, and letting clang widen it was another 368 bytes per copy
+# of code the processor never reaches. The word loop IS vectorised, and that
+# is worth 186,305,200 instructions on encodebench, so it stays.
+# 2026-08-31 (same PR, second change): a one-byte append writes the byte.
+# Only +32 bytes wherever it lands — one compare and one store against the
+# call it replaces.
+# 2026-08-31: +704 bytes on seven of the eight and +688 on deepbench, which is
+# `k_str_seek` — the walk that turns a character position into a byte offset,
+# now shared by the index as well as the slice. escapebench does not move: it
+# indexes nothing, so the linker drops it. indexbench arrives at 52,130.
+# 2026-08-31: +16 bytes in every binary, which is the one store that forgets
+# the character-seek cursor when a beat rewinds the arena. The cursor named
+# its string by address and the rewind hands those addresses back.
+jsonbench text=85250
+encodebench text=102274
+oneshot text=102322
+basket text=94786
+widebench text=103330
+deepbench text=67074
+escapebench text=52898
+pendbench text=77794
+indexbench text=54690

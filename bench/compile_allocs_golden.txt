@@ -48,4 +48,179 @@
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
 # measured-on rustc=1.98.0
-compile_allocs=61981
+#
+# 2026-08-29 (the three chain words): 61,981 -> 61,974, a fall of 7. Banked
+# rather than explained in detail: the front end gained three names in
+# BUILTINS and three in AMBIENT and lost nothing, so a fall of seven
+# allocations out of sixty-two thousand is layout, in the same family as the
+# entries in the instructions golden beside it.
+# 2026-08-30 (a call's argument sets on the stack): 61,974 -> 57,430, a fall of
+# 4,544, or 7.3%. Banked. `eval_call` collected a call's argument sets into a
+# `Vec<Set>`, and `Set` is a `u16`: dhat's map put that one line at 8,309 of
+# the front end's blocks, the largest single line in it, holding two, four or
+# six bytes apiece. Eight fit in sixteen bytes of stack and higher arities
+# still spill. `compile_peak_bytes` does not move, because these blocks died
+# when the call was inferred and were never at the high water mark — which is
+# why nothing but the map could see them.
+#
+# 2026-08-30 (a dispatch group is a range): 57,430 -> 54,747, a fall of 2,683,
+# or 4.7%. Banked. `eval_call` cloned its dispatch group's `Vec<usize>` on
+# every call it inferred, to release the borrow on `ctx` before the loop below
+# takes it mutably. A group is a half-open range into one flat vector now, and
+# a range copies. `compile_peak_bytes` falls 21,296 with it, because the table
+# it cloned from was itself one heap vector per (name, arity).
+#
+# 2026-08-30 (four lookup keys the program holds): 54,747 -> 50,528, a fall of
+# 4,219, or 7.7%. Banked. `inline.rs` built a `String` in order to look one up,
+# in three places — the alias fixpoint's keys and values, and the callee at
+# every `App` node the rewrite walked — and kept a private child walk that
+# returned a fresh vector per node. All four now borrow from the program or
+# hand children to a callback. `check.rs` had worked around the third of these
+# by building a borrowed view of the map; the producer borrows now, so the
+# view is gone too.
+#
+# 2026-08-30 (a text block's fence in bytes): 50,528 -> 48,356, a fall of
+# 2,172, or 4.3%. Banked, and it is one line: `block_opener` collected a
+# `Vec<char>` to scan the line a text block opens on. `lib/json` holds no text
+# block — the vector was built for every line of every file compiled, in order
+# to answer no. The scan reads bytes now, which it can because the three bytes
+# it tests for are ASCII. dhat had attributed exactly 2,172 blocks to that line
+# and re-running it after the change shows every other site identical to the
+# block, so this row moved for one reason and no other.
+#
+# 2026-08-30 (a token and its end column in one vector): 48,356 -> 46,998, a
+# fall of 1,358, or 2.8%. Banked. `Line` carried `tokens: Vec<(Tok, Span)>`
+# beside `end_cols: Vec<usize>`, always the same length, sliced in step by hand
+# in twelve places. One `Vec<(Tok, Span, u32)>` pays one header and one
+# doubling sequence where a line used to pay two. The fall is larger than the
+# 1,117 blocks dhat attributed to `end_cols`, because `StrPart::Interp` carried
+# the identical pair and every interpolation paid it again — the map could not
+# separate that. compile_peak_bytes does not move: the triple pads to the width
+# the pair occupied across two allocations, so what goes is the second header.
+#
+# 2026-08-30 (trmc's group keys borrow): 46,998 -> 46,008, a fall of 990, or
+# 2.1%. Banked. `trmc::rewrite` built a `String` per function declaration to
+# key its group map, out of names the program already holds — #1141's finding
+# one file over. `rewrite` takes `&mut Program`, which is what blocked the same
+# fix in #1140, but nothing in the body writes to it: the rewritten arms
+# accumulate in a local and go on at the end, after both loops are done with
+# the borrow. dhat put 1,634 on the site; the remaining 644 is the per-group
+# `Vec<usize>` and the `Vec<&FnDecl>` the body collects back out, and those are
+# declined — group iteration order decides the order arms are rewritten in.
+#
+# 2026-08-30 (the demand pass's lookup keys): 46,008 -> 44,920, a fall of
+# 1,088, or 2.4%. Banked. `demand::discard_positions` keyed its map on
+# `(String, usize)` and `collect_uses` built the same pair to read it, at every
+# `App` node the demand walk visits. Both sides borrow from the program now.
+# The identical shape one function down in `use_targets` was built, measured at
+# 44,920 either way and reverted: it runs only for a binding that has already
+# passed the lazy vote, and lib/json produces none, so the clone sits on a path
+# this row cannot see.
+#
+# 2026-08-30 (four vectors the front end rebuilt per iteration): 44,920 ->
+# 40,935, a fall of 3,985, or 8.9%. Banked, and it is four independent pieces
+# measured one at a time:
+#
+#   Scanner's Vec<char> comes from a pool          -1,988
+#   lex_line reserves `tokens` at eight              -434
+#   the parser matches on &Tok instead of cloning    -196
+#   callee_first hoists `names` out of its loop    -1,367
+#
+# The two pooled buffers cost 992 bytes of compile_peak_bytes between them,
+# because a reused buffer stays at the size of the largest thing it ever held
+# where a fresh one dies with its iteration. Sixteen slots for `tokens` rather
+# than eight takes 156 more allocations and puts 9.7% on the peak; that one was
+# measured and declined.
+#
+# The parser piece returns 196 of the 3,788 blocks dhat put on
+# `<Tok as Clone>::clone`, and the log entry says where the other 3,592 went:
+# into the arms that build `Expr::Ident` and `Pattern::Var`, which need an
+# owned name and clone it there instead. The allocation moved frames.
+#
+# 2026-08-30 (four allocations the front end made per declaration): 40,935 ->
+# 38,462, a fall of 2,473, or 6.0%. Banked, four pieces measured one at a time:
+#
+#   flush_unused's shadowed set borrows      -704
+#   Local.name borrows                       -704
+#   synthesize_getters keys on the field     -435
+#   callee_first's call table goes flat      -630
+#
+# The first three are the owned-name family #1141 opened, finishing on this
+# path. The fourth is #1140's: `callee_first` held one `Vec<usize>` per function
+# declaration for what that declaration calls, and holds one flat vector plus a
+# start per declaration now. It takes 8,310 bytes off compile_peak_bytes with
+# it, where the other three leave the peak alone.
+#
+# 2026-08-30 (the two tables the fixpoint kept per declaration): 38,462 ->
+# 36,268, a fall of 2,194, or 5.7%. Banked, two pieces measured one at a time:
+#
+#   readers becomes a bitset               -1,343
+#   Inference::params goes flat              -851
+#
+# `readers[i]` was a `HashSet<usize>` per declaration saying who to wake, and
+# waking cloned it to release the borrow. It is one row of ceil(n/64) u64 per
+# declaration now. `Inference::params` was a `Vec<Set>` per declaration for one
+# to three `u16`, and is one flat vector plus starts.
+#
+# The two move compile_peak_bytes in opposite directions — the bitset costs
+# 6,096 bytes and the params table gives 7,556 back — and ship together for
+# that reason.
+#
+# 2026-08-30 (a set nobody read, and one that grew from empty): 36,268 ->
+# 35,639, a fall of 629, or 1.7%. Banked, two pieces:
+#
+#   used_globals deleted                     -595
+#   prune_unused_getters reserves its set     -34
+#
+# `Resolver::used_globals` was a `HashSet<String>` threaded through four
+# signatures and filled with `name.to_string()` on every mention that resolved
+# to a global. Nothing read it: eight occurrences in the tree, one of them the
+# insert, none of them a read. It recorded which globals a file used for an
+# unused-private check that moved to `lib::private_uses`, and the recording
+# stayed behind — #1072's family.
+#
+# `prune_unused_getters` collects every identifier occurrence into a borrowed
+# set to ask which getters are mentioned, and that set started at capacity
+# nothing. Two declarations' worth of room per declaration was measured against
+# eight, and eight is WORSE (49,336,704 against 49,348,198 local instructions)
+# because a larger table probes further.
+#
+# 2026-08-30 (the last per-line scratch): 35,639 -> 34,945, a fall of 694, or
+# 1.9%. Banked. `check_needless_continuation` groups a line's tokens by source
+# line to ask what the statement would measure one line wide, and built a
+# `Vec<(usize, usize, Span)>` to do it — per line of every file compiled, for a
+# scratch that dies at the end of the call, and usually after one push and an
+# early return. One buffer for the file, cleared per line.
+#
+# Its two neighbours in the same loop were read and left: `check_partial_chain`
+# and `validate_spacing` allocate nothing at all.
+#
+# 2026-08-30 (three sets opened once per declaration): 32,856 -> 31,316, a fall
+# of 1,540, or 4.7%. Banked. check.rs walks program.fns in three separate
+# passes and each opened a fresh HashSet<&str> of the declaration's bound names
+# before walking the body — one allocation on the first insert, and the
+# capacity it grew to dropped with it. One set per pass, cleared per iteration.
+#
+# 2026-08-30 (a guard asked one line too late): 31,316 -> 31,254, a fall of 62.
+# Banked. `synthesize_getters` built each candidate arm's pattern vector and
+# the binder's name and THEN asked whether that (type, field) already had a
+# getter. The question moved above the construction.
+#
+# 2026-08-30 (three more tables that allocate a vector per key): 31,254 ->
+# 30,406, a fall of 848, or 2.7%. Banked. The counting pass of #1161 took the
+# last three of the shape in the front end: the two arity tables, which held a
+# `Vec<usize>` of one number per name, and the overlap checker's per-group
+# `Vec<&FnDecl>`. The arity pair was 499 blocks, the overlap groups 349.
+#
+# 2026-08-30 (the last two tables of the shape): 30,406 -> 29,876, a fall of
+# 530, or 1.7%. Banked. check_literal_arguments' Vec<&FnDecl> per group, rekeyed
+# by name so a borrowed &str can probe it, and advisory.rs's Vec<usize> per
+# name. 349 blocks and 181. No table in the front end holds a Vec per key now.
+#
+# 2026-08-30 (the bare-name walk asks what it already knows): 29,876 -> 29,864,
+# a fall of 12. Banked, and the allocation row is the small half of this one —
+# it is worth 164,185 instructions, because the set was costing to fill rather
+# than to hold. mark_bare_quals collected every bare identifier in the module
+# into a set it then asked about the surfaced names and the rename targets
+# only; it tests that membership before inserting now.
+compile_allocs=29864

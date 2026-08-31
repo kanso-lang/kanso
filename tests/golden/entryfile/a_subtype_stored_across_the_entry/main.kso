@@ -1,0 +1,8 @@
+import "./cellar"
+
+print "field int    {cellar/in_a_field (cellar/a_tally 3)}"
+print "field string {cellar/in_a_field (cellar/a_label "hi")}"
+print "field float  {cellar/in_a_field (cellar/a_measure 2.5)}"
+print "list  int    {cellar/in_a_list (cellar/a_tally 4)}"
+print "list  string {cellar/in_a_list (cellar/a_label "ho")}"
+print "list  float  {cellar/in_a_list (cellar/a_measure 1.5)}"

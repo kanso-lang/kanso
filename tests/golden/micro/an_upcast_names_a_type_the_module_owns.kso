@@ -1,0 +1,22 @@
+# the widening `(x):type` names a type the way an annotation does, so a
+# module's own type name has to move with the module. Reached as a module
+# this file's `animal` becomes `<module>/animal`; an upcast still holding the
+# bare spelling names nothing, and the three engines disagreed about what to
+# say — the interpreter reported that a dog is not an animal while holding
+# one, and both backends refused the module with `unknown type`.
+type animal
+  name
+
+type dog animal
+
+fn speak d:dog
+  "woof: {d.name}"
+
+fn speak x:animal
+  "generic: {x.name}"
+
+pub play =
+  d = dog (animal "rex")
+  print (speak d)
+  >> print (speak (d):animal)
+  >> print "{(d):animal}"

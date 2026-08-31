@@ -7,33 +7,32 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one — "What a digest costs, and whether it stays
-written in kanso".** `sha256/hex` holds the whole message; peak arena is linear
-in the input at about six and a half thousand bytes per byte hashed, and the
-asset-digests job's headroom falls as `docs/kanso.wasm` grows.
+only indexes it. **Blocking right now: nothing.** The digest question — what a
+digest costs, and whether it stays written in kanso — sat here and was bounced
+on 2026-08-29: a performance question with no surface area is the
+implementer's, per the ledger's own charter, and the log carries the research
+mandate it left with.
 
-**Fourteen questions are waiting, and every one of them carries a
-recommendation** — one blocking, thirteen open but not blocking. The July
-letters are closed: Clay ruled the last five in one sitting on 2026-08-26, and
-that ruling reached main only on 2026-08-28, on a branch that had been sitting
-unmerged. Counted from the ledger rather than carried forward. That is the point of the 2026-08-25 sweep: Clay's ask was
-*"the goal here would be to not have anything left to gavel. I feel like I keep
-gathering things and then you ask me the same question 10 to 20 more times."*
-So each entry now cites the search behind it and proposes an answer, and a
-sitting can be a yes or a no rather than a fresh design conversation.
+**Two questions are waiting, and both carry a recommendation** — neither
+blocking. Counted from the ledger, which is the only place that count is true;
+this file said fourteen in one paragraph and sixteen in another until the
+2026-08-29 sitting ruled the rest. The July letters are closed: Clay ruled the
+last five in one sitting on 2026-08-26, and that ruling reached main only on
+2026-08-28, on a branch that had been sitting unmerged.
 
-**The thirteen open, not blocking** — whether a `compile_instructions` move that
-cannot be work needs a spend attribution, asked after three such moves in two
-days; whether `read_file` is text or bytes, which
-is one reader with no way to say which you meant and two engines that answer
-differently; which claim owns a qualified name when a module declares one of
-its imports' names, whose filing pointed at a gavel that has since fallen; what
-a record prints as when its module is imported;
-`--explain-copies`; the assert hako's surface; the
-bare-call cross-module tie whose interim ruling is still live and still called
-interim; whether a dependency's render arms join the root group; `first coll n`;
-where `std/` comes from; block-born as a dataflow property; and the
-ten-thousand-frame guard, which is a standing offer rather than a question.
+That sitting is what the 2026-08-25 sweep was for. Clay's ask was *"the goal
+here would be to not have anything left to gavel. I feel like I keep gathering
+things and then you ask me the same question 10 to 20 more times."* So each
+entry cites the search behind it and proposes an answer, and a sitting can be a
+yes or a no rather than a fresh design conversation. On 2026-08-29 every
+remaining question was ruled in one pass.
+
+**The two open, not blocking** — the book teaching the boundary language,
+queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types gavel,
+so half one of ch04 does not survive as written and compiler.html entry 23 owes
+a rewrite in the same campaign; and the assert hako's surface shape, whose
+licence half was ruled in the archive on 2026-08-17 and which waits on nothing
+but its own design pass.
 
 **The July letters are closed.** C struck, `done` minted for D, G struck on the
 July provenance measurement, Z confirmed declined, AA explicit-cast only. Every
@@ -59,10 +58,57 @@ because a question with no proposed answer turns one sitting into ten.
 Nothing. Every branch this session opened is merged and verified on
 `origin/main`, and neither kanso nor kq has an open pull request.
 
-One branch could not be cleaned up: `origin/the-log-is-forty-entries-again`
-(3837161a) is an earlier, unmerged log trim with no PR, superseded by #1110.
-The git proxy in this container refuses a delete refspec, so it is recorded as
-superseded here and in #1110's body rather than removed.
+## What landed on 2026-08-29
+
+    kanso b42699d4  #1115  the err migration count, corrected
+    kanso ab158a37  #1116  the three chain words on all three engines
+    kanso 2b2f7e36  #1117  §23 told the opposite of what shipped
+    kanso 5d49b125  #1118  a rescue inside a group, on all three engines
+    kanso afc7947b  #1119  a builtin's count, checked where a user
+                           function's is
+    kanso 4c40088e  #1120  a module is named the way an import writes it,
+                           and the page reads the error corpus
+    kanso 6bc5b168  #1121  the backend still indexed the argument the
+                           front door had started counting
+    kq    f0f413a   #81    the pin absorbs seventy-three kanso merges
+
+**Where a rule lives is the through-line, and §29 now carries it.** A
+builtin's argument count had four answers — the interpreter checked at
+runtime, the native backend checked in its emit list, the page not at all,
+and `kanso check` did not know — because the counts were a second field on a
+table answering a different question. `print (wrap_err 1)` aborted the
+compiler outright. This is the third instance of one shape in eight days,
+after the `val` accessor and `rt_maybe_bind`'s inline copy of a predicate,
+and the observation worth keeping is how the duplicates arrive: not one was
+written as a copy. Each was a local detail at a site that needed it, and
+became a duplicate later when somebody wrote the abstraction.
+
+**And the opposite lesson on the same rule.** Once the front end checks the
+count, the backend's own check looks like exactly that kind of second copy.
+It is not: three builtins are emitted inline and read their arguments by
+index before any guard runs, so with the front-end check off the abort is
+still there. Knowing a fact twice is the problem; refusing to proceed
+without it twice is the defence.
+
+**A second host separates work from layout, and it costs a minute.** Same
+diff, `compile_instructions`: +12 here against CI's +83,829 on #1120, then
+byte-identical here against +2,138 on #1121. Every earlier layout
+attribution in the log argued from the call graph. Two callgrind runs in the
+container make it a number, and the same trick bisected kq's work vein to a
+single kanso commit — the container cannot compare absolute numbers with the
+runner, and its deltas matched to the instruction.
+
+
+**The corpus reads programs that RUN, and that is a gap.** The browser
+differential takes `examples`, `tests/golden/runtime` and
+`tests/golden/micro`, so a program refused at compile time is read on two
+engines and never on the third. Measured on 2026-08-29: all 173
+`tests/golden/errors` fixtures put through the page's compile door give 141
+byte-identical answers, 32 differing, 0 that run and 0 declined — and every
+one of the 32 is the same cause, native's `(module foo.kso)` against the
+page's `(module foo)`. `src/lib.rs:3484` prints the resolved path on native
+and the import path on the page. So the gate is one decision away: which
+spelling is a module's name. Task #116.
 
 ## What landed on 2026-08-27 and 2026-08-28
 
@@ -117,24 +163,120 @@ are gone now anyway, dissolved by #1106's placeholder.
 
 ## Next
 
-**The queue is empty for the first time in a while.** The four findings the
-last version of this section left open are all closed:
+The directive of 2026-08-26 — merged to main only on 2026-08-28, in #1112,
+having sat unmerged on the branch that carried it — says the running cloud
+session makes no further claude-code-remote tool calls, because it predates
+the checked-in allowlist and every one of them prompts Clay's phone. That
+holds: self-scheduled check-ins are bash waits, and creating a successor
+session is itself such a call, so Clay starts one when he wants one. The queue
+drains and refills in the meantime; it is not a boundary the session can act
+on by itself.
 
-  - the fifth file the ratchet could not see, `src/eval.rs` — #1100
-  - the fourth way the compiler writes a message, `codegen.rs`'s `format!` —
-    answered: one of the two was fixed in #1098 and the other is dead, because
-    `check_field_annotations` refuses every field annotation, so nothing
-    reaches the emitter's half. Deleting it is still not obviously right
-  - the scan's corpus taking `.stderr` only — measured and settled
-  - whether the scan should read `wasm_rt.rs` as well — #1108, yes, and the
-    week above is what it found
+**The biggest buildable thing is now the err spelling, and it is ruled.**
+Gaveled 2026-08-26 and on main since #1112:
 
-**What is open is a decision, not a build.** Twenty questions in
-`design/pending-gavels.md`, one of them blocking. Nothing in the task list can
-start without a ruling.
+    io/read_file path
+    bind     (text -> json/parse text)
+    annotate (e -> "config: {e.reason}")
+    rescue   when_failed
 
-**The rule that carries forward**, restated from the last version because it
-went on being true and then got sharper: a scan over a corpus enumerates the
-corpus's file types from the harness that reads it, never from the ones that
-came to mind. And its sibling, learned twice this week: a claim that a site
-cannot be reached is only as good as the program written to reach that site.
+Three words, all ordinary two-argument functions — `bind effect callback` —
+threaded by the chain rule already in the language. The callback receives the
+err itself, so a dispatch group is a legal callback. Annotate cannot resurrect
+by construction. Rescue is the sole door, its foreign-only license checked at
+the word. `.` retires from chain-step position; field access is untouched.
+
+**All three words work on all three engines** as of 2026-08-29 (kanso#1116).
+`tests/golden/chainwords/` holds four cases, pinned on both engines against
+one golden, and three mutations were watched turning the right case red.
+
+`annotate` needed no new description field: the runtime builds its wrapper
+closure itself, over the callback and the site, and hands it to rescue's node.
+`k_closure` was already there for that shape.
+
+**The page was diverging in silence and nothing in the tree could see it.**
+It compiled `rescue` and then propagated the failure the other two engines
+catch, because the wasm backend has no node for the words and the names fell
+through its generic call path rather than its `unsupported call` arm. Every
+chainwords case needs a filesystem to make an effect fail, and a page has
+none, so no program the page could run reached the words.
+`tests/golden/micro/a_settled_failure_meets_the_three_words.kso` closes that:
+it reaches them through a subject that has already failed, with no filesystem,
+so all three engines run it. It went red on the wasm harness on its first run,
+and the page was built rather than left refusing. The general lesson is worth
+carrying: the engine with no world is the one that most needs a case, and a
+fixture that fails an effect cannot be that case.
+
+One narrow hole is written down rather than assumed absent: the page's
+`as_desc` answers None for a rescue or annotate slot, so a worded step other
+than `bind` inside a `join` is refused there rather than scheduled. Nothing in
+the corpus reaches it.
+
+`bind`, `rescue` and `annotate` are reserved names now. Two fixtures in the
+corpus had defined functions by two of those names and were renamed, which is
+a fair measure of how ordinary the words are.
+
+**`rescue` was new capability, not a respelling** — the finding that reshapes
+the rest. An execution-time failure could not be handled inside a chain at
+all: a chain step over an effect wraps its expression in a one-parameter
+closure, and handing a failure to a closure returns the failure rather than
+entering the body, so the callback was never called whatever its shape.
+`docs/book/samples/ch05/fallback.kso` is that program and ch05 teaches it as
+the design. So the migration's err-arm half is empty for a stronger reason
+than the greps below gave: the chain err-arm was never a working surface, and
+the one site that looks like one is the book's counter-example.
+
+**What is left is one pass over the lambda steps.** 485 loose-dot steps in
+fleet code with comments and strings stripped: 346 are `. (lambda)`, the
+monadic steps that respell as `bind`, and 139 are `. named_fn`, the threading
+form the effect-first rider preserves. (An earlier count of 309 counted
+differently and is superseded.) Most of the 346 are in `scripts`, which is the
+gates, so a botched pass there takes CI down rather than a user program.
+
+**It cannot start until Clay rules on the line grammar.** The gavel's sample
+is dotless — `bind (text -> ...)` — while the same paragraph says the first
+argument comes from the rule that makes `(expect 1) . to (equal x)` work, and
+that rule is the dot. Dropping the dot collides with the rule that an indented
+line under an argument-taking statement is one more argument (`src/lexer.rs`),
+which the leading `.` is currently the only thing distinguishing — so the
+dotless form needs the parser to know the three words, contradicting "nothing
+about them is syntax". Filed.
+
+**Two things the gavel's own sample needs and does not have.** Its lambda form
+reads `e.reason`, and an err has no such reader — nor could a lambda use one,
+since every operation on an err propagates it. A group callback destructures
+instead, which is the gavel's primary story. Whether an err gains readers that
+get past its own infectiousness, the way `wrap_err`'s second argument does, is
+open.
+
+**`done` is the second, smaller one.** Letter D was ruled in the same sitting:
+a succeeded effect yields `done`, not `none`. `none` means absence and nothing
+else. Chains that tested for `none` after an effect migrate.
+
+**What needs Clay, and cannot start without him:**
+
+  - the one blocking question, what a digest costs, filed with its measurement
+  - `delete_branch_on_merge=true` and the 324-branch purge (task #109), both
+    checked from here on two days and both refused by the tooling
+  - the chain-line grammar above, which stands before the 346-site respelling
+  - whether an err gains readers a lambda callback can use
+
+**Nineteen questions wait in `design/pending-gavels.md`** — one blocking,
+eighteen open — each with a recommendation, counted from the ledger rather
+than carried forward. Five are new today: the chain-line grammar, whether
+an err gains readers a callback can use, whether the backends should
+build a partial whose callee is a value, whether an identifier's name
+lives inline, and whether welfare satiates the mean of its ratios or each
+counter, which decides whether a benchmark 138 times better than its baseline
+carries two thirds of the run-speed term.
+
+**The rules that carry forward**, each earned twice:
+
+  - a scan over a corpus enumerates the corpus's file types from the harness
+    that reads it, never from the ones that came to mind
+  - a claim that a site cannot be reached is only as good as the program
+    written to reach THAT site — `(opaque d).nope` is a name error and proves
+    nothing about `(opaque d).n`
+  - a branch with a ruling on it is not a record until it merges. Four gavels
+    sat unread for up to thirty-two hours, and this session reported the tree
+    settled while they did.

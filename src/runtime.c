@@ -44,6 +44,7 @@ typedef struct { char* data; int len; int cap; } KStr;
 #define K_STR_HEAD ((long long)sizeof(long long))
 #define k_str_count(s) (((long long*)(void*)(s)->data)[-1])
 static long long k_str_chars(KStr* s);
+static long k_str_seek(KStr* s, long long from);
 typedef struct { long long cap; long long used; } KBuf;
 /* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
    KBuf-headed buffer this value may extend at its frontier. */
@@ -274,7 +275,7 @@ struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
-   18 is_dir, 26 start, 27 kill */
+   18 is_dir, 26 start, 27 kill, 29 rescue */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -300,6 +301,8 @@ static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
 static KValue k_list_own(KValue* items, long long n);
 KValue k_call1(KValue f, KValue a);
+KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, KValue* caps);
+KValue k_env_get(void* env, long long i);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
 /* The arena is a chain of blocks, newest first; allocation bumps in the head
@@ -316,6 +319,25 @@ static long long k_live_block_bytes = 0;
 static long long k_stat_peak_block_bytes = 0;
 static long long k_stat_cohort_frees = 0;
 static long long k_stat_cohort_kept = 0;
+/* One remembered position, so a forward sweep over a string does not restart
+   at the front. It names its string by address, which is only meaningful for
+   as long as that address means that string — so `k_beat_rewind` forgets it,
+   because the arena hands the same addresses back and the next allocation
+   there is a different string.
+
+   This used to say a reset was unnecessary, on the grounds that a string
+   whose bytes changed is a builder and a builder never qualifies. The string
+   whose bytes change across a rewind is not a builder; it is somebody else,
+   wearing the address. `text/slice s 5 5` then answered `g` where the
+   interpreter answered `e`.
+
+   A single cell is safe because the scheduler is green — every fibre runs on
+   the one thread — and it would need to move into the fibre if that ever
+   stopped being true. */
+static KStr* k_seek_str = NULL;
+static long long k_seek_char = 0;
+static long k_seek_byte = 0;
+
 char* k_arena = NULL;
 size_t k_arena_left = 0;
 
@@ -671,6 +693,9 @@ static void k_beat_rewind(KMark* m) {
     }
     k_arena = m->ptr;
     k_arena_left = m->left;
+    /* Every address above the mark is free to be handed out again, so the
+       string the seek cursor names may not be there any more. One store. */
+    k_seek_str = NULL;
     /* A mark whose pointer and remaining count no longer meet the end of its
        block hands out memory past that end, and the damage surfaces later in
        an unrelated allocation — as a glibc abort on linux, and as nothing at
@@ -867,24 +892,40 @@ static KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
 
 typedef struct KTenBlock { struct KTenBlock* next; size_t cap; size_t used; char* data; } KTenBlock;
 static KTenBlock* k_ten_blocks[K_BEAT_MAX];
-static KPtrMap k_ten_set[K_BEAT_MAX];
-static size_t k_ten_live[K_BEAT_MAX];
 static size_t k_ten_bytes[K_BEAT_MAX];
 /* Past this a program stops tenuring and behaves as it did before, so no loop
    can grow without bound on storage that is only freed at the pop. */
 #define K_TEN_CAP (64u << 20)
-#define K_TEN_BLOCK (64u << 10)
+/* The first block, and the base the doubling below starts from. 64 KiB left
+   the wide-array benchmark needing a second block for 128 KiB of tenured
+   storage, so every membership miss walked two; 256 KiB holds it in one and
+   takes k_ten_holds from 37.7 instructions an ask to 30.4, with the call count
+   unchanged. What it costs is address space rather than pages — malloc mmaps
+   a block this size and untouched pages never become resident — and the
+   measured peak is 80 KiB on widebench. */
+#define K_TEN_BLOCK (256u << 10)
 static int k_ten_on = 0;
 
 /* Is this pointer tenured, at this beat depth or any outer one? A value
-   promoted by an outer loop is outside the arena for an inner one too. */
-static int k_ten_holds(const void* p) {
-    for (long long d = 0; d < k_beat_depth && d < K_BEAT_MAX; d++) {
-        KPtrMap* t = &k_ten_set[d];
-        if (!t->slots) continue;
-        size_t i = k_ptrmap_probe(t, p);
-        if (t->slots[i].gen == t->gen && t->slots[i].key == p) return 1;
-    }
+   promoted by an outer loop is outside the arena for an inner one too.
+
+   A walk of the blocks, which is only affordable because each block doubles
+   the one before it: 64 MiB of tenured storage is eleven blocks, not the
+   thousand that a fixed 64 KiB would make, and K_TEN_CAP means there is never
+   a twelfth. That bound is what pays for deleting the hash set this used to
+   be — a set that cost a probe here AND an insert on every single tenured
+   allocation, where the walk costs neither.
+
+   No cache in front of it. A one-entry memo of the block that answered last
+   was built and measured: it takes 16,080 of widebench's 96,496 asks, and it
+   costs the other 80,416 a load and two compares before they walk two blocks
+   anyway. That is 634,925 instructions spent to save 16,080 short walks, so
+   the memo went. */
+static __attribute__((noinline)) int k_ten_holds(const void* p) {
+    const char* q = (const char*)p;
+    for (long long d = 0; d < k_beat_depth && d < K_BEAT_MAX; d++)
+        for (KTenBlock* b = k_ten_blocks[d]; b; b = b->next)
+            if (q >= b->data && q < b->data + b->used) return 1;
     return 0;
 }
 
@@ -919,7 +960,14 @@ static void* k_ten_alloc(size_t n) {
     long long d = k_beat_depth - 1;
     KTenBlock* b = k_ten_blocks[d];
     if (!b || b->cap - b->used < n) {
-        size_t cap = n > K_TEN_BLOCK ? n : K_TEN_BLOCK;
+        /* Each block is twice the one before it. That is what keeps the list
+           short enough for k_ten_holds to walk: K_TEN_CAP is 64 MiB, so
+           doubling from 64 KiB runs out of licence after eleven blocks.
+           The tail of the last block is address space rather than pages —
+           malloc mmaps anything this size and untouched pages are never
+           resident — so the peak this costs is not memory. */
+        size_t grow = b ? b->cap * 2 : (size_t)K_TEN_BLOCK;
+        size_t cap = n > grow ? n : grow;
         KTenBlock* nb = malloc(sizeof(KTenBlock));
         if (!nb) { fputs("out of memory\n", stderr); exit(1); }
         nb->data = malloc(cap);
@@ -934,12 +982,6 @@ static void* k_ten_alloc(size_t n) {
     b->used += n;
     k_ten_bytes[d] += n;
     k_ten_any = 1;
-    if (!k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
-    KPtrSlot* slot = k_ptrmap_at(&k_ten_set[d], out, &k_ten_live[d]);
-    k_ten_live[d]++;
-    slot->gen = k_ten_set[d].gen;
-    slot->key = out;
-    slot->val = NULL;
     return out;
 }
 
@@ -954,7 +996,6 @@ static void k_ten_release(long long d) {
     k_ten_bytes[d] = 0;
     k_ten_any = 0;
     for (long long i = 0; i < K_BEAT_MAX; i++) if (k_ten_blocks[i]) k_ten_any = 1;
-    if (k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
 }
 
 static size_t k_copy_seen_live;
@@ -1092,6 +1133,14 @@ static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
 
 static size_t k_repair_size(KValue v, const void* p, KMark* m);
 
+/* `k_copy_size` returns zero for an immediate and for nothing else without
+   looking at it, so a caller walking a container can skip the call entirely.
+   deepbench folds over lists of ints, and the call it used to make per element
+   existed only to return zero. */
+static inline int k_worth_sizing(KValue v) {
+    return k_is_heap(v.tag) || v.tag == K_THUNK;
+}
+
 static size_t k_copy_size(KValue v, KMark* m) {
     /* A thunk cell is malloc'd and survives every rewind, but what it holds
        — captured args, or a forced result — may live in the arena about to
@@ -1133,14 +1182,16 @@ static size_t k_copy_size(KValue v, KMark* m) {
             KList* l = (KList*)p;
             n += k_copy_size_ptr(l, sizeof(KList), m);
             n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
-            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            for (long long i = 0; i < l->len; i++)
+                if (k_worth_sizing(l->items[i])) n += k_copy_size(l->items[i], m);
             break;
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
             n += k_copy_size_ptr(mp, sizeof(KMap), m);
             n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
-            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            for (long long i = 0; i < 2 * mp->len; i++)
+                if (k_worth_sizing(mp->pairs[i])) n += k_copy_size(mp->pairs[i], m);
             break;
         }
         case K_SUB: {
@@ -1153,7 +1204,8 @@ static size_t k_copy_size(KValue v, KMark* m) {
             KRec* r = (KRec*)p;
             n += k_copy_size_ptr(r, sizeof(KRec), m);
             n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
-            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            for (long long i = 0; i < r->nfields; i++)
+                if (k_worth_sizing(r->fields[i])) n += k_copy_size(r->fields[i], m);
             break;
         }
         case K_CLOSURE: {
@@ -1211,21 +1263,24 @@ static size_t k_repair_size(KValue v, const void* p, KMark* m) {
             KList* l = (KList*)p;
             if (!k_survives_x(l->items, m))
                 n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
-            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            for (long long i = 0; i < l->len; i++)
+                if (k_worth_sizing(l->items[i])) n += k_copy_size(l->items[i], m);
             break;
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
             if (!k_survives_x(mp->pairs, m))
                 n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
-            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            for (long long i = 0; i < 2 * mp->len; i++)
+                if (k_worth_sizing(mp->pairs[i])) n += k_copy_size(mp->pairs[i], m);
             break;
         }
         case K_REC: {
             KRec* r = (KRec*)p;
             if (!k_survives_x(r->fields, m))
                 n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
-            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            for (long long i = 0; i < r->nfields; i++)
+                if (k_worth_sizing(r->fields[i])) n += k_copy_size(r->fields[i], m);
             break;
         }
         case K_CLOSURE: {
@@ -1838,14 +1893,36 @@ KValue k_caf_complete(KValue built, KValue seeded) {
 }
 
 
+/* Every tag whose payload is a pointer. `K_SUB` was absent until 2026-08-30,
+   and `k_cohort_pop` reads this to decide whether a beat's result has to be
+   carried out of the arena before the rewind: a returned subtype was taken for
+   a scalar, the arena went back to the mark under it, and the caller got a
+   dangling `KSub*`. The value read back as whatever the arena was reused for,
+   which on the fixtures below is a pointer rendered as a double. `K_THUNK` is
+   spelled out at that call site rather than here because a thunk is a promise
+   and not a value; every other pointer tag belongs in this list. */
+/* Every tag whose payload is a pointer — K_ERR K_STR K_REC K_DESC K_LIST
+   K_MAP K_CLOSURE K_BYTES K_SUB — as bit positions in the enum above. `tag`
+   is masked to the enum's width so the shift is defined for any input; every
+   tag a value can carry is already in range.
+
+   `K_SUB` was absent until 2026-08-30 and its payload is a `KSub*`, so a
+   returned subtype was taken for a scalar by `k_cohort_pop` and by
+   `k_slots_survive` alike: the arena went back to the mark under it and the
+   caller kept a dangling pointer.
+
+   A mask rather than the switch this used to be, because the switch is inlined
+   into `k_slots_survive` and through it into `k_copy_size`, which is 36% of
+   deepbench. A tenth `case` cost that benchmark 49,528,233 instructions —
+   6.14%, all of it inside `k_copy_size`, on both hosts to the instruction —
+   on a program that never makes a subtype: `k_survives_x` and `k_ptrmap_at`
+   are byte-identical across the change, so it is the same walk compiled
+   differently. The mask gives 6,149,160 of that back. Two other shapes were
+   measured and were worse: a mask carrying a bounds branch reads 878,869,219,
+   and giving `k_slots_survive` its own copy of the switch reads exactly what
+   the shared switch does. */
 static int k_is_heap(long long tag) {
-    switch (tag) {
-        case K_STR: case K_ERR: case K_REC: case K_DESC:
-        case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
-            return 1;
-        default:
-            return 0;
-    }
+    return (int)((0xAFE0U >> (tag & 15)) & 1U);
 }
 
 /* Diagnostics color from the site palette, only when stderr is a tty and
@@ -2458,8 +2535,13 @@ KValue k_set_field(KValue target, const char* name, KValue v) {
             KValue none; none.tag = K_NONE; none.payload = 0; return none;
         }
     }
-    k_die("no such field");
-    KValue none; none.tag = K_NONE; none.payload = 0; return none;
+    /* The sentence the other two engines print, and the one `k_keyed_field`
+       and `k_no_field` above already print for a READ. This site said "no such
+       field" — naming neither the type nor the field, and diverging from the
+       oracle on a program a user can write. */
+    fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
+            k_type_name(r->type_id), name);
+    exit(1);
 }
 
 KValue k_keyed_field(KValue v, const char* name) {
@@ -3240,7 +3322,12 @@ static int ryu_d2d(double f, char* dig, int* e10) {
 /* format (digits, k, e10) exactly as the probe would have: %g with
    precision max(15, k) — fixed vs exponent at X < -4 or X >= P */
 static void render_ryu(double d, char* buf) {
-    if (d == 0.0) { snprintf(buf, 64, "%.1f", d); return; }
+    if (d == 0.0) {
+        char* z = buf;
+        if (signbit(d)) *z++ = '-';
+        z[0] = '0'; z[1] = '.'; z[2] = '0'; z[3] = 0;
+        return;
+    }
     char dig[20];
     int e10;
     int k = ryu_d2d(d, dig, &e10);
@@ -3340,12 +3427,25 @@ long long k_check_sub_rec(KValue v, long long type_id, long long nfields) {
     return r->type_id == type_id && r->nfields == nfields;
 }
 
+/* "an int", "a string" — a diagnostic that fumbles its own grammar reads as
+   carelessness about everything else in it. The rule is spelling, not
+   pronunciation: a type name is a program's word rather than an English one,
+   and the letter is what a reader has in front of them. `article` in diag.rs
+   is the same rule for the other two engines. */
+static const char* k_article(const char* word) {
+    switch (word[0]) {
+        case 'a': case 'e': case 'i': case 'o': case 'u': return "an";
+        default: return "a";
+    }
+}
+
 /* Construction: `post_body s` — the inner value must be (or reach) the
    parent; want encodes a type id, or -(tag+1) for a primitive. */
 KValue k_sub_ctor(long long type_id, long long want, KValue inner, const char* tyname, const char* parent) {
     if (!k_not_failure(inner)) return inner;
     if (k_sub_depth(inner, want) < 0) {
-        fprintf(stderr, "%serror[runtime]:%s `%s` wraps a %s\n", k_c_err(), k_c_off(), tyname, parent);
+        fprintf(stderr, "%serror[runtime]:%s `%s` wraps %s %s\n", k_c_err(), k_c_off(), tyname,
+                k_article(parent), parent);
         exit(1);
     }
     return k_sub_wrap(type_id, inner);
@@ -3365,8 +3465,8 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
         if (want < 0 && cur.tag == -(want + 1)) return cur;
         if (want >= 0 && cur.tag == K_REC
             && ((KRec*)(intptr_t)cur.payload)->type_id == want) return cur;
-        fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not a %s\n",
-                k_c_err(), k_c_off(), tyname, tyname);
+        fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not %s %s\n",
+                k_c_err(), k_c_off(), tyname, k_article(tyname), tyname);
         exit(1);
     }
 }
@@ -3420,7 +3520,20 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_FLOAT: {
             double d = k_as_f(v);
             if (d == floor(d) && fabs(d) < 1e15 && isfinite(d)) {
-                snprintf(buf, sizeof buf, "%.1f", d);
+                /* An integral double under 1e15 casts exactly, so its digits
+                   are an integer's digits and the fraction is exactly `.0`.
+                   glibc's `%.1f` reaches __printf_fp for them anyway, which
+                   is a multiprecision routine: it was 11.0% of the wide
+                   benchmark. Negative zero is the one value the cast loses,
+                   and `%.1f` writes `-0.0` for it. */
+                char* o = buf;
+                long long whole = (long long)d;
+                if (whole == 0 && signbit(d)) *o++ = '-';
+                k_itoa(o, whole);
+                while (*o) o++;
+                *o++ = '.';
+                *o++ = '0';
+                *o = 0;
                 return k_str(buf);
             }
             /* shortest round-trip: %g trims trailing zeros, so probing
@@ -4138,6 +4251,80 @@ KValue k_maybe_bind(KValue piped, KValue closure) {
     return k_call1(closure, piped);
 }
 
+/* k_call1 without its argument guard, for the two callers that have already
+   decided about the argument themselves.
+
+   `rescue` is one: k_call1 refuses to hand a failure to a closure — a failure
+   propagates instead of entering the body, which is what threads failures
+   through a chain for free — and rescue is the step that must get past it. A
+   group needs no help; dispatch already routes an err to the arm written for
+   it.
+
+   `bind` is the other, and it is there for speed rather than meaning. The
+   chain loop tests the yielded value for failure before deciding whether the
+   callback runs at all — that test IS the difference between the worded steps
+   — so k_call1's copy of it is redundant work on the hottest path in the
+   language. Measured: dropping it takes deepbench back under its pre-gavel
+   count. */
+KValue k_call_decided(KValue f, KValue a) {
+    if (!k_not_failure(f)) return f;
+    if (f.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity != 1) k_die_arity(c->arity, 1);
+        return c->fn(c->env, a);
+    }
+    return k_call1(f, a);
+}
+
+/* What a worded chain step answers once its subject has settled — the whole
+   difference between the words of the 2026-08-26 gavel. `bind` (dtag 6) reads
+   the value channel and lets a failure past untouched; `rescue` (dtag 29)
+   reads the failure channel and lets a value past. The interpreter's
+   `worded_step` is the oracle for both. */
+KValue k_worded_step(long long dtag, KValue yielded, KValue callee) {
+    int failed = !k_not_failure(yielded);
+    if (dtag == 29) return failed ? k_call_decided(callee, yielded) : yielded;
+    return failed ? yielded : k_call_decided(callee, yielded);
+}
+
+/* An effect defers and becomes a chain node; a value that has already settled
+   decides here, which is what makes a word mean the same thing called
+   prefix-style outside a chain. */
+KValue k_b_bind(KValue subject, KValue callback) {
+    if (subject.tag == K_DESC) return k_mkdesc(6, subject, callback);
+    return k_worded_step(6, subject, callback);
+}
+
+KValue k_b_rescue(KValue subject, KValue callback) {
+    if (subject.tag == K_DESC) return k_mkdesc(29, subject, callback);
+    return k_worded_step(29, subject, callback);
+}
+
+/* `annotate` is `rescue` with a wrapper around its callback, so it needs no
+   description of its own — which matters, because it is the one word that
+   builds an err, an err records where it was raised, and a description's two
+   slots are already the subject and the callback. The runtime builds the
+   wrapper here instead: a closure over the callback and the site, standing
+   where the user's callback would.
+
+   The site rides as an int payload. It is a static literal the collector
+   never owns and never traces, and a raw pointer in a payload is already how
+   `k_fnref` carries what it carries. */
+static KValue k_annotate_wrap(void* env, KValue failure) {
+    KValue callback = k_env_get(env, 0);
+    KValue site = k_env_get(env, 1);
+    return k_b_wrap_err(k_call_decided(callback, failure), failure,
+                        (const char*)(intptr_t)site.payload);
+}
+
+KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
+    KValue site; site.tag = K_INT; site.payload = (long long)(intptr_t)origin;
+    KValue caps[2]; caps[0] = callback; caps[1] = site;
+    KValue wrap = k_closure(k_annotate_wrap, 1, 2, caps);
+    if (subject.tag == K_DESC) return k_mkdesc(29, subject, wrap);
+    return k_worded_step(29, subject, wrap);
+}
+
 KValue k_desc_sleep(KValue ms) {
     if (!k_not_failure(ms)) return ms;
     if (ms.tag != K_INT) k_die_got("sleep takes milliseconds (an int)", ms);
@@ -4539,11 +4726,11 @@ static KValue k_exec(KDesc* d) {
             cur.payload = k_ptr(d);
             for (;;) {
                 KDesc* dd = k_as_desc(cur);
-                if (dd->dtag != 6) {
+                if (dd->dtag != 6 && dd->dtag != 29) {
                     return k_beat_pop(k_exec(dd));
                 }
                 KValue yielded = k_exec(k_as_desc(dd->x));
-                KValue next = k_call1(dd->y, yielded);
+                KValue next = k_worded_step(dd->dtag, yielded, dd->y);
                 if (next.tag != K_DESC) {
                     return k_beat_pop(next);
                 }
@@ -4805,13 +4992,14 @@ static KStep k_step(KDesc* d) {
             }
             return k_step(k_as_desc(right));
         }
-        case 6: {
+        case 6:
+        case 29: {
             KStep in = k_step(k_as_desc(d->x));
             if (in.blocked) {
-                KStep s = {1, in.ms, k_mkdesc(6, in.cont, d->y), k_none()};
+                KStep s = {1, in.ms, k_mkdesc(d->dtag, in.cont, d->y), k_none()};
                 return s;
             }
-            KValue next = k_call1(d->y, in.value);
+            KValue next = k_worded_step(d->dtag, in.value, d->y);
             if (next.tag == K_DESC) return k_step(k_as_desc(next));
             KStep s = {0, 0, k_none(), next};
             return s;
@@ -5635,13 +5823,23 @@ KValue k_b_utf8(KValue lv, const char* origin) {
 
 static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     k_stat_utf8_bytes += len;
-    /* a document's keys and short values are ascii and shorter than one
-       vector, where the wide pass is nearly all setup: the table loads, and
-       two tail blocks each filled a byte at a time. */
-    if (len < 16) {
+    /* A document's keys and values are ascii, and the wide pass is nearly all
+       setup: seven constant loads and two zeroed accumulators before the first
+       block, against an average token of forty-one bytes. Eight bytes at a
+       time answers the whole question for an ascii run of any length and never
+       reaches that. A run that is not ascii falls through and the wide pass
+       reads it from the start, so the scan below is the only waste. */
+    {
         long long j = 0;
-        while (j < len && (uint8_t)data[j] < 0x80) j++;
-        if (j == len) return k_none();
+        for (; j + 8 <= len; j += 8) {
+            unsigned long long w;
+            memcpy(&w, data + j, sizeof w);
+            if (w & 0x8080808080808080ULL) break;
+        }
+        if (j + 8 > len) {
+            while (j < len && (uint8_t)data[j] < 0x80) j++;
+            if (j == len) return k_none();
+        }
     }
 #if defined(__aarch64__)
     /* keiser & lemire, "validating utf-8 in less than one instruction per
@@ -5937,15 +6135,9 @@ KValue k_b_at(KValue container, KValue index) {
         KStr* s = k_as_str(container);
         long long want = index.payload;
         if (want < 1) return k_none();
-        long at = 0;
-        long long seen = 0;
-        while (at < s->len) {
-            long w = k_cp_len((unsigned char)s->data[at]);
-            seen++;
-            if (seen == want) return k_str_n(s->data + at, w);
-            at += w;
-        }
-        return k_none();
+        long at = k_str_seek(s, want);
+        if (at < 0) return k_none();
+        return k_str_n(s->data + at, k_cp_len((unsigned char)s->data[at]));
     }
     if (container.tag == K_BYTES && index.tag == K_INT) {
         KBytes* b = k_as_bytes(container);
@@ -6129,24 +6321,97 @@ static const char* k_lazy_hint(KValue v) {
    negative so nothing that asks `cap > 0` about a builder is confused. The
    header stays sixteen bytes: widening it would move the survivor ratio the
    cohort guard reads. A builder may still grow, so it counts every time. */
-/* One remembered position, so a forward sweep does not restart at the front.
-   Reset is unnecessary: the guard checks identity and direction, and a string
-   whose bytes changed is a builder, which never qualifies. A single cell is
-   safe because the scheduler is green — every fibre runs on the one thread —
-   and it would need to move into the fibre if that ever stopped being true. */
-static KStr* k_seek_str = NULL;
-static long long k_seek_char = 0;
-static long k_seek_byte = 0;
+/* The remembered position lives beside the arena, above `k_beat_rewind`. */
+
+/* How many characters a run of valid utf-8 holds. A character's first byte
+   is any byte whose top two bits are not `10`, so the count is the byte
+   length minus the number of continuation bytes, and no byte needs to be
+   decoded to know which it is.
+
+   Eight bytes at a time, because the per-character walk this replaced took a
+   branch for every byte and `length` on a document is the shape that pays
+   for it: encodebench asks for the length of what it just encoded four
+   hundred times, and that one call was 6.8% of the benchmark.
+
+   The word is read with memcpy so an unaligned load is the compiler's
+   problem, and byte order does not matter — every byte is tested in place
+   and the answer is a population count, which is order-blind. */
+static long long k_utf8_chars(const unsigned char* p, long long len) {
+    long long i = 0;
+    long long conts = 0;
+    for (; i + 8 <= len; i += 8) {
+        unsigned long long w;
+        memcpy(&w, p + i, sizeof w);
+        /* bit 7 set and bit 6 clear, per byte */
+        unsigned long long cont = w & ~(w << 1) & 0x8080808080808080ULL;
+        conts += __builtin_popcountll(cont);
+    }
+    /* The tail is at most seven bytes, so widening it is code the linker
+       carries and the processor never runs: 560 bytes of vector prologue
+       per copy of this function, against a loop that trips seven times. */
+#if defined(__clang__)
+#pragma clang loop vectorize(disable) unroll(disable)
+#endif
+    for (; i < len; i++) conts += ((p[i] & 0xc0) == 0x80);
+    return len - conts;
+}
 
 static long long k_str_chars(KStr* s) {
     if (s->cap < 0) return -(long long)s->cap - 1;
     if (s->cap > 0) return k_str_count(s);
     k_stat_str_scans++;
     k_stat_str_scan_bytes += s->len;
-    long long count = 0;
-    for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
+    long long count = k_utf8_chars((const unsigned char*)s->data, s->len);
     if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
     return count;
+}
+
+/* The byte at which character `from` begins, or -1 when the text holds fewer
+   characters than that. Answers the two questions `k_b_slice` learned to ask
+   first, for the reader who asked for one character rather than a run.
+
+   Reading a string one character at a time is the shape this exists for.
+   Starting the walk at byte zero every time made `s[i]` in a loop quadratic:
+   a string of two thousand characters cost 27,591,142 instructions and one of
+   four thousand cost 106,971,148 — a doubling of the input for 3.88 times the
+   work.
+
+   The cursor is the one `k_b_slice` keeps, deliberately: a sweep that mixes
+   `s[i]` and `text/slice` over the same subject stays linear because both
+   hands move it. `k_b_slice` keeps its own combined walk rather than calling
+   this, because it needs both ends of a run out of one pass and would
+   otherwise cross the text twice. */
+static long k_str_seek(KStr* s, long long from) {
+    /* Every character one byte, so a position is an offset. `k_str_chars`
+       caches its answer in the header, so this costs one scan per string. */
+    if (k_str_chars(s) == (long long)s->len) {
+        return from > (long long)s->len ? -1 : (long)(from - 1);
+    }
+    long at = 0;
+    long long seen = 1;
+    if (s == k_seek_str && s->cap != 0 && k_seek_byte < s->len) {
+        at = k_seek_byte;
+        seen = k_seek_char;
+        /* Behind the cursor, step back to it rather than to the front: the
+           same walk with the continuation bytes skipped, so the price is the
+           distance moved rather than the position reached. */
+        while (from < seen && at > 0) {
+            at--;
+            while (at > 0 && ((unsigned char)s->data[at] & 0xC0) == 0x80) at--;
+            seen--;
+        }
+    }
+    while (at < s->len) {
+        if (seen == from) {
+            k_seek_str = s;
+            k_seek_char = from;
+            k_seek_byte = at;
+            return at;
+        }
+        at += k_cp_len((unsigned char)s->data[at]);
+        seen++;
+    }
+    return -1;
 }
 
 KValue k_b_length(KValue v) {
@@ -6264,7 +6529,11 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         KBuf* buf = ((KBuf*)a->data) - 1;
         if (buf->used == a->len && a->len + n <= acap) {
             k_stat_append_fast++;
-            memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
+            /* A comma, a colon, a brace: the encoder's commonest append is one
+               byte, and a call into memcpy to move it costs more than the
+               move. */
+            if (n == 1) ((unsigned char*)a->data)[a->len] = *src;
+            else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
             buf->used = a->len + n;
             /* The bytes went into the accumulator's own spare capacity, so a
                fresh header would differ only in its length. Where uniqueness

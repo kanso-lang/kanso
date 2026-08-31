@@ -1,0 +1,6 @@
+# `std/` is resolved against what ships, not against the disk, so a name that
+# is not in the shipped library is refused before anything is read. The
+# message is the driver's — no span, because there is no file to point into.
+import "std/nosuchthing"
+
+pub play = print "hi"

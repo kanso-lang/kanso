@@ -17,8 +17,15 @@
 //! is the part a rewording would lose.
 use std::process::Command;
 
-fn a_program() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join("kanso-no-clang");
+/// One directory per test, named by the caller. Both tests used to stage into
+/// `kanso-no-clang`, and cargo runs them on separate threads: `fs::write`
+/// truncates before it writes, so one test emptied `main.kso` while the other
+/// test's `kanso` was reading it, and the build reported `an entry file needs
+/// at least one statement` instead of the message under test. One failure in
+/// twenty on a settled tree. kanso#1169, kanso#1175 and kanso#1177 are the
+/// same defect at three other staging sites.
+fn a_program(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("kanso-no-clang-{name}"));
     std::fs::create_dir_all(&dir).expect("a directory to build in");
     std::fs::write(dir.join("main.kso"), "import \"std/io\"\n\nio/write \"hi\\n\"\n")
         .expect("the program writes");
@@ -28,7 +35,7 @@ fn a_program() -> std::path::PathBuf {
 /// `kanso build` spawns clang itself, and says so when it cannot.
 #[test]
 fn a_build_says_it_cannot_invoke_clang() {
-    let dir = a_program();
+    let dir = a_program("build");
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("build")
         .arg(&dir)
@@ -45,7 +52,7 @@ fn a_build_says_it_cannot_invoke_clang() {
 /// neither.
 #[test]
 fn a_run_says_it_cannot_build() {
-    let dir = a_program();
+    let dir = a_program("run");
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
         .arg(&dir)

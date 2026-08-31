@@ -1,9 +1,10 @@
 use crate::ast::*;
-use crate::diag::{Diagnostic, Span};
+use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 55] = [
+pub const BUILTINS: [&str; 58] = [
+    "annotate",
     "append",
     "args",
     "bytes",
@@ -27,6 +28,7 @@ pub const BUILTINS: [&str; 55] = [
     "random",
     "read_file",
     "render_value",
+    "rescue",
     "run",
     "start",
     "kill",
@@ -40,6 +42,7 @@ pub const BUILTINS: [&str; 55] = [
     "bit_xor",
     "bit_not",
     "bit_shl",
+    "bind",
     "bit_shr",
     "env",
     "exists",
@@ -62,16 +65,123 @@ pub const BUILTINS: [&str; 55] = [
 ];
 
 /// The bare-name subset: what resolves without an import. Everything else
-/// in BUILTINS is internal, reached only through std wrapper modules.
-pub const AMBIENT: [&str; 6] = ["entries", "if", "length", "print", "push", "put"];
+/// in BUILTINS is internal, reached only through std wrapper modules. The
+/// three chain words are here because a chain step is written wherever an
+/// effect is, and importing a module to spell one would be a tax on the
+/// failure channel.
+pub const AMBIENT: [&str; 9] =
+    ["annotate", "bind", "entries", "if", "length", "print", "push", "put", "rescue"];
+
+/// What each builtin takes. `if` is absent: its count is checked where its
+/// branches are, because a guard form spells the same word with a different
+/// shape.
+///
+/// The native backend carried these counts beside its emit list and tested
+/// them in the backend, which is late and is one engine. A count the front
+/// door does not read is a count three engines answer three ways: the
+/// interpreter ran `length x x` in an unreached function and printed the
+/// program's output, the native backend refused the whole program with
+/// `native backend: `length` takes 1 argument(s)` and no span, the page
+/// died at the call, and `kanso check` said ok. So the counts live here,
+/// beside the names, and every reader takes them from one place.
+pub const BUILTIN_ARITY: [(&str, usize); 62] = [
+    ("accept", 1),
+    ("annotate", 2),
+    ("append", 2),
+    ("args", 0),
+    ("at", 2),
+    ("bind", 2),
+    ("bit_and", 2),
+    ("bit_not", 1),
+    ("bit_or", 2),
+    ("bit_shl", 2),
+    ("bit_shr", 2),
+    ("bit_xor", 2),
+    ("bytes", 1),
+    ("char_code", 1),
+    ("chars", 1),
+    ("concat", 2),
+    ("entries", 1),
+    ("env", 1),
+    ("exists", 1),
+    ("filter", 2),
+    ("find2", 4),
+    ("find2_below", 5),
+    ("from_code", 1),
+    ("is_desc", 1),
+    ("is_dir", 1),
+    ("join", 2),
+    ("kill", 1),
+    ("length", 1),
+    ("list_dir", 1),
+    ("listen", 1),
+    ("make_dir", 1),
+    ("map", 2),
+    ("net_close", 1),
+    ("net_port", 1),
+    ("net_read", 1),
+    ("net_write", 2),
+    ("now", 0),
+    ("print", 1),
+    ("push", 2),
+    ("put", 3),
+    ("random", 1),
+    ("read_file", 1),
+    ("render_value", 1),
+    ("rescue", 2),
+    ("round", 1),
+    ("run", 2),
+    ("sleep", 1),
+    ("slice", 3),
+    ("sort", 1),
+    ("split", 2),
+    ("sqrt", 1),
+    ("start", 2),
+    ("stdin", 0),
+    ("sum", 1),
+    ("to_bytes", 1),
+    ("to_float", 1),
+    ("to_int", 1),
+    ("utf8", 1),
+    ("wrap_err", 2),
+    ("write", 1),
+    ("write_err", 1),
+    ("write_file", 2),
+];
+
+/// What a builtin takes, under either spelling. A std wrapper module reaches
+/// a native through the `builtin_` prefix, and that call is a call.
+///
+/// `BUILTIN_ARITY` is in alphabetical order so this can binary-search it:
+/// six comparisons where a scan does thirty-one, allocating nothing and
+/// holding nothing. `a_builtin_table_a_binary_search_can_read` keeps the
+/// order honest — an unsorted table would make this miss in silence.
+///
+/// The front end asks it of every head no declaration and no binding claims,
+/// which is where the cost is; the backends ask it once per emitted call.
+///
+/// Four shapes were measured on `kanso check lib/json`, which asks this 335
+/// times, against a container reading 58,201,174 for main: a scan of the
+/// table 58,342,747, this 58,311,708, a map built per `check_merged` call
+/// 58,271,359, a map built once for the process 58,232,625.
+///
+/// The last is the fastest and it is not the one that shipped. The map it
+/// holds is 3,216 bytes the process never gives back, which is a
+/// compile_peak_bytes term, and welfare prices a byte held about five times
+/// what it prices an instruction spent: that shape put the number under its
+/// floor and this one leaves it where it was. design/compiler-log.md,
+/// 2026-08-29, carries the readings.
+pub fn builtin_arity(name: &str) -> Option<usize> {
+    let bare = name.strip_prefix("builtin_").unwrap_or(name);
+    BUILTIN_ARITY.binary_search_by(|(b, _)| (*b).cmp(bare)).ok().map(|at| BUILTIN_ARITY[at].1)
+}
 
 pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
-    let mut used = HashSet::default();
     let mut diags = resolve_markers(program, &markers);
     diags.extend(check_typesets(program, &type_names));
-    diags.extend(check_file(program, &HashSet::default(), &mut used));
+    diags.extend(check_file(program, &HashSet::default()));
     if require_entry {
         check_entry(program, &mut diags);
     }
@@ -188,7 +298,8 @@ fn said_plainly(op: &str, word: &str) -> String {
 /// x)` calls, and `&f` holds. Refusing the bare form costs a sigil and takes
 /// away a shape whose two meanings looked identical.
 fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut arities: crate::hash::Map<&str, usize> = Default::default();
+    let mut arities: crate::hash::Map<&str, usize> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
         let widest = arities.entry(decl.name.as_str()).or_insert(0);
         *widest = (*widest).max(decl.params.len());
@@ -209,13 +320,17 @@ fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
         let widest = arities.entry(decl.name.as_str()).or_insert(0);
         *widest = (*widest).max(takes);
     }
+    // One set, cleared per declaration. Opening a fresh one each time was an
+    // allocation per declaration in each of the three passes that do this,
+    // and the capacity it had just grown to went with it.
+    let mut bound: crate::hash::Set<&str> = Default::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
         // A name bound here is this scope's, whatever a function elsewhere is
         // called: sha256 binds `first` and `list/first` is not what it means.
-        let mut bound: crate::hash::Set<&str> = Default::default();
+        bound.clear();
         for p in &decl.params {
             collect_pattern_names(p, &mut bound);
         }
@@ -412,9 +527,11 @@ fn check_effect_discarded(
     use crate::infer::DESC;
     // inference is handed in: one pass serves every check that reads it
 
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> = Default::default();
+    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     // a position every arm throws away
-    let mut discarded: crate::hash::Map<(&str, usize, usize), bool> = Default::default();
+    let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
         *returns.entry(key).or_insert(0) |= inference.returns[i];
@@ -489,8 +606,10 @@ fn check_none_exhaustive(
     // inference is handed in: one pass serves every check that reads it
 
     // group -> joined return set, and whether any arm names none at a position
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> = Default::default();
-    let mut handles: crate::hash::Map<(&str, usize, usize), bool> = Default::default();
+    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    let mut handles: crate::hash::Map<(&str, usize, usize), bool> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
         *returns.entry(key).or_insert(0) |= inference.returns[i];
@@ -629,19 +748,6 @@ fn literal_type(e: &Expr) -> Option<&'static str> {
         Expr::MapLit(..) => Some("map"),
         Expr::Ident(name, _) if name == "true" || name == "false" => Some("bool"),
         _ => None,
-    }
-}
-
-/// The constructor check keeps a field's promise where the value is written
-/// out; assignment is the other place a field is written, and only a `build`
-/// block may do it. Without this the promise holds until the knot is tied and
-/// then stops holding, which is the worst of both.
-/// "an int", "a string" — a diagnostic that fumbles its own grammar reads as
-/// carelessness about everything else in it.
-fn article(word: &str) -> String {
-    match word.starts_with(['a', 'e', 'i', 'o', 'u']) {
-        true => format!("an {word}"),
-        false => format!("a {word}"),
     }
 }
 
@@ -849,15 +955,33 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
             None => false,
         })
     }
-    let mut groups: crate::hash::Map<(&str, usize), Vec<&FnDecl>> = crate::hash::Map::default();
+    // The arms of each group as one flat vector and a range apiece. A `Vec`
+    // per group held two or three references and cost an allocation to say so.
+    // Count the arms per group, turn the counts into starts, then place each
+    // declaration at its group's cursor.
+    let mut groups: crate::hash::Map<(&str, usize), (u32, u32)> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
-        groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
+        groups.entry((d.name.as_str(), d.params.len())).or_insert((0, 0)).1 += 1;
     }
-    for ((name, _), decls) in groups {
-        for i in 0..decls.len() {
-            for j in i + 1..decls.len() {
-                let a = decls[i];
-                let b = decls[j];
+    let mut at = 0;
+    for slot in groups.values_mut() {
+        let count = slot.1;
+        *slot = (at, at);
+        at += count;
+    }
+    let mut members: Vec<u32> = vec![0; program.fns.len()];
+    for (i, d) in program.fns.iter().enumerate() {
+        let slot = groups.get_mut(&(d.name.as_str(), d.params.len())).expect("every arm counted");
+        members[slot.1 as usize] = i as u32;
+        slot.1 += 1;
+    }
+    for ((name, _), (start, end)) in &groups {
+        let arms = &members[*start as usize..*end as usize];
+        for i in 0..arms.len() {
+            for j in i + 1..arms.len() {
+                let a = &program.fns[arms[i] as usize];
+                let b = &program.fns[arms[j] as usize];
                 let mut a_stricter = false;
                 let mut b_stricter = false;
                 let mut overlap = true;
@@ -879,7 +1003,8 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                 // this the check is pairwise, and a covering arm the author
                 // already wrote is invisible to it.
                 let settled = overlap
-                    && decls.iter().enumerate().any(|(k, c)| {
+                    && arms.iter().enumerate().any(|(k, c)| {
+                        let c = &program.fns[*c as usize];
                         k != i && k != j && covers(c, a, &compare) && covers(c, b, &compare)
                     });
                 if overlap && a_stricter && b_stricter && !settled {
@@ -1072,14 +1197,9 @@ pub fn declared_names(program: &Program) -> HashSet<&str> {
 }
 
 /// Per-file checks: canonical order plus name resolution against this file's
-/// globals extended with the rest of the module. Records which module-level
-/// names the file uses, for the unused-private check.
-pub fn check_file(
-    program: &Program,
-    extern_globals: &HashSet<&str>,
-    used_globals: &mut HashSet<String>,
-) -> Vec<Diagnostic> {
-    check_file_shadow(program, extern_globals, used_globals, &HashSet::default())
+/// globals extended with the rest of the module.
+pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diagnostic> {
+    check_file_shadow(program, extern_globals, &HashSet::default())
 }
 
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
@@ -1088,7 +1208,6 @@ pub fn check_file(
 pub fn check_file_shadow(
     program: &Program,
     extern_globals: &HashSet<&str>,
-    used_globals: &mut HashSet<String>,
     shadowable: &HashSet<String>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
@@ -1099,16 +1218,14 @@ pub fn check_file_shadow(
     check_retired_any(program, &mut diags);
     check_field_annotations(program, &mut diags);
     check_field_conflicts(program, &mut diags);
-    check_annotation_names(program, &mut diags);
+    // One set, read by the annotation walk and by the resolver. Built twice
+    // it cost a second HashSet on every compile, which compile_allocs saw.
+    let declared_type_names: HashSet<&str> =
+        program.types.iter().map(|t| t.name.as_str()).collect();
+    check_annotation_names(program, &declared_type_names, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
-    let mut fn_arities: crate::hash::Map<&str, Vec<usize>> = crate::hash::Map::default();
-    for decl in &program.fns {
-        let arities = fn_arities.entry(decl.name.as_str()).or_default();
-        if !arities.contains(&decl.params.len()) {
-            arities.push(decl.params.len());
-        }
-    }
+    let fn_arities = Arities::of(program);
     // A construction is positional and complete: `point 1` where `point`
     // declares two fields is the same mistake as calling a two-argument
     // function with one, and the compiler knows both counts. A typeset never
@@ -1120,16 +1237,10 @@ pub fn check_file_shadow(
         .filter(|t| t.members.is_empty() && t.parent.is_none() && !t.fields.is_empty())
         .map(|t| (t.name.as_str(), t.fields.len()))
         .collect();
+    let declared =
+        Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: &declared_type_names };
     for decl in &program.fns {
-        check_fn_body_shadow(
-            decl,
-            &globals,
-            used_globals,
-            &mut diags,
-            shadowable,
-            &fn_arities,
-            &type_arity,
-        );
+        check_fn_body_shadow(decl, &globals, &mut diags, shadowable, &declared);
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -1152,7 +1263,7 @@ fn check_predicates(
     for (i, decl) in program.fns.iter().enumerate() {
         // test functions are assertions the test verb consumes — their own
         // convention, not questions
-        let short = decl.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&decl.name);
+        let short = crate::ast::split_qual(&decl.name).map(|(_, s)| s).unwrap_or(&decl.name);
         // a getter takes its field's name, so this rule would reach past the
         // function and rename the field — a language question (should a
         // boolean field be `drained?`) that is not this check's to answer
@@ -1174,7 +1285,7 @@ fn check_predicates(
     let mut groups: Vec<_> = groups.into_iter().collect();
     groups.sort_by_key(|(name, (_, span))| (span.line, span.col, *name));
     for (name, (set, span)) in groups {
-        let short = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
+        let short = crate::ast::split_qual(name).map(|(_, s)| s).unwrap_or(name);
         let is_question = short.ends_with('?');
         // only err rides along (a predicate over fallible work is still a
         // predicate). none is not an answer a question may give — when the
@@ -1257,7 +1368,7 @@ fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
         for stmt in &decl.body {
             field_reads(stmt, &scan, &local, &mut open, diags);
             if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
-                match constructed_type(expr, &scan.plain) {
+                match type_in_hand(expr, &scan.plain) {
                     Some(ty) => local.insert(n.as_str(), ty),
                     None => local.remove(n.as_str()),
                 };
@@ -1269,12 +1380,22 @@ fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-/// The record type this expression constructs, when that is plain to read off
-/// the call itself. Anything else answers `None` and the read stays as it was.
-fn constructed_type<'a>(
-    e: &'a Expr,
-    plain: &HashMap<&'a str, HashSet<&'a str>>,
-) -> Option<&'a str> {
+/// The record type this expression hands back, when that is plain to read off
+/// the expression itself. Anything else answers `None` and the read stays as
+/// it was.
+///
+/// Two expressions say it plainly. A construction names the type as the head
+/// of the call. A widening names it after the colon — `(v):point` hands back a
+/// point and says so — and until this read it, `p = (v):point` followed by
+/// `p.z` compiled clean where the same field read is refused through an
+/// annotation, through a constructor pattern's as-binding, and through a local
+/// construction. Three ways of naming a type reached the table and the fourth
+/// did not; both engines then refused `p.z` at run time, identically, so this
+/// was a diagnostic arriving late rather than a disagreement.
+fn type_in_hand<'a>(e: &'a Expr, plain: &HashMap<&'a str, HashSet<&'a str>>) -> Option<&'a str> {
+    if let Expr::Upcast { ty, .. } = e {
+        return plain.get_key_value(ty.as_str()).map(|(k, _)| *k);
+    }
     let Expr::App { head, .. } = e else { return None };
     let Expr::Ident(name, _) = head.as_ref() else { return None };
     plain.get_key_value(name.as_str()).map(|(k, _)| *k)
@@ -1513,7 +1634,7 @@ fn base_type<'a>(
 ) -> Option<&'a str> {
     match base {
         Expr::Ident(n, _) => local.get(n.as_str()).copied(),
-        other => constructed_type(other, plain),
+        other => type_in_hand(other, plain),
     }
 }
 
@@ -1540,6 +1661,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, &mut diags);
     foreign_constructions(program, &mut diags);
+    typeset_constructions(program, &mut diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
@@ -1606,6 +1728,70 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
 }
 
 /// GAVEL 1b: the owner's pub functions are the only door, so a value wearing a
+/// A typeset is annotation-only vocabulary: `type shape circle square` names
+/// a union for a parameter to stand in, and no value is ever a `shape`. So a
+/// call whose head names one is a mistake the compiler can see, and until this
+/// it was three different answers. The interpreter refused it at run time —
+/// "`shape` is a typeset — it only annotates" — the page said the same, and
+/// native built a one-field record and PRINTED `shape 1`. A silent divergence
+/// on the engine most programs run on.
+///
+/// Naming one without calling it diverges too, and more quietly: `print
+/// "{shape}"` compiles clean, prints `<mod>/shape` on native and `<fn>` on the
+/// interpreter. Two engines, two answers, neither an error. So the refusal is
+/// on the NAME rather than the call — an `Ident` or a `&` partial in any
+/// expression position — and a call is the case where the name is a head.
+///
+/// Refusing it here makes the three agree by construction, because none of
+/// them gets to see the name. Annotations are untouched: a parameter's `:shape`
+/// is a pattern, a field's is a type list, and neither is an expression. What
+/// stays at run time is the same test on the interpreter's construction path.
+fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let annotating: HashSet<&str> = program
+        .types
+        .iter()
+        .filter(|ty| !ty.members.is_empty())
+        .map(|ty| ty.name.as_str())
+        .collect();
+    if annotating.is_empty() {
+        return;
+    }
+    fn walk(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+        let named = match e {
+            Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name, span)),
+            // A widening names its target after the colon, and a typeset is
+            // not something a value can become: `(circle 1):shape` for a
+            // typeset holding `circle` refused at RUN time, on both engines,
+            // with "this value is not a shape" — a sentence that blames a
+            // program whose circle is exactly what the typeset admits.
+            Expr::Upcast { ty, span, .. } => Some((ty, span)),
+            _ => None,
+        };
+        if let Some((name, span)) = named {
+            if annotating.contains(name.as_str()) {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{name}` is a typeset — it only annotates"),
+                    *span,
+                ));
+            }
+        }
+        crate::for_each_child(e, |child| walk(child, annotating, diags));
+    }
+    for decl in &program.fns {
+        if decl.synthetic || crate::ast::has_slash(&decl.name) {
+            continue;
+        }
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    walk(expr, &annotating, diags)
+                }
+            }
+        }
+    }
+}
+
 /// type's name was built by its owner. Reading one is free — naming it,
 /// annotating with it, destructuring it by name — and so is building your own.
 /// What this refuses is reaching across an import to construct.
@@ -1616,7 +1802,9 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
     let foreign: HashSet<&str> = program
         .types
         .iter()
-        .filter(|ty| ty.name.contains('/') && (!ty.fields.is_empty() || ty.parent.is_some()))
+        .filter(|ty| {
+            crate::ast::has_slash(&ty.name) && (!ty.fields.is_empty() || ty.parent.is_some())
+        })
         .map(|ty| ty.name.as_str())
         .collect();
     if foreign.is_empty() {
@@ -1626,7 +1814,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
         if let Expr::App { head, .. } = e {
             if let Expr::Ident(name, span) = &**head {
                 if foreign.contains(name.as_str()) {
-                    let (owner, base) = name.rsplit_once('/').unwrap_or(("", name));
+                    let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
                     diags.push(Diagnostic::new(
                         "opacity",
                         format!(
@@ -1641,7 +1829,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
         crate::for_each_child(e, |child| walk(child, foreign, diags));
     }
     for decl in &program.fns {
-        if decl.synthetic || decl.name.contains('/') {
+        if decl.synthetic || crate::ast::has_slash(&decl.name) {
             continue;
         }
         for stmt in &decl.body {
@@ -1651,6 +1839,49 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
                 }
             }
         }
+    }
+}
+
+/// The distinct arities each name is declared at, as one flat vector and a
+/// range apiece. A `Vec` per name held one or two numbers and cost an
+/// allocation to say so; two tables in this file were built that way.
+struct Arities<'a> {
+    ranges: HashMap<&'a str, (u32, u32)>,
+    flat: Vec<usize>,
+}
+
+impl<'a> Arities<'a> {
+    /// Count the arms per name, turn the counts into starts, then place each
+    /// declaration's arity at its name's cursor, skipping one already there.
+    /// The counts bound the ranges from above, so a name declared three times
+    /// at one arity leaves two cells unread between it and the next name.
+    fn of(program: &'a Program) -> Arities<'a> {
+        let mut ranges: HashMap<&str, (u32, u32)> =
+            HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+        for decl in &program.fns {
+            ranges.entry(decl.name.as_str()).or_insert((0, 0)).1 += 1;
+        }
+        let mut at = 0;
+        for slot in ranges.values_mut() {
+            let count = slot.1;
+            *slot = (at, at);
+            at += count;
+        }
+        let mut flat: Vec<usize> = vec![0; program.fns.len()];
+        for decl in &program.fns {
+            let key = decl.name.as_str();
+            let (start, end) = *ranges.get(key).expect("every name was counted");
+            let arity = decl.params.len();
+            if !flat[start as usize..end as usize].contains(&arity) {
+                flat[end as usize] = arity;
+                ranges.get_mut(key).expect("every name was counted").1 = end + 1;
+            }
+        }
+        Arities { ranges, flat }
+    }
+
+    fn get(&self, name: &str) -> Option<&[usize]> {
+        self.ranges.get(name).map(|&(start, end)| &self.flat[start as usize..end as usize])
     }
 }
 
@@ -1665,18 +1896,13 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
         .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
         .map(|ty| (ty.name.as_str(), ty.fields.len()))
         .collect();
-    let mut arities: HashMap<&str, Vec<usize>> = HashMap::default();
-    for decl in &program.fns {
-        let slot = arities.entry(decl.name.as_str()).or_default();
-        if !slot.contains(&decl.params.len()) {
-            slot.push(decl.params.len());
-        }
-    }
+    let arities = Arities::of(program);
+    let mut bound: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
-        let mut bound: HashSet<&str> = HashSet::default();
+        bound.clear();
         for param in &decl.params {
             for_each_param_name(param, &mut |n| {
                 bound.insert(n);
@@ -1758,7 +1984,7 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
 
 fn arity_walk_stmt(
     stmt: &Stmt,
-    arities: &HashMap<&str, Vec<usize>>,
+    arities: &Arities,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
@@ -1772,7 +1998,7 @@ fn arity_walk_stmt(
 
 fn arity_walk_expr(
     e: &Expr,
-    arities: &HashMap<&str, Vec<usize>>,
+    arities: &Arities,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
@@ -1784,7 +2010,7 @@ fn arity_walk_expr(
             // name matching a declared group is that group, and the per-file
             // pass sees only one file of a module, which leaves every call
             // to a sibling file unchecked.
-            let known = arities.get(name.as_str());
+            let known = arities.get(name);
             if !bound.contains(name.as_str()) {
                 if let Some(count) = fields.get(name.as_str()) {
                     if args.len() != *count {
@@ -1797,6 +2023,17 @@ fn arity_walk_expr(
                             ),
                             *span,
                         ));
+                    }
+                }
+                if known.is_none() {
+                    if let Some(takes) = builtin_arity(name) {
+                        if args.len() != takes {
+                            diags.push(Diagnostic::new(
+                                "arity",
+                                format!("`{name}` takes {takes} argument(s), got {}", args.len()),
+                                *span,
+                            ));
+                        }
                     }
                 }
                 if let Some(known) = known {
@@ -1830,25 +2067,67 @@ fn arity_walk_expr(
 /// and says nothing where an argument is anything else. What it catches is
 /// the call that could never have worked, reported where the author wrote it
 /// instead of when the value arrives.
-fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> = HashMap::default();
-    for decl in &program.fns {
-        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(decl);
+/// The arms of each dispatch group, keyed by NAME so a `&str` borrows for the
+/// lookup, with each arm's arity carried beside its index. A `Vec<&FnDecl>`
+/// per (name, arity) was an allocation for a list of two or three references,
+/// and a tuple key cannot be probed with a borrowed name the way a `&str` can.
+struct LiteralGroups<'a> {
+    ranges: HashMap<&'a str, (u32, u32)>,
+    flat: Vec<(usize, u32)>,
+    fns: &'a [FnDecl],
+}
+
+impl<'a> LiteralGroups<'a> {
+    fn of(program: &'a Program) -> LiteralGroups<'a> {
+        let mut ranges: HashMap<&str, (u32, u32)> =
+            HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+        for decl in &program.fns {
+            ranges.entry(decl.name.as_str()).or_insert((0, 0)).1 += 1;
+        }
+        let mut at = 0;
+        for slot in ranges.values_mut() {
+            let count = slot.1;
+            *slot = (at, at);
+            at += count;
+        }
+        let mut flat = vec![(0usize, 0u32); program.fns.len()];
+        for (i, decl) in program.fns.iter().enumerate() {
+            let slot = ranges.get_mut(decl.name.as_str()).expect("every arm was counted");
+            flat[slot.1 as usize] = (decl.params.len(), i as u32);
+            slot.1 += 1;
+        }
+        LiteralGroups { ranges, flat, fns: &program.fns }
     }
+
+    /// The arms of `name` that take `arity` parameters, in declaration order.
+    fn arms(&self, name: &str, arity: usize) -> impl Iterator<Item = &FnDecl> + '_ {
+        let (start, end) = self.ranges.get(name).copied().unwrap_or((0, 0));
+        self.flat[start as usize..end as usize]
+            .iter()
+            .filter(move |(a, _)| *a == arity)
+            .map(|(_, i)| &self.fns[*i as usize])
+    }
+
+    fn has(&self, name: &str, arity: usize) -> bool {
+        self.arms(name, arity).next().is_some()
+    }
+}
+
+fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let groups = LiteralGroups::of(program);
     let types: HashMap<&str, &TypeDecl> =
         program.types.iter().map(|t| (t.name.as_str(), t)).collect();
     // Borrowed for the walk: the map is keyed by an owned name, and looking
     // one up needed a String built from the callee at every call expression —
     // twice, since the same key answered `forwards`. A view keyed by the
     // program's own names answers both from one lookup and allocates nothing.
-    let owned = crate::inline::aliases(program);
-    let builtins: HashMap<(&str, usize), &str> =
-        owned.iter().map(|((n, a), t)| ((n.as_str(), *a), t.as_str())).collect();
+    let builtins = crate::inline::aliases(program);
+    let mut bound: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
-        let mut bound: HashSet<&str> = HashSet::default();
+        bound.clear();
         for param in &decl.params {
             for_each_param_name(param, &mut |n| {
                 bound.insert(n);
@@ -1981,7 +2260,7 @@ fn type_admits(ty: &str, kind: LitKind, types: &HashMap<&str, &TypeDecl>) -> boo
 
 fn literal_walk_stmt(
     stmt: &Stmt,
-    groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
+    groups: &LiteralGroups,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
     builtins: &HashMap<(&str, usize), &str>,
@@ -1996,7 +2275,7 @@ fn literal_walk_stmt(
 
 fn literal_walk_expr(
     e: &Expr,
-    groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
+    groups: &LiteralGroups,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
     builtins: &HashMap<(&str, usize), &str>,
@@ -2008,8 +2287,9 @@ fn literal_walk_expr(
                 // a std wrapper is a rename over a builtin, so the builtin's
                 // demand is the one that will actually be met
                 let alias = builtins.get(&(name.as_str(), args.len())).copied();
-                let bare =
-                    alias.unwrap_or_else(|| name.rsplit_once('/').map(|(_, n)| n).unwrap_or(name));
+                let bare = alias.unwrap_or_else(|| {
+                    crate::ast::split_qual(name).map(|(_, n)| n).unwrap_or(name)
+                });
                 let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
                 // A program that declares its own `run` calls its own `run`,
                 // and the arms below say what those take. Without this, every
@@ -2024,7 +2304,7 @@ fn literal_walk_expr(
                 // `text/chars 5` answered a bare runtime string: not a
                 // decision, an accident of which names have wrappers.
                 let forwards = alias.is_some();
-                let shadowed = !forwards && groups.contains_key(&(name.as_str(), args.len()));
+                let shadowed = !forwards && groups.has(name, args.len());
                 for (i, arg) in args.iter().enumerate() {
                     let Some(kind) = literal_kind(arg) else { continue };
                     let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {
@@ -2044,15 +2324,15 @@ fn literal_walk_expr(
                         ));
                     }
                 }
-                if let Some(arms) = groups.get(&(name.as_str(), args.len())) {
+                if groups.has(name, args.len()) {
                     for (i, arg) in args.iter().enumerate() {
                         let Some(kind) = literal_kind(arg) else { continue };
-                        let admitted = arms.iter().any(|a| {
+                        let admitted = groups.arms(name, args.len()).any(|a| {
                             a.params.get(i).is_some_and(|p| pattern_admits(p, kind, types))
                         });
                         if !admitted {
-                            let wanted: Vec<String> = arms
-                                .iter()
+                            let wanted: Vec<String> = groups
+                                .arms(name, args.len())
                                 .filter_map(|a| a.params.get(i))
                                 .map(describe_pattern)
                                 .collect();
@@ -2117,59 +2397,115 @@ fn dedup_join(mut names: Vec<String>) -> String {
 /// Values born before the block stay immutable, which is what keeps every
 /// cycle inside one birth cohort.
 fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let type_names: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    let mut scan = BuildScan {
+        type_names: program.types.iter().map(|t| t.name.as_str()).collect(),
+        born: None,
+        diags,
+    };
     for decl in &program.fns {
-        for stmt in &decl.body {
-            build_walk_stmt(stmt, &type_names, diags);
-        }
+        scan.body(&decl.body);
     }
 }
 
-fn build_walk_stmt(stmt: &Stmt, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
-    // a `Set` reached here is one no `build` block enclosed: writing a field is
-    // the one mutation the language has, and it lives in a build block only
-    if let Stmt::Set { target, field, span, .. } = stmt {
-        diags.push(Diagnostic::new(
-            "build",
-            format!(
-                "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
-            ),
-            *span,
-        ));
-    }
-    match stmt {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            build_walk_expr(expr, type_names, diags);
-        }
-    }
+/// `born` names what the enclosing `build` block has constructed so far, and
+/// its absence means no `build` encloses these statements at all. That
+/// distinction is the whole rule: outside a build a field write is refused,
+/// inside one it is refused unless the target was made there.
+///
+/// The three fields travel together because this walk reaches every expression
+/// the front end holds, and it descends through `for_each_child`, whose
+/// callback is a `&mut dyn FnMut` — one indirect call per child. A closure
+/// capturing three references writes three words at every one of those calls; a
+/// method on this struct captures one. Carrying the state as free variables
+/// instead cost 7,602 retired instructions in the callback alone on
+/// `kanso check lib/json`, measured.
+struct BuildScan<'a, 'd> {
+    type_names: HashSet<&'a str>,
+    born: Option<HashSet<&'a str>>,
+    diags: &'d mut Vec<Diagnostic>,
 }
 
-fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
-    if let Expr::Build(stmts, _) = expr {
-        let mut born: HashSet<&str> = HashSet::default();
+impl<'a> BuildScan<'a, '_> {
+    /// A statement list, in order. A construction binds a name the statements
+    /// below it may write, so the set grows as the walk goes, and a write above
+    /// the construction that gives it is refused — which is what reading in
+    /// order buys.
+    fn body(&mut self, stmts: &'a [Stmt]) {
         for stmt in stmts {
             match stmt {
                 Stmt::Bind { pattern, expr } => {
-                    if let (Pattern::Var(name, _), true) = (pattern, constructs(expr, type_names)) {
-                        born.insert(name);
+                    self.expr(expr);
+                    if let (Some(born), Pattern::Var(name, _)) = (self.born.as_mut(), pattern) {
+                        if constructs(expr, &self.type_names) {
+                            born.insert(name);
+                        }
                     }
                 }
-                Stmt::Set { target, field, span, .. } if !born.contains(target.as_str()) => {
-                    diags.push(Diagnostic::new(
-                        "build",
-                        format!(
-                            "`{target}.{field} = ...` writes only block-born values: \
-                             `{target}` is not a construction made in this `build` \
-                             block, so it stays immutable"
-                        ),
-                        *span,
-                    ));
+                Stmt::Expr(expr) => self.expr(expr),
+                Stmt::Set { target, field, value, span } => {
+                    self.wrote_a_field(target, field, *span);
+                    self.expr(value);
                 }
-                _ => {}
             }
         }
     }
-    crate::for_each_child(expr, |child| build_walk_expr(child, type_names, diags));
+
+    fn wrote_a_field(&mut self, target: &str, field: &str, span: Span) {
+        match &self.born {
+            // writing a field is the one mutation the language has, and it
+            // lives in a build block only
+            None => self.diags.push(Diagnostic::new(
+                "build",
+                format!(
+                    "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
+                ),
+                span,
+            )),
+            Some(born) if !born.contains(target) => self.diags.push(Diagnostic::new(
+                "build",
+                format!(
+                    "`{target}.{field} = ...` writes only block-born values: \
+                     `{target}` is not a construction made in this `build` \
+                     block, so it stays immutable"
+                ),
+                span,
+            )),
+            Some(_) => {}
+        }
+    }
+
+    fn expr(&mut self, expr: &'a Expr) {
+        match expr {
+            // a `build` opens the one scope a field write may live in, and it
+            // opens it with nothing born
+            Expr::Build(stmts, _) => {
+                let outer = self.born.replace(HashSet::default());
+                self.body(stmts);
+                self.born = outer;
+            }
+            // An `if` arm and the remainder below a guard are statement lists
+            // too, and they carry whatever build they sit in. Until this walk
+            // reached them a field write in one was checked by nobody: outside
+            // a build it ran and mutated a value the language calls immutable,
+            // and after a guard line the native backend did not even get that
+            // far — `emit_fn_body` reached an `unreachable!` reading "`set`
+            // parses only inside `build`", which is this rule stated as an
+            // invariant somewhere that could not enforce it.
+            Expr::Block(stmts, _) => {
+                let outer = self.born.clone();
+                self.body(stmts);
+                self.born = outer;
+            }
+            Expr::Guard { cond, early, rest, .. } => {
+                self.expr(cond);
+                self.expr(early);
+                let outer = self.born.clone();
+                self.body(rest);
+                self.born = outer;
+            }
+            _ => crate::for_each_child(expr, |child| self.expr(child)),
+        }
+    }
 }
 
 /// A call that merely returns a record may hand back something older.
@@ -2366,22 +2702,92 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// — so the name inside was decoration nothing verified, and `[]banana`
 /// compiled and ran while a bare `banana` was refused. A typo in an element
 /// name should be as loud as a typo anywhere else.
-fn check_annotation_names(program: &Program, diags: &mut Vec<Diagnostic>) {
-    const BUILT_IN: [&str; 8] = ["int", "float64", "string", "bool", "none", "err", "some", "any"];
-    let declared: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+/// The type names no declaration provides. Two readers ask this — the walk
+/// over patterns below, and the resolver, which is where an upcast's target
+/// is reached — so the list lives here rather than at either of them.
+const BUILT_IN_TYPES: [&str; 8] =
+    ["int", "float64", "string", "bool", "none", "err", "some", "any"];
+
+/// The names in an annotation that no type answers to. A qualified name is
+/// the import resolver's to answer for.
+fn undeclared_in(ty: &str, declared: &HashSet<&str>) -> Vec<String> {
+    annotation_names(ty)
+        .into_iter()
+        .filter(|n| {
+            !crate::ast::has_slash(n) && !BUILT_IN_TYPES.contains(n) && !declared.contains(n)
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+fn check_annotation_names(
+    program: &Program,
+    declared: &HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    fn patterns(
+        p: &Pattern,
+        declared: &HashSet<&str>,
+        annotating: &HashSet<&str>,
+        diags: &mut Vec<Diagnostic>,
+    ) {
+        match p {
+            Pattern::Annotated { ty, span, .. } => {
+                for name in undeclared_in(ty, declared) {
+                    diags.push(Diagnostic::new(
+                        "type",
+                        format!("no type is called `{name}`, so this arm can never match"),
+                        *span,
+                    ));
+                }
+            }
+            // `(shape x)` for a typeset `shape` destructures a record by its
+            // type, and a typeset has no fields to destructure and no value
+            // is ever one, so the arm can never match whatever arrives. Both
+            // engines said "no overload matches these arguments" at run time,
+            // which sends the reader to look at an argument that is fine.
+            //
+            // `Pattern::Ctor` carries no span, so this points at the first
+            // field — one token past the type name, the same place the two
+            // other ctor diagnostics in this file point. GIVING IT A SPAN WAS
+            // MEASURED AND DECLINED: `Pattern` grows 64 bytes to 72, and
+            // `kanso check lib/json` costs 482,913 more instructions for the
+            // exact column. The log entry has the numbers.
+            //
+            // `(banana w h)` with no `banana` declared still reaches dispatch.
+            // That one wants a set `declared` is not: `std/list` writes
+            // `(entry k v)`, and `entry` is a marker the compiler knows and
+            // `program.types` does not hold, so the obvious check calls a
+            // correct program wrong. Measured that way too.
+            Pattern::Ctor { ty, fields, .. } => {
+                if annotating.contains(ty.as_str()) && !fields.is_empty() {
+                    diags.push(Diagnostic::new(
+                        "type",
+                        format!(
+                            "`{ty}` is a typeset — it only annotates, so this arm \
+                             can never match"
+                        ),
+                        other_span(&fields[0]),
+                    ));
+                }
+                for f in fields {
+                    patterns(f, declared, annotating, diags);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // The typesets, borrowed from the list `declared` was built from.
+    let annotating: HashSet<&str> =
+        program.types.iter().filter(|t| !t.members.is_empty()).map(|t| t.name.as_str()).collect();
     for decl in &program.fns {
         for param in &decl.params {
-            let Pattern::Annotated { ty, span, .. } = param else { continue };
-            for name in annotation_names(ty) {
-                // a qualified name is the import resolver's to answer for
-                if name.contains('/') || BUILT_IN.contains(&name) || declared.contains(name) {
-                    continue;
-                }
-                diags.push(Diagnostic::new(
-                    "type",
-                    format!("no type is called `{name}`, so this arm can never match"),
-                    *span,
-                ));
+            patterns(param, declared, &annotating, diags);
+        }
+        for stmt in &decl.body {
+            if let Stmt::Bind { pattern, .. } = stmt {
+                patterns(pattern, declared, &annotating, diags);
             }
         }
     }
@@ -2412,7 +2818,8 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
     let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
     let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();
     let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
-    let mut refs: HashMap<&str, Vec<&str>> = HashMap::default();
+    let mut refs: HashMap<&str, Vec<&str>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &constants {
         let out = refs.entry(decl.name.as_str()).or_default();
         for stmt in &decl.body {
@@ -2443,20 +2850,23 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
 }
 
 fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut groups: Vec<(&str, Vec<&FnDecl>)> = Vec::new();
-    for decl in &program.fns {
-        match groups.last_mut() {
-            Some((name, decls)) if *name == decl.name => decls.push(decl),
-            _ => groups.push((&decl.name, vec![decl])),
+    // A run of consecutive declarations sharing a name, walked in place. Each
+    // run used to be collected into a `Vec<&FnDecl>` of its own — 579
+    // allocation blocks for three facts: whether any arm takes no parameters,
+    // how many arms there are, and where the second one is.
+    let mut at = 0;
+    while at < program.fns.len() {
+        let name = &program.fns[at].name;
+        let start = at;
+        while at < program.fns.len() && program.fns[at].name == *name {
+            at += 1;
         }
-    }
-    for (name, decls) in groups {
-        let has_constant = decls.iter().any(|d| d.params.is_empty());
-        if has_constant && decls.len() > 1 {
+        let arms = &program.fns[start..at];
+        if arms.len() > 1 && arms.iter().any(|d| d.params.is_empty()) {
             diags.push(Diagnostic::new(
                 "dispatch",
                 format!("`{name}` is a constant (arity 0); a constant admits no overloads"),
-                decls[1].span,
+                arms[1].span,
             ));
         }
     }
@@ -2541,9 +2951,10 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
             })
             .map(|t| t.name.clone())
     };
-    let mut torn: HashMap<(&str, usize), Vec<String>> = HashMap::default();
+    let mut torn: HashMap<(&str, usize), Vec<String>> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, a) in program.fns.iter().enumerate() {
-        if !a.synthetic || a.name.contains('/') {
+        if !a.synthetic || crate::ast::has_slash(&a.name) {
             continue;
         }
         for b in program.fns.iter().skip(i + 1) {
@@ -2597,7 +3008,7 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
         crate::for_each_child(e, |child| walk(child, torn, diags));
     }
     for d in &program.fns {
-        if d.synthetic || d.name.contains('/') {
+        if d.synthetic || crate::ast::has_slash(&d.name) {
             continue;
         }
         let bound: crate::hash::Set<&str> = d
@@ -2651,7 +3062,7 @@ fn check_entry(program: &Program, diags: &mut Vec<Diagnostic>) {
         diags.push(Diagnostic::new(
             "name",
             "a directory runs through `main.kso`, and this module has none".to_string(),
-            Span { line: 1, col: 1 },
+            Span::at(1, 1),
         ));
     }
 }
@@ -2662,29 +3073,42 @@ fn other_span(pattern: &Pattern) -> Span {
         Pattern::Annotated { span, .. } | Pattern::Keyed { span, .. } => *span,
         Pattern::Var(_, s) => *s,
         Pattern::Wildcard(s) => *s,
-        Pattern::Ctor { .. } => Span { line: 0, col: 0 },
+        Pattern::Ctor { .. } => Span::at(0, 0),
     }
 }
 
-struct Local {
-    name: String,
+struct Local<'a> {
+    /// Borrowed from the pattern that bound it. The declaration this walk
+    /// reads outlives the walk, so owning the name meant a `String` per
+    /// binding for a vector that is truncated at the end of every scope.
+    name: &'a str,
     span: Span,
     used: bool,
 }
 
-struct Resolver<'a> {
-    globals: &'a HashSet<&'a str>,
-    locals: Vec<Local>,
-    used_globals: &'a mut HashSet<String>,
-    diags: Vec<Diagnostic>,
-    shadowable: &'a HashSet<String>,
+/// What the program declares, gathered once and asked about everywhere. The
+/// three used to travel as three parameters; a fourth would have been a
+/// fourth, and they are one question about one program.
+struct Declared<'a> {
     /// Arities of this module's own fn groups; an application of a local
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
-    fn_arities: &'a crate::hash::Map<&'a str, Vec<usize>>,
+    fn_arities: &'a Arities<'a>,
     /// How many fields each record type declares. Construction is positional,
     /// so an application of a type name has to hand over all of them.
     type_arity: &'a crate::hash::Map<&'a str, usize>,
+    /// Every declared type name, records and subtypes and typesets alike.
+    /// An upcast's target is a name this walk already reaches, so asking
+    /// whether a type answers to it costs the lookup and no traversal.
+    types: &'a HashSet<&'a str>,
+}
+
+struct Resolver<'a> {
+    globals: &'a HashSet<&'a str>,
+    locals: Vec<Local<'a>>,
+    diags: Vec<Diagnostic>,
+    shadowable: &'a HashSet<String>,
+    declared: &'a Declared<'a>,
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
@@ -2693,21 +3117,17 @@ struct Resolver<'a> {
 fn check_fn_body_shadow(
     decl: &FnDecl,
     globals: &HashSet<&str>,
-    used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &HashSet<String>,
-    fn_arities: &crate::hash::Map<&str, Vec<usize>>,
-    type_arity: &crate::hash::Map<&str, usize>,
+    declared: &Declared,
 ) {
     let mut resolver = Resolver {
         globals,
         locals: Vec::new(),
-        used_globals,
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
         shadowable,
-        fn_arities,
-        type_arity,
+        declared,
     };
     for param in &decl.params {
         resolver.bind_pattern(param);
@@ -2751,8 +3171,8 @@ fn check_fn_body_shadow(
     diags.append(&mut resolver.diags);
 }
 
-impl Resolver<'_> {
-    fn bind_pattern(&mut self, pattern: &Pattern) {
+impl<'a> Resolver<'a> {
+    fn bind_pattern(&mut self, pattern: &'a Pattern) {
         match pattern {
             Pattern::Var(name, span) => self.push_local(name, *span),
             Pattern::Annotated { name, span, .. } => self.push_local(name, *span),
@@ -2768,7 +3188,7 @@ impl Resolver<'_> {
         }
     }
 
-    fn bind_target(&mut self, pattern: &Pattern) {
+    fn bind_target(&mut self, pattern: &'a Pattern) {
         match pattern {
             Pattern::Var(name, span) => self.rebind(name, *span),
             Pattern::Ctor { fields, .. } => {
@@ -2799,7 +3219,7 @@ impl Resolver<'_> {
         }
     }
 
-    fn bind_target_field(&mut self, pattern: &Pattern) {
+    fn bind_target_field(&mut self, pattern: &'a Pattern) {
         match pattern {
             Pattern::Var(name, span) => self.rebind(name, *span),
             Pattern::Ctor { fields, .. } => {
@@ -2823,7 +3243,7 @@ impl Resolver<'_> {
         }
     }
 
-    fn push_local(&mut self, name: &str, span: Span) {
+    fn push_local(&mut self, name: &'a str, span: Span) {
         if self.globals.contains(name) && !self.shadowable.contains(name) {
             self.diags.push(Diagnostic::new(
                 "name",
@@ -2831,10 +3251,10 @@ impl Resolver<'_> {
                 span,
             ));
         }
-        self.locals.push(Local { name: name.to_string(), span, used: false });
+        self.locals.push(Local { name, span, used: false });
     }
 
-    fn rebind(&mut self, name: &str, span: Span) {
+    fn rebind(&mut self, name: &'a str, span: Span) {
         if let Some(local) = self.locals.iter().rev().find(|l| l.name == name) {
             if !local.used {
                 self.diags.push(Diagnostic::new(
@@ -2848,25 +3268,34 @@ impl Resolver<'_> {
     }
 
     fn flush_unused(&mut self, from: usize) {
-        let mut shadowed: HashSet<String> = HashSet::default();
-        for local in self.locals[from..].iter().rev() {
-            // `_:type` ascribes without binding: there is no name to use
-            if local.name == "_" {
-                continue;
+        // The set borrows from `self.locals`, which is why the two fields are
+        // taken apart here: the loop reads one and writes the other, and
+        // reaching them through `self` would be one borrow doing both. Owning
+        // the names instead was a `String` per binding in every scope the
+        // checker left.
+        {
+            let mut shadowed: HashSet<&str> = HashSet::default();
+            let locals = &self.locals;
+            let diags = &mut self.diags;
+            for local in locals[from..].iter().rev() {
+                // `_:type` ascribes without binding: there is no name to use
+                if local.name == "_" {
+                    continue;
+                }
+                if !local.used && !shadowed.contains(local.name) {
+                    diags.push(Diagnostic::new(
+                        "unused",
+                        format!("unused binding `{}`", local.name),
+                        local.span,
+                    ));
+                }
+                shadowed.insert(local.name);
             }
-            if !local.used && !shadowed.contains(&local.name) {
-                self.diags.push(Diagnostic::new(
-                    "unused",
-                    format!("unused binding `{}`", local.name),
-                    local.span,
-                ));
-            }
-            shadowed.insert(local.name.clone());
         }
         self.locals.truncate(from);
     }
 
-    fn resolve_expr(&mut self, expr: &Expr) {
+    fn resolve_expr(&mut self, expr: &'a Expr) {
         match expr {
             Expr::Int(..) | Expr::Float(..) => {}
             // `&f` reads f exactly as a bare mention does
@@ -2919,7 +3348,21 @@ impl Resolver<'_> {
                 }
             }
             Expr::Field { base, .. } => self.resolve_expr(base),
-            Expr::Upcast { expr, .. } => self.resolve_expr(expr),
+            // `(x):type` names a type the way an annotation does, and until
+            // this arm asked, nothing before the backends did. `kanso check`
+            // answered ok and each engine then spoke for itself: the two
+            // backends refused the whole program with `unknown type`, and the
+            // interpreter said at run time that the value was not one.
+            Expr::Upcast { expr, ty, span } => {
+                for name in undeclared_in(ty, self.declared.types) {
+                    self.diags.push(Diagnostic::new(
+                        "type",
+                        format!("no type is called `{name}`, so there is nothing to widen to"),
+                        *span,
+                    ));
+                }
+                self.resolve_expr(expr);
+            }
             Expr::MapLit(pairs, _) => {
                 for (key, value) in pairs {
                     self.resolve_expr(key);
@@ -2945,9 +3388,9 @@ impl Resolver<'_> {
                     self.resolve_expr(arg);
                 }
                 if let Expr::Ident(name, span) = &**head {
-                    let local = self.locals.iter().any(|l| &l.name == name);
+                    let local = self.locals.iter().any(|l| l.name == name.as_str());
                     if !local {
-                        if let Some(fields) = self.type_arity.get(name.as_str()) {
+                        if let Some(fields) = self.declared.type_arity.get(name.as_str()) {
                             if args.len() != *fields {
                                 self.diags.push(Diagnostic::new(
                                     "arity",
@@ -2960,7 +3403,7 @@ impl Resolver<'_> {
                                 ));
                             }
                         }
-                        if let Some(arities) = self.fn_arities.get(name.as_str()) {
+                        if let Some(arities) = self.declared.fn_arities.get(name) {
                             if !arities.contains(&args.len()) && !arities.contains(&0) {
                                 let mut known: Vec<String> =
                                     arities.iter().map(|a| a.to_string()).collect();
@@ -3043,9 +3486,12 @@ impl Resolver<'_> {
             }
         }
         match self.globals.contains(name) {
-            true => {
-                self.used_globals.insert(name.to_string());
-            }
+            // The name resolves; nothing more to say about it here. A set of
+            // which globals a file used was recorded at this line for an
+            // unused-private check that has since moved to `lib::private_uses`,
+            // and nothing read it after the move — a `String` per mention, for
+            // a set that was dropped.
+            true => {}
             false if name == "set" => {
                 self.diags.push(Diagnostic::new(
                     "name",
@@ -3107,7 +3553,8 @@ fn check_wall_operands(
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::default();
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
     }
@@ -3252,7 +3699,8 @@ fn check_discarded_value(
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::default();
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
     }
@@ -3375,7 +3823,7 @@ fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
 
 /// `to_int` and `to_float` given a literal that will not parse.
 fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>) {
-    let bare = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
+    let bare = crate::ast::split_qual(name).map(|(_, s)| s).unwrap_or(name);
     let Some(Expr::Str(parts, span)) = args.first() else { return };
     let [TemplatePart::Lit(text)] = parts.as_slice() else { return };
     let refuses = match bare {
@@ -3395,5 +3843,39 @@ fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>
             ),
             *span,
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{builtin_arity, BUILTINS, BUILTIN_ARITY};
+
+    /// `builtin_arity` binary-searches the table, so an entry out of order is
+    /// a builtin the front end stops knowing the count of — no error, no
+    /// diagnostic, just a check that quietly stops covering one name.
+    #[test]
+    fn a_builtin_table_a_binary_search_can_read() {
+        let mut sorted: Vec<&str> = BUILTIN_ARITY.iter().map(|(b, _)| *b).collect();
+        let written = sorted.clone();
+        sorted.sort_unstable();
+        assert_eq!(written, sorted, "BUILTIN_ARITY is out of alphabetical order");
+        for (name, takes) in BUILTIN_ARITY {
+            assert_eq!(builtin_arity(name), Some(takes), "the search missed `{name}`");
+            assert_eq!(
+                builtin_arity(&format!("builtin_{name}")),
+                Some(takes),
+                "the search missed `builtin_{name}`"
+            );
+        }
+    }
+
+    /// A name a program can write bare and no count to check it against. `if`
+    /// is the one deliberate absence: its count is checked where its branches
+    /// are, because the guard form spells the word with a different shape.
+    #[test]
+    fn every_bare_builtin_has_a_count() {
+        let missing: Vec<&str> =
+            BUILTINS.iter().copied().filter(|n| *n != "if" && builtin_arity(n).is_none()).collect();
+        assert!(missing.is_empty(), "no count for {missing:?}");
     }
 }

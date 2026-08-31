@@ -1,0 +1,4 @@
+error[syntax]: expected an expression
+  --> an_arithmetic_operand_refuses_not.kso:9:13
+   9 | print "{1 + not true}"
+                   ^

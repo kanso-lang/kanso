@@ -1,0 +1,12 @@
+error[formatting]: tabs are not part of the canonical grammar; indent with spaces
+  --> a_tab_after_a_wide_character.kso:5:10
+   5 | x = "ééé"	y
+                ^
+error[formatting]: tabs are not part of the canonical grammar; indent with spaces
+  --> a_tab_after_a_wide_character.kso:8:6
+   8 |   ééé	z
+            ^
+error[formatting]: a text block holds two or more lines; one line is written `"..."`
+  --> a_tab_after_a_wide_character.kso:7:9
+   7 | block = """
+               ^

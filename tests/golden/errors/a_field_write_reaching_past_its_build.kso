@@ -1,0 +1,21 @@
+# A `build` block may write only what it built: a value made elsewhere stays
+# immutable, and the refusal says so. That check read the build's own statement
+# list and stopped there, so writing a caller's record through an `if` arm went
+# unrefused — and mutated it. The program below used to print `node 9 node 2`,
+# the second being the argument the caller still held.
+type node
+  id
+
+fn tagged old
+  build
+    n = node 9
+    q = if true
+      old.id = 2
+      n
+    else
+      n
+  q
+
+pub play =
+  base = node 1
+  print "{tagged base} {base}"

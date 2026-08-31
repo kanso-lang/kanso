@@ -1,0 +1,4 @@
+error[type]: `shape` is a typeset — it only annotates
+  --> a_typeset_named_as_a_value.kso:14:20
+  14 | pub play = print "{shape}"
+                          ^

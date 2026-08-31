@@ -1,0 +1,4 @@
+error[name]: `point` has no field `z`
+  --> a_field_read_through_a_widening.kso:17:4
+  17 |   p.z
+          ^

@@ -313,3 +313,41 @@ fn an_operator_arm_needs_a_type_the_module_defines() {
         "an arm on `<` for a type the module does not define was accepted: {complaint}"
     );
 }
+
+/// A subtype of a primitive is a heap value, and a beat has to carry one out
+/// of its arena before rewinding it. `k_is_heap` left `K_SUB` off its list, so
+/// `k_cohort_pop` took a returned subtype for a scalar, rewound the arena under
+/// it and handed back a dangling `KSub*` — read later as whatever the arena was
+/// reused for, which rendered as a denormal double.
+///
+/// Six lines because the arena decides which one comes back wrong: three
+/// primitive parents by two containers, pinned whole. On the parent commit the
+/// first reads `6.898943556335e-310` instead of `3`.
+#[test]
+fn a_subtype_survives_being_stored_across_the_entry() {
+    let fixture = "tests/golden/entryfile/a_subtype_stored_across_the_entry";
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+
+    assert_eq!(complaint, "", "native refused a stored subtype");
+    assert_eq!(
+        native,
+        "field int    3\nfield string hi\nfield float  2.5\n\
+         list  int    [4]\nlist  string [\"ho\"]\nlist  float  [1.5]\n"
+    );
+    assert_eq!(interp, native, "the engines disagree on a stored subtype");
+}

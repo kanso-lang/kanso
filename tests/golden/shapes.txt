@@ -1,0 +1,38 @@
+# Which of the grammar's constructs the page-runnable corpus carries, and —
+# while there are at most three of them — which programs those are. Written
+# by tests/wasm_engine.rs, regenerated with KANSO_REGEN_SHAPES=1.
+#
+# `many` is four or more carriers: a construct with that many survives losing
+# one, so naming them would move this file on every ordinary fixture without
+# saying anything. `NOBODY` is the failure this exists for — the last program
+# using a construct left the corpus, and the three engines stopped being
+# compared on it.
+Int	many
+Float	many
+MapLit	many
+Str	many
+Ident	many
+Partial	many
+List	many
+App	many
+Field	many
+Index	many
+Seq	many
+Lambda	many
+BinOp	many
+Join	many
+Block	examples/if_blocks.kso tests/golden/micro/a_constant_whose_branches_bind.kso
+Upcast	examples/subtypes.kso tests/golden/micro/an_upcast_names_a_type_the_module_owns.kso tests/golden/runtime/a_widening_to_a_vowel_initial_type.kso
+Build	many
+Guard	many
+p:IntLit	many
+p:StrLit	tests/golden/micro/a_conditional_accumulator_across_nested_binds.kso tests/golden/micro/a_tail_chain_of_five_parameter_arms.kso tests/golden/micro/a_thunk_capture_survives_the_cohort.kso
+p:Nullary	many
+p:Var	many
+p:Wildcard	many
+p:Annotated	many
+p:Ctor	many
+p:Keyed	many
+s:Bind	many
+s:Expr	many
+s:Set	many

@@ -1,0 +1,20 @@
+# A worded chain step inside a green-thread group. The two members run as
+# fibers, so the rescue's subject is executed by the scheduler rather than by
+# the flat chain loop, and that is a different path on every engine.
+#
+# The arm discards the reason, which is what lets all three engines read one
+# golden: a page has no filesystem and says so in its own words, native says
+# the file is not there, and `rescued` is the answer either way.
+import "std/os"
+
+fn told (err _)
+  "rescued"
+
+fn told v
+  "{v}"
+
+pub play =
+  print "start"
+  >>
+  rescue (os/read_file "no-such-file.txt") told . print
+  print "beside it"

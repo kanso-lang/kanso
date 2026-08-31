@@ -11,11 +11,21 @@
 # Eight other programs are built by the same step and have cost goldens of
 # their own. None of them was watched on this dimension, so the leak that was
 # found once in the decoder could still happen in any of them, in silence.
-# scanbench is the largest at 20,023 lines and is not in bench/text_golden.txt
+# scanbench is the largest at 20,019 lines and is not in bench/text_golden.txt
 # either.
 #
 # A rise here is a regression to explain; a fall is a win to bank. Either way
 # say which in the PR and regenerate. The per-line diff names the program.
+#
+# 2026-08-30: scanbench 3745 -> 3743 calls, 2216 -> 2214 branches, 20023 ->
+# 20019 lines. Banked. The hoister found repeated interpolations with
+# `collect_hoistable`, which walks with `for_each_child`, and replaced them
+# with `replace_shape`, which walked with `lib::walk_children_mut` — and that
+# walk had no arm for a block, a build or a guard. So a repeat found inside one
+# of those got its `onceN` binding emitted and none of its uses rewritten: two
+# bindings of dead code in this program, and the pattern in any program that
+# repeats an interpolation inside a nested body. The walk has the arms now and
+# the two agree.
 encodebench defines=153 calls=1663 branches=1014 lines=10466
 oneshot defines=154 calls=1779 branches=1159 lines=11469
 basket defines=118 calls=1324 branches=726 lines=7181
@@ -23,4 +33,8 @@ widebench defines=169 calls=1884 branches=1116 lines=11507
 deepbench defines=92 calls=840 branches=520 lines=5046
 escapebench defines=29 calls=97 branches=48 lines=708
 pendbench defines=106 calls=1250 branches=611 lines=6169
-scanbench defines=307 calls=3745 branches=2216 lines=20023
+scanbench defines=307 calls=3743 branches=2214 lines=20019
+indexbench defines=35 calls=159 branches=76 lines=1104
+# 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
+# 1,104 lines. It reads a string forward one character at a time, which is the
+# only shape in the tree that asks `s[i]` of multibyte text.

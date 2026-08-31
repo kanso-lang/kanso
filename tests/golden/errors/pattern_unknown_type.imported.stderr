@@ -1,1 +1,1 @@
-error[name]: `poynt` is not a type, so a binding cannot destructure with it (module pattern_unknown_type.kso)
+error[name]: `poynt` is not a type, so a binding cannot destructure with it (module pattern_unknown_type)

@@ -85,10 +85,12 @@ A real assertion library in the rspec direction Clay sketched —
 improvised inside a test fix. Its arms are foreign to every tested hako,
 so the err license needs nothing special. Queued 2026-08-17.
 
-**RECOMMENDATION: build it as its own design pass, after the err
-spelling above is ruled.** The matcher surface reads failures, so its
-shape depends on how a failure is spelled; designing it first would mean
-designing it twice.
+**RECOMMENDATION: build it as its own design pass. The gate is lifted.**
+The matcher surface reads failures, so its shape depended on how a
+failure is spelled — that is ruled (three-forms gavel, 2026-08-26) and
+built on all three engines (kanso#1116), so designing it now cannot mean
+designing it twice. `rescue` is the word a matcher's own failure door
+would use.
 
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)

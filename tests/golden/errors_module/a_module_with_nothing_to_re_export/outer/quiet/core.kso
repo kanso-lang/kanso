@@ -1,0 +1,5 @@
+fn twice n
+  n * 2
+
+fn four n
+  twice (twice n)

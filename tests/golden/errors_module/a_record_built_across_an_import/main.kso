@@ -1,0 +1,4 @@
+import "./shapes"
+import "std/io"
+
+io/write "{(shapes/point 1 2).x}"

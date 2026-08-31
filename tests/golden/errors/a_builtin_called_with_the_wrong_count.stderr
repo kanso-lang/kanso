@@ -1,0 +1,4 @@
+error[arity]: `length` takes 1 argument(s), got 2
+  --> a_builtin_called_with_the_wrong_count.kso:2:3
+   2 |   length xs xs
+         ^

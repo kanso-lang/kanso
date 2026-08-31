@@ -32,6 +32,60 @@
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
 # measured-on rustc=1.98.0
+#
+# 2026-08-30 (a dispatch group is a range): 763,868 -> 742,572, a fall of
+# 21,296 or 2.8%. Banked. `infer`'s dispatch table held one heap `Vec<usize>`
+# per (name, arity) for the length of the compile; the arms are one flat
+# vector now and the table holds ranges into it. This row and the traffic row
+# move together for once — the same change removed a per-call clone of those
+# vectors, which `compile_allocs` sees and this cannot.
+#
+# 2026-08-30 (four vectors the front end rebuilt per iteration): 742,572 ->
+# 743,564, a RISE of 992, or 0.13%. Banked as the price of a much larger fall
+# on the traffic row: compile_allocs 44,920 -> 40,935, down 8.9%. Two of the
+# four vectors are reused across iterations now — the `Vec<char>` a `Scanner`
+# lexes a line with, and the `Vec<&str>` `callee_first` gathers a
+# declaration's mentions into — and a reused buffer stays at the size of the
+# largest thing it ever held where a fresh one dies with its iteration. 992
+# bytes is one long source line and one large declaration.
+#
+# Rounds and visits do not move: nothing here changes what the compiler decides,
+# only what it allocates deciding it.
+#
+# 2026-08-30 (four allocations the front end made per declaration): 743,564 ->
+# 735,254, a fall of 8,310, or 1.1%. Banked, and one of the four did all of it:
+# `callee_first` held a `Vec<usize>` per function declaration and holds one flat
+# vector plus a start per declaration now, so four hundred headers become one.
+# That also takes back the 992 bytes #1149's two pooled buffers cost, and 7,318
+# more.
+#
+# The three borrowed-name pieces in the same change leave this row alone, which
+# is right: a `String` built to answer a question and dropped is traffic rather
+# than residency, and compile_allocs is the row that sees it.
+#
+# 2026-08-30 (the two tables the fixpoint kept per declaration): 735,254 ->
+# 733,794, a fall of 1,460, or 0.2%, and it is two moves that nearly cancel.
+# The reader bitset COSTS 6,096 bytes: n rows of ceil(n/64) u64 is 22,792 bytes
+# for lib/json's four hundred declarations, held for the compile where the hash
+# sets it replaces were sparse. Flattening `Inference::params` gives 7,556 back,
+# because a `Vec<Set>` per declaration was a header and a padded block for one
+# to three `u16`.
+#
+# Rounds and visits do not move, which is the check on the bitset: those two
+# counters are exactly what a wake set that woke a different set would change.
+#
+# 2026-08-30 (a set nobody read): 733,794 -> 730,120, a fall of 3,674, or 0.5%.
+# Banked, and it is one piece of the two in that change: `Resolver::used_globals`
+# held a `String` per global mention for the length of a file's check, and
+# nothing ever read the set. The reservation in `prune_unused_getters` beside it
+# does not move this row, because that set is transient.
+#
+# 2026-08-30 (a word is a copy, not a re-encode): 730,120 -> 728,030, a fall of
+# 2,090, or 0.29%. Banked, and it was not the point of the change — lex_word
+# slices the line's &str on an ascii line instead of collecting &char, and a
+# String built by to_string on a slice is allocated at the length it needs
+# where one grown a character at a time overshoots. The first fall in this row
+# since #1152. Both hosts read 728,030, as this row's two hosts always have.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=822004
+compile_peak_bytes=728030

@@ -138,10 +138,9 @@ fn compile_parsed_entry(
         .map(|d| d.name.clone())
         .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
         .collect();
-    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -297,10 +296,9 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     let mut all_type_names: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
-    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
     if drop_unused {
         diags.retain(|d| d.kind != "unused");
     }
@@ -378,10 +376,9 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let mut all_type_names: crate::hash::Set<String> =
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
-    let mut used = crate::hash::Set::default();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -589,7 +586,7 @@ fn install_prelude(program: &mut ast::Program) {
     if !wants_prelude(program) {
         return;
     }
-    let at = diag::Span { line: 0, col: 0 };
+    let at = diag::Span::at(0, 0);
     for (name, parent) in [(MATH_FAILURE, "string"), (DIVIDE_BY_ZERO, MATH_FAILURE)] {
         program.types.push(ast::TypeDecl {
             name: name.to_string(),
@@ -614,12 +611,18 @@ fn synthesize_getters(program: &mut ast::Program) {
     // Keyed by the type as well as the field. One getter group holds an arm
     // per type that has the field, and skipping on the name alone would let
     // the first type through and leave every later one unreadable.
-    let already: crate::hash::Set<(String, String)> = program
+    // Keyed on the FIELD rather than the getter, and borrowed. `getter_name`
+    // and `getter_field` are inverse, so asking about a field costs a
+    // `strip_prefix` on each existing getter once instead of a `format!` and a
+    // clone on every (type, field) pair the loop below considers.
+    let already: crate::hash::Set<(&str, &str)> = program
         .fns
         .iter()
         .filter(|f| f.is_getter())
         .filter_map(|f| match f.params.first() {
-            Some(ast::Pattern::Ctor { ty, .. }) => Some((f.name.clone(), ty.clone())),
+            Some(ast::Pattern::Ctor { ty, .. }) => {
+                ast::getter_field(&f.name).map(|field| (field, ty.as_str()))
+            }
             _ => None,
         })
         .collect();
@@ -634,6 +637,12 @@ fn synthesize_getters(program: &mut ast::Program) {
             continue;
         }
         for (index, (field, _, span)) in ty.fields.iter().enumerate() {
+            // Asked before the arm is built. A field that already has a getter
+            // used to pay for the whole pattern vector and the binder's name
+            // first and throw them away on the next line.
+            if already.contains(&(field.as_str(), ty.name.as_str())) {
+                continue;
+            }
             let bound = ty
                 .fields
                 .iter()
@@ -643,9 +652,6 @@ fn synthesize_getters(program: &mut ast::Program) {
                     false => ast::Pattern::Wildcard(*span),
                 })
                 .collect();
-            if already.contains(&(ast::getter_name(field), ty.name.clone())) {
-                continue;
-            }
             arms.push(ast::FnDecl {
                 name: ast::getter_name(field),
                 is_pub: true,
@@ -739,19 +745,19 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     // sibling: the canon is that a local import wears `./` or `../`, so a name
     // beside this module and a name from the cache can never be confused, and
     // a reader knows which they are looking at without leaving the line.
-    if !path.contains('/') && base.join(format!("{path}.kso")).is_file() {
+    if !ast::has_slash(path) && base.join(format!("{path}.kso")).is_file() {
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a bare path names a hako, \
              and `{path}.kso` sits beside this module: write \"./{path}\"\n"
         ));
     }
-    if !path.contains('/') && base.join(path).is_dir() {
+    if !ast::has_slash(path) && base.join(path).is_dir() {
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a bare path names a hako, \
              and `{path}/` sits beside this module: write \"./{path}\"\n"
         ));
     }
-    let first = path.split('/').next().unwrap_or_default();
+    let first = ast::split_module(path).map_or(path, |(head, _)| head);
     if first.contains('.') {
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a dot in the first segment \
@@ -794,7 +800,7 @@ fn hako_cache() -> std::path::PathBuf {
 /// The last path segment names the module at use sites: `import "std/json"`
 /// qualifies as `json/...`.
 fn short_name(path: &str) -> &str {
-    path.rsplit('/').next().unwrap_or(path)
+    ast::bare_name(path)
 }
 
 /// Names a pattern binds, borrowed from the program.
@@ -927,7 +933,12 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     for twin in &program.fns {
         if !twin.synthetic {
             at_site
-                .entry((twin.file.as_str(), twin.span.line, twin.span.col, twin.params.len()))
+                .entry((
+                    twin.file.as_str(),
+                    twin.span.line as usize,
+                    twin.span.col as usize,
+                    twin.params.len(),
+                ))
                 .or_default()
                 .push(twin.name.as_str());
         }
@@ -935,15 +946,18 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     let mut by_name: HashMap<&str, (bool, HashSet<&str>)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
-        if d.name.contains('/') {
+        if ast::has_slash(&d.name) {
             continue;
         }
         let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::default()));
         entry.0 &= d.synthetic;
         if d.synthetic {
-            if let Some(twins) =
-                at_site.get(&(d.file.as_str(), d.span.line, d.span.col, d.params.len()))
-            {
+            if let Some(twins) = at_site.get(&(
+                d.file.as_str(),
+                d.span.line as usize,
+                d.span.col as usize,
+                d.params.len(),
+            )) {
                 for name in twins {
                     // `qual/name`, asked without building the needle. A
                     // `format!("/{}", d.name)` here cost a String per
@@ -1141,11 +1155,11 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         .iter()
         .filter(|d| d.file.starts_with("std/list"))
         .map(|d| {
-            d.name.rsplit_once('/').map(|(_, s)| s.to_string()).unwrap_or_else(|| d.name.clone())
+            ast::split_qual(&d.name).map(|(_, s)| s.to_string()).unwrap_or_else(|| d.name.clone())
         })
         .collect();
     for d in &program.fns {
-        let short = d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name);
+        let short = ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name);
         if std_names.contains(short) {
             shorts.insert(d.name.clone(), short.to_string());
         }
@@ -1158,7 +1172,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         .find(|d| {
             d.file.starts_with("std/list")
                 && !d.synthetic
-                && d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name) == "fold"
+                && ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name) == "fold"
         })
         .map(|d| d.name.clone())
     else {
@@ -1173,9 +1187,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         .iter()
         .filter(|d| d.file.starts_with("std/list") && !d.synthetic)
         .map(|d| {
-            let short = d
-                .name
-                .rsplit_once('/')
+            let short = ast::split_qual(&d.name)
                 .map(|(_, s)| s.to_string())
                 .unwrap_or_else(|| d.name.clone());
             (short, d.name.clone())
@@ -1692,7 +1704,7 @@ fn qualify(
     let owned: crate::hash::Set<String> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(*n))
-        .filter(|n| !n.contains('/'))
+        .filter(|n| !ast::has_slash(n))
         .filter(|n| *n != MATH_FAILURE && *n != DIVIDE_BY_ZERO)
         .map(String::from)
         .collect();
@@ -1709,9 +1721,9 @@ fn qualify(
     // Left in, a typeset member or a parent spelled `shape/blank` picks up a
     // second prefix and names a type nothing declares.
     let own_types: crate::hash::Set<String> =
-        dep.types.iter().map(|t| t.name.clone()).filter(|n| !n.contains('/')).collect();
+        dep.types.iter().map(|t| t.name.clone()).filter(|n| !ast::has_slash(n)).collect();
     for ty in &mut dep.types {
-        if ty.name.contains('/') {
+        if ast::has_slash(&ty.name) {
             // GAVEL 51: one module, and a qualified name IS its identity, so
             // a second arrival is the same declaration rather than a rival.
             // Its visibility is what the routes grant between them — a sealed
@@ -1761,7 +1773,7 @@ fn qualify(
             // GAVEL 51: an already-qualified name enrolls under the spelling
             // it already has. Composing `{qual}/` onto it would register the
             // route rather than the identity.
-            let key = match f.name.contains('/') {
+            let key = match ast::has_slash(&f.name) {
                 true => f.name.clone(),
                 false => format!("{qual}/{}", f.name),
             };
@@ -1774,7 +1786,7 @@ fn qualify(
             // spelling. Reading the second arrival as a rival claim turned
             // `shape/describe` into an opacity refusal on the very program
             // the ruling exists to make work.
-            let own_claim = !f.name.contains('/');
+            let own_claim = !ast::has_slash(&f.name);
             match (taken, f.synthetic) {
                 // The same declaration arriving by a second route. One
                 // module, so its visibility is what the importer's routes
@@ -1796,7 +1808,7 @@ fn qualify(
             // from this module's own dependency and keeps its canonical
             // spelling — it still enrolls, it just does not get a second
             // prefix.
-            if !f.name.contains('/') {
+            if !ast::has_slash(&f.name) {
                 f.name = format!("{qual}/{}", f.name);
             }
         }
@@ -1821,7 +1833,7 @@ fn qualify(
         .map(|f| &f.name)
         .chain(dep.types.iter().filter(|t| t.is_pub).map(|t| &t.name));
     for name in pubs {
-        let (owner, bare) = match name.rsplit_once('/') {
+        let (owner, bare) = match ast::split_qual(name) {
             Some((owner, bare)) => (owner, bare),
             None => ("", name.as_str()),
         };
@@ -1946,9 +1958,20 @@ fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>
 fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
     match e {
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+            // Only a name that could BE a getter's is worth remembering, and
+            // every getter is synthesised in one place as `Get_{field}` — the
+            // binder that makes `is_getter` true is one no source can spell,
+            // so there is no other way for one to exist. The prefix test is
+            // four bytes; the insert it replaces was a hash of the whole name,
+            // and eleven thousand of the twelve thousand occurrences in
+            // lib/json are of names no getter can have.
+            let short = ast::split_qual(name).map(|(_, s)| s);
+            if !short.unwrap_or(name).starts_with("Get_") {
+                return;
+            }
             out.insert(name.as_str());
             // a qualified read reaches the same getter under its bare name
-            if let Some((_, short)) = name.rsplit_once('/') {
+            if let Some(short) = short {
                 out.insert(short);
             }
         }
@@ -2059,7 +2082,17 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &crate::hash::Set<String>,
             }
         }
         ast::Expr::Field { base, .. } => rewrite_expr(base, qual, owned, bound),
-        ast::Expr::Upcast { expr, .. } => rewrite_expr(expr, qual, owned, bound),
+        // The target names a type the way an annotation does, so it moves
+        // with the module the way an annotation's does. Left bare it survives
+        // every declaration being qualified away from it, and then names
+        // nothing: the interpreter reports that the value is not a `num`
+        // while holding one, and both backends refuse the module outright.
+        ast::Expr::Upcast { expr, ty, .. } => {
+            if owned.contains(ty.as_str()) {
+                *ty = format!("{qual}/{ty}");
+            }
+            rewrite_expr(expr, qual, owned, bound);
+        }
         ast::Expr::App { head, args, .. } => {
             rewrite_expr(head, qual, owned, bound);
             for a in args {
@@ -2122,7 +2155,7 @@ fn enroll_bare(
             continue;
         }
         if exports.get(&f.name).copied().unwrap_or(false) && !renamed.contains(&f.name) {
-            if let Some((_, short)) = f.name.rsplit_once('/') {
+            if let Some((_, short)) = ast::split_qual(&f.name) {
                 let mut clone = f.clone();
                 clone.name = short.to_string();
                 clone.synthetic = true;
@@ -2134,7 +2167,7 @@ fn enroll_bare(
     let mut bare_types = Vec::new();
     for t in &dep_program.types {
         if exports.get(&t.name).copied().unwrap_or(false) && !renamed.contains(&t.name) {
-            if let Some((_, short)) = t.name.rsplit_once('/') {
+            if let Some((_, short)) = ast::split_qual(&t.name) {
                 let mut clone = t.clone();
                 clone.name = short.to_string();
                 clone.synthetic = true;
@@ -2207,7 +2240,7 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
     if !imports.iter().any(|i| i.path == "std/render") {
         imports.push(ast::Import {
             path: "std/render".to_string(),
-            span: diag::Span { line: 0, col: 0 },
+            span: diag::Span::at(0, 0),
             alias: None,
             renames: Vec::new(),
         });
@@ -2587,24 +2620,47 @@ fn mark_bare_quals(
     surfaced: &Surfaced,
     quals: &mut crate::hash::Set<String>,
 ) {
+    // The two loops below are the only readers, and between them they ask
+    // about exactly the surfaced names and the targets of import renames.
+    // A bare name outside that set can never be the answer to either
+    // question, so the walk skips it — the same necessary condition the
+    // getter walk tests, applied to a different question.
+    let mut asked: crate::hash::Set<&str> = crate::hash::Set::default();
+    for name in surfaced.keys() {
+        asked.insert(name.as_str());
+    }
+    for import in &program.imports {
+        for (_, yours) in &import.renames {
+            asked.insert(yours.as_str());
+        }
+    }
     // Borrowed from the program: this walks every expression of every
     // declaration and used to keep a `String` per bare identifier OCCURRENCE,
     // for a set that is asked two questions below and dropped.
     let mut bare: crate::hash::Set<&str> = crate::hash::Set::default();
-    fn collect<'a>(e: &'a ast::Expr, bare: &mut crate::hash::Set<&'a str>) {
-        if let ast::Expr::Ident(name, _) = e {
-            if !name.contains('/') {
+    fn collect<'a>(
+        e: &'a ast::Expr,
+        asked: &crate::hash::Set<&str>,
+        bare: &mut crate::hash::Set<&'a str>,
+    ) {
+        // `&select` names the import the way `select` does; the sigil holds
+        // the name rather than changing it. Left out, a file whose only use of
+        // an import was a held name could not be written at all: drop the
+        // import and the name does not resolve, keep it and this reads it as
+        // unused.
+        if let ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) = e {
+            if !ast::has_slash(name) && asked.contains(name.as_str()) {
                 bare.insert(name.as_str());
             }
         }
-        for_each_child(e, |child| collect(child, bare));
+        for_each_child(e, |child| collect(child, asked, bare));
     }
     for decl in &program.fns {
         for stmt in &decl.body {
             match stmt {
                 ast::Stmt::Bind { expr, .. }
                 | ast::Stmt::Expr(expr)
-                | ast::Stmt::Set { value: expr, .. } => collect(expr, &mut bare),
+                | ast::Stmt::Set { value: expr, .. } => collect(expr, &asked, &mut bare),
             }
         }
     }
@@ -2629,7 +2685,7 @@ fn mark_bare_quals(
 /// `json` as used, in expressions, patterns, and typeset members alike.
 fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
     fn mark(name: &str, quals: &mut crate::hash::Set<String>) {
-        if let Some((qual, _)) = name.split_once('/') {
+        if let Some((qual, _)) = ast::split_module(name) {
             quals.insert(qual.to_string());
         }
     }
@@ -2646,8 +2702,16 @@ fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
         }
     }
     fn walk_expr(e: &ast::Expr, quals: &mut crate::hash::Set<String>) {
-        if let ast::Expr::Ident(name, _) = e {
-            mark(name, quals);
+        match e {
+            // `&shapes/make` names the module the way a call does: the sigil
+            // holds the name rather than changing it.
+            ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => mark(name, quals),
+            // `(x):shapes/num` names `shapes` exactly the way an annotation
+            // does. Left out, an import whose only use is a widening target
+            // reads as unused and the file cannot be written at all: drop the
+            // import and the type does not resolve, keep it and this refuses.
+            ast::Expr::Upcast { ty, .. } => mark(ty, quals),
+            _ => {}
         }
         for_each_child(e, |child| walk_expr(child, quals));
     }
@@ -2695,7 +2759,7 @@ fn unused_imports(
 fn foreign_destructures(program: &ast::Program, diags: &mut Vec<diag::Diagnostic>) {
     fn walk(p: &ast::Pattern, diags: &mut Vec<diag::Diagnostic>, span: diag::Span) {
         if let ast::Pattern::Ctor { ty, fields, .. } = p {
-            if ty.contains('/') && !fields.is_empty() {
+            if ast::has_slash(ty) && !fields.is_empty() {
                 diags.push(diag::Diagnostic::new(
                     "opacity",
                     format!(
@@ -2761,7 +2825,7 @@ fn private_uses(
     ) {
         if let ast::Expr::Ident(name, span) = e {
             if let Some(false) = exports.get(name.as_str()) {
-                let (module, base) = name.rsplit_once('/').unwrap_or(("", name));
+                let (module, base) = ast::split_qual(name).unwrap_or(("", name));
                 let shadow = format!(
                     "`{module}` declares `{base}` pub, but an import of `{module}` exports `{base}` too and took the name — rename that import inside `{module}`"
                 );
@@ -2883,7 +2947,7 @@ pub fn any_child<'a>(e: &'a ast::Expr, mut p: impl FnMut(&'a ast::Expr) -> bool)
 }
 
 /// Every direct sub-expression, in source order, until `f` answers false.
-fn walk_children<'a>(e: &'a ast::Expr, f: &mut dyn FnMut(&'a ast::Expr) -> bool) {
+fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut F) {
     let stmt_expr = |st: &'a ast::Stmt| match st {
         ast::Stmt::Bind { expr, .. }
         | ast::Stmt::Expr(expr)
@@ -3373,7 +3437,7 @@ fn compile_module_loaded(
                     "`{qual}` is not imported here — a module's files share \
                      their declarations, not their imports"
                 ),
-                diag::Span { line: 1, col: 1 },
+                diag::Span::at(1, 1),
             ));
         }
         if !diags.is_empty() {
@@ -3427,7 +3491,6 @@ fn compile_module_loaded(
         .map(|d| d.name.clone())
         .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
         .collect();
-    let mut used = crate::hash::Set::default();
     for (file, source, program) in &mut parsed {
         // Every name in the build except this file's own, as references into
         // `all_names`. This used to clone the whole set per file and then
@@ -3439,7 +3502,7 @@ fn compile_module_loaded(
         };
         let mut diags = check::resolve_markers(program, &all_markers);
         diags.extend(check::check_typesets(program, &all_type_names));
-        diags.extend(check::check_file_shadow(program, &extern_globals, &mut used, &shadowable));
+        diags.extend(check::check_file_shadow(program, &extern_globals, &shadowable));
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {
             return Err(diag::render(&diags, file, source));
@@ -3478,10 +3541,17 @@ fn compile_module_loaded(
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
-        let file = dir.to_string_lossy();
+        // The name an import writes, never the file behind it. A module in a
+        // directory read as `(module pkg)` and a module in one file as
+        // `(module one.kso)`, from two imports a reader spells the same way —
+        // and the page, which has no filesystem and keys a handed module by
+        // its import path, said `(module one)` for the second. One rule
+        // settles both: the extension is a fact about storage.
+        let named = dir.to_string_lossy();
+        let named = named.strip_suffix(".kso").unwrap_or(&named);
         let rendered: Vec<String> = diags
             .iter()
-            .map(|d| format!("error[{}]: {} (module {file})\n", d.kind, d.message))
+            .map(|d| format!("error[{}]: {} (module {named})\n", d.kind, d.message))
             .collect();
         return Err(rendered.join(""));
     }
@@ -3581,7 +3651,12 @@ fn replace_shape(e: &mut ast::Expr, shape: &str, name: &str) {
     walk_children_mut(e, &mut |c| replace_shape(c, shape, name));
 }
 
-/// Every direct sub-expression, mutably. Mirrors `for_each_child`.
+/// Every direct sub-expression, mutably. NOT the mirror of `for_each_child`
+/// it was described as: there is no arm here for a lambda, a block, a build or
+/// a guard, so a walk built on this stops at the edge of all four. Its four
+/// callers are desugar passes that run before those forms carry anything this
+/// would need to reach; a fifth caller that needs the whole tree wants a walk
+/// with the missing arms, and `inline::for_each_child_mut` is one.
 fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
     use ast::Expr;
     match e {
@@ -3623,7 +3698,27 @@ fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
                 }
             }
         }
+        Expr::Lambda { body, .. } => f(body),
+        Expr::Guard { cond, early, rest, .. } => {
+            f(cond);
+            f(early);
+            for stmt in rest {
+                f(stmt_expr_mut(stmt));
+            }
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for stmt in stmts {
+                f(stmt_expr_mut(stmt));
+            }
+        }
         _ => {}
+    }
+}
+
+fn stmt_expr_mut(s: &mut ast::Stmt) -> &mut ast::Expr {
+    match s {
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
+        ast::Stmt::Set { value, .. } => value,
     }
 }
 

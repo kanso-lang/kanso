@@ -29,12 +29,25 @@ pub const FAIL: Set = ERR;
 pub const BOOL: Set = TRUE | FALSE;
 
 pub struct Inference {
-    /// per fn-decl index: joined argument sets seen at call sites
-    pub params: Vec<Vec<Set>>,
+    /// Every declaration's argument sets, end to end, with `param_starts`
+    /// saying where each one begins. A `Vec<Set>` apiece was one heap block
+    /// per declaration for one to three `u16`, and `Set` is a `u16`. Read it
+    /// through `param` rather than by index.
+    params: Vec<Set>,
+    /// One more entry than there are declarations, so a declaration's slice is
+    /// always `params[starts[i]..starts[i + 1]]`.
+    param_starts: Vec<u32>,
     /// per fn-decl index: return set
     pub returns: Vec<Set>,
     /// per type index, per field: joined set seen at construction sites
     pub type_fields: Vec<Vec<Set>>,
+}
+
+impl Inference {
+    /// The set inferred for one parameter of one declaration.
+    pub fn param(&self, decl: usize, at: usize) -> Set {
+        self.params[self.param_starts[decl] as usize + at]
+    }
 }
 
 struct Ctx<'a> {
@@ -52,7 +65,15 @@ struct Ctx<'a> {
     /// For each function, the functions that have read its return set. A
     /// return that widens only ever changes the answer of a function that
     /// asked for it.
-    readers: Vec<crate::hash::Set<usize>>,
+    /// Who to wake when a declaration's answer changes, as a bitset: one row
+    /// of `reader_words` u64 per declaration, the row's bit `r` set when `r`
+    /// reads it. A `HashSet<usize>` apiece was 1,072 of the front end's
+    /// allocation blocks, and waking cloned one to release the borrow.
+    readers: Vec<u64>,
+    reader_words: usize,
+    /// One row, copied out so the wake loop can take `ctx` mutably. Kept
+    /// between wakes, so it allocates once.
+    reader_scratch: Vec<u64>,
     /// Functions to visit next round. A field of a declared type widening can
     /// reach any function through pattern binding, so that one blankets.
     dirty_next: Vec<bool>,
@@ -63,12 +84,19 @@ struct Ctx<'a> {
     /// Per declared type, the functions whose patterns destructure it — see
     /// `field_readers`. A field's set growing wakes these and nothing else.
     field_readers: Vec<Vec<usize>>,
-    groups: HashMap<(&'a str, usize), Vec<usize>>,
+    /// The arms a (name, arity) dispatches over, as a half-open range into
+    /// `group_members`. A range is two words and copies, so a call site can
+    /// take one and leave `ctx` free to be borrowed mutably while it walks
+    /// the arms — where holding the group itself meant cloning its `Vec` on
+    /// every call the pass inferred, 2,693 heap blocks on `lib/json`.
+    groups: HashMap<(&'a str, usize), (u32, u32)>,
+    group_members: Vec<usize>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
     type_names: HashMap<&'a str, usize>,
-    params: Vec<Vec<Set>>,
+    params: Vec<Set>,
+    param_starts: Vec<u32>,
     returns: Vec<Set>,
     type_fields: Vec<Vec<Set>>,
     changed: bool,
@@ -170,10 +198,30 @@ fn field_readers(program: &Program, type_names: &HashMap<&str, usize>) -> Vec<Ve
 
 pub fn infer(program: &Program) -> Inference {
     work::pass();
-    let mut groups: HashMap<(&str, usize), Vec<usize>> =
+    // The arms of each dispatch group, as one flat vector and a range apiece.
+    // The range table is what the fixpoint reads; the per-group `Vec` this
+    // used to build on the way to it was 529 allocation blocks that existed
+    // only to be flattened on the next line. The counting pass of #1161: count
+    // per group, turn the counts into starts, then place each declaration at
+    // its group's cursor. Arms come out in declaration order either way.
+    let mut groups: HashMap<(&str, usize), (u32, u32)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for decl in &program.fns {
+        groups.entry((decl.name.as_str(), decl.params.len())).or_insert((0, 0)).1 += 1;
+    }
+    let mut at = 0;
+    for slot in groups.values_mut() {
+        let count = slot.1;
+        *slot = (at, at);
+        at += count;
+    }
+    let mut group_members: Vec<usize> = vec![0; program.fns.len()];
     for (i, decl) in program.fns.iter().enumerate() {
-        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
+        let slot = groups
+            .get_mut(&(decl.name.as_str(), decl.params.len()))
+            .expect("every group was counted");
+        group_members[slot.1 as usize] = i;
+        slot.1 += 1;
     }
     let type_names: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
@@ -193,20 +241,36 @@ pub fn infer(program: &Program) -> Inference {
                 Stmt::Set { value, .. } => mentions(value, &d.name),
             })
     });
+    // A row of bits per declaration, rounded up to whole words.
+    let reader_words = program.fns.len().div_ceil(64).max(1);
+    // Where each declaration's argument sets begin in the flat vector below,
+    // with a final entry so the last declaration's slice reads the same way as
+    // every other one's.
+    let mut param_starts: Vec<u32> = Vec::with_capacity(program.fns.len() + 1);
+    let mut at = 0u32;
+    for d in &program.fns {
+        param_starts.push(at);
+        at += d.params.len() as u32;
+    }
+    param_starts.push(at);
     let mut ctx = Ctx {
         defers_into_containers,
         program,
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
         current_index: 0,
-        readers: vec![crate::hash::Set::default(); program.fns.len()],
+        readers: vec![0u64; program.fns.len() * reader_words],
+        reader_words,
+        reader_scratch: Vec::with_capacity(reader_words),
         dirty_next: vec![false; program.fns.len()],
         dirty: Vec::new(),
         field_readers,
         groups,
+        group_members,
         yields: HashMap::default(),
         type_names,
-        params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
+        params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
+        param_starts,
         returns: vec![0; program.fns.len()],
         type_fields: program.types.iter().map(|t| vec![0; t.fields.len()]).collect(),
         changed: true,
@@ -219,7 +283,7 @@ pub fn infer(program: &Program) -> Inference {
     // count in the twenties turns a clone here into thousands of allocations
     // that only ever serve as a lookup key.
     let fns = &program.fns;
-    let mut env: HashMap<&str, Set> = HashMap::default();
+    let mut env = Env::default();
     let mut param_sets: Vec<Set> = Vec::new();
     // Every function is visited the first round; after that only the ones a
     // change can reach. Four fifths of the visits in a settled fixpoint find
@@ -254,7 +318,9 @@ pub fn infer(program: &Program) -> Inference {
             ctx.yields.clear();
             env.clear();
             param_sets.clear();
-            param_sets.extend_from_slice(&ctx.params[i]);
+            param_sets.extend_from_slice(
+                &ctx.params[ctx.param_starts[i] as usize..ctx.param_starts[i + 1] as usize],
+            );
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
             }
@@ -263,15 +329,24 @@ pub fn infer(program: &Program) -> Inference {
                 ctx.returns[i] |= ret;
                 ctx.changed = true;
                 moved += 1;
-                let readers = ctx.readers[i].clone();
-                for r in readers {
-                    // This round as well as the next. A reader the sweep has
-                    // not reached yet takes the new answer now instead of
-                    // costing a whole round to hear about it, and one already
-                    // behind the cursor is simply not walked again.
-                    ctx.dirty[r] = true;
-                    ctx.dirty_next[r] = true;
+                let w = ctx.reader_words;
+                let mut scratch = std::mem::take(&mut ctx.reader_scratch);
+                scratch.clear();
+                scratch.extend_from_slice(&ctx.readers[i * w..(i + 1) * w]);
+                for (word, &row) in scratch.iter().enumerate() {
+                    let mut bits = row;
+                    while bits != 0 {
+                        let r = word * 64 + bits.trailing_zeros() as usize;
+                        bits &= bits - 1;
+                        // This round as well as the next. A reader the sweep
+                        // has not reached yet takes the new answer now instead
+                        // of costing a whole round to hear about it, and one
+                        // already behind the cursor is simply not walked again.
+                        ctx.dirty[r] = true;
+                        ctx.dirty_next[r] = true;
+                    }
                 }
+                ctx.reader_scratch = scratch;
             }
         }
         if std::env::var_os("KANSO_PHASES").is_some() {
@@ -279,7 +354,12 @@ pub fn infer(program: &Program) -> Inference {
         }
         ctx.dirty = std::mem::take(&mut ctx.dirty_next);
     }
-    Inference { params: ctx.params, returns: ctx.returns, type_fields: ctx.type_fields }
+    Inference {
+        params: ctx.params,
+        param_starts: ctx.param_starts,
+        returns: ctx.returns,
+        type_fields: ctx.type_fields,
+    }
 }
 
 /// Post-order over the call graph: every function lands after the functions
@@ -287,10 +367,27 @@ pub fn infer(program: &Program) -> Inference {
 /// fresh where the graph is acyclic, and a cycle costs rounds only for its
 /// own knot.
 fn callee_first(program: &Program) -> Vec<usize> {
-    let mut by_name: HashMap<&str, Vec<usize>> =
+    // The declarations sharing a name, as one flat vector and a range apiece.
+    // `by_name.entry(..).or_default().push(i)` allocated a `Vec` per DISTINCT
+    // name — 937 blocks for a table that is built once and only ever read.
+    // Sorting the pairs groups the arms of a name together, and within a name
+    // the indices stay ascending, which is the order the push loop gave them.
+    let mut by_name: HashMap<&str, (u32, u32)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for decl in &program.fns {
+        by_name.entry(decl.name.as_str()).or_insert((0, 0)).1 += 1;
+    }
+    let mut at = 0;
+    for slot in by_name.values_mut() {
+        let count = slot.1;
+        *slot = (at, at);
+        at += count;
+    }
+    let mut members: Vec<usize> = vec![0; program.fns.len()];
     for (i, decl) in program.fns.iter().enumerate() {
-        by_name.entry(decl.name.as_str()).or_default().push(i);
+        let slot = by_name.get_mut(decl.name.as_str()).expect("every name was counted");
+        members[slot.1 as usize] = i;
+        slot.1 += 1;
     }
     fn gather<'a>(expr: &'a Expr, names: &mut Vec<&'a str>) {
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
@@ -298,9 +395,21 @@ fn callee_first(program: &Program) -> Vec<usize> {
         }
         crate::for_each_child(expr, |child| gather(child, names));
     }
-    let mut calls: Vec<Vec<usize>> = vec![Vec::new(); program.fns.len()];
-    for (i, decl) in program.fns.iter().enumerate() {
-        let mut names: Vec<&str> = Vec::new();
+    // One flat vector and a start per declaration, rather than a `Vec<usize>`
+    // apiece. The loop below fills each declaration's slice completely before
+    // moving to the next, so appending to the flat vector and recording where
+    // each one began is the same walk with one allocation instead of four
+    // hundred. #1140 did this to the dispatch table for the same reason.
+    let mut flat: Vec<usize> = Vec::new();
+    let mut starts: Vec<u32> = Vec::with_capacity(program.fns.len() + 1);
+    // Outside the loop and cleared, rather than built inside it. The vector
+    // holds borrowed names and dies at the end of each declaration, so a fresh
+    // one per declaration was 1,367 allocation blocks for a buffer that is the
+    // same size and shape every time round. Reused, it grows once to the
+    // largest declaration and stays there.
+    let mut names: Vec<&str> = Vec::new();
+    for decl in &program.fns {
+        names.clear();
         for stmt in &decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => gather(expr, &mut names),
@@ -309,15 +418,19 @@ fn callee_first(program: &Program) -> Vec<usize> {
         }
         names.sort_unstable();
         names.dedup();
-        for name in names {
-            if let Some(targets) = by_name.get(name) {
-                calls[i].extend(targets);
+        starts.push(flat.len() as u32);
+        for name in &names {
+            if let Some(&(start, end)) = by_name.get(name) {
+                flat.extend_from_slice(&members[start as usize..end as usize]);
             }
         }
     }
-    let mut order = Vec::with_capacity(calls.len());
-    let mut state = vec![0u8; calls.len()];
-    for root in 0..calls.len() {
+    starts.push(flat.len() as u32);
+    let calls = |i: usize| &flat[starts[i] as usize..starts[i + 1] as usize];
+    let n = program.fns.len();
+    let mut order = Vec::with_capacity(n);
+    let mut state = vec![0u8; n];
+    for root in 0..n {
         if state[root] != 0 {
             continue;
         }
@@ -325,9 +438,9 @@ fn callee_first(program: &Program) -> Vec<usize> {
         let mut stack = vec![(root, 0usize)];
         while let Some(frame) = stack.last_mut() {
             let (node, next) = *frame;
-            if next < calls[node].len() {
+            if next < calls(node).len() {
                 frame.1 += 1;
-                let child = calls[node][next];
+                let child = calls(node)[next];
                 if state[child] == 0 {
                     state[child] = 1;
                     stack.push((child, 0));
@@ -342,12 +455,55 @@ fn callee_first(program: &Program) -> Vec<usize> {
     order
 }
 
+/// The locals a declaration has bound, newest last.
+///
+/// This was a `HashMap<&str, Set>`, and it is the wrong shape for what it
+/// holds: a declaration binds a handful of names, and hashing a five-byte
+/// string costs more than walking a handful of them. Every child scope —
+/// a block, a lambda, a guard's untaken side — took a clone of it, which
+/// allocated a table and rehashed every entry into it; the clone is a
+/// memcpy now.
+///
+/// A bind pushes rather than replaces, so a name written twice appears
+/// twice and the search reads back to front. Lookup answers the same as
+/// the map did, and the vector cannot grow past the bind sites written in
+/// the declaration.
+#[derive(Clone, Default)]
+struct Env<'a>(Vec<(&'a str, Set)>);
+
+impl<'a> Env<'a> {
+    fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    fn insert(&mut self, name: &'a str, set: Set) {
+        self.0.push((name, set));
+    }
+
+    fn get(&self, name: &str) -> Option<Set> {
+        self.0.iter().rev().find(|(n, _)| *n == name).map(|&(_, s)| s)
+    }
+
+    fn contains_key(&self, name: &str) -> bool {
+        self.get(name).is_some()
+    }
+
+    /// A child scope: these bindings, with room for the ones it will add.
+    /// A plain clone sizes the vector to what it copied, so the child's
+    /// first bind reallocated it — 216 allocations over a compile.
+    fn child(&self, extra: usize) -> Env<'a> {
+        let mut out = Vec::with_capacity(self.0.len() + extra);
+        out.extend_from_slice(&self.0);
+        Env(out)
+    }
+}
+
 fn bind_pattern<'a>(
     pattern: &'a Pattern,
     joined: Set,
     type_fields: &[Vec<Set>],
     type_names: &HashMap<&'a str, usize>,
-    env: &mut HashMap<&'a str, Set>,
+    env: &mut Env<'a>,
 ) {
     match pattern {
         // generics never bind failures
@@ -395,7 +551,7 @@ fn pattern_catches(pat: &Pattern) -> Set {
     }
 }
 
-fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str, Set>) -> Set {
+fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut Env<'a>) -> Set {
     let mut result = NONE;
     for (index, stmt) in body.iter().enumerate() {
         match stmt {
@@ -425,7 +581,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
     result
 }
 
-fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, Set>) -> Set {
+fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
     work::visit();
     match expr {
         Expr::Int(..) => INT,
@@ -433,7 +589,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             // a child scope: block binds stay local to the branch
-            let mut env = env.clone();
+            let mut env = env.child(stmts.len());
             let mut result = NONE;
             for stmt in stmts {
                 match stmt {
@@ -519,7 +675,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
             DESC | (a & FAIL) | (b & FAIL)
         }
         Expr::Lambda { body, params, .. } => {
-            let mut inner = env.clone();
+            let mut inner = env.child(params.len());
             for (p, _) in params {
                 inner.insert(p, TOP & !FAIL);
             }
@@ -543,7 +699,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
         }
         Expr::Guard { cond, early, rest, .. } => {
             let c = eval_expr(ctx, cond, env);
-            let mut benv = env.clone();
+            let mut benv = env.child(rest.len());
             let taken = eval_expr(ctx, early, env);
             let not_taken = eval_body(ctx, rest, &mut benv);
             (c & FAIL) | taken | not_taken
@@ -574,9 +730,9 @@ fn numeric_result(a: Set, b: Set) -> Set {
     out
 }
 
-fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Set>) -> Set {
+fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
     if let Some(set) = env.get(name) {
-        return *set;
+        return set;
     }
     match name.strip_prefix("builtin_").unwrap_or(name) {
         "true" => TRUE,
@@ -591,9 +747,9 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
                 }
             }
             // constant mention evaluates; fn mention is a value (params go TOP)
-            if let Some(decls) = ctx.groups.get(&(name, 0)) {
-                let i = decls[0];
-                ctx.readers[i].insert(ctx.current_index);
+            if let Some(&(start, _)) = ctx.groups.get(&(name, 0)) {
+                let i = ctx.group_members[start as usize];
+                mark_reader(ctx, i);
                 // A constant naming itself inside its own body hands over its
                 // cell rather than a value — there is nothing else to hand
                 // over yet. Everything that mention flows into may therefore
@@ -620,9 +776,17 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
     }
 }
 
+/// `decl`'s answer feeds the declaration being walked, so a change to it must
+/// wake that one.
+fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
+    let at = decl * ctx.reader_words + ctx.current_index / 64;
+    ctx.readers[at] |= 1u64 << (ctx.current_index % 64);
+}
+
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
-    if ctx.params[decl][param] | set != ctx.params[decl][param] {
-        ctx.params[decl][param] |= set;
+    let at = ctx.param_starts[decl] as usize + param;
+    if ctx.params[at] | set != ctx.params[at] {
+        ctx.params[at] |= set;
         ctx.changed = true;
         ctx.dirty_next[decl] = true;
     }
@@ -632,10 +796,27 @@ fn eval_call<'a>(
     ctx: &mut Ctx<'a>,
     head: &'a Expr,
     args: &'a [Expr],
-    env: &mut HashMap<&'a str, Set>,
+    env: &mut Env<'a>,
     piped: bool,
 ) -> Set {
-    let mut arg_sets: Vec<Set> = args.iter().map(|a| eval_expr(ctx, a, env)).collect();
+    // A `Set` is a u16 and a call's arity is almost always small, so the
+    // eight that fit here never reach the allocator. dhat put this line at
+    // 8,309 blocks — 13.4% of every allocation the front end makes — for
+    // vectors holding one to three sixteen-bit values.
+    let mut inline = [0 as Set; 8];
+    let mut spill: Vec<Set> = Vec::new();
+    let arg_sets: &mut [Set] = match args.len() <= inline.len() {
+        true => {
+            for (slot, a) in inline.iter_mut().zip(args) {
+                *slot = eval_expr(ctx, a, env);
+            }
+            &mut inline[..args.len()]
+        }
+        false => {
+            spill.extend(args.iter().map(|a| eval_expr(ctx, a, env)));
+            &mut spill
+        }
+    };
     let mut piped_bits: Set = 0;
     if piped && !arg_sets.is_empty() && arg_sets[0] & DESC != 0 {
         // a description piped into a continuation: the executor runs it and
@@ -656,8 +837,8 @@ fn eval_call<'a>(
     // crossed the ABI as a smuggled pointer. Step the beta: bind the
     // argument sets and walk the body.
     if let Expr::Lambda { params, body, .. } = head {
-        let mut inner = env.clone();
-        for ((p, _), set) in params.iter().zip(&arg_sets) {
+        let mut inner = env.child(params.len());
+        for ((p, _), set) in params.iter().zip(arg_sets.iter()) {
             inner.insert(p, *set & !FAIL);
         }
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
@@ -704,29 +885,30 @@ fn eval_call<'a>(
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
         return REC | fails | piped_bits;
     }
-    if let Some(decls) = ctx.groups.get(&(name.as_str(), args.len())) {
-        let decls = decls.clone();
+    if let Some(&(start, end)) = ctx.groups.get(&(name.as_str(), args.len())) {
+        let (start, end) = (start as usize, end as usize);
         let mut out: Set = 0;
         // pass-through: a failure in arg `pos` reaches the result only when no arm
         // catches it there. an arm whose pattern is `none`/`(err _)` handles that
         // failure (e.g. `_is_ws none -> false`), so it must not contaminate the
         // result — that spurious `none` is what kept scanner positions off `int`.
         for (pos, arg) in arg_sets.iter().enumerate() {
-            let caught = decls.iter().fold(0, |acc, &i| {
+            let caught = ctx.group_members[start..end].iter().fold(0, |acc, &i| {
                 acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
             });
             out |= (arg & FAIL) & !caught;
         }
-        for i in decls {
+        for k in start..end {
+            let i = ctx.group_members[k];
             for (p, set) in arg_sets.iter().enumerate() {
                 widen_param(ctx, i, p, *set);
             }
-            ctx.readers[i].insert(ctx.current_index);
+            mark_reader(ctx, i);
             out |= ctx.returns[i];
         }
         return out | piped_bits;
     }
-    builtin_set(name, &arg_sets) | piped_bits
+    builtin_set(name, arg_sets) | piped_bits
 }
 
 /// What a description's execution hands a bound continuation, syntactically:
@@ -747,7 +929,7 @@ fn desc_yield_of(ctx: &Ctx, e: &Expr) -> Set {
 fn desc_yield(e: &Expr) -> Set {
     fn base(n: &str) -> &str {
         let n = n.strip_prefix("builtin_").unwrap_or(n);
-        n.rsplit('/').next().unwrap_or(n)
+        crate::ast::bare_name(n)
     }
     match e {
         // the io constants referenced bare: stdin yields the input string,
@@ -848,6 +1030,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "bit_and" | "bit_or" | "bit_xor" | "bit_not" | "bit_shl" | "bit_shr" => INT | fails,
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
+        // a worded chain step answers a description when its subject is one,
+        // and whatever its callback answers when the subject has settled
+        "bind" | "rescue" | "annotate" => TOP,
         "read_file" | "write" | "write_err" | "write_file" | "make_dir" | "sleep" | "random"
         | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" | "start" | "kill"
         | "listen" | "net_port" | "accept" | "net_read" | "net_write" | "net_close" => DESC | fails,

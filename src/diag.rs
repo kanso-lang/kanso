@@ -1,7 +1,16 @@
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Span {
-    pub line: usize,
-    pub col: usize,
+    pub line: u32,
+    pub col: u32,
+}
+
+impl Span {
+    /// A line and column counted as `usize` by the lexer and the passes,
+    /// narrowed to what the struct holds. Four billion lines is the limit and
+    /// no file reaches it.
+    pub const fn at(line: usize, col: usize) -> Span {
+        Span { line: line as u32, col: col as u32 }
+    }
 }
 
 #[derive(Debug)]
@@ -86,13 +95,29 @@ pub fn render(diags: &[Diagnostic], file: &str, source: &str) -> String {
     for d in diags {
         out.push_str(&format!("error[{}]: {}\n", d.kind, d.message));
         out.push_str(&format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col));
-        if d.span.line >= 1 && d.span.line <= lines.len() {
-            let src_line = lines[d.span.line - 1];
+        let line = d.span.line as usize;
+        if line >= 1 && line <= lines.len() {
+            let src_line = lines[line - 1];
             let num = format!("{:>4}", d.span.line);
             out.push_str(&format!("{} | {}\n", num, src_line));
-            let pad = " ".repeat(num.len() + 3 + d.span.col.saturating_sub(1));
+            let pad = " ".repeat(num.len() + 3 + (d.span.col as usize).saturating_sub(1));
             out.push_str(&format!("{}^\n", pad));
         }
     }
     out
+}
+
+/// A name with the article English gives it. "an int", "a string" — a
+/// diagnostic that fumbles its own grammar reads as carelessness about
+/// everything else in it.
+///
+/// It lives here because three engines write sentences that need it and each
+/// had its own copy of the wording. The rule is spelling, not pronunciation:
+/// a name is a program's word rather than an English one, and the letter is
+/// what a reader has in front of them.
+pub fn article(word: &str) -> String {
+    match word.starts_with(['a', 'e', 'i', 'o', 'u']) {
+        true => format!("an {word}"),
+        false => format!("a {word}"),
+    }
 }

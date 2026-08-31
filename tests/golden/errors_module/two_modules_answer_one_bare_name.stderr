@@ -1,0 +1,4 @@
+error[dispatch]: a bare `twice` reaches `alpha/twice` and `beta/twice` alike — say which with a qualifier
+  --> tests/golden/errors_module/two_modules_answer_one_bare_name/main.kso:5:12
+   5 | io/write "{twice 21}"
+                  ^

@@ -1,0 +1,14 @@
+# The quieter half. Naming a typeset without calling it compiled clean and gave
+# two answers: native printed `<mod>/shape`, the interpreter printed `<fn>`.
+# Neither is an error and neither is the other, which is the shape the
+# differential law has no clause for. The refusal is on the NAME, so a call is
+# just the case where the name stands at a head.
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+pub play = print "{shape}"

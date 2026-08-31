@@ -51,6 +51,7 @@
 # withdrawn with it rather than disproven: nothing re-measured it against the
 # shape that matters.
 # 2026-08-13: basket 56,597,311 to 55,987,313, a fall of 609,998 and 1.08%.
+#
 # jsonbench +5 and oneshot +10 are noise; encodebench rises 4,414. An accumulator
 # handed round a cycle is no longer re-seeded on every hop, and seeding copies the
 # whole string, so the work removed is larger than the carry's new flag and
@@ -97,21 +98,78 @@
 # This is a language change and the cost is the language's. It is priced in
 # welfare, the floor moves with it and says why, and the log entry names the
 # gavel that permits the fall.
-jsonbench 2910241426
+#
+# 2026-08-29 (the three chain words): mixed, and deepbench comes out AHEAD of
+# where it started. deepbench 807,094,318 -> 806,985,948 (-108,370), a win.
+# widebench 85,209,624 -> 85,273,589 (+63,965) and pendbench +536; jsonbench,
+# encodebench and oneshot move by 4 or 5, which is one call frame. basket and
+# escapebench do not move.
+#
+# One mechanism explains both directions. The chain loop must test the yielded
+# value for failure before deciding whether the callback runs — that test IS
+# the difference between the three worded steps, and it cannot be dropped,
+# because k_call1 skips a closure on a failure but hands one to a group, and
+# the gavel says the failure channel is never inferred from the callback's
+# shape. Adding it naively cost deepbench 1.6M, measured. But k_call1 was
+# ALREADY testing the same value for the same thing on its way into a closure,
+# so the loop was paying twice; calling k_call_decided instead leaves exactly
+# one test per step, where the old code had one. deepbench runs the most chain
+# steps and so banks the most.
+#
+# Marking the helper static so it could inline was tried and measured
+# separately: byte-identical, because the optimizer already inlines within the
+# single translation unit.
+# 2026-08-30 — `K_SUB` joined `k_is_heap`, which had left a returned subtype to
+# be freed under the caller, and the sizing walk stopped calling `k_copy_size`
+# on values it can see are immediates. Five rows fall and three pay:
+#
+#   deepbench     806,985,948 -> 760,475,193   -46,510,755   -5.76%
+#   widebench      85,273,589 ->  83,967,604    -1,305,985   -1.53%
+#   encodebench 9,866,843,915 -> 9,866,614,705    -229,210
+#   basket         57,436,178 ->  57,392,199       -43,979
+#   pendbench     987,907,671 -> 988,282,947     +375,276   +0.038%
+#   escapebench   258,574,097 -> 258,583,100       +9,003
+#   jsonbench   2,910,241,430 -> 2,910,241,528          +98
+#   oneshot        47,277,061 ->  47,277,156          +95
+#
+# The repair on its own is a RISE, and a large one. deepbench NEVER MAKES A
+# SUBTYPE — `k_sub` appears nowhere in its profile, and `k_survives_x` and
+# `k_ptrmap_at` are byte-identical across the change — yet a tenth `case` cost
+# it 49,528,233 instructions, because the predicate is inlined into
+# `k_slots_survive` and through it into `k_copy_size`, which is 36% of that
+# benchmark. Its shape decides how the walk compiles. Five shapes were measured
+# in the container:
+#
+#   with the bug                            806,982,208
+#   the switch, plus one `case K_SUB:`      856,510,441   +6.14%
+#   a mask carrying a bounds branch         878,869,219   +8.90%
+#   `k_slots_survive` given its own switch  856,510,441   +6.14%
+#   the mask that ships                     850,361,281   +5.38%
+#
+# The container and the runner agree to 3,740 instructions on the last and to
+# the instruction on the second, so this is what the correct predicate costs
+# rather than a host disagreement.
+#
+# What turns the rise into a fall is a level below it: `k_copy_size` returns
+# zero for an immediate without looking at it, so a caller walking a container
+# can skip the call. deepbench folds over lists of ints and the call it made
+# per element existed only to return zero. Six sites now test `k_worth_sizing`
+# first, and deepbench reads 760,471,453 in the container — 5.77% under the
+# buggy baseline.
+#
+# pendbench is the one row that pays for the SKIP rather than the mask, and it
+# pays for what it is: the lazy benchmark's slots hold thunks, `k_worth_sizing`
+# answers yes for a thunk, so every element takes the new test and still makes
+# the call. escapebench, jsonbench and oneshot are identical between the fix
+# alone and the fix with the skip, so their few thousand instructions are the
+# predicate's shape in programs whose copy walk is cold.
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 9866843910
-oneshot 47277057
-basket 57436178
-widebench 85209624
-deepbench 807094318
-escapebench 258574097
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
-pendbench 987907135
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -313,3 +371,73 @@ pendbench 987907135
 # What it buys is an honest vein. escapebench pinned bytes_malloc=0 against
 # bytes_freed=3000 — three thousand frees of buffers the counters said were
 # never allocated — and reads 12,000 against 12,000 now.
+# 2026-08-31 (the runner's numbers): two byte-level costs in the runtime. The
+# character count reads a word at a time instead of walking, and an append of
+# one byte writes the byte instead of calling memcpy.
+#
+#   jsonbench    2,910,241,528 -> 2,862,072,778   -48,168,750   -1.655%
+#   encodebench  9,866,614,705 -> 8,715,312,865 -1,151,301,840  -11.669%
+#   oneshot         47,277,156 ->    44,077,654    -3,199,502   -6.767%
+#   pendbench      988,282,947 ->   957,236,511   -31,046,436   -3.141%
+#   basket          57,392,199 ->    57,118,035      -274,164   -0.478%
+#   widebench       83,967,604 ->    84,047,604       +80,000   +0.095%
+#   deepbench, escapebench                              unmoved
+#
+# widebench is the only rise and it is one number: k_str_chars costs +4.000
+# instructions on a string shorter than eight bytes, which pays for the word
+# loop's guard and its closing subtraction and reaches neither. jsonbench pays
+# the same +4 on 898,500 calls and takes 51.8M back from the append, ending
+# well under where it started. encode_instructions was the welfare term
+# furthest below its baseline of 9,283,777,698; it ends 6.1% above it.
+#
+# The local box (glibc 2.39-0ubuntu8.7 against this file's 8.8) reads
+# deepbench -3,680 and escapebench -399 where the runner reads neither, which
+# is why these rows come out of the job log and not from here.
+# 2026-08-31 (the runner's numbers): the string index gets the cursor the
+# slice already had. k_b_at restarted its character walk at byte zero for
+# every index, so reading a string forward was quadratic in its length.
+#
+#   encodebench  8,715,312,865 -> 8,708,075,665    -7,237,200   -0.083%
+#   basket          57,118,035 ->    57,083,993       -34,042   -0.060%
+#   oneshot         44,077,654 ->    44,059,561       -18,093   -0.041%
+#   widebench       84,047,604 ->    84,031,604       -16,000   -0.019%
+#   jsonbench, deepbench, escapebench, pendbench          unmoved
+#   indexbench                        5,266,934   new
+#
+# Nothing rises. The four falls are the same number twice over: k_b_at's list
+# and bytes branches got a smaller function to sit in once the string walk
+# moved out to k_str_seek, and encodebench's 7,237,200 over its 7,237,200
+# k_b_at calls is 1.0001 instructions each.
+#
+# indexbench is new and pins the shape nothing else in the tree asks for:
+# reading a string forward one character at a time, over an alphabet mixing
+# one-, two-, three- and four-byte characters. On the unfixed runtime it reads
+# 2,570,995,073 — 488 times what it reads here.
+# 2026-08-31 (the runner's numbers): the seek cursor is forgotten when a beat
+# rewinds the arena, because it named its string by an address the rewind
+# hands back. Native answered `g` where the interpreter answered `e`; welfare
+# does not weigh a change that makes the engines agree.
+#
+#   work_basket          57,083,993 ->    57,198,013   +114,020   +0.1997%
+#   work_encodebench  8,708,075,665 -> 8,713,108,067  +5,032,402   +0.0578%
+#   work_oneshot         44,059,561 ->    44,072,143    +12,582   +0.0286%
+#   work_deepbench      760,475,193 ->   760,475,924       +731   +0.0001%
+#   work_jsonbench    2,862,072,778 -> 2,862,072,931       +153   +0.0000%
+#   work_pendbench      957,236,511 ->   957,236,647       +136   +0.0000%
+#   work_widebench       84,031,604 ->    84,031,648        +44   +0.0001%
+#   work_indexbench       5,266,934 ->     5,266,960        +26   +0.0005%
+#   work_escapebench                                    unmoved
+#
+# The rise is not the store. It is the cursor hits that stop happening: a
+# sweep crossing a beat boundary used to resume where it left off and now
+# restarts at the front. basket carries the most of it because it sweeps text
+# across beats; the five rows under a thousandth are the store itself.
+jsonbench 2858845253
+encodebench 8704347910
+oneshot 44000621
+basket 56458062
+widebench 63757213
+deepbench 726486934
+escapebench 253819096
+pendbench 946378074
+indexbench 5243094

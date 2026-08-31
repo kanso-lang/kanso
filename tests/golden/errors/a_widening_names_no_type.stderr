@@ -1,0 +1,8 @@
+error[type]: no type is called `banana`, so there is nothing to widen to
+  --> a_widening_names_no_type.kso:9:3
+   9 |   (v):banana
+         ^
+error[type]: no type is called `mango`, so there is nothing to widen to
+  --> a_widening_names_no_type.kso:12:3
+  12 |   (v):mango
+         ^

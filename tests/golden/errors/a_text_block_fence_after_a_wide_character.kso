@@ -1,0 +1,12 @@
+# The column this points at is counted in characters and the offset the lexer
+# found the fence with is counted in bytes, so a line holding anything outside
+# ASCII before the `"""` is where the two part company. With `é` ahead of it
+# the caret sits one column right of the fence's tail if the byte offset is
+# used unconverted.
+fn pick a b
+  "{a} {b}"
+
+pub joined = pick "é" """ and more
+  one
+  two
+"""

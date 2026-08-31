@@ -82,6 +82,11 @@ const RT_NOT_OWN_ERR: u32 = 39;
 /// the VALUE as well as the type name, because the sentence names what the
 /// reader bound and only the runtime knows it.
 const RT_DIE_DESTRUCTURE: u32 = 40;
+/// The three worded chain steps. Appended at the end of the import list so
+/// every index above stays where it was.
+const RT_BIND: u32 = 41;
+const RT_RESCUE: u32 = 42;
+const RT_ANNOTATE: u32 = 43;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -126,6 +131,9 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_force", params: 1, returns: true },
         Import { name: "rt_not_own_err", params: 2, returns: true },
         Import { name: "rt_die_destructure", params: 2, returns: false },
+        Import { name: "rt_bind", params: 2, returns: true },
+        Import { name: "rt_rescue", params: 2, returns: true },
+        Import { name: "rt_annotate", params: 3, returns: true },
     ]
 }
 
@@ -175,6 +183,19 @@ fn partial_lambda(
         .collect();
     arities.sort_unstable();
     arities.dedup();
+    // The same two things emptied this list, and the same one message spoke
+    // for both — see the note in codegen.rs. A name no declaration answers to
+    // is refused at the front door, so what reaches here is a name bound to a
+    // VALUE, and a partial over a value settles its arity when the arguments
+    // arrive. The interpreter does that and `tests/partial.rs` specifies it;
+    // a closure fixes its count where it is written.
+    if !program.fns.iter().any(|d| d.name == name) {
+        return Err(format!(
+            "browser backend: `{name}` is a value here, and a partial over a value settles \
+             its arity when its arguments arrive — this backend fixes it where the closure \
+             is written"
+        ));
+    }
     // `&` supplies without running, so an arm's last argument is a partial
     // like any other and the value waits to be called. Only more arguments
     // than any arm accepts is unfinishable.
@@ -968,20 +989,10 @@ impl<'a> WasmBackend<'a> {
             // through the ambient group.
             _ if !self.program.fns.iter().any(|d| d.name == name)
                 && (bare == "print"
-                    || crate::codegen::BUILTIN_CALLS
-                        .iter()
-                        .any(|(b, a)| *b == bare && *a <= 4)) =>
+                    || (crate::codegen::BUILTIN_CALLS.contains(&bare)
+                        && crate::check::builtin_arity(bare).is_some_and(|a| a <= 4))) =>
             {
-                let arity = match bare {
-                    "print" => 1,
-                    _ => {
-                        crate::codegen::BUILTIN_CALLS
-                            .iter()
-                            .find(|(b, _)| *b == bare)
-                            .expect("found")
-                            .1
-                    }
-                };
+                let arity = crate::check::builtin_arity(bare).expect("a builtin takes a count");
                 let widx = self.builtin_wrapper(bare, arity)?;
                 ctx.body.i32_const(widx as i64);
                 ctx.body.i32_const(0);
@@ -1311,6 +1322,30 @@ impl<'a> WasmBackend<'a> {
             let origin = self.origin_lit(&ctx.prefix, &ctx.hako, span);
             ctx.body.i32_const(origin as i64);
             ctx.body.call(RT_MKERR);
+            return Ok(());
+        }
+        // The three worded chain steps of the 2026-08-26 gavel. Named here
+        // rather than left to the generic call path, which is where they went
+        // before: the page compiled `rescue` and then propagated the failure
+        // the other two engines catch, and nothing could see it because every
+        // other fixture for these words needs a filesystem to fail an effect.
+        // `annotate` takes the site it was written at, like `err`, because the
+        // err it builds is a raise.
+        if matches!(name.as_str(), "bind" | "rescue" | "annotate") {
+            if args.len() != 2 {
+                return Err(format!("`{name}` takes an effect and a callback"));
+            }
+            self.emit_expr(ctx, &args[0], false)?;
+            self.emit_expr(ctx, &args[1], false)?;
+            match name.as_str() {
+                "bind" => ctx.body.call(RT_BIND),
+                "rescue" => ctx.body.call(RT_RESCUE),
+                _ => {
+                    let origin = self.origin_lit(&ctx.prefix, &ctx.hako, span);
+                    ctx.body.i32_const(origin as i64);
+                    ctx.body.call(RT_ANNOTATE);
+                }
+            }
             return Ok(());
         }
         if let Some(tid) = self.type_ids.get(name.as_str()).copied() {

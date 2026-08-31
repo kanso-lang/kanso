@@ -1,0 +1,4 @@
+error[syntax]: unexpected trailing tokens
+  --> a_comparison_refuses_a_bitwise_tail.kso:12:15
+  12 | print "{6 < 3 & 1}"
+                     ^

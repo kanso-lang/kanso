@@ -1,0 +1,1 @@
+error[build]: `n.id = ...` writes a field, and only a `build` block may do that (module a_field_write_below_a_guard)

@@ -204,11 +204,11 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
 
 /// For each (group name, arity), which argument positions have at least one
 /// arm that discards the parameter outright.
-fn discard_positions(program: &Program) -> HashMap<(String, usize), Vec<bool>> {
-    let mut positions: HashMap<(String, usize), Vec<bool>> = HashMap::default();
+fn discard_positions(program: &Program) -> HashMap<(&str, usize), Vec<bool>> {
+    let mut positions: HashMap<(&str, usize), Vec<bool>> = HashMap::default();
     for f in &program.fns {
         let slots = positions
-            .entry((f.name.clone(), f.params.len()))
+            .entry((f.name.as_str(), f.params.len()))
             .or_insert_with(|| vec![false; f.params.len()]);
         for (i, param) in f.params.iter().enumerate() {
             if matches!(param, Pattern::Wildcard(_)) {
@@ -231,7 +231,7 @@ struct Uses {
 fn collect_uses(
     expr: &Expr,
     name: &str,
-    discard: &HashMap<(String, usize), Vec<bool>>,
+    discard: &HashMap<(&str, usize), Vec<bool>>,
     uses: &mut Uses,
 ) {
     match expr {
@@ -259,7 +259,7 @@ fn collect_uses(
         }
         Expr::App { head, args, .. } => {
             let discard_slots = match head.as_ref() {
-                Expr::Ident(callee, _) => discard.get(&(callee.clone(), args.len())),
+                Expr::Ident(callee, _) => discard.get(&(callee.as_str(), args.len())),
                 _ => None,
             };
             if !matches!(head.as_ref(), Expr::Ident(..)) {

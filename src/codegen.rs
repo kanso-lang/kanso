@@ -254,6 +254,9 @@ declare %KValue @k_b_net_read(%KValue)
 declare %KValue @k_b_net_write(%KValue, %KValue)
 declare %KValue @k_b_net_close(%KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
+declare %KValue @k_b_bind(%KValue, %KValue)
+declare %KValue @k_b_rescue(%KValue, %KValue)
+declare %KValue @k_b_annotate(%KValue, %KValue, ptr)
 declare %KValue @k_desc_join(%KValue, %KValue)
 declare %KValue @k_desc_sleep(%KValue)
 declare %KValue @k_desc_random(%KValue)
@@ -316,60 +319,76 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
-    ("net_port", 1),
-    ("start", 2),
-    ("kill", 1),
-    ("at", 2),
-    ("is_desc", 1),
-    ("append", 2),
-    ("find2", 4),
-    ("find2_below", 5),
-    ("bytes", 1),
-    ("to_bytes", 1),
-    ("read_file", 1),
-    ("write", 1),
-    ("write_err", 1),
-    ("env", 1),
-    ("exists", 1),
-    ("is_dir", 1),
-    ("list_dir", 1),
-    ("make_dir", 1),
-    ("write_file", 2),
-    ("run", 2),
-    ("listen", 1),
-    ("accept", 1),
-    ("net_read", 1),
-    ("net_write", 2),
-    ("net_close", 1),
-    ("concat", 2),
-    ("utf8", 1),
-    ("char_code", 1),
-    ("chars", 1),
-    ("split", 2),
-    ("entries", 1),
-    ("filter", 2),
-    ("from_code", 1),
-    ("join", 2),
-    ("length", 1),
-    ("map", 2),
-    ("push", 2),
-    ("put", 3),
-    ("slice", 3),
-    ("sort", 1),
-    ("render_value", 1),
-    ("sqrt", 1),
-    ("bit_and", 2),
-    ("bit_or", 2),
-    ("bit_xor", 2),
-    ("bit_not", 1),
-    ("bit_shl", 2),
-    ("bit_shr", 2),
-    ("round", 1),
-    ("sum", 1),
-    ("to_float", 1),
-    ("to_int", 1),
+pub(crate) const BUILTIN_CALLS: [&str; 55] = [
+    "net_port",
+    "start",
+    "kill",
+    "at",
+    "is_desc",
+    "append",
+    "find2",
+    "find2_below",
+    "bytes",
+    "to_bytes",
+    "bind",
+    "rescue",
+    "annotate",
+    "read_file",
+    "write",
+    "write_err",
+    "env",
+    "exists",
+    "is_dir",
+    "list_dir",
+    "make_dir",
+    "write_file",
+    "run",
+    "listen",
+    "accept",
+    "net_read",
+    "net_write",
+    "net_close",
+    "concat",
+    "utf8",
+    "char_code",
+    "chars",
+    "split",
+    "entries",
+    "filter",
+    "from_code",
+    "join",
+    "length",
+    "map",
+    "push",
+    "put",
+    "slice",
+    "sort",
+    "render_value",
+    "sqrt",
+    "bit_and",
+    "bit_or",
+    "bit_xor",
+    "bit_not",
+    "bit_shl",
+    "bit_shr",
+    "round",
+    "sum",
+    "to_float",
+    "to_int",
 ];
+
+/// The count a builtin the native backend emits a direct call for takes.
+/// Membership is this file's business — which builtins get a C entry rather
+/// than an inline expansion — and the count is `check`'s, so this asks each
+/// question where it is answered instead of keeping a second copy of the
+/// counts here. That second copy is what let the backend refuse a call the
+/// front door had waved through.
+fn arity_of_emitted(name: &str) -> Option<usize> {
+    match BUILTIN_CALLS.contains(&name) {
+        true => crate::check::builtin_arity(name),
+        false => None,
+    }
+}
 
 /// Groups that are pure builtin forwarders: one arm, plain-var params,
 /// body exactly `builtin_X p1 p2 ...` in order. Call sites bypass the
@@ -923,7 +942,7 @@ impl<'a> Backend<'a> {
     fn group_param_set(&self, name: &str, arity: usize, param: usize) -> Set {
         self.group_indices(name, arity)
             .iter()
-            .fold(0, |acc, i| acc | self.inference.params[*i][param])
+            .fold(0, |acc, i| acc | self.inference.param(*i, param))
     }
 
     fn group_return_set(&self, name: &str, arity: usize) -> Set {
@@ -987,9 +1006,11 @@ impl<'a> Backend<'a> {
         // inside the bracket: converted outside it, the header sits below the
         // mark and the join finds a string that is not a builder.
         let carried = match arg {
-            Some(Expr::Ident(_, span)) => {
-                self.builder_carried.contains(&(f.file.clone(), span.line, span.col))
-            }
+            Some(Expr::Ident(_, span)) => self.builder_carried.contains(&(
+                f.file.clone(),
+                span.line as usize,
+                span.col as usize,
+            )),
             _ => false,
         };
         let entering = self.builder_params.contains(&(callee.to_string(), arity, i))
@@ -2714,6 +2735,22 @@ impl<'a> Backend<'a> {
             seen.dedup();
             seen
         };
+        // Two different things emptied that list, and one message spoke for
+        // both. A name no declaration answers to is not a mistake here — the
+        // front door refuses an unknown name before this runs — so what is
+        // left is a name bound to a VALUE: a parameter holding a function, a
+        // local, a builtin, a record's constructor. The interpreter takes a
+        // partial over a value and settles its arity when the arguments
+        // arrive; `tests/partial.rs` specifies that. This backend writes a
+        // closure whose parameter count is fixed where the closure is, so it
+        // cannot. Saying "no `f` takes more" put that on the program.
+        if !self.program.fns.iter().any(|d| d.name == name) {
+            return Err(format!(
+                "native backend: `{name}` is a value here, and a partial over a value settles \
+                 its arity when its arguments arrive — this backend fixes it where the closure \
+                 is written"
+            ));
+        }
         // Currying past every arm is the one real error: `&` supplies without
         // running, so supplying an arm's last argument is a partial like any
         // other — the value waits to be called rather than being a call. What
@@ -2815,8 +2852,11 @@ impl<'a> Backend<'a> {
                 Ok(t)
             }
             Expr::Str(parts, span) => {
-                let joins_builder =
-                    self.builder_joins.contains(&(f.file.clone(), span.line, span.col));
+                let joins_builder = self.builder_joins.contains(&(
+                    f.file.clone(),
+                    span.line as usize,
+                    span.col as usize,
+                ));
                 let mut acc: Option<Vec<String>> = None;
                 let mut fails: Set = 0;
                 for part in parts {
@@ -2904,7 +2944,22 @@ impl<'a> Backend<'a> {
                 if let Some(temp) = f.lookup(name) {
                     return Ok(temp);
                 }
-                if self.program.types.iter().any(|t| t.name == *name && t.fields.is_empty()) {
+                // A record type with no fields IS a value: `type unit` names one
+                // thing and naming it builds it. A subtype and a typeset also
+                // carry no fields, and neither is that — a subtype's name takes
+                // one argument, and a typeset never constructs at all. Both
+                // reached this arm and were emitted as nullary records, so
+                // `print "{age}"` for `type age int` printed `<mod>/age` where
+                // the oracle prints `<fn>` and the page refuses the name. It
+                // falls through to the bare-value refusal below now, which is
+                // what native already said for a record type that HAS fields.
+                let nullary_record = |t: &crate::ast::TypeDecl| {
+                    t.name == *name
+                        && t.fields.is_empty()
+                        && t.parent.is_none()
+                        && t.members.is_empty()
+                };
+                if self.program.types.iter().any(nullary_record) {
                     let id = self.type_ids[name.as_str()];
                     let arr = f.tmp();
                     f.line(&format!("{arr} = alloca [1 x %KValue]"));
@@ -2963,11 +3018,11 @@ impl<'a> Backend<'a> {
                 // over the same way a declared group is handed over. The
                 // interpreter calls it; the wrapper below is what lets a
                 // compiled `k_callN` reach the same C entry.
-                if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| *b == bare) {
-                    if (1..=4).contains(arity) {
-                        self.builtin_value_wrappers.push((bare.to_string(), *arity));
+                if let Some(arity) = arity_of_emitted(bare) {
+                    if (1..=4).contains(&arity) {
+                        self.builtin_value_wrappers.push((bare.to_string(), arity));
                         let t = f.tmp();
-                        let sym = rsym(&format!("builtin.{bare}"), *arity);
+                        let sym = rsym(&format!("builtin.{bare}"), arity);
                         f.line(&format!("{t} = call %KValue @k_fnref(ptr @{sym})"));
                         return Ok(t);
                     }
@@ -4109,11 +4164,46 @@ impl<'a> Backend<'a> {
         let was_builtin = name.starts_with("builtin_");
         let name: &str = name.strip_prefix("builtin_").unwrap_or(name);
 
+        // Every builtin's count, before anything reads an argument by index.
+        // The block below emits `wrap_err` inline and takes `emitted[1]`, and
+        // the guard further down covers only the names this file emits a
+        // direct C call for — `wrap_err` is not one of them. So
+        // `print (wrap_err 1)` walked off the end of a one-element vector and
+        // aborted the process: exit 101 with a Rust backtrace, on a two-word
+        // program. The front door refuses that program now, and this stays
+        // because a backend that indexes an argument it never counted is one
+        // front-end regression from doing it again.
+        // A declaration of the same name is that declaration — the bail
+        // further down says so, and this has to say it too, because it runs
+        // first. lib/sha256 declares `bytes`, and a guard that skipped this
+        // condition refused its three-argument call as a wrong-count builtin.
+        let shadows = !was_builtin && self.program.fns.iter().any(|d| d.name == name);
+        if !shadows {
+            if let Some(takes) = crate::check::builtin_arity(name) {
+                if emitted.len() != takes {
+                    return Err(format!("native backend: `{name}` takes {takes} argument(s)"));
+                }
+            }
+        }
+
         if name == "err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_err(%KValue {}, {origin})", emitted[0]));
             f.record(&t, ERR);
+            return Ok(t);
+        }
+        // `annotate` raises an err of its own, so like `err` and `wrap_err` it
+        // is handed the site it was written at. The runtime wraps the callback
+        // in a closure holding both and hands the result to rescue's node.
+        if name == "annotate" {
+            let origin = self.origin_arg(f, span);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = call %KValue @k_b_annotate(%KValue {}, %KValue {}, {origin})",
+                emitted[0], emitted[1]
+            ));
+            f.record(&t, TOP);
             return Ok(t);
         }
         if name == "wrap_err" {
@@ -4196,7 +4286,7 @@ impl<'a> Backend<'a> {
             // a record this call is the last reader of can be built into
             let victim = self
                 .reusable_records
-                .get(&(f.file.clone(), span.line, span.col))
+                .get(&(f.file.clone(), span.line as usize, span.col as usize))
                 .and_then(|name| f.lookup(name));
             match victim {
                 Some(v) => f.line(&format!(
@@ -4252,8 +4342,8 @@ impl<'a> Backend<'a> {
             // they can carry thunks whose forced values would die under a
             // cell the caller still holds.
             let arg_heapish = heapish & !BYTES;
-            let caller_mod = f.group.rsplit_once('/').map(|(m, _)| m).unwrap_or("");
-            let callee_mod = name.rsplit_once('/').map(|(m, _)| m).unwrap_or("");
+            let caller_mod = crate::ast::split_qual(&f.group).map(|(m, _)| m).unwrap_or("");
+            let callee_mod = crate::ast::split_qual(name).map(|(m, _)| m).unwrap_or("");
             let crosses_down = callee_mod.len() > caller_mod.len()
                 && callee_mod.starts_with(caller_mod)
                 && (caller_mod.is_empty() || callee_mod.as_bytes()[caller_mod.len()] == b'/');
@@ -4325,8 +4415,8 @@ impl<'a> Backend<'a> {
             Some(target) => target.as_str(),
             None => name,
         };
-        if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| *b == name) {
-            if emitted.len() != *arity {
+        if let Some(arity) = arity_of_emitted(name) {
+            if emitted.len() != arity {
                 return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
             }
             // builtins scrutinize every argument; a thunk forces here (the
@@ -4340,7 +4430,11 @@ impl<'a> Backend<'a> {
             }
             // A push the linearity analysis proved unique extends its list in
             // place instead of allocating a fresh header.
-            let in_place = self.in_place_pushes.contains(&(f.file.clone(), span.line, span.col));
+            let in_place = self.in_place_pushes.contains(&(
+                f.file.clone(),
+                span.line as usize,
+                span.col as usize,
+            ));
             let sym = if name == "push" && in_place {
                 "push_mut"
             } else if name == "put" && in_place {

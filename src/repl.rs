@@ -308,7 +308,7 @@ fn assemble_with(imports: &[String], units: &[Unit]) -> String {
 /// answered with `list`.
 fn short_of(line: &str) -> String {
     let path = line.split('"').nth(1).unwrap_or_default();
-    path.rsplit('/').next().unwrap_or(path).to_string()
+    crate::ast::bare_name(path).to_string()
 }
 
 /// An arm's dispatch signature, canonically rendered: name, arity, and the

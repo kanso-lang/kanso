@@ -1,1 +1,1 @@
-error[arity]: no 2-argument arm of `list/spread` (arms take 1) (module imported_arity.kso)
+error[arity]: no 2-argument arm of `list/spread` (arms take 1) (module imported_arity)

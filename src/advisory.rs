@@ -5,18 +5,66 @@ use crate::hash::{Map as HashMap, Set as HashSet};
 /// its callers an operation that accepts it — re-exported or wrapped. The
 /// analysis under-approximates (only constructions and calls it can trace),
 /// so every advisory is a real handle with no door.
+/// The declaration indices of each group, as one flat vector and a range
+/// apiece. A `Vec<usize>` per name was an allocation for a list of two or
+/// three numbers, and this table is only ever read.
+struct Groups<'a> {
+    ranges: HashMap<&'a str, (u32, u32)>,
+    flat: Vec<u32>,
+}
+
+impl<'a> Groups<'a> {
+    /// Count the arms per name, turn the counts into starts, then place each
+    /// declaration at its group's cursor. Synthetic declarations are skipped
+    /// here as they were before, so the counts are an upper bound and a group
+    /// whose synthetic arms were dropped leaves cells nothing reads.
+    fn of(program: &'a Program) -> Groups<'a> {
+        let mut ranges: HashMap<&str, (u32, u32)> =
+            HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+        for decl in &program.fns {
+            if decl.synthetic {
+                continue;
+            }
+            ranges.entry(decl.name.as_str()).or_insert((0, 0)).1 += 1;
+        }
+        let mut at = 0;
+        for slot in ranges.values_mut() {
+            let count = slot.1;
+            *slot = (at, at);
+            at += count;
+        }
+        let mut flat: Vec<u32> = vec![0; at as usize];
+        for (i, decl) in program.fns.iter().enumerate() {
+            if decl.synthetic {
+                continue;
+            }
+            let slot = ranges.get_mut(decl.name.as_str()).expect("every arm was counted");
+            flat[slot.1 as usize] = i as u32;
+            slot.1 += 1;
+        }
+        Groups { ranges, flat }
+    }
+
+    fn get(&self, name: &str) -> &[u32] {
+        match self.ranges.get(name) {
+            Some(&(start, end)) => &self.flat[start as usize..end as usize],
+            None => &[],
+        }
+    }
+
+    fn names(&self) -> impl Iterator<Item = (&'a str, &[u32])> + '_ {
+        self.ranges
+            .iter()
+            .map(|(name, &(start, end))| (*name, &self.flat[start as usize..end as usize]))
+    }
+}
+
 pub fn door_advisories(program: &Program) -> Vec<String> {
     // bare-enrollment clones are dispatch conveniences, not surface facts —
     // the door analysis reasons about the real declarations only
     let type_names: HashSet<&str> =
         program.types.iter().filter(|t| !t.synthetic).map(|t| t.name.as_str()).collect();
-    let mut groups: HashMap<&str, Vec<usize>> = HashMap::default();
-    for (i, decl) in program.fns.iter().enumerate() {
-        if decl.synthetic {
-            continue;
-        }
-        groups.entry(decl.name.as_str()).or_default().push(i);
-    }
+    let groups = Groups::of(program);
     let returns = return_type_names(program, &type_names, &groups);
     let pub_names: HashSet<&str> =
         program.fns.iter().filter(|d| d.is_pub && !d.synthetic).map(|d| d.name.as_str()).collect();
@@ -24,11 +72,11 @@ pub fn door_advisories(program: &Program) -> Vec<String> {
     let mut advisories = Vec::new();
     let mut seen = HashSet::default();
     for (i, decl) in program.fns.iter().enumerate() {
-        if !decl.is_pub || decl.name.contains('/') || decl.synthetic {
+        if !decl.is_pub || crate::ast::has_slash(&decl.name) || decl.synthetic {
             continue;
         }
         for ty in &returns[i] {
-            if !ty.contains('/') || accepted.contains(ty) {
+            if !crate::ast::has_slash(ty) || accepted.contains(ty) {
                 continue;
             }
             if seen.insert((decl.name.as_str(), *ty)) {
@@ -50,7 +98,7 @@ pub fn door_advisories(program: &Program) -> Vec<String> {
 fn return_type_names<'a>(
     program: &'a Program,
     type_names: &HashSet<&str>,
-    groups: &HashMap<&'a str, Vec<usize>>,
+    groups: &Groups<'a>,
 ) -> Vec<HashSet<&'a str>> {
     let mut returns: Vec<HashSet<&'a str>> = vec![HashSet::default(); program.fns.len()];
     let mut changed = true;
@@ -71,7 +119,7 @@ fn body_types<'a>(
     decl: &'a FnDecl,
     program: &Program,
     type_names: &HashSet<&str>,
-    groups: &HashMap<&'a str, Vec<usize>>,
+    groups: &Groups<'a>,
     returns: &[HashSet<&'a str>],
 ) -> HashSet<&'a str> {
     let mut env: HashMap<&str, HashSet<&'a str>> = HashMap::default();
@@ -98,7 +146,7 @@ fn body_types<'a>(
 fn expr_types<'a>(
     e: &'a Expr,
     type_names: &HashSet<&str>,
-    groups: &HashMap<&'a str, Vec<usize>>,
+    groups: &Groups<'a>,
     returns: &[HashSet<&'a str>],
     env: &HashMap<&str, HashSet<&'a str>>,
 ) -> HashSet<&'a str> {
@@ -127,7 +175,7 @@ fn expr_types<'a>(
 fn name_types<'a>(
     name: &'a str,
     type_names: &HashSet<&str>,
-    groups: &HashMap<&'a str, Vec<usize>>,
+    groups: &Groups<'a>,
     returns: &[HashSet<&'a str>],
     env: &HashMap<&str, HashSet<&'a str>>,
 ) -> HashSet<&'a str> {
@@ -141,8 +189,8 @@ fn name_types<'a>(
         return local.clone();
     }
     let mut set = HashSet::default();
-    for &i in groups.get(name).into_iter().flatten() {
-        set.extend(returns[i].iter().copied());
+    for &i in groups.get(name) {
+        set.extend(returns[i as usize].iter().copied());
     }
     set
 }
@@ -152,10 +200,10 @@ fn name_types<'a>(
 fn accepted_types<'a>(
     program: &'a Program,
     pub_names: &HashSet<&str>,
-    groups: &HashMap<&'a str, Vec<usize>>,
+    groups: &Groups<'a>,
 ) -> HashSet<&'a str> {
     let mut surface_groups: HashSet<&str> =
-        pub_names.iter().copied().filter(|n| !n.contains('/')).collect();
+        pub_names.iter().copied().filter(|n| !crate::ast::has_slash(n)).collect();
     for decl in &program.fns {
         if !surface_groups.contains(decl.name.as_str()) {
             continue;
@@ -169,18 +217,18 @@ fn accepted_types<'a>(
                 },
                 _ => None,
             };
-            if let Some(name) = target.filter(|n| n.contains('/')) {
+            if let Some(name) = target.filter(|n| crate::ast::has_slash(n)) {
                 surface_groups.insert(name);
             }
         }
     }
     let mut accepted = HashSet::default();
-    for (name, indices) in groups {
+    for (name, indices) in groups.names() {
         if !surface_groups.contains(name) {
             continue;
         }
         for &i in indices {
-            for pattern in &program.fns[i].params {
+            for pattern in &program.fns[i as usize].params {
                 pattern_type_names(pattern, &mut accepted);
             }
         }

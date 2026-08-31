@@ -161,9 +161,45 @@ fn keeping s _ false
 fn keeping s piece true
   scan (s.at + 1) (push s.runs piece)
 
-fn head_of lit
-  before_brace = (text/split lit "\{")[1]!
-  squeezed (text/split before_brace "\\")[1]!
+# The SHAPE of a diagnostic's message: the literal with every interpolation
+# written `{}`, so `` `{ty}` has no field `{field}` `` keys as
+# `` `{}` has no field `{}` ``.
+#
+# It used to be the leading run — everything before the first interpolation —
+# and that is where the article bug hid. A key of `` `: `` fell under the floor
+# below, so "`:{ty}` widens; this value is not a {ty}" was neither counted
+# among the diagnostics nor listed as unpinned; it was not in the gate's world
+# at all. Thirty-eight literals sat in that blind spot, among them every
+# "`{ty}` has no field `{name}`" site, whose leading run is one backtick.
+#
+# The floor cannot simply come down. One backtick matches every fixture in the
+# corpus, which is what the floor is for. What changes is that the key now
+# carries the WHOLE message, so `in_corpus?` can ask for all of its runs, in
+# order, on one line — specificity the leading run could not reach because it
+# threw the rest away.
+fn shape_of lit
+  unescaped = (text/split lit "\\")[1]!
+  squeezed (rejoined (text/split unescaped "\{"))
+
+fn rejoined parts
+  tails = list/to_list (list/map (list/to_list (list/drop parts 1)) after_brace)
+  text/join (text/concat [parts[1]!] tails) "\{}"
+
+fn after_brace piece
+  after_first (text/split piece "}") "}"
+
+# The floor counts what a corpus can actually match: the literal text, with
+# the two braces of each interpolation taken back off.
+fn run_units s
+  opens = list/to_list (list/select (text/chars s) (c -> c == "\{"))
+  length s - 2 * length opens
+
+# A message's runs, in the order it writes them, with the empty ones dropped —
+# a message that opens with an interpolation has an empty first run.
+fn shape_runs msg
+  parts = text/split msg "\{"
+  rest = list/to_list (list/map (list/to_list (list/drop parts 1)) after_brace)
+  list/to_list (list/reject (text/concat [parts[1]!] rest) (r -> r == ""))
 
 fn message_in group
   pieces = text/split group "\""
@@ -174,7 +210,7 @@ fn chosen _ true
   ""
 
 fn chosen wanted false
-  head_of wanted[1]!
+  shape_of wanted[1]!
 
 # A site the pattern reaches: an open paren, whitespace, then a bare kind.
 fn site_of chunk
@@ -210,14 +246,14 @@ fn told _ ""
 
 # The head has to be specific enough that finding it in the corpus means
 # finding this message and not another one, which is why there is a floor at
-# all. It sat at twelve and hid three reachable diagnostics: `function `,
+# all. It sat at twelve and hid three reachable? diagnostics: `function `,
 # `constant ` and `the name `, each ten characters with its opening backtick,
 # each raised by a program anybody could write, and none of them pinned. Ten
 # admits four sites. Three were those gaps. The fourth, `no arm of `, was
 # already pinned by literal_arg_type — a true match, not a coincidence — so
 # the widening cost no false pins.
 fn told kind msg
-  worth kind msg (length msg >= 10)
+  worth kind msg (run_units msg >= 10)
 
 fn worth _ _ false
   ""
@@ -231,7 +267,7 @@ fn worth kind msg true
 # anything is compiled could be reworded or lost with nothing going red.
 #
 # The chunk after the opener runs to the end of the file, so the literal is cut
-# at its closing quote first and only then handed to `head_of`. An escaped
+# at its closing quote first and only then handed to `shape_of`. An escaped
 # quote truncates the head early, which costs specificity and never invents it.
 fn driver_in src
   chunks = list/to_list (list/drop (text/split src driver_opener) 1)
@@ -239,13 +275,13 @@ fn driver_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn driver_site chunk
-  told_driver (head_of (text/split chunk "\"")[1]!)
+  told_driver (shape_of (text/split chunk "\"")[1]!)
 
 fn told_driver ""
   ""
 
 fn told_driver msg
-  worth_driver msg (length msg >= 10)
+  worth_driver msg (run_units msg >= 10)
 
 fn worth_driver _ false
   ""
@@ -267,13 +303,13 @@ fn kinded_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn kinded_site chunk
-  told_kinded (head_of (text/split chunk "\"")[1]!)
+  told_kinded (shape_of (text/split chunk "\"")[1]!)
 
 fn told_kinded ""
   ""
 
 fn told_kinded msg
-  worth_kinded "error[{msg}" (length msg >= 10)
+  worth_kinded "error[{msg}" (run_units msg >= 10)
 
 fn worth_kinded _ false
   ""
@@ -299,13 +335,13 @@ fn native_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn native_site chunk
-  told_native (head_of (text/split chunk "\"")[1]!)
+  told_native (shape_of (text/split chunk "\"")[1]!)
 
 fn told_native ""
   ""
 
 fn told_native msg
-  worth_native msg (length msg >= 10)
+  worth_native msg (run_units msg >= 10)
 
 fn worth_native _ false
   ""
@@ -340,7 +376,7 @@ fn oracle_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn oracle_site chunk
-  told_oracle (head_of (text/split chunk "\"")[1]!)
+  told_oracle (shape_of (text/split chunk "\"")[1]!)
 
 fn oracle_format_in src
   chunks = list/to_list (list/drop (text/split src oracle_format_opener) 1)
@@ -357,13 +393,13 @@ fn opening _ true
   ""
 
 fn opening pieces false
-  head_of pieces[2]!
+  shape_of pieces[2]!
 
 fn told_oracle ""
   ""
 
 fn told_oracle msg
-  worth_oracle msg (length msg >= 10)
+  worth_oracle msg (run_units msg >= 10)
 
 fn worth_oracle _ false
   ""
@@ -387,7 +423,7 @@ fn page_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn page_site chunk
-  told_page (head_of (text/split chunk "\"")[1]!)
+  told_page (shape_of (text/split chunk "\"")[1]!)
 
 fn page_format_in src
   chunks = list/to_list (list/drop (text/split src page_format_opener) 1)
@@ -404,7 +440,7 @@ fn told_page ""
   ""
 
 fn told_page msg
-  worth_page msg (length msg >= 10)
+  worth_page msg (run_units msg >= 10)
 
 fn worth_page _ false
   ""
@@ -551,7 +587,37 @@ fn read_test _ false rest parts
   test_sources rest parts
 
 fn read_test name true rest parts
-  os/read_file "tests/{name}" . (t -> test_sources rest (push parts t))
+  os/read_file "tests/{name}" . (t -> kept_source rest parts t)
+
+fn kept_source rest parts t
+  test_sources rest (push parts (uncommented t))
+
+# A COMMENT IS A MENTION AND AN `assert!` STRING IS A PIN, and a substring
+# search cannot tell them apart. That is why the driver corpus below is
+# .stderr plus module_differential: four of its six pins came from tests/*.rs
+# and every one was false. The wide corpus keeps tests/*.rs, because the
+# handful of diagnostics a corpus of programs cannot express ARE legitimately
+# pinned by a Rust test, and drops the commentary, because four more were
+# resting on prose:
+#
+#   no such field                  a doc comment in getter_identity.rs listing
+#                                  "the three ways a read can fail"
+#   not an err                     the words "not an error." in make_dir.rs's
+#                                  module comment, about mkdir -p
+#   a beat mark and the arena ...  carry_repair.rs:37 quotes it as history
+#   too many processes at once     many_handles.rs:52 quotes it as history
+#
+# The last two are the sharpest. Each is a regression test that names the bug
+# it fixed and then asserts the fix: `stdout == "gathered 4\n"` and
+# `"answered 41\n"` — an assertion that the message never appears, read by the
+# scan as a pin of the message. All four could be reworded in the runtime with
+# nothing going red, and one of them, `no such field`, was a live divergence.
+fn uncommented src
+  lines = list/select (text/split src "\n") (l -> code? l)
+  text/join (list/to_list lines) "\n"
+
+fn code? line
+  text/slice (squeezed line) 1 2 != "//"
 
 fn corpus_of dir parts
   os/list_dir dir . (names -> in_dir dir (list/to_list names) parts)
@@ -588,8 +654,53 @@ fn allowances t
   kept = list/to_list (list/reject lines (l -> l == "" or first_char l == "#"))
   list/to_list kept
 
+# A shape is in the corpus when all of its runs appear, in that order, on ONE
+# line. The line matters: runs matched anywhere in the blob would let the
+# opening backtick of one fixture and the closing backtick of another stand in
+# for a message nothing raises.
+#
+# The longest run is tried against the whole corpus first. That is one split
+# instead of a walk over every line, and a shape whose longest run is absent
+# cannot match any line, so the walk only runs for shapes that could hit.
 fn in_corpus? corpus msg
-  length (text/split corpus msg) > 1
+  runs = shape_runs msg
+  reachable? corpus runs (length (text/split corpus (longest runs)) > 1)
+
+fn reachable? _ _ false
+  false
+
+fn reachable? corpus runs true
+  list/any? (text/split corpus "\n") (l -> in_order? l runs)
+
+fn longest runs
+  list/fold runs "" tallest
+
+fn tallest best r
+  taller best r (length r > length best)
+
+fn taller best _ false
+  best
+
+fn taller _ r true
+  r
+
+fn in_order? line runs
+  ran? line runs (length runs == 0)
+
+fn ran? _ _ true
+  true
+
+fn ran? line runs false
+  stepped_run? line runs runs[1]! (text/split line runs[1]!)
+
+fn stepped_run? line runs r pieces
+  onward? line runs r pieces (length pieces == 1)
+
+fn onward? _ _ _ _ true
+  false
+
+fn onward? _ runs r pieces false
+  in_order? (after_first pieces r) (list/to_list (list/drop runs 1))
 
 fn judged every corpus driver_corpus excused
   seen = (e -> known? corpus driver_corpus e)

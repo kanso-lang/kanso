@@ -13,9 +13,35 @@
 
 use std::process::Command;
 
+/// The pair that collided. Both are 82 bytes, and that is asserted below
+/// rather than left to a reader counting characters, because the collision
+/// condition is easy to lose to an innocent reword and nothing would say so.
+const LICENSED: &str =
+    "branch: a-real-fix\nkq's carry_dedup moves, and what it now buys is a linear walk.\n";
+const LEFT_BEHIND: &str =
+    "branch: the-branch-that-merged\nkq's carry_dedup moves, and it buys a linear walk.\n";
+
 /// Run the licence check against a file holding `body`, for `branch`.
+///
+/// The directory is named by a hash of the body, not its LENGTH. Two of the
+/// fixtures below are 82 bytes each, cargo runs them on separate threads, and
+/// the file inside is the constant `sibling-goldens-move` — so under a length
+/// key both tests wrote one path and the first to finish called
+/// `remove_dir_all` on the other's program mid-run. 27 failures in 40 runs,
+/// measured, reporting exit 2 where the test asserts 0.
+///
+/// Those two bodies are left the same length deliberately. The condition is
+/// what a length key needs to fail, so the corpus carries it and a regression
+/// to `body.len()` goes red on the next run rather than the next fortnight.
+///
+/// kanso#1177 fixed this exact shape in a_bare_list_is_or_is_not_bytes.rs,
+/// where the key was a length too; #1169, #1175 and #1178 fixed the sibling
+/// shape where the path was a constant.
 fn verdict(body: &str, branch: &str) -> i32 {
-    let dir = std::env::temp_dir().join(format!("kanso-gm-{}", body.len()));
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hash::hash(body, &mut hasher);
+    let key = std::hash::Hasher::finish(&hasher);
+    let dir = std::env::temp_dir().join(format!("kanso-gm-{key:x}"));
     std::fs::create_dir_all(&dir).expect("a directory to write in");
     let file = dir.join("sibling-goldens-move");
     std::fs::write(&file, body).expect("the file writes");
@@ -30,17 +56,14 @@ fn verdict(body: &str, branch: &str) -> i32 {
 
 #[test]
 fn a_file_licenses_the_branch_it_names() {
-    let body = "branch: a-real-fix\nkq's carry_dedup moves, and what it buys is a linear walk.\n";
-    assert_eq!(verdict(body, "a-real-fix"), 0, "a file naming this branch did not license it");
+    assert_eq!(verdict(LICENSED, "a-real-fix"), 0, "a file naming this branch did not license it");
 }
 
 /// The one that matters: this is the shape #724 left on main.
 #[test]
 fn a_file_left_behind_licenses_nobody() {
-    let body =
-        "branch: the-branch-that-merged\nkq's carry_dedup moves, and it buys a linear walk.\n";
     assert_eq!(
-        verdict(body, "some-later-branch"),
+        verdict(LEFT_BEHIND, "some-later-branch"),
         1,
         "a leftover did not read as a leftover — 1 is 'does not apply', and it \
          has to be told apart from a malformed licence so the build carries on \
@@ -66,4 +89,18 @@ fn a_file_naming_no_gain_licenses_nothing() {
 fn the_old_format_licenses_nothing() {
     let body = "kq's carry_dedup moves, and what it buys is a linear walk.\n";
     assert_eq!(verdict(body, "a-real-fix"), 1, "a file with no branch line was honoured");
+}
+
+/// The condition itself, pinned. Under the old `kanso-gm-{body.len()}` key
+/// these two staged one directory holding one file called
+/// `sibling-goldens-move`, and `verdict` ends in `remove_dir_all` — 27 of 40
+/// runs failed. The key is a hash of the body now, and these two are left the
+/// same length so the corpus keeps asking the question the hash answers.
+#[test]
+fn the_two_bodies_that_collided_are_still_the_same_length() {
+    assert_eq!(
+        LICENSED.len(),
+        LEFT_BEHIND.len(),
+        "the fixture stopped exercising the collision a length key needs"
+    );
 }

@@ -1,0 +1,31 @@
+import "std/text"
+
+# Reading a string forward one character at a time, which no other benchmark
+# does. `s[i]` on multibyte text used to restart the walk at byte zero for
+# every i, so this shape was quadratic in the subject: two thousand characters
+# cost 27,591,142 instructions and four thousand cost 106,971,148. Nothing in
+# the tree would have noticed, because every other benchmark reads its text
+# through slices or byte scans.
+#
+# The alphabet mixes one-, two-, three- and four-byte characters on purpose.
+# All-ascii text takes the direct path, where an index is an offset and there
+# is no walk to get wrong.
+alphabet = "aé😀b€z"
+
+# Doubling, so building the subject costs a logarithmic number of joins rather
+# than an honest O(n) term in the row this benchmark exists to keep linear.
+fn doubled s n
+  wider s n (length s < n)
+
+fn wider s _ false
+  s
+
+fn wider s n true
+  doubled (text/join [s s] "") n
+
+fn walk s i n acc
+  if (i > n) acc (walk s (i + 1) n (acc + length s[i]))
+
+pub fn total n
+  subject = text/slice (doubled alphabet n) 1 n
+  walk subject 1 n 0

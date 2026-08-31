@@ -47,7 +47,7 @@ pub fn fold_spellings(program: &Program) -> HashSet<String> {
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/list") && d.params.len() == 3)
-        .filter(|d| d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name) == "fold")
+        .filter(|d| crate::ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name) == "fold")
         .map(|d| d.name.clone())
         .collect()
 }
@@ -580,14 +580,14 @@ fn walk_for_push_in(
             && args.len() == 2
             && a.unique_in(&args[0], decl, scoped)
         {
-            out.insert((decl.file.clone(), span.line, span.col));
+            out.insert((decl.file.clone(), span.line as usize, span.col as usize));
         }
         // put extends a map the same way, one arity over
         if matches!(head.as_ref(), Expr::Ident(n, _) if n == "put")
             && args.len() == 3
             && a.unique_in_with(&args[0], decl, scoped, &[&args[1], &args[2]])
         {
-            out.insert((decl.file.clone(), span.line, span.col));
+            out.insert((decl.file.clone(), span.line as usize, span.col as usize));
         }
         // inside a validated folder the accumulator arrives as the lambda's
         // own parameter, and every push or append there is on a unique value
@@ -796,7 +796,7 @@ fn walk_for_reuse(
         if let Expr::Ident(name, _) = head.as_ref() {
             if types.contains(name.as_str()) && !args.is_empty() {
                 if let Some(victim) = sole_finished_record(a, decl, args) {
-                    out.insert((decl.file.clone(), span.line, span.col), victim);
+                    out.insert((decl.file.clone(), span.line as usize, span.col as usize), victim);
                 }
             }
         }
@@ -1003,9 +1003,9 @@ fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
     decl.body
         .iter()
         .filter_map(|s| match s {
-            Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => {
-                joins.contains(&(decl.file.clone(), span.line, span.col)).then(|| name.clone())
-            }
+            Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => joins
+                .contains(&(decl.file.clone(), span.line as usize, span.col as usize))
+                .then(|| name.clone()),
             _ => None,
         })
         .collect()
@@ -1101,7 +1101,7 @@ fn collect_carried(
                             &p == n && carrying.contains(&(decl.name.clone(), decl.params.len(), j))
                         });
                     if holds {
-                        out.insert((decl.file.clone(), span.line, span.col));
+                        out.insert((decl.file.clone(), span.line as usize, span.col as usize));
                     }
                 }
             }
@@ -1127,7 +1127,7 @@ fn walk_for_builder(
         if parts.len() > 1 {
             if let Some(TemplatePart::Interp(Expr::Ident(name, _))) = parts.first() {
                 if let Some(i) = builder_param(a, decl, name, e) {
-                    sites.insert((decl.file.clone(), span.line, span.col));
+                    sites.insert((decl.file.clone(), span.line as usize, span.col as usize));
                     accs.insert((decl.name.clone(), decl.params.len(), i));
                 }
             }

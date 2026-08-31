@@ -54,8 +54,14 @@ fn unescape_template(raw: &str) -> String {
     out
 }
 
-fn written(name: &str, source: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join("kanso-playground-test");
+/// One directory per test, because the two below that stage files run at the
+/// same time in one process and used to share the same
+/// `kanso-playground-test/<name>.kso`. A write truncates before it fills, so a
+/// subprocess reading the file the other test was rewriting saw an empty one
+/// and reported "a play file needs at least one statement to run" — a failure
+/// with nothing wrong with the example, landing on whichever test lost.
+fn written(bench: &str, name: &str, source: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("kanso-playground-test-{bench}"));
     std::fs::create_dir_all(&dir).expect("temp work dir");
     let file = dir.join(format!("{name}.kso"));
     std::fs::write(&file, source).expect("example writes");
@@ -81,7 +87,7 @@ fn play(file: &PathBuf, engine: &[&str]) -> std::process::Output {
 #[test]
 fn every_playground_example_runs_on_the_interpreter() {
     for (name, source) in examples() {
-        let file = written(&name, &source);
+        let file = written("interp", &name, &source);
 
         let run = play(&file, &["--interp"]);
 
@@ -99,7 +105,7 @@ fn every_playground_example_runs_on_the_interpreter() {
 #[test]
 fn every_playground_example_agrees_between_the_interpreter_and_native() {
     for (name, source) in examples() {
-        let file = written(&name, &source);
+        let file = written("agree", &name, &source);
         let oracle = play(&file, &["--interp"]);
 
         let native = play(&file, &[]);
