@@ -2211,10 +2211,16 @@ function to the file it came from. 2.81 billion instructions, split:
     emitted kanso   1,728,709,950   61.6%
     runtime.c       1,078,786,257   38.4%
 
-The single largest function is `d_jsonbench/value_for_3` at 22.67%, which is
-the decoder's own kanso source as codegen wrote it. The largest runtime entries
-are `k_b_append_mut` at 7.05%, `k_b_put_mut` at 4.82% and `k_utf8_bad` at
-4.11%.
+The largest single symbol is `d_jsonbench/value_for_3` at 22.67%, and reading
+it as one fat function would be wrong: `parse_string`, `parse_array`,
+`parse_object`, `parse_number` and `skip_ws` are all absent from the profile
+under their own names, because clang inlined them into it. The figure is the
+whole value-parsing path collected under one symbol. The dispatch that names it
+is a real `switch i64` over all six literal arms with a default, checked in the
+emitted ir, so §05's switchboard claim holds where a reader would test it.
+
+The largest runtime entries are `k_b_append_mut` at 7.05%, `k_b_put_mut` at
+4.82% and `k_utf8_bad` at 4.11%.
 
 That ratio is the finding. Roughly twenty merged changes have taken cost out of
 `runtime.c` — the byte-level pair in #1171, the string cursor in #1172, the
