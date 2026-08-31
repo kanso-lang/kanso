@@ -3306,7 +3306,12 @@ static int ryu_d2d(double f, char* dig, int* e10) {
 /* format (digits, k, e10) exactly as the probe would have: %g with
    precision max(15, k) — fixed vs exponent at X < -4 or X >= P */
 static void render_ryu(double d, char* buf) {
-    if (d == 0.0) { snprintf(buf, 64, "%.1f", d); return; }
+    if (d == 0.0) {
+        char* z = buf;
+        if (signbit(d)) *z++ = '-';
+        z[0] = '0'; z[1] = '.'; z[2] = '0'; z[3] = 0;
+        return;
+    }
     char dig[20];
     int e10;
     int k = ryu_d2d(d, dig, &e10);
@@ -3499,7 +3504,20 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_FLOAT: {
             double d = k_as_f(v);
             if (d == floor(d) && fabs(d) < 1e15 && isfinite(d)) {
-                snprintf(buf, sizeof buf, "%.1f", d);
+                /* An integral double under 1e15 casts exactly, so its digits
+                   are an integer's digits and the fraction is exactly `.0`.
+                   glibc's `%.1f` reaches __printf_fp for them anyway, which
+                   is a multiprecision routine: it was 11.0% of the wide
+                   benchmark. Negative zero is the one value the cast loses,
+                   and `%.1f` writes `-0.0` for it. */
+                char* o = buf;
+                long long whole = (long long)d;
+                if (whole == 0 && signbit(d)) *o++ = '-';
+                k_itoa(o, whole);
+                while (*o) o++;
+                *o++ = '.';
+                *o++ = '0';
+                *o = 0;
                 return k_str(buf);
             }
             /* shortest round-trip: %g trims trailing zeros, so probing
@@ -5789,13 +5807,23 @@ KValue k_b_utf8(KValue lv, const char* origin) {
 
 static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     k_stat_utf8_bytes += len;
-    /* a document's keys and short values are ascii and shorter than one
-       vector, where the wide pass is nearly all setup: the table loads, and
-       two tail blocks each filled a byte at a time. */
-    if (len < 16) {
+    /* A document's keys and values are ascii, and the wide pass is nearly all
+       setup: seven constant loads and two zeroed accumulators before the first
+       block, against an average token of forty-one bytes. Eight bytes at a
+       time answers the whole question for an ascii run of any length and never
+       reaches that. A run that is not ascii falls through and the wide pass
+       reads it from the start, so the scan below is the only waste. */
+    {
         long long j = 0;
-        while (j < len && (uint8_t)data[j] < 0x80) j++;
-        if (j == len) return k_none();
+        for (; j + 8 <= len; j += 8) {
+            unsigned long long w;
+            memcpy(&w, data + j, sizeof w);
+            if (w & 0x8080808080808080ULL) break;
+        }
+        if (j + 8 > len) {
+            while (j < len && (uint8_t)data[j] < 0x80) j++;
+            if (j == len) return k_none();
+        }
     }
 #if defined(__aarch64__)
     /* keiser & lemire, "validating utf-8 in less than one instruction per

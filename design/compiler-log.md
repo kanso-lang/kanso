@@ -3475,3 +3475,116 @@ The row is `beat_cursor` in scripts/ratchet/ratchet.kso and the step runs in
 the diagnostics-differential job beside the eight sweeps already there.
 
 DONE.
+
+## 2026-08-31 — two things the wide benchmark paid for and did not need
+
+widebench had never been profiled. It carries 68.45% of welfare's run-speed
+mean, so where its time goes decides most of what the index can be moved by.
+Two answers came out of one profile.
+
+**A whole number rendered as a float went through glibc's multiprecision
+formatter.** 11.0% of widebench was inside three libc frames:
+
+```
+     5,661,266  6.74%  __printf_fp_buffer_1
+     2,192,140  2.61%  hack_digit
+     1,424,000  1.69%  __printf_buffer
+```
+
+The caller is `k_render_at`. A double that is a whole number takes a branch
+guarded by `d == floor(d) && fabs(d) < 1e15 && isfinite(d)`, and that branch
+called `snprintf("%.1f")`. `%f` reaches `__printf_fp`, which is multiprecision
+— it also pulls `__mpn_divrem` and `__mpn_mul_1`, which `k_b_to_float`'s strtod
+shares. `render_ryu`'s `d == 0.0` branch made the same call.
+
+The guard has already proved the number is an integer under 1e15, so the cast
+to `long long` is exact, the digits are an integer's digits, and the fraction is
+exactly `.0`. `k_itoa` writes it. Negative zero is the one value the cast loses,
+and `signbit` keeps it.
+
+**The utf-8 validator paid full vector setup for a forty-one byte token.**
+`k_utf8_bad` was 4.15% of jsonbench. Counting the calls in the callgrind file
+rather than guessing: 265,950 calls carrying 10,975,500 bytes, so 41.3 bytes a
+call and 446 instructions a call — about eleven instructions a byte, where a
+vectorized validator on a long input runs at a fraction of one. The setup is
+why: seven constant loads and two zeroed accumulators before the first block.
+The old short-circuit only fired below sixteen bytes.
+
+Eight bytes at a time answers the whole question for an ascii run of any
+length and never reaches the vector pass. A run that is not ascii falls
+through and the wide pass reads it from the start, so the scan is the only
+waste.
+
+```
+    widebench     84,031,235 -> 67,553,585   -16,477,650   -19.6090%
+    basket          57,197,600 ->    56,780,940     -416,660    -0.7285%
+    jsonbench    2,862,072,518 -> 2,860,867,718   -1,204,800    -0.0421%
+    oneshot          44,071,744 ->    44,065,976       -5,768    -0.0131%
+    encodebench   8,713,107,668 -> 8,714,005,236     +897,568    +0.0103%
+    deepbench, escapebench, pendbench, indexbench: identical
+```
+
+Held apart, so the two are separable: the float render alone is widebench
+-19.019% and welfare +0.253991; the ascii pre-scan alone is basket -0.7241%,
+widebench -0.5900%, jsonbench -0.0421% and welfare +0.007426.
+
+encodebench's rise is 1.003 instructions per ryu_render and no counter it owns
+moves; it is layout, and it is under a hundredth of a per cent.
+
+`text` rises, and it is bought rather than explained away: 128 bytes of .text
+on the five benchmarks that link both changed functions, 80 to 96 on the four
+that link a subset because the linker drops what they never call. That is the
+integer path and the word-wise scan against two `snprintf` call sites removed,
+and it buys widebench 19.6%. Every allocation counter is byte-identical — all
+eight counter gates and the emitted-line gate pass untouched — which is what
+says the machine code is the only dimension that moved.
+
+Byte-identical on both engines across the float edges — 0.0, -0.0, ±1.0,
+±42.0, ±1e14, 999999999999999.0, the 1e15 boundary where the exponent form
+takes over, 1e-07, and `0.0 * -1.0`. Pinned in
+tests/golden/micro/a_whole_float_keeps_its_point.kso, which goes red on the
+mutation that drops the `signbit` test: three of its `-0.0`s render as `0.0`.
+All eight differential sweeps agree, the utf-8 one included.
+
+**What is left in widebench, for whoever picks it up.** The carry evacuation:
+`k_survives_x` at 7,522,206, `k_copy_size` at 8,098,822 across both frames,
+`k_ptrmap_at` at 2,724,570 and `k_deep_copy` at 1,695,365 — about 29% of what
+this leaves. `k_survives_x` is not slow per call and the chain is short
+(widebench holds two arena blocks); it is called roughly 375,000 times, because
+the evacuation walks the carried document every iteration. That is a design
+question about the carry rather than a peephole.
+
+DONE.
+
+## 2026-08-31 — a third staging collision, and this one hid behind a name that looked unique
+
+kanso#1175's flake was found by a suite run going red for reasons that had
+nothing to do with what was being measured. Two more runs of the same suite
+named the rest of it: `a_list_that_was_never_bytes_reads_the_same_on_both_engines`
+and `genuine_bytes_already_read_the_same_on_both_engines`, together, in one run
+of three.
+
+tests/a_bare_list_is_or_is_not_bytes.rs stages its program in a directory named
+by the expression's LENGTH. Two pairs collide across the file's two tests, which
+cargo runs on separate threads:
+
+```
+    text/to_float [1]                and  text/utf8 [97 98]                  17
+    text/find2_below [97] 0 97 98 1  and  text/to_float (text/bytes "ab")    31
+```
+
+Each call writes `run.kso` into that directory and calls `remove_dir_all` when
+it is done, so one test deletes the other's program between the write and the
+run. Twenty runs each on a settled tree: five failures before, none after.
+
+A hash of the expression names the directory now.
+
+**The rule this is the third instance of.** kanso#1169 fixed it in the
+playground tests and kanso#1175 in the deliberate-exit pair, both where the
+name was a constant. Here the name was derived and looked unique, which is why
+neither of those fixes covered it: a staging path has to be keyed by something
+injective over everything that can reach it, and `len` is not. Every test
+binary in the tree was then run repeatedly to find the rest by failure rather
+than by reading, because reading is what missed this one twice.
+
+DONE.
