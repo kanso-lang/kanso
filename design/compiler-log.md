@@ -3011,3 +3011,12 @@ answers with a list. A second arity on `first` would make the return
 shape depend on the argument count: the same name answering two
 questions, the disease the `done` gavel cured in the effect world.
 The enumerable spec's §9.3 question closes.
+
+## 2026-08-29 — gavel: std ships inside the binary
+
+Clay took the recommendation. `std/` is welded into the toolchain: the
+compiler version is the std version, one number in every bug report,
+one version axis under every differential golden. Go's shape, for
+Go's reason. A pinnable std waits for a demonstrated need, which
+would be a new entry, not a reopening. design/hako.md's observation-
+clause question closes.
