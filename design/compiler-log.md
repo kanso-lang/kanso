@@ -2956,3 +2956,17 @@ has admitted is a decision already made, and it is finished now:
 every engine speaks it, or the decision was not made. "Refuse
 honestly" is the differential law's transition state, never a place a
 decided feature rests.
+
+## 2026-08-29 — gavel: block-born is the whole cohort
+
+Clay: "okay whole cohort it is." Block-born becomes a dataflow
+property: anything the checker can prove was born in the block can be
+knotted — through aliases, conditionals, indexes of block-born
+collections, fields of block-born nodes — so cyclic structures sized
+by data (a graph parsed from input, N linked nodes from a map) gain a
+spelling. The theorem's obligation is unchanged: prove the birthday,
+or be refused; the analysis widens how the proof is found, never what
+must be proven. The book's sentence — everything born in the block,
+nothing escaping — was the decision; the syntactic fence was the
+checker falling short of it. Ships with red-first fixtures for the
+newly admitted shapes and the escape cases that must stay refused.
