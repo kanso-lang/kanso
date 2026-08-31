@@ -3539,6 +3539,14 @@ and it buys widebench 19.6%. Every allocation counter is byte-identical — all
 eight counter gates and the emitted-line gate pass untouched — which is what
 says the machine code is the only dimension that moved.
 
+Removing `"%.1f"` made a ratchet mutation stale, which is the check doing its
+job: `native_renders_a_float_wider` widened that format to `"%.2f"` so native
+printed `1.00` where the oracle printed `1.0`. There is no format to widen now,
+so it breaks the cast instead — `(long long)d` becomes `(long long)d * 10` and
+native prints `10.0`. Watched red before it was believed: the render sweep
+reports `native: 10.0 / interp: 1.0` under the mutation and 86 values, 0
+disagree, without it.
+
 Byte-identical on both engines across the float edges — 0.0, -0.0, ±1.0,
 ±42.0, ±1e14, 999999999999999.0, the 1e15 boundary where the exponent form
 takes over, 1e-07, and `0.0 * -1.0`. Pinned in
