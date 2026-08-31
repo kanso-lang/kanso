@@ -385,6 +385,14 @@ behaviour = row
   (breaking "native_rounds_a_half_to_even")
   release
 
+beat_cursor = row
+  "a character read remembering a position into a string a beat has freed"
+  true
+  "./target/release/kanso run scripts/beat_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "a_cursor_that_outlives_its_string")
+  release
+
 dispatch = row
   "the two engines taking different arms for the same call"
   true
@@ -626,7 +634,9 @@ rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
 rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
-rows_c = text/concat rows_c1l [itself]
+rows_c1m = text/concat rows_c1l [beat_cursor]
+
+rows_c = text/concat rows_c1m [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

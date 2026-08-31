@@ -1,0 +1,217 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/text"
+
+type probe_case
+  a
+  b
+  label
+  reader
+
+# Reading a character out of a string by position remembers where the walk
+# stopped, so the next read resumes rather than crossing the text again. The
+# remembered position names its string by address; a beat rewinds the arena;
+# and the next string built in the loop can land exactly where the last one
+# sat. A cursor kept from the last iteration is then a cursor into a string
+# that is no longer there, and native answers a character the interpreter
+# does not.
+#
+# That is kanso#1173, and one golden pinned one shape of it. This asks the
+# whole family: every pair of byte layouts, alternating between iterations,
+# read by every hand that moves the cursor. A layout pair is chosen so the
+# two members disagree about where character five begins, which is what makes
+# a stale position wrong rather than accidentally right.
+kanso = "target/release/kanso"
+
+probe = "target/beat_probe.kso"
+
+# A probe that loops forever is a finding, and a louder one than a wrong
+# character. `timeout` answers 124 when it fires; a box without it cannot
+# start the sweep at all rather than quietly losing the property.
+limit = "20"
+
+# Each layout puts its characters at different byte offsets. `ascii` and
+# `lead4` are the extremes — one byte a character against four — and `mixed`
+# changes width within one string, so no single stride is right for it.
+layouts = ["abcdefghij\{n}" "ééééé\{n}abcde" "😀😀\{n}abcdefgh" "a€b😀c\{n}déf"]
+
+# The hands that move the cursor. Forward is the cheap case the cursor was
+# written for; backward makes it walk back; the slice hand and the index hand
+# share one cursor, so a sweep that mixes them is the one that catches a
+# cursor either can leave wrong.
+hands_index = ["\{s[1]}\{s[4]}\{s[7]}" "\{s[7]}\{s[4]}\{s[1]}"]
+
+hands_slice = ["\{text/slice s 2 4}\{text/slice s 6 7}"]
+
+hands_slice_back = ["\{text/slice s 6 7}\{text/slice s 2 4}"]
+
+hands_both = ["\{s[6]}\{text/slice s 2 3}\{s[3]}\{text/slice s 5 6}"]
+
+hands_length = ["\{length s}\{s[2]}\{length s}\{text/slice s 1 2}"]
+
+hands_0 = text/concat hands_index hands_slice
+
+hands_1 = text/concat hands_0 hands_slice_back
+
+readers = text/concat (text/concat hands_1 hands_both) hands_length
+
+# `step` is a beat: it rebuilds `shaped` every iteration and threads the
+# answer through the carry, so the arena hands each iteration the addresses
+# the last one used.
+fn shaped a b reader
+  """
+    import "std/text"
+
+    fn subject n 0
+      "{a}"
+
+    fn subject n _
+      "{b}"
+
+    fn read s
+      "{reader}"
+
+    fn step 0 acc
+      acc
+
+    fn step n acc
+      step (n - 1) "\{acc}|\{read (subject n (n % 2))}"
+
+    print (step 6 "")
+  """
+
+fn asked argv
+  os/run "timeout" (text/concat [limit kanso] argv)
+
+fn hung? 124
+  true
+
+fn hung? _
+  false
+
+fn ran source
+  os/write_file probe source . (_ -> both)
+
+both = asked ["play" probe] . against
+
+fn against native
+  asked ["play" probe "--interp"] . (interp -> answer native interp)
+
+fn answer n i
+  stalled n i (hung? n.status or hung? i.status)
+
+fn stalled n i true
+  "    never returned: native {n.status} interp {i.status}\n"
+
+fn stalled n i false
+  same = n.status == i.status and n.stdout == i.stdout
+  agreed n i (same and n.stderr == i.stderr)
+
+fn agreed _ _ true
+  ""
+
+fn agreed n i false
+  native = "    native: {n.status} {n.stdout}{n.stderr}"
+  "{native}    interp: {i.status} {i.stdout}{i.stderr}\n"
+
+fn told ""
+  io/write "" . (_ -> 0)
+
+fn told line
+  io/write line . (_ -> 1)
+
+fn named _ ""
+  ""
+
+fn named label line
+  "  {label}\n{line}"
+
+# One probe at a time, by recursion rather than a fold: each step is an
+# effect whose answer the next step needs.
+fn swept todo count
+  onward todo count (length todo == 0)
+
+fn onward _ count true
+  io/write "" . (_ -> count)
+
+fn onward todo count false
+  rest = list/to_list (list/drop todo 1)
+  c = todo[1]!
+  ran (shaped c.a c.b c.reader) . (v -> reported rest count c v)
+
+fn reported rest count c v
+  told (named c.label v) . (n -> swept rest (count + n))
+
+fn cased ai bi ri
+  a = layouts[ai]!
+  b = layouts[bi]!
+  probe_case a b "layout {ai} then {bi}, hand {ri}" readers[ri]!
+
+fn over_readers ai bi ri acc
+  gathering ai bi ri acc (ri > length readers)
+
+fn gathering _ _ _ acc true
+  acc
+
+fn gathering ai bi ri acc false
+  over_readers ai bi (ri + 1) (text/concat acc [(cased ai bi ri)])
+
+fn over_b ai bi acc
+  spanning ai bi acc (bi > length layouts)
+
+fn spanning _ _ acc true
+  acc
+
+fn spanning ai bi acc false
+  over_b ai (bi + 1) (over_readers ai bi 1 acc)
+
+fn over_a ai acc
+  crossing ai acc (ai > length layouts)
+
+fn crossing _ acc true
+  acc
+
+fn crossing ai acc false
+  over_a (ai + 1) (over_b ai 1 acc)
+
+cases = over_a 1 []
+
+# A probe whose interpolation was lost prints a plain string, which both
+# engines render identically — so the sweep would agree with itself about
+# nothing and report every case green. The sample below has to come back with
+# the answer the loop actually computes, on both engines, before any case
+# runs.
+sample = shaped "ab\{n}" "é\{n}b" "\{s[1]}\{text/slice s 2 2}"
+
+want = "|ab|é5|ab|é3|ab|é1\n"
+
+mute = "the probes do not run: the sample did not answer {want}"
+
+fn sound? r
+  r.status == 0 and r.stdout == want
+
+fn works? n i
+  sound? n and sound? i
+
+fn ready native
+  asked ["play" probe "--interp"] . (interp -> live native interp)
+
+fn live n i
+  running (works? n i)
+
+fn running true
+  io/write banner . (_ -> swept cases 0 . finished)
+
+fn running false
+  io/write_err mute . (_ -> os/exit 2)
+
+banner = "{length cases} beats, every layout pair by every hand\n"
+
+fn finished 0
+  io/write "0 disagree\n"
+
+fn finished n
+  io/write "{n} disagree\n" . (_ -> os/exit 1)
+
+pub play = os/write_file probe sample . (_ -> asked ["play" probe]) . ready

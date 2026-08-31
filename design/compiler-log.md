@@ -3440,3 +3440,38 @@ the playground tests and this pair was missed.
 One directory per test, named by the caller.
 
 DONE.
+
+## 2026-08-31 — the beat sweep: every layout pair, every hand that moves the cursor
+
+kanso#1173 fixed a cursor that outlived its string across a beat's rewind and
+shipped one golden pinning one shape of it. One shape is what the bug happened
+to take, so the sweep here asks the whole family instead.
+
+`scripts/beat_differential` builds a program per case: a beat that rebuilds a
+string every iteration, alternating between two byte layouts, and reads it with
+one hand. Four layouts — all ascii, all two-byte, all four-byte, and one that
+changes width inside a single string — crossed with themselves and with six
+hands: forward indexing, backward indexing, forward slicing, backward slicing,
+a hand that mixes index and slice, and one that asks `length` between reads.
+Ninety-six cases, both engines, ten seconds.
+
+Alternation is what makes a case sharp. Two iterations of the same layout put
+the next string's characters at the byte offsets the last one used, so a stale
+cursor is accidentally right; two layouts that disagree about where character
+five begins make it wrong.
+
+**Watched fail, for the right reason.** With `k_seek_str = NULL` deleted from
+`k_beat_rewind` — the whole of #1173's fix, and now
+`scripts/ratchet/mutations/a_cursor_that_outlives_its_string.sh` — sixteen of
+the ninety-six disagree. Some of them answer a character from the wrong
+position; some answer a byte from the middle of a codepoint, which the terminal
+renders as U+FFFD. With the store restored, all ninety-six agree.
+
+Two sweeps ran on the way and are recorded because they say what the fix
+covers: thirty-six single-layout programs and ninety alternating-layout ones,
+both zero disagreements against the fixed runtime.
+
+The row is `beat_cursor` in scripts/ratchet/ratchet.kso and the step runs in
+the diagnostics-differential job beside the eight sweeps already there.
+
+DONE.
