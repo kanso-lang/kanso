@@ -1,0 +1,53 @@
+# What a digest costs, watched.
+#
+# sha256 is a streaming algorithm: it walks the padded message sixty-four
+# bytes at a time, carrying eight state words, and everything a block builds —
+# the sixty-four schedule words and the sixty-four intermediate states — is
+# dead the moment the next block starts. So the arena should hold a constant
+# amount however long the message is.
+#
+# It holds all of it. Measured on 2026-08-31 against a file rather than this
+# fixture, because the sizes a habit shows up at are larger than a golden
+# should run: an 8,800-byte message reads 713,523 allocations and 90,177,536
+# arena bytes, and an 88,000-byte one reads 7,118,218 and 889,192,464 — ten
+# times the input for ten times the memory, 849 MB of resident set to digest
+# 88 KB. `alloc_bytes` and `arena_peak_bytes` agree to within one percent at
+# every size, which is the whole finding: nothing is reclaimed between blocks,
+# so the peak IS the total.
+#
+# massif attributes the peak to two owners, both inside the walk:
+#
+#   66.21%  k_b_push_into_proven   the `push` in schedule, first_sixteen and
+#                                  padded_bytes
+#   32.52%  k_b_concat             31.36% of it from sha256/compress, which
+#                                  builds an eight-element list literal on
+#                                  each of its sixty-four rounds
+#
+# KANSO_BEAT_REPORT reports sha256/digested, sha256/blocked, sha256/compress
+# and sha256/turned as "bracketed with its cluster", where sha256/filled — the
+# one self-recursive loop in the file — "rewinds every iteration". That looks
+# like the answer and is not: four models of the shape, up to and including an
+# outer walk carrying a list around an inner sixty-four-round loop returning
+# one, all read the same verdict and all hold a single arena block.
+#
+# What holds it is the import line. Copy this file into a program's own
+# directory and import it as `./sha256` rather than `std/sha256`, and the same
+# bytes read 1,048,576 arena bytes where the std import reads 90,177,536 —
+# eighty-six times, from a source-path prefix in beat.rs that keeps imported
+# groups out of the carry tier. The second log entry for 2026-08-31 has the
+# bisection, the emitted-IR diff and the two consequences.
+#
+# The message here is forty-four bytes — ONE padded block — because a fixture
+# that ran at the sizes above would take a golden suite minutes. So this pins
+# the constant rather than the slope: 1,980 allocations and 424,369 allocated
+# bytes for a single block, which is forty-five allocations per input byte
+# before any accumulation happens at all. Both fall when the clustering is
+# fixed, and the slope is what the numbers in the comment above are for.
+#
+# Watched, not frozen: regenerate deliberately and say which way it went.
+import "std/sha256"
+import "std/text"
+
+message = "the quick brown fox jumps over the lazy dog."
+
+pub play = print (text/slice (sha256/hex (text/bytes message)) 1 16)

@@ -3065,3 +3065,438 @@ what a change that did no compiler work looks like. Fifth instance this
 week of the same cause.
 
 Welfare 73.8913121796 to 73.8913693718 on the corrected rows.
+
+## 2026-08-31 — the inline name exists, and closing its variants was the finding
+
+First half of the 2026-08-29 inline-name ruling: the type, with its spec.
+The twenty-nine AST fields that will adopt it are a separate change, and
+this one is worth landing on its own because it is the piece the rest
+rests on.
+
+Twenty-two bytes of inline capacity, and it is a measurement. Across
+`lib/`, 89.8% of identifier occurrences are seven bytes or fewer and
+99.77% are twenty-two or fewer; thirty distinct names run longer and each
+appears exactly once, nearly all of them test function names. So the heap
+path is real and exercised and is not what anything hot takes. Twenty-two
+also lands the whole type on twenty-four bytes, which is what a `String`
+already costs, so no AST node grows by adopting it — pinned, not assumed.
+
+The finding came out of watching a mutation fail to fail. A `PartialEq`
+comparing representations instead of text passed the entire spec. The
+reason is that `Name::new` decides by length, so through the constructor a
+name's representation follows from its text and the two can never
+disagree — but the variants were public, so a caller could box a short
+name by hand and produce a name that read the same as another and
+compared unequal to it.
+
+The answer was to close the variants rather than to write a bigger
+assertion. `Name` is a struct around a private `Repr` now, `new` is the
+only way in, and the invariant is enforced instead of tested for. That is
+the difference between a spec that catches a mistake and a type that
+cannot have it made.
+
+Four mutations, each watched going red for its own reason:
+
+- never take the inline path: the allocation counter reads 1 where 0 is
+  required, and three specs go red including the multibyte one.
+- compare representations in `PartialEq`: passed everything, which is what
+  closed the variants.
+- hash the representation, as a derive would: the map lookup by `&str`
+  answers `None` where it should answer `Some(1)`. `Borrow<str>` requires
+  the borrowed form to hash identically and this is what enforces it.
+- order by representation: the sorted list stops matching the sorted text.
+
+The allocation property is asserted through a counting global allocator
+around `Name::new`, comparing a reading before against one after, rather
+than by asking the type which variant it is. `is_inline` exists for the
+spec to cross-check with and nothing in the compiler should need it.
+
+A seventh instance of the shared-fixture family, found by the spec flaking
+before it was committed. The allocation counter was a `static`, and cargo
+runs these tests on parallel threads, so another test's allocation landed
+between the two readings and the delta read 2 or 3 where the spec demands
+1. Measured both ways: **10 failures in 40 runs** with the shared counter,
+**0 in 40** with a thread-local one. A counter shared by threads measures
+the process; what is under test is one call on one thread.
+
+The six before it were staged files and directories keyed by something two
+tests could collide on. This one is a counter, which is why the sweep that
+found those could not have found it — the shape is "one mutable thing two
+tests reach", and the file path was only ever the commonest spelling of it.
+
+## 2026-08-31 — DONE: the AST's identifiers are inline names (#1188)
+
+The second half of the inline-name ruling, and the half that pays. The type
+landed on its own first and welfare refused it: 96,963 compile instructions
+for a module nothing called. That was the objective working. A type with no
+user is a cost with no benefit, and the unit of change is the type together
+with its first user.
+
+Six per-occurrence positions changed from `String` to `Name`: `Tok::Ident`,
+`Expr::Ident`, `Expr::Partial`, `Pattern::Var`, `Pattern::Nullary`, and the
+type name on `Pattern::Ctor` and `Pattern::Annotated`. The dhat map from
+2026-08-28 put 6,983 of the front end's blocks on three of those sites —
+`parser.rs:2127` at 3,197, `lexer.rs:631` at 3,157, `parser.rs:1793` at 629.
+
+Downstream tables keyed by declaration stay `String` and convert at the
+boundary. They are filled once per declaration rather than once per mention,
+so a `to_string()` there is O(declarations) and leaves the traffic where the
+win is. Measured rather than assumed: the whole conversion is worth 4,470
+blocks, which is 64% of the three sites' 6,983, and the remainder is names
+over twenty-two bytes plus the boundary conversions.
+
+Measured in the box on `lib/json`, both sides on the same host (glibc
+2.39-0ubuntu8.7, rustc 1.94.1, so these are deltas and the goldens' rows
+come off the runner):
+
+    compile_allocs        29,864 -> 25,394     -14.97%
+    compile_peak_bytes   728,030 -> 713,606     -1.98%
+    compile_instructions 42,734,177 -> 41,923,829  -1.90%
+    compile_rounds        40 -> 40
+    compile_visits        16,806 -> 16,806
+
+The runner's rows, which are what the goldens carry:
+
+    compile_allocs        29,864 -> 25,394        -14.97%
+    compile_peak_bytes   728,030 -> 713,606        -1.98%
+    compile_instructions 42,298,874 -> 41,496,870  -1.90%
+
+Allocations and peak read the same number on both hosts, as they have every
+time; the instruction rows differ by host and agree to within four hundredths
+of a percent on the direction and size of the move, which is what the
+delta-plus-golden practice is for.
+
+Rounds and visits are byte-identical, which is the check that this changed
+how the front end holds names and not what it decided. The emitted code is
+identical for the same reason: the cost-goldens job reported every runtime
+vein green — emitted, machine code, work, and the six benchmark counter sets
+— and only the three compile veins moved. kq's five stay where kq#83 left
+them.
+
+welfare 73.8913 -> 74.3319, ratcheted in the same commit.
+
+#1033 declined the interned symbol at "365 conversion sites", and the
+propagation this hit is the same phenomenon at a tenth the size: 126
+compiler errors, all mechanical, because `Expr::Partial` or-patterns with
+`Expr::Ident` in the walks and had to travel with it. The difference from
+#1033 is that an inline name needs no interner, no arena and no lifetime —
+it is the same twenty-four bytes a `String` occupied, so the conversion is
+the whole cost and there is no ongoing one.
+
+### the 23.5% that was hiding in `as_str`
+
+The first build read **+32% instructions** — 56,538,789 against a baseline
+of 42,734,177 — and `core::str::converts::from_utf8` was 13,295,370 of them,
+23.52% of the whole front end. `as_str` was validating utf-8 on every read
+of bytes that had come out of a `&str` to begin with. The comment above it
+already argued the invariant and the code checked it anyway, which is the
+shape to watch for: a proof written down beside a runtime test of the same
+claim means one of the two is redundant, and here the expensive one was.
+
+It reads unchecked now, and what makes that sound is structural. `Repr` is
+private to the module, `Repr::Inline` is built in exactly one place, and
+that place copies `s.as_bytes()` whole and records the slice's length. The
+same closing of the variants that #1188's first commit made for `PartialEq`
+is what licenses this: a caller cannot hand-build an inline name, so the
+range is always a complete `&str`.
+
+`a_name_holds_every_encoding` reads the range back through the public door
+for one-, two-, three- and four-byte characters, at the longest length that
+still fits inline and again one character over. Watched red two ways:
+
+- length recorded in characters rather than bytes: the invalid `&str`
+  reaches the formatter and the process aborts. Under the checked read this
+  was a panic with a message; under the unchecked one it is undefined
+  behaviour that happens to be loud, which is the reason the spec has to
+  read the bytes back rather than trust the type.
+- threshold strict, `< INLINE` rather than `<=`: `é` eleven times is
+  twenty-two bytes and spills, and two specs go red.
+
+The existing multibyte spec covers three-byte characters only, so it catches
+the first mutation and not the second. Four widths at the boundary is what
+the unchecked read is worth.
+
+### a smaller thing, recorded because it will look like noise later
+
+Removing nine redundant `Name::new(&x.to_string())` calls that clippy
+flagged moved compile_instructions **up** 80,439, from 41,843,390 to
+41,923,829. Nine fewer allocations should not cost 0.19%, and the reason is
+the same one #1186 attributed: the compiler's own binary rearranges when its
+source does, and `Name::new` is small enough for the inliner to change its
+mind about. The shorter source is kept because it is the right code; the
+number is recorded so a later reader does not go looking for a regression.
+
+## 2026-08-31 — MEASURED, OPEN: a digest holds every block it walked
+
+Task #82 asked whether sha256 wants an arena. It has one; the arena never
+rewinds inside the walk, and that is the whole answer.
+
+Measured in the container against files, so the input is read rather than
+built — an earlier attempt grew the message by repeated interpolation and
+half the peak was the benchmark's own quadratic copying:
+
+    input      allocs    arena_peak_bytes   bytes of arena per input byte
+     8,800    713,523        90,177,536          10,247
+    88,000  7,118,218       889,192,464          10,104
+
+Ten times the input for ten times everything, and 849 MB of resident set to
+digest 88 KB. `alloc_bytes` and `arena_peak_bytes` agree to within one per
+cent at both sizes, which is the finding stated exactly: nothing is reclaimed
+between blocks, so the peak IS the total. A megabyte would want about ten
+gigabytes.
+
+sha256 is streaming. Its working set is sixty-four schedule words and eight
+state words, and everything a block builds is dead the moment the next block
+starts. The peak should be flat.
+
+massif attributes it to two owners, both inside the walk:
+
+    66.21%  59,769,744  k_b_push_into_proven
+    32.52%  29,360,576  k_b_concat, 31.36% of it from sha256/compress
+
+`compress` builds an eight-element list literal on each of its sixty-four
+rounds; `schedule`, `first_sixteen` and `padded_bytes` do the pushing.
+
+KANSO_BEAT_REPORT says why nothing sweeps. `sha256/digested`, `sha256/blocked`,
+`sha256/compress` and `sha256/turned` all read "bracketed with its cluster",
+where `sha256/filled` — the one self-recursive loop in the file — reads
+"rewinds every iteration". The outer block walk and the inner sixty-four-round
+compression are in ONE cluster, so the only place a mark can go is outside
+both.
+
+Five hypotheses were built and killed, and every one is worth recording
+because each is an obvious guess that a reader would otherwise make again:
+
+- "A trampoline defeats the rewind." A loop written self-recursively and the
+  same loop written as the two-function trampoline the library uses everywhere
+  both hold one arena block over 500,000 iterations and 1,000,002 allocations.
+  Bracketing on its own reclaims fine.
+- "Carrying a list rather than a scalar defeats it." A loop carrying an
+  eight-element list rebuilt every round reads "carry beat: rewinds every
+  iteration, evacuating argument 1" and also holds one block, with 1,000,000
+  evacuations. The machinery handles that case.
+
+- "A cluster spanning two NESTED loops defeats it." An outer walk with an
+  inner sixty-four-round loop, all four functions reading "bracketed with its
+  cluster", holds one block over 1,024,002 allocations.
+- "The nested shape with lists on both sides defeats it." The same, with the
+  inner returning a fresh eight-element list and the outer folding it into its
+  own, reads 6,864 allocations for 512,000 iterations — the uniqueness
+  analysis turns the literals into in-place writes and there is nothing left
+  to reclaim.
+- "Building one long list by repeated `push` is quadratic, as `padded_bytes`
+  does it." Ten allocations for eight thousand pushes; the growth doubles and
+  the arena holds one block at 2,000, 4,000 and 8,000.
+
+So it is not the spelling, not the carried type, not the nesting, and not the
+growth path. Four reproductions that ought to show the habit do not, which
+means the cause is narrower than any of them and the next session should start
+by bisecting sha256 itself rather than by building a fifth model of it. The
+attribution above is the place to start: `k_b_push_into_proven` at 66% and
+`sha256/compress`'s list literal at 31%, with the whole thing in one cluster.
+
+`tests/golden/mem/a_digest_holds_every_block_it_walked` pins the constant at
+one block — 1,980 allocations and 424,369 bytes for forty-four bytes of
+message, which is forty-five allocations per input byte before any
+accumulation. A fixture that ran at the sizes above would cost the golden
+suite minutes, so the slope lives in this entry and the constant lives in the
+vein. Watched, not frozen.
+
+The arena question in #82 is answered and closed: sha256 has an arena and the
+arena does not rewind inside the walk, at 10,000 bytes of it per input byte.
+What replaces it is narrower and still open — WHICH of sha256's sites holds,
+given that four models of the shape all reclaim. The way in is to bisect the
+file: run the walk with `compress` stubbed to return its state unchanged, then
+with `schedule` stubbed, and see which stub flattens the peak.
+
+## 2026-08-31 — IDENTIFIED: the digest's 86x is a source-path prefix
+
+The entry above said the cause was not identified and that the way in was to
+bisect sha256 rather than model it. Bisecting found it in one step, and the
+answer is not in sha256 at all.
+
+Copy `lib/sha256/sha256.kso` into a program's own directory and import it as
+`./sha256` instead of `std/sha256`. Same bytes, same digest, same allocation
+count to within 0.04%:
+
+    import "./sha256"     allocs 713,807   arena_peak_bytes  1,048,576
+    import "std/sha256"   allocs 713,523   arena_peak_bytes 90,177,536
+
+Eighty-six times the peak from the import line. The emitted IR says what
+changed: the local build emits four `k_beat_iter_carry` rewinds, at
+`sha256/compress`, `sha256/turned`, `sha256/digested` and `sha256/blocked`.
+The std build emits none. Every one of the nineteen sha256 functions has the
+same emitted name in both, so it is not a lookup miss on a spelling.
+
+`src/beat.rs`, the filter this file's 2026-07-27 entry describes narrowing
+from "every group whose name contains a slash" to "imported groups stay out
+of the carry tier only":
+
+    let imported = program.fns.iter()
+        .filter(|d| d.file.starts_with("std/") || d.file.starts_with("lib/"))
+
+`d.file` is the source path, and `ast::FnDecl` documents it as the thing err
+origins are built from — "{name} at {file}:{line}". It is a diagnostic field
+being read as a semantic marker, by string prefix. Two consequences, and they
+are different in kind:
+
+**One, deliberate.** A genuine `std/` import loses its carry beat, and the
+`ids.retain` two lines below then drops the id as well, so the group gets
+neither the carry rewind nor the plain bracket. sha256's block walk is
+collateral: it carries an eight-word state list, not the unbounded
+caller-invariant the rule was written against. That is the 90 MB, and it is
+the implementer's to settle — the ledger bounced this class on 2026-08-29.
+
+**Two, a defect.** The `lib/` arm is a RELATIVE PATH PREFIX on the user's own
+source, so a program's memory behaviour depends on the directory it was built
+from. Proven with identical bytes:
+
+    built from an arbitrary directory   arena_peak_bytes  1,048,576
+    built from lib/app                  arena_peak_bytes 90,177,536
+
+The arm is not dead weight — `kanso check lib/json` is how the compile gate
+measures the library, so removing it moves the compile veins. But a user who
+keeps their code in a directory called `lib` gets a different program, and
+nothing in the tree says so.
+
+Both are one change away from each other and neither is started. What the
+fix needs is a real marker for "this declaration came from an imported
+module", set where imports are resolved rather than inferred from a path,
+and then a decision about whether the carry exclusion should survive on that
+marker at all. The measurement to make first is the cheap one: strip the
+exclusion, and read the compile veins and the sha256 peak together.
+
+The four A/B models in the entry above are not wasted. They are what proves
+the exclusion is the only thing holding the digest, because every one of them
+is the same shape without the `std/` import and every one reclaims.
+
+## 2026-08-31 — the measurement the entry above asked for: the exclusion costs eleven lines
+
+Stripping the imported-group exclusion entirely — `.filter(|_d| false)` in
+place of the path-prefix test — and reading every vein the tree has, on this
+container:
+
+    sha256 via std/, arena_peak_bytes   90,177,536 -> 1,048,576   (86x)
+    sha256 via std/, allocs                713,523 ->   713,807   (+284)
+
+    compile_allocs        25,394   unchanged
+    compile_peak_bytes   713,606   unchanged
+    compile_rounds            40   unchanged
+    compile_visits        16,806   unchanged
+
+    decode, encode, one-shot, basket, escape, wide and pending-cell
+    counters: all seven byte-identical
+    machine code: byte-identical
+    kq's three allocation cost goldens: byte-identical
+    welfare: 74.33, unchanged
+
+    emitted code: scanbench calls 3,743 -> 3,753, lines 20,019 -> 20,030.
+    Every other benchmark byte-identical.
+
+Eleven emitted lines in one benchmark is the whole measurable price, and the
++284 allocations are the evacuation copies the carry rewind pays for. The
+compile veins do not move at all, which answers the worry the entry above
+raised about `kanso check lib/json`: the library's own groups either never
+wanted a carry or were already getting one.
+
+The rule's stated hazard — a shared library driver threading its caller's
+invariant source through the loop, so carrying copies an unbounded value per
+iteration — does not appear anywhere in the corpus. That is a finding in its
+own right and cuts both ways: it is evidence the exclusion is over-broad, and
+it is evidence that nothing in the tree would catch the hazard if it were
+real. A fixture that exercises it is owed either way, and it does not exist.
+
+So the naive strip is measured and cheap, and it is deliberately NOT what
+ships next. What ships next is the marker: `d.file` is a diagnostic field and
+reading it as a semantic one is what made a directory name change a program.
+Whether the exclusion then survives on a real marker is the question the
+fixture above has to be written before answering, because a rule kept for a
+hazard nothing demonstrates is a rule kept on faith.
+
+## 2026-08-31 — CORRECTION: the exclusion has a pin, and it is about correctness
+
+The entry above says the rule's stated hazard "does not appear anywhere in the
+corpus" and reasons from there that the exclusion is over-broad. That is wrong,
+and the way it was wrong is worth more than the conclusion was.
+
+`beat::tests::json_decode_loops_stay_conservative` in src/beat.rs is the
+corpus statement of it:
+
+    assert_eq!(licensed, vec![("encode_items", 3), ("encode_pairs", 3)],
+        "only the byte-builder encoders may rewind; scanners threading
+         records or lists stay on the grow-only arena");
+
+with a comment that argues safety rather than cost: the two encoders thread a
+byte builder by pointer identity, "raw bytes hold no pointers, so nothing in
+the accumulator can dangle across a rewind." Removing the exclusion admits
+`list/bisect`, `list/found_in`, `list/holds_all?` and `list/holds_any?` to the
+carry tier and turns that assertion red.
+
+I missed it by searching design/compiler-log.md and the archive and not the
+test suite. The filing gate in design/pending-gavels.md names three places to
+search before calling a question unanswered, and all three are prose. A pin
+lives in code, and this one carries an argument no log entry repeats.
+
+So the naive strip is refused, and it should be. What looked like a
+performance heuristic with no evidence behind it is a boundary on what may
+rewind at all, and a carried list of records is on the far side of it. Whether
+the carry machinery's evacuation already covers the case the comment worries
+about — `k_carry_stage` and `k_carry_take` exist precisely so a carried value
+survives a rewind — is a real question, and it is a question about pointer
+lifetime that wants a differential fixture rather than my reading of a
+comment.
+
+What the measurements above still say, unaffected:
+
+- Peak goes from linear in the message to flat when a digest's walk may
+  rewind: 108,003,328 bytes to 1,048,576 at ten kilobytes, 426,770,448 to
+  4,194,320 at forty-three, for 0.04% more allocations.
+- At forty-four bytes — one padded block, nothing to reclaim — the same change
+  costs 1,980 allocations to 5,259 on the interpreter and four natively. The
+  rewinds are pure overhead when there is only one block.
+- Only the digest fixture moves in the whole mem corpus, and only scanbench in
+  the emitted vein (+10 calls) and the scan counters (beat_iters 15 -> 16).
+- The compile veins, the seven runtime counter veins, machine code, kq's three
+  allocation goldens and welfare are all unmoved.
+
+And the defect is untouched and still real: `d.file.starts_with("lib/")` is a
+relative path prefix, so a program built from a directory called `lib` gets a
+different program. Fixing THAT without touching the boundary needs the marker,
+because the `lib/` arm is what makes the repo's own `lib/json` behave like an
+installed module — this very test compiles `lib/json` directly and depends on
+it. A marker set where imports are resolved would have to answer for a module
+compiled as a root as well as one reached through an import, and that is the
+design question, stated properly at last.
+
+Nothing shipped from this. The branch is reverted to main and the fixture, the
+bisection and these measurements are the whole product.
+
+## 2026-08-31 — the fixture the carry boundary was missing
+
+The correction above says the carry exclusion is a boundary on what may rewind
+and that the pin's argument — raw bytes hold no pointers, a list of records
+might — wants a fixture rather than a reading of the comment. This is that
+fixture, and it lands on its own because it is worth having whatever the
+boundary turns out to be.
+
+`tests/golden/micro/a_library_scanner_threads_records_across_a_rewind` carries
+a window of eight records through four hundred rounds, shifting it each time,
+and prints a field out of the element that has passed through the carry eight
+times since the round that built it. `m/shifted/2` reads "beat: rewinds every
+iteration", so the records really are live across a rewind, and both engines
+answer `8 18974 19170`.
+
+It is asked at the observable end. If a rewind ever left those elements
+pointing into arena that had been given back, the printed field is where it
+shows, and the micro corpus compares the interpreter against native and
+against a release build — so a divergence appears as a diff rather than as a
+plausible-looking number one engine invented.
+
+Watched red before it was kept: shifting the window wrong by one slot
+(`s[6]!` twice) turns both the library arm and the release-built arm red on
+the right line. It passes today because these groups are not carried today;
+it exists so the change that admits them has something to be wrong against.
+
+The corpus had nothing in this shape. Every mem fixture pins allocation counts
+and every micro fixture that touches records reads them without a rewind in
+between.

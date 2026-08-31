@@ -1,6 +1,7 @@
 use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use crate::lexer::{Lexed, Line, StrPart, Tok};
+use crate::name::Name;
 
 /// An entry file: imports, then statements — the body IS the program. The
 /// statements synthesize an internal `main` constant so every later stage
@@ -362,7 +363,7 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
         // import t "path" — alias the qualifier
         [(Tok::KwImport, _, _), (Tok::Ident(alias), _, _), (Tok::Str(parts), span, _)] => {
             let path = plain_path(parts, *span)?;
-            Ok(Import { path, span: *span, alias: Some(alias.clone()), renames: Vec::new() })
+            Ok(Import { path, span: *span, alias: Some(alias.to_string()), renames: Vec::new() })
         }
         // import { theirs:yours ... } "path" — renames only; a bare word in
         // braces is redundant (the compiler prunes; bare access is default)
@@ -387,7 +388,7 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
             match rest.get(i) {
                 Some((Tok::Str(parts), span, _)) if rest.len() == i + 1 && !renames.is_empty() => {
                     let path = plain_path(parts, *span)?;
-                    Ok(Import { path, span: *span, alias: Some(alias.clone()), renames })
+                    Ok(Import { path, span: *span, alias: Some(alias.to_string()), renames })
                 }
                 _ => Err(Diagnostic::new(
                     "syntax",
@@ -421,7 +422,7 @@ fn parse_renames(
             Some((Tok::Ident(theirs), _, _)) => match rest.get(i + 1) {
                 Some((Tok::Colon, _, _)) => match rest.get(i + 2) {
                     Some((Tok::Ident(yours), _, _)) => {
-                        renames.push((theirs.clone(), yours.clone()));
+                        renames.push((theirs.to_string(), yours.to_string()));
                         i += 3;
                     }
                     other => {
@@ -470,12 +471,12 @@ fn parse_reexport(line: &Line, body: &[Line]) -> Result<crate::ast::Reexport, Di
     }
     match line.tokens.as_slice() {
         [(Tok::KwPub, _, _), (Tok::Ident(name), span, _)] => {
-            Ok(crate::ast::Reexport { name: name.clone(), rename: None, span: *span })
+            Ok(crate::ast::Reexport { name: name.to_string(), rename: None, span: *span })
         }
         [(Tok::KwPub, _, _), (Tok::Ident(theirs), span, _), (Tok::Colon, _, _), (Tok::Ident(yours), _, _)] => {
             Ok(crate::ast::Reexport {
-                name: theirs.clone(),
-                rename: Some(yours.clone()),
+                name: theirs.to_string(),
+                rename: Some(yours.to_string()),
                 span: *span,
             })
         }
@@ -609,7 +610,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             head_span(header),
         ));
     };
-    let name = name.clone();
+    let name = name.to_string();
     let span = *span;
     if header.tokens.len() == off + 2 {
         if body.is_empty() {
@@ -763,9 +764,9 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
             colon_span,
         ));
     }
-    let mut tys = vec![p.parse_type_expr()?];
+    let mut tys = vec![p.parse_type_expr()?.to_string()];
     while !p.done() {
-        tys.push(p.parse_type_expr()?);
+        tys.push(p.parse_type_expr()?.to_string());
     }
     Ok((name, tys, span))
 }
@@ -1397,7 +1398,7 @@ fn reject_never_effect(e: &Expr, is_final: bool) -> Result<(), Diagnostic> {
 /// are spelling, the deferred if family is the semantics.
 fn logical_if(cond: Expr, then_e: Expr, else_e: Expr, span: Span) -> Expr {
     Expr::App {
-        head: Box::new(Expr::Ident("if".to_string(), span)),
+        head: Box::new(Expr::Ident(Name::new("if"), span)),
         args: vec![cond, then_e, else_e],
         span,
         piped: false,
@@ -1457,7 +1458,12 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
         let mut rhs = P::new(&line.tokens[i + 1..], line.number);
         let value = rhs.parse_expr()?;
         rhs.expect_done()?;
-        return Ok(Stmt::Set { target: target.clone(), field: field.clone(), value, span: *span });
+        return Ok(Stmt::Set {
+            target: target.to_string(),
+            field: field.to_string(),
+            value,
+            span: *span,
+        });
     }
     let mut lhs = P::new(&line.tokens[..i], line.number);
     let pattern = lhs.parse_bind_target()?;
@@ -1670,7 +1676,7 @@ impl<'a> P<'a> {
         match self.toks.get(self.pos) {
             Some((Tok::Ident(name), span, _)) => {
                 self.pos += 1;
-                Ok((name.clone(), *span))
+                Ok((name.to_string(), *span))
             }
             _ => Err(self.err(format!("expected {what}"))),
         }
@@ -1694,7 +1700,7 @@ impl<'a> P<'a> {
     Both spellings fold into the same internal name the postfix forms
     already produce, so nothing downstream learns a new shape: `[]int`
     becomes `int[]`, and `map[string int]` keeps its brackets. */
-    fn parse_type_expr(&mut self) -> Result<String, Diagnostic> {
+    fn parse_type_expr(&mut self) -> Result<Name, Diagnostic> {
         if matches!(self.peek(), Some(Tok::LBracket)) {
             self.pos += 1;
             match self.peek() {
@@ -1702,7 +1708,7 @@ impl<'a> P<'a> {
                 _ => return Err(self.err("expected `]` — a slice is `[]T`".to_string())),
             }
             let inner = self.parse_type_expr()?;
-            return Ok(format!("{inner}[]"));
+            return Ok(Name::new(&format!("{inner}[]")));
         }
         let (mut ty, _) = self.expect_ident("a type")?;
         if ty == "map" && matches!(self.peek(), Some(Tok::LBracket)) {
@@ -1713,7 +1719,7 @@ impl<'a> P<'a> {
                 Some(Tok::RBracket) => self.pos += 1,
                 _ => return Err(self.err("expected `]` — a map is `map[K V]`".to_string())),
             }
-            return Ok(format!("map[{key} {val}]"));
+            return Ok(Name::new(&format!("map[{key} {val}]")));
         }
         while matches!(self.peek(), Some(Tok::LBracket)) {
             self.pos += 1;
@@ -1741,7 +1747,7 @@ impl<'a> P<'a> {
                 _ => return Err(self.err("expected `]` or a key type".to_string())),
             }
         }
-        Ok(ty)
+        Ok(Name::new(&ty))
     }
 
     pub fn parse_pattern(&mut self) -> Result<Pattern, Diagnostic> {
@@ -1776,7 +1782,7 @@ impl<'a> P<'a> {
                         ));
                     }
                     let ty = self.parse_type_expr()?;
-                    return Ok(Pattern::Annotated { name: "_".to_string(), ty, span });
+                    return Ok(Pattern::Annotated { name: Name::new("_"), ty, span });
                 }
                 if matches!(self.peek(), Some(Tok::At)) {
                     return Err(Diagnostic::new(
@@ -1837,7 +1843,7 @@ impl<'a> P<'a> {
                             fields.push(self.parse_pattern()?);
                         }
                         self.expect_rparen()?;
-                        Ok(Pattern::Ctor { ty: name, fields, whole: None })
+                        Ok(Pattern::Ctor { ty: Name::new(&name), fields, whole: None })
                     }
                 }
             }
@@ -1847,7 +1853,7 @@ impl<'a> P<'a> {
 
     /// `r@(rect w h)` — the whole and its parts from one match. Air around
     /// the sigil is the lexer's to refuse, which it does before this runs.
-    fn parse_as_pattern(&mut self, name: String, span: Span) -> Result<Pattern, Diagnostic> {
+    fn parse_as_pattern(&mut self, name: Name, span: Span) -> Result<Pattern, Diagnostic> {
         let at_span = self.span_here();
         self.pos += 1;
         match self.parse_pattern()? {
@@ -1909,13 +1915,13 @@ impl<'a> P<'a> {
         }
         let (first, span) = self.expect_ident("a binding name or type")?;
         match self.done() {
-            true => Ok(Pattern::Var(first, span)),
+            true => Ok(Pattern::Var(Name::new(&first), span)),
             false => {
                 let mut fields = Vec::new();
                 while !self.done() {
                     fields.push(self.parse_pattern()?);
                 }
-                Ok(Pattern::Ctor { ty: first, fields, whole: None })
+                Ok(Pattern::Ctor { ty: Name::new(&first), fields, whole: None })
             }
         }
     }
@@ -1992,7 +1998,7 @@ impl<'a> P<'a> {
             self.pos += 1;
             self.consumed(OR);
             let rhs = self.parse_and()?;
-            lhs = logical_if(lhs, Expr::Ident("true".to_string(), span), rhs, span);
+            lhs = logical_if(lhs, Expr::Ident(Name::new("true"), span), rhs, span);
         }
         Ok(lhs)
     }
@@ -2004,7 +2010,7 @@ impl<'a> P<'a> {
             self.pos += 1;
             self.consumed(AND);
             let rhs = self.parse_not()?;
-            lhs = logical_if(lhs, rhs, Expr::Ident("false".to_string(), span), span);
+            lhs = logical_if(lhs, rhs, Expr::Ident(Name::new("false"), span), span);
         }
         Ok(lhs)
     }
@@ -2021,8 +2027,8 @@ impl<'a> P<'a> {
         self.pos += 1;
         self.consumed(NOT);
         let inner = self.parse_not()?;
-        let yes = Expr::Ident("false".to_string(), span);
-        let no = Expr::Ident("true".to_string(), span);
+        let yes = Expr::Ident(Name::new("false"), span);
+        let no = Expr::Ident(Name::new("true"), span);
         Ok(logical_if(inner, yes, no, span))
     }
 
@@ -2134,7 +2140,7 @@ impl<'a> P<'a> {
                     return Err(self.err("a field name follows the dot".to_string()));
                 };
                 self.pos += 1;
-                expr = Expr::Field { base: Box::new(expr), name, span };
+                expr = Expr::Field { base: Box::new(expr), name: name.to_string(), span };
                 continue;
             }
             // `foo()` runs a value waiting to be called — the complement of
@@ -2183,7 +2189,7 @@ impl<'a> P<'a> {
         {
             if let Some((Tok::Ident(field), _, _)) = self.toks.get(self.pos + 2).cloned() {
                 self.pos += 3;
-                return Ok(Expr::Ident(crate::ast::getter_name(&field), span));
+                return Ok(Expr::Ident(Name::new(&crate::ast::getter_name(&field)), span));
             }
         }
         // `self.toks` is a `&'a [_]`, so the token this reads out borrows the

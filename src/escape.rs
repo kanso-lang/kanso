@@ -385,7 +385,7 @@ impl<'a> Analysis<'a> {
                         || (name == "if"
                             && args.len() == 3
                             && (self.produces_ty(ty, &args[1]) || self.produces_ty(ty, &args[2])))
-                        || self.returns_ty.contains(&(name.clone(), args.len()))
+                        || self.returns_ty.contains(&(name.to_string(), args.len()))
                 }
                 _ => false,
             },

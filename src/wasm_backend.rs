@@ -4,6 +4,7 @@
 //! and baked in as handle constants; dispatch, calls, and recursion are wasm.
 use crate::ast::*;
 use crate::hash::Map as HashMap;
+use crate::name::Name;
 use crate::wasm_encode::{Body, Import, Module};
 
 #[derive(Clone, Debug)]
@@ -215,8 +216,8 @@ fn partial_lambda(
     let params: Vec<(String, crate::diag::Span)> =
         (0..arity - supplied.len()).map(|i| (format!("k#partial{i}"), span)).collect();
     let mut args = supplied.to_vec();
-    args.extend(params.iter().map(|(n, s)| Expr::Ident(n.clone(), *s)));
-    let head = Expr::Ident(name.to_string(), span);
+    args.extend(params.iter().map(|(n, s)| Expr::Ident(Name::new(&n.clone()), *s)));
+    let head = Expr::Ident(Name::new(name), span);
     let body = Expr::App { head: Box::new(head), args, piped: false, span };
     Ok(Expr::Lambda { params, body: Box::new(body), span })
 }
@@ -506,7 +507,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.local_get(value_local);
                 ctx.body.call(RT_IS_FAILURE);
                 ctx.body.br_if(0);
-                ctx.scope.insert(name.clone(), value_local);
+                ctx.scope.insert(name.to_string(), value_local);
             }
             Pattern::Annotated { name, ty, .. } => {
                 if self.admits_err(ty) {
@@ -518,7 +519,7 @@ impl<'a> WasmBackend<'a> {
                     .iter()
                     .find(|t| t.name == *ty && !t.members.is_empty())
                     .map(|t| t.members.clone())
-                    .unwrap_or_else(|| vec![ty.clone()]);
+                    .unwrap_or_else(|| vec![ty.to_string()]);
                 // one member is the plain check; several OR together
                 let ok = ctx.body.local();
                 ctx.body.i32_const(0);
@@ -535,7 +536,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.local_get(ok);
                 ctx.body.eqz();
                 ctx.body.br_if(0);
-                ctx.scope.insert(name.clone(), value_local);
+                ctx.scope.insert(name.to_string(), value_local);
             }
             Pattern::Ctor { ty, fields, whole } if ty == "err" => {
                 self.own_origin_guard(ctx, value_local);
@@ -549,7 +550,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.local_set(inner);
                 self.emit_pattern(ctx, inner, &fields[0])?;
                 if let Some(named) = whole {
-                    ctx.scope.insert(named.0.clone(), value_local);
+                    ctx.scope.insert(named.0.to_string(), value_local);
                 }
             }
             Pattern::Ctor { ty, fields, whole } => {
@@ -572,7 +573,7 @@ impl<'a> WasmBackend<'a> {
                     self.emit_pattern(ctx, fv, field)?;
                 }
                 if let Some(named) = whole {
-                    ctx.scope.insert(named.0.clone(), value_local);
+                    ctx.scope.insert(named.0.to_string(), value_local);
                 }
             }
             Pattern::Keyed { .. } => {
@@ -648,7 +649,7 @@ impl<'a> WasmBackend<'a> {
             Pattern::Var(name, _) => {
                 let local = ctx.body.local();
                 ctx.body.local_set(local);
-                ctx.scope.insert(name.clone(), local);
+                ctx.scope.insert(name.to_string(), local);
             }
             Pattern::Ctor { ty, fields, .. } => {
                 let tid = *self
@@ -678,7 +679,7 @@ impl<'a> WasmBackend<'a> {
                         ctx.body.i32_const(i as i64);
                         ctx.body.call(RT_FIELD);
                         ctx.body.local_set(local);
-                        ctx.scope.insert(name.clone(), local);
+                        ctx.scope.insert(name.to_string(), local);
                     }
                 }
             }
@@ -1402,7 +1403,7 @@ impl<'a> WasmBackend<'a> {
                 return Ok(());
             }
         }
-        if let Some(idx) = self.dispatchers.get(&(name.clone(), args.len())).copied() {
+        if let Some(idx) = self.dispatchers.get(&(name.to_string(), args.len())).copied() {
             for arg in args {
                 self.emit_expr(ctx, arg, false)?;
             }
@@ -1425,7 +1426,7 @@ impl<'a> WasmBackend<'a> {
             return Ok(());
         }
         // a constant holding a function value: evaluate it, then apply
-        if let Some(idx) = self.dispatchers.get(&(name.clone(), 0)).copied() {
+        if let Some(idx) = self.dispatchers.get(&(name.to_string(), 0)).copied() {
             for arg in args {
                 self.emit_expr(ctx, arg, false)?;
                 ctx.body.call(RT_ARG);
@@ -1503,8 +1504,10 @@ impl<'a> WasmBackend<'a> {
         self.emit_expr(ctx, &args[0], false)?;
         ctx.body.local_set(piped_local);
         let closure: Result<(), String> = match head {
-            Expr::Ident(name, _) if self.dispatchers.contains_key(&(name.clone(), args.len())) => {
-                let target = self.dispatchers[&(name.clone(), args.len())];
+            Expr::Ident(name, _)
+                if self.dispatchers.contains_key(&(name.to_string(), args.len())) =>
+            {
+                let target = self.dispatchers[&(name.to_string(), args.len())];
                 let rest = args.len() - 1;
                 let fn_idx = self.module.declare(2);
                 self.module.table.push(fn_idx);

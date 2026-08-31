@@ -209,7 +209,7 @@ fn demotable_entries(
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
             let Expr::Ident(callee, _) = head.as_ref() else { continue };
-            let to = (callee.clone(), args.len());
+            let to = (callee.to_string(), args.len());
             if from == to {
                 cyclic.insert(from.clone());
             }
@@ -403,7 +403,7 @@ fn is_chain(
                 };
                 folder_chains && is_chain(&args[1], own, decl, locals, mut_sites, chains, folds)
             }
-            Expr::Ident(f, _) if chains.contains(&(f.clone(), args.len())) => args
+            Expr::Ident(f, _) if chains.contains(&(f.to_string(), args.len())) => args
                 .first()
                 .is_some_and(|a| is_chain(a, own, decl, locals, mut_sites, chains, folds)),
             _ => false,
@@ -504,7 +504,7 @@ fn eligible_clusters(
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
             let Expr::Ident(callee, _) = head.as_ref() else { continue };
-            if let Some(&to) = index.get(&(callee.clone(), args.len())) {
+            if let Some(&to) = index.get(&(callee.to_string(), args.len())) {
                 edges.push((from, to, di, args));
             }
         }
@@ -1506,7 +1506,7 @@ fn reachable_names<'a>(
 fn collect_names(e: &Expr, out: &mut HashSet<String>) {
     match e {
         Expr::Ident(n, _) | Expr::Partial(n, _) => {
-            out.insert(n.clone());
+            out.insert(n.to_string());
         }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for st in stmts {
@@ -1962,7 +1962,7 @@ mod tests {
 
     fn idents_in(e: &crate::ast::Expr, out: &mut crate::hash::Set<String>) {
         if let crate::ast::Expr::Ident(n, _) = e {
-            out.insert(n.clone());
+            out.insert(n.to_string());
         }
         if let crate::ast::Expr::Str(parts, _) = e {
             for p in parts {

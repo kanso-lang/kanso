@@ -1,0 +1,36 @@
+# A loop carrying records across a rewind, which the corpus never asked about.
+#
+# `beat::tests::json_decode_loops_stay_conservative` keeps loops like this off
+# the carry tier, and its reason is not cost: the two encoders it admits thread
+# raw bytes, and "raw bytes hold no pointers, so nothing in the accumulator can
+# dangle across a rewind." A list of records is the other side of that line,
+# and nothing in the corpus asked what happens when one crosses.
+#
+# So this asks, at the observable end. The walk carries a window of eight
+# records and shifts it every round, so the value printed at the end passed
+# through the carry eight times after the round that built it. If evacuating a
+# carried list copied the spine and left its elements pointing into arena that
+# had been rewound, this is the read that would answer garbage — and both
+# engines are asked, so a divergence shows as a diff rather than as a plausible
+# number.
+#
+# It passes today because these groups are not carried today. It is here so
+# that a change admitting them has something to be wrong against.
+type cell
+  tag
+  mark
+
+fn shifted s 0
+  s
+
+fn shifted s n
+  head = cell n (s[1]!.mark + n * 7 % 97)
+  shifted [head s[1]! s[2]! s[3]! s[4]! s[5]! s[6]! s[7]!] (n - 1)
+
+nil = cell 0 0
+
+zeros = [nil nil nil nil nil nil nil nil]
+
+final = shifted zeros 400
+
+pub play = print "{final[8]!.tag} {final[8]!.mark} {final[1]!.mark}"

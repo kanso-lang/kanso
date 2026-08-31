@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::diag::{article, Span};
+use crate::name::Name;
 use num_bigint::BigInt;
 use num_traits::{ToPrimitive, Zero};
 use std::cell::{Cell, RefCell};
@@ -1107,7 +1108,7 @@ impl<'a> Interp<'a> {
                 return Ok(Flow::Done(piped_value));
             }
             if let Value::Desc(inner) = piped_value {
-                let mut body_args: Vec<Expr> = vec![Expr::Ident("__piped".to_string(), *span)];
+                let mut body_args: Vec<Expr> = vec![Expr::Ident(Name::new("__piped"), *span)];
                 body_args.extend(args[1..].iter().cloned());
                 let closure = Value::Closure(Rc::new(ClosureData {
                     params: vec!["__piped".to_string()],
@@ -1471,7 +1472,7 @@ impl<'a> Interp<'a> {
                     }
                     if let Value::Desc(inner) = piped_value {
                         let mut body_args: Vec<Expr> =
-                            vec![Expr::Ident("__piped".to_string(), *span)];
+                            vec![Expr::Ident(Name::new("__piped"), *span)];
                         body_args.extend(args[1..].iter().cloned());
                         let closure = Value::Closure(Rc::new(ClosureData {
                             params: vec!["__piped".to_string()],
@@ -3233,9 +3234,9 @@ fn match_params(
 
 /// The as-pattern's name takes the value the shape matched — the same value
 /// the caller passed, not one rebuilt from the parts.
-fn bind_whole(whole: &Option<Box<(String, crate::diag::Span)>>, arg: &Value, binds: &mut Bindings) {
+fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds: &mut Bindings) {
     if let Some(named) = whole {
-        binds.push((named.0.clone(), arg.clone()));
+        binds.push((named.0.to_string(), arg.clone()));
     }
 }
 
@@ -3258,14 +3259,14 @@ fn match_one(
         (Pattern::Var(name, _), _) => match is_failure(arg) {
             true => None,
             false => {
-                binds.push((name.clone(), arg.clone()));
+                binds.push((name.to_string(), arg.clone()));
                 Some(0)
             }
         },
         (Pattern::Annotated { name, ty, .. }, _) if !own_failure(arg, arm) => {
             match type_match_depth(ty, arg) {
                 Some(depth) => {
-                    binds.push((name.clone(), arg.clone()));
+                    binds.push((name.to_string(), arg.clone()));
                     Some(depth)
                 }
                 None => None,

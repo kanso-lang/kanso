@@ -2,6 +2,7 @@ use crate::ast::*;
 use crate::diag::Span;
 use crate::hash::Map as HashMap;
 use crate::infer::{self, Set, BYTES, DESC, ERR, FAIL, FLOAT, INT, LIST, MAP, NONE, REC, STR, TOP};
+use crate::name::Name;
 use std::fmt::Write as _;
 
 const K_TRUE: i64 = 2;
@@ -436,7 +437,7 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
 pub(crate) fn knotted_constants(program: &Program) -> crate::hash::Set<String> {
     fn names(expr: &Expr, out: &mut Vec<String>) {
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
-            out.push(n.clone());
+            out.push(n.to_string());
         }
         crate::for_each_child(expr, |child| names(child, out));
     }
@@ -1382,17 +1383,19 @@ impl<'a> Backend<'a> {
                     .iter()
                     .map(|p| match p {
                         Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => 3000,
-                        Pattern::Annotated { ty, .. } => match self.typesets.contains_key(ty) {
-                            true => 1000,
-                            false => 2000 + depth_of(ty),
-                        },
+                        Pattern::Annotated { ty, .. } => {
+                            match self.typesets.contains_key(ty.as_str()) {
+                                true => 1000,
+                                false => 2000 + depth_of(ty),
+                            }
+                        }
                         // an err arm ranks as its reason pattern does: a
                         // named leaf with the concretes, a typeset with the
                         // typesets, a bare binder just above the generics
                         Pattern::Ctor { ty, fields, .. } if ty == "err" && fields.len() == 1 => {
                             match &fields[0] {
                                 Pattern::Annotated { ty: rty, .. } => {
-                                    match self.typesets.contains_key(rty) {
+                                    match self.typesets.contains_key(rty.as_str()) {
                                         true => 1000,
                                         false => 2000 + depth_of(rty),
                                     }
@@ -2475,9 +2478,9 @@ impl<'a> Backend<'a> {
                 // a typeset matches when any member does: OR the members'
                 // checks and branch once. A plain annotation is the same
                 // shape with one member.
-                let members = match self.typesets.get(ty) {
+                let members = match self.typesets.get(ty.as_str()) {
                     Some(members) => members.clone(),
-                    None => vec![ty.clone()],
+                    None => vec![ty.to_string()],
                 };
                 let mut acc: Option<String> = None;
                 for member in &members {
@@ -2779,8 +2782,8 @@ impl<'a> Backend<'a> {
         let params: Vec<(String, Span)> =
             (0..waiting).map(|i| (format!("k#partial{i}"), span)).collect();
         let mut args = supplied.to_vec();
-        args.extend(params.iter().map(|(n, s)| Expr::Ident(n.clone(), *s)));
-        let head = Expr::Ident(name.to_string(), span);
+        args.extend(params.iter().map(|(n, s)| Expr::Ident(Name::new(&n.clone()), *s)));
+        let head = Expr::Ident(Name::new(name), span);
         let body = Expr::App { head: Box::new(head), args, piped: false, span };
         Ok(Expr::Lambda { params, body: Box::new(body), span })
     }
@@ -2814,7 +2817,7 @@ impl<'a> Backend<'a> {
                         Stmt::Set { target, field, value, span } => {
                             let new = self.emit_expr(f, value)?;
                             let new = self.maybe_force(f, new);
-                            let ident = Expr::Ident(target.clone(), *span);
+                            let ident = Expr::Ident(Name::new(&target.clone()), *span);
                             let tv = self.emit_expr(f, &ident)?;
                             let tv = self.maybe_force(f, tv);
                             let (label, _) = self.intern(&format!("{field}\0"));
@@ -3002,7 +3005,7 @@ impl<'a> Backend<'a> {
                     && self.simple_fn_value(name, arities[0])
                 {
                     let arity = arities[0];
-                    self.fn_value_wrappers.push((name.clone(), arity));
+                    self.fn_value_wrappers.push((name.to_string(), arity));
                     let t = f.tmp();
                     f.line(&format!("{t} = call %KValue @k_fnref(ptr @{})", rsym(name, arity)));
                     return Ok(t);
@@ -3358,7 +3361,7 @@ impl<'a> Backend<'a> {
                 // cluster demotes — an unbracketed entry would let the
                 // loop's rewinds unwind to an enclosing mark and free the
                 // caller's own live data.
-                let target = (name.clone(), args.len());
+                let target = (name.to_string(), args.len());
                 let outside_cluster = self.beat.ids.contains_key(&target)
                     && !self.beat.same_cluster(&target, &(f.group.clone(), f.arity));
                 if outside_cluster
@@ -3405,9 +3408,11 @@ impl<'a> Backend<'a> {
                     let callee_ret = self.ret_ty(name, n);
                     let same_ret = callee_ret == f.ret_ty;
                     if same_ret
-                        && self.beat.same_cluster(&(name.clone(), n), &(f.group.clone(), f.arity))
+                        && self
+                            .beat
+                            .same_cluster(&(name.to_string(), n), &(f.group.clone(), f.arity))
                     {
-                        match self.beat.carried.get(&(name.clone(), n)) {
+                        match self.beat.carried.get(&(name.to_string(), n)) {
                             Some(positions) => {
                                 // evacuate the loop-varying arguments through
                                 // the carry buffers, then rewind — before the
@@ -3422,7 +3427,8 @@ impl<'a> Backend<'a> {
                                     // slot builder_params names is kept, so
                                     // nothing that merely has capacity is
                                     // aliased.
-                                    let kept = self.builder_params.contains(&(name.clone(), n, j));
+                                    let kept =
+                                        self.builder_params.contains(&(name.to_string(), n, j));
                                     let stage = match kept {
                                         true => "k_carry_stage_kept",
                                         false => "k_carry_stage",
@@ -3862,7 +3868,7 @@ impl<'a> Backend<'a> {
         if piped && !args.is_empty() {
             let piped_value = self.emit_expr(f, &args[0])?;
             if f.set_of(&piped_value) & DESC != 0 {
-                let mut body_args: Vec<Expr> = vec![Expr::Ident("__piped".to_string(), span)];
+                let mut body_args: Vec<Expr> = vec![Expr::Ident(Name::new("__piped"), span)];
                 body_args.extend(args[1..].iter().cloned());
                 let lambda = Expr::Lambda {
                     params: vec![("__piped".to_string(), span)],
@@ -4524,7 +4530,7 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
                 }
             }
         }
-        Expr::Ident(name, _) => out.push(name.clone()),
+        Expr::Ident(name, _) => out.push(name.to_string()),
         Expr::List(items, _) => {
             for item in items {
                 collect_idents(item, out);

@@ -1,4 +1,5 @@
 use crate::diag::Span;
+use crate::name::Name;
 use num_bigint::BigInt;
 
 #[derive(Clone, Debug)]
@@ -7,11 +8,11 @@ pub enum Expr {
     Float(f64, Span),
     MapLit(Vec<(Expr, Expr)>, Span),
     Str(Vec<TemplatePart>, Span),
-    Ident(String, Span),
+    Ident(Name, Span),
     /// `&name` — the head of a partial application. Bare, it is superfluous
     /// (a name already denotes the function); applied to fewer arguments than
     /// any arm takes, it is the only spelling for a partial.
-    Partial(String, Span),
+    Partial(Name, Span),
     List(Vec<Expr>, Span),
     App {
         head: Box<Expr>,
@@ -105,21 +106,21 @@ impl Expr {
 pub enum Pattern {
     IntLit(BigInt, Span),
     StrLit(String, Span),
-    Nullary(String, Span),
-    Var(String, Span),
+    Nullary(Name, Span),
+    Var(Name, Span),
     Wildcard(Span),
     Annotated {
-        name: String,
-        ty: String,
+        name: Name,
+        ty: Name,
         span: Span,
     },
     /// `whole` is the as-pattern's name: `r@(rect w h)` destructures into `w`
     /// and `h` and binds `r` to the value that matched, so an arm can answer
     /// what it was given without building it again.
     Ctor {
-        ty: String,
+        ty: Name,
         fields: Vec<Pattern>,
-        whole: Option<Box<(String, Span)>>,
+        whole: Option<Box<(Name, Span)>>,
     },
     Keyed {
         entries: Vec<KeyedEntry>,
