@@ -2918,3 +2918,23 @@ accumulating that attribution repeatedly is the case for attacking the
 cause (pinning inlining, splitting the crate), which a waiver would
 have hidden. The ledger entry's removal rides the next reconciliation
 with main.
+
+## 2026-08-29 — gavel: the backends build the partial over a value
+
+On "Whether the backends should build a partial over a value", Clay
+rejected leave-it in the strongest terms: "the whole point is when you
+write a library including a language you're writing it for an unknown
+future use case... you are deciding what features they are allowed to
+use up front." So: BUILD IT. Native and wasm gain the runtime shape
+the interpreter already speaks — a partial whose arity resolves when
+the arguments arrive — and `&f` over a value callee works on all three
+engines, pinned by the differential goldens like everything else.
+
+The meta-line this draws, so the next entry applies the right
+precedent: yagni governs additive tooling (a diagnostic flag can land
+the day somebody wants it — the --explain-copies ruling), and never
+governs language surface. A feature one engine speaks and two refuse
+is a transition state under the differential law, not a resting place;
+a user meeting the refusal cannot file the use case, they conclude the
+language is broken. The ledger entry's removal rides the next
+reconciliation with main.
