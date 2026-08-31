@@ -6562,44 +6562,29 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         KMark* inner = &k_beat_stack[k_beat_depth - 1];
         dies = mutate ? (k_survives(a, NULL) && !k_survives(a, inner)) : 1;
     }
+    /* Where the buffer comes from, and the sign the new cap carries. That is
+       the whole of the difference between the two regimes, so it is decided
+       here and the copy, the free and the two returns are written once
+       below. A builder's buffer lives outside the arena: growth doubles, and
+       an allocator that reclaims nothing pays for every intermediate size a
+       builder passes through rather than the size it reached, where malloc
+       plus a free on the owned path pays for one buffer at a time. */
+    KBuf* buf;
+    long long marked;
     if (dies) {
-        KBuf* buf = k_alloc(sizeof(KBuf) + (size_t)cap);
-        buf->cap = cap;
-        buf->used = a->len + n;
-        unsigned char* data = (unsigned char*)(buf + 1);
-        memcpy(data, a->data, (size_t)a->len);
-        memcpy(data + a->len, src, (size_t)n);
-        if (mutate) {
-            if (a->cap > 0) {
-                KBuf* old = ((KBuf*)a->data) - 1;
-                if (__builtin_expect(k_stats_on > 0, 0)) {
-                    k_stat_bytes_freed++;
-                    k_stat_held_live -= (long long)sizeof(KBuf) + old->cap;
-                }
-                free(old);
-            }
-            a->len += n;
-            a->data = data;
-            a->cap = -cap;
-            return acc;
+        buf = k_alloc(sizeof(KBuf) + (size_t)cap);
+        marked = -cap;
+    } else {
+        buf = malloc(sizeof(KBuf) + (size_t)cap);
+        if (!buf) { fputs("out of memory\n", stderr); exit(1); }
+        if (__builtin_expect(k_stats_on > 0, 0)) {
+            k_stat_allocs++;
+            k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
+            k_stat_bytes_malloc++;
+            k_stat_held_live += (long long)(sizeof(KBuf) + (size_t)cap);
+            if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
         }
-        return k_bytes_owned(a->len + n, data, -cap);
-    }
-    /* A builder's buffer lives outside the arena. Growth doubles, and an
-       allocator that reclaims nothing pays for every intermediate size a
-       builder passes through rather than the size it reached; malloc plus a
-       free on the owned path pays for exactly one buffer at a time. A
-       builder's cap is positive only for buffers made here, which is what
-       makes the free below safe: uniqueness is proven at mut sites, so no
-       other header shares the storage being released. */
-    KBuf* buf = malloc(sizeof(KBuf) + (size_t)cap);
-    if (!buf) { fputs("out of memory\n", stderr); exit(1); }
-    if (__builtin_expect(k_stats_on > 0, 0)) {
-        k_stat_allocs++;
-        k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
-        k_stat_bytes_malloc++;
-        k_stat_held_live += (long long)(sizeof(KBuf) + (size_t)cap);
-        if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
+        marked = cap;
     }
     buf->cap = cap;
     buf->used = a->len + n;
@@ -6607,6 +6592,9 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     memcpy(data, a->data, (size_t)a->len);
     memcpy(data + a->len, src, (size_t)n);
     if (mutate) {
+        /* A builder's cap is positive only for buffers made here, which is
+           what makes this free safe: uniqueness is proven at mut sites, so
+           no other header shares the storage being released. */
         if (a->cap > 0) {
             KBuf* old = ((KBuf*)a->data) - 1;
             if (__builtin_expect(k_stats_on > 0, 0)) {
@@ -6617,10 +6605,10 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         }
         a->len += n;
         a->data = data;
-        a->cap = cap;
+        a->cap = marked;
         return acc;
     }
-    return k_bytes_owned(a->len + n, data, cap);
+    return k_bytes_owned(a->len + n, data, marked);
 }
 
 KValue k_b_append(KValue acc, KValue x) { return k_b_append_into(acc, x, 0); }

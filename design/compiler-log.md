@@ -2929,3 +2929,50 @@ unified — are still out of the tree. The second was already priced under
 both orders when it was held (-0.001096 as written, +0.008015 per
 counter), and re-scoring them against the definition that now ships is
 the next thing this owes.
+
+## 2026-08-31 — the first held improvement ships, because the objective changed under it
+
+`k_b_append_into` wrote its grow path twice — once taking arena storage
+when the header dies at the innermost rewind, once taking malloc — and
+the two differed in the allocator and in the sign of the cap and in
+nothing else. Both then copied twice, freed the old header on the same
+condition, and returned the same two ways. One tail serves both now, with
+where the buffer comes from and the sign the cap carries decided in a
+local above the copy. Twenty-seven lines in, thirty-nine out.
+
+Measured on this container, callgrind, against a baseline built from the
+same tree in a worktree so the two differ only in this patch:
+
+```
+    encodebench  8,704,347,511 -> 8,661,983,911  -42,363,600  -0.4867%
+    jsonbench    2,858,844,826 -> 2,856,424,140   -2,420,686  -0.0847%
+    oneshot         44,000,222 ->    43,878,175     -122,047  -0.2774%
+    widebench       63,756,786 ->    63,788,800      +32,014  +0.0502%
+    deepbench, pendbench: +14 each. basket, escapebench, indexbench: 0.
+```
+
+The container sits a constant below the runner — 399 to 427 instructions
+on eight of the nine, 3,694 on deepbench — so the golden rows are the
+runner's plus these deltas, and CI checks that arithmetic rather than
+being asked to trust it.
+
+widebench is the only benchmark in the tree where half the appends grow,
+because `text/append (text/bytes lead) "  "` builds a fresh accumulator
+per element and the first append onto one has no spare capacity. Its
+32,014 over 16,000 grows is two instructions each.
+
+Every allocation counter is byte-identical, on all eight veins. `.text`
+falls 176 bytes on the four binaries that link the grow path and does not
+move on the five that do not.
+
+This is the change held on 2026-08-31 with the arithmetic already
+written down: -0.001096 under the aggregation as it was, +0.008015 under
+per-counter saturation. The second number is now the live one, and
+welfare reads 73.8273894965 to 73.8358594052, a rise of 0.0084699 against
+the 0.008015 that entry predicted, banked. Nothing about the change
+moved; the objective did, and the entry that held it said in advance
+which way it would go.
+
+The second held improvement — `k_b_append_grow` outlined so the fast
+path stops carrying six callee-saved pushes — is still out of the tree
+and owes the same treatment.
