@@ -3599,3 +3599,55 @@ beat_iters, evac_allocs, evac_bytes all double when the message doubles — so
 the cost is in work no counter watches. `k_beat_iter_carry` sizes and copies
 the carried slots per iteration and `k_copy_size` walks rather than counts;
 that walk is where to look first.
+
+## 2026-08-31 — the quadratic has a name: k_slots_survive, at 80.66%
+
+The entry above left it open. callgrind, on the digest built WITHOUT the
+exclusion, 8,000-byte ASCII message from a file, 3,871,213,343 instructions
+total:
+
+```
+3,122,380,806 (80.66%)  k_slots_survive
+  106,378,584 ( 2.75%)  k_index
+   73,497,528 ( 1.90%)  k_b_bit_shr
+   71,987,328 ( 1.86%)  d_thunk_eval
+   67,448,520 ( 1.74%)  k_shift_of
+```
+
+Four fifths of the run, in one function, on a program whose every allocation
+counter is linear.
+
+`k_slots_survive(slots, n, m)` loops over a node's immediate interior asking
+`k_survives_x` of each heap slot, and its answer decides whether `k_copy_size`
+and `k_deep_copy` may SHARE the node instead of copying it. For a list that
+loop is `l->len` long, and the list the digest's evacuation reaches is
+`padded` — the whole message as a list of integers, from `list/to_list b` in
+`sha256/padded_bytes`. So one ask is O(message), the evacuation asks per
+iteration, and the iterations are O(message).
+
+THERE IS ALREADY A MEMO ABOVE IT and it only helps in one direction. The
+`K_LIST` arm of `k_interior_survives` caches, for lists of `K_ISV_MIN` (64) or
+more, whether the list survives the OUTERMOST mark — keyed on the list pointer,
+invalidated when `k_beat_stack[0].ptr` moves. When that cached answer is yes it
+returns 1 and the scan never runs. When it is no it falls through to the full
+`k_slots_survive` anyway, and stores the no. `padded` is built long after mark
+zero, so it is never an outer survivor, so the memo answers no forever and
+every ask pays the whole list.
+
+So the shape of a fix is narrow rather than architectural: the negative answer
+has to be worth something too. Whether a node's interior survives depends on
+the mark it is asked about, and within one evacuation that mark is fixed —
+which is the seam. Nothing is built here; this entry is the profile and where
+it points.
+
+WHAT ELSE IT SAYS. A counter for this would have caught the regression in the
+cost goldens instead of in a CI timeout: `evac_bytes` counts what an evacuation
+COPIES, and the whole cost here is in deciding not to copy. Slots examined per
+evacuation is platform-invariant, algorithm-level, and exactly the missing
+dimension. That is a presence counter this project's own rule already asks for
+and it does not exist.
+
+The 2026-08-30 note beside `k_is_heap` says `k_copy_size` is 36% of deepbench
+and that a tenth `case` in the tag switch cost that benchmark 6.14%. The same
+walk is 80.66% here. deepbench is the closest thing the suite has to this
+shape and it is nowhere near it.
