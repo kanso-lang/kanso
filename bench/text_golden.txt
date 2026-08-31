@@ -378,11 +378,16 @@
 # rewind, once taking malloc — and the two differed in the allocator and in the
 # sign of the cap and in nothing else. One tail serves both, with the regime
 # carried in a local. Thirty fewer lines, and this is what they weighed.
-jsonbench text=85074
-encodebench text=102098
-oneshot text=102146
+# 2026-08-31: +128 bytes on the same four binaries, which is the outlined
+# `k_b_append_grow` — its own prologue and epilogue, where before it shared
+# the caller's. That is what the append fast path stops carrying: six
+# callee-saved pushes and a frame become three pushes, and encodebench falls
+# 3.06%. The five binaries that never link the grow path do not move.
+jsonbench text=85202
+encodebench text=102226
+oneshot text=102274
 basket text=94786
-widebench text=103154
+widebench text=103282
 deepbench text=67074
 escapebench text=52898
 pendbench text=77794

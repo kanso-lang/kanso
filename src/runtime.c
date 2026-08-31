@@ -6500,6 +6500,10 @@ static KValue k_bytes_owned(long long len, const unsigned char* data, long long 
     KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
 }
 
+static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
+                                                        const unsigned char* src,
+                                                        long long n, int mutate);
+
 static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     if (!k_not_failure(acc)) return acc;
     if (!k_not_failure(x)) return x;
@@ -6546,6 +6550,20 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
             return k_bytes_owned(a->len + n, a->data, a->cap);
         }
     }
+    return k_b_append_grow(acc, a, src, n, mutate);
+}
+
+/* The growth, out of line, so the fast path stops paying for it.
+
+   One function used to hold both. The fast path — two failure tests, a tag
+   dispatch, a capacity comparison and a store — needs two registers; the
+   growth needs eight, because it decides which allocator the new buffer comes
+   from, copies twice and frees the old header. So every append pushed six
+   callee-saved registers and built a frame before it could test anything.
+   Split, the common path pushes three, and the rare one pays a call. */
+static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
+                                                        const unsigned char* src,
+                                                        long long n, int mutate) {
     k_stat_append_grow++;
     long long cap = 2 * (a->len + n);
     if (cap < 64) cap = 64;

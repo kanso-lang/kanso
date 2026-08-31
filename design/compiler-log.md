@@ -2976,3 +2976,56 @@ which way it would go.
 The second held improvement — `k_b_append_grow` outlined so the fast
 path stops carrying six callee-saved pushes — is still out of the tree
 and owes the same treatment.
+
+## 2026-08-31 — the second held improvement ships too, and both are on the page
+
+`k_b_append_grow` is out of line. One function held the fast path and the
+growth: the fast path — two failure tests, a tag dispatch, a capacity
+comparison and a store — needs two registers, and the growth needs eight,
+because it decides which allocator the new buffer comes from, copies
+twice and frees the old header. So every append pushed six callee-saved
+registers and built a frame before it could test anything. Split, the
+common path pushes three.
+
+```
+    k_b_append_mut:
+      push %r15 / %r14 / %rbx
+```
+
+Measured on the container against the one-tail commit that precedes it,
+so the two builds differ only in this patch:
+
+```
+    encodebench  8,661,983,911 -> 8,396,568,711  -265,415,200  -3.0641%
+    jsonbench    2,856,424,140 -> 2,838,415,440   -18,008,700  -0.6305%
+    oneshot         43,878,175 ->    43,094,579      -783,596  -1.7858%
+    widebench       63,788,800 ->    63,996,800      +208,000  +0.3261%
+    basket, deepbench, escapebench, pendbench, indexbench: 0, to the
+    instruction.
+```
+
+widebench's 208,000 over its 16,000 grows is thirteen instructions each,
+which is the call frame the grow path now enters. It is the only
+benchmark where half the appends grow. Every other benchmark grows a
+handful of times against millions of fast appends, so they take the three
+fewer pushes and pay nothing for the call — which is why five of the nine
+do not move at all.
+
+Every allocation counter is byte-identical on all eight veins. `.text`
+rises 128 bytes on the four binaries that link the grow path, which is
+the outlined function's own prologue and epilogue where before it shared
+the caller's, and does not move on the five that do not link it.
+
+Welfare 73.8358594052 to 73.8913121796. Under the old aggregation this
+change was -0.002692 and held; the entry that held it bisected the number
+by holding one row at a time and found widebench's 0.267% rise costing
+0.003311 points on its own, outweighing encodebench's 3.6% fall. Under
+per-counter saturation encodebench's fall is worth what it is worth and
+widebench cannot spend a whole term.
+
+Both held improvements are now in, and §31 of the compiler page says so
+with what each bought. What the two of them together demonstrate is what
+the ruling was for: neither change moved, the objective did, and both
+went from negative to positive. The per-counter goldens could not have
+told the difference — every allocation counter is byte-identical across
+both.
