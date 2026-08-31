@@ -3062,3 +3062,18 @@ repository-settings writes (the 403 task #109 kept hitting). Every
 branch merged from now on deletes itself. Task #109 closes on this;
 what remains is the one-time purge of branches that merged before the
 setting existed, which is ordinary API work any session can do.
+
+## 2026-08-29 — directive: bring binary size back down, keeping the wins
+
+Clay, reading the trend chart: "the recent numbers are mind-blowing.
+if we can just get that binary size back down to where it was, the
+recent wins on compile memory and run instructions are just
+astonishing." So binary size is the next priority target: return it
+to its earlier level WITHOUT giving back the run-instructions and
+compile-memory gains. The chart's shape is a lead — the size spike
+lands beside the big run-instructions drop, which is what a speed win
+bought with inlining or specialization looks like — so the first move
+is attribution (which change grew the emission, and whether the
+growth is the win's cost or a separable side effect), not a revert.
+If the two turn out inseparable, that is a welfare trade to present
+with numbers, and the weights arbitrate as always.
