@@ -3241,3 +3241,114 @@ Welfare 87.511035 -> 87.511217, recorded with `--set`, and the page's tagged
 compile-instructions figure follows the golden.
 
 DONE.
+
+## 2026-08-31 — the seek cursor outlived its string, and the engines disagreed
+
+A differential-law violation, in shipped code, found while looking for one.
+
+```
+    fn shaped n 0 / "éé{n}ééééé"
+    fn shaped n _ / "abcdefg{n}é"
+    fn read s     / "{s[5]}{s[3]}/{text/slice s 5 5}{text/slice s 3 3}"
+
+    interpreter   [abcdefg3é=>ec/ec]
+    native        [abcdefg3é=>ge/ge]
+```
+
+Character 5 of `abcdefg3é` is `e`. Native answered `g`, which is character 7,
+through both readers.
+
+`k_seek_str` / `k_seek_char` / `k_seek_byte` are one remembered position, so a
+forward sweep over a string resumes rather than restarting at the front. The
+cursor names its string by address. `k_alloc` is a bump arena and
+`k_beat_rewind` moves the frontier back, so the next string built in a loop
+sits exactly where the last one sat — and inherits a byte offset that was true
+of a string that no longer exists.
+
+The comment above the cursor said a reset was unnecessary, on the grounds that
+"a string whose bytes changed is a builder, which never qualifies". The string
+whose bytes change across a rewind is not a builder. It is somebody else,
+wearing the address. That sentence has been there since the cursor landed and
+was the whole defence.
+
+**Pre-existing, and not what #1172 introduced.** `text/slice` reproduces it
+identically and has had the cursor since it landed; #1172 gave `s[i]` the same
+cursor, which widened the exposure to the commonest way to read a character
+but did not create it. Both readers are in the fixture for that reason.
+
+The fix is one store in `k_beat_rewind`, which is the only place the arena
+frontier moves backward — `k_beat_iter`, `k_beat_pop` and the carry paths all
+reach it. Every address above the mark is free to be handed out again, so the
+cursor is forgotten.
+
+**What correctness cost**, and the rule says to pay it: welfare does not weigh
+a change that makes the engines agree, so this ships and the floor moves to
+whatever it costs.
+
+```
+    work_basket          57,083,993 ->    57,197,600   +113,607   +0.199%   (local)
+    work_encodebench  8,708,075,665 -> 8,713,107,668  +5,032,003   +0.058%
+    work_oneshot         44,059,561 ->    44,071,744    +12,183   +0.028%
+    the other six                                    under a ten-thousandth
+    text                                     +16 bytes in every binary
+```
+
+The rise is not the store. It is the cursor hits that stop happening: a sweep
+that crossed a beat boundary used to resume and now restarts at the front.
+That is the cost of the answer being right.
+
+**A narrower reset was considered and not taken.** Keeping the cursor when the
+remembered string lies below the mark and inside the surviving block would
+recover some of it, but it needs the string's address checked against a block
+whose own bounds are moving, and getting that wrong reintroduces exactly this
+bug. The blunt version is provably correct and the measurement above is what
+it costs. If that ever matters, the narrower test is the thing to build, with
+this fixture already in place to catch it.
+
+`tests/golden/micro/a_seek_cursor_does_not_outlive_its_string` is the pin, and
+the harness runs it on both engines. Removing the store turns `ec/ec` into
+`ge/ge` on native while the interpreter holds, which is the failure that
+started this.
+
+DONE.
+
+## 2026-08-31 — the runner's numbers for the cursor fix, and a wrong note corrected
+
+```
+    work_basket          57,083,993 ->    57,198,013   +114,020   +0.1997%
+    work_encodebench  8,708,075,665 -> 8,713,108,067  +5,032,402   +0.0578%
+    work_oneshot         44,059,561 ->    44,072,143    +12,582   +0.0286%
+    work_deepbench      760,475,193 ->   760,475,924       +731   +0.0001%
+    work_jsonbench    2,862,072,778 -> 2,862,072,931       +153   +0.0000%
+    work_pendbench      957,236,511 ->   957,236,647       +136   +0.0000%
+    work_widebench       84,031,604 ->    84,031,648        +44   +0.0001%
+    work_indexbench       5,266,934 ->     5,266,960        +26   +0.0005%
+    work_escapebench                                    unmoved
+    text                    716,626 ->       716,754      +128
+    compile_instructions 42,299,530 ->    42,297,011     -2,519
+```
+
+Every work row rises except escapebench, and the rise is not the store. It is
+the cursor hits that stop happening: a sweep crossing a beat boundary used to
+resume where it left off and now restarts at the front. basket carries most of
+it because it sweeps text across beats; the five rows under a thousandth are
+the store itself, and `text` is its sixteen bytes in each of eight binaries.
+
+**Welfare rose, and the reason is not the fix.** 87.511217 -> 87.511303, all of
+it from `compile_instructions` falling 2,519, which is layout. Recorded with
+`--set` because the rule says a rise is held rather than banked, and recorded
+here as a ratchet step to spend back when `src/runtime.c`'s length next moves.
+The fix itself costs runtime instructions and would have been right to ship at
+a fall: welfare does not weigh a change that makes the engines agree.
+
+**A note from #1172 was wrong and is corrected in the golden.** It said
+`compile_instructions` moves when `src/runtime.c` changes length because
+`main.rs` holds the file as an `include_str!` and hashes it for the build cache
+key. That hash is in `cached_program_binary`, which is on the run and build
+paths; `kanso check lib/json` never reaches it. What moves is layout — the
+static's length shifts what follows it — and the direction does not follow the
+length: twenty added lines read +1,630 and 713 added bytes read −2,519.
+`compile_allocs`, `compile_peak_bytes`, rounds and visits are unmoved across
+all three, which is what says the front end's work did not change.
+
+DONE.
