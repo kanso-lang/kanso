@@ -3500,3 +3500,154 @@ it exists so the change that admits them has something to be wrong against.
 The corpus had nothing in this shape. Every mem fixture pins allocation counts
 and every micro fixture that touches records reads them without a rewind in
 between.
+
+## 2026-08-31 — the carry exclusion removed, measured properly, and REVERTED
+
+SEARCHED FIRST: design/compiler-log.md, design/log/compiler-log-archive.md,
+design/*.md, and — after the correction two entries above — the test suite,
+`beat.rs` itself, and the runtime functions the exclusion's comment makes
+claims about.
+
+The exclusion is `d.file.starts_with("std/") || d.file.starts_with("lib/")` in
+`beat_loops`, and three things are wrong with it. Two of them survive this
+entry; the third is the reason nothing shipped.
+
+**The field is a diagnostic.** `file` is what error origins are built from, so
+`std/sha256` and a user directory called `lib` read alike, and the same package
+compiled from `lib/app` holds 27,262,976 arena bytes where the same sources
+under `elsewhere/app` hold 1,048,576. `tests/a_program_is_not_its_directory.rs`
+pins BOTH numbers now, in the shape `tests/sha256_peak.rs` already uses: the
+defect asserted as a fact, so it cannot be lost while the fix waits.
+
+**The premise the comment gives is false.** It says a shared library driver
+threads its caller's invariant source through the loop, so carrying it copies
+an unbounded value per iteration. `k_beat_iter_carry` copies only what lies
+above the mark, and a loop's mark is pushed at entry, so the caller's source is
+below it and shared. A fold over a list built through `std/list` allocates
+556,768 bytes at two thousand elements and 2,223,856 at eight thousand.
+
+**And it is not enforcing the pin that refused its removal.** With the test
+gone, `lib/json`'s licensed set gains `list/bisect`, `list/found_in`,
+`list/holds_all?` and `list/holds_any?` — three boolean predicates and a binary
+search — and every group json itself declares reads the same on both sides.
+json's scanners are refused by the classifier. The exclusion's whole live
+effect is those four predicates and sha256's cluster.
+
+WHY IT IS REVERTED. The trade is memory for time and the time is quadratic.
+Native, ASCII message read from a file, each arm built in its own directory:
+
+| message | before, time | before, peak | after, time | after, peak |
+|--------:|-------------:|-------------:|------------:|------------:|
+|   8,000 |      0.084 s |   79,691,776 |     0.309 s |   1,048,576 |
+|  16,000 |      0.170 s |  159,383,552 |     1.152 s |   1,048,576 |
+|  32,000 |      0.331 s |  316,669,952 |     4.367 s |   1,048,576 |
+|  64,000 |      0.675 s |  633,339,920 |    16.535 s |   4,194,320 |
+| 128,000 |      1.304 s |1,262,485,520 |    68.168 s |   4,194,320 |
+
+The digest is linear in time today. With the carry it is quadratic — 52x at
+128 KB, and CI said so before this table existed: the `asset digests` job
+digests a 1,604,098-byte wasm and took 49 seconds on main, then sat past
+twenty-five minutes on the branch. Trading 1.2 GB for 52x is not a trade this
+project's weights would take, and welfare cannot arbitrate it because no
+benchmark in the suite streams (**OPEN**, and the reason a digest benchmark is
+worth building).
+
+**HOW THE FIRST REPORT GOT IT WRONG, because the mistake is easy to repeat.**
+Three separate A/B runs said the change was wall-clock neutral. All three were
+invalid. `kanso build` caches the native binary, and rebuilding the RUST
+compiler does not invalidate that cache — the key is over the sources and
+`runtime.c`, not the compiler. So rebuilding `src/beat.rs` and re-running
+`kanso build` in the same directory re-ran the SAME binary in both arms, and
+the two columns agreed because they were one column. The numbers above come
+from a fresh directory per arm. Any A/B on emitted or runtime behaviour has to
+build into a directory the other arm never touched.
+
+WHAT IS LEFT OF THE PEAK, run down while the branch was still alive and true
+whichever way this goes: `sha256/padded_bytes` opens with `list/to_list b`, so
+the message is held as a list of integers at sixteen arena bytes an input byte
+for as long as `digested` indexes it. massif at 64 KB put 46.17% of the peak —
+2,097,184 bytes — on `k_b_push_into_proven` under `d_list/fold_3`, the buffer
+that list is grown into. A program that reads the same file and prints its
+length holds one block at 400 KB with eight allocations, because a bytes value
+never becomes a list. That is lib/sha256's to fix and nothing here is in the
+way of it.
+
+TWO THINGS FOUND ON THE WAY, both surviving the revert:
+
+- **`thunk_evals` is not engine-shared and never was.** Measured on main: a
+  1,000-byte sha256 reads `thunk_forces=1024 thunk_evals=1024` native and
+  `1088`/`17` interpreted. `k_memo_outlives` declines the memo when the answer
+  was built inside the innermost beat; the interpreter has no arena to rewind.
+  `mem_corpus_interp_matches_the_semantic_counters` classes evals with allocs
+  and forces as engine-shared semantics, and no fixture has ever asked. The
+  classification is left alone here — a gate that is not failing is not
+  weakened on the way past — and the measurement is recorded so the next
+  fixture in that shape is not a surprise. **OPEN.**
+- **Two tests in `a_file_that_is_not_text.rs` shared one temp directory and one
+  `run.kso`, and raced.** Caught once as `an entry file needs at least one
+  statement` about a file that has one. One directory per test now, the same
+  fix kanso#1169 made for the playground pair. That is the only compiler-facing
+  change that ships from this branch.
+
+WHAT SHIPS: the race fix, the directory defect pinned with both its numbers,
+and this entry. The removal is built, measured and declined — recorded so the
+next attempt starts from the curve rather than from the idea.
+
+**OPEN, and it is the whole question now:** where the quadratic is. Every
+deterministic counter is linear across the same range — allocs, alloc_bytes,
+beat_iters, evac_allocs, evac_bytes all double when the message doubles — so
+the cost is in work no counter watches. `k_beat_iter_carry` sizes and copies
+the carried slots per iteration and `k_copy_size` walks rather than counts;
+that walk is where to look first.
+
+## 2026-08-31 — the quadratic has a name: k_slots_survive, at 80.66%
+
+The entry above left it open. callgrind, on the digest built WITHOUT the
+exclusion, 8,000-byte ASCII message from a file, 3,871,213,343 instructions
+total:
+
+```
+3,122,380,806 (80.66%)  k_slots_survive
+  106,378,584 ( 2.75%)  k_index
+   73,497,528 ( 1.90%)  k_b_bit_shr
+   71,987,328 ( 1.86%)  d_thunk_eval
+   67,448,520 ( 1.74%)  k_shift_of
+```
+
+Four fifths of the run, in one function, on a program whose every allocation
+counter is linear.
+
+`k_slots_survive(slots, n, m)` loops over a node's immediate interior asking
+`k_survives_x` of each heap slot, and its answer decides whether `k_copy_size`
+and `k_deep_copy` may SHARE the node instead of copying it. For a list that
+loop is `l->len` long, and the list the digest's evacuation reaches is
+`padded` — the whole message as a list of integers, from `list/to_list b` in
+`sha256/padded_bytes`. So one ask is O(message), the evacuation asks per
+iteration, and the iterations are O(message).
+
+THERE IS ALREADY A MEMO ABOVE IT and it only helps in one direction. The
+`K_LIST` arm of `k_interior_survives` caches, for lists of `K_ISV_MIN` (64) or
+more, whether the list survives the OUTERMOST mark — keyed on the list pointer,
+invalidated when `k_beat_stack[0].ptr` moves. When that cached answer is yes it
+returns 1 and the scan never runs. When it is no it falls through to the full
+`k_slots_survive` anyway, and stores the no. `padded` is built long after mark
+zero, so it is never an outer survivor, so the memo answers no forever and
+every ask pays the whole list.
+
+So the shape of a fix is narrow rather than architectural: the negative answer
+has to be worth something too. Whether a node's interior survives depends on
+the mark it is asked about, and within one evacuation that mark is fixed —
+which is the seam. Nothing is built here; this entry is the profile and where
+it points.
+
+WHAT ELSE IT SAYS. A counter for this would have caught the regression in the
+cost goldens instead of in a CI timeout: `evac_bytes` counts what an evacuation
+COPIES, and the whole cost here is in deciding not to copy. Slots examined per
+evacuation is platform-invariant, algorithm-level, and exactly the missing
+dimension. That is a presence counter this project's own rule already asks for
+and it does not exist.
+
+The 2026-08-30 note beside `k_is_heap` says `k_copy_size` is 36% of deepbench
+and that a tenth `case` in the tag switch cost that benchmark 6.14%. The same
+walk is 80.66% here. deepbench is the closest thing the suite has to this
+shape and it is nowhere near it.
