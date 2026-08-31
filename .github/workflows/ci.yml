@@ -434,6 +434,10 @@ jobs:
       # the same std surface, asked for the awkward thing rather than the
       # wrong one: what a function ANSWERS at its edges, not what it complains
       - run: ./target/release/kanso run scripts/behaviour_differential
+      # A character read by position remembers where it stopped, and a beat
+      # rewinds the arena under it. Every layout pair by every hand that moves
+      # that cursor: kanso#1173 was one of the sixteen this finds.
+      - run: ./target/release/kanso run scripts/beat_differential
       # integer arithmetic across the two engines. Run with no random rounds:
       # every random draw lands past the native ceiling, so the rounds spend
       # ten minutes re-confirming what the 561 edge cases already say. The
