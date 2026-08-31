@@ -3919,3 +3919,77 @@ to reference documents read as evidence.
 The list is corrected. The pin bump is kq's own PR and needs a branch there.
 
 DONE.
+
+## 2026-08-31 — kq's pin absorbed, and a fifth staging collision found by scan
+
+Two things landed off the same afternoon.
+
+**kq#82, the pin bump.** `.kanso-version` walks from #1120 to #1181, sixty-one
+merges. Every allocation counter and the published-numbers stamp are
+byte-identical across the whole window, which is why nothing here noticed the
+drift. The instructions vein moves and every row falls: print_small -1.46%,
+path_small -1.91%, print_big -1.37%, path_big -1.68%.
+
+Print and path do not collect the same number, so the saving is not one thing
+in the decode they share. Bisected at seven points, small rows only, and both
+columns sum to the end-to-end delta exactly:
+
+    #1143  a subtype of a primitive is a heap value   print +128,464  path   +186
+    #1171  two byte-level costs in the runtime        print -955,739  path -320,184
+    #1172-#1173  the string index gets the cursor     print +113,192  path   +470
+    #1174-#1177  the wide benchmark's two costs       print  -40,141  path  -59,157
+    #1178-#1180  the tenure walk answers on ranges    print -402,592  path  -13,561
+
+Fifty of the sixty-one commits move neither row by one instruction: two runs of
+them, 22 commits and 26, plus two that edit only markdown. They are front-end
+work, and kq's vein counts what the compiled program executes.
+
+The container measuring this is one glibc revision behind the runner and read
+print_small 409 instructions below the committed row under the pinned
+compiler — the same offset that file recorded on 2026-08-29. The rows were
+committed as the runner's values moved by the container's deltas, and the
+runner then said "instructions: every row is where it was". All four
+predictions correct to the instruction, which is the second time this host pair
+has been shown to differ by an offset and not a slope.
+
+**The fifth staging collision.** Task #191 asked whether the family that cost
+#1169, #1175, #1177 and #1178 had more members. Six full-suite passes had found
+nothing, so the question was put to a scan instead of to luck.
+
+The scan looks for a function that writes under `temp_dir()` and is reached by
+two or more `#[test]`s in its file, then asks what distinguishes the paths those
+tests stage. Run against the four pre-fix trees it goes red on three of the four
+at exactly the commit that fixed them; #1177's is a length key, invisible to the
+first shape it checks. Two false positives taught it two legitimate
+distinguishers — a `process::id()` in the path, and an `AtomicUsize` counter
+making it unique per call. `view_cache_is_returned.rs` carries the second, with
+a comment saying two tests there ask for 20,000 maps: a fifth instance of the
+family, already found and fixed by somebody, and never written down here.
+
+On today's tree the scan found `goldens_move_expires.rs`, whose staging
+directory is `kanso-gm-{body.len()}` while the file inside it is the constant
+`sibling-goldens-move`. The four fixtures are 78, 82, 38 and 59 bytes, so it
+does not fire. Four bytes of prose added to the first makes two of them 82, and
+then it fires hard: **27 failures in 40 runs**, reporting exit 2 where the test
+asserts 0, because `verdict` ends in `remove_dir_all` and the first test to
+finish deletes the other's program mid-run.
+
+The key is a hash of the body now, as in `a_bare_list_is_or_is_not_bytes.rs`
+after #1177 and `numeric_parity.rs`. The same forty runs go 0 for 40. The two
+82-byte bodies are left at 82 on purpose: that is the condition a length key
+needs to fail, so the corpus carries it and a regression goes red on the next
+run.
+
+**The scan itself is not shipped.** It is regex over Rust with five special
+cases for what counts as a distinguisher, and the log's own rule against specs
+written against an internal decomposition applies to a gate written against a
+parse. What would be sound is structural rather than analytic — every staging
+site reaching one helper, so the family is unrepresentable — and that is the
+83-site change a blanket regex already botched once this session. Recorded as
+the shape, not attempted here.
+
+Six full-suite passes could not find this. A scan found it in one run, because
+the condition was latent rather than live: the corpus was four bytes away from a
+27-in-40 flake and no amount of running it would have said so.
+
+DONE.
