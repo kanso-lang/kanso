@@ -3308,3 +3308,64 @@ What replaces it is narrower and still open — WHICH of sha256's sites holds,
 given that four models of the shape all reclaim. The way in is to bisect the
 file: run the walk with `compress` stubbed to return its state unchanged, then
 with `schedule` stubbed, and see which stub flattens the peak.
+
+## 2026-08-31 — IDENTIFIED: the digest's 86x is a source-path prefix
+
+The entry above said the cause was not identified and that the way in was to
+bisect sha256 rather than model it. Bisecting found it in one step, and the
+answer is not in sha256 at all.
+
+Copy `lib/sha256/sha256.kso` into a program's own directory and import it as
+`./sha256` instead of `std/sha256`. Same bytes, same digest, same allocation
+count to within 0.04%:
+
+    import "./sha256"     allocs 713,807   arena_peak_bytes  1,048,576
+    import "std/sha256"   allocs 713,523   arena_peak_bytes 90,177,536
+
+Eighty-six times the peak from the import line. The emitted IR says what
+changed: the local build emits four `k_beat_iter_carry` rewinds, at
+`sha256/compress`, `sha256/turned`, `sha256/digested` and `sha256/blocked`.
+The std build emits none. Every one of the nineteen sha256 functions has the
+same emitted name in both, so it is not a lookup miss on a spelling.
+
+`src/beat.rs`, the filter this file's 2026-07-27 entry describes narrowing
+from "every group whose name contains a slash" to "imported groups stay out
+of the carry tier only":
+
+    let imported = program.fns.iter()
+        .filter(|d| d.file.starts_with("std/") || d.file.starts_with("lib/"))
+
+`d.file` is the source path, and `ast::FnDecl` documents it as the thing err
+origins are built from — "{name} at {file}:{line}". It is a diagnostic field
+being read as a semantic marker, by string prefix. Two consequences, and they
+are different in kind:
+
+**One, deliberate.** A genuine `std/` import loses its carry beat, and the
+`ids.retain` two lines below then drops the id as well, so the group gets
+neither the carry rewind nor the plain bracket. sha256's block walk is
+collateral: it carries an eight-word state list, not the unbounded
+caller-invariant the rule was written against. That is the 90 MB, and it is
+the implementer's to settle — the ledger bounced this class on 2026-08-29.
+
+**Two, a defect.** The `lib/` arm is a RELATIVE PATH PREFIX on the user's own
+source, so a program's memory behaviour depends on the directory it was built
+from. Proven with identical bytes:
+
+    built from an arbitrary directory   arena_peak_bytes  1,048,576
+    built from lib/app                  arena_peak_bytes 90,177,536
+
+The arm is not dead weight — `kanso check lib/json` is how the compile gate
+measures the library, so removing it moves the compile veins. But a user who
+keeps their code in a directory called `lib` gets a different program, and
+nothing in the tree says so.
+
+Both are one change away from each other and neither is started. What the
+fix needs is a real marker for "this declaration came from an imported
+module", set where imports are resolved rather than inferred from a path,
+and then a decision about whether the carry exclusion should survive on that
+marker at all. The measurement to make first is the cheap one: strip the
+exclusion, and read the compile veins and the sha256 peak together.
+
+The four A/B models in the entry above are not wasted. They are what proves
+the exclusion is the only thing holding the digest, because every one of them
+is the same shape without the `std/` import and every one reclaims.

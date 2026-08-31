@@ -28,9 +28,14 @@
 # one self-recursive loop in the file — "rewinds every iteration". That looks
 # like the answer and is not: four models of the shape, up to and including an
 # outer walk carrying a list around an inner sixty-four-round loop returning
-# one, all read the same verdict and all hold a single arena block. The log
-# entry for 2026-08-31 has the four and what each ruled out. What holds here is
-# narrower than any of them and is not identified yet.
+# one, all read the same verdict and all hold a single arena block.
+#
+# What holds it is the import line. Copy this file into a program's own
+# directory and import it as `./sha256` rather than `std/sha256`, and the same
+# bytes read 1,048,576 arena bytes where the std import reads 90,177,536 —
+# eighty-six times, from a source-path prefix in beat.rs that keeps imported
+# groups out of the carry tier. The second log entry for 2026-08-31 has the
+# bisection, the emitted-IR diff and the two consequences.
 #
 # The message here is forty-four bytes — ONE padded block — because a fixture
 # that ran at the sizes above would take a golden suite minutes. So this pins
