@@ -321,15 +321,6 @@
 # every program that links the runtime carries the same added bytes whether
 # its own walk reaches them or not. Bought 89,889,828 instructions on
 # deepbench.
-jsonbench text=82722
-encodebench text=99746
-oneshot text=99794
-basket text=92162
-widebench text=100802
-deepbench text=64642
-escapebench text=50370
-pendbench text=75282
-indexbench text=52242
 # 2026-08-31: the word-at-a-time character count. 752 bytes wherever it is
 # inlined twice and 368 where it is inlined once; basket takes 1,520 because
 # it holds four copies. The tail loop is told not to vectorise — it trips at
@@ -346,3 +337,12 @@ indexbench text=52242
 # 2026-08-31: +16 bytes in every binary, which is the one store that forgets
 # the character-seek cursor when a beat rewinds the arena. The cursor named
 # its string by address and the rewind hands those addresses back.
+jsonbench text=85250
+encodebench text=102274
+oneshot text=102322
+basket text=94786
+widebench text=103330
+deepbench text=67074
+escapebench text=52898
+pendbench text=77794
+indexbench text=54690
