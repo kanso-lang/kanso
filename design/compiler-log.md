@@ -3470,3 +3470,33 @@ design question, stated properly at last.
 
 Nothing shipped from this. The branch is reverted to main and the fixture, the
 bisection and these measurements are the whole product.
+
+## 2026-08-31 — the fixture the carry boundary was missing
+
+The correction above says the carry exclusion is a boundary on what may rewind
+and that the pin's argument — raw bytes hold no pointers, a list of records
+might — wants a fixture rather than a reading of the comment. This is that
+fixture, and it lands on its own because it is worth having whatever the
+boundary turns out to be.
+
+`tests/golden/micro/a_library_scanner_threads_records_across_a_rewind` carries
+a window of eight records through four hundred rounds, shifting it each time,
+and prints a field out of the element that has passed through the carry eight
+times since the round that built it. `m/shifted/2` reads "beat: rewinds every
+iteration", so the records really are live across a rewind, and both engines
+answer `8 18974 19170`.
+
+It is asked at the observable end. If a rewind ever left those elements
+pointing into arena that had been given back, the printed field is where it
+shows, and the micro corpus compares the interpreter against native and
+against a release build — so a divergence appears as a diff rather than as a
+plausible-looking number one engine invented.
+
+Watched red before it was kept: shifting the window wrong by one slot
+(`s[6]!` twice) turns both the library arm and the release-built arm red on
+the right line. It passes today because these groups are not carried today;
+it exists so the change that admits them has something to be wrong against.
+
+The corpus had nothing in this shape. Every mem fixture pins allocation counts
+and every micro fixture that touches records reads them without a rewind in
+between.
