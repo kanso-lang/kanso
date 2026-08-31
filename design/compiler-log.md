@@ -2938,3 +2938,21 @@ is a transition state under the differential law, not a resting place;
 a user meeting the refusal cannot file the use case, they conclude the
 language is broken. The ledger entry's removal rides the next
 reconciliation with main.
+
+## 2026-08-29 — correction: the yagni axis, in Clay's words
+
+The previous entry's meta-line (yagni governs tooling, never surface)
+drew the wrong axis. Clay: "there really is no such thing as yagni in
+language design. there may be something you don't have any evidence
+you need yet and if the user base or you yourself end up wanting it
+then fine you add it at that time. but if there's a feature you say is
+important enough to add then you are deciding it's important enough to
+add and make usable right now."
+
+So the axis is undecided versus half-shipped. A thing with no
+evidence of need waits for the evidence — that is the --explain-copies
+ruling, and it needs no other justification. A feature the language
+has admitted is a decision already made, and it is finished now:
+every engine speaks it, or the decision was not made. "Refuse
+honestly" is the differential law's transition state, never a place a
+decided feature rests.
