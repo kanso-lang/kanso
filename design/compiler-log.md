@@ -2813,3 +2813,38 @@ own, which is a wall-clock claim, and instructions are not wall clock.
 jsonbench's instruction count FELL across #1178 while its .text rose, so
 whatever the code growth costs is not work. Whether it costs cache is a
 question for an idle box at a release sitting, not for this container.
+
+## 2026-08-31 — the one-time branch purge, and the test that made it possible
+
+Clay turned on auto-delete-on-merge, which covers every merge from here
+and none of the 388 branches that had already piled up. This is the
+sweep of those.
+
+The obstacle was named in an earlier entry and it is real: the
+repository squash-merges, so a landed branch's commits never become
+ancestors of main. `git branch -r --merged origin/main` answers 1 out of
+389, `--no-merged` answers 387, and `git merge-tree --write-tree` calls a
+branch that certainly landed live. Every git-native test agrees the
+branches are unmerged and every one of them is wrong.
+
+What does work is the squash commit's own subject. A squash merge writes
+the branch's subject with `(#N)` appended, so a branch carrying a commit
+whose subject appears on main that way has landed. Two shapes were tried.
+Matching the branch TIP's subject flags 176 of 388 and misses 75 of the
+95 heads the pull-request record confirms merged — branch tips carry
+fixup subjects that never became a PR title. Matching ANY commit on the
+branch, computed as `origin/main..origin/NAME` so main's own history is
+excluded, flags 325 and misses 11.
+
+Precision on the ground-truth set is 84 of 84: every branch the test
+flags among the 95 recent merges was in fact merged. The 11 it fails to
+flag stay on the remote, which is the direction to fail in. Six more were
+held back by hand because their matching subject was short enough for the
+match to be luck — `a-record-field-waits-too`, `curly-maps`,
+`forward-slash-scan`, `the-chart-gains-the-work`, `the-chart-has-to-draw`,
+`welfare-reads-the-work`. That leaves 319 deleted and 69 standing.
+
+`design/log/branch-purge-2026-08-31.txt` holds every deleted name beside
+the commit it pointed at, so each one goes back with a single push. A
+sweep that cannot be undone is a sweep nobody should run, and the record
+costs 21 KB.
