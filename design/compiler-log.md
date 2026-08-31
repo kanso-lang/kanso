@@ -3808,6 +3808,23 @@ block is mmap'd and its untouched tail never becomes resident, so what a
 program that tenures nothing pays is zero — `k_ten_alloc` runs only when
 something is promoted.
 
+**The runner's rows.** widebench 64,535,771 to 63,757,213 and indexbench
+5,244,741 to 5,243,094; every other row byte-identical. The container measured
+-778,572 and -1,647 against the runner's -778,558 and -1,647, so the two agree
+to fourteen instructions on one row and exactly on the other.
+
+`compile_instructions` FALLS 628, 42,300,376 to 42,299,748, with
+`compile_allocs` and `compile_peak_bytes` byte-identical at 29,864 and 728,030.
+The diff is a constant and nine lines of comment in runtime.c, which
+`kanso check lib/json` never runs and which reaches the compiler only through
+`include_str!`. kanso#1178's entry recorded the same mechanism moving this
+vein UP by 2,687 the day before, which is the point the ledger entry
+"Whether a compile_instructions move that cannot be work needs an attribution"
+makes: the sign does not track the direction of the edit, because neither is
+about the front end's work.
+
+Welfare 87.8371 to 87.8507, banked with `--set` in this PR.
+
 The bound the doubling exists for still holds. K_TEN_CAP is 64 MiB, so doubling
 from 256 KiB runs out of licence after nine blocks where it took eleven from
 64 KiB, and k_ten_holds' walk is shorter at every size.

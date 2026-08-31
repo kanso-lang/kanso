@@ -751,7 +751,7 @@
 # against a per-character encode loop is exactly the kind of trade two
 # machines price differently. compile_peak_bytes fell 2,090 on both hosts to
 # the byte, because a String sized at its length does not overshoot.
-compile_instructions=42300376
+compile_instructions=42299748
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more
