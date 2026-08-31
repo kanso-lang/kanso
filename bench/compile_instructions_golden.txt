@@ -751,7 +751,30 @@
 # against a per-character encode loop is exactly the kind of trade two
 # machines price differently. compile_peak_bytes fell 2,090 on both hosts to
 # the byte, because a String sized at its length does not overshoot.
-compile_instructions=42298874
+# 2026-08-31 (the AST's identifiers are inline names): 42,298,874 ->
+# 41,496,870, a fall of 802,004, or 1.90%. Banked, and unlike the three notes
+# above it this one is the front end's work rather than layout: compile_allocs
+# falls 14.97% and compile_peak_bytes 1.98% with it, where a layout move leaves
+# both byte-identical. Six per-occurrence AST positions hold a `Name` instead of
+# a `String`, so 4,470 allocate/free pairs are gone and `_int_malloc` and
+# `_int_free` fall with them.
+#
+# The first build of that change read the other way: 56,538,789, a RISE of 32%,
+# and `core::str::converts::from_utf8` was 13,295,370 of it — 23.52% of the
+# whole front end. `Name::as_str` was validating utf-8 on every read of bytes
+# that had come out of a `&str` to begin with. It reads unchecked now, licensed
+# by `Repr` being private and `Name::new` being the only place an inline name is
+# built. The number is recorded because the mistake is invisible in the source:
+# the comment above that line already argued the invariant, and the code checked
+# it anyway.
+#
+# Recorded so a later reader does not go hunting: removing nine redundant
+# `Name::new(&x.to_string())` calls that clippy flagged moved this row UP 80,439
+# in the container measurement (41,843,390 -> 41,923,829). Nine fewer
+# allocations do not cost 0.19%; the inliner changed its mind about a small
+# function, which is the same layout effect the notes above describe. The
+# shorter source is kept because it is the right code.
+compile_instructions=41496870
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more

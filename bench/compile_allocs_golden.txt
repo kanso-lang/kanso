@@ -223,4 +223,14 @@
 # than to hold. mark_bare_quals collected every bare identifier in the module
 # into a set it then asked about the surfaced names and the rename targets
 # only; it tests that membership before inserting now.
-compile_allocs=29864
+# 2026-08-31 (the AST's identifiers are inline names): 29,864 -> 25,394, a
+# fall of 4,470, or 14.97%. Banked, and the largest single fall this row has
+# had. Six per-occurrence positions hold a `Name` instead of a `String` —
+# Tok::Ident, Expr::Ident, Expr::Partial, Pattern::Var, Pattern::Nullary, and
+# the type name on Pattern::Ctor and Pattern::Annotated — so a name of
+# twenty-two bytes or fewer lives in the node rather than on the heap. The
+# dhat map put 6,983 blocks on three of those sites; the difference between
+# that and 4,470 is names over the threshold plus the conversions at the
+# boundaries where declaration-keyed tables still hold Strings, and those are
+# filled once per declaration rather than once per mention.
+compile_allocs=25394

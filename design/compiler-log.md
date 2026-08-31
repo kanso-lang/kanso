@@ -3123,3 +3123,105 @@ The six before it were staged files and directories keyed by something two
 tests could collide on. This one is a counter, which is why the sweep that
 found those could not have found it — the shape is "one mutable thing two
 tests reach", and the file path was only ever the commonest spelling of it.
+
+## 2026-08-31 — DONE: the AST's identifiers are inline names (#1188)
+
+The second half of the inline-name ruling, and the half that pays. The type
+landed on its own first and welfare refused it: 96,963 compile instructions
+for a module nothing called. That was the objective working. A type with no
+user is a cost with no benefit, and the unit of change is the type together
+with its first user.
+
+Six per-occurrence positions changed from `String` to `Name`: `Tok::Ident`,
+`Expr::Ident`, `Expr::Partial`, `Pattern::Var`, `Pattern::Nullary`, and the
+type name on `Pattern::Ctor` and `Pattern::Annotated`. The dhat map from
+2026-08-28 put 6,983 of the front end's blocks on three of those sites —
+`parser.rs:2127` at 3,197, `lexer.rs:631` at 3,157, `parser.rs:1793` at 629.
+
+Downstream tables keyed by declaration stay `String` and convert at the
+boundary. They are filled once per declaration rather than once per mention,
+so a `to_string()` there is O(declarations) and leaves the traffic where the
+win is. Measured rather than assumed: the whole conversion is worth 4,470
+blocks, which is 64% of the three sites' 6,983, and the remainder is names
+over twenty-two bytes plus the boundary conversions.
+
+Measured in the box on `lib/json`, both sides on the same host (glibc
+2.39-0ubuntu8.7, rustc 1.94.1, so these are deltas and the goldens' rows
+come off the runner):
+
+    compile_allocs        29,864 -> 25,394     -14.97%
+    compile_peak_bytes   728,030 -> 713,606     -1.98%
+    compile_instructions 42,734,177 -> 41,923,829  -1.90%
+    compile_rounds        40 -> 40
+    compile_visits        16,806 -> 16,806
+
+The runner's rows, which are what the goldens carry:
+
+    compile_allocs        29,864 -> 25,394        -14.97%
+    compile_peak_bytes   728,030 -> 713,606        -1.98%
+    compile_instructions 42,298,874 -> 41,496,870  -1.90%
+
+Allocations and peak read the same number on both hosts, as they have every
+time; the instruction rows differ by host and agree to within four hundredths
+of a percent on the direction and size of the move, which is what the
+delta-plus-golden practice is for.
+
+Rounds and visits are byte-identical, which is the check that this changed
+how the front end holds names and not what it decided. The emitted code is
+identical for the same reason: the cost-goldens job reported every runtime
+vein green — emitted, machine code, work, and the six benchmark counter sets
+— and only the three compile veins moved. kq's five stay where kq#83 left
+them.
+
+welfare 73.8913 -> 74.3319, ratcheted in the same commit.
+
+#1033 declined the interned symbol at "365 conversion sites", and the
+propagation this hit is the same phenomenon at a tenth the size: 126
+compiler errors, all mechanical, because `Expr::Partial` or-patterns with
+`Expr::Ident` in the walks and had to travel with it. The difference from
+#1033 is that an inline name needs no interner, no arena and no lifetime —
+it is the same twenty-four bytes a `String` occupied, so the conversion is
+the whole cost and there is no ongoing one.
+
+### the 23.5% that was hiding in `as_str`
+
+The first build read **+32% instructions** — 56,538,789 against a baseline
+of 42,734,177 — and `core::str::converts::from_utf8` was 13,295,370 of them,
+23.52% of the whole front end. `as_str` was validating utf-8 on every read
+of bytes that had come out of a `&str` to begin with. The comment above it
+already argued the invariant and the code checked it anyway, which is the
+shape to watch for: a proof written down beside a runtime test of the same
+claim means one of the two is redundant, and here the expensive one was.
+
+It reads unchecked now, and what makes that sound is structural. `Repr` is
+private to the module, `Repr::Inline` is built in exactly one place, and
+that place copies `s.as_bytes()` whole and records the slice's length. The
+same closing of the variants that #1188's first commit made for `PartialEq`
+is what licenses this: a caller cannot hand-build an inline name, so the
+range is always a complete `&str`.
+
+`a_name_holds_every_encoding` reads the range back through the public door
+for one-, two-, three- and four-byte characters, at the longest length that
+still fits inline and again one character over. Watched red two ways:
+
+- length recorded in characters rather than bytes: the invalid `&str`
+  reaches the formatter and the process aborts. Under the checked read this
+  was a panic with a message; under the unchecked one it is undefined
+  behaviour that happens to be loud, which is the reason the spec has to
+  read the bytes back rather than trust the type.
+- threshold strict, `< INLINE` rather than `<=`: `é` eleven times is
+  twenty-two bytes and spills, and two specs go red.
+
+The existing multibyte spec covers three-byte characters only, so it catches
+the first mutation and not the second. Four widths at the boundary is what
+the unchecked read is worth.
+
+### a smaller thing, recorded because it will look like noise later
+
+Removing nine redundant `Name::new(&x.to_string())` calls that clippy
+flagged moved compile_instructions **up** 80,439, from 41,843,390 to
+41,923,829. Nine fewer allocations should not cost 0.19%, and the reason is
+the same one #1186 attributed: the compiler's own binary rearranges when its
+source does, and `Name::new` is small enough for the inliner to change its
+mind about. The shorter source is kept because it is the right code; the
+number is recorded so a later reader does not go looking for a regression.
