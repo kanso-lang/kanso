@@ -3597,13 +3597,27 @@ compile_allocs 25,394, compile_peak_bytes 713,606, rounds 40 and visits 16,806
 all unchanged, which is right — this changes what the analysis decides, not
 what deciding costs.
 
-WELFARE DOES NOT MOVE. 74.33 against a floor of 74.33, and that is worth saying
-out loud rather than passing over: the largest memory result in weeks is
-invisible to the objective, because no benchmark in the suite streams. Every
+ONE COMPILE ROW MOVES, and CI found it rather than this container:
+`compile_instructions` 41,496,870 -> 41,366,636, a fall of 130,234 or 0.31%,
+read out of the cost-goldens job log. `beat_loops` built two sets and ran two
+extra `retain` passes to decide which groups were imported by reading the
+source path off every declaration, and removing the test removes all of it.
+Banked, and the golden regenerated with that note.
+
+WELFARE MOVES ON THAT ROW AND ONLY THAT ROW: 74.33 -> 74.34, ratcheted. Which
+is worth saying out loud rather than passing over — the objective priced this
+change at a third of a per cent of compile work and could not see the 76x fall
+in a digest's peak at all, because no benchmark in the suite streams. Every
 program welfare weighs either holds its whole subject on purpose (the decoder,
 the encoder) or is small enough to sit in one block. The number is not wrong;
 it cannot see this. **OPEN:** a digest-shaped benchmark, so the next change
 that trades this dimension has something to trade against.
+
+WALL CLOCK, which welfare deliberately does not weigh, is unmoved. Native,
+message from a file: 0.093 s at 4 KB, 0.331 at 8 KB, 1.140 at 16 KB, against
+0.094, 0.316 and 1.150 on the compiler this replaces. Those figures also say
+the digest's time is QUADRATIC while every counter above is linear, which is a
+separate finding and has its own entry below.
 
 The marker task (#199) closes with the exclusion rather than with a marker.
 There is no "imported" question left to answer because nothing in `beat_loops`
@@ -3671,3 +3685,43 @@ the arithmetic. Two shapes of fix, neither built:
 Freezing into permanent storage is the wrong shape and is recorded so nobody
 re-derives it: the schedule is per block, so a `k_caf_freeze` would be linear
 in the message and would put back the exact peak the entry above removed.
+
+## 2026-08-31 — the digest's time is quadratic and every counter says linear
+
+Measured as kanso#1194's perf check, and it is a finding rather than a check.
+Native, message read from a file:
+
+| message | wall (after) | wall (before) |
+|--------:|-------------:|--------------:|
+|  4,000 B |     0.093 s |       0.094 s |
+|  8,000 B |     0.331 s |       0.316 s |
+| 16,000 B |     1.140 s |       1.150 s |
+
+The two columns agree, so the carry change is wall-clock neutral while cutting
+the peak 76x. That is the part that was owed. The part that was not:
+
+Doubling the message takes the time up about 3.5x, and every deterministic
+counter over the same range is exactly linear — allocs 319,049 -> 637,892 ->
+1,270,518, alloc_bytes 39,818,577 -> 79,455,121 -> 158,623,425, beat_iters
+8,214 -> 16,436 -> 32,686, evac_allocs 16,535 -> 33,041 -> 65,791, evac_bytes
+1,322,160 -> 2,642,640 -> 5,262,640. Two doublings, every row exactly doubling
+with them.
+
+So the quadratic is somewhere nothing in the tree watches. That is the blind
+spot `bench/emitted_golden.txt` was built for — 7.6% of decode speed leaked
+away with every allocation counter byte-identical — and welfare, which weighs
+retired instructions, would catch it only if a digest were in the suite.
+
+WHERE TO LOOK, and there is precedent. `gathered` reads `padded[base]!` once
+per input byte and `blocked` asks `length padded` once per block, both against
+a list as long as the message. kanso#1172 gave the STRING index a cursor and
+took indexbench from quadratic to linear, 488x; nobody has audited the LIST
+index for the same shape.
+
+A first probe went wrong and is recorded so it is not repeated. A scratch loop
+doing `built (n - 1) (push acc n)` reads alloc_bytes 874,320,544 at n = 5,000
+against allocs of 40,017 — the pushes are copying the list rather than
+extending it, which is a different defect and drowned the measurement. Probe
+the index with a list the loop does not also build.
+
+**OPEN.** Nothing shipped from this; it is the measurement and where it points.
