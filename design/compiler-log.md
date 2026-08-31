@@ -3501,227 +3501,101 @@ The corpus had nothing in this shape. Every mem fixture pins allocation counts
 and every micro fixture that touches records reads them without a rewind in
 between.
 
-## 2026-08-31 — the carry exclusion goes, and it was never what it said it was
+## 2026-08-31 — the carry exclusion removed, measured properly, and REVERTED
 
-SEARCHED FIRST, because the last entry on this thread was a correction for not
-doing it: design/compiler-log.md, design/log/compiler-log-archive.md,
-design/*.md, and — this time — the test suite, `beat.rs` itself, and the two
-runtime functions the exclusion's comment made a claim about. The pin the
-correction found is `beat::tests::json_decode_loops_stay_conservative`, and it
-is the reason this entry is possible rather than an obstacle to it.
+SEARCHED FIRST: design/compiler-log.md, design/log/compiler-log-archive.md,
+design/*.md, and — after the correction two entries above — the test suite,
+`beat.rs` itself, and the runtime functions the exclusion's comment makes
+claims about.
 
-The exclusion is gone. `d.file.starts_with("std/") || d.file.starts_with("lib/")`
-kept whole modules out of the carry tier, and three separate things were wrong
-with it.
+The exclusion is `d.file.starts_with("std/") || d.file.starts_with("lib/")` in
+`beat_loops`, and three things are wrong with it. Two of them survive this
+entry; the third is the reason nothing shipped.
 
 **The field is a diagnostic.** `file` is what error origins are built from, so
-`std/sha256` and a user directory called `lib` read alike. The same package
-compiled from `lib/app` held 27,262,976 arena bytes where the same sources
-under `elsewhere/app` held 1,048,576. `tests/a_program_is_not_its_directory.rs`
-is that measurement as a spec — it copies `lib/sha256/sha256.kso` into the
-package and imports it as `./digest`, because a `std/sha256` import reads
-`std/` in both arms and passes either way. Two earlier drafts of it did exactly
-that and proved nothing; the file's header says so, so the third is not
-re-derived.
+`std/sha256` and a user directory called `lib` read alike, and the same package
+compiled from `lib/app` holds 27,262,976 arena bytes where the same sources
+under `elsewhere/app` hold 1,048,576. `tests/a_program_is_not_its_directory.rs`
+pins BOTH numbers now, in the shape `tests/sha256_peak.rs` already uses: the
+defect asserted as a fact, so it cannot be lost while the fix waits.
 
-**The premise was false.** The comment said a shared library driver threads its
-caller's invariant source through the loop, so carrying it copies an unbounded
-value per iteration. `k_beat_iter_carry` copies only what lies above the mark
-and a loop's mark is pushed at entry, so the caller's source is always below it
-and always shared. Measured, not read: a fold over a list built through
-`std/list` allocates 556,768 bytes at two thousand elements and 2,223,856 at
-eight thousand. Linear.
+**The premise the comment gives is false.** It says a shared library driver
+threads its caller's invariant source through the loop, so carrying it copies
+an unbounded value per iteration. `k_beat_iter_carry` copies only what lies
+above the mark, and a loop's mark is pushed at entry, so the caller's source is
+below it and shared. A fold over a list built through `std/list` allocates
+556,768 bytes at two thousand elements and 2,223,856 at eight thousand.
 
-**And the pin's own worry was never being enforced by it.** With the exclusion
-removed, the licensed list for `lib/json` gains `list/bisect`, `list/found_in`,
+**And it is not enforcing the pin that refused its removal.** With the test
+gone, `lib/json`'s licensed set gains `list/bisect`, `list/found_in`,
 `list/holds_all?` and `list/holds_any?` — three boolean predicates and a binary
-search, all in `std/list`, none of which accumulates — and *every group json
-itself declares reads the same on both sides*. json's scanners are refused by
-the classifier, which is what the pin's sentence is about; the exclusion was
-refusing four search predicates and sha256's cluster, and nothing else in the
-tree. `fold_go`, `fold_flat`, `drain` and `next_skipped` are "grow-only:
-another group tail-calls it" with or without it.
+search — and every group json itself declares reads the same on both sides.
+json's scanners are refused by the classifier. The exclusion's whole live
+effect is those four predicates and sha256's cluster.
 
-WHAT IT BOUGHT, on the digest, native, `KANSO_COUNTERS`:
+WHY IT IS REVERTED. The trade is memory for time and the time is quadratic.
+Native, ASCII message read from a file, each arm built in its own directory:
 
-| message | arena peak before | after | allocations before | after |
-|--------:|------------------:|------:|-------------------:|------:|
-|  1,000 B |        10,485,760 | 1,048,576 |  81,147 |  81,181 |
-|  2,000 B |        20,971,520 | 1,048,576 | 162,091 | 162,157 |
-|  4,000 B |        39,845,888 | 1,048,576 | 318,921 | 319,049 |
-|  8,000 B |        79,691,776 | 1,048,576 | 637,638 | 637,892 |
+| message | before, time | before, peak | after, time | after, peak |
+|--------:|-------------:|-------------:|------------:|------------:|
+|   8,000 |      0.084 s |   79,691,776 |     0.309 s |   1,048,576 |
+|  16,000 |      0.170 s |  159,383,552 |     1.152 s |   1,048,576 |
+|  32,000 |      0.331 s |  316,669,952 |     4.367 s |   1,048,576 |
+|  64,000 |      0.675 s |  633,339,920 |    16.535 s |   4,194,320 |
+| 128,000 |      1.304 s |1,262,485,520 |    68.168 s |   4,194,320 |
 
-0.04% more allocations, and the peak comes off the message at these sizes. It
-does NOT become a constant, and the first draft of this entry said it did.
-Run further: 1,048,576 at 16 KB and 32 KB, 4,194,320 at 64 KB and at 100 KB,
-12,582,944 at 200 KB. The rate falls across the range — 1,048 bytes per input
-byte at 1 KB against 63 at 200 KB, where the old code held about ten thousand
-at every size — but the last doubling took the peak up threefold, so calling
-the remainder sublinear would be reading four points as a law. Holding the
-message and doing nothing with it reads one block at 100 KB, so what is left
-is not the arena failing to reclaim.
+The digest is linear in time today. With the carry it is quadratic — 52x at
+128 KB, and CI said so before this table existed: the `asset digests` job
+digests a 1,604,098-byte wasm and took 49 seconds on main, then sat past
+twenty-five minutes on the branch. Trading 1.2 GB for 52x is not a trade this
+project's weights would take, and welfare cannot arbitrate it because no
+benchmark in the suite streams (**OPEN**, and the reason a digest benchmark is
+worth building).
 
-What it is, run down rather than left open: `sha256/padded_bytes` opens with
-`list/to_list b`, so the message is re-expressed as a list of integers at
-sixteen arena bytes per input byte and held for the whole walk, because
-`digested` indexes into it. massif at 64 KB puts 46.17% of the peak —
-2,097,184 bytes — on `k_b_push_into_proven` under `d_list/fold_3`, which is
-the buffer that list is grown into; the rest is two 1 MiB base blocks. The
-steps at 64 KB and at 200 KB are that buffer's doubling crossing a power of
-two, and the 400 KB reading settles it: 13,631,520 bytes, so doubling the
-input from 200 KB added one megabyte, and the rate is 34 bytes an input byte
-where it was ten thousand.
+**HOW THE FIRST REPORT GOT IT WRONG, because the mistake is easy to repeat.**
+Three separate A/B runs said the change was wall-clock neutral. All three were
+invalid. `kanso build` caches the native binary, and rebuilding the RUST
+compiler does not invalidate that cache — the key is over the sources and
+`runtime.c`, not the compiler. So rebuilding `src/beat.rs` and re-running
+`kanso build` in the same directory re-ran the SAME binary in both arms, and
+the two columns agreed because they were one column. The numbers above come
+from a fresh directory per arm. Any A/B on emitted or runtime behaviour has to
+build into a directory the other arm never touched.
 
-So the remaining growth belongs to lib/sha256 rather than to the beat
-machinery. **OPEN, and it is a library change:** the digest could walk the
-bytes value it is handed instead of materialising a list of it, and the peak
-would be a constant. Nothing here is in the way of that.
-`tests/sha256_peak.rs` pinned the old shape and said in its own header that the
-assertion was the thing to delete when the hash learned to stream; it now reads
-1,048,576 at 1,024, 2,048 and 4,096 bytes. Three sizes rather than two, because
-two points fit any line.
+WHAT IS LEFT OF THE PEAK, run down while the branch was still alive and true
+whichever way this goes: `sha256/padded_bytes` opens with `list/to_list b`, so
+the message is held as a list of integers at sixteen arena bytes an input byte
+for as long as `digested` indexes it. massif at 64 KB put 46.17% of the peak —
+2,097,184 bytes — on `k_b_push_into_proven` under `d_list/fold_3`, the buffer
+that list is grown into. A program that reads the same file and prints its
+length holds one block at 400 KB with eight allocations, because a bytes value
+never becomes a list. That is lib/sha256's to fix and nothing here is in the
+way of it.
 
-WHAT IT COST, and it is the same trade seen from the small end. The mem fixture
-digests forty-four bytes — one padded block — so the rewinds happen and there
-is nothing to give back: allocs 1,980 -> 5,259, alloc_bytes 424,369 -> 638,865,
-beat_iters 11 -> 141, evac_allocs 26 -> 290, peak unmoved at one block.
-`thunk_evals` 1 -> 64 with `thunk_forces` unchanged, which is `k_memo_outlives`
-working as documented: a memo whose result the rewind would reclaim is declined
-and recomputed. The golden is regenerated with all of that in its header.
+TWO THINGS FOUND ON THE WAY, both surviving the revert:
 
-The rest of the veins, in full: `bench/emitted_golden_others.txt` scanbench
-3,743 -> 3,753 calls and 20,019 -> 20,030 lines; `bench/cost_golden_scan.txt`
-beat_iters 15 -> 16. Nothing else. Decode, encode, oneshot, basket, escape,
-wide and pend counters byte-identical; machine code byte-identical;
-compile_allocs 25,394, compile_peak_bytes 713,606, rounds 40 and visits 16,806
-all unchanged, which is right — this changes what the analysis decides, not
-what deciding costs.
+- **`thunk_evals` is not engine-shared and never was.** Measured on main: a
+  1,000-byte sha256 reads `thunk_forces=1024 thunk_evals=1024` native and
+  `1088`/`17` interpreted. `k_memo_outlives` declines the memo when the answer
+  was built inside the innermost beat; the interpreter has no arena to rewind.
+  `mem_corpus_interp_matches_the_semantic_counters` classes evals with allocs
+  and forces as engine-shared semantics, and no fixture has ever asked. The
+  classification is left alone here — a gate that is not failing is not
+  weakened on the way past — and the measurement is recorded so the next
+  fixture in that shape is not a surprise. **OPEN.**
+- **Two tests in `a_file_that_is_not_text.rs` shared one temp directory and one
+  `run.kso`, and raced.** Caught once as `an entry file needs at least one
+  statement` about a file that has one. One directory per test now, the same
+  fix kanso#1169 made for the playground pair. That is the only compiler-facing
+  change that ships from this branch.
 
-ONE COMPILE ROW MOVES, and CI found it rather than this container:
-`compile_instructions` 41,496,870 -> 41,366,636, a fall of 130,234 or 0.31%,
-read out of the cost-goldens job log. `beat_loops` built two sets and ran two
-extra `retain` passes to decide which groups were imported by reading the
-source path off every declaration, and removing the test removes all of it.
-Banked, and the golden regenerated with that note.
+WHAT SHIPS: the race fix, the directory defect pinned with both its numbers,
+and this entry. The removal is built, measured and declined — recorded so the
+next attempt starts from the curve rather than from the idea.
 
-WELFARE MOVES ON THAT ROW AND ONLY THAT ROW: 74.33 -> 74.34, ratcheted. Which
-is worth saying out loud rather than passing over — the objective priced this
-change at a third of a per cent of compile work and could not see the 76x fall
-in a digest's peak at all, because no benchmark in the suite streams. Every
-program welfare weighs either holds its whole subject on purpose (the decoder,
-the encoder) or is small enough to sit in one block. The number is not wrong;
-it cannot see this. **OPEN:** a digest-shaped benchmark, so the next change
-that trades this dimension has something to trade against.
-
-WALL CLOCK, which welfare deliberately does not weigh, is unmoved. Native,
-message from a file: 0.093 s at 4 KB, 0.331 at 8 KB, 1.140 at 16 KB, against
-0.094, 0.316 and 1.150 on the compiler this replaces. Those figures also say
-the digest's time is QUADRATIC while every counter above is linear, which is a
-separate finding and has its own entry below.
-
-The marker task (#199) closes with the exclusion rather than with a marker.
-There is no "imported" question left to answer because nothing in `beat_loops`
-asks where a declaration came from any more, and the direction that question
-was heading was wrong on its own terms: a module compiled as a root and the
-same module reached through an import are the same code, and a boundary that
-answered differently for them would be the directory defect in a second
-coordinate.
-
-STILL OPEN, and unchanged by this: `k_carry_stage_kept` is the only thing that
-keeps a grow-only accumulator from being deep-copied per iteration, and its
-license comes from `linear::in_place_pushes`. A carried builder the linear
-analysis cannot prove would be quadratic. Nothing in the corpus has that shape
-today — `tests/golden/micro/a_library_scanner_threads_records_across_a_rewind`
-is the nearest, and it carries a bounded window — and the classifier is what
-stands between a program and it. That is a boundary worth a fixture of its own.
-
-## 2026-08-31 — thunk_evals was never engine-shared, and a benchmark had been saying so
-
-Found while landing the entry above: the carry removal turned
-`mem_corpus_interp_matches_the_semantic_counters` red on the digest fixture,
-interp `thunk_evals=1` against native `thunk_evals=64`. The first reading was
-that the change had introduced a divergence. It had not.
-
-Measured on main, before any of today's work, on a 1,000-byte sha256:
-
-- native, `KANSO_COUNTERS=1 ./dg` — `thunk_allocs=16 thunk_forces=1024
-  thunk_evals=1024`
-- the same program interpreted, `kanso play` — `thunk_allocs=17
-  thunk_forces=1088 thunk_evals=17`
-
-Sixty-four evaluations for one, on both engines' own numbers, on a shape that
-has been in the tree for weeks. `k_memo_outlives` declines the memo when the
-answer was built inside the innermost beat, because the loop rewinds between
-iterations and the cell would say "forced" while pointing at reclaimed arena.
-The interpreter has no arena to rewind and answers from the memo. The mem
-corpus simply had no fixture where a deferred value is forced inside a beat,
-so the oracle test's classification — `allocs/forces/evals` engine-shared,
-`frees/escaped/live_exit` native-only — had never been asked the question.
-
-`thunk_evals` moves to the native-only side. The reason is not that the gate
-was inconvenient: the language is pure, so how many times a value is COMPUTED
-is not something a program can observe, and `thunk_forces` beside it pins what
-the program actually did. The remaining assertion was mutated to check it still
-bites — `forces + 2` instead of `forces + 1` in eval.rs turns the digest
-fixture red on the right line.
-
-**OPEN, and it is a real cost rather than a classification.** The value native
-recomputes here is sha256's message schedule: sixty-four words, built once per
-block, read once per compress round, rebuilt on every read. 8,064 evaluations
-where 126 would do, on an 8 KB message. It does not show in `allocs` because
-the schedule's storage is reused inside the block, but it is sixty-four times
-the arithmetic. Two shapes of fix, neither built:
-
-- Tenure the answer. `k_ten_alloc` already gives a per-beat-depth region that
-  survives rewinds and is freed at `k_beat_pop`, which is exactly the lifetime
-  a per-block value wants. `k_survives_x` already consults it.
-- Force the thunk before `k_beat_push`. The comment on `k_memo_outlives` says
-  the call site that opens a beat "promises its arguments are already
-  evaluated — a thunk is the one argument that is not"; making good on the
-  promise puts the answer below the mark, where it survives every rewind.
-  This one changes when work happens, so it runs into the 2026-08-23 ruling on
-  undemanded knots and wants a gavel rather than a patch.
-
-Freezing into permanent storage is the wrong shape and is recorded so nobody
-re-derives it: the schedule is per block, so a `k_caf_freeze` would be linear
-in the message and would put back the exact peak the entry above removed.
-
-## 2026-08-31 — the digest's time is quadratic and every counter says linear
-
-Measured as kanso#1194's perf check, and it is a finding rather than a check.
-Native, message read from a file:
-
-| message | wall (after) | wall (before) |
-|--------:|-------------:|--------------:|
-|  4,000 B |     0.093 s |       0.094 s |
-|  8,000 B |     0.331 s |       0.316 s |
-| 16,000 B |     1.140 s |       1.150 s |
-
-The two columns agree, so the carry change is wall-clock neutral while cutting
-the peak 76x. That is the part that was owed. The part that was not:
-
-Doubling the message takes the time up about 3.5x, and every deterministic
-counter over the same range is exactly linear — allocs 319,049 -> 637,892 ->
-1,270,518, alloc_bytes 39,818,577 -> 79,455,121 -> 158,623,425, beat_iters
-8,214 -> 16,436 -> 32,686, evac_allocs 16,535 -> 33,041 -> 65,791, evac_bytes
-1,322,160 -> 2,642,640 -> 5,262,640. Two doublings, every row exactly doubling
-with them.
-
-So the quadratic is somewhere nothing in the tree watches. That is the blind
-spot `bench/emitted_golden.txt` was built for — 7.6% of decode speed leaked
-away with every allocation counter byte-identical — and welfare, which weighs
-retired instructions, would catch it only if a digest were in the suite.
-
-WHERE TO LOOK, and there is precedent. `gathered` reads `padded[base]!` once
-per input byte and `blocked` asks `length padded` once per block, both against
-a list as long as the message. kanso#1172 gave the STRING index a cursor and
-took indexbench from quadratic to linear, 488x; nobody has audited the LIST
-index for the same shape.
-
-A first probe went wrong and is recorded so it is not repeated. A scratch loop
-doing `built (n - 1) (push acc n)` reads alloc_bytes 874,320,544 at n = 5,000
-against allocs of 40,017 — the pushes are copying the list rather than
-extending it, which is a different defect and drowned the measurement. Probe
-the index with a list the loop does not also build.
-
-**OPEN.** Nothing shipped from this; it is the measurement and where it points.
+**OPEN, and it is the whole question now:** where the quadratic is. Every
+deterministic counter is linear across the same range — allocs, alloc_bytes,
+beat_iters, evac_allocs, evac_bytes all double when the message doubles — so
+the cost is in work no counter watches. `k_beat_iter_carry` sizes and copies
+the carried slots per iteration and `k_copy_size` walks rather than counts;
+that walk is where to look first.

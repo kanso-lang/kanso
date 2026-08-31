@@ -774,14 +774,7 @@
 # allocations do not cost 0.19%; the inliner changed its mind about a small
 # function, which is the same layout effect the notes above describe. The
 # shorter source is kept because it is the right code.
-# 2026-08-31 (the carry tier stops asking where a declaration came from):
-# 41,496,870 -> 41,366,636, a fall of 130,234, or 0.31%. Banked, and it was
-# not the point of the change. `beat_loops` built two sets and ran two extra
-# `retain` passes to decide which groups were "imported" by reading the source
-# path off every declaration; removing the test removes all of it. The runner's
-# figure, read out of the cost-goldens job log — the container this was
-# developed in is rustc 1.94.1 and cannot compare.
-compile_instructions=41366636
+compile_instructions=41496870
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more

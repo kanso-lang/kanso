@@ -1,41 +1,30 @@
 //! A hash reads its message 64 bytes at a time and carries eight words of
-//! state, so what it holds is a property of the algorithm rather than of the
-//! message. This asserts that: three sizes, one number.
+//! state, so what it holds should be a property of the algorithm rather than
+//! of the message. `sha256/hex` holds the message instead: doubling the input
+//! doubles the peak arena, exactly, and the constant is about seven thousand
+//! bytes of live memory for every byte hashed.
 //!
-//! It did not hold until 2026-08-31, and the version of this file that ran
-//! before then pinned the failure — `a_hash_holds_every_block_it_has_read`,
-//! 7,340,032 bytes at 1,024 and 14,680,064 at 2,048, with a note saying that
-//! when the hash learned to stream, the assertion was the thing to delete.
-//! This is that deletion. What changed is in `beat.rs`: the analysis decided
-//! which loops could rewind their arena by reading the declaration's source
-//! path, and every `std/` module lost the rewind, so the digest never gave a
-//! block back.
+//! This asserts what the hash DOES, not what it should do. The numbers are
+//! deterministic to the byte — three runs of each size agree — so they are
+//! pinned rather than bounded, and a change that makes the hash stream will
+//! turn this red. That is the point: the entry that stops matching is the
+//! reminder, the same contract tests/golden/wasm_gaps.txt keeps.
 //!
 //! WHY IT MATTERS AWAY FROM THE TEST. `scripts/fingerprint` digests the site's
-//! assets, and docs/kanso.wasm is 1,604,098 bytes. At the old rate — about
-//! seven kilobytes of live arena for every byte hashed — that was roughly
-//! eleven gigabytes; measured, the kernel's own out-of-memory report for that
-//! run read anon-rss 13,954,684 kB.
+//! assets, and docs/kanso.wasm is 1,604,098 bytes. At this rate that is roughly
+//! eleven gigabytes of live arena for one file; measured, the kernel's own
+//! out-of-memory report for that run read anon-rss 13,954,684 kB. The
+//! asset-digests job passes on CI, so the runner has headroom this container
+//! did not — but the headroom shrinks by about seven kilobytes for every byte
+//! added to the blob, and nothing in the tree was watching that.
 //!
-//! WHAT IS AND IS NOT CLAIMED ABOVE THESE SIZES. The old peak was linear and
-//! exact — about ten thousand bytes of arena for every byte hashed, at every
-//! size. The new one still grows, and how it grows is not characterised.
-//! Natively, from a file: one 1 MiB block from 1 KB through 32 KB, 4,194,320
-//! bytes at 64 KB and at 100 KB, 12,582,944 at 200 KB, 13,631,520 at 400 KB —
-//! 1,048 bytes per input byte at the small end and 34 at the large.
-//!
-//! What is left is `sha256/padded_bytes`, which opens with `list/to_list b`
-//! and so holds the message as a list of integers, sixteen arena bytes an
-//! input byte, for as long as the walk indexes it. The steps are that list's
-//! buffer doubling past a power of two. It is the library's to fix and this
-//! spec does not pin it: the sizes below are small enough that the walk, not
-//! the message, is what they measure. The wasm blob was not re-measured — a
-//! 100 KB digest takes about forty seconds in this container.
-//!
-//! The peak is pinned exactly rather than as a ratio. A ratio stays green if
-//! both numbers grow together, which is the shape this spec exists to catch,
-//! and the arena's first block is 1 MiB so a digest that holds one reads it to
-//! the byte.
+//! The in-place append is NOT the cause and was the first guess: at 25,000
+//! bytes the run reads push_mut_fast=1,904,531 against push_mut_slow=125,541,
+//! so 93.8% of appends already take the fast path. What the counters do say is
+//! that nothing is ever reclaimed — cohort_frees=0, and alloc_bytes lands
+//! within half a per cent of arena_peak_bytes, which is one fact said twice:
+//! every byte allocated is still live when the program ends. 89% of that peak
+//! is buffer (sh_buf=220,980,512 of 247,463,936).
 
 use std::process::Command;
 
@@ -68,16 +57,20 @@ fn peak_bytes(n: u64) -> u64 {
         .unwrap_or_else(|| panic!("no arena_peak_bytes in:\n{said}"))
 }
 
-/// Four times the message, the same arena. The three sizes are read rather
-/// than the two a slope needs, because two points fit any line and the third
-/// is what says the number is a constant.
+/// Twice the message, twice the arena — to the byte. A streaming hash would
+/// read the same number twice here, and when one does this assertion is the
+/// thing to delete.
 #[test]
-fn a_hash_holds_one_block_however_long_the_message() {
+fn a_hash_holds_every_block_it_has_read() {
     let short = peak_bytes(1024);
-    let mid = peak_bytes(2048);
-    let long = peak_bytes(4096);
+    let long = peak_bytes(2048);
 
-    assert_eq!(short, 1_048_576, "the 1,024-byte peak moved");
-    assert_eq!(mid, 1_048_576, "the 2,048-byte peak moved");
-    assert_eq!(long, 1_048_576, "the 4,096-byte peak moved");
+    assert_eq!(short, 7_340_032, "the 1,024-byte peak moved");
+    assert_eq!(long, 14_680_064, "the 2,048-byte peak moved");
+    assert_eq!(
+        long,
+        short * 2,
+        "the peak stopped being linear in the message: {short} at 1,024 bytes \
+         and {long} at 2,048"
+    );
 }
