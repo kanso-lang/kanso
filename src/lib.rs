@@ -14,6 +14,7 @@ pub mod infer;
 pub mod inline;
 pub mod lexer;
 pub mod linear;
+pub mod name;
 pub mod parser;
 pub mod provenance;
 pub mod repl;

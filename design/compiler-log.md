@@ -3065,3 +3065,61 @@ what a change that did no compiler work looks like. Fifth instance this
 week of the same cause.
 
 Welfare 73.8913121796 to 73.8913693718 on the corrected rows.
+
+## 2026-08-31 — the inline name exists, and closing its variants was the finding
+
+First half of the 2026-08-29 inline-name ruling: the type, with its spec.
+The twenty-nine AST fields that will adopt it are a separate change, and
+this one is worth landing on its own because it is the piece the rest
+rests on.
+
+Twenty-two bytes of inline capacity, and it is a measurement. Across
+`lib/`, 89.8% of identifier occurrences are seven bytes or fewer and
+99.77% are twenty-two or fewer; thirty distinct names run longer and each
+appears exactly once, nearly all of them test function names. So the heap
+path is real and exercised and is not what anything hot takes. Twenty-two
+also lands the whole type on twenty-four bytes, which is what a `String`
+already costs, so no AST node grows by adopting it — pinned, not assumed.
+
+The finding came out of watching a mutation fail to fail. A `PartialEq`
+comparing representations instead of text passed the entire spec. The
+reason is that `Name::new` decides by length, so through the constructor a
+name's representation follows from its text and the two can never
+disagree — but the variants were public, so a caller could box a short
+name by hand and produce a name that read the same as another and
+compared unequal to it.
+
+The answer was to close the variants rather than to write a bigger
+assertion. `Name` is a struct around a private `Repr` now, `new` is the
+only way in, and the invariant is enforced instead of tested for. That is
+the difference between a spec that catches a mistake and a type that
+cannot have it made.
+
+Four mutations, each watched going red for its own reason:
+
+- never take the inline path: the allocation counter reads 1 where 0 is
+  required, and three specs go red including the multibyte one.
+- compare representations in `PartialEq`: passed everything, which is what
+  closed the variants.
+- hash the representation, as a derive would: the map lookup by `&str`
+  answers `None` where it should answer `Some(1)`. `Borrow<str>` requires
+  the borrowed form to hash identically and this is what enforces it.
+- order by representation: the sorted list stops matching the sorted text.
+
+The allocation property is asserted through a counting global allocator
+around `Name::new`, comparing a reading before against one after, rather
+than by asking the type which variant it is. `is_inline` exists for the
+spec to cross-check with and nothing in the compiler should need it.
+
+A seventh instance of the shared-fixture family, found by the spec flaking
+before it was committed. The allocation counter was a `static`, and cargo
+runs these tests on parallel threads, so another test's allocation landed
+between the two readings and the delta read 2 or 3 where the spec demands
+1. Measured both ways: **10 failures in 40 runs** with the shared counter,
+**0 in 40** with a thread-local one. A counter shared by threads measures
+the process; what is under test is one call on one thread.
+
+The six before it were staged files and directories keyed by something two
+tests could collide on. This one is a counter, which is why the sweep that
+found those could not have found it — the shape is "one mutable thing two
+tests reach", and the file path was only ever the commonest spelling of it.
