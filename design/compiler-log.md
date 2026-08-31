@@ -3053,3 +3053,12 @@ ritual was ruled earlier this sitting (an instruction is a real cost,
 full ritual, causes named honestly), and per-counter saturation stops
 layout jitter from leveraging a whole term. Both rulings reach the
 session in this branch's sweep.
+
+## 2026-08-29 — auto-delete of merged branches is on
+
+Clay flipped "Automatically delete head branches" in the repo
+settings, which no session could do — the GitHub proxy refuses
+repository-settings writes (the 403 task #109 kept hitting). Every
+branch merged from now on deletes itself. Task #109 closes on this;
+what remains is the one-time purge of branches that merged before the
+setting existed, which is ordinary API work any session can do.
