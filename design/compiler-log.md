@@ -3142,3 +3142,47 @@ properly means invalidating the cursor when a string dies, and that is a
 separate change with its own reasoning.
 
 DONE.
+
+## 2026-08-31 — the append's grow path moves out of line
+
+Same PR, and the third thing today that a disassembly answered and a profile
+could not. `k_b_append_mut` was still 26.5% of encodebench after the one-byte
+store landed — 42,318,000 calls at 54.6 instructions of self cost — and the
+first eight of those instructions were this:
+
+```
+    push %rbp / %r15 / %r14 / %r13 / %r12 / %rbx
+    sub  $0x28,%rsp
+```
+
+Six callee-saved registers and a frame, on every append, because one function
+held both the frontier check and the growth. The fast path — two failure
+tests, a tag dispatch, a capacity comparison and a store — needs two registers.
+The growth needs eight: it decides which allocator the new buffer comes from,
+copies twice, and frees the old header.
+
+`k_b_append_grow` is that second half, `noinline`, taking the six things it
+needs. The prologue is three pushes now.
+
+```
+    work_encodebench  8,708,075,266 -> 8,400,333,666  -307,741,600  -3.534%
+    work_jsonbench    2,862,072,365 -> 2,841,642,965   -20,429,400  -0.714%
+    work_oneshot         44,059,162 ->    43,153,612      -905,550  -2.055%
+    work_basket                                              unmoved
+```
+
+307,741,600 over 42,318,000 appends is 7.27 instructions each, which is the
+three pushes and three pops with the smaller frame beside them. `text` rises
+96 bytes in the four binaries that reach the grow path and nothing in the
+other five — a call and a small frame against what it removes from every
+caller.
+
+The counters do not move: `append_fast` and `append_grow` count the same
+events, and the nine runtime counter gates plus `native_checksum` are green.
+
+This is the same shape as the fast/slow split the allocator already uses, and
+the reason it went unnoticed is that a profile attributes by function. Both
+halves were one function, so the row said `k_b_append_mut` and nothing said
+that a third of the row was register traffic for a branch almost never taken.
+
+DONE.

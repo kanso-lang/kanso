@@ -6441,52 +6441,12 @@ static KValue k_bytes_owned(long long len, const unsigned char* data, long long 
     KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
 }
 
-static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
-    if (!k_not_failure(acc)) return acc;
-    if (!k_not_failure(x)) return x;
-    if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
-    KBytes* a = k_as_bytes(acc);
-    const unsigned char* src;
-    long long n;
-    unsigned char one;
-    if (x.tag == K_STR) {
-        KStr* s = k_as_str(x);
-        src = (const unsigned char*)s->data;
-        n = s->len;
-    } else if (x.tag == K_BYTES) {
-        KBytes* b = k_as_bytes(x);
-        src = b->data;
-        n = b->len;
-    } else if (x.tag == K_INT) {
-        one = (unsigned char)(x.payload & 0xff);
-        src = &one;
-        n = 1;
-    } else {
-        k_die("append takes bytes and a string, bytes, or byte");
-        return k_none();
-    }
-    long long acap = a->cap < 0 ? -a->cap : a->cap;
-    if (acap) {
-        KBuf* buf = ((KBuf*)a->data) - 1;
-        if (buf->used == a->len && a->len + n <= acap) {
-            k_stat_append_fast++;
-            /* A comma, a colon, a brace: the encoder's commonest append is one
-               byte, and a call into memcpy to move it costs more than the
-               move. */
-            if (n == 1) ((unsigned char*)a->data)[a->len] = *src;
-            else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
-            buf->used = a->len + n;
-            /* The bytes went into the accumulator's own spare capacity, so a
-               fresh header would differ only in its length. Where uniqueness
-               is proven, write that length in place: the header was the
-               largest single source of garbage the encoder made. */
-            if (mutate) {
-                a->len += n;
-                return acc;
-            }
-            return k_bytes_owned(a->len + n, a->data, a->cap);
-        }
-    }
+/* Everything past the frontier check, out of line. The fast path needs two
+   registers and the grow needs eight, and one function paid for both: an
+   append pushed and popped six callee-saved registers whatever it did. */
+__attribute__((noinline))
+static KValue k_b_append_grow(KValue acc, int mutate, KBytes* a,
+                              const unsigned char* src, long long n) {
     k_stat_append_grow++;
     long long cap = 2 * (a->len + n);
     if (cap < 64) cap = 64;
@@ -6562,6 +6522,55 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         return acc;
     }
     return k_bytes_owned(a->len + n, data, cap);
+}
+
+static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
+    if (!k_not_failure(acc)) return acc;
+    if (!k_not_failure(x)) return x;
+    if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
+    KBytes* a = k_as_bytes(acc);
+    const unsigned char* src;
+    long long n;
+    unsigned char one;
+    if (x.tag == K_STR) {
+        KStr* s = k_as_str(x);
+        src = (const unsigned char*)s->data;
+        n = s->len;
+    } else if (x.tag == K_BYTES) {
+        KBytes* b = k_as_bytes(x);
+        src = b->data;
+        n = b->len;
+    } else if (x.tag == K_INT) {
+        one = (unsigned char)(x.payload & 0xff);
+        src = &one;
+        n = 1;
+    } else {
+        k_die("append takes bytes and a string, bytes, or byte");
+        return k_none();
+    }
+    long long acap = a->cap < 0 ? -a->cap : a->cap;
+    if (acap) {
+        KBuf* buf = ((KBuf*)a->data) - 1;
+        if (buf->used == a->len && a->len + n <= acap) {
+            k_stat_append_fast++;
+            /* A comma, a colon, a brace: the encoder's commonest append is one
+               byte, and a call into memcpy to move it costs more than the
+               move. */
+            if (n == 1) ((unsigned char*)a->data)[a->len] = *src;
+            else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
+            buf->used = a->len + n;
+            /* The bytes went into the accumulator's own spare capacity, so a
+               fresh header would differ only in its length. Where uniqueness
+               is proven, write that length in place: the header was the
+               largest single source of garbage the encoder made. */
+            if (mutate) {
+                a->len += n;
+                return acc;
+            }
+            return k_bytes_owned(a->len + n, a->data, a->cap);
+        }
+    }
+    return k_b_append_grow(acc, mutate, a, src, n);
 }
 
 KValue k_b_append(KValue acc, KValue x) { return k_b_append_into(acc, x, 0); }

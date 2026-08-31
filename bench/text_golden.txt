@@ -321,11 +321,11 @@
 # every program that links the runtime carries the same added bytes whether
 # its own walk reaches them or not. Bought 89,889,828 instructions on
 # deepbench.
-jsonbench text=82578
-encodebench text=99602
-oneshot text=99650
+jsonbench text=82674
+encodebench text=99698
+oneshot text=99746
 basket text=92018
-widebench text=100658
+widebench text=100754
 deepbench text=64546
 escapebench text=50274
 pendbench text=75170
@@ -343,3 +343,6 @@ indexbench text=52130
 # `k_str_seek` — the walk that turns a character position into a byte offset,
 # now shared by the index as well as the slice. escapebench does not move: it
 # indexes nothing, so the linker drops it. indexbench arrives at 52,130.
+# 2026-08-31 (same PR): the append's grow path moved out of line. +96 bytes in
+# the four binaries that reach it — a call and a small frame against the six
+# callee-saved registers every append used to push and pop.
