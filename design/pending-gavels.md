@@ -719,7 +719,7 @@ since it was set, the accumulator rewrite removed the case that used to hit
 it, and both limits are documented. If a program ever needs more, that
 program is the reason to revisit it.
 
-### Whether welfare's weights mean what they say about a saturated term
+### Whether welfare satiates the mean of its ratios or each counter
 
 **Cited: searched design/compiler-log.md and design/log/compiler-log-archive.md
 for `welfare`, `satiation`, `weights` and `wide_instructions`. The weights and
@@ -748,36 +748,79 @@ The hour before, an eleven per cent fall in encode_instructions moved the
 number 0.0093. So a quarter of a per cent on widebench is worth a third of
 what eleven per cent on encode is worth.
 
-**Why it happens.** `wide_instructions` reads 84,047,604 against a baseline of
-11,627,314,301 — 138 times better. `decode_instructions` and
-`encode_instructions` read 1.15 and 1.11 times better. The score is a ratio of
-weighted costs, and a term whose current cost is a 138th of its baseline
-contributes almost nothing to the denominator, so its *proportional* moves
-land on a very small number and its *absolute* moves land on the baseline
-scale. The three shape benchmarks — wide, deep and pending — are all in that
-regime, at 138, 30 and 29 times.
+**Why it happens, exactly.** `dimension_score` in scripts/welfare/welfare.kso
+averages the counters' ratios and satiates the average:
 
-**What is being asked.** Whether that is the intended reading. Two answers are
-coherent and they differ:
+```
+  ratios = list/to_list (list/map t.counters (c -> ratio_of now base c))
+  mean = list/sum ratios / (1.0 * length ratios)
+  satisfaction mean t.satiation * t.weight
+```
 
-- **It is intended.** A term that has improved 138-fold has banked that
-  improvement, and giving any of it back is exactly what the ratchet exists to
-  refuse, however small the fraction. Then the note belongs beside the weights
-  so the next reader is not surprised, and changes like the one above are
-  correctly held.
-- **It is an artefact.** The three shape rows are 138x, 30x and 29x better
-  because they were pathological when the baseline was taken, not because the
-  project bought 138 times the value there. If so they dominate the score for a
-  historical reason, and the two rows the front page makes claims about —
-  decode and encode — have less leverage than a benchmark nobody quotes.
+Satiation is applied to the mean, so it is never applied to a counter. A
+counter's raw ratio enters the average linearly and without bound, and the
+counter furthest past its baseline therefore carries the term — which is the
+opposite of what satiation is written to do. Run speed, at the floor this
+entry was filed against:
 
-**Nothing is blocked.** kanso#1172 ships the string index alone and stays above
-the floor. The outlining is written down in design/compiler-log.md with its
-measurements, held rather than lost, and costs nothing to pick up again.
+```
+    wide_instructions        ratio  138.37     68.45% of the mean
+    deep_instructions        ratio   29.88     14.78%
+    pending_instructions     ratio   29.22     14.45%
+    oneshot_instructions     ratio    1.46      0.72%
+    decode_instructions      ratio    1.14      0.56%
+    encode_instructions      ratio    1.07      0.53%
+    basket_instructions      ratio    0.99      0.49%
+```
 
-**Recommendation: rebaseline the three shape counters, or say in the weights
-why 138x is load-bearing.** The second is cheaper and may well be right. The
-first is a change to the objective and needs this entry ruled first either way.
+decode and encode own 1.09% of the term between them. The earlier reading in
+this entry — that a small current cost "contributes almost nothing to the
+denominator" — described a weighted ratio of costs, which is not what the
+script computes. The arithmetic above is checked against the live goldens and
+reproduces the recorded floor of 87.511303209 to nine decimal places.
+
+**A second change is now held behind this.** Merging `k_b_append_into`'s two
+grow tails into one — they differed in the allocator and the sign of the cap
+and in nothing else — is a pure simplification that leaves five of the nine
+benchmarks byte-identical:
+
+```
+    encodebench  8,713,107,668 -> 8,670,774,068   -42,333,600   -0.4859%
+    jsonbench    2,862,072,518 -> 2,860,449,668    -1,622,850   -0.0567%
+    oneshot         44,071,744 ->    43,955,091      -116,653   -0.2647%
+    widebench       84,031,235 ->    84,111,235       +80,000   +0.0952%
+```
+
+widebench's 80,000 is 5 instructions across its 16,000 grows, and widebench is
+the only benchmark in the tree where half the appends grow. Priced two ways:
+
+```
+    as written    (average the ratios, then satiate)   -0.001096   held
+    per counter   (satiate each ratio, then average)   +0.008015   ships
+```
+
+The sign turns on the order of those two operations and on nothing else.
+
+**What is being asked.** Whether `satisfaction` belongs inside the average or
+outside it. Two answers are coherent and they differ:
+
+- **Outside is intended.** A term that has improved 138-fold has banked that
+  improvement and giving any of it back is what the ratchet exists to refuse,
+  however small the fraction. Then the reason belongs beside the weights, and
+  both held changes are correctly held.
+- **Inside is what the comments already promise.** `satisfaction`'s own comment
+  says a term "past a point is fast enough that making it twice as fast again
+  buys almost nothing" — a statement about a term, applied to no term. Moving
+  it inside makes wide, deep and pending contribute 0.986, 0.937 and 0.936 of
+  their allowance and stop moving, which is what 138x better is supposed to
+  mean.
+
+**Recommendation: satiate per counter.** It is the smaller edit, it is what
+the existing comments already claim the model does, and it does not require
+choosing new baselines. Rebaselining wide, deep and pending is the other
+coherent answer and needs this ruled either way. Whichever is chosen, the
+floor is re-set once with the reason recorded and the two held changes are
+re-priced against it.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 

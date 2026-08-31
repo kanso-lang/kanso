@@ -280,8 +280,9 @@ eighteen open — each with a recommendation, counted from the ledger rather
 than carried forward. Five are new today: the chain-line grammar, whether
 an err gains readers a callback can use, whether the backends should
 build a partial whose callee is a value, whether an identifier's name
-lives inline, and whether welfare's weights mean what they say about a term
-already 138 times better than its baseline.
+lives inline, and whether welfare satiates the mean of its ratios or each
+counter, which decides whether a benchmark 138 times better than its baseline
+carries two thirds of the run-speed term.
 
 **The rules that carry forward**, each earned twice:
 
