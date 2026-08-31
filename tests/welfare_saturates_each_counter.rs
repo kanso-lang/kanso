@@ -49,8 +49,9 @@ fn scored(key: &str, doctored: &[(&str, u128)]) -> String {
     let mut floor = String::from("{\"baseline\":{");
     let mut first = true;
     for name in names(&text) {
-        let now = now_of(&told, &name)
-            .unwrap_or_else(|| held_value(&text, &name).expect("a counter with no row and no baseline"));
+        let now = now_of(&told, &name).unwrap_or_else(|| {
+            held_value(&text, &name).expect("a counter with no row and no baseline")
+        });
         let factor = doctored.iter().find(|(n, _)| *n == name).map(|(_, f)| *f).unwrap_or(1);
         if !first {
             floor.push(',');
@@ -70,7 +71,14 @@ fn scored(key: &str, doctored: &[(&str, u128)]) -> String {
 
     let said = run(root, &stage);
     let _ = std::fs::remove_dir_all(&stage);
-    said.lines().next().expect("welfare says something").split("   ").next().expect("a score").trim().to_string()
+    said.lines()
+        .next()
+        .expect("welfare says something")
+        .split("   ")
+        .next()
+        .expect("a score")
+        .trim()
+        .to_string()
 }
 
 fn run(root: &std::path::Path, stage: &std::path::Path) -> String {

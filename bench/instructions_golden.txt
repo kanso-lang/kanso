@@ -432,12 +432,12 @@
 # sweep crossing a beat boundary used to resume where it left off and now
 # restarts at the front. basket carries the most of it because it sweeps text
 # across beats; the five rows under a thousandth are the store itself.
-jsonbench 2838415867
+jsonbench 2838415853
 encodebench 8396569110
 oneshot 43094978
 basket 56458062
-widebench 63997227
-deepbench 726486948
+widebench 63997213
+deepbench 726486934
 escapebench 253819096
-pendbench 946378088
+pendbench 946378074
 indexbench 5243094

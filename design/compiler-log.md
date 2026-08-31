@@ -3029,3 +3029,39 @@ the ruling was for: neither change moved, the objective did, and both
 went from negative to positive. The per-counter goldens could not have
 told the difference — every allocation counter is byte-identical across
 both.
+
+## 2026-08-31 — the runner disagreed with the container by fourteen instructions, four times
+
+CI priced the outlined grow path and four of the nine rows came back
+fourteen instructions off what the container's delta implied.
+
+```
+                    implied        runner
+    jsonbench    2,838,415,867  2,838,415,853
+    widebench       63,997,227     63,997,213
+    deepbench      726,486,948    726,486,934
+    pendbench      946,378,088    946,378,074
+```
+
+Every row is exactly fourteen lower, and deepbench and pendbench do not
+move on the runner at all — the container's +14 on each was the whole of
+their reported change. So the container adds fourteen instructions
+somewhere this patch happens to touch, and the golden takes the runner's
+rows, which is what it is stamped for.
+
+Worth writing down because the practice this session has been using —
+measure the delta on the container, add it to the golden — held to the
+instruction across the tenure attribution and the one-tail change and
+then did not here. The deltas are still the right way to reason; the
+golden is still the runner's; CI is what tells the two apart, and it did.
+
+`compile_instructions` falls 42,299,748 to 42,298,874. Nothing about
+compiling got cheaper: `src/runtime.c` reaches the compiler through
+`include_str!`, this change shortens it by twelve lines, and the
+compiler's own binary is laid out differently as a result. This is
+codegen movement and it is named as such — `compile_allocs` and
+`compile_peak_bytes` are byte-identical at 29,864 and 728,030, which is
+what a change that did no compiler work looks like. Fifth instance this
+week of the same cause.
+
+Welfare 73.8913121796 to 73.8913693718 on the corrected rows.
