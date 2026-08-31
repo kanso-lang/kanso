@@ -3878,3 +3878,44 @@ declined replacing it with a digest is untouched. Only what it says when it
 refuses has changed.
 
 DONE.
+
+## 2026-08-31 — the reference said kq keeps three veins and it keeps five
+
+Task #190 said kq's pin needed bumping past today's runtime work, and predicted
+the bump would be a one-line change: kq pins allocation counters, and neither
+kanso#1178 nor #1179 moved an allocation counter — all nine counter gates
+passed unmoved in both.
+
+The prediction came from CLAUDE.md's list of kq's veins, which names
+`bench/cost_golden.txt`, `bench/cost_golden_decode.txt` and
+`bench/numbers_stamp.txt`. Reading the repo instead, kq keeps five:
+
+    bench/cost_golden.txt              allocations
+    bench/cost_golden_decode.txt       allocations
+    bench/cost_golden_escapes.txt      allocations
+    bench/instructions_golden.txt      RETIRED INSTRUCTIONS
+    bench/numbers_stamp.txt            keyed to the first
+
+The fourth is the one the prediction turned on, and it is the one most changes
+reach. A change that moves no allocation counter still moves it — which is the
+whole reason kanso added its own instructions vein, recorded in that file's
+header: eight and a half per cent of decode went missing with every allocation
+counter byte-identical.
+
+So the pin bump is a re-stamp of five veins rather than one line. And the pin
+is not two commits behind, it is **fifty-nine**, sitting at kanso#1120 with
+#1171 (encode -11.67%), #1172 (indexbench 488x), #1177, #1178 and #1179 all in
+the gap. Why it drifted is not recorded anywhere and this entry does not guess;
+what is checkable is that the short list would licence exactly this drift, by
+telling a session to ask a question that returns the wrong answer.
+
+**This is the second time today a stale description beat a measurement.** The
+other was `k_ten_holds`: a task priced its depth loop at four iterations from
+arithmetic on a profile total, and the counter said one. Both were reasoning
+from a written summary rather than from the thing. The rule the log already has
+for specs — enter where a user enters, assert what the program does — applies
+to reference documents read as evidence.
+
+The list is corrected. The pin bump is kq's own PR and needs a branch there.
+
+DONE.
