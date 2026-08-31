@@ -32527,3 +32527,1834 @@ container and +1,560 on the runner — opposite signs on the same diff, which is
 this file's layout signature, and `partial_lambda` runs on the emit path where
 `kanso check lib/json` emits nothing. The entry before it is the contrast:
 +14,934 and +10,404, same sign and order, banked as work.
+
+## 2026-08-29 — four expressions name a type plainly, and the table read three
+
+`check_field_exists` keeps a small table of which local holds which record
+type, so that `p.z` can be refused where it is written rather than where it
+runs. Four expressions say the type plainly enough to fill that table, and
+the table read three:
+
+```
+pub fn f p:point / p.z          check: `point` has no field `z`
+pub fn f r@(point x y) / r.z    check: `point` has no field `z`
+p = point a b / p.z             check: `point` has no field `z`
+p = (v):point / p.z             check: OK
+```
+
+An annotation names the type after a colon. A constructor pattern names it as
+the head of the pattern. A construction names it as the head of the call. A
+widening names it after a colon too, and `constructed_type` only knew how to
+read the head of an `App`.
+
+Nothing diverges here. Both engines refuse `p.z` at run time and print the same
+sentence, so what was missing was the diagnostic arriving at the front door
+instead of the back. The fixture pins the difference precisely: without the
+arm it yields `error[runtime]` with no span, with it `error[name]` and the
+column of the dot.
+
+The function is `type_in_hand` now, because "constructed" was the whole
+mistake — it named the one way a type reaches your hand and the reader of the
+call site had no reason to doubt it. Both call sites move: the bind loop, and
+`base_type`, which means a field read straight off a widening — `((v):point).z`
+without the bind — is covered by the same arm.
+
+Two controls hold. A real field through a widening still passes, and a widening
+to a *subtype* still passes, because subtypes are not in `plain` and the
+table has never claimed to know their fields.
+
+This is the fourth pass in two days that answered a question about names and
+read only `Expr::Ident` or `Expr::App`. The other three were the import
+rewriter, the qualifier collector and the bare-name marker. `Expr::Upcast`
+carries a type name after its colon and every one of them walked past it.
+
+`compile_allocs` is 61,974, unchanged — the arm is a branch on an existing
+walk and allocates nothing. `compile_instructions` reads -3,127 in the
+container and +2,513 on the runner: opposite signs on one diff, which is this
+file's layout signature. `lib/json` widens nothing, so the arm is never taken
+on the measured path.
+
+## 2026-08-29 — "a animal", on three engines, pinned by nothing
+
+Two runtime messages put an article in front of a type name and always chose
+`a`:
+
+```
+error[runtime]: `:int` widens; this value is not a int
+error[runtime]: `age` wraps a int
+```
+
+Six sites, two messages by three engines. Each engine wrote the sentence with
+its own format string, and none of them asked what letter the name begins
+with. `article` has been in check.rs since the demand diagnostics were
+written, and its own comment says a diagnostic that fumbles its grammar reads
+as carelessness about everything else in it.
+
+It lives in diag.rs now, which is the module that owns how a diagnostic is
+written, and both Rust engines call it. `runtime.c` has `k_article`, five
+lines, with a comment naming the Rust one so a reader finds the other half.
+
+Two fixtures in tests/golden/runtime pin both messages on all three engines.
+`("x"):int` is the widening: `int` is a builtin, so no import qualifies it and
+the fixture says the same thing whatever the file is called. `type age int`
+with `age "old"` is the wrapper, and its type name IS qualified through the
+import, so it carries an `.imported.stderr` twin.
+
+Watched red first. The widening fixture answered `not a int` against a golden
+reading `not an int`, which is the whole change and nothing else.
+
+**The gate could not see either message.** `diagnostic_coverage` keys a
+message on `head_of` — the literal up to
+its first interpolation — and drops any head under ten characters, because a
+head of one backtick would match every fixture in the corpus. `` `:{ty}`
+widens… `` has the head `` `: ``, two characters. So the scan reported 262
+literal diagnostics and 38 unpinned before this change and after it, and
+neither of these was ever in either count.
+
+Replaying the scan's seven opener families over src/*.rs and src/runtime.c
+finds 38 literals in that blind spot, these among them, and every `` `{ty}` has no field
+`{name}` `` site. Two keys were measured against tests/golden plus the book
+samples. The longest run between interpolations makes 29 of them visible and
+false-pins one: `{name} takes a list` is matched by `accept takes a listener`.
+The skeleton — every run, in order, on one line, with the same ten-character
+floor on the total — makes 30 visible, reports 25 pinned and 5 unpinned, and
+gets `field `{field}` of `{}` takes {}` right where the longest run could not
+see it at all. The five it finds unpinned are real gaps. That is its own
+change; the measurement is here so it does not have to be taken twice.
+
+`compile_allocs` is 61,974, unchanged. `compile_instructions` reads +3,863 on
+the runner and -3,950 in the container: opposite signs on one diff, layout.
+`article` moves between two modules and gains three callers, `k_article` is
+new in runtime.c and absent from this binary, and both messages they feed are
+runtime messages that `kanso check lib/json` never reaches.
+
+## 2026-08-29 — the gate keyed a message on its first few characters
+
+`diagnostic_coverage` decides whether a diagnostic is pinned by looking for
+its text in the corpus. The text it looked for was the leading run — the
+literal up to the first interpolation — and any key under ten characters was
+dropped, because one backtick matches every fixture there is.
+
+So a message that opens with an interpolation was not unpinned. It was
+invisible: not in the 262 the gate counted, not in the 38 it listed, not in
+its world at all. `` `:{ty}` widens; this value is not a {ty} `` has the key
+`` `: ``. That is how the article bug in the entry above sat in six sites with
+nothing watching, and thirty-eight literals sat in the same blind spot,
+including every `` `{ty}` has no field `{name}` `` site.
+
+The floor stays. What changes is the key: the whole message, with each
+interpolation written `{}`, so the field read keys as
+`` `{}` has no field `{}` ``. `in_corpus?` then asks for every run of a shape,
+in order, on ONE line. The line matters — runs matched anywhere in the blob
+would let one fixture's opening backtick and another's closing backtick stand
+in for a message nothing raises. The longest run is tried against the whole
+corpus first, so the per-line walk only runs for shapes that could hit.
+
+The other key measured was the longest run alone. It makes 29 of the 38
+visible against the skeleton's 30, and it false-pins: `{name} takes a list` is
+matched by `accept takes a listener`. It also cannot see
+`` field `{field}` of `{}` takes {} `` at all, which the skeleton reports
+correctly as unpinned.
+
+**262 diagnostics became 309.** Eight of what the gate found were pinned in
+the same change: an import of a std module that is not shipped, a rename of
+something an import does not export, a `builtin_` name spelled outside the
+standard library, a field typeset naming no type, and — in the module-shaped
+corpus — two modules answering one bare name, a module with nothing to
+re-export, a record built across an import, and a dependency that is only an
+entry file.
+
+Eight could not be pinned and each carries its reason in the list. Three are
+the same shape twice over: the two engines refuse the same program at
+different times in different words, and the runtime corpus asks both for the
+same stderr. Two are unreachable through the harness that stages the corpus.
+One needs a hako package, which no stderr corpus holds.
+
+One is a divergence. `shape 1`, for a typeset `shape`, is refused by
+the interpreter and by the page with the same sentence, and native prints
+`<mod>/shape 1` and exits 0. Nothing can pin a message two engines raise and
+the third answers with output. That is its own fix; the line stands until it
+lands.
+
+## 2026-08-29 — a typeset written as a constructor, and what native did with it
+
+The gate widened an hour ago and listed `` `{}` is a typeset — it only
+annotates `` as a message nothing pinned. Looking for a program that raises it
+found this:
+
+```
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+pub play = print "{shape 1}"
+```
+
+`kanso check` said ok. Then the interpreter refused it at run time with that
+sentence, the page said the same thing byte for byte, and native printed
+`<mod>/shape 1` and exited 0. Native had built a one-field record whose type
+was the typeset, and a one-field record renders as its name and its field.
+
+Naming one without calling it is the quieter half of the same thing:
+
+```
+pub play = print "{shape}"
+```
+
+also compiles clean, and prints `<mod>/shape` on native against `<fn>` on the
+interpreter. Two engines, two answers, neither an error, nothing red.
+
+And a third position, which both engines agreed on and both got wrong:
+
+```
+pub play = print "{(circle 1):shape}"
+```
+
+refuses at RUN time with "`:shape` widens; this value is not a shape" — a
+sentence that blames a program whose circle is exactly what the typeset
+admits. There is nothing to widen: the value already matches the annotation.
+
+A typeset is annotation-only vocabulary. `type shape circle square` names a
+union a parameter can stand in, and no value is ever a `shape`, which the AST
+comment beside `members` has said since the field was added. So the refusal is
+on the NAME — an `Ident`, a `&` partial, or a widening's target, anywhere an
+expression can stand — and the call is the case where the name is a head. `typeset_constructions` in
+check.rs says so where it is written, and all three engines agree because none
+of them gets the name.
+
+Annotations are untouched, which is the point of putting it on the expression
+walk: a parameter's `:shape` is a pattern and a field's is a type list, and
+neither is an expression. Both controls hold — a typeset as a parameter
+annotation still compiles, and a record whose type is one of the typeset's
+members still constructs.
+
+**Why the interpreter's runtime test stays.** The walk reads the expression
+tree of every function body. A typeset name that reaches `construct` some
+other way — synthesised by a pass after this one, or through a shape the walk
+does not model — would arrive with nothing to have caught it. Nothing in the
+corpus writes that, and removing the test to find out is the wrong order.
+
+The message existed and the divergence existed, and what found them was a gate
+that could not see the message at all until its key changed. The scan reported
+262 diagnostics for weeks with this one outside the count.
+
+`compile_allocs` is 61,974, unchanged — the pass borrows its names and returns
+at once when a program declares no typeset, which `lib/json` does not.
+`compile_instructions` reads -882 on the runner against +1,182 in the
+container: opposite signs on one diff, layout, and the runner's side is the
+good side. The pass reads the type list, finds nothing, and stops, so there is
+no walk to pay for on the measured path.
+
+## 2026-08-29 — 482,913 instructions for an exact column, declined
+
+The typeset sweep's fourth position is a constructor pattern:
+
+```
+fn area (shape x)
+  x
+```
+
+Both engines compiled it and both answered "no overload of `area` matches
+these arguments" at run time, which sends the reader to look at an argument
+that is fine. A constructor pattern destructures a record by its type; a
+typeset has no fields to destructure and no value is ever one, so the arm can
+never match whatever arrives.
+
+`Pattern::Ctor` carries no span, which is why kanso#1126 left this alone — its
+comment says so in as many words. So the first attempt gave it one: thirteen
+sites, three constructions in the parser, one in `resolve_marker_pattern`, one
+in the getter synthesis, eight destructures gaining a `..`, and `other_span`
+answering a real column where it had answered `0:0`.
+
+**Then it was measured, and the field costs more than the column is worth.**
+
+```
+main after the typeset refusal          58,330,347
+  + the span on Pattern::Ctor           58,813,260    +482,913
+  + the span and the new arm            58,818,195    +487,848
+  the arm alone, no span                58,329,928        -419
+```
+
+The arm costs 4,935 with the span in place and reads as noise without it. The
+FIELD costs 482,913 — 0.83% of everything `kanso check lib/json` does — because
+`Pattern` grows from 64 bytes to 72 and patterns are moved through every pass
+in the front end.
+
+What the field buys is a caret on `shape` instead of on `x`, one token to its
+right. The arm points at the first field, which is where the two other
+constructor diagnostics in check.rs already point: `other_span(&fields[0])` is
+an idiom this file had before today. So the span is declined and the arm ships
+without it, at 419 instructions below the baseline.
+
+**The undeclared half is declined too, and for a different reason.** With the
+span in hand I also wrote the check kanso#1126 wanted — a constructor pattern
+naming no declared type — and the unit suite went red on the standard library.
+`std/list` has `fn put_renamed acc (entry k v) f` in two arms, and `entry` is a
+marker the compiler knows: `check.rs` puts it in `globals`, `codegen.rs` gives
+it type id zero. `declared` is built from `program.types`, which does not hold
+it, so the check called a correct program wrong. Putting `entry` in
+`BUILT_IN_TYPES` would let an annotation say `:entry` as a side effect, which
+is a different decision. The comment in `patterns()` names the missing set now
+rather than the missing span.
+
+**If the span is ever wanted, the cheap way in is to shrink `Span` first.** It
+is two `usize` — sixteen bytes for a line and a column, where two `u32` would
+hold a four-billion-line file. That change pays for this one several times over
+and speeds up everything else that carries a span, which is most of the AST.
+Not attempted here; recorded so the next reader does not re-derive the trade.
+
+`compile_allocs` is 61,974, unchanged. `compile_instructions` reads +3,760 on
+the runner against -419 in the container: opposite signs on one diff, layout.
+The arm is a branch on a walk that already ran, and `lib/json` declares no
+typeset, so the borrowed set is empty and the branch never fires on the
+measured path.
+## 2026-08-29 — `fields.is_empty()` is not the same question as "is this a value"
+
+The typeset sweep turned up a second divergence one name over. `type age int`
+is a subtype, and:
+
+```
+pub play = print "{age}"
+```
+
+compiles clean, prints `<fn>` on the interpreter, and prints `<mod>/age` on
+native. The page refuses the name outright — "unsupported name `<mod>/age`" —
+which is what the differential law permits and what native was not doing.
+
+The emitter's test for "this name IS a value" was `fields.is_empty()`, meant
+for `type unit`: a record type with no fields describes one thing, and naming
+it builds it. A subtype has no fields either, and so does a typeset, so both
+were emitted as nullary records of their own type id. A one-field record
+renders as its name and its field, and a zero-field one renders as its name,
+which is why the output looked like an echo of the program.
+
+The test asks for three things now — no fields, no parent, no members — and a
+subtype falls through to the refusal native has always given for a record type
+that HAS fields. Three programs pin it: the subtype, the nullary record that
+must keep working, and the record-with-fields whose older refusal the new one
+borrows.
+
+The sweep that found both is worth its four lines. Every name a program can
+write bare, on both engines:
+
+```
+length          <fn>   <fn>      a builtin
+list/map        <fn>   <fn>      an imported group
+twice           <fn>   <fn>      a declared group
+err             refused, identically, by both — it has no line to record
+point           refused by native as its own limit; `<fn>` on the oracle
+&point, &age    refused by native, the sentence kanso#1128 wrote
+unit            `unit` on both — a nullary record IS a value
+shape           `<mod>/shape` on native, `<fn>` on the oracle  (typeset)
+age             `<mod>/age`   on native, `<fn>` on the oracle  (subtype)
+```
+
+Nine shapes, two wrong, and both wrong the same way: a type name that carries
+no fields and is not a nullary record. The typeset half is refused at the
+front door by the entry above; this is the other half.
+
+## 2026-08-30 — a span was sixteen bytes and needed eight
+
+`Span` held two `usize`. Every `Expr`, every `Stmt`, most patterns and every
+diagnostic carry one, and a few carry two, so the width of that struct sets the
+width of the whole AST. Four billion lines is a limit no source file reaches,
+and a `u32` pair is half the size:
+
+```
+Span     16 -> 8
+Expr     64 -> 56
+Stmt    136 -> 120
+Pattern  64 -> 64   (unchanged — its largest arm is not span-bound)
+```
+
+The lexer and the passes still count in `usize`, so the narrowing happens at one
+place: `Span::at(line, col)`, which is what every construction site calls now.
+`render` widens back for the source-line lookup.
+
+Measured, `kanso check lib/json`. The runner's rows, which are the goldens:
+
+```
+compile_peak_bytes   822,004 -> 763,868       -58,136   -7.1%
+compile_instructions 57,822,766 -> 58,205,543  +382,777  +0.66%
+compile_allocs       61,974 -> 61,974          unchanged
+```
+
+`compile_peak_bytes` reads 763,868 on the container and 763,868 on the runner,
+so that counter is host-invariant. The allocation count does not move because
+the same objects are allocated; they are smaller.
+
+The memory fall is the struct size and nothing else. A build with the same
+`u32` fields and two words of explicit padding — same casts, same side tables,
+`Span` back at 16 and `Expr` back at 64 — reads `compile_peak_bytes=822004`,
+the baseline to the byte.
+
+Where the instructions went is not settled. The container reads +50,058 for
+the same change, an eighth of the runner's +382,777 — same sign, different
+order — so some of this is work and some is two hosts laying the binary out
+differently, and neither number decomposes it.
+
+Callgrind will not decompose it either. It puts the container's rise almost
+entirely in `walk_children` (+343k gross, against falls elsewhere), which
+touches no span arithmetic at all; the padded probe rises by the same amount
+overall, +47,430, and attributes it to `parse_atom` and `parse_stmt` instead,
+with `walk_children` unchanged. Same total, disjoint explanations. About twenty
+side tables key on `(String, usize, usize)` — beat.rs, check.rs, codegen.rs,
+demand.rs, dispatch.rs, escape.rs — so a narrowed span is widened again to
+build a key; the cast count is the right order of magnitude, and there is no
+evidence for it beyond that.
+
+Welfare: 84.10 -> 84.27, banked. The instruction term costs 0.074 points and
+the memory term more than pays for it.
+
+The next eight bytes were measured too, and they are a worse trade. `Expr` sits
+at 56 because `Guard`'s payload is exactly 48 with no spare byte for the tag,
+and `Guard.rest` is a `Vec<Stmt>` built at one site. As a `Box<[Stmt]>` it is
+16 bytes instead of 24, `Expr` falls to 48 and `Stmt` to 112, and
+`compile_peak_bytes` falls again, 763,868 -> 721,652, another 5.5%. It costs
+1,254,345 container instructions, +2.1%, and that rise is real work rather than
+layout: it lands positive on every walker that matches an `Expr` — eval_expr,
+wants_prelude, provenance, field_reads_expr, desugar_expr, mentions_in_expr,
+check_merged — which is what a changed discriminant encoding looks like. Net
+welfare is +0.08 on top of this entry. Left unshipped: 2.1% of the front end
+for 0.08 points wants the encoding understood first.
+
+## 2026-08-30 — the one mutation the language has, written where nobody was looking
+
+`x.f = v` is the only mutation kanso has, and two rules fence it: it lives in a
+`build` block, and it writes only what that block built. Both rules were applied
+by walks that between them saw one level of a function body.
+
+The parser refuses a `Set` statement it parses at the top of a body.
+`check_build_blocks` refuses a `Set` it finds at the top of a body, and inside a
+`build` it checks the target against the names the build constructed. Neither
+descended into a nested statement list, and there are three of them: an `if`
+arm's `Block`, a `build`'s own body when it sits inside one, and `Guard.rest` —
+everything below a fired guard.
+
+Three programs, each of which used to compile:
+
+```
+fn tagged x            fn tagged x           fn tagged old
+  n = node x             n = node x            build
+  q = if true            return n if false       n = node 9
+    n.id = 2             n.id = 2                q = if true
+    n                    n                         old.id = 2
+  else                                             n
+    n                                            else
+  q                                               n
+                                                q
+```
+
+The first ran the write and printed `node 2`, with no `build` anywhere in the
+file. The second printed `node 2` on the interpreter and killed the native
+backend: `emit_fn_body` met an `unreachable!` reading "`set` parses only inside
+`build`" — the invariant stated where it could not be enforced, panicking rather
+than diagnosing. The third is the one that matters most. `old` is a parameter,
+so the value belongs to the caller, and the born-check exists to say so; written
+through an `if` arm it went unrefused and the caller's record changed under it.
+The program printed `node 9 node 2`, the second being the argument the caller
+still held.
+
+`check_build_blocks` walks statements now, with the enclosing build carried
+along: absent outside a build, and inside one a set of block-born names that a
+nested `Block` or a guard's remainder inherits and may extend. So the legitimate
+shape — a write inside an `if` arm to something the build made — still compiles,
+which is the case that says the fix is a fence rather than a ban.
+
+`compile_allocs` is 61,974 and `compile_peak_bytes` 763,868, both unchanged:
+lib/json has no field write inside a nested body, so the inherited set is never
+cloned there.
+
+Instructions took three versions to get right, and the ruling that welfare
+cannot fall is what forced the last two. Written as a pair of free functions
+carrying `(born, type_names, diags)`, the walk cost +21,767 on the container and
++28,556 on the runner — same sign, same order, so real work rather than layout.
+Folding the field-write check into the same `match` that picks a statement apart
+made it WORSE, +38,298: `build_walk_body` stopped being inlined and the saving
+went with it. What actually paid was the callback. This walk reaches every
+expression the front end holds and descends through `for_each_child`, whose
+callback is a `&mut dyn FnMut` — one indirect call per child — so a closure
+capturing three references writes three words at every one of them. The
+callback alone was +7,602. As a method on a struct holding the three, it
+captures one, and the whole pass now reads 58,375,759 against main's
+58,379,986: 4,227 cheaper than the code it replaces, because a `build`'s
+statements are no longer walked twice.
+
+`compile_instructions` still ends at 58,210,887 against 58,205,543 on the
+runner, +5,344, and the two hosts disagree about the sign: the container reads
+a fall of 4,227 where the runner reads a rise. Opposite signs, so what is left
+is the two of them laying the binary out differently rather than work on either
+one. `compile_allocs` and `compile_peak_bytes` do not move at all, welfare
+holds at 84.27, and the floor's history carries the entry saying so.
+
+This is the third time the pattern in `tests/golden/unpinned_diagnostics.txt`
+has paid. That file says an excuse reasoning about which check speaks first must
+name WHICH walk it is reasoning about, because a second one may not have the
+rule at all. It was written about the unused-expression rule and a `build` body.
+Reading it as a sweep rather than a note is what found this.
+
+## 2026-08-30 — a regression test's account of the bug it fixed, read as a pin
+
+The diagnostic scan keeps two corpora and narrowed only one of them. Its own
+comment says why: "a substring search cannot tell an assertion from a mention",
+written after four of the driver family's six pins turned out to be text in
+tests/*.rs that checked no compiler message at all. The driver corpus became
+`.stderr` plus `module_differential`. The wide corpus went on reading tests/*.rs
+whole, comments included.
+
+Four messages were resting on prose. Every one checked by hand:
+
+```
+no such field          getter_identity.rs:78, a doc comment listing "the three
+                       ways a read can fail — no such field anywhere, ..."
+not an err             make_dir.rs:7, the words "not an error." in a module
+                       comment about `mkdir -p`
+a beat mark and the    carry_repair.rs:37 quotes the message as what used to
+arena disagree ...     happen, then asserts stdout == "gathered 4\n"
+too many processes     many_handles.rs:52 quotes it, then asserts
+at once                stdout == "answered 41\n"
+```
+
+The last two are the sharpest thing this file has turned up. Each is a
+regression test that names the bug it fixed and then asserts the fix — an
+assertion that the message never appears — and the scan read the narrative as a
+pin of the message. All four could have been reworded in the runtime with
+nothing going red.
+
+One of them was already wrong. `k_set_field` in runtime.c refused a write to a
+field the record does not declare with `no such field`, naming neither the type
+nor the field, where the interpreter and the page both say `` `node` has no
+field `nope` `` — the sentence runtime.c itself prints for a failed field READ,
+at the two sites above `k_set_field` in the same file. Native says it now, and
+the program that shows it is in the runtime corpus, which requires both engines
+to write the same stderr.
+
+The scan drops comment lines from tests/*.rs before they join the wide corpus.
+A Rust test is still a legitimate pin for the handful of diagnostics a corpus of
+programs cannot express — the precedent is `an_empty_branch_is_refused.rs` —
+and what it asserts is what pins them. 310 literal diagnostics became 309, and
+the three that are left have their mechanisms written: the page's err read has
+one call site with `RT_CHECK_ERR` and a `br_if` two instructions above it, the
+beat-mark disagreement is an arena invariant no program can ask for, and the
+process cap is the fourth of its family, needing 64 live children on the runner
+to reach.
+
+`compile_instructions` moves 58,210,887 -> 58,209,632, a fall of 1,255.
+runtime.c is embedded in the compiler's binary, so editing its text shifts the
+data section and the row with it; `kanso check lib/json` emits nothing and never
+runs a line of it. compile_allocs, compile_peak_bytes, rounds and visits do not
+move. Layout, in the direction that costs nothing.
+
+## 2026-08-30 — one indirect call per child, across the whole front end
+
+`walk_children` is how every pass reaches a sub-expression. It took its
+callback as `&mut dyn FnMut(&'a Expr) -> bool`, so every child visit in the
+compiler went through a vtable. The machinery is 7.04% of
+`kanso check lib/json`:
+
+```
+walk_children'2                   1,801,053   3.09%
+walk_children                       983,259   1.68%
+for_each_child::{{closure}}         672,707   1.15%
+for_each_child::{{closure}}'2       565,642   0.97%
+any_child::{{closure}}'2             45,117   0.08%
+any_child::{{closure}}               39,771   0.07%
+                                  4,107,549   7.04%
+```
+
+`walk_children` has exactly two callers, `for_each_child` and `any_child`, and
+those are called from thirty-nine sites: twenty in check.rs, eleven in lib.rs,
+three in infer.rs, two in codegen.rs, and one each in eval.rs, linear.rs and
+wasm_backend.rs. Making it generic is one line, and gives it one instance per
+distinct closure type across all of them:
+
+```
+                        runner                    container
+compile_instructions  58,209,632 -> 56,442,099   -1,767,533   -3.04%
+                      58,373,255 -> 56,536,342   -1,836,913   -3.15%
+compile_allocs        61,974      unchanged
+compile_peak_bytes    763,868     unchanged
+compile_rounds        40          unchanged
+compile_visits        16,806      unchanged
+native binary         +17,944 bytes   +0.43%
+docs/kanso.wasm       +32,823 bytes   +2.0%
+```
+
+Every counter that measures work is identical and only the instruction count
+falls, which is what removing dispatch looks like. The two hosts agree for
+once — same sign, within four per cent of each other — which is what the
+pending gavel on attribution says work looks like across a host pair, and
+nothing like the +382,777 against +50,058 the `Span` change read three entries
+up. Welfare 84.27 -> 84.37, banked. The sibling
+`walk_children_mut` keeps its `&mut dyn`: it does not appear in the profile at
+all, because its four callers inline it, and the whole desugar family is under
+one per cent.
+
+The route here was the field-write fence two entries above. Its first version
+cost +28,556 instructions and the cause turned out to be its closure's three
+captured references, one indirect call per child. That is a property of
+`walk_children` rather than of that pass, and the same tax was being paid
+forty times over.
+
+### The eight bytes below `Expr`, determined
+
+`Expr` sits at 56 because `Guard`'s payload is exactly 48 with no spare byte
+for the tag. `Guard.rest` as a `Box<[Stmt]>` takes it to 48 and `Stmt` to 112,
+and `compile_peak_bytes` falls 763,868 -> 721,652, another 5.5%, for +2.19%
+instructions. Two probes say where that rise lives, both measured with
+`walk_children` already generic so the changes could not confound each other:
+
+```
+Guard.rest          Expr   instructions   peak
+Vec<Stmt>            56     56,536,342    763,868
+Box<[Stmt]> + pad    56     56,528,428    763,748
+Box<[Stmt]>          48     57,773,600    721,652
+```
+
+Padding `Guard` so `Expr` stays 56 while `rest` is still a boxed slice reads
+7,914 BELOW the `Vec` version, on 120 bytes less peak. So the indirection is
+free, and the whole +1,237,258 is the 48-byte layout. It is not dispatch
+either: the rise was +1,254,345 before this change and +1,237,258 after.
+
+That leaves the trade as measured, with no cheaper route through this door:
+5.5% of the front end's peak for 2.19% of its instructions, +0.08 welfare.
+Left unshipped, and now characterised rather than open.
+
+## 2026-08-30 — the largest line in the allocation map held two bytes
+
+The dhat map from the entry before last put one line of `infer.rs` at 8,309
+blocks, 13.4% of every allocation the front end makes on `kanso check
+lib/json`, and more than twice the next line down. It is `eval_call`
+collecting a call's argument sets:
+
+```rust
+let mut arg_sets: Vec<Set> = args.iter().map(|a| eval_expr(ctx, a, env)).collect();
+```
+
+`Set` is a `u16`. Arity in real source is one, two or three, so the great
+majority of those 8,309 heap blocks held two, four or six bytes. Eight of them
+are an array on the stack now, and arities above eight still spill to a `Vec`,
+so nothing a program may write changes.
+
+```
+compile_allocs        61,974 -> 57,430          -4,544    -7.3%
+compile_instructions  56,442,099 -> 55,414,950  -1,027,149  -1.82%  (runner)
+compile_peak_bytes    763,868   unchanged
+compile_rounds        40        unchanged
+compile_visits        16,806    unchanged
+```
+
+Welfare 84.37 -> 84.66, banked. Nothing rises.
+
+`compile_peak_bytes` does not move, and that is the argument for having a map
+at all. A call's argument sets die when the call is inferred, so these blocks
+were never what the arena held at its high water mark: the peak vein could not
+see them and `compile_allocs` could only say there were sixty-two thousand of
+something. dhat is what named the line.
+
+### Two hosts, three times apart, and a mechanism for it
+
+They agree exactly on the allocations — both read 57,430 — and disagree by a
+factor of three on what the allocations cost. The container reads -340,075
+where the runner reads -1,027,149. Same sign, neither near zero, so by the
+pending gavel's reading this is part work; callgrind says which part.
+
+```
+                        before        after       delta
+malloc               2,712,344    2,521,016    -191,328
+_int_malloc          3,356,980    3,367,739     +10,759
+free                 1,735,552    1,608,320    -127,232
+_int_free            3,754,476    3,509,501    -244,975
+arena.c:free           185,952      172,320     -13,632
+__rust_alloc         1,220,817    1,116,305    -104,512
+__rust_dealloc          97,638       88,550      -9,088
+                                               -680,008
+
+malloc_consolidate     788,221    1,058,396    +270,175
+unlink_chunk           362,013      481,793    +119,780
+                                               +389,955
+```
+
+The calls that went away saved 680,008 instructions and the free lists took
+back 389,955 of it. Removing 4,544 small short-lived blocks changes the shape
+of the heap, and this glibc revision pays for the change at consolidation.
+What is left, -290,053, plus about fifty thousand in `eval_call` itself, is
+the container's -340,075. The runner's 2.39-0ubuntu8.8 does not pay it and
+banks nearly the whole gross saving.
+
+Every earlier row where the hosts disagreed ended in "layout" — true, and
+unsatisfying, because layout is a name for not having looked. This one has a
+mechanism, and the mechanism says something the gavel's rule does not: when
+the hosts disagree, the SMALLER reading is not automatically the work. Here
+the smaller reading is the work minus a penalty one host pays and the other
+does not, and both numbers are honest measurements of the same change on
+different allocators. The rule wants a fourth row for that.
+
+## 2026-08-30 — a dispatch group is a range, not a cloned vector
+
+Re-running the map after the entry above put `eval_call`'s dispatch lookup at
+2,693 blocks, 4.7% of what the front end allocates and the largest line left
+with kanso's name on it.
+
+```rust
+if let Some(decls) = ctx.groups.get(&(name.as_str(), args.len())) {
+    let decls = decls.clone();
+```
+
+The clone answers to the borrow checker and to nothing else. `decls` borrows
+`ctx`, and three lines down the loop calls `widen_param(ctx, ..)`, so the group
+is copied to a fresh `Vec<usize>` on every call the pass infers — a group
+holding, typically, one index. `groups` is built once in `infer` and never
+written again, so a group can be a half-open range into one flat
+`group_members: Vec<usize>`. A range is two words and it copies.
+
+```
+compile_allocs        57,430 -> 54,747          -2,683   -4.7%
+compile_peak_bytes    763,868 -> 742,572        -21,296  -2.8%
+compile_instructions  55,414,950 -> 55,319,098  -95,852  -0.17%  (runner)
+compile_rounds        40        unchanged
+compile_visits        16,806    unchanged
+```
+
+Welfare 84.66 -> 84.89, banked. Peak moves as well as traffic this time: the
+table used to hold one heap vector per (name, arity) for the length of the
+compile, and those are one vector now.
+
+### The consolidation step, and where each host takes it
+
+The entry above blamed a host disagreement on `malloc_consolidate` and left it
+there. This change disagrees too, by three and a half times and leaning the
+other way — the container reads -342,880 where the runner reads -95,852 — and
+the two rows read together say what one could not.
+
+```
+malloc_consolidate      before #1139   after #1139   after #1140
+container                    788,221     1,058,396     1,055,975
+runner                             —       789,570     1,054,967
+```
+
+Consolidation on this workload steps up about 265,000 instructions, once, when
+the free lists change shape. The container took that step on the previous
+change and holds flat through this one; the runner held flat there and takes it
+here. Each host pays the same penalty for the same reason and only the change
+it lands on differs, which is why the per-change gaps are large and lean
+opposite ways. Over the two changes together the readings are -682,955 and
+-1,123,001: still apart, but by 1.6x where the individual rows are 3x and 3.6x.
+
+That is a fourth shape for the attribution question, and it is not in the
+ledger entry's table. Two hosts can disagree by a factor of three on a change
+where both are measuring real work, correctly, and neither number is the
+answer on its own. What made it legible was measuring the allocator lines
+rather than the total — which is available on any row, and was not done on any
+of the eight rows before these two.
+
+## 2026-08-30 — four lookup keys the program already holds, and a walk that was not a mirror
+
+`inline.rs` built a `String` in order to look one up, in three places, and kept
+a private copy of the mutable child walk that returns a fresh vector per node.
+
+`aliases` returned `HashMap<(String, usize), String>`, so the fixpoint owned a
+name and a target for every alias it found on every round, and `direct_aliases`
+cloned the callee at every candidate it tested. Both keys and both values
+borrow from the program now. `check.rs` had already diagnosed this at the
+consumer and worked around it — it built a borrowed view of the owned map, with
+a comment saying the lookup "needed a String built from the callee at every call
+expression" — so the view and the workaround are gone with it. `inline::rewrite`
+cloned the callee at every `App` node; its map has to be owned, because the walk
+takes `program` mutably, but nesting it by name and then arity means both
+lookups borrow.
+
+```
+compile_allocs        54,747 -> 50,528          -4,219   -7.7%
+compile_instructions  55,319,098 -> 54,488,638  -830,460 -1.50%  (runner)
+compile_peak_bytes    742,572   unchanged
+compile_rounds        40        unchanged
+compile_visits        16,806    unchanged
+```
+
+Welfare 84.89 -> 85.19, banked. The hosts agree on this row — -852,860 in the
+container against -830,460 on the runner, 2.7% apart and the same sign — which
+is what the two entries above predict. Consolidation steps up once when the
+free lists change shape; the container took its step two changes ago and the
+runner one change ago, and with both spent neither pays here.
+
+Three rounds off one allocation map now: 61,974 blocks to 50,528, 18.5%, with
+instructions down 3.5% and peak down 2.8% beside it.
+
+### The walk that said it was a mirror
+
+The fourth piece of that change was wrong, and CI caught it. `inline::children_mut`
+looked like a duplicate of `lib::walk_children_mut`, which carries the comment
+"Mirrors `for_each_child`". Swapping one for the other turned the emitted,
+machine-code and work veins red: `walk_children_mut` has no arm for
+`Expr::Lambda`, `Expr::Block`, `Expr::Build` or `Expr::Guard`, where
+`for_each_child` handles all four. A wrapper called inside any of them stopped
+being inlined.
+
+So `inline.rs` keeps its own walk, now as `for_each_child_mut`: the coverage
+`children_mut` had, handing children to a callback instead of returning a
+vector. That was the whole allocation saving — `compile_allocs` reads 50,528
+either way — and the swap bought nothing it did not also break.
+
+Two things worth keeping from it. The comment was load-bearing and false, which
+is the shape #1137 went after; it says what the function does not do now. And
+the veins that caught it were the runtime ones. The compile veins were happily
+reporting a win on a compiler that had quietly stopped inlining, because
+compiling less work is cheaper. A cost golden cannot tell a saving from an
+omission; only a golden over the OUTPUT can.
+
+What the four callers of `walk_children_mut` do with the missing arms is a
+separate question, and two of them are answered. `desugar_expr` (field read to
+getter call) and `deny_expr` (`!=` to `if (==) false true`) are normalisations
+rather than requirements: `Expr::Field` is handled directly at codegen.rs:3090,
+eval.rs:1408 and wasm_backend.rs:764, and `"!="` at codegen.rs:3571,
+eval.rs:3656 and wasm_backend.rs:897. A field read and a `!=` inside a lambda
+body, an if-block arm, a build body and below a guard — four shapes on two
+engines — answer correctly and identically. `replace_shape` is the hoister,
+where an unreached site is a hoist not taken. `door_expr` is the one still
+open: it rewrites an upcast's type from a door spelling to the owner's, and an
+upcast inside any of the four would keep the door spelling.
+
+## 2026-08-30 — the walk with four holes in it, and the two bugs behind them
+
+`lib::walk_children_mut` said it mirrored `for_each_child` and had no arm for
+`Expr::Lambda`, `Expr::Block`, `Expr::Build` or `Expr::Guard`. The entry above
+found that by accident, swapping `inline`'s own walk for it and watching three
+runtime veins go red. Its own four callers were the open question, and two of
+them were wrong.
+
+### A door spelling stopped at the edge of a nested body
+
+`door_expr` rewrites `Expr::Upcast`'s type from a door — the qualified second
+spelling a re-export opens — to the owner's canonical name. Recursing through
+the holed walk, it reached every statement of a function body and nothing
+nested inside one, so an upcast written in a lambda, a block, a build or a
+guard kept the door spelling. `kanso check` passed the program and the
+widening failed at run time against a name no declaration answers.
+
+Five positions, same value, same upcast, on main:
+
+```
+statement level    prints 1
+inside a lambda    error[runtime]: `:mid/shape` widens; this value is not a mid/shape
+inside an if-block same
+inside a build     same
+below a guard      same
+```
+
+Exactly the four missing arms and nothing else — `(v):deep/shape`, the
+canonical spelling, runs in all five. Native and the interpreter fail alike,
+so this was never a divergence, which is why nine differential sweeps never
+saw it. `tests/golden/reexports/upcast` is the five positions in one program.
+
+### The hoister emitted bindings it could not use
+
+`collect_hoistable` finds a repeated interpolation with `for_each_child` — the
+full walk. `replace_shape` substitutes it with `walk_children_mut` — the holed
+one. So a repeat found inside a block, a build or a guard got its `onceN`
+binding emitted and not one of its uses rewritten. Dead code, in every program
+that repeats an interpolation inside a nested body.
+
+That is what the emitted vein reports: scanbench falls 3,745 -> 3,743 calls,
+2,216 -> 2,214 branches, 20,023 -> 20,019 lines. Two dead bindings in one
+benchmark. Both functions refuse a lambda outright, so the lambda arm changes
+nothing for the hoister.
+
+### The two that were fine, and why
+
+`desugar_expr` (a field read to a getter call) and `deny_expr` (`!=` to
+`if (==) false true`) are normalisations rather than requirements: every engine
+handles the un-normalised form directly — `Expr::Field` at codegen.rs:3090,
+eval.rs:1408 and wasm_backend.rs:764, and `"!="` at codegen.rs:3571,
+eval.rs:3656 and wasm_backend.rs:897. Both forms in all four positions on both
+engines answer correctly and identically.
+
+`compile_allocs` and `compile_peak_bytes` do not move, and neither do rounds or
+visits. `compile_instructions` rises 54,488,638 -> 54,507,708 on the runner,
+19,070 instructions or 0.035%, and that is the arms themselves: four passes
+descend into bodies they used to stop at, and two of them had to. It is a
+LAYOUT row by this project's own reading — the container reads 55,000,527 ->
+54,850,326, a FALL of 150,201, against the runner's small rise. Opposite signs,
+both under three tenths of a per cent, on a change that adds four match arms to
+one function. The fifth host-pair for the attribution ledger, and the cleanest
+layout case in it.
+
+The general lesson is about the comment. "Mirrors `for_each_child`" was a claim
+nothing tested, and two passes were built on it. #1137 went after four
+diagnostics resting on prose; this is the same failure in a walk, and the same
+answer applies — the fixture is the pin.
+
+## 2026-08-30 — a subtype of a primitive is a heap value, and one list did not say so
+
+Native printed a different denormal double on every run where the interpreter
+printed the value. A use-after-free that produced silent wrong answers, live on
+main since subtypes of primitives existed, and found by accident while building
+the fixtures for the entry above.
+
+```
+type shape int              native 6.90351265195293e-310   interp 3
+type shape string           native 6.9464150267249e-310    interp hi
+type shape float64          native 3.5                     interp 3.5
+```
+
+### The cause
+
+`runtime.c`'s `k_is_heap` lists every tag whose payload is a pointer:
+
+```c
+case K_STR: case K_ERR: case K_REC: case K_DESC:
+case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
+    return 1;
+```
+
+`K_SUB` was not on it, and a `K_SUB` payload is a `KSub*`. `k_cohort_pop` reads
+that predicate to decide whether a beat's result has to be carried out of the
+arena before the rewind:
+
+```c
+if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
+    k_beat_depth--;
+    k_beat_rewind(m);     /* the arena goes back to the mark */
+    return r;             /* r points into what was just freed */
+}
+```
+
+So a returned subtype was taken for a scalar, the arena went back under it and
+the caller kept a dangling pointer. The fix is one case label.
+
+`K_THUNK` is spelled out at that call site rather than in the list, which is
+what says the list was known to be the gate — and that it had already been
+found short once.
+
+### Why the conditions looked so strange
+
+Three ingredients, each checked against the unfixed compiler. The value has to
+be MADE in one call and STORED by another, both written in the entry, so
+`k_cohort_pop` sees it cross — `lib/both 3`, the same chain inside the library,
+is correct. It has to go into a container, because a value rendered on the spot
+is read before the arena is reused. And the parent has to be `int` or `string`:
+`float64` survived every arrangement, structurally, because a float payload is
+the double itself and has nothing to dangle.
+
+None of the module boundary, the re-export, the build block or the seed value
+mattered, and all four were in the first reproduction.
+
+Valgrind reports zero errors on the failing binary, which is worth saying
+plainly: the arena block is still mapped and still initialised, so the read is
+well-defined and merely stale. A memory checker was never going to find this.
+What found it was the interpreter disagreeing.
+
+### What it costs, and what it does not
+
+Every runtime counter gate is green — decode, encode, escape, one-shot, basket,
+wide, pending-cell and scan all unchanged. None of the benchmarks returns a
+subtype across a beat, which is also why nothing caught this.
+
+The page engine cannot have it: `wasm_rt.rs` has no beat and no cohort at all,
+so the arena rewind is native's alone. That is a structural answer rather than
+a test, and better than one.
+
+The fixture is `tests/golden/entryfile/a_subtype_stored_across_the_entry`:
+three primitive parents by two containers, pinned as one output on both
+engines. Which line comes back wrong depends on what the arena held, so the
+whole output is the pin rather than any line of it.
+
+### The rest of the list, swept
+
+A predicate that enumerates tags is worth checking the moment one of them is
+found short, so the other ten were walked against the enum.
+
+```
+K_INT K_FLOAT K_TRUE K_FALSE K_NONE   immediates; the payload is the value
+K_FNREF                               a pointer, and correctly absent: it is
+                                      always `ptr @<global>` — codegen emits
+                                      `k_fnref(ptr @rsym)` at all three call
+                                      sites and the helper's own comment calls
+                                      it "the static a `k_fnref` value points
+                                      at". A static cannot be rewound.
+K_THUNK                               a pointer, spelled out at the call site
+K_STR K_ERR K_REC K_DESC K_LIST
+K_MAP K_CLOSURE K_BYTES K_SUB         on the list
+```
+
+So the list is complete now, and `k_is_heap` is the only predicate of its shape
+in the file — one other line groups heap tags, and it renders `K_CLOSURE` and
+`K_FNREF` alike as `<fn>`, which is a display question and not a lifetime one.
+The deep copier already had its `K_SUB` arm; only the predicate that decides
+whether to call it was short.
+
+### What the repair cost, and what a second look returned
+
+The one-case fix is not free, and the reason is the opposite of what a reader
+would guess. `k_is_heap` is inlined into `k_slots_survive` and through it into
+`k_copy_size`, which is 36% of deepbench — so the predicate's SHAPE decides how
+that walk compiles. Five shapes were measured in the container:
+
+    with the bug                            806,982,208
+    the switch, plus one `case K_SUB:`      856,510,441   +6.14%
+    a mask carrying a bounds branch         878,869,219   +8.90%
+    `k_slots_survive` given its own switch  856,510,441   +6.14%
+    the mask that ships                     850,361,281   +5.38%
+
+deepbench never makes a subtype — `k_sub` appears nowhere in its profile, and
+`k_survives_x` and `k_ptrmap_at` are byte-identical across the change. Same
+walk, same calls, same counts, more instructions. A tenth `case` was worth
+49,528,233 instructions on a benchmark that cannot reach the tag.
+
+That 5.38% cost welfare 0.03, and the ruling in `scripts/welfare/welfare.kso`
+is that welfare cannot fall. The entry went to design/pending-gavels.md as a
+blocking question. It has been WITHDRAWN, unruled, because looking one level
+further down dissolved it.
+
+`k_copy_size` returns zero for an immediate and for nothing else without
+looking at it, so a caller walking a container can skip the call entirely.
+deepbench folds over lists of ints; the call it made per element existed only
+to return zero. Six sites — three in `k_copy_size`, three in `k_repair_size` —
+now test `k_worth_sizing` first:
+
+    with the bug                     806,982,208
+    the fix alone                    850,361,281   +5.38%
+    the fix and the skip             760,471,453   -5.77% against the bug
+
+Against origin/main, on the runner:
+
+    work_deepbench    806,985,948 -> 760,475,193   -46,510,755   -5.76%
+    work_widebench     85,273,589 ->  83,967,604    -1,305,985   -1.53%
+    work_encodebench 9,866,843,915 -> 9,866,614,705   -229,210
+    work_basket        57,436,178 ->  57,392,199       -43,979
+    work_pendbench    987,907,671 -> 988,282,947      +375,276   +0.038%
+    work_escapebench  258,574,097 -> 258,583,100        +9,003
+    work_jsonbench  2,910,241,430 -> 2,910,241,528          +98
+    work_oneshot       47,277,061 ->  47,277,156          +95
+
+`work_pendbench` is the only row that pays for the skip rather than the mask,
+and it pays for exactly what it is: the lazy benchmark's slots hold thunks,
+`k_worth_sizing` answers yes for a thunk, so every element takes the new test
+AND still makes the call. 392,848 instructions of a test that never saves one,
+against 46.5 million saved on the benchmark whose slots are ints. The other
+three risers — `work_escapebench`, `work_jsonbench`, `work_oneshot` — are
+identical between the fix alone and the fix with the skip, so their movement is
+the predicate's shape in programs whose copy walk is cold, not the skip.
+
+`compile_instructions` falls 3,097 (54,507,708 -> 54,504,611) and the machine
+code falls 1,328 bytes net: the mask removes about four hundred bytes from
+every benchmark and `k_worth_sizing` adds back 240 to each.
+
+Welfare is 85.22 against a floor of 85.19, and the floor is moved in this same
+PR. The blocking entry is gone from the ledger with no ruling recorded, because
+none was needed in the end — which is the outcome the escalation was supposed
+to have, and the reason to escalate the moment a question is found rather than
+after exhausting it.
+
+## 2026-08-30 — the text-block opener counted characters and sliced bytes
+
+`kanso check` panicked on this file, and printed a wrong diagnostic on the two
+files either side of it:
+
+```
+pub joined = pick "e"  """     compiles, prints
+pub joined = pick "é"  """     refused: "nothing follows `\"\"\"`"
+pub joined = pick "…"  """     refused: the same
+pub joined = pick "🎯" """     panic: byte index 22 is not a char boundary
+```
+
+One character apart, and the program is otherwise identical.
+
+### The cause
+
+`block_opener` scans the line a text block opens on and returns where it found
+the `"""`. It collected a `Vec<char>` and returned a CHARACTER index. All three
+of its callers use that number as a BYTE index:
+
+```rust
+if content[at..].chars().count() != 3 { ... Span::at(number, indent + at + 4) }
+let (body, consumed) = gather_block(...);
+match lex_line_with_block(&content[..at], number, indent + 1, indent + 1 + at, &body)
+```
+
+The two agree exactly while the line is ASCII, which every line in the corpus,
+the book and the standard library happens to be. One two-byte character before
+the fence puts the byte index one ahead of the character index, so
+`content[at..]` starts a byte early, reads `" \"\"\""` rather than `"\"\"\""`,
+counts four characters where three are wanted, and the block is refused for
+having something after it. Three bytes drift by two. Four bytes land inside the
+character and `str`'s slice panics.
+
+The predicate has been this way since text blocks existed. What kept it quiet
+is that the only way to reach it is to write a non-ASCII character on the same
+line as a `"""`, and nothing in the tree does.
+
+### The fix, and what it returns
+
+`block_opener` walks `content.as_bytes()` and returns a byte offset. The three
+bytes it tests for — `\`, `"`, `#` — are ASCII, and every byte inside a
+multi-byte character is at least 0x80, so those bytes match no arm of the scan
+and are walked past one at a time. `i += 2` past an escape is right for the
+same reason: it skips the backslash and the escaped character's first byte, and
+whatever remains of that character matches nothing either.
+
+The column the diagnostic points at is still counted in characters, so the one
+caller that needs it takes `content[..at].chars().count()` — which is what the
+old `at` was. Replacing that back with `at` moves the caret one column right on
+the `é` fixture, which is the pin on that half of the change.
+
+The `Vec<char>` goes with it, and it was not small: **compile_allocs 50,528 ->
+48,356**, a fall of 2,172 and 4.3% of everything the front end allocates.
+`lib/json` contains no text block at all — the vector was being built for every
+line of every file compiled, in order to answer no. `compile_peak_bytes` does
+not move (742,572), which is right for a vector that never lived past the call.
+
+The map was re-run against the fixed compiler, and it says the change did one
+thing:
+
+```
+total blocks   50,540 -> 48,368   (-2,172)
+block_opener    2,172 ->      0
+every other site           identical, to the block
+```
+
+Not a fall of about the right size — the same number dhat had attributed to
+that one line, with no other site moving by one allocation. (48,368 against
+`compile_allocs` 48,356 is the twelve allocations that happen before the
+counting allocator installs, which the archive already accounts for.) The other
+lexer rows only changed line numbers, because the comment above `block_opener`
+grew.
+
+### The fixtures
+
+`tests/golden/micro/a_text_block_opens_after_a_wide_character` runs one program
+holding all three widths and pins its output on both engines. It panics on the
+parent commit — "byte index 16 is not a char boundary" at lexer.rs:122 — rather
+than printing a wrong answer, which is the loudest a fixture gets.
+
+`tests/golden/errors/a_text_block_fence_after_a_wide_character` pins the column
+of the "nothing follows" diagnostic, which is the half of the fix that has
+nothing to do with slicing.
+
+### The family, swept
+
+A predicate confusing two units is worth checking the file for others, and
+`src/lexer.rs` had two more of exactly this shape. `raw.find('\t')` and
+`trimmed.find('\t')` answer in bytes, and both feed `Span::at(number, col + 1)`
+— a column. Three two-byte characters before a tab put the caret three columns
+right of it:
+
+```
+x = "ééé"	y        said column 13, the tab is the 10th character
+  ééé	z            said column 9,  the tab is the 6th
+```
+
+Both take `[..at].chars().count() + 1` now. There is no third: the only other
+byte index in the file is the leading-whitespace `indent`, and the check above
+it refuses tabs outright, so what it counts is spaces and the two units agree
+by construction.
+
+The sweep ran past the file too. Every `Span::at` in the tree outside
+`src/lexer.rs` — two in check.rs, six in eval.rs, three in lib.rs, nine in
+parser.rs, one in wasm_rt.rs — takes a literal or a token's own span, so no
+other pass computes a column from source text at all. That is the lexer's job
+and only the lexer's, which is why the confusion could only live here.
+
+These are wrong carets rather than wrong programs, which is why they had
+survived a corpus that pins every diagnostic in the tree — the pins are all
+ASCII, so the two units agreed on every one of them.
+`tests/golden/errors/a_tab_after_a_wide_character` carries both lines, and
+putting the byte offset back at either site moves that fixture's caret.
+
+### Where it came from
+
+The dhat allocation map, re-run after #1139–#1141 took the front end from
+61,974 blocks to 50,528. The lexer is the largest allocator in the new map —
+13,854 blocks over six lines, 27% of the total — and `block_opener`'s vector
+was 2,172 of them, the fourth line down. Reading the function to see whether
+the vector could go is what found the index units. The bug was not what the map
+was looking for; a map of where the work is answers questions nobody asked it.
+
+## 2026-08-30 — a token and the column it ends at are one vector
+
+`Line` carried `tokens: Vec<(Tok, Span)>` beside `end_cols: Vec<usize>`. The
+two were always the same length, and twelve places in `src/parser.rs` sliced
+them:
+
+```rust
+P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number)
+P::new(&line.tokens[1..*at],      &line.end_cols[1..*at],      line.number)
+```
+
+All twelve slice both the same way — that was checked before the change, and
+there is no bug here to fix. What there is, is a pair that has to be kept in
+step by hand, in the file where a character index and a byte index had just
+been found disagreeing. `Vec<(Tok, Span, u32)>` cannot fall out of step.
+
+### What it costs and returns
+
+```
+compile_allocs        48,356 -> 46,998    -1,358   -2.8%
+compile_peak_bytes             742,572    unmoved
+docs/kanso.wasm    1,661,716 -> 1,657,340   -4,376 bytes
+```
+
+The fall is larger than the 1,117 blocks dhat attributed to `end_cols`'
+growth, and the extra is where the map could not see it: `StrPart::Interp`
+carried the identical pair — `Interp(Vec<(Tok, Span)>, Vec<usize>)` — so every
+interpolation in the program paid it again. That variant is one field now, and
+`template_part` hands `P::new` one slice where it used to hand two.
+
+Peak does not move, which is the right answer rather than a disappointing one.
+A `(Tok, Span, u32)` pads to the same width the pair occupied across two
+allocations, so what goes is the second header and the second doubling
+sequence, not the bytes the tokens themselves need.
+
+### What did not change
+
+Every output gate is green: the emitted golden, the machine-code golden and
+all eight work rows, plus decode, encode, escape, one-shot, basket, wide,
+pending-cell and scan counters. The compiler writes the same program and every
+benchmark does the same work. This is the front end's own bookkeeping and
+nothing a user can observe, which is why it ships with no fixture of its own —
+the corpus that already pins every diagnostic in the tree is the test, and
+`check_needless_continuation` and `validate_spacing` were both rewritten
+against it.
+
+The diff is 162 lines added against 181 removed. A merge that removes more
+than it adds is the shape to expect when two things that were always equal
+stop being written down twice.
+
+### The neighbouring vector is DECLINED, and the reason is the same family
+
+`lex_line` builds a `Vec<char>` per source line — 1,997 allocation blocks, the
+next item down the map after this one. It stays, and the reason is one line:
+
+```rust
+fn span(&self) -> Span { Span::at(self.line, self.col_offset + self.pos) }
+```
+
+`pos` IS the column. The vector is not indexing convenience; it is what makes
+every token's column a character count, which is what a caret under a source
+line has to be. Three ways to remove it were considered and all three are
+worse:
+
+- **Byte offsets alone.** Every token's column goes wrong by the number of
+  multi-byte characters before it on the line. That is the bug this file was
+  just fixed for twice, reintroduced at every token rather than at one fence.
+- **Compute the column when a span is made**, `content[..byte].chars().count()`.
+  O(byte) per token, so quadratic in line length, to save one linear collect.
+- **Carry a byte position beside the character one.** Fourteen sites advance
+  `pos`, two of them by two characters at a time, and the byte width of what
+  they skip is not known at the site. That is the shape this entry removes,
+  at fourteen places instead of twelve, with a harder invariant.
+
+So the vector is the cheapest way to have the thing it buys, and this is a
+declined idea rather than an open one.
+
+## 2026-08-30 — the tail-call rewriter's group map cloned a name per declaration
+
+`trmc::rewrite` opens by grouping declarations:
+
+```rust
+let mut groups: HashMap<(String, usize), Vec<usize>> = HashMap::default();
+for (i, decl) in program.fns.iter().enumerate() {
+    groups.entry((decl.name.clone(), decl.params.len())).or_default().push(i);
+}
+```
+
+A `String` per function declaration, built to look one up, out of names the
+program is holding open in front of it. That is #1141's finding one file over,
+and the map put 1,634 blocks on this site.
+
+The keys borrow now. What made the same fix hard in #1140 — `rewrite` takes
+`&mut Program` — turns out not to apply here: nothing in the body writes to
+`program`. The rewritten arms accumulate in a local `new_fns` and go on at the
+end, `program.fns.extend(new_fns)`, after both loops have finished with the
+borrow. One `FnDecl` the rewriter builds does need an owned name, and takes
+`name.to_string()` — once per rewritten group rather than once per declaration.
+
+```
+compile_allocs   46,998 -> 46,008   -990   -2.1%
+compile_peak_bytes        742,572   unmoved
+```
+
+The 990 against dhat's 1,634 is the split, and it says where the rest is: the
+`Vec<usize>` each group collects its members into, and the `Vec<&FnDecl>` the
+body collects them back out into. Those are #1140's treatment — a half-open
+range into one flat vector — and they are NOT taken here. Restructuring the
+tail-call rewriter for the remaining 644 is a worse trade than a one-line
+borrow for 990, and the emitted golden is what would catch it going wrong: the
+group iteration order decides the order arms are rewritten in.
+
+`scripts/trmc_differential` passes — 23 shapes, three of which the license
+refuses, at four depths each, rewritten and not, agreeing on both engines — and
+the emitted golden is unchanged, so the compiler writes the same program.
+
+### The sweep this came out of, and the nine sites it refused
+
+The shape is `(name.clone(), arity)` as a map key. A grep finds eleven more:
+codegen.rs:399 and :425, demand.rs:211, dispatch.rs:46, escape.rs:51 and :89,
+linear.rs:86, :88, :979 and :1131, provenance.rs:315.
+
+dhat attributes ZERO blocks to codegen.rs, dispatch.rs, escape.rs and
+linear.rs on `kanso check lib/json` — a check never runs those passes. Nine of
+the eleven would have been diffs that cost a reader time and returned nothing.
+The map usually earns its keep by finding work; here it earned it by refusing
+some.
+
+What is left on the measured path is demand.rs at 1,614 blocks and
+provenance.rs at 633. demand.rs has the shape on both sides, and the lookup is
+the larger one: `discard.get(&(callee.clone(), args.len()))` fires at every
+`App` node the walk visits, where the build side fires once per declaration.
+Its borrow is easier than this one's — `discard_positions` already takes
+`&Program`.
+
+## 2026-08-30 — where the welfare headroom actually is
+
+The score is used two ways: as a gate, and afterwards to say which term paid.
+It answers a third question nobody had put to it — where work should go — and
+the answer is not what a day of this session's choices assumed.
+
+Each dimension's earned score against its ceiling, from the weights and
+satiations in `scripts/welfare/welfare.kso` and the goldens at `fb5bf7bc`:
+
+```
+dimension        ratio   satisf.   earns   ON TABLE
+run speed        28.72    0.935    28.05     1.95
+run memory      112.44    0.983    29.48     0.52
+compile speed     1.20    0.706    19.77     8.23
+compile memory    1.10    0.688     8.26     3.74
+                                   85.56
+```
+
+The total reproduces the live score to the digit, which is what says the
+reading is of the function rather than of an approximation to it.
+
+**11.97 of the 14.44 points still available sit in the two compile
+dimensions.** The benchmarks are 28.7 and 112.4 times their baselines and
+satiate at 2.0, so between them they hold 2.47 points. Compile speed sits at
+ratio 1.20 — barely off its baseline — and holds 8.23 alone, early satiation
+and all, because satiation only bites once a dimension has moved.
+
+This explains a scoreboard that otherwise reads backwards. Today's four
+changes:
+
+```
+#1143  a use-after-free repair, deepbench -5.76%     +0.03
+#1145  the text-block fence, compile_allocs -4.3%    +0.19
+#1146  one vector, compile_allocs -2.8%              +0.15
+#1147  trmc's keys borrow, compile_allocs -2.1%      +0.08
+```
+
+The runtime change is the largest single measurement of the four and worth the
+least, because a benchmark thirty times better than its baseline has almost
+nothing left to give the index. Three modest front-end changes outscore it
+six to one.
+
+What this licenses is choosing between two pieces of work that are both sound.
+It does not say a decoder regression stops mattering — the per-counter goldens
+are the tripwire for that and are untouched by any of this — and it cannot say
+anything about wall time, which the function leaves out and therefore weights
+at zero. The function is provisional and says so. But asked which end of the
+compiler to spend the next hour on, it has a clear answer, and the answer is
+the front end.
+
+## 2026-08-30 — the demand pass's lookup keys
+
+`discard_positions` keyed its map on `(String, usize)`, and `collect_uses` built
+the same pair every time it read one:
+
+```rust
+Expr::Ident(callee, _) => discard.get(&(callee.clone(), args.len())),
+```
+
+The build side allocates once per function declaration. The lookup side fires
+at every `App` node the demand walk visits and throws the `String` away as soon
+as the map has answered. Both sides borrow now, which the pass can do because
+`discard_positions` takes `&Program` and the map dies inside `analyze`.
+
+```
+compile_allocs        46,008 -> 44,920    -1,088   -2.4%
+compile_peak_bytes               742,572  unmoved
+docs/kanso.wasm    1,656,573 -> 1,654,278  -2,295 bytes
+```
+
+### compile_instructions rose, and the rise is glibc's
+
+```
+compile_instructions  52,172,225 -> 52,201,308   +29,083   +0.056%
+```
+
+A rise on a change that removes 1,088 allocations, which reads backwards until
+the profile is diffed. Everything kanso does got cheaper and so did every
+allocator entry point:
+
+```
+_int_malloc     3,196,519 -> 3,120,043    -76,476
+_int_free       2,865,445 -> 2,796,140    -69,305
+malloc          2,017,580 -> 1,969,739    -47,841
+String::clone     311,018 ->   275,114    -35,904
+free            1,288,504 -> 1,258,040    -30,464
+__rust_alloc      917,838 ->   892,814    -25,024
+```
+
+That is about 326,000 instructions of work removed. Two rows rose past it, and
+both are glibc's free-list maintenance:
+
+```
+malloc_consolidate  721,213 -> 967,024   +245,811
+unlink_chunk        340,268 -> 448,044   +107,776
+```
+
+Removing 1,088 short-lived allocations of one size changed which chunks sat in
+the fastbins when glibc came to consolidate them, and it consolidated more. The
+compiler asks the allocator for less and the allocator charges more for the
+asking. `kanso::demand::analyze` itself moves 174 instructions on 112,706,
+which is this measurement's noise floor.
+
+It is banked as a rise with a cause rather than waved through as layout,
+because it reproduces on both toolchains and with the same sign: +20,355 here
+under rustc 1.94.1, +29,083 on the runner under 1.98.0. A layout accident would
+not do that.
+
+Welfare goes up, 85.64 -> 85.72, ratcheted here. Compile speed reads the mean of
+this row's ratio and `compile_allocs`'s, and 2.4% off the allocations is worth
+several times 0.056% on the instructions.
+
+### The sibling that measures zero
+
+`use_targets` has the identical shape one function down — it collects
+`Vec<(String, usize, usize)>` and pushes `callee.clone()` — and borrowing it
+moves `compile_allocs` by nothing at all. Built, measured at 44,920 both ways,
+reverted. It runs only for a binding that has already passed the lazy vote, and
+`lib/json` produces none, so the clone is on a path the vein cannot see. A
+program in the lazy fragment would reach it; the mem tier is where that would
+show, and those fixtures are a dozen statements each.
+
+### What #1147's entry got wrong about provenance
+
+That entry named `provenance.rs` at 633 blocks as the other site left on the
+measured path. A dhat run on the current binary attributes **zero** blocks to
+`provenance.rs` at any depth, and reading the file says why: `Provenance` keys
+its parameter map on `Group<'a>`, borrowed already, and the `decl.name.clone()`
+at line 315 is inside the license diagnostic — reached only by a declaration
+with an arm for an err its own package raised. `lib/json` has none. The 633
+came from the pre-#1139 map and was carried forward without being re-read.
+
+### The front end's allocations after the day
+
+44,923 blocks by dhat against 44,920 by the counting allocator. The ten largest
+lines:
+
+```
+3,592  lexer.rs:7      <Tok as Clone>::clone — the String inside Tok::Ident,
+                       copied when a caller clones the token
+3,157  lexer.rs:584    let tok = s.lex_word()? — the same String, built; the
+                       allocation is inside lex_word and lands on the inlined
+                       call site
+1,997  lexer.rs:535    Scanner's Vec<char> per line
+1,689  infer.rs:250
+1,394  lib.rs:610
+1,375  lib.rs:2897
+1,117  lexer.rs:585    tokens.push — the per-line token vector
+1,100  parser.rs:2112
+1,072  infer.rs:574
+1,067  parser.rs:2119
+```
+
+The lexer holds four of the ten and 9,863 blocks between them, which is 22% of
+the front end. Read the frames rather than the line numbers: 6,749 of the 9,863
+are one `String`, the name in `Tok::Ident`, built once at 584 and copied 3,592
+times at 7. Building it is what interning would remove, and interning is
+declined — #1033, 365 conversion sites for one AST field of twenty-nine.
+Copying it is a separate question with a separate answer, because a clone
+happens at a caller that could have matched on `&Tok`.
+
+That leaves 3,114 blocks in two vectors the lexer builds per line and neither
+of which a reader ever sees: `Scanner`'s `Vec<char>` at 1,997 and the token
+vector at 1,117. The `Vec<char>` was declined in #1145 on the grounds that
+`pos` is the column, which remains true and is a reason to keep indexing
+characters rather than a reason to allocate a fresh vector for each line.
+
+## 2026-08-30 — four vectors the front end rebuilt on every iteration
+
+Each of these builds a heap vector inside a loop, uses it for one iteration and
+drops it. None of them is visible in the language, the diagnostics or the
+emitted code, and together they were 3,985 of the front end's 44,920 allocation
+blocks.
+
+```
+Scanner's Vec<char> comes from a pool          44,920 -> 42,932   -1,988
+lex_line reserves `tokens` at eight            42,932 -> 42,498     -434
+the parser matches on &Tok instead of cloning  42,498 -> 42,302     -196
+callee_first hoists `names` out of its loop    42,302 -> 40,935   -1,367
+                                                                 -3,985   -8.9%
+compile_peak_bytes                            742,572 -> 743,564    +992   +0.13%
+docs/kanso.wasm                             1,654,278 -> 1,655,440  +1,162 bytes
+```
+
+Measured one at a time, in that order, so each number is that piece's.
+
+### What it cost to run
+
+```
+compile_instructions  52,201,308 -> 51,126,817   -1,074,491   -2.06%
+```
+
+The allocator rows carry about half of it — `_int_free` 2,796,241 ->
+2,580,177, `malloc` 1,969,739 -> 1,790,546, `free` 1,258,040 -> 1,146,488,
+`__rust_alloc` 892,814 -> 852,633, some 547,000 between them. `_int_malloc` and
+`malloc_consolidate` hold, which says the fastbin churn #1148's entry describes
+did not come back when the traffic fell again.
+
+Two rows rise and both are a reused buffer's bookkeeping: `lex_line` 749,824 ->
+777,023 for taking a buffer from the pool and giving it back once a line, and
+`infer::infer` 1,167,175 -> 1,186,509 for clearing the gather vector. 46,000
+instructions against 1,074,000 saved.
+
+`eval_expr`, `check_merged` and `__memcmp_avx2_movbe` are byte-identical, which
+is what a change confined to the lexer, the parser and one function of infer
+should read as. Welfare 85.72 -> 86.06, ratcheted here.
+
+### The scanner's line
+
+`pos` is the column a caret goes under, so `Scanner` indexes characters and has
+to hold the line as a `Vec<char>`. #1145 settled that and it still holds. What
+goes is collecting a fresh one per line.
+
+Scanners nest — an interpolation lexes its inner text with a scanner of its own
+while the outer one still holds the line the interpolation was written on — so
+the buffers come from a pool rather than a single slot. A `Scanner` takes one at
+construction and gives it back in `Drop`, and the pool ends up holding one
+buffer per level of nesting reached, each grown to the longest line it ever
+took.
+
+### The token vector, and why eight
+
+`tokens` starts empty, reaches four and doubles from there. Eight covers most
+lines outright. Sixteen takes 156 more allocations and puts **9.7%** on
+`compile_peak_bytes`, which is a bad trade for a vector a `Line` keeps for the
+whole parse; that was measured and declined.
+
+### 3,788 blocks on Tok::clone, and the 196 they return
+
+```rust
+match self.toks.get(self.pos).map(|(t, _, _)| t.clone()) {
+```
+
+Two places did this, in `parse_atom_base` and `parse_pattern`, and dhat put
+3,788 blocks on `<Tok as Clone>::clone` between them. `self.toks` is a
+`&'a [_]`, so a token read out of it borrows the slice rather than `self`, and
+the arms are free to move `pos` while holding one. Matching on `&Tok` compiles
+as it stands.
+
+It returns 196. A dhat run after the change puts **zero** on
+`<Tok as Clone>::clone`, 3,197 on `parser.rs:2127` and 629 on `parser.rs:1793`
+— the arms that build `Expr::Ident` and `Pattern::Var`, which need an owned name
+and clone it there instead. The allocation moved to a different frame. What went
+away is the clone for `Underscore`, `LParen`, `LBrace`, `LBracket`, the `Str`
+arm of `parse_pattern` that only read its parts, and every path that matched
+none of them.
+
+That is the second time in a day a line in the map read high because the frame
+above it was doing the allocating; #1148's entry corrected `lexer.rs:584` the
+same way. **Read the frames before costing a fix.** A line number says where an
+allocation was charged, not whether deleting the code there would remove it.
+
+### The gather buffer
+
+`callee_first` builds `let mut names: Vec<&str> = Vec::new()` inside its
+per-declaration loop, fills it, sorts it, reads it and drops it. Hoisted out and
+cleared, it is 1,367 blocks for two lines — the largest of the four, from the
+smallest diff, and it was the last one looked at because the map charged it to
+`infer.rs:250`, the call site.
+
+### A fifth vector, measured and declined
+
+`parse_app` accumulates a call's arguments the same way `lex_line` accumulates
+its tokens, and dhat charged 1,100 blocks to the push. Reserving eight there
+makes both counters worse:
+
+```
+compile_allocs      40,935 -> 41,649   +714    +1.7%
+compile_peak_bytes 743,564 -> 860,940  +117,376  +15.8%
+```
+
+`Vec::new()` allocates nothing until something is pushed, and most of what
+`parse_app` looks at is a bare atom with no arguments at all — reserving pays
+an allocation for every one of those, where the empty vector paid none. The
+peak is the other half: an `Expr::App` keeps its arguments for the whole
+compile, so eight slots apiece are eight slots held. The 1,100 blocks are one
+allocation per call that has arguments, and that one is not removable by
+reserving.
+
+The `tokens` vector differs on both counts. Every line has at least one token,
+so its first allocation happens regardless, and reserving only moves where the
+second one would have been.
+
+### What the peak buys
+
+The 992 bytes are the two pooled buffers: one long source line and one large
+declaration, held for the process rather than for an iteration. Welfare weighs
+compile speed at 0.28 and compile memory at 0.12, and 8.9% off the traffic
+against 0.13% on the residency is not a close call. Rounds and visits do not
+move at all — nothing here changes what the compiler decides, only what it
+allocates while deciding it.
+
+## 2026-08-30 — four allocations the front end made per declaration
+
+Three of these built a `String` out of a name the program was already holding —
+the family #1141 opened, and these are the last of it on the measured path. The
+fourth is #1140's: a `Vec` per declaration where one flat vector and a start
+would do.
+
+```
+flush_unused's shadowed set borrows   40,935 -> 40,231   -704
+Local.name borrows                    40,231 -> 39,527   -704
+synthesize_getters keys on the field  39,527 -> 39,092   -435
+callee_first's call table goes flat   39,092 -> 38,462   -630
+                                                       -2,473   -6.0%
+compile_peak_bytes                   743,564 -> 735,254  -8,310   -1.1%
+docs/kanso.wasm                    1,655,440 -> 1,654,157  -1,283 bytes
+```
+
+Measured one at a time, in that order.
+
+### What it cost to run
+
+```
+compile_instructions  51,126,817 -> 50,455,686   -671,131   -1.31%
+```
+
+The allocator rows carry 478,000 of it: `_int_free` 2,580,177 -> 2,434,266,
+`malloc` 1,790,546 -> 1,684,286, `_int_malloc` 3,123,992 -> 3,044,126, `free`
+1,146,488 -> 1,077,244, `__rust_alloc` 852,633 -> 800,814, `malloc_consolidate`
+966,246 -> 940,889. The rest is the `String` construction and drop that
+callgrind's 90% threshold leaves without rows of its own.
+
+`infer::infer` rises 65,058, and that is the flat call table's price: the
+topological walk indexes `starts` twice per step where it followed one pointer.
+A sixth of what the allocator gave back, for 630 blocks and 8,310 bytes.
+
+The row named `HashMap<&str, ()>::insert` reads +69,302 and is a renaming rather
+than a rise — `flush_unused`'s set was a `HashSet<String>` and is a
+`HashSet<&str>` now, so its inserts moved from one monomorphisation to another
+and the old one sat below the threshold. `eval_expr` and `check_merged` are
+byte-identical.
+
+Welfare 86.06 -> 86.32, ratcheted here.
+
+### The shadow checker
+
+`flush_unused` collected the names it had already reported into a
+`HashSet<String>` — one `String` per binding in every scope the checker leaves.
+The set can borrow from `self.locals`, which the loop only reads; the truncation
+happens after it. The two fields are taken apart before the loop so that reading
+one and writing the other is not one borrow doing both, and the set is scoped so
+its own borrow ends before `self.locals.truncate`.
+
+`Local` then gave up its owned name for a `&'a str`. `Resolver<'_>` became
+`impl<'a> Resolver<'a>`, and `bind_pattern`, `bind_target`, `bind_target_field`
+and `resolve_expr` take `&'a` of what they walk. Six signatures, and the
+compiler named every one of them in turn.
+
+### The getter synthesiser
+
+```rust
+if already.contains(&(ast::getter_name(field), ty.name.clone())) {
+```
+
+Inside a loop over every field of every declared type, to ask a question.
+`getter_name` and `getter_field` are inverse, so the set can be keyed on the
+field name rather than the getter's, and both halves of the key then borrow. The
+`format!` and the clone move to the arms actually synthesised, where a new
+declaration genuinely needs an owned name.
+
+### The call table
+
+`callee_first` built `vec![Vec::new(); program.fns.len()]` and filled each
+declaration's vector completely before moving to the next — which is exactly the
+shape that flattens. One `Vec<usize>` and a `starts: Vec<u32>` replace four
+hundred headers, and the topological walk below reads
+`&flat[starts[i]..starts[i + 1]]` where it read `calls[i]`.
+
+This is the only one of the four that moves `compile_peak_bytes`, and it moves
+it a long way: 8,310 bytes, which takes back the 992 that #1149's two pooled
+buffers cost and 7,318 more. The three borrowed names leave the peak alone,
+which is right — a `String` built to answer a question and dropped is traffic
+rather than residency.
+
+### What the map says is left
+
+dhat before this change put 39,096 blocks against the counter's 39,092. The
+eight largest lines, and what each one is:
+
+```
+3,197  parser.rs:2127   Expr::Ident's String — interning, declined in #1033
+3,157  lexer.rs:622     the same String, built in lex_word
+1,567  infer.rs:250     the call table this entry flattens
+1,100  parser.rs:2114   an App's arguments — reserving measured worse, #1149
+1,072  infer.rs:580     eval_call
+1,067  parser.rs:2121   Box::new(head)
+  959  lib.rs:610       the getter arms themselves
+  861  infer.rs:225     one Vec<Set> per declaration for its parameter sets
+```
+
+The top two are one `String`, built once per identifier and copied once into the
+AST, and the treatment for both is interning. That stays declined at 365
+conversion sites. `infer.rs:225` is the call table's sibling and flattens the
+same way, except that `Inference::params` is `pub` and read as
+`inference.params[decl][i]` at seven sites outside infer.rs, so it wants an
+accessor and a wider diff than this one.
+
+## 2026-08-30 — the two tables the fixpoint kept per declaration
+
+`infer` held two `Vec<_>`-per-declaration structures for the length of a
+compile: a `HashSet<usize>` saying who to wake when a declaration's answer
+changes, and a `Vec<Set>` holding its argument sets. Four hundred declarations,
+so four hundred headers apiece, for sets that are usually a handful of small
+integers.
+
+```
+the reader bitset       38,462 -> 37,119   -1,343
+the params table        37,119 -> 36,268     -851
+                                           -2,194   -5.7%
+compile_peak_bytes     735,254 -> 741,350   +6,096   the bitset
+                       741,350 -> 733,794   -7,556   the params table
+                                            -1,460   -0.2%
+front_end_rounds 40 and front_end_visits 16,806, unmoved by both
+```
+
+The two move the peak in opposite directions and ship together for that reason:
+the bitset costs residency to buy traffic, and the params table more than pays
+it back.
+
+### What it cost to run
+
+```
+compile_instructions  50,455,686 -> 49,090,280   -1,365,406   -2.71%
+```
+
+The largest single fall this vein has taken. The allocator rows carry about
+half — `_int_malloc` 3,044,126 -> 2,808,434, `_int_free` 2,434,266 -> 2,284,655,
+`malloc` 1,684,286 -> 1,588,013, `malloc_consolidate` 940,889 -> 867,875, `free`
+1,077,244 -> 1,015,812, `__rust_alloc` 800,814 -> 769,810, some 647,000 between
+them — and the rest is hashing the bitset removed. Every `mark_reader` hashed a
+`usize` into a set; it shifts and ors now.
+
+`infer::infer` rises 87,854, which is where that work went: the wake loop scans
+`ceil(n / 64)` words per wake instead of iterating a set that knew its own
+members, and the flat params table indexes `param_starts` where it followed a
+pointer. A fifteenth of the fall.
+
+`eval_expr` moves 1,495 on two million and `check_merged` is byte-identical.
+Welfare 86.32 -> 86.58, ratcheted here.
+
+### Who to wake, as bits
+
+`readers[i]` was a `HashSet<usize>`, and waking a declaration's readers cloned
+it — the set is read while `ctx` is taken mutably, so a snapshot was the way to
+release the borrow. It is a bitset now: one row of `ceil(n / 64)` u64 per
+declaration, `mark_reader` sets bit `r`, and the wake loop copies the row into a
+scratch vector taken from `ctx` with `mem::take` and walks it with
+`trailing_zeros`. The clone goes with the hash set.
+
+`front_end_rounds` and `front_end_visits` do not move, which is the check that
+matters here: those two counters are exactly what a wake set that woke a
+different set of readers would change.
+
+The row costs `n * ceil(n / 64) * 8` bytes — 22,792 for `lib/json`'s four
+hundred declarations — in one allocation, where the sets cost 1,343 blocks.
+
+### The argument sets, flat
+
+`Inference::params` was `Vec<Vec<Set>>` and is one flat `Vec<Set>` with a
+`param_starts: Vec<u32>` beside it. `Set` is a `u16`, so a declaration of two
+parameters had a heap block for four bytes.
+
+The field is private now, behind `Inference::param(decl, at)`. Making it private
+first was the way to find the readers: the compiler named all seven — beat.rs
+four times, codegen.rs and dispatch.rs once each — and there was no need to
+guess at a grep.
+
+## 2026-08-30 — a set nobody read, and one that grew from empty
+
+```
+prune_unused_getters reserves its set   36,268 -> 36,234    -34
+used_globals deleted                    36,234 -> 35,639   -595
+                                                           -629   -1.7%
+compile_peak_bytes                     733,794 -> 730,120  -3,674   -0.5%
+```
+
+### What it cost to run
+
+```
+compile_instructions  49,090,280 -> 48,743,776   -346,504   -0.71%
+```
+
+The two pieces show separately. The reservation is
+`RawTable<(&str, ())>::reserve_rehash` 753,484 -> 654,170, a fall of 99,314 —
+`prune_unused_getters`'s set no longer doubling its way up from nothing. The
+deletion is in the allocator rows, `free` 1,015,812 -> 998,200, `__rust_alloc`
+769,810 -> 755,343, `malloc_consolidate` 867,875 -> 861,041, plus the 595
+`String`s no longer built and dropped, which the 90% threshold leaves without
+rows of their own.
+
+`lex_line`, `eval_expr` and `memrchr` are byte-identical: nothing here touches
+the lexer or the fixpoint. Welfare 86.58 -> 86.66, ratcheted here.
+
+### The set nobody read
+
+`Resolver::used_globals` was a `HashSet<String>`, threaded through
+`check_file`, `check_file_shadow`, `check_fn_body_shadow` and the `Resolver`
+struct, and filled here:
+
+```rust
+match self.globals.contains(name) {
+    true => {
+        self.used_globals.insert(name.to_string());
+    }
+```
+
+A `String` for every mention in the program that resolves to a module-level
+name. A grep over `src/` and `tests/` finds eight occurrences of the field: one
+insert, one struct field, four parameters, one pass-through, one initialiser.
+None of them a read. At all four call sites the caller writes `let mut used =
+Set::default()`, hands over `&mut used`, and never looks at it again.
+
+`check_file`'s own doc comment says what it was for — "Records which
+module-level names the file uses, for the unused-private check" — and that check
+lives in `lib::private_uses` now, working from the imports rather than from this
+set. The recording stayed behind when the check moved. #1072's family, and the
+same treatment.
+
+### The set that grew from empty
+
+`prune_unused_getters` walks every statement of every non-getter declaration and
+collects each identifier occurrence into a borrowed set, to ask afterwards which
+getters were mentioned. `collect`-shaped growth from capacity nothing costs a
+rehash sequence over a set that ends up holding every distinct name in the
+program.
+
+Two declarations' worth of room per declaration was measured against eight, and
+eight is worse — 49,348,198 local instructions against 49,336,704 — because a
+larger table probes further for the same contents. The number is a measurement
+rather than a guess, and the comment beside it says so.
+
+### What the sweep that found this cost, and what it refused
+
+`callgrind --separate-callers=2` was run to answer a different question: which
+of the compiler's `HashSet<&str>` inserts the profile's 2,075,915-instruction
+row belongs to. The answer was ten callers with no owner — the largest 1.11% of
+the compile — and two declines came out of it:
+
+- **Filtering `prune_unused_getters`'s mentions against the getter names.** The
+  walk already pays exactly one hash per mention, which is the floor for this
+  shape; a filter pays one for the `contains` and then the insert anyway. It
+  also cannot be a `Get_` prefix test, because `FnDecl::is_getter` reads the
+  BODY (`[Stmt::Expr(Expr::Ident(name)) if name == GETTER_BINDER]`), so a
+  hand-written function whose body is just `Read` is a getter under any name.
+- **Pre-sizing the six `iter().filter(..).map(..).collect()` sets** in
+  `advisory`, `beat`, `check` and `escape`. The premise holds — a `Filter`'s
+  size_hint lower bound is zero, so those sets do start empty — and the
+  measurement is 4,514 instructions and one allocation. Six diffs for 0.009%.
