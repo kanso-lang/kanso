@@ -3772,3 +3772,50 @@ sites, and this is the second of those four found by a suite going red rather
 than by anybody looking.
 
 DONE.
+
+## 2026-08-31 — the depth loop was already one iteration, and the block walk was two
+
+kanso#1178 left `k_ten_holds` as its own symbol in widebench at 37.7
+instructions an ask, and a task naming the outer loop over beat depths as where
+that went. The estimate came from arithmetic on 44 instructions per call rather
+than from a counter, and it was wrong.
+
+Instrumented, widebench reads `calls=112,529 depth_iters=112,529
+block_iters=208,982 max_beat_depth=1`. **One depth iteration per ask**, because
+the beat depth never exceeds one on this program: there is no depth loop to
+bound. indexbench, the only other benchmark that reaches the function, reads
+`calls=89 depth_iters=178 max_beat_depth=2` — 89 asks is not a cost.
+
+The 1.86 block iterations per ask are the cost. widebench tenures about 128 KiB,
+which needed a second 64 KiB block, so 71% of asks — the misses — walked both.
+Starting the doubling at 256 KiB holds it in one. 256 is the smallest power of
+two that does, and nothing larger can help: the walk cannot go below the one
+block it now takes, so a bigger base would buy nothing and cost peak to every
+program that tenures at all.
+
+    widebench     64,535,358 -> 63,756,786    -778,572   -1.2064%
+    indexbench     5,244,328 ->  5,242,681      -1,647   -0.0314%
+
+Every other benchmark moves by 0 or 14 instructions, which is nothing. All nine
+counter gates are unmoved — no evacuation counter, no arena peak — and the
+machine code is byte-identical on all nine binaries, because a constant is all
+that changed. `k_ten_holds` costs 30.4 instructions an ask against 37.7, at the
+same 112,529 calls, which is one block test removed and matches the total to
+five per cent.
+
+Peak resident set: widebench 3,624 KiB to 3,704, indexbench 2,416 to 2,452. The
+block is mmap'd and its untouched tail never becomes resident, so what a
+program that tenures nothing pays is zero — `k_ten_alloc` runs only when
+something is promoted.
+
+The bound the doubling exists for still holds. K_TEN_CAP is 64 MiB, so doubling
+from 256 KiB runs out of licence after nine blocks where it took eleven from
+64 KiB, and k_ten_holds' walk is shorter at every size.
+
+**The idea that started this is declined.** Bounding the depth loop buys
+nothing, because the loop is already one iteration on every program that
+reaches it. Recorded so nobody prices it again from the same arithmetic: 37.7
+instructions an ask is a call, a prologue, one depth iteration and two block
+tests, and only the last of those was ever worth attacking.
+
+DONE.

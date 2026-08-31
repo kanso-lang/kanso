@@ -896,7 +896,14 @@ static size_t k_ten_bytes[K_BEAT_MAX];
 /* Past this a program stops tenuring and behaves as it did before, so no loop
    can grow without bound on storage that is only freed at the pop. */
 #define K_TEN_CAP (64u << 20)
-#define K_TEN_BLOCK (64u << 10)
+/* The first block, and the base the doubling below starts from. 64 KiB left
+   the wide-array benchmark needing a second block for 128 KiB of tenured
+   storage, so every membership miss walked two; 256 KiB holds it in one and
+   takes k_ten_holds from 37.7 instructions an ask to 30.4, with the call count
+   unchanged. What it costs is address space rather than pages — malloc mmaps
+   a block this size and untouched pages never become resident — and the
+   measured peak is 80 KiB on widebench. */
+#define K_TEN_BLOCK (256u << 10)
 static int k_ten_on = 0;
 
 /* Is this pointer tenured, at this beat depth or any outer one? A value
