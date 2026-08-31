@@ -3088,3 +3088,18 @@ price? If the growth is separable from the wins (a duplicated
 specialization, a dropped dedup, dead emission), fix it. If it is the
 genuine cost of the run-instructions and compile-memory gains, keep
 it and record the trade; no campaign to force the number back down.
+
+## 2026-08-29 — the memory repo never existed; the phantom is cut out
+
+Task #146's mystery closed with a screenshot: the kanso-lang org holds
+kanso, kq, kanso-json, vse and homebrew-tap — no `memory`. The
+"Clay's memory, in a container" section of CLAUDE.md, and
+.claude/sync-memory.sh beside it, described machinery whose one
+manual step (creating the private repo) was never run. Every session
+that "was refused the attach" was asking for a repository that does
+not exist, and then reporting itself as running without instructions
+that also do not exist. CLAUDE.md now states the truth — this file is
+the complete instruction set a container gets — and the sync script
+is deleted. #146 closes: there was never anything to attach. If a
+cross-project memory is ever really wanted, it starts by actually
+creating the repo, and the section comes back with it.

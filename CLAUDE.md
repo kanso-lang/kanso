@@ -38,19 +38,18 @@ grep -nE "isn't .{0,60}\. it's|is not .{0,60}\. it's|—not .{0,40}, but|\. it (
 ```
 A clean grep is necessary, not sufficient — the families above are wider than any regex. Read it.
 
-## Clay's memory, in a container
+## This file is the whole of it
 
-A session on the web clones this repo and nothing else, so `~/.claude/CLAUDE.md`
-— the global memory that governs every project — is not on disk there, and a
-session that never looks for it works without half its instructions and does not
-know it. It lives in the private repo `kanso-lang/memory` instead. Attach that
-repo at the start of a session in a container and read its `CLAUDE.md`; if the
-attach is refused, say so in the first reply rather than carrying on without it.
-
-`.claude/sync-memory.sh` is what puts it there, run on the machine that holds
-the file. It pushes only when the memory has changed, so the history reads as
-the memory's own edits. Nothing personal goes into this repo: kanso is public
-and the memory repo is private.
+A session on the web clones this repo and nothing else, and this file is the
+complete instruction set such a session gets. There is no global memory to
+attach: an earlier note here told sessions to attach a private repo
+`kanso-lang/memory` holding `~/.claude/CLAUDE.md`, but that repo was never
+created — the machinery was written and its one manual step never run — so
+every attach attempt failed and sessions wrongly believed they were running
+without instructions. Verified against the org's repository list on
+2026-08-29. Do not attach or search for a memory repo; do not report its
+absence as a gap. If a cross-project memory is ever actually created, this
+section is where its instructions will appear.
 
 ## Ironclad engineering rules (learned the hard way; do not relax)
 
