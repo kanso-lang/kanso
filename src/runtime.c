@@ -6427,7 +6427,11 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         KBuf* buf = ((KBuf*)a->data) - 1;
         if (buf->used == a->len && a->len + n <= acap) {
             k_stat_append_fast++;
-            memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
+            /* A comma, a colon, a brace: the encoder's commonest append is one
+               byte, and a call into memcpy to move it costs more than the
+               move. */
+            if (n == 1) ((unsigned char*)a->data)[a->len] = *src;
+            else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
             buf->used = a->len + n;
             /* The bytes went into the accumulator's own spare capacity, so a
                fresh header would differ only in its length. Where uniqueness

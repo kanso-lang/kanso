@@ -2968,3 +2968,59 @@ front end is a separate question — the compiler asks for character counts too,
 and `compile_instructions` will say.
 
 DONE.
+
+## 2026-08-31 — a one-byte append writes the byte
+
+Same PR, and the second time in an hour that a byte-level operation in the
+runtime turned out to be paying a call to move less than a register's worth.
+
+`k_b_append_mut` is 23.24% of encodebench on its own: 42,318,000 calls at 54.2
+instructions each, and 48,945,694 calls into `__memcpy_avx_unaligned_erms`
+beneath it at 17.6 apiece. The encoder's commonest append is one byte — a
+comma between elements, a colon between key and value, the brace that opens a
+map — and `elem_onto` writes it as `text/append acc 44`. Moving one byte
+through libc's dispatcher costs more than the move.
+
+```c
+if (n == 1) ((unsigned char*)a->data)[a->len] = *src;
+else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
+```
+
+```
+    jsonbench    2,913,835,115 -> 2,862,072,365   -51,762,750  -1.777%
+    encodebench  9,254,332,066 -> 8,715,312,466  -539,019,600  -5.824%
+    oneshot         45,769,889 ->    44,077,255    -1,692,634  -3.698%
+    widebench       84,031,191 ->    84,047,191       +16,000  +0.019%
+```
+
+The other four rows do not move. **This pays back the character count's
+decoder cost and then some**: jsonbench ends the pair at −48,169,163 against
+main, −1.655%, where the counter alone had left it +0.123%. The two changes
+land together for that reason.
+
+The obvious generalisation is worse. A byte loop for every `n <= 8` — which
+would also catch `"true"`, `"null"` and `"[]"` — reads encodebench at
+8,878,376,066, jsonbench at 2,874,946,565 and oneshot at 44,570,742: worse
+than the single byte on all three, because clang's memcpy for a known-small
+dynamic length beats an explicit loop everywhere except at one. Measured, not
+assumed.
+
++32 bytes of text wherever it lands, which is one compare and one store
+against the call it replaces.
+
+**And a refuted one, worth writing down because it looks free.** Two counters
+on this fast path — `k_stat_append_fast++` and `k_stat_append_grow++` — are
+incremented unconditionally, where most of the runtime's statistics sit behind
+`__builtin_expect(k_stats_on > 0, 0)`. Putting them behind the same guard
+costs +42,323,600 on encodebench and +4,016,400 on jsonbench: exactly +1.0001
+instructions per fast append. Loading the flag and branching on it is one
+instruction more than incrementing a counter that is already in cache, so the
+guard buys nothing and is not a saving waiting to be taken.
+
+The thread the entry above left open is closed too. The front end asks for
+character counts as well — `trimmed.chars().count()` runs on every line of
+every source file for the eighty-column cap — but rust's std already counts
+this way: `core::str::count::do_count_chars` and `char_count_general_case`
+together are 99,709 instructions of the front end, 0.23%. Nothing to take.
+
+DONE.
