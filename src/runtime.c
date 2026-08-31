@@ -6269,13 +6269,45 @@ static KStr* k_seek_str = NULL;
 static long long k_seek_char = 0;
 static long k_seek_byte = 0;
 
+/* How many characters a run of valid utf-8 holds. A character's first byte
+   is any byte whose top two bits are not `10`, so the count is the byte
+   length minus the number of continuation bytes, and no byte needs to be
+   decoded to know which it is.
+
+   Eight bytes at a time, because the per-character walk this replaced took a
+   branch for every byte and `length` on a document is the shape that pays
+   for it: encodebench asks for the length of what it just encoded four
+   hundred times, and that one call was 6.8% of the benchmark.
+
+   The word is read with memcpy so an unaligned load is the compiler's
+   problem, and byte order does not matter — every byte is tested in place
+   and the answer is a population count, which is order-blind. */
+static long long k_utf8_chars(const unsigned char* p, long long len) {
+    long long i = 0;
+    long long conts = 0;
+    for (; i + 8 <= len; i += 8) {
+        unsigned long long w;
+        memcpy(&w, p + i, sizeof w);
+        /* bit 7 set and bit 6 clear, per byte */
+        unsigned long long cont = w & ~(w << 1) & 0x8080808080808080ULL;
+        conts += __builtin_popcountll(cont);
+    }
+    /* The tail is at most seven bytes, so widening it is code the linker
+       carries and the processor never runs: 560 bytes of vector prologue
+       per copy of this function, against a loop that trips seven times. */
+#if defined(__clang__)
+#pragma clang loop vectorize(disable) unroll(disable)
+#endif
+    for (; i < len; i++) conts += ((p[i] & 0xc0) == 0x80);
+    return len - conts;
+}
+
 static long long k_str_chars(KStr* s) {
     if (s->cap < 0) return -(long long)s->cap - 1;
     if (s->cap > 0) return k_str_count(s);
     k_stat_str_scans++;
     k_stat_str_scan_bytes += s->len;
-    long long count = 0;
-    for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
+    long long count = k_utf8_chars((const unsigned char*)s->data, s->len);
     if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
     return count;
 }

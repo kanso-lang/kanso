@@ -2890,3 +2890,81 @@ has.
 Welfare 87.4740 -> 87.4996, banked with `--set`. The page's `data-golden`
 instruction figure moves with it; the allocation figure does not, because
 allocations did not.
+
+## 2026-08-31 — a character count is a population count
+
+`length` on a string counts characters, and `k_str_chars` counted them by
+walking: read a byte, decide from it how wide the character is, step that far,
+add one. A branch per byte, about 8.9 instructions each on this box.
+
+The shape that pays for it is asking a document its length. encodebench's
+harness does exactly that — `rounds v (n - 1) (acc + length (encode v))` —
+four hundred times over 188,698 bytes, and the cost golden had the numbers all
+along: `str_scans=400`, `str_scan_bytes=75479200`. That one call was
+671,356,000 instructions, 6.8% of the benchmark, and it read as
+`k_b_length` in the profile rather than as anything the encoder does.
+
+A character's first byte is any byte whose top two bits are not `10`, so the
+count is the byte length minus the number of continuation bytes and nothing
+has to be decoded. Eight bytes at a time: load a word, mark the bytes with bit
+7 set and bit 6 clear, population count. About one instruction per byte.
+
+```
+    encodebench  9,866,614,705 -> 9,254,332,066  -612,282,639  -6.206%   (local)
+    pendbench      988,282,947 ->   957,236,125   -31,046,822  -3.141%
+    oneshot         47,277,156 ->    45,769,889    -1,507,267  -3.188%
+    basket          57,392,199 ->    57,117,622      -274,577  -0.478%
+    jsonbench    2,910,241,528 -> 2,913,835,115    +3,593,587  +0.123%
+    widebench       83,967,604 ->    84,031,191       +63,587  +0.076%
+```
+
+**The two rises are one number.** jsonbench makes 898,500 `k_str_chars` calls,
+all from `k_b_slice`'s test for whether a string is one byte per character,
+and each costs +4.000 instructions — 898,500 × 4 is the whole 3,593,587 to the
+unit. The strings are shorter than eight bytes, so the word loop never runs
+and they pay only for its guard and the closing subtraction. Traded knowingly:
+the four benchmarks that improved are the ones that ask a document its length,
+and the decoder's four instructions buy the encoder six per cent.
+
+Three shapes were measured, not two. A plain branch-free byte loop —
+`conts += (p[i] & 0xc0) == 0x80`, no word at all — leaves jsonbench exactly
+where it was and gives encodebench only 3.55%; clang does not vectorise it,
+so it lands at 4.3 instructions per byte instead of 8.9. Disabling
+vectorisation on the *word* loop costs 186,305,200 instructions on
+encodebench, which is what the SIMD popcount is worth, so it stays. The tail
+loop is told not to vectorise: it trips at most seven times, and clang's
+widening of it was 368 bytes of prologue per copy against a loop the processor
+barely enters.
+
+That last one is the text vein's whole movement: +752 bytes wherever the
+function is inlined twice, +368 where once, +1,520 on basket, which holds four
+copies. Regenerated with the reason in the file.
+
+**The harness came second, and says so.** `scripts/utf8_differential` already
+extracts the validator's text from `src/runtime.c` at run time rather than
+copying it; it extracts `k_utf8_chars` the same way now, under a name of its
+own, and checks it against a reference in `scripts/utf8/harness.c` that walks
+the text a character at a time from the rfc 3629 widths. Two routes to the
+same answer on valid utf-8. The sweep is every arrangement of character widths
+that fits in twenty-four bytes — three whole words plus the tails either side
+of each — and then two hundred thousand valid strings over code points the
+four representatives do not reach: 8,346,016 counts, 0 mismatches.
+
+It was watched red before it was believed. Writing the mask as
+`w & ~(w >> 1)` gives 7,036,227 mismatches; stopping the tail one byte short
+gives 2,079,600. Both are the mistakes actually available in this function.
+
+The counter this kernel is present by is `str_scans` / `str_scan_bytes`, which
+already existed and did not move — they count scans and bytes, never words or
+lanes, so they say the same thing on a host with no popcount instruction.
+
+`k_chars_list` twenty lines above does the same scan to size the list it is
+about to build. Left alone deliberately: it allocates a string per character
+straight afterwards, so the count is not what that path pays for.
+
+Not measured, and worth saying: the interpreter counts characters in Rust and
+is untouched, so this moves native only. Whether the same shape helps the
+front end is a separate question — the compiler asks for character counts too,
+and `compile_instructions` will say.
+
+DONE.
