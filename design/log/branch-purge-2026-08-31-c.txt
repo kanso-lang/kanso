@@ -1,0 +1,25 @@
+# The 17 abandoned branches deleted on 2026-08-31, and the commit each
+# pointed at. The first two lists in this directory name landed
+# branches; nothing here landed. Eight were heads of pull requests
+# closed without merging, and nine never had a pull request and had
+# not moved in two weeks — a long stillness in a repository that
+# merges several branches a day. Any row goes back with
+#
+#     git push origin <sha>:refs/heads/<name>
+b5e3d8c7906165e6c95875d8865d7a1c1ff5e3db beat-narrow-boundary
+1ef85ffaa9a414d68bf1ec72a819707c28fddfb2 board-sitting
+446111a063417e86e92eae63adc1cc673a428276 book-panel-sync
+9d6806651a550f43e3c562a7f88b7a9968e3a888 builtins-demand-their-strings
+18ffb961585c1bfdd34f66e6b65bf09cc6ff59c4 byte-shelf-flagged
+2482b4059089d56d6d213f8d78b0db8e8bf1782c dep-check-ablation
+b872e992cef51c626f2c906264d6ecc3c02780eb encode-linearity
+068ad22cae093b5099547468c555221dd2c56578 err-unhandleable
+3acdcb32eb8308aca6e847fe24ef4a0ba30a96c5 hako-granularity
+5690b96678815ae8bb00b2437b7ff428ce732b62 json-projection-migration
+c1593890be350f900f711fdadf6e48b539accd62 merge-dialog
+50b0bd58ff66714a449ca01e2def9aa7f6e45197 ownership-analysis
+514c1b044f4546e23bda6ec56ce0835ce150090a permanents-are-recognisable
+7665b4b74474b549967b7e9f6060f51348b92289 synthesize-only-the-getters-read
+ef4c0986c8b5d00ed79b42aafec0bfec2667a024 the-night-the-python-went
+a81650d27dd347bd9c973b73b4bfa90132db352d the-page-states-the-design
+2b5eaa0cafd5957ab5ff593b6c6f89c4fc56804f welfare-reads-the-work
