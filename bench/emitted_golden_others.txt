@@ -34,3 +34,7 @@ deepbench defines=92 calls=840 branches=520 lines=5046
 escapebench defines=29 calls=97 branches=48 lines=708
 pendbench defines=106 calls=1250 branches=611 lines=6169
 scanbench defines=307 calls=3743 branches=2214 lines=20019
+indexbench defines=35 calls=159 branches=76 lines=1104
+# 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
+# 1,104 lines. It reads a string forward one character at a time, which is the
+# only shape in the tree that asks `s[i]` of multibyte text.

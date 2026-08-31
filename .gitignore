@@ -61,6 +61,8 @@ bench/history_series.jsonl
 /tests/golden/cohort/escapes.json
 /widebench
 /escapebench
+/indexbench
+indexbench.ll
 /scanbench
 /pendbench
 /deepbench

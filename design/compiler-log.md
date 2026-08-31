@@ -3069,3 +3069,175 @@ Nothing is being argued here; the observation is that the encoder had a lot of
 room and the index says the project had already been paid for most of it.
 
 DONE.
+
+## 2026-08-31 — the string index gets the cursor the slice already had
+
+`s[i]` on a string counts characters, so finding the ith one means walking the
+text until you have passed i characters. `k_b_at` started that walk at byte
+zero every time, which makes reading a string one character at a time
+quadratic in its length:
+
+```
+    2,000 characters    27,591,142 instructions
+    4,000 characters   106,971,148            a doubling for 3.88x the work
+```
+
+`k_b_slice` solved this and left the comment saying so — "starting the walk at
+zero every time is what made reading a page one character at a time quadratic"
+— and it has two shortcuts for it. A string whose characters are all one byte
+skips the walk entirely, because then a position is an offset. Anything wider
+uses a remembered cursor: one string, one character index, one byte offset, so
+the next question resumes where the last one stopped rather than from the
+front, walking backward to it when the question moves back.
+
+`k_b_at` had neither. The two are now `k_str_seek`, which the index calls and
+the slice does not: the slice needs both ends of a run out of one pass and
+would cross the text twice if it went through here. They share the cursor,
+which is the part that matters — a sweep alternating `s[i]` and `text/slice`
+over one subject stays linear because both hands move it.
+
+```
+    2,000 characters     1,690,119   -93.9%
+    4,000 characters     3,169,125   -97.0%    a doubling for 1.875x the work
+```
+
+**The corpus had no home for this, which is why it survived.** Two were added.
+
+`bench/indexbench` reads a string of twenty thousand characters forward, one
+index at a time, over an alphabet mixing one-, two-, three- and four-byte
+characters. It reads 5,266,521 instructions here and 2,570,995,073 on the
+unfixed runtime — 488 times. No other benchmark asks `s[i]` of multibyte text;
+they all read through slices or byte scans, which is precisely why nothing
+went red for a year.
+
+`tests/golden/micro/a_string_index_counts_characters` is the behaviour, on
+both engines: forward through the string, backward through it, both ends, past
+both ends, and an ascii subject for the direct path. It was watched red twice.
+Resuming at `k_seek_char - 1` instead of `k_seek_char` — the off-by-one this
+kind of cursor invites — turns `aé😀b€z` into `a 😀 € <none>` and the reversed
+walk into `<none><none><none>zzz`. Writing the ascii bound as `from >= s->len`
+loses the last character of an ascii string. Both are mistakes available in
+these fifteen lines.
+
+**What it costs, by the name each vein watches it under.** `text` rises 704
+bytes in seven binaries and 688 in deepbench, which is `k_str_seek`;
+escapebench indexes nothing, so the linker drops the function and its row does
+not move. `emitted_other_defines`, `emitted_other_calls`,
+`emitted_other_branches` and `emitted_other_lines` all rise because
+indexbench's own 35, 159, 76 and 1,104 join a file that is a sum over
+programs — a new benchmark is arithmetic there, not a regression, and the four
+totals will rise again the next time one is added.
+
+The instruction rows FALL slightly across the board — encodebench 7,237,599
+(0.083%), which is 1.0001 instructions for each of its 7,237,200 `k_b_at`
+calls: the list and bytes branches got a smaller function to sit in when the
+string walk moved out of line.
+
+**Not fixed, and worth writing down.** The cursor is compared by pointer, and a
+`KStr` freed and reallocated at the same address with `cap != 0` would match
+it. The guard added here is `k_seek_byte < s->len`, which turns the dangerous
+case into a miss rather than a wrong character, but it is not a proof. The
+same exposure has been in `k_b_slice` since the cursor landed. Closing it
+properly means invalidating the cursor when a string dies, and that is a
+separate change with its own reasoning.
+
+DONE.
+
+## 2026-08-31 — the append's grow path, built and HELD by the welfare number
+
+Built, measured, and taken back out of the branch it was written on, because
+the project's own scalar prices it negative. Recorded here so it is not
+rediscovered.
+
+`k_b_append_mut` is 26.5% of encodebench, and the first eight instructions of
+every call were six callee-saved pushes and a frame:
+
+```
+    push %rbp / %r15 / %r14 / %r13 / %r12 / %rbx
+    sub  $0x28,%rsp
+```
+
+One function holds both the frontier check and the growth. The fast path — two
+failure tests, a tag dispatch, a capacity comparison, a store — needs two
+registers; the growth needs eight, because it decides which allocator the new
+buffer comes from, copies twice and frees the old header. Every append pays
+for both. A `noinline` `k_b_append_grow` taking the six things it needs
+reduces the prologue to three pushes.
+
+```
+    work_encodebench  8,708,075,266 -> 8,400,334,065  -314,978,800  -3.614%   (runner)
+    work_jsonbench    2,862,072,778 -> 2,841,643,378   -20,429,400  -0.714%
+    work_oneshot         44,077,654 ->    43,154,011      -923,643  -2.096%
+    work_widebench       84,047,604 ->    84,271,604      +224,000  +0.267%
+```
+
+**widebench is why it is held, and the number is exact.** Its counters read
+`append_fast=16000` and `append_grow=16000` — the only benchmark in the tree
+where half the appends grow — and 224,000 over 16,000 grows is 14.0
+instructions each, which is the call frame the grow path now enters. Every
+other benchmark grows a handful of times against millions of fast appends, so
+they take the three fewer pushes and pay nothing for the call.
+
+The index disagrees with the arithmetic that looks obvious:
+
+```
+    floor after #1171                              87.511035
+    the string index alone                         87.511654    +0.000619
+    the string index and the outlining together    87.508343    -0.002692
+```
+
+Bisected by holding one row at a time. **widebench's 0.267% rise costs 0.003311
+points on its own, where encodebench's 3.6% fall, jsonbench's 0.7%, oneshot's
+2.1% and basket's 0.06% together earn 0.000619.** So the package falls below
+the floor and the rule is unambiguous: the sum is the objective, a fall means
+the change is worse by the weights as written, and the floor does not move to
+accommodate it.
+
+**What is worth asking, and is Clay's to answer, is whether the weights are
+right about this.** wide_instructions sits at 138 times its baseline. A term
+that far out contributes nearly its whole allowance already, so on the shape
+of the curve a small move there should be worth almost nothing — and it is
+worth five times what an eleven per cent improvement in encode was worth an
+hour earlier. Either the model means that and the reason is worth writing down
+beside the weights, or one benchmark 138x better than its baseline has more
+leverage over the score than the two rows the front page makes claims about.
+Filed in design/pending-gavels.md.
+
+The change itself is small and its measurements are above; whoever picks it up
+does not have to find it again.
+
+HELD.
+
+## 2026-08-31 — the runner's numbers for the string index
+
+```
+    work_encodebench  8,715,312,865 -> 8,708,075,665    -7,237,200   -0.083%
+    work_basket          57,118,035 ->    57,083,993       -34,042   -0.060%
+    work_oneshot         44,077,654 ->    44,059,561       -18,093   -0.041%
+    work_widebench       84,047,604 ->    84,031,604       -16,000   -0.019%
+    work_jsonbench, deepbench, escapebench, pendbench           unmoved
+    work_indexbench                        5,266,934   new
+    compile_instructions 42,297,900 ->    42,299,530        +1,630   +0.004%
+```
+
+Nothing in the work vein rises. The four falls are one number counted four
+ways: `k_b_at`'s list and bytes branches got a smaller function to sit in once
+the string walk moved out to `k_str_seek`, and encodebench's 7,237,200 over
+its 7,237,200 `k_b_at` calls is 1.0001 instructions each.
+
+**work_indexbench is new**, so it reads as a rise against a file that did not
+have the row. It is the benchmark this change adds, at 5,266,934 — against
+2,570,995,073 on the unfixed runtime, which is the 488 times the fix is worth.
+A new row in a summed vein is arithmetic rather than a regression, and the
+same will be true of the next benchmark somebody adds.
+
+**compile_instructions rises 1,630 and none of it is the front end.**
+`k_str_seek` adds lines to `src/runtime.c`, which `main.rs` holds as an
+`include_str!` and hashes for the build cache key; a longer string takes
+longer to hash. `compile_allocs`, `compile_peak_bytes`, rounds and visits are
+byte-identical.
+
+Welfare 87.511035 -> 87.511217, recorded with `--set`, and the page's tagged
+compile-instructions figure follows the golden.
+
+DONE.

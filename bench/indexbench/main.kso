@@ -1,0 +1,4 @@
+import "./indexbench"
+import "std/io"
+
+total 20000 . (t -> io/write "{t}\n")
