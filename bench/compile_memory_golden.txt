@@ -88,4 +88,10 @@
 # since #1152. Both hosts read 728,030, as this row's two hosts always have.
 front_end_rounds=40
 front_end_visits=16806
-compile_peak_bytes=728030
+# 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
+# fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
+# short name's bytes now live inside the AST node the allocator already gave
+# out, so the header and the rounding a small heap block costs are gone with
+# it. rounds and visits do not move at all, which is the check that this
+# changed how the front end holds names rather than what it decided.
+compile_peak_bytes=713606

@@ -331,7 +331,7 @@ fn pattern_shape(p: &crate::ast::Pattern) -> String {
     match p {
         Pattern::IntLit(n, _) => n.to_string(),
         Pattern::StrLit(s, _) => format!("{s:?}"),
-        Pattern::Nullary(n, _) => n.clone(),
+        Pattern::Nullary(n, _) => n.to_string(),
         Pattern::Var(..) | Pattern::Wildcard(_) => "_".to_string(),
         Pattern::Annotated { ty, .. } => format!("_:{ty}"),
         Pattern::Ctor { ty, fields, .. } => {

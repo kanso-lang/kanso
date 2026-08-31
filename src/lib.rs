@@ -1,3 +1,4 @@
+use crate::name::Name;
 pub mod advisory;
 pub mod ast;
 pub mod beat;
@@ -14,6 +15,7 @@ pub mod infer;
 pub mod inline;
 pub mod lexer;
 pub mod linear;
+pub mod name;
 pub mod parser;
 pub mod provenance;
 pub mod repl;
@@ -648,7 +650,7 @@ fn synthesize_getters(program: &mut ast::Program) {
                 .iter()
                 .enumerate()
                 .map(|(at, _)| match at == index {
-                    true => ast::Pattern::Var(ast::GETTER_BINDER.to_string(), *span),
+                    true => ast::Pattern::Var(Name::new(ast::GETTER_BINDER), *span),
                     false => ast::Pattern::Wildcard(*span),
                 })
                 .collect();
@@ -657,14 +659,11 @@ fn synthesize_getters(program: &mut ast::Program) {
                 is_pub: true,
                 span: *span,
                 params: vec![ast::Pattern::Ctor {
-                    ty: ty.name.clone(),
+                    ty: Name::new(&ty.name.clone()),
                     fields: bound,
                     whole: None,
                 }],
-                body: vec![ast::Stmt::Expr(ast::Expr::Ident(
-                    ast::GETTER_BINDER.to_string(),
-                    *span,
-                ))],
+                body: vec![ast::Stmt::Expr(ast::Expr::Ident(Name::new(ast::GETTER_BINDER), *span))],
                 file: String::new(),
                 synthetic: false,
             });
@@ -1030,8 +1029,8 @@ fn alias_stmt(stmt: &mut ast::Stmt, aliases: &crate::hash::Map<String, String>) 
 fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>) {
     match e {
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
-            if let Some(q) = aliases.get(name) {
-                *name = q.clone();
+            if let Some(q) = aliases.get(name.as_str()) {
+                *name = Name::new(q);
             }
         }
         ast::Expr::Int(..) | ast::Expr::Float(..) => {}
@@ -1103,9 +1102,9 @@ pub fn canonicalize_types(program: &mut ast::Program) {
     if aliases.is_empty() {
         return;
     }
-    fn fix(name: &mut String, aliases: &crate::hash::Map<String, String>) {
+    fn fix(name: &mut Name, aliases: &crate::hash::Map<String, String>) {
         if let Some(canon) = aliases.get(name.as_str()) {
-            *name = canon.clone();
+            *name = Name::new(canon);
         }
     }
     fn walk_pattern(p: &mut ast::Pattern, aliases: &crate::hash::Map<String, String>) {
@@ -1133,7 +1132,9 @@ pub fn canonicalize_types(program: &mut ast::Program) {
     for ty in &mut program.types {
         for (_, members, _) in &mut ty.fields {
             for member in members {
-                fix(member, &aliases);
+                let mut held = Name::new(member);
+                fix(&mut held, &aliases);
+                *member = held.to_string();
             }
         }
     }
@@ -1456,14 +1457,14 @@ fn try_fuse_piped(
     let span = stages[0].2;
     *counter += 1;
     let tmp = format!("froot{counter}");
-    let tmp_ident = || Expr::Ident(tmp.clone(), span);
+    let tmp_ident = || Expr::Ident(Name::new(&tmp.clone()), span);
     // the nested spelling with the bound subject as its innermost source
     let mut nested = tmp_ident();
     for (name, args, sspan) in stages.iter().rev() {
         let mut all = vec![nested];
         all.extend(args[1..].iter().cloned());
         nested = Expr::App {
-            head: Box::new(Expr::Ident((*name).to_string(), *sspan)),
+            head: Box::new(Expr::Ident(Name::new(name), *sspan)),
             args: all,
             span: *sspan,
             piped: false,
@@ -1476,26 +1477,29 @@ fn try_fuse_piped(
         let mut all = vec![original];
         all.extend(args[1..].iter().cloned());
         original = Expr::App {
-            head: Box::new(Expr::Ident((*name).to_string(), *sspan)),
+            head: Box::new(Expr::Ident(Name::new(name), *sspan)),
             args: all,
             span: *sspan,
             piped: true,
         };
     }
     let test = Expr::App {
-        head: Box::new(Expr::Ident("is_desc".to_string(), span)),
+        head: Box::new(Expr::Ident(Name::new("is_desc"), span)),
         args: vec![tmp_ident()],
         span,
         piped: false,
     };
     let picked = Expr::App {
-        head: Box::new(Expr::Ident("if".to_string(), span)),
+        head: Box::new(Expr::Ident(Name::new("if"), span)),
         args: vec![test, original, fused],
         span,
         piped: false,
     };
     Some(Expr::Block(
-        vec![Stmt::Bind { pattern: Pattern::Var(tmp, span), expr: root }, Stmt::Expr(picked)],
+        vec![
+            Stmt::Bind { pattern: Pattern::Var(Name::new(&tmp), span), expr: root },
+            Stmt::Expr(picked),
+        ],
         span,
     ))
 }
@@ -1517,7 +1521,7 @@ fn try_fuse(
         body: Box::new(body),
         span,
     };
-    let ident = |n: &str| Expr::Ident(n.to_string(), span);
+    let ident = |n: &str| Expr::Ident(Name::new(n), span);
     let call = |h: Expr, a: Vec<Expr>| Expr::App { head: Box::new(h), args: a, span, piped: false };
     *counter += 1;
     let acc = format!("facc{counter}");
@@ -1899,11 +1903,11 @@ fn deny_expr(e: &mut ast::Expr) {
     let rhs = Box::new(std::mem::replace(rhs.as_mut(), zero));
     let same = ast::Expr::BinOp { op: "==", lhs, rhs, span };
     *e = ast::Expr::App {
-        head: Box::new(ast::Expr::Ident("if".to_string(), span)),
+        head: Box::new(ast::Expr::Ident(Name::new("if"), span)),
         args: vec![
             same,
-            ast::Expr::Ident("false".to_string(), span),
-            ast::Expr::Ident("true".to_string(), span),
+            ast::Expr::Ident(Name::new("false"), span),
+            ast::Expr::Ident(Name::new("true"), span),
         ],
         span,
         piped: false,
@@ -1913,7 +1917,7 @@ fn deny_expr(e: &mut ast::Expr) {
 fn desugar_expr(e: &mut ast::Expr) {
     if let ast::Expr::Field { base, name, span } = e {
         desugar_expr(base);
-        let head = ast::Expr::Ident(ast::getter_name(name), *span);
+        let head = ast::Expr::Ident(Name::new(&ast::getter_name(name)), *span);
         let base = std::mem::replace(base.as_mut(), ast::Expr::Int(0.into(), *span));
         *e = ast::Expr::App { head: Box::new(head), args: vec![base], span: *span, piped: false };
         return;
@@ -2001,10 +2005,12 @@ fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
 /// the case impossible to write.
 fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
     match p {
-        ast::Pattern::Var(name, _) | ast::Pattern::Annotated { name, .. } => out.push(name.clone()),
+        ast::Pattern::Var(name, _) | ast::Pattern::Annotated { name, .. } => {
+            out.push(name.to_string())
+        }
         ast::Pattern::Ctor { fields, whole, .. } => {
             if let Some(named) = whole {
-                out.push(named.0.clone());
+                out.push(named.0.to_string());
             }
             for f in fields {
                 pattern_binds(f, out);
@@ -2021,14 +2027,14 @@ fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &crate::hash::Set<St
     match p {
         ast::Pattern::Ctor { ty, fields, .. } => {
             if owned.contains(ty.as_str()) {
-                *ty = format!("{qual}/{ty}");
+                *ty = Name::new(&format!("{qual}/{ty}"));
             }
             for f in fields {
                 rewrite_pattern(f, qual, owned);
             }
         }
         ast::Pattern::Annotated { ty, .. } if owned.contains(ty.as_str()) => {
-            *ty = format!("{qual}/{ty}");
+            *ty = Name::new(&format!("{qual}/{ty}"));
         }
         _ => {}
     }
@@ -2078,7 +2084,7 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &crate::hash::Set<String>,
         // name after every declaration has been qualified away from it.
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
             if owned.contains(name.as_str()) && !bound.iter().any(|b| b == name) {
-                *name = format!("{qual}/{name}");
+                *name = Name::new(&format!("{qual}/{name}"));
             }
         }
         ast::Expr::Field { base, .. } => rewrite_expr(base, qual, owned, bound),
@@ -2209,8 +2215,8 @@ fn merge_ambient_arms_with(
         // Re-arming a primitive or the sentinels is reserved to the stdlib;
         // wrap the value in your own type instead.
         let owns_a_type = decl.params.iter().any(|p| match p {
-            ast::Pattern::Ctor { ty, .. } => local_types.contains(ty),
-            ast::Pattern::Annotated { ty, .. } => local_types.contains(ty),
+            ast::Pattern::Ctor { ty, .. } => local_types.contains(ty.as_str()),
+            ast::Pattern::Annotated { ty, .. } => local_types.contains(ty.as_str()),
             _ => false,
         });
         if !owns_a_type {
@@ -2592,12 +2598,12 @@ fn door_pattern(p: &mut ast::Pattern, doors: &crate::hash::Map<String, String>) 
         // qualifier, because a bound name is always bare.
         ast::Pattern::Var(ty, _) => {
             if let Some(owner) = doors.get(ty.as_str()) {
-                *ty = owner.clone();
+                *ty = Name::new(owner);
             }
         }
         ast::Pattern::Ctor { ty, fields, .. } => {
             if let Some(owner) = doors.get(ty.as_str()) {
-                *ty = owner.clone();
+                *ty = Name::new(owner);
             }
             for f in fields {
                 door_pattern(f, doors);
@@ -2605,7 +2611,7 @@ fn door_pattern(p: &mut ast::Pattern, doors: &crate::hash::Map<String, String>) 
         }
         ast::Pattern::Annotated { ty, .. } => {
             if let Some(owner) = doors.get(ty.as_str()) {
-                *ty = owner.clone();
+                *ty = Name::new(owner);
             }
         }
         _ => {}
@@ -3645,7 +3651,7 @@ fn replace_shape(e: &mut ast::Expr, shape: &str, name: &str) {
     }
     if shape_of(e) == shape {
         let span = e.span();
-        *e = Expr::Ident(name.to_string(), span);
+        *e = Expr::Ident(Name::new(name), span);
         return;
     }
     walk_children_mut(e, &mut |c| replace_shape(c, shape, name));
@@ -3760,7 +3766,7 @@ fn hoist_in_body(body: &mut Vec<ast::Stmt>, counter: &mut usize) {
             }
             body.insert(
                 i + inserted,
-                ast::Stmt::Bind { pattern: ast::Pattern::Var(name, span), expr },
+                ast::Stmt::Bind { pattern: ast::Pattern::Var(Name::new(&name), span), expr },
             );
             inserted += 1;
         }

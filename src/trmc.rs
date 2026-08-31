@@ -28,6 +28,7 @@
 //! moves nothing a program can observe. Any operand outside that grammar, or
 //! any recursive call that hands a counter position something the grammar
 //! cannot read, leaves the whole group alone.
+use crate::name::Name;
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
 use crate::hash::Map as HashMap;
@@ -93,8 +94,8 @@ fn counter_names(decl: &FnDecl, counter: &[bool]) -> Vec<String> {
         .enumerate()
         .filter(|(_, is_counter)| **is_counter)
         .filter_map(|(i, _)| match decl.params.get(i) {
-            Some(Pattern::Var(n, _)) => Some(n.clone()),
-            Some(Pattern::Annotated { name, ty, .. }) if ty == "int" => Some(name.clone()),
+            Some(Pattern::Var(n, _)) => Some(n.to_string()),
+            Some(Pattern::Annotated { name, ty, .. }) if ty == "int" => Some(name.to_string()),
             _ => None,
         })
         .collect()
@@ -153,8 +154,8 @@ fn walk(expr: &Expr, visit: &mut dyn FnMut(&Expr)) {
 /// Names bound by a pattern, so the accumulator's name cannot shadow one.
 fn bound_names(p: &Pattern, out: &mut Vec<String>) {
     match p {
-        Pattern::Var(n, _) => out.push(n.clone()),
-        Pattern::Annotated { name, .. } => out.push(name.clone()),
+        Pattern::Var(n, _) => out.push(n.to_string()),
+        Pattern::Annotated { name, .. } => out.push(name.to_string()),
         Pattern::Ctor { fields, .. } => {
             for f in fields {
                 bound_names(f, out);
@@ -246,11 +247,11 @@ pub fn rewrite(program: &mut Program) {
         for (decl, arm) in decls.iter().zip(&arms) {
             let span = decl.span;
             let mut params = decl.params.clone();
-            params.push(Pattern::Var(acc.clone(), span));
+            params.push(Pattern::Var(Name::new(&acc.clone()), span));
             let body = match arm {
                 Arm::Base(k) => vec![Stmt::Expr(Expr::BinOp {
                     op,
-                    lhs: Box::new(Expr::Ident(acc.clone(), span)),
+                    lhs: Box::new(Expr::Ident(Name::new(&acc.clone()), span)),
                     rhs: Box::new(Expr::Int(k.clone(), span)),
                     span,
                 })],
@@ -258,12 +259,12 @@ pub fn rewrite(program: &mut Program) {
                     let mut args: Vec<Expr> = self_args.to_vec();
                     args.push(Expr::BinOp {
                         op,
-                        lhs: Box::new(Expr::Ident(acc.clone(), span)),
+                        lhs: Box::new(Expr::Ident(Name::new(&acc.clone()), span)),
                         rhs: Box::new((*operand).clone()),
                         span,
                     });
                     vec![Stmt::Expr(Expr::App {
-                        head: Box::new(Expr::Ident(helper.clone(), span)),
+                        head: Box::new(Expr::Ident(Name::new(&helper.clone()), span)),
                         args,
                         span,
                         piped: false,
@@ -287,14 +288,16 @@ pub fn rewrite(program: &mut Program) {
         };
         let wrapper_params: Vec<Pattern> = (0..*arity)
             .map(|i| match counter[i] {
-                true => {
-                    Pattern::Annotated { name: format!("trmcp{i}"), ty: "int".to_string(), span }
-                }
-                false => Pattern::Var(format!("trmcp{i}"), span),
+                true => Pattern::Annotated {
+                    name: Name::new(&format!("trmcp{i}")),
+                    ty: Name::new("int"),
+                    span,
+                },
+                false => Pattern::Var(Name::new(&format!("trmcp{i}")), span),
             })
             .collect();
         let mut wrapper_args: Vec<Expr> =
-            (0..*arity).map(|i| Expr::Ident(format!("trmcp{i}"), span)).collect();
+            (0..*arity).map(|i| Expr::Ident(Name::new(&format!("trmcp{i}")), span)).collect();
         wrapper_args.push(Expr::Int(identity, span));
         new_fns.push(FnDecl {
             name: name.to_string(),
@@ -302,7 +305,7 @@ pub fn rewrite(program: &mut Program) {
             span,
             params: wrapper_params,
             body: vec![Stmt::Expr(Expr::App {
-                head: Box::new(Expr::Ident(helper, span)),
+                head: Box::new(Expr::Ident(Name::new(&helper), span)),
                 args: wrapper_args,
                 span,
                 piped: false,

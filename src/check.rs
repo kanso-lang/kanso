@@ -1758,17 +1758,17 @@ fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
     fn walk(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
         let named = match e {
-            Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name, span)),
+            Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name.as_str(), span)),
             // A widening names its target after the colon, and a typeset is
             // not something a value can become: `(circle 1):shape` for a
             // typeset holding `circle` refused at RUN time, on both engines,
             // with "this value is not a shape" — a sentence that blames a
             // program whose circle is exactly what the typeset admits.
-            Expr::Upcast { ty, span, .. } => Some((ty, span)),
+            Expr::Upcast { ty, span, .. } => Some((ty.as_str(), span)),
             _ => None,
         };
         if let Some((name, span)) = named {
-            if annotating.contains(name.as_str()) {
+            if annotating.contains(name) {
                 diags.push(Diagnostic::new(
                     "type",
                     format!("`{name}` is a typeset — it only annotates"),
@@ -2370,9 +2370,9 @@ fn describe_pattern(p: &Pattern) -> String {
     match p {
         Pattern::IntLit(n, _) => n.to_string(),
         Pattern::StrLit(s, _) => format!("\"{s}\""),
-        Pattern::Nullary(n, _) => n.clone(),
-        Pattern::Ctor { ty, .. } => ty.clone(),
-        Pattern::Annotated { ty, .. } => ty.clone(),
+        Pattern::Nullary(n, _) => n.to_string(),
+        Pattern::Ctor { ty, .. } => ty.to_string(),
+        Pattern::Annotated { ty, .. } => ty.to_string(),
         Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. } => "any".to_string(),
     }
 }
