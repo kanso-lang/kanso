@@ -3836,3 +3836,45 @@ instructions an ask is a call, a prologue, one depth iteration and two block
 tests, and only the last of those was ever worth attacking.
 
 DONE.
+
+## 2026-08-31 — a refusal that blamed an edit for what a checkout's write order did
+
+Validating kanso#1179 in a git worktree, two wasm tests refused to run:
+`docs/kanso.wasm predates ast.rs, lexer.rs, diag.rs, ...` and twenty-three more.
+The diff under test touched src/runtime.c and a markdown file, neither of them
+in that list, so the sentence sent me looking for an edit that had not
+happened.
+
+The timestamps say what did:
+
+    1788165438.949546191  docs/kanso.wasm
+    1788165438.977546193  src/eval.rs
+    1788165438.977546193  src/lexer.rs
+
+Twenty-eight milliseconds, inside one second. git checks a tree out in path
+order and `docs/` sorts before `src/`, so the blob is written first every time.
+This is not a coincidence that a second checkout would shake off: **every fresh
+clone and every new worktree lands in exactly this state**, and both tests are
+unrunnable there until `scripts/build_wasm.sh` has run. CI never sees it
+because CI builds the blob.
+
+Refusing is right — the blob is genuinely not known to match those sources. The
+sentence was the defect, and it is the family kanso#1084 and kanso#1086 already
+took out of two other refusals: a check whose stated reason is not its reason.
+
+When every source is newer and the widest gap is under a second, that is a
+checkout rather than an edit, and the guard now says so. Watched on all three
+branches before it was believed:
+
+    fresh worktree            "36ms older than all 26 sources, which is what a
+                               checkout looks like rather than an edit"
+    one source touched        the original sentence, all 26 named — the gap is
+                               real now, so the checkout reading no longer
+                               applies
+    blob rebuilt              12 passed, 0 failed
+
+The mtime comparison stays a mtime comparison, so the ruling in design/ that
+declined replacing it with a digest is untouched. Only what it says when it
+refuses has changed.
+
+DONE.
