@@ -3020,3 +3020,15 @@ one version axis under every differential golden. Go's shape, for
 Go's reason. A pinnable std waits for a demonstrated need, which
 would be a new entry, not a reopening. design/hako.md's observation-
 clause question closes.
+
+## 2026-08-29 — gavel: the frame guard's standing offer closes
+
+Clay, after the Rust/Haskell/Python comparison: "you've convinced me."
+The interpreter keeps its 10,000-frame guard — a deterministic frame
+count, Python's mechanism at 10x the number, refusing the same
+program at the same depth on every build where a byte limit would
+drift with frame size and optimization level, which matters here
+because the differential law cannot tolerate engines disagreeing
+about how deep a program may recurse. Native stays under the OS byte
+ceiling; both are documented. The offer to revisit the constant
+closes; a program that needs more depth reopens it with evidence.
