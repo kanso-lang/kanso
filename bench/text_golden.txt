@@ -321,15 +321,15 @@
 # every program that links the runtime carries the same added bytes whether
 # its own walk reaches them or not. Bought 89,889,828 instructions on
 # deepbench.
-jsonbench text=82578
-encodebench text=99602
-oneshot text=99650
-basket text=92018
-widebench text=100658
-deepbench text=64546
+jsonbench text=82594
+encodebench text=99618
+oneshot text=99666
+basket text=92034
+widebench text=100674
+deepbench text=64562
 escapebench text=50274
-pendbench text=75170
-indexbench text=52130
+pendbench text=75186
+indexbench text=52146
 # 2026-08-31: the word-at-a-time character count. 752 bytes wherever it is
 # inlined twice and 368 where it is inlined once; basket takes 1,520 because
 # it holds four copies. The tail loop is told not to vectorise — it trips at
@@ -343,3 +343,6 @@ indexbench text=52130
 # `k_str_seek` — the walk that turns a character position into a byte offset,
 # now shared by the index as well as the slice. escapebench does not move: it
 # indexes nothing, so the linker drops it. indexbench arrives at 52,130.
+# 2026-08-31: +16 bytes in every binary, which is the one store that forgets
+# the character-seek cursor when a beat rewinds the arena. The cursor named
+# its string by address and the rewind hands those addresses back.

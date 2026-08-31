@@ -3241,3 +3241,73 @@ Welfare 87.511035 -> 87.511217, recorded with `--set`, and the page's tagged
 compile-instructions figure follows the golden.
 
 DONE.
+
+## 2026-08-31 — the seek cursor outlived its string, and the engines disagreed
+
+A differential-law violation, in shipped code, found while looking for one.
+
+```
+    fn shaped n 0 / "éé{n}ééééé"
+    fn shaped n _ / "abcdefg{n}é"
+    fn read s     / "{s[5]}{s[3]}/{text/slice s 5 5}{text/slice s 3 3}"
+
+    interpreter   [abcdefg3é=>ec/ec]
+    native        [abcdefg3é=>ge/ge]
+```
+
+Character 5 of `abcdefg3é` is `e`. Native answered `g`, which is character 7,
+through both readers.
+
+`k_seek_str` / `k_seek_char` / `k_seek_byte` are one remembered position, so a
+forward sweep over a string resumes rather than restarting at the front. The
+cursor names its string by address. `k_alloc` is a bump arena and
+`k_beat_rewind` moves the frontier back, so the next string built in a loop
+sits exactly where the last one sat — and inherits a byte offset that was true
+of a string that no longer exists.
+
+The comment above the cursor said a reset was unnecessary, on the grounds that
+"a string whose bytes changed is a builder, which never qualifies". The string
+whose bytes change across a rewind is not a builder. It is somebody else,
+wearing the address. That sentence has been there since the cursor landed and
+was the whole defence.
+
+**Pre-existing, and not what #1172 introduced.** `text/slice` reproduces it
+identically and has had the cursor since it landed; #1172 gave `s[i]` the same
+cursor, which widened the exposure to the commonest way to read a character
+but did not create it. Both readers are in the fixture for that reason.
+
+The fix is one store in `k_beat_rewind`, which is the only place the arena
+frontier moves backward — `k_beat_iter`, `k_beat_pop` and the carry paths all
+reach it. Every address above the mark is free to be handed out again, so the
+cursor is forgotten.
+
+**What correctness cost**, and the rule says to pay it: welfare does not weigh
+a change that makes the engines agree, so this ships and the floor moves to
+whatever it costs.
+
+```
+    work_basket          57,083,993 ->    57,197,600   +113,607   +0.199%   (local)
+    work_encodebench  8,708,075,665 -> 8,713,107,668  +5,032,003   +0.058%
+    work_oneshot         44,059,561 ->    44,071,744    +12,183   +0.028%
+    the other six                                    under a ten-thousandth
+    text                                     +16 bytes in every binary
+```
+
+The rise is not the store. It is the cursor hits that stop happening: a sweep
+that crossed a beat boundary used to resume and now restarts at the front.
+That is the cost of the answer being right.
+
+**A narrower reset was considered and not taken.** Keeping the cursor when the
+remembered string lies below the mark and inside the surviving block would
+recover some of it, but it needs the string's address checked against a block
+whose own bounds are moving, and getting that wrong reintroduces exactly this
+bug. The blunt version is provably correct and the measurement above is what
+it costs. If that ever matters, the narrower test is the thing to build, with
+this fixture already in place to catch it.
+
+`tests/golden/micro/a_seek_cursor_does_not_outlive_its_string` is the pin, and
+the harness runs it on both engines. Removing the store turns `ec/ec` into
+`ge/ge` on native while the interpreter holds, which is the failure that
+started this.
+
+DONE.

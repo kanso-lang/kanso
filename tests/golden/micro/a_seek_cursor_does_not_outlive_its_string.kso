@@ -1,0 +1,28 @@
+# Reading a character out of a multibyte string remembers where the walk
+# stopped, so the next read resumes rather than starting at the front. The
+# remembered position names its string by address, and a beat rewinds the
+# arena, so the next string built in the loop can sit exactly where the last
+# one sat. The two shapes below have different byte layouts on purpose: one
+# leads with two-byte characters and the other with ascii, so a position
+# remembered from either is wrong about the other.
+#
+# Native answered `g` where character 5 is `e`. Both readers are here — the
+# index and the slice — because the cursor is shared and either can set it.
+import "std/text"
+
+fn shaped n 0
+  "éé{n}ééééé"
+
+fn shaped n _
+  "abcdefg{n}é"
+
+fn read s
+  "{s}=>{s[5]}{s[3]}/{text/slice s 5 5}{text/slice s 3 3}"
+
+fn step 0 acc
+  acc
+
+fn step n acc
+  step (n - 1) "{acc}[{read (shaped n (n % 2))}]"
+
+pub play = print (step 4 "")

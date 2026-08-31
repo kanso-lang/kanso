@@ -319,6 +319,25 @@ static long long k_live_block_bytes = 0;
 static long long k_stat_peak_block_bytes = 0;
 static long long k_stat_cohort_frees = 0;
 static long long k_stat_cohort_kept = 0;
+/* One remembered position, so a forward sweep over a string does not restart
+   at the front. It names its string by address, which is only meaningful for
+   as long as that address means that string — so `k_beat_rewind` forgets it,
+   because the arena hands the same addresses back and the next allocation
+   there is a different string.
+
+   This used to say a reset was unnecessary, on the grounds that a string
+   whose bytes changed is a builder and a builder never qualifies. The string
+   whose bytes change across a rewind is not a builder; it is somebody else,
+   wearing the address. `text/slice s 5 5` then answered `g` where the
+   interpreter answered `e`.
+
+   A single cell is safe because the scheduler is green — every fibre runs on
+   the one thread — and it would need to move into the fibre if that ever
+   stopped being true. */
+static KStr* k_seek_str = NULL;
+static long long k_seek_char = 0;
+static long k_seek_byte = 0;
+
 char* k_arena = NULL;
 size_t k_arena_left = 0;
 
@@ -674,6 +693,9 @@ static void k_beat_rewind(KMark* m) {
     }
     k_arena = m->ptr;
     k_arena_left = m->left;
+    /* Every address above the mark is free to be handed out again, so the
+       string the seek cursor names may not be there any more. One store. */
+    k_seek_str = NULL;
     /* A mark whose pointer and remaining count no longer meet the end of its
        block hands out memory past that end, and the damage surfaces later in
        an unrelated allocation — as a glibc abort on linux, and as nothing at
@@ -6255,14 +6277,7 @@ static const char* k_lazy_hint(KValue v) {
    negative so nothing that asks `cap > 0` about a builder is confused. The
    header stays sixteen bytes: widening it would move the survivor ratio the
    cohort guard reads. A builder may still grow, so it counts every time. */
-/* One remembered position, so a forward sweep does not restart at the front.
-   Reset is unnecessary: the guard checks identity and direction, and a string
-   whose bytes changed is a builder, which never qualifies. A single cell is
-   safe because the scheduler is green — every fibre runs on the one thread —
-   and it would need to move into the fibre if that ever stopped being true. */
-static KStr* k_seek_str = NULL;
-static long long k_seek_char = 0;
-static long k_seek_byte = 0;
+/* The remembered position lives beside the arena, above `k_beat_rewind`. */
 
 /* How many characters a run of valid utf-8 holds. A character's first byte
    is any byte whose top two bits are not `10`, so the count is the byte
