@@ -2862,3 +2862,206 @@ watched refusing a row before it was trusted. Every row carries its
 commit, so a branch deleted by it goes back with a single push. A sweep
 that cannot be undone is a sweep nobody should run, and the record costs
 21 KB.
+
+## 2026-08-31 — the curve reaches every counter now, and the floor moves with it
+
+Built to the 2026-08-29 gavel: the saturation curve applies to each
+counter's ratio, and a term is the equal-weighted average of the
+saturated values. Four lines of arithmetic, and the objective is a
+different function.
+
+```
+    fn share now base t
+      sat = t.satiation
+      each = list/map t.counters (c -> satisfaction (ratio_of now base c) sat)
+      sats = list/to_list each
+      list/sum sats / (1.0 * length sats) * t.weight
+```
+
+`standing` moves with it. A counter new to the model enters where its
+dimension already stands so that its arrival is not a score move, and
+under the old rule that meant the mean ratio. The term is a mean of
+saturated values now, and the curve is not linear, so a newcomer at the
+mean ratio would shift the term. What leaves it alone is a newcomer
+whose satisfaction equals the mean satisfaction, so that is computed and
+read back through the curve: `r / (r + s) = m` inverts to
+`r = m * s / (1 - m)`.
+
+The floor falls 87.85 to 73.8273894965, and nothing about the compiler
+moved — every counter reads today what it read yesterday. It is set by
+hand in `bench/welfare_floor.json`, because the tool refuses a fall and
+should: an objective change is exactly the case that belongs in a diff a
+reviewer reads rather than behind a flag.
+
+Two specs, in `tests/welfare_saturates_each_counter.rs`, and both pin
+numbers that are properties of the weights rather than of the compiler.
+The fixtures set every counter's baseline to its own current value, so
+every ratio is exactly one whatever the goldens say today, and the
+scores do not move when a benchmark gets faster.
+
+- Every ratio at one scores **46.67**: run speed and run memory saturate
+  at 1/(1+2.0) and carry 0.30 each, compile speed and compile memory at
+  1/(1+0.5) carrying 0.28 and 0.12.
+- One of the seven run-speed counters a thousand and twenty-four times
+  better than its baseline, the other six at parity, scores **49.52**.
+  Saturating the mean instead answers **66.26** on that same fixture,
+  measured by putting the old `share` back and running it — one
+  benchmark takes the term almost to its ceiling while six sit at
+  parity, which is the shape the ruling closed.
+
+The now-values the fixtures need come from welfare's own report rather
+than from a second reader of the goldens. A spec that re-parses what the
+tool parses is asserting its own copy of the tool, and the copy is what
+goes stale.
+
+Both were watched failing. With the old `share` restored, the runaway
+spec reads 66.26 against 49.52; the parity spec passes under both
+definitions, which is correct — at a ratio of one the two orders agree,
+and that spec is pinning the weights rather than the ruling.
+
+The ratchet's welfare mutation still bites, harder than before. Claiming
+jsonbench did 9,999,999,999 instructions now costs 0.96 points where the
+old rule diluted one counter's collapse across an unbounded mean.
+
+What this does not do yet: the two improvements held behind the gavel —
+`k_b_append_grow` outlined, and `k_b_append_into`'s duplicated grow tail
+unified — are still out of the tree. The second was already priced under
+both orders when it was held (-0.001096 as written, +0.008015 per
+counter), and re-scoring them against the definition that now ships is
+the next thing this owes.
+
+## 2026-08-31 — the first held improvement ships, because the objective changed under it
+
+`k_b_append_into` wrote its grow path twice — once taking arena storage
+when the header dies at the innermost rewind, once taking malloc — and
+the two differed in the allocator and in the sign of the cap and in
+nothing else. Both then copied twice, freed the old header on the same
+condition, and returned the same two ways. One tail serves both now, with
+where the buffer comes from and the sign the cap carries decided in a
+local above the copy. Twenty-seven lines in, thirty-nine out.
+
+Measured on this container, callgrind, against a baseline built from the
+same tree in a worktree so the two differ only in this patch:
+
+```
+    encodebench  8,704,347,511 -> 8,661,983,911  -42,363,600  -0.4867%
+    jsonbench    2,858,844,826 -> 2,856,424,140   -2,420,686  -0.0847%
+    oneshot         44,000,222 ->    43,878,175     -122,047  -0.2774%
+    widebench       63,756,786 ->    63,788,800      +32,014  +0.0502%
+    deepbench, pendbench: +14 each. basket, escapebench, indexbench: 0.
+```
+
+The container sits a constant below the runner — 399 to 427 instructions
+on eight of the nine, 3,694 on deepbench — so the golden rows are the
+runner's plus these deltas, and CI checks that arithmetic rather than
+being asked to trust it.
+
+widebench is the only benchmark in the tree where half the appends grow,
+because `text/append (text/bytes lead) "  "` builds a fresh accumulator
+per element and the first append onto one has no spare capacity. Its
+32,014 over 16,000 grows is two instructions each.
+
+Every allocation counter is byte-identical, on all eight veins. `.text`
+falls 176 bytes on the four binaries that link the grow path and does not
+move on the five that do not.
+
+This is the change held on 2026-08-31 with the arithmetic already
+written down: -0.001096 under the aggregation as it was, +0.008015 under
+per-counter saturation. The second number is now the live one, and
+welfare reads 73.8273894965 to 73.8358594052, a rise of 0.0084699 against
+the 0.008015 that entry predicted, banked. Nothing about the change
+moved; the objective did, and the entry that held it said in advance
+which way it would go.
+
+The second held improvement — `k_b_append_grow` outlined so the fast
+path stops carrying six callee-saved pushes — is still out of the tree
+and owes the same treatment.
+
+## 2026-08-31 — the second held improvement ships too, and both are on the page
+
+`k_b_append_grow` is out of line. One function held the fast path and the
+growth: the fast path — two failure tests, a tag dispatch, a capacity
+comparison and a store — needs two registers, and the growth needs eight,
+because it decides which allocator the new buffer comes from, copies
+twice and frees the old header. So every append pushed six callee-saved
+registers and built a frame before it could test anything. Split, the
+common path pushes three.
+
+```
+    k_b_append_mut:
+      push %r15 / %r14 / %rbx
+```
+
+Measured on the container against the one-tail commit that precedes it,
+so the two builds differ only in this patch:
+
+```
+    encodebench  8,661,983,911 -> 8,396,568,711  -265,415,200  -3.0641%
+    jsonbench    2,856,424,140 -> 2,838,415,440   -18,008,700  -0.6305%
+    oneshot         43,878,175 ->    43,094,579      -783,596  -1.7858%
+    widebench       63,788,800 ->    63,996,800      +208,000  +0.3261%
+    basket, deepbench, escapebench, pendbench, indexbench: 0, to the
+    instruction.
+```
+
+widebench's 208,000 over its 16,000 grows is thirteen instructions each,
+which is the call frame the grow path now enters. It is the only
+benchmark where half the appends grow. Every other benchmark grows a
+handful of times against millions of fast appends, so they take the three
+fewer pushes and pay nothing for the call — which is why five of the nine
+do not move at all.
+
+Every allocation counter is byte-identical on all eight veins. `.text`
+rises 128 bytes on the four binaries that link the grow path, which is
+the outlined function's own prologue and epilogue where before it shared
+the caller's, and does not move on the five that do not link it.
+
+Welfare 73.8358594052 to 73.8913121796. Under the old aggregation this
+change was -0.002692 and held; the entry that held it bisected the number
+by holding one row at a time and found widebench's 0.267% rise costing
+0.003311 points on its own, outweighing encodebench's 3.6% fall. Under
+per-counter saturation encodebench's fall is worth what it is worth and
+widebench cannot spend a whole term.
+
+Both held improvements are now in, and §31 of the compiler page says so
+with what each bought. What the two of them together demonstrate is what
+the ruling was for: neither change moved, the objective did, and both
+went from negative to positive. The per-counter goldens could not have
+told the difference — every allocation counter is byte-identical across
+both.
+
+## 2026-08-31 — the runner disagreed with the container by fourteen instructions, four times
+
+CI priced the outlined grow path and four of the nine rows came back
+fourteen instructions off what the container's delta implied.
+
+```
+                    implied        runner
+    jsonbench    2,838,415,867  2,838,415,853
+    widebench       63,997,227     63,997,213
+    deepbench      726,486,948    726,486,934
+    pendbench      946,378,088    946,378,074
+```
+
+Every row is exactly fourteen lower, and deepbench and pendbench do not
+move on the runner at all — the container's +14 on each was the whole of
+their reported change. So the container adds fourteen instructions
+somewhere this patch happens to touch, and the golden takes the runner's
+rows, which is what it is stamped for.
+
+Worth writing down because the practice this session has been using —
+measure the delta on the container, add it to the golden — held to the
+instruction across the tenure attribution and the one-tail change and
+then did not here. The deltas are still the right way to reason; the
+golden is still the runner's; CI is what tells the two apart, and it did.
+
+`compile_instructions` falls 42,299,748 to 42,298,874. Nothing about
+compiling got cheaper: `src/runtime.c` reaches the compiler through
+`include_str!`, this change shortens it by twelve lines, and the
+compiler's own binary is laid out differently as a result. This is
+codegen movement and it is named as such — `compile_allocs` and
+`compile_peak_bytes` are byte-identical at 29,864 and 728,030, which is
+what a change that did no compiler work looks like. Fifth instance this
+week of the same cause.
+
+Welfare 73.8913121796 to 73.8913693718 on the corrected rows.

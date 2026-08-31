@@ -372,11 +372,22 @@
 # +1.87%, pendbench +0.86%, widebench +0.71% and basket +0.40%. #1178 bought
 # deepbench -4.47%; this hands back more than half of that to recover 22 KB.
 # Declined at that price. The bytes are what the win cost.
-jsonbench text=85250
-encodebench text=102274
-oneshot text=102322
+# 2026-08-31: -176 bytes on the four binaries that link the byte builder's
+# grow path, and nothing on the five that do not. `k_b_append_into` wrote that
+# path twice — once taking arena storage when the header dies at the innermost
+# rewind, once taking malloc — and the two differed in the allocator and in the
+# sign of the cap and in nothing else. One tail serves both, with the regime
+# carried in a local. Thirty fewer lines, and this is what they weighed.
+# 2026-08-31: +128 bytes on the same four binaries, which is the outlined
+# `k_b_append_grow` — its own prologue and epilogue, where before it shared
+# the caller's. That is what the append fast path stops carrying: six
+# callee-saved pushes and a frame become three pushes, and encodebench falls
+# 3.06%. The five binaries that never link the grow path do not move.
+jsonbench text=85202
+encodebench text=102226
+oneshot text=102274
 basket text=94786
-widebench text=103330
+widebench text=103282
 deepbench text=67074
 escapebench text=52898
 pendbench text=77794
