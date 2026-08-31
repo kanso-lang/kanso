@@ -3681,7 +3681,8 @@ unchanged hash gives deepbench -4.44% and escapebench -1.84%, and the walk adds
 the rest on the benchmarks that tenure. Without it the walk COST escapebench
 1.38%, at exactly +3 instructions per push with every call count identical.
 
-`text` rises 2,528 bytes on all nine binaries. It is the optimiser, not the
+`text` rises 22,656 bytes over the nine binaries, between 2,432 and 2,624
+each. It is the optimiser, not the
 change: `k_survives_x` shrinks 346 bytes to 118 once the tenure test is out of
 line, and then inlines into more of its callers — `k_copy_size` +1,911,
 `k_repair_interior` +800, `k_slots_survive` +267, `k_interior_survives` +263,
@@ -3722,6 +3723,37 @@ it is recorded rather than fixed here: an attempt to fill it with a text
 accumulator crossing a beat was written, generated its goldens, and was DELETED
 because it read identically on main, on this change, and under the declined
 variant. A golden that cannot go red is worse than no golden.
+
+**The runner's rows, and what the compile veins did.** Every delta below was
+measured on the container first and reproduced on the runner to the
+instruction; the absolute numbers differ by the usual few hundred, and the
+subtractions do not.
+
+    jsonbench     2,860,868,131 -> 2,858,845,253     -0.0707%
+    encodebench   8,714,005,635 -> 8,704,347,910     -0.1108%
+    oneshot          44,066,375 ->    44,000,621     -0.1492%
+    basket           56,781,353 ->    56,458,062     -0.5693%
+    widebench        67,553,998 ->    64,535,771     -4.4679%
+    deepbench       760,475,924 ->   726,486,934     -4.4694%
+    escapebench     258,583,100 ->   253,819,096     -1.8423%
+    pendbench       957,236,647 ->   946,378,074     -1.1344%
+    indexbench        5,266,960 ->     5,244,741     -0.4218%
+
+`compile_instructions` rises 42,297,689 to 42,300,376, +2,687 and +0.0064%.
+Nothing about compiling got harder: `compile_allocs` and `compile_peak_bytes`
+are byte-identical at 29,864 and 728,030, the front end's rounds and visits do
+not move, and the diff touches src/runtime.c and nothing the measured path
+runs. `kanso check lib/json` compiles a library and executes no program, so
+the runtime is not reached at all — but runtime.c arrives in the compiler
+through `include_str!`, so changing its LENGTH rearranges the compiler's own
+binary. This is the fourth instance this week and the sign does not track the
+direction of the edit. It is the case design/pending-gavels.md asks about
+under "Whether a compile_instructions move that cannot be work needs an
+attribution", and the entry is unchanged by this: the vein earns its place,
+and the question is only what a rise with every sibling counter identical
+should have to buy.
+
+Welfare 87.7738 to 87.8371, banked with `--set` in this PR.
 
 All nine differential sweeps agree, the beat and utf-8 ones included. The whole
 Rust suite passes. `evac_bytes` in two veins is what pins the walk: revert it

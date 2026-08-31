@@ -163,22 +163,13 @@
 # the call. escapebench, jsonbench and oneshot are identical between the fix
 # alone and the fix with the skip, so their few thousand instructions are the
 # predicate's shape in programs whose copy walk is cold.
-jsonbench 2860868131
 # 2026-08-20 (bisimulation): pendbench pays 2.4M (+0.24%) for the force
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 8714005635
-oneshot 44066375
-basket 56781353
-widebench 67553998
-deepbench 760475924
-escapebench 258583100
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
-pendbench 957236647
-indexbench 5266960
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -441,3 +432,12 @@ indexbench 5266960
 # sweep crossing a beat boundary used to resume where it left off and now
 # restarts at the front. basket carries the most of it because it sweeps text
 # across beats; the five rows under a thousandth are the store itself.
+jsonbench 2858845253
+encodebench 8704347910
+oneshot 44000621
+basket 56458062
+widebench 64535771
+deepbench 726486934
+escapebench 253819096
+pendbench 946378074
+indexbench 5244741
