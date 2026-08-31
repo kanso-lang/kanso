@@ -3646,7 +3646,7 @@ releases tenured storage on its way out but three other sites lower
 longer reach would answer where the walk says no. That check was another
 257,197 instructions on widebench. Neither is in the code.
 
-Answering on ranges is the behaviour change, not a side effect of it. A list's
+Answering on ranges is where the behaviour changes. A list's
 elements sit in a buffer the header points into, so the copy that tenured the
 list put the header at an allocation start and the elements at an offset; the
 hash answered no for the buffer and the next rewind evacuated all of it again.
@@ -3674,22 +3674,23 @@ sitting; the runner's rows are in bench/instructions_golden.txt.
 was pulled into `k_survives_x`, which is inlined into `k_born_this_beat`, which
 is inlined into `k_b_push_mut` — so a program that never tenures still carried
 the whole tenure test inside its hottest fast path. escapebench, deepbench and
-jsonbench never call `k_ten_holds` at all: the symbol does not appear in their
-profiles. Their falls are entirely the fast path being compiled better once
+jsonbench never call `k_ten_holds` at all: the symbol is absent from their
+profiles, as it is from four of the other six — only widebench and indexbench
+reach it. Their falls are entirely the fast path being compiled better once
 the cold code is out of it. Measured separately: `noinline` alone on the
 unchanged hash gives deepbench -4.44% and escapebench -1.84%, and the walk adds
 the rest on the benchmarks that tenure. Without it the walk COST escapebench
 1.38%, at exactly +3 instructions per push with every call count identical.
 
 `text` rises 22,656 bytes over the nine binaries, between 2,432 and 2,624
-each. It is the optimiser, not the
-change: `k_survives_x` shrinks 346 bytes to 118 once the tenure test is out of
-line, and then inlines into more of its callers — `k_copy_size` +1,911,
-`k_repair_interior` +800, `k_slots_survive` +267, `k_interior_survives` +263,
-`k_deep_copy` +252, against `k_repair_size` -940 inlined away entirely. Bigger
-code, fewer instructions executed, on every benchmark. Only one of the nine,
-widebench, calls `k_ten_holds` at all — `basket` reads -0.57% here and the
-symbol does not appear in its profile, so that row is layout like the rest.
+each. The optimiser did that: `k_survives_x` shrinks 346 bytes to 118 once the
+tenure test is out of line, and then inlines into more of its callers —
+`k_copy_size` +1,911, `k_repair_interior` +800, `k_slots_survive` +267,
+`k_interior_survives` +263, `k_deep_copy` +252, against `k_repair_size` -940
+inlined away entirely. Bigger
+code, fewer instructions executed, on every benchmark. Two of the nine reach
+`k_ten_holds` at all — widebench and indexbench — so seven of these rows,
+`basket`'s -0.57% among them, are the fast path alone.
 
 **The archive declines positional membership by name, and this is not it.**
 design/log/compiler-log-archive.md, under "Declined by measurement: the same
