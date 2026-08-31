@@ -3032,3 +3032,24 @@ because the differential law cannot tolerate engines disagreeing
 about how deep a program may recurse. Native stays under the OS byte
 ceiling; both are documented. The offer to revisit the constant
 closes; a program that needs more depth reopens it with evidence.
+
+## 2026-08-29 — gavel: saturate each counter, then average (task #184)
+
+Clay, on the welfare aggregation question: "you do the log or whatever
+function it is on each term before averaging." The saturation curve
+applies to each counter's ratio individually, and the term is the
+equal-weighted average of the saturated values — never the saturation
+of an averaged ratio. So the curve reaches every counter, successive
+doublings of any single benchmark pay less as the philosophy says, no
+counter dominates a term by raw magnitude (widebench's 68% share of
+run speed ends), and the two held improvements are scored under the
+new definition. The switch is a change to the objective, so it lands
+the way a weights change lands: recorded, and the floor re-set in the
+same commit.
+
+The compile_instructions noise observation folds in here rather than
+becoming its own gavel, as the session suspected: the attribution
+ritual was ruled earlier this sitting (an instruction is a real cost,
+full ritual, causes named honestly), and per-counter saturation stops
+layout jitter from leveraging a whole term. Both rulings reach the
+session in this branch's sweep.
