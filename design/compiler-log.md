@@ -2727,3 +2727,138 @@ and free, which is the inline-name gavel; the decoder's remaining 61.6% is what
 codegen emits. Neither is a kernel to tighten.
 
 DONE.
+
+## 2026-08-31 — the 22,656 bytes beside the tenure win, attributed
+
+Clay asked whether the binary-size rise that landed with #1178 is a
+separable oversight or the price of the win, and said he would accept a
+real cost given proof it is not fixable. It is the price. Two levers
+were built and measured; one is worse and the other costs more than the
+bytes are worth.
+
+First the thing that should not have happened. #1178 moved every row of
+`bench/text_golden.txt` — +22,656 bytes over the nine binaries, between
+2,432 and 2,624 each — and wrote no sentence in the file. The corrected
+figure went in the PR body instead. That file's own header says a number
+that changes without a sentence is the thing to catch, and the sentence
+belongs in the file, because the PR body is not what the next reader
+opens. The entry is written now, late, and says so.
+
+The attribution, measured on the container at clang 18.1.3, the same
+release the golden is stamped with. It reproduces the runner's rows to
+the byte, before and after, so these are the published numbers rather
+than a proxy for them.
+
+Twelve symbols move on jsonbench and every one is in `runtime.c`:
+
+    k_copy_size          +2,031      1,659 -> 3,690
+    k_repair_size          -940        940 -> 0 (inlined away)
+    k_repair_interior      +800        984 -> 1,784
+    k_slots_survive        +270        142 -> 412
+    k_interior_survives    +255      1,122 -> 1,377
+    k_deep_copy            +240      1,924 -> 2,164
+    k_survives_x           -228        346 -> 118
+    k_copy_alloc           -171        607 -> 436
+    k_ten_holds            +138          0 -> 138 (new, out of line)
+    k_b_push_mut            +96      1,189 -> 1,285
+    k_map_sorted            +78      1,202 -> 1,280
+    k_beat_pop              -38      1,253 -> 1,215
+
+They sum to +2,531 against a .text row of +2,528; the three bytes are
+alignment. Nothing in the emitted kanso moves at all, which is what the
+golden's header already predicts — `runtime.c` is embedded whole, so
+every program carries the same added bytes whether its own walk reaches
+them or not.
+
+So the growth is the evacuation size walk being re-inlined, and the
+question is which half of #1178 caused it. The 2x2, on jsonbench:
+
+    hash set,   k_ten_holds inlinable    82,722   (#1177)
+    hash set,   k_ten_holds noinline     85,538
+    block walk, k_ten_holds inlinable    88,034
+    block walk, k_ten_holds noinline     85,250   (shipped)
+
+The walk on its own is +5,312, and the `noinline` — added for a run-time
+reason, to keep the tenure test out of `k_b_push_mut`'s fast path —
+takes 2,784 of that back. So the shipped configuration is the cheapest
+of the three that contain the win, and the only cell below it is the one
+that gives the win up.
+
+A block walk is smaller code than a hash probe, so the inliner is what
+grew the binary. `k_survives_x` drops from 346 bytes to 118, which puts
+it under clang's threshold at all eight of its call sites in the size
+walk, and `k_repair_size` follows it in.
+
+Two levers, built and measured:
+
+- `noinline` on `k_repair_size`: +352 bytes on every binary. It does not
+  stop the cascade, it only stops one participant from being folded into
+  a caller that then keeps its own copy of everything else.
+- `noinline` on `k_survives_x`: stops the cascade at its source and
+  returns every byte. jsonbench 82,434, which is 288 BELOW where #1177
+  left it, and -2,816 on each of the nine. It costs 33,136,876
+  instructions across the nine, +0.2426%, and the cost is concentrated
+  where the win was: deepbench +2.39%, escapebench +1.87%, pendbench
+  +0.86%, widebench +0.71%, basket +0.40%, jsonbench +0.07%,
+  encodebench +0.002%, oneshot +0.08%, indexbench -0.005%.
+
+#1178 bought deepbench -4.47%. Handing back +2.39% of it to recover
+22 KB of code that costs no instructions to carry is a trade in the
+wrong direction, so the lever is declined and written down here rather
+than left as a thing somebody re-derives.
+
+One thing this does not settle. The golden's header says padding an old
+build up with functions it never calls cost 1.6% of decode time on its
+own, which is a wall-clock claim, and instructions are not wall clock.
+jsonbench's instruction count FELL across #1178 while its .text rose, so
+whatever the code growth costs is not work. Whether it costs cache is a
+question for an idle box at a release sitting, not for this container.
+
+## 2026-08-31 — the one-time branch purge, and the test that made it possible
+
+Clay turned on auto-delete-on-merge, which covers every merge from here
+and none of the 388 branches that had already piled up. This is the
+sweep of those.
+
+The obstacle was named in an earlier entry and it is real: the
+repository squash-merges, so a landed branch's commits never become
+ancestors of main. `git branch -r --merged origin/main` answers 1 out of
+389, `--no-merged` answers 387, and `git merge-tree --write-tree` calls a
+branch that certainly landed live. Every git-native test agrees the
+branches are unmerged and every one of them is wrong.
+
+What does work is the squash commit's own subject. A squash merge writes
+the branch's subject with `(#N)` appended, so a branch carrying a commit
+whose subject appears on main that way has landed. Two shapes were tried.
+Matching the branch TIP's subject flags 176 of 388 and misses 75 of the
+95 heads the pull-request record confirms merged — branch tips carry
+fixup subjects that never became a PR title. Matching ANY commit on the
+branch, computed as `origin/main..origin/NAME` so main's own history is
+excluded, flags 325 and misses 11.
+
+Precision on the ground-truth set is 84 of 84: every branch the test
+flags among the 95 recent merges was in fact merged. The 11 it fails to
+flag stay on the remote, which is the direction to fail in. Six more were
+held back by hand because their matching subject was short enough for the
+match to be luck — `a-record-field-waits-too`, `curly-maps`,
+`forward-slash-scan`, `the-chart-gains-the-work`, `the-chart-has-to-draw`,
+`welfare-reads-the-work`. That leaves 319 deleted and 69 standing.
+
+The deletion did not run from here, and that is the honest state of it.
+A ref-deletion push from the container is refused by the agent proxy with
+HTTP 403 — `git push origin :refs/heads/beat-differential` gets "RPC
+failed; HTTP 403" and the branch is still there — and the GitHub tools
+this session has expose create_branch and no delete. The proxy's own
+README says to report a 403 rather than route around it, so that is what
+this is.
+
+What ships instead is the sweep itself, ready to run:
+`design/log/branch-purge-2026-08-31.txt` names all 319 beside the commit
+each points at, and `scripts/purge_merged_branches.sh` reads that file
+and does the deletion in batches. It re-reads the remote first and keeps
+any branch whose tip has moved since the list was written, because a
+branch somebody has pushed to is a branch with work on it; that guard was
+watched refusing a row before it was trusted. Every row carries its
+commit, so a branch deleted by it goes back with a single push. A sweep
+that cannot be undone is a sweep nobody should run, and the record costs
+21 KB.

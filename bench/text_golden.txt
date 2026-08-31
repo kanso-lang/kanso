@@ -337,6 +337,41 @@
 # 2026-08-31: +16 bytes in every binary, which is the one store that forgets
 # the character-seek cursor when a beat rewinds the arena. The cursor named
 # its string by address and the rewind hands those addresses back.
+# 2026-08-31 (written late, attributing a rise that landed without a
+# sentence): +22,656 bytes over the nine, between 2,432 and 2,624 each. This
+# is the tenure test answering on ranges, and the rows moved when it did —
+# the PR carried the corrected figure and this file did not, which is the one
+# thing the header above says must not happen. The attribution, measured on
+# the container at the same clang and reproducing the runner's rows to the
+# byte:
+#
+# Twelve symbols move on jsonbench, all of them runtime.c, summing to +2,531
+# against a .text row of +2,528. `k_copy_size` +2,031 and `k_repair_interior`
+# +800 are the bulk, `k_repair_size` -940 vanishes into them, and the new
+# out-of-line `k_ten_holds` is 138. Nothing in the emitted kanso moves.
+#
+# So the growth is the size walk being re-inlined, and the 2x2 says which
+# half of the change caused it. On jsonbench:
+#
+#     hash set,   k_ten_holds inlinable   82,722   (#1177)
+#     hash set,   k_ten_holds noinline    85,538
+#     block walk, k_ten_holds inlinable   88,034
+#     block walk, k_ten_holds noinline    85,250   (shipped)
+#
+# The walk alone is +5,312, and the noinline that was added for a run-time
+# reason takes 2,784 of it back. The walk is smaller code than a hash probe;
+# what it costs is that `k_survives_x` becomes cheap enough for clang to
+# inline at all eight of its call sites in the size walk, dragging
+# `k_repair_size` with it.
+#
+# Two levers were built and measured. `noinline` on `k_repair_size` is +352
+# on every binary — worse. `noinline` on `k_survives_x` stops the cascade at
+# its source and returns every byte: jsonbench 82,434, which is 288 BELOW
+# where #1177 left it, and -2,816 on each of the nine. It costs 33,136,876
+# instructions, +0.2426% over the nine, with deepbench +2.39%, escapebench
+# +1.87%, pendbench +0.86%, widebench +0.71% and basket +0.40%. #1178 bought
+# deepbench -4.47%; this hands back more than half of that to recover 22 KB.
+# Declined at that price. The bytes are what the win cost.
 jsonbench text=85250
 encodebench text=102274
 oneshot text=102322
