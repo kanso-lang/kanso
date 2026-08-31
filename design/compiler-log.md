@@ -2862,3 +2862,70 @@ watched refusing a row before it was trusted. Every row carries its
 commit, so a branch deleted by it goes back with a single push. A sweep
 that cannot be undone is a sweep nobody should run, and the record costs
 21 KB.
+
+## 2026-08-31 — the curve reaches every counter now, and the floor moves with it
+
+Built to the 2026-08-29 gavel: the saturation curve applies to each
+counter's ratio, and a term is the equal-weighted average of the
+saturated values. Four lines of arithmetic, and the objective is a
+different function.
+
+```
+    fn share now base t
+      sat = t.satiation
+      each = list/map t.counters (c -> satisfaction (ratio_of now base c) sat)
+      sats = list/to_list each
+      list/sum sats / (1.0 * length sats) * t.weight
+```
+
+`standing` moves with it. A counter new to the model enters where its
+dimension already stands so that its arrival is not a score move, and
+under the old rule that meant the mean ratio. The term is a mean of
+saturated values now, and the curve is not linear, so a newcomer at the
+mean ratio would shift the term. What leaves it alone is a newcomer
+whose satisfaction equals the mean satisfaction, so that is computed and
+read back through the curve: `r / (r + s) = m` inverts to
+`r = m * s / (1 - m)`.
+
+The floor falls 87.85 to 73.8273894965, and nothing about the compiler
+moved — every counter reads today what it read yesterday. It is set by
+hand in `bench/welfare_floor.json`, because the tool refuses a fall and
+should: an objective change is exactly the case that belongs in a diff a
+reviewer reads rather than behind a flag.
+
+Two specs, in `tests/welfare_saturates_each_counter.rs`, and both pin
+numbers that are properties of the weights rather than of the compiler.
+The fixtures set every counter's baseline to its own current value, so
+every ratio is exactly one whatever the goldens say today, and the
+scores do not move when a benchmark gets faster.
+
+- Every ratio at one scores **46.67**: run speed and run memory saturate
+  at 1/(1+2.0) and carry 0.30 each, compile speed and compile memory at
+  1/(1+0.5) carrying 0.28 and 0.12.
+- One of the seven run-speed counters a thousand and twenty-four times
+  better than its baseline, the other six at parity, scores **49.52**.
+  Saturating the mean instead answers **66.26** on that same fixture,
+  measured by putting the old `share` back and running it — one
+  benchmark takes the term almost to its ceiling while six sit at
+  parity, which is the shape the ruling closed.
+
+The now-values the fixtures need come from welfare's own report rather
+than from a second reader of the goldens. A spec that re-parses what the
+tool parses is asserting its own copy of the tool, and the copy is what
+goes stale.
+
+Both were watched failing. With the old `share` restored, the runaway
+spec reads 66.26 against 49.52; the parity spec passes under both
+definitions, which is correct — at a ratio of one the two orders agree,
+and that spec is pinning the weights rather than the ruling.
+
+The ratchet's welfare mutation still bites, harder than before. Claiming
+jsonbench did 9,999,999,999 instructions now costs 0.96 points where the
+old rule diluted one counter's collapse across an unbounded mean.
+
+What this does not do yet: the two improvements held behind the gavel —
+`k_b_append_grow` outlined, and `k_b_append_into`'s duplicated grow tail
+unified — are still out of the tree. The second was already priced under
+both orders when it was held (-0.001096 as written, +0.008015 per
+counter), and re-scoring them against the definition that now ships is
+the next thing this owes.

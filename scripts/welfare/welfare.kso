@@ -308,14 +308,27 @@ fn nonzero n false
 fn as_ratio a b
   1.0 * a / b
 
-# A dimension improves when its counters improve on average, so its ratio is
-# the mean of theirs. One counter halving while another doubles is a wash,
-# which is what it should be: the counters are how a dimension is observed,
-# not four separate things to defend.
+# A dimension improves when its counters improve on average, and the curve
+# reaches each counter before the average is taken. Ruled 2026-08-29: "you do
+# the log or whatever function it is on each term before averaging."
+#
+# Saturating the mean instead let one counter carry a whole term. A ratio
+# enters a mean linearly and unbounded, so a benchmark 138 times better than
+# its baseline contributed 138 where a benchmark twice as good contributed 2,
+# and the run-speed term became 68% one benchmark — the pretty-printer — while
+# the decode and encode rows the front page makes claims about were 1% between
+# them. Saturating first bounds every counter at one, so no counter can
+# dominate by raw magnitude and successive doublings of any single benchmark
+# pay less, which is what the satiation curve is for.
+#
+# One counter halving while another doubles is still close to a wash. It is no
+# longer exactly one, because the curve is asymmetric: the halving loses more
+# than the doubling gains, which is the shape the ratchet wants.
 fn share now base t
-  ratios = list/to_list (list/map t.counters (c -> ratio_of now base c))
-  mean = list/sum ratios / (1.0 * length ratios)
-  satisfaction mean t.satiation * t.weight
+  sat = t.satiation
+  each = list/map t.counters (c -> satisfaction (ratio_of now base c) sat)
+  sats = list/to_list each
+  list/sum sats / (1.0 * length sats) * t.weight
 
 fn ratio_of now base c
   as_ratio (live base[c]!) (live now[c]!)
@@ -410,13 +423,12 @@ fn gauge d e o b c held w s ir ca
 # introduction is never a score move and only improvement from here pays.
 #
 # Entering at a ratio of one against ITSELF does not achieve that, which is
-# what this used to do. A dimension scores the mean of its counters' ratios,
-# and the run-speed counters sit far above one — wide alone is a factor of
-# eighty — so a newcomer at one drags the mean down and a benchmark costs
-# welfare on the day it lands, however healthy. The reference is a choice, not
-# a measurement, so it is chosen to mean what the rule above says: the ratio
-# the dimension already has. Once the counter has real history that reference
-# is behind it and improvement pays from there.
+# what this used to do. The run-speed counters sit far above one, so a newcomer
+# at one drags the term down and a benchmark costs welfare on the day it lands,
+# however healthy. The reference is a choice, not a measurement, so it is
+# chosen to mean what the rule above says: the standing the dimension already
+# has. Once the counter has real history that reference is behind it and
+# improvement pays from there.
 fn baseline_of held now
   base = held["baseline"]!
   fresh = list/fold terms [] (acc t -> text/concat acc (entering base now t))
@@ -425,21 +437,31 @@ fn baseline_of held now
 fn entering base now t
   known = list/to_list (list/select t.counters (c -> base[c] != none))
   missing = list/to_list (list/select t.counters (c -> base[c] == none))
-  at = standing now base known
+  at = standing now base known t.satiation
   list/to_list (list/map missing (c -> [c (math/round (now[c]! * at))]))
 
-# Where the dimension already stands: the mean ratio of the counters that have
-# a baseline. A dimension whose counters are all new has nowhere to stand and
-# enters at one, which is the old rule and right for that case alone.
-fn standing now base known
-  stood now base known (length known == 0)
+# Where the dimension already stands, as a ratio a newcomer can be given.
+#
+# The term is a mean of SATURATED values now, so standing at the mean ratio is
+# no longer the same thing as standing where the term stands — the curve is not
+# linear, and a newcomer placed at the mean ratio would move the term. What
+# leaves the term untouched is a newcomer whose SATISFACTION equals the mean
+# satisfaction, so that is computed and then read back through the curve:
+# `r / (r + s) = m` inverts to `r = m * s / (1 - m)`.
+#
+# A dimension whose counters are all new has nowhere to stand and enters at
+# one, which is the old rule and right for that case alone.
+fn standing now base known sat
+  stood now base known sat (length known == 0)
 
-fn stood _ _ _ true
+fn stood _ _ _ _ true
   1.0
 
-fn stood now base known false
-  ratios = list/to_list (list/map known (c -> ratio_of now base c))
-  list/sum ratios / (1.0 * length ratios)
+fn stood now base known sat false
+  each = list/map known (c -> satisfaction (ratio_of now base c) sat)
+  sats = list/to_list each
+  mean = list/sum sats / (1.0 * length sats)
+  mean * sat / (1.0 - mean)
 
 fn merged base fresh
   carried base fresh (length fresh == 0)
