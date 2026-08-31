@@ -168,16 +168,17 @@ jsonbench 2862072778
 # now planted at tail-position ifs on its lazy paths — the gap the
 # browser differential's own harness exposed — and encodebench gives
 # back 6,250 from the reshaped equality prelude. The other rows hold.
-encodebench 8715312865
-oneshot 44077654
-basket 57118035
-widebench 84047604
+encodebench 8708075665
+oneshot 44059561
+basket 57083993
+widebench 84031604
 deepbench 760475193
 escapebench 258583100
 # 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
 # benchmark whose work includes allocating, forcing and carrying pending
 # cells; the seven old rows are untouched.
 pendbench 957236511
+indexbench 5266934
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -401,3 +402,23 @@ pendbench 957236511
 # The local box (glibc 2.39-0ubuntu8.7 against this file's 8.8) reads
 # deepbench -3,680 and escapebench -399 where the runner reads neither, which
 # is why these rows come out of the job log and not from here.
+# 2026-08-31 (the runner's numbers): the string index gets the cursor the
+# slice already had. k_b_at restarted its character walk at byte zero for
+# every index, so reading a string forward was quadratic in its length.
+#
+#   encodebench  8,715,312,865 -> 8,708,075,665    -7,237,200   -0.083%
+#   basket          57,118,035 ->    57,083,993       -34,042   -0.060%
+#   oneshot         44,077,654 ->    44,059,561       -18,093   -0.041%
+#   widebench       84,047,604 ->    84,031,604       -16,000   -0.019%
+#   jsonbench, deepbench, escapebench, pendbench          unmoved
+#   indexbench                        5,266,934   new
+#
+# Nothing rises. The four falls are the same number twice over: k_b_at's list
+# and bytes branches got a smaller function to sit in once the string walk
+# moved out to k_str_seek, and encodebench's 7,237,200 over its 7,237,200
+# k_b_at calls is 1.0001 instructions each.
+#
+# indexbench is new and pins the shape nothing else in the tree asks for:
+# reading a string forward one character at a time, over an alphabet mixing
+# one-, two-, three- and four-byte characters. On the unfixed runtime it reads
+# 2,570,995,073 — 488 times what it reads here.

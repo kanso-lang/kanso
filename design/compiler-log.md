@@ -3207,3 +3207,37 @@ The change itself is small and its measurements are above; whoever picks it up
 does not have to find it again.
 
 HELD.
+
+## 2026-08-31 — the runner's numbers for the string index
+
+```
+    work_encodebench  8,715,312,865 -> 8,708,075,665    -7,237,200   -0.083%
+    work_basket          57,118,035 ->    57,083,993       -34,042   -0.060%
+    work_oneshot         44,077,654 ->    44,059,561       -18,093   -0.041%
+    work_widebench       84,047,604 ->    84,031,604       -16,000   -0.019%
+    work_jsonbench, deepbench, escapebench, pendbench           unmoved
+    work_indexbench                        5,266,934   new
+    compile_instructions 42,297,900 ->    42,299,530        +1,630   +0.004%
+```
+
+Nothing in the work vein rises. The four falls are one number counted four
+ways: `k_b_at`'s list and bytes branches got a smaller function to sit in once
+the string walk moved out to `k_str_seek`, and encodebench's 7,237,200 over
+its 7,237,200 `k_b_at` calls is 1.0001 instructions each.
+
+**work_indexbench is new**, so it reads as a rise against a file that did not
+have the row. It is the benchmark this change adds, at 5,266,934 — against
+2,570,995,073 on the unfixed runtime, which is the 488 times the fix is worth.
+A new row in a summed vein is arithmetic rather than a regression, and the
+same will be true of the next benchmark somebody adds.
+
+**compile_instructions rises 1,630 and none of it is the front end.**
+`k_str_seek` adds lines to `src/runtime.c`, which `main.rs` holds as an
+`include_str!` and hashes for the build cache key; a longer string takes
+longer to hash. `compile_allocs`, `compile_peak_bytes`, rounds and visits are
+byte-identical.
+
+Welfare 87.511035 -> 87.511217, recorded with `--set`, and the page's tagged
+compile-instructions figure follows the golden.
+
+DONE.
