@@ -317,6 +317,20 @@ trend_runtime = row
   (breaking "a_runtime_counter_worsens_for_nothing")
   release
 
+# The half of the trend gate's refusal that a joining sample could hide. The
+# gate sums a golden's fields across its samples, so adding a benchmark raises
+# every sum at once; comparing over the samples both sides have is what keeps
+# that from reading as a regression, and this row is what keeps the fix from
+# being written the lazy way. Its first draft skipped the whole golden for the
+# run, and skipped a real rise sitting beside the new sample.
+trend_joined = row
+  "a counter worsening in a sample that was already there, while one joins"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_worsening_hidden_behind_a_joining_sample")
+  release
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -515,9 +529,11 @@ rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs error_corpus trend]
 
-rows_c1a = text/concat rows_c1 [perf_row trend_runtime published_numbers]
+rows_c1a = text/concat rows_c1 [perf_row trend_runtime trend_joined]
 
-rows_c1b = text/concat rows_c1a [diagnostics accumulator]
+rows_c1p = text/concat rows_c1a [published_numbers]
+
+rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
 rows_c1c = text/concat rows_c1b [rendering behaviour]
 
