@@ -4664,16 +4664,20 @@ the point of death and nothing anywhere else.
 
 | row | before | after | |
 |---|---:|---:|---:|
-| jsonbench | 2,838,415,815 | 2,781,834,468 | -1.99% |
-| encodebench | 8,396,592,982 | 7,870,152,609 | **-6.27%** |
-| oneshot | 43,094,978 | 41,401,596 | -3.93% |
-| basket | 56,490,028 | 56,458,733 | -0.06% |
-| widebench | 63,997,234 | 64,076,831 | **+0.12%** |
-| deepbench | 726,488,376 | 717,295,599 | -1.27% |
-| escapebench | 253,819,082 | 249,018,661 | -1.89% |
-| pendbench | 937,802,653 | 930,587,464 | -0.77% |
-| indexbench | 5,243,104 | 5,242,683 | -0.01% |
-| digestbench | 152,573,619 | 143,471,800 | **-5.97%** |
+| jsonbench | 2,838,415,815 | 2,781,834,881 | -1.99% |
+| encodebench | 8,396,592,982 | 7,870,153,008 | **-6.27%** |
+| oneshot | 43,094,978 | 41,401,995 | -3.93% |
+| basket | 56,490,028 | 56,459,146 | -0.05% |
+| widebench | 63,997,234 | 64,077,244 | **+0.13%** |
+| deepbench | 726,488,376 | 717,299,279 | -1.27% |
+| escapebench | 253,819,082 | 249,019,060 | -1.89% |
+| pendbench | 937,802,653 | 930,587,850 | -0.77% |
+| indexbench | 5,243,104 | 5,243,096 | -0.0002% |
+| digestbench | 152,573,619 | 143,472,199 | **-5.96%** |
+
+(CI's rows. The container this was developed in runs glibc 2.39-0ubuntu8.7
+against the runner's 2.39-0ubuntu8.8, so `measured_on` refuses a local
+regeneration and the numbers above come out of the instructions job.)
 
 The two changes were measured apart. `noreturn` alone is digestbench -5.97%,
 escapebench -1.89%, deepbench -1.27%, encodebench -1.27%, pendbench -0.77%,
@@ -4698,6 +4702,16 @@ unchanged. That is the point of a separate instruction vein — a decode that
 allocates identically and executes six per cent less work moves nothing else in
 the tree. Every binary also falls about 2,000 bytes, 2.4%, which is the
 inlined error text and call sequence leaving dozens of sites.
+
+**compile_instructions rises 1,630, and it is layout for the third time.**
+`kanso check lib/json` runs none of the runtime, so nothing the front end does
+changed. What changed is `include_str!("runtime.c")`, a static in the binary
+that grew 2,962 bytes and shifted what follows it. Measured rather than
+assumed, because the same claim was made twice before on the strength of
+elimination: build this branch's front end against main's runtime.c and
+against this branch's, on one host, and read 41,922,834 and 41,925,168 — the
+same rise with no Rust changed at all. compile_allocs, compile_peak_bytes,
+rounds and visits hold.
 
 Welfare 74.33 to 74.50, floor set. kq links this runtime and owes a pin bump;
 its instructions vein will move and none of its allocation counters will.
