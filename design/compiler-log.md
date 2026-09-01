@@ -4138,3 +4138,67 @@ The behavior is pinned where it already was:
 `tests/golden/mem/a_digest_holds_every_block_it_walked.mem` reads
 `thunk_allocs=1` and `thunk_forces=64` for a one-block message, so a demand
 analysis that started answering differently moves that golden.
+
+## 2026-09-01 — sixteen counters gain a direction, five keep none on purpose
+
+SEARCHED FIRST: design/compiler-log.md (the 2026-08-26 entry adding the two
+measured compile veins to these tables, and the 2026-09-01 entry adding
+digestbench), design/log/compiler-log-archive.md, design/*.md, and the tables
+themselves in scripts/trend_gate/trend_gate.kso, which are the record of what
+has ever been classified.
+
+Twenty-two counters across the goldens had no direction. The gate's third state
+prints them under UNCLASSIFIED and counts them toward neither side of the
+pure-regression rule, which is right for a counter whose direction is genuinely
+unknown and wrong for one nobody had got round to. Sixteen were the second
+kind.
+
+**To `lower`, twelve.** `evac_allocs` and `evac_bytes`, what a carry evacuation
+spends. `str_scans`, `str_scan_bytes`, `find2_calls`, `utf8_bytes`, bytes
+walked. `perm_live_bytes` and `perm_peak_bytes`, malloc-backed storage the
+process still holds — it only leaves through `free()`, so a peak that scales
+with iteration count is a leak by definition, which is what the counter's own
+comment in runtime.c says. `append_grow`, `push_mut_slow` and `put_mut_grow`,
+the slow halves of three pairs whose fast halves were already classified.
+`thunk_evals`, a lazy binding actually running.
+
+**To `higher`, four.** `push_mut_fast` and `put_mut_fast`, the fast halves.
+`bytes_freed`, what `bytes_malloc` is measured against. `carry_dedup`, a node
+the carry found already copied and reused rather than copying twice.
+
+**Five stay out, and the reason is written beside them.** `cohort_frees` and
+`cohort_kept` are the two outcomes of the cohort dance and both scale with how
+many cohorts ran, so what means anything is the ratio and this gate cannot say
+ratios. `view_allocs` and `view_frees` are the same shape, and runtime.c says
+so at the counter: the difference is memory the process is still holding, and
+either side alone is not. `thunk_forces` counts asking a thunk for its value
+rather than computing one — #1197 took `thunk_evals` from 8,256 to 129 on the
+digest with `thunk_forces` byte-identical, which is what a working memo looks
+like, and a change that made the same program strict would lower it while doing
+identical work.
+
+**The risk the `higher` table carries, stated rather than left to be found.** A
+change that does strictly LESS of the work lowers a presence counter, and the
+table reads that as a worsening. `append_fast` and `utf8_zerocopy` have sat
+there since the table was written without it biting, because a change that
+removes work almost always moves its slow twin the same way and the verdict
+comes out mixed. A pure regression that is really a pure simplification is the
+shape to watch for.
+
+**A ratchet row was about to start passing for the wrong reason, and this is
+the part worth remembering.** `a_worsening_paid_for_by_an_unclassified_counter`
+raised `scanbench calls` and `evac_allocs` together: one classified worsening
+beside one unclassified move, so a gate that intersects correctly refuses the
+first and lets the second count toward neither side. Classifying `evac_allocs`
+makes BOTH halves classified worsenings — which any pure-regression rule
+refuses, so the row goes on turning the gate red while testing nothing it was
+written to test. Verified by running it: before the repoint the listing had no
+UNCLASSIFIED section at all.
+
+The mutation now raises `thunk_forces`, which stays unclassified on purpose,
+and `tests/a_mutation_keeps_its_unclassified_counter.rs` reads the counter out
+of the mutation's own `sed` line and requires the tables not to name it. It was
+watched red by putting `thunk_forces` into `lower_k`. That is the general
+shape: a classification sweep can silently disarm a mutation that depends on
+something being unclassified, and nothing else in the tree was watching that
+edge.

@@ -92,13 +92,66 @@ lower_run = text/concat lower_h (text/concat lower_i lower_j)
 
 lower_efr = text/concat lower_ef lower_run
 
-lower = text/concat lower_ab (text/concat lower_cd lower_efr)
+lower_all = text/concat lower_cd lower_efr
+
+lower = text/concat lower_ab (text/concat lower_all lower_cost)
+
+# The runtime counters that are plainly a cost, swept in on 2026-09-01. Every
+# one of them had been unclassified since it was minted, so a change that
+# worsened it alone printed as drift and the pure-regression rule counted it
+# toward neither side. `evac_allocs` and `evac_bytes` are what a carry
+# evacuation spends; `str_scans`, `str_scan_bytes`, `find2_calls` and
+# `utf8_bytes` are bytes walked; `perm_live_bytes` and `perm_peak_bytes` are
+# malloc-backed storage the process is still holding, which only ever leaves
+# through free() — a peak that scales with iteration count is a leak by
+# definition. `thunk_evals` is a lazy binding actually running, which #1197
+# moved 8,256 to 129 with `thunk_forces` byte-identical.
+lower_k = ["evac_allocs" "evac_bytes" "str_scans" "str_scan_bytes"]
+
+lower_l = ["find2_calls" "utf8_bytes" "perm_live_bytes" "perm_peak_bytes"]
+
+# The slow halves of three fast/slow pairs whose fast halves are already in
+# `higher`. `append_grow` is the out-of-line growth k_b_append_grow does;
+# `push_mut_slow` and `put_mut_grow` are a push and a put that could not write
+# in place.
+lower_m = ["append_grow" "push_mut_slow" "put_mut_grow" "thunk_evals"]
+
+lower_cost = text/concat lower_k (text/concat lower_l lower_m)
 
 higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
 
 higher_b = ["buf_reuse" "thunk_frees"]
 
-higher = text/concat higher_a higher_b
+# The fast halves, and two reclaim counters. `bytes_freed` is malloc-backed
+# storage given back, which is what `bytes_malloc` in `lower` is measured
+# against; `carry_dedup` is a node the carry found already copied and reused
+# rather than copying twice.
+#
+# The risk these carry, stated rather than left for somebody to find: a change
+# that does strictly LESS of the work lowers a presence counter, and this table
+# reads that as a worsening. `append_fast` and `utf8_zerocopy` have sat here
+# since the table was written and it has not bitten, because a change that
+# removes work almost always moves its slow twin the same way and the verdict
+# comes out mixed. A pure regression that is really a pure simplification is
+# the shape to watch for.
+higher_c = ["push_mut_fast" "put_mut_fast" "bytes_freed" "carry_dedup"]
+
+# What stays unclassified, and why each one is not an oversight.
+#
+# `cohort_frees` and `cohort_kept` are the two outcomes of the cohort dance,
+# and both scale with how many cohorts ran: a change that adds a loop raises
+# both while reclaiming exactly as well as before. What means something is the
+# ratio, which this gate has no way to say.
+#
+# `view_allocs` and `view_frees` are the same shape and runtime.c says so at
+# the counter: "view_allocs minus view_frees is memory the process is still
+# holding". The difference is the number; either side alone is not.
+#
+# `thunk_forces` counts asking a thunk for its value, not computing one. #1197
+# took `thunk_evals` from 8,256 to 129 on the digest with this counter
+# unchanged, which is what a working memo looks like; a change that made the
+# same program strict would lower it while doing identical work.
+higher = text/concat higher_a (text/concat higher_b higher_c)
 
 bench_a = [["bench/cost_golden.txt" ""]]
 
