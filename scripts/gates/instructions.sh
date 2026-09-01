@@ -15,8 +15,12 @@ set -e
 # Whose numbers these are, before spending a minute measuring against them.
 sh scripts/gates/measured_on.sh bench/instructions_golden.txt
 
+# digestbench joined on 2026-09-01. Its peak is the row welfare weighs, and a
+# term counted on one axis and not the other is a trade the index cannot see:
+# every change that buys the digest's memory spends something here, and this is
+# where that something has to show.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench; do
+         indexbench digestbench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
     >/dev/null 2>/tmp/ir.$b
@@ -39,6 +43,14 @@ else
 fi
 grep -v '^#' bench/instructions_golden.txt > work_want.txt
 diff work_want.txt work.txt || {
+  # The rows again, after the diff and after the profile above it, because
+  # this file is pinned to a host and the sessions that have to regenerate it
+  # are on a different one — they read the numbers out of this log and copy
+  # them in. A diff eighty lines of callgrind output above the end of a step
+  # is a diagnostic the log API will not hand back, which is the same
+  # complaint the note above makes about step summaries.
+  echo "=== every row as measured here, to copy into the golden"
+  cat work.txt
   echo "::error::the work the benchmarks do changed. A rise is a"
   echo "::error::regression to explain and a fall is a win to bank —"
   echo "::error::say which in the PR and regenerate"

@@ -3765,3 +3765,181 @@ Ratchet row `trend_adrift`, mutation
 (in `lower_d`, a real worsening) and `evac_allocs` in the digest golden (in
 neither table) in the same patch. A gate that reads the second as an
 improvement goes green; this one stays red.
+
+---
+
+## 2026-09-01 — a memo declined inside a beat, and the third state that keeps it
+
+**DONE.** Closes the 64x thread opened on 2026-08-31.
+
+`k_force` memoized a thunk's answer only when `k_memo_outlives` said the
+storage sat below the innermost beat mark. Inside a beat it usually does not,
+and the memo was declined outright: the cell stayed unforced and the whole
+computation ran again on the next force. In the streaming shape that is once a
+block. On the 8,192-byte digest, `thunk_forces` and `thunk_evals` were both
+8,256 — every single force re-evaluated.
+
+**The third state.** The memo is kept and marked AT RISK instead of declined.
+A rewind may take the answer away; a carry evacuation may move it somewhere a
+rewind cannot reach, which `k_deep_copy`'s thunk arm already does on purpose
+(`if (t->forced) t->result = k_deep_copy(t->result, cp)`). Which of the two
+happened has a cheap answer — is the storage still in the live chain — and it
+is asked at the next force, where it costs a walk of a block list instead of a
+re-evaluation. `forced` carries three values now rather than two, so the flag
+rides on the cell and there is no second structure to keep in step.
+
+**Why not a register of at-risk cells checked at each rewind.** That was
+written first and thrown away. A thunk cell is refcounted and can be freed and
+handed out again while a list still names it, so the list would have to be
+kept in step with the free list, and touching a freed cell to un-memo it is the
+bug the register exists to prevent. The flag cannot go stale because it dies
+with the cell.
+
+The captures are NOT dropped for an at-risk memo: a cell that may be asked to
+run again has to still have them. A kept memo drops them as before.
+
+**Measured on the digest benchmark, exclusion untouched, main as the base.**
+
+| counter | before | after |
+|---|---:|---:|
+| thunk_evals | 8,256 | **129** |
+| allocs | 652,817 | **230,214** (-64.7%) |
+| alloc_bytes | 81,846,129 | **54,149,841** (-33.8%) |
+| arena_peak_bytes | 82,837,504 | **54,525,952** (-34.2%) |
+| arena_blocks | 79 | 52 |
+| push_mut_fast | 628,289 | 514,511 |
+| push_mut_slow | 41,479 | 25,225 |
+| sh_buf | 73,376,000 | 52,051,280 |
+
+Wall clock, interleaved against a worktree of origin/main built in its own
+directory, best of five, this container: **0.093 s -> 0.039 s**, 2.4x.
+
+**`digest_buf_reuse` 24,768 -> 16,640 is the counter that fell the wrong way,
+and it is the same fact.** A buffer is reused when a builder finds one to
+reuse; 8,127 fewer evaluations build 8,128 fewer buffers, so there are fewer
+reuses to count. Nothing lost a reuse it used to get.
+
+**Every other vein is byte-identical**: decode, escape, pend, oneshot, basket,
+encode, wide, scan counters, and the emitted-code golden. The machine-code
+golden falls about a hundred bytes a binary — `k_force` gained a state and lost
+the branch that declined a memo.
+
+**What it cost, and why the first measurement of it was misleading.** CI on
+the pinned host reported four benchmarks worse: deepbench +0.59%, oneshot
++0.46%, basket +0.44%, pendbench +0.34%, with every allocation counter on
+those programs byte-identical. Nothing was doing more work, which is the shape
+that says look at the code rather than the algorithm.
+
+callgrind named it: `k_force` at 4,752,000 instructions on deepbench, a
+function that does not appear in main's profile at all. It had outgrown what
+the inliner would take, so every force paid a call and a prologue it used to
+get for free. The delta was 4,375,985 and `k_force`'s own cost was 4,752,000 —
+the same number twice.
+
+So the cold half is out of line now (`k_force_slow`, `noinline`) and `k_force`
+is the memo hit and nothing else, which is the shape it had before. deepbench
+reads **726,483,240** against main's 726,483,254 on this container: fourteen
+instructions BELOW main, measured on the same host with both binaries built in
+their own directories.
+
+`text` rises 740,226 -> 741,202 across the nine binaries, about 108 bytes
+each.
+`k_force_slow` is a real function now where the whole of `k_force` used to be
+one, so there is a second prologue and a call site to pay for. That is the
+price of the fourteen instructions above, and it is the trade the outlining
+makes on purpose.
+
+The lesson is not about thunks. A runtime function that grows past the
+inliner's budget charges every caller, and no counter in the tree can see it —
+allocations, arena blocks and evacuations were all identical while 0.6% of
+deepbench went missing. kanso#1186 outlined `k_b_append_grow` for the same
+reason; this is the second instance, and the first where the growth was
+incidental rather than intended.
+
+**The work vein after the split, measured by CI.** Nothing regressed and one
+row fell properly:
+
+| counter | before | after | |
+|---|---:|---:|---:|
+| `work_pendbench` | 946,378,074 | 937,566,473 | **-0.93%** |
+| `work_encodebench` | 8,396,569,110 | 8,396,587,878 | +18,768 |
+| `work_indexbench` | 5,243,094 | 5,243,104 | +10 |
+| `work_widebench` | 63,997,213 | 63,997,231 | +18 |
+| `work_jsonbench` | 2,838,415,853 | 2,838,415,815 | -38 |
+| `work_basket` | 56,458,062 | 56,458,024 | -38 |
+| `work_deepbench` | 726,486,934 | 726,486,920 | -14 |
+| `work_escapebench` | 253,819,096 | 253,819,082 | -14 |
+| `work_oneshot` | 43,094,978 | 43,094,978 | 0 |
+| `work_digestbench` | — | 152,573,619 | joins |
+
+`compile_instructions` 41,496,870 -> 41,496,028, a fall of 842 and free.
+
+The deepbench row is fourteen below main, which is exactly what this container
+measured before the push — the local method and CI agree to the instruction on
+the one row both could see. pendbench's 0.93% is the memo doing its job on a
+program that forces cells inside a beat and used to re-evaluate every one.
+
+Welfare rises and is banked in the same change, per the rule that a gain
+nobody ratchets is a gain the next change is free to spend.
+
+**A fourth memo state, built on the misattribution and removed.****A fourth memo state, built on the misattribution and removed.** Before
+callgrind was asked, the four rises were blamed on the at-risk check running
+again and again on cells whose answer a rewind keeps taking, and a K_MEMO_SPENT
+state was added so such a cell stops asking. It was measured after the split
+and buys nothing: deepbench reads 726,483,240 with it and 726,483,240 without,
+and every counter in every vein is byte-identical either way. No program in the
+corpus exercises it. So it is gone, and the three states stand.
+
+The comment it carried asserted the 4,375,985 as ITS motivation, which was the
+misattribution written down as fact — the same number was `k_force`'s own
+inlining cost, and a plausible story reached for it first. A state that costs
+nothing to keep is still a state somebody has to read, and this one had a wrong
+measurement attached.
+
+**An intermediate state worth recording, because it nearly changed the
+objective.** Before the split was found, the four rises were taken at face
+value: welfare read 74.32 against a floor of 74.33, a fall with nothing on the
+other side, and the argument being drafted was that the index is blind to a
+streaming program's peak and should gain a digest term. That argument is still
+true and still worth making one day — welfare cannot see this change's 64.7%
+and 34.2% — but it was about to be made in service of a cost that did not
+exist. A model is easiest to argue with when a measurement is embarrassing,
+which is exactly when the measurement deserves another look first.
+
+Also learned on the way: welfare already has a rule for a counter joining the
+model — `baseline_of`/`entering` gives it the standing its dimension already
+has, so a new term is score-neutral on the day it lands and only improvement
+after that pays. Hand-writing a baseline into `bench/welfare_floor.json` was
+the wrong instinct and the machinery was already right.
+
+**Welfare is 74.3323 before and after**, and now for the right reason: nothing
+regressed. No digest counter feeds the index, so a 64.7% fall in allocations
+and a 34.2% fall in peak on a real program still scores zero — the omission
+digestbench (kanso#1195) exists to make visible. Deliberately not wired here:
+adding a term to the objective in the same change the term would reward is the
+wrong order, and it is a weaker argument now that nothing needs it. **OPEN.**
+
+`digestbench` joins `bench/instructions_golden.txt` in this change even so. A
+benchmark counted on one axis and not the other is a trade the index cannot
+see, and every change that buys the digest's memory spends something in work.
+The vein is a tripwire; whether welfare gets a term from it is a separate
+question and not this change's to answer.
+
+**The reduced fixture that would not reduce.** Four attempts at a
+postcard-sized program: a body binding used once, one used behind a two-arm
+dispatch, one built outside the loop and passed in, and one built inside the
+loop's own cluster and handed to a thirty-round inner loop — the shape sha256
+has, where `w = schedule ...` in `blocked` is read by `compress` on each of
+sixty-four rounds. Every one of them compiled strict: the demand analysis
+proved the binding needed and no thunk was allocated at all. So what pins this
+is bench/cost_golden_digest.txt, whose `thunk_evals` row is exact and which
+went 8,256 -> 129 under this change and back again when it was reverted. That
+is the observation the rule asks for, on a fixture larger than the rule wants.
+**OPEN:** what keeps sha256's schedule lazy where four hand-written copies of
+its shape are strict. Whoever answers that gets the postcard.
+
+**What this does NOT close.** The carry-tier prefix removal, built and measured
+on 2026-08-31 and on the entry above, is still not landed. This change removes
+the reason it could not be: with the memo kept, lifting the prefix no longer
+takes native's `thunk_evals` to 64 where the interpreter reads 1, which is the
+differential the oracle refuses. Re-measure and land it next.

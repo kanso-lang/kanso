@@ -774,7 +774,7 @@
 # allocations do not cost 0.19%; the inliner changed its mind about a small
 # function, which is the same layout effect the notes above describe. The
 # shorter source is kept because it is the right code.
-compile_instructions=41496870
+compile_instructions=41496028
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more
