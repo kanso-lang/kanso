@@ -3943,3 +3943,63 @@ on 2026-08-31 and on the entry above, is still not landed. This change removes
 the reason it could not be: with the memo kept, lifting the prefix no longer
 takes native's `thunk_evals` to 64 where the interpreter reads 1, which is the
 differential the oracle refuses. Re-measure and land it next.
+
+## 2026-09-01 — the digest joins the objective, on both sides
+
+SEARCHED FIRST: design/compiler-log.md, design/log/compiler-log-archive.md,
+design/*.md, design/pending-gavels.md, and `scripts/welfare/welfare.kso`'s own
+counter lists, which are the record of what the model has ever weighed.
+
+The digest benchmark landed on 2026-08-31 with a CI gate, a ratchet row and an
+emitted-code row, and welfare could not see a single one of its counters. So
+the gap the benchmark was built to close was still open: a change that takes an
+8 KB digest from 79,691,776 arena bytes to 1,048,576 still scored zero, and so
+did the 52x that bought it.
+
+**What the model reads now.** `bench/cost_golden_digest.txt` joins the eight
+goldens welfare already chains through, and three counters come off it:
+
+| counter | dimension | today |
+|---|---|---:|
+| `digest_instructions` | run speed (satiation 2.0, weight 0.30) | 152,573,619 |
+| `digest_peak_bytes` | run memory (2.0, 0.30) | 54,525,952 |
+| `digest_arena_blocks` | run memory | 52 |
+
+The instructions row comes from the work vein rather than from the digest
+golden, the same place every other speed counter comes from.
+
+**Both sides, and this is the whole point of the entry.** The peak is the row
+digestbench exists for. A term that priced only the peak would rank any change
+that reclaims per block above one that does not, however long it takes — which
+is precisely the trade the 52x slowdown was, scored as free in the other
+direction. Pricing the work beside the retention turns that into a number the
+model settles instead of a preference somebody argues. Adding only the memory
+half would have been rigging the answer to a question still open.
+
+**The score did not move, and that is the entering rule working.** A counter
+new to the model enters at its dimension's standing, so run speed's eight
+counters and run memory's eight leave both terms where they were. The floor
+went from 74.33468320932070 to 74.33468268729726 — a fall of 5.2e-7, which is
+the rounding in `math/round` on the three entering baselines and nothing else.
+Ratchet 132 records why.
+
+**One pinned number moved.** `one_counter_running_away_cannot_carry_its_term`
+answered 49.52 and answers 49.16: the fixture puts one run-speed counter a
+thousand times better than its baseline and the rest at parity, so the term is
+`(7/3 + 1024/1026) / 8 * 0.30` where it used to be over seven. The number is a
+property of the weights and the counter count, not of the compiler.
+
+**The spec, watched red.** `tests/the_digest_is_priced_on_both_sides.rs` stages
+`bench/`, doctors one row of one golden tenfold, and requires welfare to go red
+naming the digest row that moved — once for the peak, once for the work. A
+third fixture runs the undoctored goldens and requires green, so neither of the
+first two can pass on a welfare that fails on everything. With `digest_work`
+and `digest_memory` taken back out of the counter lists both doctored fixtures
+go red and the control stays green; that is the failure that was watched, and
+the message on each is the assert's own sentence rather than a parse error.
+
+**What this unblocks.** The carry tier measured on 2026-08-31 trades 2.24x on
+the clock for 68x less peak at 131,072 bytes, and 1.6x for 52x at 8,192. That
+is a trade across two dimensions, which is the one thing the per-counter
+goldens cannot arbitrate and the one thing the index is for. It is now a
+question with an answer rather than a judgement call.
