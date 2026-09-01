@@ -783,7 +783,6 @@
 # the measured path. The counters that measure only the front end's work say
 # the same: compile_allocs identical and compile_peak_bytes identical at
 # 713,606. Fifth movement of this vein with an untouched call graph.
-
 compile_instructions=41497092
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
