@@ -4091,3 +4091,50 @@ term". The cost is a visible four-point drop in the published number and an
 honest one in place of an invented history. Nobody should settle this while a
 particular change's verdict hangs on it; digestbench is the only counter that
 has ever entered by this rule, so there is one instance and it is this one.
+
+## 2026-09-01 — why sha256's schedule is lazy: an arm that ignores a parameter
+
+SEARCHED FIRST: design/compiler-log.md — this closes the question the
+2026-08-31 memo entry left open ("what keeps sha256's schedule lazy where four
+hand-written copies of its shape are strict") —
+design/log/compiler-log-archive.md, design/*.md, and
+tests/golden/mem/a_digest_holds_every_block_it_walked.kso, whose comment named
+the four copies.
+
+`digested` binds `w = schedule ...` and hands it to `compress s w 1 false`,
+which reads `w[at]!` sixty-four times. The binding is a thunk, and the reason
+is one arm:
+
+```
+fn compress s _ _ true
+  s
+
+fn compress s w at false
+  ...
+```
+
+The exhausted arm ignores `w`, so `w` is not demanded on every path into
+`compress`, so the argument is thunked. Demand is decided per parameter across
+all arms rather than per call site, and the call site's guard is the literal
+`false`.
+
+**A controlled pair, built to check it rather than to argue it.** Two programs
+identical but for the exit arm: one written `fn walk s _ _ true` reads
+`thunk_allocs=1`, `thunk_forces=8`, `thunk_evals=1`; the same program with the
+exit arm reading `w` reads `thunk_allocs=0`. `allocs=5` in both. The four
+hand-written copies were strict because their consumers read the parameter in
+every arm.
+
+**Costed, and no change is warranted.** callgrind on digestbench puts
+`d_thunk_eval` at 1,151,583 of 152,573,220 — 0.75%, and that is the 129 real
+evaluations of the schedule, which a strict compile would do too. `k_force`
+does not appear in the profile at all: #1197 outlined its cold half and the
+hot half is inlined, so 8,256 forces cost less than the annotator's threshold.
+The obvious refinement — decide demand per call site when the guard argument is
+a literal, which would make `w` strict here — buys a fraction of a per cent of
+one benchmark and adds a case to a pass that already runs on every declaration.
+
+The behavior is pinned where it already was:
+`tests/golden/mem/a_digest_holds_every_block_it_walked.mem` reads
+`thunk_allocs=1` and `thunk_forces=64` for a one-block message, so a demand
+analysis that started answering differently moves that golden.
