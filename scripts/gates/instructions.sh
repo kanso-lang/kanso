@@ -15,8 +15,12 @@ set -e
 # Whose numbers these are, before spending a minute measuring against them.
 sh scripts/gates/measured_on.sh bench/instructions_golden.txt
 
+# digestbench joined on 2026-09-01. Its peak is the row welfare weighs, and a
+# term counted on one axis and not the other is a trade the index cannot see:
+# every change that buys the digest's memory spends something here, and this is
+# where that something has to show.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench; do
+         indexbench digestbench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
     >/dev/null 2>/tmp/ir.$b

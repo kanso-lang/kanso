@@ -3824,6 +3824,28 @@ encode, wide, scan counters, and the emitted-code golden. The machine-code
 golden falls about a hundred bytes a binary — `k_force` gained a state and lost
 the branch that declined a memo.
 
+**What it costs, measured by CI on the pinned host.** The at-risk check is a
+walk of the block list on each force of an at-risk cell, and four benchmarks
+pay for it in retired instructions:
+
+| counter | before | after | |
+|---|---:|---:|---:|
+| `work_deepbench` | 726,486,934 | 730,758,921 | +0.59% |
+| `work_oneshot` | 43,094,978 | 43,294,001 | +0.46% |
+| `work_basket` | 56,458,062 | 56,709,279 | +0.44% |
+| `work_pendbench` | 946,378,074 | 949,584,874 | +0.34% |
+| `work_widebench` | 63,997,213 | 64,013,233 | +0.03% |
+| `work_encodebench` | 8,396,569,110 | 8,396,581,628 | +0.00015% |
+| `work_jsonbench` | 2,838,415,853 | 2,838,415,879 | +26 |
+| `work_indexbench` | 5,243,094 | 5,243,357 | +263 |
+| `work_escapebench` | 253,819,096 | 253,819,083 | -13 |
+
+`compile_instructions` FALLS 41,496,870 -> 41,494,317, which is free and is
+code layout rather than any decision the front end stopped making.
+
+That encodebench row settles the wall-clock note below: 12,518 instructions on
+8.4 billion cannot be 1.5% of anything, so the clock difference is layout.
+
 **encodebench is 1.5% slower in wall clock** (0.953 s against 0.967, best of
 nine interleaved) with every one of its counters byte-identical, so it is doing
 exactly the same work. The randomised-layout spread measured for this tree is
