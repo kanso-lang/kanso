@@ -60,6 +60,7 @@ typedef struct { long long len; const unsigned char* data; long long cap; } KByt
 #define K_MEMO_NONE 0
 #define K_MEMO_KEPT 1
 #define K_MEMO_AT_RISK 2
+#define K_MEMO_SPENT 3
 
 typedef struct KThunk {
     long long rc;
@@ -254,27 +255,40 @@ static int k_memo_still_there(KThunk* t) {
     return k_still_live((const void*)(intptr_t)t->result.payload);
 }
 
-KValue k_force(KValue v) {
-    if (v.tag != K_THUNK) return v;
-    KThunk* t = (KThunk*)v.payload;
-    k_stat_thunk_forces++;
-    if (t->forced == K_MEMO_KEPT) return t->result;
+/* The cold half, kept out of line. Everything but "the memo is standing" is
+   here, because k_force is called once per demanded cell and the caller pays
+   for its size: growing it past what the inliner will take cost deepbench
+   4,375,985 instructions, 0.60% of the run, with no counter moving at all. */
+static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
     if (t->forced == K_MEMO_AT_RISK) {
         if (k_memo_still_there(t)) return t->result;
-        t->forced = K_MEMO_NONE;
+        /* Asked once and gone. A cell whose answer a rewind took is a cell
+           whose answers this loop keeps taking, and asking again on every
+           later force costs the walk without ever paying. So the memo is
+           spent and the cell goes back to what it did before any of this:
+           evaluate and return. */
+        t->forced = K_MEMO_SPENT;
     }
     if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
     k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     t->result = answer;
     if (!k_memo_outlives(answer)) {
-        t->forced = K_MEMO_AT_RISK;
+        if (t->forced != K_MEMO_SPENT) t->forced = K_MEMO_AT_RISK;
         return t->result;
     }
     t->forced = K_MEMO_KEPT;
     /* the computation ran; its captures are done */
     k_thunk_drop_args(t);
     return t->result;
+}
+
+KValue k_force(KValue v) {
+    if (v.tag != K_THUNK) return v;
+    KThunk* t = (KThunk*)v.payload;
+    k_stat_thunk_forces++;
+    if (t->forced == K_MEMO_KEPT) return t->result;
+    return k_force_slow(t);
 }
 
 /* A constructor slot is where a knot ties, so a field still being computed is
@@ -1199,7 +1213,10 @@ static size_t k_copy_size(KValue v, KMark* m) {
         KThunk* t = (KThunk*)(intptr_t)v.payload;
         if (k_copy_seen_check(t)) return 0;
         size_t n = 0;
-        if (t->forced) n += k_copy_size(t->result, m);
+        /* K_MEMO_SPENT leaves a stale `result` behind by design, so the
+           two copy walks ask for a memo that is actually standing. */
+        if (t->forced == K_MEMO_KEPT || t->forced == K_MEMO_AT_RISK)
+            n += k_copy_size(t->result, m);
         for (int i = 0; i < t->argc; i++) n += k_copy_size(t->args[i], m);
         return n;
     }
@@ -1400,7 +1417,8 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, t, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == t) return v;
         k_copy_map_put(t, t);
-        if (t->forced) t->result = k_deep_copy(t->result, cp);
+        if (t->forced == K_MEMO_KEPT || t->forced == K_MEMO_AT_RISK)
+            t->result = k_deep_copy(t->result, cp);
         for (int i = 0; i < t->argc; i++) t->args[i] = k_deep_copy(t->args[i], cp);
         return v;
     }

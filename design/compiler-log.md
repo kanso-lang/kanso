@@ -3824,40 +3824,66 @@ encode, wide, scan counters, and the emitted-code golden. The machine-code
 golden falls about a hundred bytes a binary — `k_force` gained a state and lost
 the branch that declined a memo.
 
-**What it costs, measured by CI on the pinned host.** The at-risk check is a
-walk of the block list on each force of an at-risk cell, and four benchmarks
-pay for it in retired instructions:
+**What it cost, and why the first measurement of it was misleading.** CI on
+the pinned host reported four benchmarks worse: deepbench +0.59%, oneshot
++0.46%, basket +0.44%, pendbench +0.34%, with every allocation counter on
+those programs byte-identical. Nothing was doing more work, which is the shape
+that says look at the code rather than the algorithm.
 
-| counter | before | after | |
-|---|---:|---:|---:|
-| `work_deepbench` | 726,486,934 | 730,758,921 | +0.59% |
-| `work_oneshot` | 43,094,978 | 43,294,001 | +0.46% |
-| `work_basket` | 56,458,062 | 56,709,279 | +0.44% |
-| `work_pendbench` | 946,378,074 | 949,584,874 | +0.34% |
-| `work_widebench` | 63,997,213 | 64,013,233 | +0.03% |
-| `work_encodebench` | 8,396,569,110 | 8,396,581,628 | +0.00015% |
-| `work_jsonbench` | 2,838,415,853 | 2,838,415,879 | +26 |
-| `work_indexbench` | 5,243,094 | 5,243,357 | +263 |
-| `work_escapebench` | 253,819,096 | 253,819,083 | -13 |
+callgrind named it: `k_force` at 4,752,000 instructions on deepbench, a
+function that does not appear in main's profile at all. It had outgrown what
+the inliner would take, so every force paid a call and a prologue it used to
+get for free. The delta was 4,375,985 and `k_force`'s own cost was 4,752,000 —
+the same number twice.
 
-`compile_instructions` FALLS 41,496,870 -> 41,494,317, which is free and is
-code layout rather than any decision the front end stopped making.
+So the cold half is out of line now (`k_force_slow`, `noinline`) and `k_force`
+is the memo hit and nothing else, which is the shape it had before. deepbench
+reads **726,483,240** against main's 726,483,254 on this container: fourteen
+instructions BELOW main, measured on the same host with both binaries built in
+their own directories.
 
-That encodebench row settles the wall-clock note below: 12,518 instructions on
-8.4 billion cannot be 1.5% of anything, so the clock difference is layout.
+`text` rises 740,226 -> 741,218 across the nine binaries, about 110 bytes
+each.
+`k_force_slow` is a real function now where the whole of `k_force` used to be
+one, so there is a second prologue and a call site to pay for. That is the
+price of the fourteen instructions above, and it is the trade the outlining
+makes on purpose.
 
-**encodebench is 1.5% slower in wall clock** (0.953 s against 0.967, best of
-nine interleaved) with every one of its counters byte-identical, so it is doing
-exactly the same work. The randomised-layout spread measured for this tree is
-2.97% to 3.79%, wider than this, and there is no counter to attribute it to.
-Recorded rather than explained.
+The lesson is not about thunks. A runtime function that grows past the
+inliner's budget charges every caller, and no counter in the tree can see it —
+allocations, arena blocks and evacuations were all identical while 0.6% of
+deepbench went missing. kanso#1186 outlined `k_b_append_grow` for the same
+reason; this is the second instance, and the first where the growth was
+incidental rather than intended.
 
-**Welfare is 74.3323 before and after.** No digest counter feeds the index, so
-a 64.7% fall in allocations and a 34.2% fall in peak on a real program scores
-zero — the omission digestbench (kanso#1195) exists to make visible, still
-open. Deliberately not wired here: adding a term to the objective in the same
-change the term would reward is the wrong order, and the baselines it takes
-should not be chosen by whoever benefits. **OPEN.**
+**An intermediate state worth recording, because it nearly changed the
+objective.** Before the split was found, the four rises were taken at face
+value: welfare read 74.32 against a floor of 74.33, a fall with nothing on the
+other side, and the argument being drafted was that the index is blind to a
+streaming program's peak and should gain a digest term. That argument is still
+true and still worth making one day — welfare cannot see this change's 64.7%
+and 34.2% — but it was about to be made in service of a cost that did not
+exist. A model is easiest to argue with when a measurement is embarrassing,
+which is exactly when the measurement deserves another look first.
+
+Also learned on the way: welfare already has a rule for a counter joining the
+model — `baseline_of`/`entering` gives it the standing its dimension already
+has, so a new term is score-neutral on the day it lands and only improvement
+after that pays. Hand-writing a baseline into `bench/welfare_floor.json` was
+the wrong instinct and the machinery was already right.
+
+**Welfare is 74.3323 before and after**, and now for the right reason: nothing
+regressed. No digest counter feeds the index, so a 64.7% fall in allocations
+and a 34.2% fall in peak on a real program still scores zero — the omission
+digestbench (kanso#1195) exists to make visible. Deliberately not wired here:
+adding a term to the objective in the same change the term would reward is the
+wrong order, and it is a weaker argument now that nothing needs it. **OPEN.**
+
+`digestbench` joins `bench/instructions_golden.txt` in this change even so. A
+benchmark counted on one axis and not the other is a trade the index cannot
+see, and every change that buys the digest's memory spends something in work.
+The vein is a tripwire; whether welfare gets a term from it is a separate
+question and not this change's to answer.
 
 **The reduced fixture that would not reduce.** Four attempts at a
 postcard-sized program: a body binding used once, one used behind a two-arm
