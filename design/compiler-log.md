@@ -4202,3 +4202,69 @@ watched red by putting `thunk_forces` into `lower_k`. That is the general
 shape: a classification sweep can silently disarm a mutation that depends on
 something being unclassified, and nothing else in the tree was watching that
 edge.
+
+## 2026-09-01 — two ratchet rows went blind on the same day, and nobody read the nightly
+
+SEARCHED FIRST: design/compiler-log.md (the 2026-08-24 entry that fixed the
+same `compile_allocs_unwatched` row for the same class of reason, and the
+2026-08-31 entries), design/log/compiler-log-archive.md, design/*.md, and the
+mutation corpus itself — 59 scripts in scripts/ratchet/mutations.
+
+`scripts/ratchet -- prove` applies each gate's claimed defect and refuses a
+gate that stays green. It runs nightly. It has been RED since 2026-08-30, with
+two rows reported BLIND, and the two nights of failure were not read. What
+follows is what they were.
+
+**Row one: a mutation had been inserting itself into a comment.**
+`a_string_the_builder_corrupted_in_place` matched `k_stat_append_fast++;`,
+skipped one line and appended after it. kanso#1171 (2026-08-30) wrote a
+three-line comment above the copy, so the skipped line became the comment's
+opening and the injected statement landed inside `/* ... */`. It was not code.
+The compiler built clean, kq's suite ran green, and the script's own
+`grep -qF` found its text in the file and reported success.
+
+Reproduced end to end: apply the mutation to a worktree at origin/main, build,
+clone kq to /tmp/kq, run `KANSO=$K KQ_STORED=report sh spec.sh` — exit 0, "kq
+specs: all green", and kq's own counters read `append_fast=242226`, so the
+mutated path ran a quarter of a million times and corrupted nothing.
+
+It substitutes the copy now:
+`else memcpy(...)` becomes `else { memcpy(...); ...[a->len] = 0; }`. A
+substitution cannot land in a comment, because the anchor is the code being
+replaced. Watched red: the kq gate dies with `invalid utf-8, born in
+text/utf8`, which is the sentence the mutation's own comment had been
+promising and not delivering.
+
+**Row two took two merges to kill and a rewrite to fix.**
+`compile_allocs_unwatched` makes a front-end pass own the program's names
+instead of borrowing them. kanso#1188 (2026-08-30) made an identifier a `Name`
+rather than a `String`, so `out.insert(name.clone())` stopped type-checking and
+the mutation became a compile error — the exact failure its own comment had
+warned about once already, in different words.
+
+**Repairing the type is not enough, and this is the part worth keeping.** With
+`name.as_str().to_string()` the mutation builds and `compile_allocs` reads
+25,394 either way, on binaries that differ. kanso#1157 (2026-08-30) gave the
+walk an early return for any name that cannot be a getter's, and by its own
+comment eleven thousand of lib/json's twelve thousand occurrences take it. An
+owned insert behind that guard is reached almost never. A mutation can be
+applied, compile, and still be inert.
+
+So the row restores the shape the vein was built to catch rather than one line
+of it: the guard goes and the names are owned. Measured on this container,
+`kanso check lib/json` in a fixed box: **compile_allocs 25,394 -> 31,138**,
+compile_alloc_bytes 3,950,766 -> 4,062,065.
+
+**Both scripts now fail loudly rather than silently.** Each greps its anchor
+before substituting and exits 1 with a sentence if it is gone; the second also
+greps that the guard is GONE afterwards, so a mutation that applied and left
+the code inert is an error rather than a green row. That is the durable half:
+the two rots were both silent, and silence is what let a nightly failure sit
+unread for two nights.
+
+**What this does not fix.** The per-PR half of the ratchet only checks that
+every job has a row; proving them costs a build each and runs nightly. So this
+class of rot is invisible until the next nightly, and the nightly's result
+reaches nobody automatically. Both rows here were killed by merges dated
+2026-08-30 — #1157, #1171 and #1188 — which is to say a single busy day put two
+of the repo's own gates to sleep.
