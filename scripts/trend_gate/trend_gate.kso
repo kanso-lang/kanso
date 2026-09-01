@@ -50,7 +50,14 @@ type move
 # down-is-worse so a dropped kernel reads as a worsening and wants its sentence.
 lower_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
 
-lower_b = ["bytes_malloc" "thunk_allocs" "thunk_escaped" "thunk_live_exit"]
+# `ten_blocks` is the tenure allocator's storage claimed, so lower is better
+# like every other allocation counter. Its partner `ten_frees` is the same
+# storage given back and sits in `higher` beside `bytes_freed`, for the reason
+# that counter exists: with blocks held constant, a fall in frees is a leak,
+# and until 2026-09-01 no counter, no golden and no spec here could see one.
+lower_b = ["bytes_malloc" "thunk_allocs" "thunk_escaped" "ten_blocks"]
+
+lower_bb = ["thunk_live_exit"]
 
 lower_c = ["arena_peak_bytes" "held_peak_bytes" "sh_str" "sh_rec" "sh_buf"]
 
@@ -83,7 +90,7 @@ lower_i = ["deepbench" "escapebench" "pendbench" "indexbench" "text"]
 # because `digest_arena_peak_bytes` strips to a name lower_c already held.
 lower_j = ["digestbench"]
 
-lower_ab = text/concat lower_a lower_b
+lower_ab = text/concat lower_a (text/concat lower_b lower_bb)
 
 lower_cd = text/concat lower_c lower_d
 
@@ -131,7 +138,7 @@ lower_cost = text/concat lower_k (text/concat lower_l lower_mn)
 
 higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
 
-higher_b = ["buf_reuse" "thunk_frees"]
+higher_b = ["buf_reuse" "thunk_frees" "ten_frees"]
 
 # The fast halves, and two reclaim counters. `bytes_freed` is malloc-backed
 # storage given back, which is what `bytes_malloc` in `lower` is measured

@@ -383,15 +383,15 @@
 # the caller's. That is what the append fast path stops carrying: six
 # callee-saved pushes and a frame become three pushes, and encodebench falls
 # 3.06%. The five binaries that never link the grow path do not move.
-jsonbench text=83634
-encodebench text=100066
-oneshot text=100258
-basket text=92578
-widebench text=101138
-deepbench text=65890
-escapebench text=52178
-pendbench text=76962
-indexbench text=54002
+jsonbench text=83762
+encodebench text=100194
+oneshot text=100386
+basket text=92706
+widebench text=101266
+deepbench text=65986
+escapebench text=52306
+pendbench text=77074
+indexbench text=54098
 # 2026-09-01: every binary falls by about 100 bytes. `k_force` gained a third
 # memo state and lost the branch that declined one, and the arithmetic came
 # out slightly in favour.
@@ -400,3 +400,6 @@ indexbench text=54002
 # an fprintf and an exit into every runtime entry that validates a tag, so the
 # error text and the call sequence were duplicated across dozens of sites and
 # the frame those registers need was built on the path that never dies.
+# 2026-09-01 (later still): every binary rises about 110 bytes. Two tenure
+# counters and the early return that skips a sixty-four-deep summary walk on a
+# beat pop that released nothing. The instruction rows all fall.

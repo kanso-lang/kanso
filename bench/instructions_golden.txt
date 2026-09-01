@@ -457,16 +457,28 @@
 # 74.50 on the objective, because it gives back 142M instructions on
 # encodebench and 20M on jsonbench to save 384k on widebench. The model prefers
 # the split, so the split is what shipped.
-jsonbench 2781834881
-encodebench 7870153008
-oneshot 41401995
-basket 56459146
-widebench 64077244
-deepbench 717299279
-escapebench 249019060
-pendbench 930587850
-indexbench 5243096
-digestbench 143472199
+#
+# 2026-09-01 (later still): every row falls and none rises. `k_ten_release`
+# recomputed `k_ten_any` — a summary over all sixty-four beat depths — on every
+# beat pop, including the pops where this depth held no block and the summary
+# therefore could not have changed. k_beat_pop was 2,205,202 calls at 282
+# instructions each in encodebench; 216 of the 282 were that walk. An early
+# return when the depth is empty takes it to 66 a call and removes 476,323,632
+# from encodebench, which is the whole of that row's fall to the instruction.
+#
+# encodebench falls to 7,393,828,977, oneshot to 40,210,572, deepbench to
+# 705,254,951, escapebench to 248,370,445; jsonbench, basket, widebench,
+# pendbench, indexbench and digestbench fall by less than a thousandth.
+jsonbench 2781834036
+encodebench 7393828977
+oneshot 40210572
+basket 56457221
+widebench 64076836
+deepbench 705254951
+escapebench 248370445
+pendbench 930586816
+indexbench 5242688
+digestbench 143471368
 # 2026-09-01: digestbench joins, at 152,573,619 retired instructions, measured
 # by CI because this host's glibc differs from the one this file is pinned to.
 # It is here because a benchmark counted on one axis and not the other is a

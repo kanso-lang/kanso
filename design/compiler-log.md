@@ -4756,3 +4756,55 @@ The cost is that a branch worsening a counter must now write the number, not
 just the name. That is what the log's own rule already asks for — pin the
 number, never a band — so the gate is asking for the record it was always
 supposed to be reading.
+
+## 2026-09-01 (later still, third) — sixty-four depths walked on every beat pop
+
+`k_beat_pop` is 2,205,202 calls in encodebench at 282 instructions each, and
+216 of the 282 are one loop. `k_ten_release` frees the tenure blocks at a
+depth, then recomputes `k_ten_any` — a summary over all sixty-four depths of
+whether ANY holds a block — by walking all sixty-four. It did that on every
+pop, including the pops where this depth held nothing and the summary
+therefore could not have changed.
+
+An early return when the depth's list is already empty takes `k_beat_pop` to
+66 instructions a call and removes 476,323,632 from encodebench, which is that
+row's entire fall to the instruction. The argument is arithmetic: `k_ten_any`
+is a disjunction over all depths, nothing at any depth changes on the early
+path, so the summary that was correct on entry is correct on exit. And
+`k_ten_bytes[d]` cannot be non-zero with `k_ten_blocks[d]` NULL, because the
+only `+=` follows a push at that depth.
+
+encodebench falls to 7,393,828,977 (-6.05%), oneshot to 40,210,572 (-2.88%),
+deepbench to 705,254,951 (-1.68%), escapebench to 248,370,445 (-0.26%);
+jsonbench, basket, widebench, pendbench, indexbench and digestbench each fall
+by less than a thousandth. Nothing rises.
+
+**The same early-out in `k_chunkreg_migrate` was measured and dropped.** It is
+a wash — deepbench -225,082, widebench +40, basket +21 — and the change is
+smaller without it.
+
+**And nothing in the tree could see the inverse.** Break `k_ten_release` on
+purpose so it never frees and never recomputes, and: all nine allocation
+counter gates stay green, because `k_ten_alloc` mallocs without touching
+`k_stat_allocs`, `k_stat_bytes_malloc` or `k_stat_held_live`; the whole test
+suite passes but for the two `docs/kanso.wasm` staleness guards, which fail on
+the correct build too; and the instruction vein reads the leak as a further
+WIN, 7,378,392,563 against the correct fix's 7,393,828,977, because skipping
+the frees is cheaper than doing them. A change that leaked every tenure block
+would have landed green and looked like an improvement.
+
+So the fix ships with the counter that catches it. `ten_blocks` counts storage
+claimed and `ten_frees` counts it given back, in all nine cost goldens and all
+fifty-two mem fixtures, every one pinned exactly. The coverage is thin —
+widebench and one mem fixture tenure a single block each and everything else
+tenures none — and sufficient, because the broken version reads `ten_frees=0`
+against a pinned 1. Both veins move purely additively: every line that was
+there is byte-identical, which is the same statement the nine counter gates
+make about this change. `ten_blocks` joins the lower table beside
+the other allocation counters and `ten_frees` the higher table beside
+`bytes_freed`, because with blocks held constant a fall in frees is a leak.
+
+`text` rises 1,072 to 727,778 — the two counters and the early return, about
+110 bytes a binary. That is the whole cost of the change on any vein.
+
+Welfare 74.50 to 74.59, floor set.
