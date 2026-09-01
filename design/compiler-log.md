@@ -4953,8 +4953,17 @@ The arithmetic was in the growth arm. It started at `cap = 4` KValues, which is
 two pairs, and doubled from there, so a map of k keys grew at k = 1, 3, 5, 9,
 17. A JSON object with two keys therefore paid a growth for its first insert
 and a three-key object paid two, and the objects in this corpus are small
-enough that the doubling never got going. Four is enough room for one pair
-after the header's own, which is a size chosen for maps that do not exist here.
+enough that the doubling never got going. Four is room for two pairs, and it is
+the wrong four: the LIST path has never used it.
+
+`k_b_push_into_proven` sizes a fresh list's buffer with `cap = 4`, doubles
+while the length needs it, and then doubles once more unconditionally, so a
+list holding its first element gets eight KValues. `k_b_put_mut` did the first
+two steps and not the third, so a map holding its first pair got four. The two
+containers grow the same way and started a factor of two apart, and this change
+is the map taking the list's second doubling. Eight is not a constant tuned to
+this corpus; it is the number the sibling path already used, and the ladder
+below is the check rather than the choice.
 
 **The ladder, measured rather than reasoned about.**
 
