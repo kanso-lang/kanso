@@ -3943,3 +3943,262 @@ on 2026-08-31 and on the entry above, is still not landed. This change removes
 the reason it could not be: with the memo kept, lifting the prefix no longer
 takes native's `thunk_evals` to 64 where the interpreter reads 1, which is the
 differential the oracle refuses. Re-measure and land it next.
+
+## 2026-09-01 — the digest joins the objective, on both sides
+
+SEARCHED FIRST: design/compiler-log.md, design/log/compiler-log-archive.md,
+design/*.md, design/pending-gavels.md, and `scripts/welfare/welfare.kso`'s own
+counter lists, which are the record of what the model has ever weighed.
+
+The digest benchmark landed on 2026-08-31 with a CI gate, a ratchet row and an
+emitted-code row, and welfare could not see a single one of its counters. So
+the gap the benchmark was built to close was still open: a change that takes an
+8 KB digest from 79,691,776 arena bytes to 1,048,576 still scored zero, and so
+did the 52x that bought it.
+
+**What the model reads now.** `bench/cost_golden_digest.txt` joins the eight
+goldens welfare already chains through, and three counters come off it:
+
+| counter | dimension | today |
+|---|---|---:|
+| `digest_instructions` | run speed (satiation 2.0, weight 0.30) | 152,573,619 |
+| `digest_peak_bytes` | run memory (2.0, 0.30) | 54,525,952 |
+| `digest_arena_blocks` | run memory | 52 |
+
+The instructions row comes from the work vein rather than from the digest
+golden, the same place every other speed counter comes from.
+
+**Both sides, and this is the whole point of the entry.** The peak is the row
+digestbench exists for. A term that priced only the peak would rank any change
+that reclaims per block above one that does not, however long it takes — which
+is precisely the trade the 52x slowdown was, scored as free in the other
+direction. Pricing the work beside the retention turns that into a number the
+model settles instead of a preference somebody argues. Adding only the memory
+half would have been rigging the answer to a question still open.
+
+**The score did not move, and that is the entering rule working.** A counter
+new to the model enters at its dimension's standing, so run speed's eight
+counters and run memory's eight leave both terms where they were. The floor
+went from 74.33468320932070 to 74.33468268729726 — a fall of 5.2e-7, which is
+the rounding in `math/round` on the three entering baselines and nothing else.
+Ratchet 132 records why.
+
+**One pinned number moved.** `one_counter_running_away_cannot_carry_its_term`
+answered 49.52 and answers 49.16: the fixture puts one run-speed counter a
+thousand times better than its baseline and the rest at parity, so the term is
+`(7/3 + 1024/1026) / 8 * 0.30` where it used to be over seven. The number is a
+property of the weights and the counter count, not of the compiler.
+
+**The spec, watched red.** `tests/the_digest_is_priced_on_both_sides.rs` stages
+`bench/`, doctors one row of one golden tenfold, and requires welfare to go red
+naming the digest row that moved — once for the peak, once for the work. A
+third fixture runs the undoctored goldens and requires green, so neither of the
+first two can pass on a welfare that fails on everything. With `digest_work`
+and `digest_memory` taken back out of the counter lists both doctored fixtures
+go red and the control stays green; that is the failure that was watched, and
+the message on each is the assert's own sentence rather than a parse error.
+
+**What this unblocks.** The carry tier measured on 2026-08-31 trades 2.24x on
+the clock for 68x less peak at 131,072 bytes, and 1.6x for 52x at 8,192. That
+is a trade across two dimensions, which is the one thing the per-counter
+goldens cannot arbitrate and the one thing the index is for. It is now a
+question with an answer rather than a judgement call.
+
+## 2026-09-01 — the carry tier, arbitrated: DECLINED at −0.56, and the reference that decides it
+
+SEARCHED FIRST: design/compiler-log.md (the 2026-08-31 entries "the carry
+exclusion removed, measured properly, and REVERTED" and "the quadratic has a
+name"), design/log/compiler-log-archive.md, design/pending-gavels.md — whose
+charter bounced the sha256 question on 2026-08-29 with "performance questions
+with no surface area are the implementer's", so this decision is recorded here
+rather than sent anywhere.
+
+The entry above put digestbench's peak and work into the objective so this
+trade could be settled by the model. It has been.
+
+**The arms.** `origin/main` against `wip/carry3`, which removes beat.rs's
+`std/`/`lib/` prefix exclusion so a library loop carries like any other, and
+adds `k_isv_flat` — a mark-free memo on the interior-survives walk, keyed on
+the items pointer, that answers "this list holds no heap slot and no thunk"
+without rescanning. Each arm built in its own directory, every benchmark binary
+deleted before rebuilding, both swept on this container. The main arm
+reproduced all six allocation goldens byte-identically, which is what says the
+sweep measured the compiler rather than a stale binary.
+
+**What moved.**
+
+| counter | main | carry |
+|---|---:|---:|
+| digest arena_peak_bytes | 54,525,952 | **1,048,576** |
+| digest arena_blocks | 52 | **1** |
+| digest allocs | 230,214 | 653,077 |
+| digest thunk_evals | 129 | **8,256** |
+| digest beat_iters | 56 | 16,826 |
+| digest evac_allocs | 27 | 66,851 |
+| digestbench instructions | 152,573,220 | **820,087,049** (+437.5%) |
+| compile_instructions | 41,921,600 | 41,800,396 (−0.29%) |
+
+Every other benchmark is within a tenth of a per cent, and `scan`'s
+`beat_iters` moves 15 to 16. Nothing else in any vein.
+
+**The at-risk memo and the carry tier are in direct conflict, and this is the
+mechanism.** `thunk_evals` goes back to 8,256 — equal to `thunk_forces`, so
+every force re-evaluates, which is the state before yesterday's memo. The memo
+is correct and it is being correctly invalidated: the carry evacuation copies
+what is reachable from the staged value and rewinds the rest, and a memoized
+result the loop does not carry is exactly what the rewind takes. So the 52x
+memory win is bought by discarding the memos, and the recomputation is where
+the 5.4x work goes. Both changes are right on their own and each one's win is
+the other's cost.
+
+**The verdict: 74.31 → 73.75, a fall of 0.56.** Same host, same sweep, the
+repo's own baselines. Welfare names `digest_instructions` as the term that
+paid, at 0.373 points. **The carry tier is DECLINED.** wip/carry3 is not
+merged and the prefix exclusion stays.
+
+**A second measurement, which is the part worth arguing about.** Rerun both
+arms with the three digest baselines set to the main arm's own values — every
+digest ratio exactly one — and the answer reverses: main 70.14, carry
+**72.99**, a rise of 2.85. The same change is worse by 0.56 or better by 2.85
+depending on nothing but where the digest counters' reference sits.
+
+The reference is not a measurement. `entering` chose it this morning so a new
+counter would not move its dimension on landing day, which put
+`digest_peak_bytes` at a ratio of 11.2 — the model now asserts that the
+digest's memory has already improved elevenfold, and it has no history at all.
+On a satiating curve that assertion is not free: a counter placed at 11.2 is
+84.8% satisfied and a further 52x buys 0.15 of satisfaction, where the same 52x
+from parity buys 0.63. The rule spends most of a new counter's headroom on the
+day it enters, and the same placement makes the work counter's regression
+proportionally dearer. Both effects push the verdict the same way.
+
+**This is not grounds to move the reference now.** The rule was written for a
+real problem — entering at parity costs welfare on landing day, and here it
+costs 4.17 points — and a model is easiest to argue with when its answer is
+inconvenient, which is when the measurement deserves another look first. That
+was written in this log four days ago about this same benchmark and it applies
+to me again. So the decline stands on the model as it is.
+
+**The question the two numbers leave open, stated once and left open.** A
+newcomer needs two things that `entering` supplies with one number: a reference
+that reflects where the counter actually stands, and no score move on the day
+it lands. They can be separated — enter at parity and absorb the landing-day
+step in the floor, in the same PR, with the reason recorded. That is what
+`--set` exists for, except that `--set` refuses a fall by ruling, so the step
+would have to be a hand edit of bench/welfare_floor.json where a reviewer sees
+it, which is the designed override and the right shape for "the model gained a
+term". The cost is a visible four-point drop in the published number and an
+honest one in place of an invented history. Nobody should settle this while a
+particular change's verdict hangs on it; digestbench is the only counter that
+has ever entered by this rule, so there is one instance and it is this one.
+
+## 2026-09-01 — why sha256's schedule is lazy: an arm that ignores a parameter
+
+SEARCHED FIRST: design/compiler-log.md — this closes the question the
+2026-08-31 memo entry left open ("what keeps sha256's schedule lazy where four
+hand-written copies of its shape are strict") —
+design/log/compiler-log-archive.md, design/*.md, and
+tests/golden/mem/a_digest_holds_every_block_it_walked.kso, whose comment named
+the four copies.
+
+`digested` binds `w = schedule ...` and hands it to `compress s w 1 false`,
+which reads `w[at]!` sixty-four times. The binding is a thunk, and the reason
+is one arm:
+
+```
+fn compress s _ _ true
+  s
+
+fn compress s w at false
+  ...
+```
+
+The exhausted arm ignores `w`, so `w` is not demanded on every path into
+`compress`, so the argument is thunked. Demand is decided per parameter across
+all arms rather than per call site, and the call site's guard is the literal
+`false`.
+
+**A controlled pair, built to check it rather than to argue it.** Two programs
+identical but for the exit arm: one written `fn walk s _ _ true` reads
+`thunk_allocs=1`, `thunk_forces=8`, `thunk_evals=1`; the same program with the
+exit arm reading `w` reads `thunk_allocs=0`. `allocs=5` in both. The four
+hand-written copies were strict because their consumers read the parameter in
+every arm.
+
+**Costed, and no change is warranted.** callgrind on digestbench puts
+`d_thunk_eval` at 1,151,583 of 152,573,220 — 0.75%, and that is the 129 real
+evaluations of the schedule, which a strict compile would do too. `k_force`
+does not appear in the profile at all: #1197 outlined its cold half and the
+hot half is inlined, so 8,256 forces cost less than the annotator's threshold.
+The obvious refinement — decide demand per call site when the guard argument is
+a literal, which would make `w` strict here — buys a fraction of a per cent of
+one benchmark and adds a case to a pass that already runs on every declaration.
+
+The behavior is pinned where it already was:
+`tests/golden/mem/a_digest_holds_every_block_it_walked.mem` reads
+`thunk_allocs=1` and `thunk_forces=64` for a one-block message, so a demand
+analysis that started answering differently moves that golden.
+
+## 2026-09-01 — sixteen counters gain a direction, five keep none on purpose
+
+SEARCHED FIRST: design/compiler-log.md (the 2026-08-26 entry adding the two
+measured compile veins to these tables, and the 2026-09-01 entry adding
+digestbench), design/log/compiler-log-archive.md, design/*.md, and the tables
+themselves in scripts/trend_gate/trend_gate.kso, which are the record of what
+has ever been classified.
+
+Twenty-two counters across the goldens had no direction. The gate's third state
+prints them under UNCLASSIFIED and counts them toward neither side of the
+pure-regression rule, which is right for a counter whose direction is genuinely
+unknown and wrong for one nobody had got round to. Sixteen were the second
+kind.
+
+**To `lower`, twelve.** `evac_allocs` and `evac_bytes`, what a carry evacuation
+spends. `str_scans`, `str_scan_bytes`, `find2_calls`, `utf8_bytes`, bytes
+walked. `perm_live_bytes` and `perm_peak_bytes`, malloc-backed storage the
+process still holds — it only leaves through `free()`, so a peak that scales
+with iteration count is a leak by definition, which is what the counter's own
+comment in runtime.c says. `append_grow`, `push_mut_slow` and `put_mut_grow`,
+the slow halves of three pairs whose fast halves were already classified.
+`thunk_evals`, a lazy binding actually running.
+
+**To `higher`, four.** `push_mut_fast` and `put_mut_fast`, the fast halves.
+`bytes_freed`, what `bytes_malloc` is measured against. `carry_dedup`, a node
+the carry found already copied and reused rather than copying twice.
+
+**Five stay out, and the reason is written beside them.** `cohort_frees` and
+`cohort_kept` are the two outcomes of the cohort dance and both scale with how
+many cohorts ran, so what means anything is the ratio and this gate cannot say
+ratios. `view_allocs` and `view_frees` are the same shape, and runtime.c says
+so at the counter: the difference is memory the process is still holding, and
+either side alone is not. `thunk_forces` counts asking a thunk for its value
+rather than computing one — #1197 took `thunk_evals` from 8,256 to 129 on the
+digest with `thunk_forces` byte-identical, which is what a working memo looks
+like, and a change that made the same program strict would lower it while doing
+identical work.
+
+**The risk the `higher` table carries, stated rather than left to be found.** A
+change that does strictly LESS of the work lowers a presence counter, and the
+table reads that as a worsening. `append_fast` and `utf8_zerocopy` have sat
+there since the table was written without it biting, because a change that
+removes work almost always moves its slow twin the same way and the verdict
+comes out mixed. A pure regression that is really a pure simplification is the
+shape to watch for.
+
+**A ratchet row was about to start passing for the wrong reason, and this is
+the part worth remembering.** `a_worsening_paid_for_by_an_unclassified_counter`
+raised `scanbench calls` and `evac_allocs` together: one classified worsening
+beside one unclassified move, so a gate that intersects correctly refuses the
+first and lets the second count toward neither side. Classifying `evac_allocs`
+makes BOTH halves classified worsenings — which any pure-regression rule
+refuses, so the row goes on turning the gate red while testing nothing it was
+written to test. Verified by running it: before the repoint the listing had no
+UNCLASSIFIED section at all.
+
+The mutation now raises `thunk_forces`, which stays unclassified on purpose,
+and `tests/a_mutation_keeps_its_unclassified_counter.rs` reads the counter out
+of the mutation's own `sed` line and requires the tables not to name it. It was
+watched red by putting `thunk_forces` into `lower_k`. That is the general
+shape: a classification sweep can silently disarm a mutation that depends on
+something being unclassified, and nothing else in the tree was watching that
+edge.

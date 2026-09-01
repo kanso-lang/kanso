@@ -116,7 +116,14 @@ held_shapes = ["wide_instructions" "deep_instructions" "pending_instructions"]
 
 held_work = text/concat held_small held_shapes
 
-run_speed_counters = text/concat decode_work held_work
+# The digest sits on both sides of the model on purpose. Its peak is the row
+# it was built for, and a term that priced only the peak would rank a change
+# that reclaims per block above one that does not however long it takes, which
+# is how a fifty-two-fold slowdown scored zero on 2026-08-31. Pricing the work
+# beside the retention makes the trade a number instead of a preference.
+digest_work = ["digest_instructions"]
+
+run_speed_counters = text/concat (text/concat decode_work held_work) digest_work
 
 decode_memory = ["decode_peak_bytes" "decode_arena_blocks"]
 
@@ -131,11 +138,15 @@ held_memory = ["oneshot_peak_bytes" "basket_peak_bytes"]
 # a user's document gets longer.
 scan_memory = ["scan_arena_blocks" "scan_peak_bytes"]
 
+digest_memory = ["digest_peak_bytes" "digest_arena_blocks"]
+
 codec_memory = text/concat decode_memory encode_memory
 
 held_and_scan = text/concat held_memory scan_memory
 
-run_memory_counters = text/concat codec_memory held_and_scan
+run_memory_rows = text/concat codec_memory held_and_scan
+
+run_memory_counters = text/concat run_memory_rows digest_memory
 
 # What compiling COSTS, not what it counts. Rounds, visits and emitted lines
 # are the compiler's own bookkeeping — how many times a fixpoint went round,
@@ -241,7 +252,7 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"]! + m["held_peak_bytes"]! + m["perm_peak_bytes"]!
 
-fn measured decode encode oneshot basket comp held work scan ir traffic
+fn measured decode encode oneshot basket comp held work scan ir traffic dig
   d = [["decode_allocs" decode["allocs"]!]]
   db = [["decode_arena_blocks" decode["arena_blocks"]!]]
   dp = [["decode_peak_bytes" (peak_of decode)]]
@@ -261,7 +272,8 @@ fn measured decode encode oneshot basket comp held work scan ir traffic
   ci = [["compile_instructions" ir["compile_instructions"]!]]
   ca = [["compile_allocs" traffic["compile_allocs"]!]]
   rows = text/concat (text/concat l cm) (text/concat sb sp)
-  built = text/concat rows (text/concat ci ca)
+  dg = digest_rows dig
+  built = text/concat rows (text/concat ci (text/concat ca dg))
   gathered d db dp e eb ep o b bp c v (text/concat built ins)
 
 fn worked work
@@ -272,7 +284,9 @@ fn worked work
   wi = [["wide_instructions" work["widebench"]!]]
   pi = [["deep_instructions" work["deepbench"]!]]
   ni = [["pending_instructions" work["pendbench"]!]]
-  rest = text/concat oi (text/concat bi (text/concat wi (text/concat pi ni)))
+  gi = [["digest_instructions" work["digestbench"]!]]
+  more = text/concat (text/concat wi pi) (text/concat ni gi)
+  rest = text/concat oi (text/concat bi more)
   text/concat (text/concat di ei) rest
 
 fn gathered d db dp e eb ep o b bp c v l
@@ -407,7 +421,7 @@ fn filled s width false
 fn asked path
   os/read_file path
 
-fn gauge d e o b c held w s ir ca
+fn gauge d e o b c held w s ir ca g
   comp = compile_totals c
   cm = counters held
   work = work_of w
@@ -415,9 +429,17 @@ fn gauge d e o b c held w s ir ca
   ec = counters e
   scan = counters s
   built = counters ir
-  traffic = counters ca
-  now = measured dc ec (counters o) (counters b) comp cm work scan built traffic
+  tr = counters ca
+  dig = counters g
+  now = measured dc ec (counters o) (counters b) comp cm work scan built tr dig
   os/read_file floor_path . (held -> against now (json/decode held))
+
+# The digest bench's peak is the row it exists for; its block count comes
+# along because a peak alone cannot say whether the arena grew once or often.
+fn digest_rows dig
+  blocks = [["digest_arena_blocks" dig["arena_blocks"]!]]
+  peak = [["digest_peak_bytes" (peak_of dig)]]
+  text/concat blocks peak
 
 # A term new to the model enters where its dimension already stands, so its
 # introduction is never a score move and only improvement from here pays.
@@ -682,7 +704,10 @@ fn with_compile d e o b c
 
 fn with_ir d e o b c held w s ir
   asked "bench/compile_allocs_golden.txt"
-    . (ca -> gauge d e o b c held w s ir ca)
+    . (ca -> with_traffic d e o b c held w s ir ca)
+
+fn with_traffic d e o b c held w s ir ca
+  asked "bench/cost_golden_digest.txt" . (g -> gauge d e o b c held w s ir ca g)
 
 fn with_held d e o b c held
   asked "bench/instructions_golden.txt" . (w -> with_work d e o b c held w)

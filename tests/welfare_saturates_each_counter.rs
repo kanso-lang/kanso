@@ -124,17 +124,17 @@ fn every_counter_at_parity_scores_the_weights_alone() {
     assert_eq!(scored("parity", &[]), "welfare 46.67");
 }
 
-/// One of the seven run-speed counters a thousand times better than its
-/// baseline, the other six at parity. Saturating each counter first bounds
+/// One of the eight run-speed counters a thousand times better than its
+/// baseline, the other seven at parity. Saturating each counter first bounds
 /// what the runaway can contribute at one, so the term is
-/// (6/3 + 1024/1026) / 7 * 0.30 and the score is 49.52.
+/// (7/3 + 1024/1026) / 8 * 0.30 and the score is 49.16.
 ///
-/// Saturating the MEAN instead answers 66.26 on this exact fixture, which
-/// was measured rather than derived: the mean ratio is (6 + 1024)/7 = 147.14
-/// and its satisfaction is 0.9866, so one benchmark takes the run-speed term
-/// almost to its ceiling while six others sit at parity. That is the shape
-/// the ruling closed, and it is what this number is here to catch.
+/// Saturating the MEAN instead answers well above this on the same fixture:
+/// the mean ratio is (7 + 1024)/8 = 128.88 and its satisfaction is 0.9847, so
+/// one benchmark takes the run-speed term almost to its ceiling while seven
+/// others sit at parity. That is the shape the ruling closed, and it is what
+/// this number is here to catch.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 49.52");
+    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 49.16");
 }
