@@ -511,9 +511,20 @@ itself = row
   (breaking "unrowed_ci_job")
   release
 
+# The one vein whose headline row is a high water mark. Every other
+# benchmark's peak is bounded by the size of its own text, so a change that
+# moves what a program HOLDS and not what it allocates is invisible to them.
+digest_counters = row
+  "an arena block size raised without the peak it moves being measured"
+  true
+  (gating "digest_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_arena_block_that_grew_unmeasured")
+  benchmarks
+
 rows_a = [formatting linting python_free goldens mem_shapes release_profile]
 
-rows_b1a = [decode_counters escape_counters pend_counters]
+rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
 rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
