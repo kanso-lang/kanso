@@ -4574,6 +4574,17 @@ never printing, and never stopping. The spec also caught a live bug on its first
 `grep -v '^#'` answers 1 on an all-comments file and `set -e` took the script
 out before it could say which answer it meant.
 
+**A second host was hiding in the spec.** The macos/arm job went red on the
+first run that reached it: five of the seven fixtures called the x86 loader by
+path and expected it to be there. Skipping them on aarch64 would have left that
+host uncovered by the very check that says which host a number belongs to, so
+each fixture states both arms instead. Where there is no loader the gate must
+say the cpu is unnamed and answer 2 — never 0, which would let a moved row pass
+as verified on silicon nobody read, and never 1, which would blame silicon
+nobody read either. `dispatch.sh` takes its loader path from an environment
+variable defaulting to the real one, which is what makes that arm reachable on
+x86: a fixture that can only run on aarch64 is a fixture nobody watches fail.
+
 **OPEN, and it is the real one.** These rows claim to be exact and the pool is
 not. Three CPUs seen in one day means an instruction golden gates properly only
 on the fraction of runs that land on its recorded silicon, and nothing here
