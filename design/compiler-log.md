@@ -4939,3 +4939,51 @@ allocations and peak are identical.
 `k_stats_on` first. Gating it would be a regression: it compiles to one `add`
 to memory, and the gate is a compare and a branch. The rule that every counter
 is gated is a rule about counters expensive enough to gate.
+
+## 2026-09-01 (last) — the growth path ran more often than the fast one
+
+`k_b_put_mut` was the largest runtime entry left in the decode: 139,045,650
+instructions over 1,254,150 calls, 110.9 each, 5.06% of jsonbench. The counters
+say what the profile only implies. put_mut_grow read 669,750 against
+put_mut_fast's 584,400 — more than half of every map insert reallocated the
+pairs buffer, memcpy'd it and donated the old one. Encode was the same shape at
+4,465 against 3,896.
+
+The arithmetic was in the growth arm. It started at `cap = 4` KValues, which is
+two pairs, and doubled from there, so a map of k keys grew at k = 1, 3, 5, 9,
+17. A JSON object with two keys therefore paid a growth for its first insert
+and a three-key object paid two, and the objects in this corpus are small
+enough that the doubling never got going. Four is enough room for one pair
+after the header's own, which is a size chosen for maps that do not exist here.
+
+**The ladder, measured rather than reasoned about.**
+
+```
+cap   jsonbench       vs 4       put_mut_grow  arena_blocks  peak_bytes
+ 4    2,747,404,386      —          669,750         2          2,097,152
+ 8    2,718,705,486   -1.044%       419,850         2          2,097,152
+16    2,708,688,349   -1.409%       334,350         3          3,145,728
+32    2,710,734,799   -1.335%       334,350         3          3,145,728
+```
+
+Sixteen is the instruction minimum and the objective refuses it. Welfare reads
+74.14 there against a floor of 74.6054: the third arena block and the extra
+megabyte of peak cost 0.47 points, where the 0.37% of instructions sixteen buys
+over eight are worth a fraction of one. Eight reads 74.6146, a rise of 0.0092,
+and thirty-two is slower than sixteen for the same growth count because the
+memcpys it does are bigger.
+
+This is the trade the index was built to settle, and it settled it against the
+number a per-counter reading would have picked. The instruction vein alone says
+sixteen; the sum says eight.
+
+**What eight costs.** jsonbench's alloc_bytes goes 262,667,408 to 268,048,208,
+two per cent more bytes requested, and its allocs FALL 5,334,608 to 5,334,308.
+The extra bytes are transient — peak does not move on any benchmark, and
+neither does any arena block count. On the small fixtures the bytes fall too:
+`map_put.mem` reads 9,136 where it read 9,216, because one fewer allocation
+outweighs one bigger buffer.
+
+Four rows fall and six do not move: jsonbench -1.044%, oneshot -0.481%, basket
+-0.040%, encodebench -0.003%. `.text` is byte-identical for all nine binaries
+again, which is what a constant change should look like.

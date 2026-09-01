@@ -5713,7 +5713,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     {
         k_stat_put_mut_grow++;
         long long need = 2 * (m->len + 1);
-        long long cap = 4;
+        long long cap = 8;
         while (cap < need) cap <<= 1;
         /* An accumulator's pairs go outside the arena for the same reason a
            list's items do: the loop's rewind reclaims the iteration's garbage
