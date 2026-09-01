@@ -404,6 +404,26 @@ static long long k_stat_evac_bytes = 0;
 static const char* k_arena_at_carry = NULL;
 static const void* k_blocks_at_carry = NULL;
 static long long k_stat_evac_allocs = 0;
+/* What DECIDING costs, where evac_allocs and evac_bytes count what copying
+   costs. k_slots_survive reads a node's whole immediate interior on every ask
+   and nothing in the tree bounds how often it is asked, so a loop carrying a
+   list that grows with its input asks a question that grows with it. On the
+   8,192-byte digest, with the carry tier admitted on the branch that was
+   declined for other reasons, that was 33,024 asks of 8,256 slots —
+   272,646,144 examinations finding zero heap slots — against 33,827
+   allocations that actually evacuated. Every counter beside this one read that
+   workload as nearly free.
+
+   Slots examined rather than calls made, because the calls were linear and the
+   slots were not; and slots rather than bytes, because this counts an
+   algorithm-level step that no platform can widen.
+
+   It costs about two retired instructions per slot examined, which is the
+   branch itself: basket rises 32,004 on 16,002 slots and pendbench 236,166 on
+   118,087, both exactly twice. Accumulating once at the exit instead was
+   measured and is not cheaper — same two per slot on both — so the count
+   stays where it is read. */
+static long long k_stat_survive_slots = 0;
 /* The two in-place writers are the decode kernels, and neither had a presence
    counter: a doubling of either is invisible to `allocs`, because the fast
    path allocates nothing. Counted by PATH, so the diff also says when a write
@@ -433,8 +453,8 @@ static void k_stats_dump(void) {
     fprintf(stderr, "cohort_frees=%lld\ncohort_kept=%lld\n", k_stat_cohort_frees, k_stat_cohort_kept);
     fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
-    fprintf(stderr, "evac_allocs=%lld\nevac_bytes=%lld\n",
-            k_stat_evac_allocs, k_stat_evac_bytes);
+    fprintf(stderr, "evac_allocs=%lld\nevac_bytes=%lld\nsurvive_slots=%lld\n",
+            k_stat_evac_allocs, k_stat_evac_bytes, k_stat_survive_slots);
     fprintf(stderr,
         "put_mut_fast=%lld\nput_mut_grow=%lld\npush_mut_fast=%lld\npush_mut_slow=%lld\n",
         k_stat_put_mut_fast, k_stat_put_mut_grow,
@@ -1099,6 +1119,7 @@ static size_t k_copy_size(KValue v, KMark* m);
    about, which keeps the walk pruning at everything that has not left. */
 static int k_slots_survive(const KValue* slots, long long n, KMark* m) {
     for (long long i = 0; i < n; i++) {
+        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_survive_slots++;
         /* the cell survives, but what it captured may not — only the copy
            walk can answer that, so a thunk slot is never shareable as-is */
         if (slots[i].tag == K_THUNK) return 0;

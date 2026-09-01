@@ -4279,3 +4279,62 @@ touched src/lib.rs, so both would have been caught at merge time for one to
 three extra builds on the pull requests that could break them, and none on the
 rest. Both rows here were killed by merges dated 2026-08-30, which is to say a
 single busy day put two of the repo's own gates to sleep.
+
+## 2026-09-01 — the survivorship walk gained a counter, and minting it found a hole in the trend gate
+
+**DONE.** `k_slots_survive` reads a node's whole immediate interior on every
+ask, and nothing in the tree bounded how often it is asked. `evac_allocs` and
+`evac_bytes` count what a carry evacuation COPIES; nothing counted what
+deciding costs. On the branch that lifted the carry-tier prefix and was
+declined for other reasons (kanso#1198), the 8,192-byte digest asked 33,024
+times over 8,256 slots — **272,646,144 examinations finding zero heap slots**,
+against 33,827 allocations that actually evacuated. Every counter beside that
+one read the workload as nearly free.
+
+`survive_slots` counts slots examined rather than calls made, because the calls
+were linear and the slots were not; and slots rather than bytes, because it is
+an algorithm-level step no platform can widen. Readings on main, where the
+carry tier is not admitted: encodebench 129,873, pendbench 118,087, basket
+16,002, widebench 16,000, and zero on the other five cost goldens — including
+digestbench, which is the point: the pathology lives behind a prefix decision,
+and the counter is what will show it the day that decision moves.
+
+It costs about two retired instructions per slot, which is the branch itself:
+basket rises 32,004 on 16,002 slots and pendbench 236,166 on 118,087, both
+exactly twice. Accumulating once at the exit was written and measured and is
+**not** cheaper — the same two per slot on both — so the count stays where it
+is read. As a fraction: basket +0.057%, pendbench +0.025%, every other
+benchmark at or below 0.0002%. Welfare is 74.31 either way, the counter not
+being one of its terms.
+
+**The hole it found.** The trend gate read the first reading as eight
+worsenings and refused the branch as a pure regression. `or_zero` cannot tell a
+counter that read nought from a counter the baseline does not carry at all, and
+every golden in a vein gains the new row on the same commit — so a change whose
+whole content is that the runtime now measures one more thing printed as a
+tree-wide regression with nothing on the other side.
+
+The gate already says this sentence one level up, for a benchmark that JOINS a
+golden (`new_samples`, added when a tenth benchmark read as four simultaneous
+worsenings). This is the transposed case: a row joining every sample rather
+than a sample joining every row. `missing?` distinguishes absence from nought,
+a minted counter is reported under MINTED and counts toward neither side of the
+pure-regression rule, and the exemption lasts exactly one commit — the dumps
+carry every counter on every run, zeros included, so a name absent from the
+baseline was absent from the runtime. The reverse, present then gone, is a
+deleted kernel and the hard golden diff already refuses that byte for byte.
+
+`tests/a_minted_counter_is_not_a_regression.rs` stands up a scratch repository
+whose committed goldens lack the row and whose working tree has it, runs the
+gate against that commit, and requires a pass. Its second fixture raises a
+counter the baseline DOES carry and requires the refusal, which is what stops
+the rule widening into an escape hatch. Watched red both ways: with the mint
+rule removed the first prints the eight worsenings; with the exemption widened
+to every counter, both go red.
+
+`survive_slots` is classified `lower` in the direction tables, so the next
+change to move it has a direction to be judged against.
+
+**OPEN.** The digest reads zero here because the carry tier is declined. Nobody
+should read that as the walk being cheap — it is the counter being pointed at a
+workload that currently does not enter it.
