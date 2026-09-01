@@ -4262,9 +4262,20 @@ the code inert is an error rather than a green row. That is the durable half:
 the two rots were both silent, and silence is what let a nightly failure sit
 unread for two nights.
 
-**What this does not fix.** The per-PR half of the ratchet only checks that
-every job has a row; proving them costs a build each and runs nightly. So this
-class of rot is invisible until the next nightly, and the nightly's result
-reaches nobody automatically. Both rows here were killed by merges dated
-2026-08-30 — #1157, #1171 and #1188 — which is to say a single busy day put two
-of the repo's own gates to sleep.
+**Why the per-PR half did not catch either, which is sharper than it looks.**
+That half does more than count rows: since the #1015 incident it also applies
+every mutation to a worktree of HEAD and fails if one no longer matches the
+source it patches — added, in its own comment's words, because the nightly
+"said so the next morning — correctly, precisely, and to nobody". Both rots
+slipped past it because both mutations still APPLIED. #1171's sed matched, and
+put its statement in a comment. #1188's sed matched, and the build then failed.
+Applying is not proving, and only proving costs a build.
+
+So the gap is narrower and more specific than "the cheap half is cheap": what
+is missing is a middle. A mutation names the source files its seds touch; a
+pull request names the files it changes; the intersection is usually empty and
+occasionally one to three rows. #1171 touched src/runtime.c and #1157 and #1188
+touched src/lib.rs, so both would have been caught at merge time for one to
+three extra builds on the pull requests that could break them, and none on the
+rest. Both rows here were killed by merges dated 2026-08-30, which is to say a
+single busy day put two of the repo's own gates to sleep.
