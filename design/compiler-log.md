@@ -4003,3 +4003,91 @@ the clock for 68x less peak at 131,072 bytes, and 1.6x for 52x at 8,192. That
 is a trade across two dimensions, which is the one thing the per-counter
 goldens cannot arbitrate and the one thing the index is for. It is now a
 question with an answer rather than a judgement call.
+
+## 2026-09-01 — the carry tier, arbitrated: DECLINED at −0.56, and the reference that decides it
+
+SEARCHED FIRST: design/compiler-log.md (the 2026-08-31 entries "the carry
+exclusion removed, measured properly, and REVERTED" and "the quadratic has a
+name"), design/log/compiler-log-archive.md, design/pending-gavels.md — whose
+charter bounced the sha256 question on 2026-08-29 with "performance questions
+with no surface area are the implementer's", so this decision is recorded here
+rather than sent anywhere.
+
+The entry above put digestbench's peak and work into the objective so this
+trade could be settled by the model. It has been.
+
+**The arms.** `origin/main` against `wip/carry3`, which removes beat.rs's
+`std/`/`lib/` prefix exclusion so a library loop carries like any other, and
+adds `k_isv_flat` — a mark-free memo on the interior-survives walk, keyed on
+the items pointer, that answers "this list holds no heap slot and no thunk"
+without rescanning. Each arm built in its own directory, every benchmark binary
+deleted before rebuilding, both swept on this container. The main arm
+reproduced all six allocation goldens byte-identically, which is what says the
+sweep measured the compiler rather than a stale binary.
+
+**What moved.**
+
+| counter | main | carry |
+|---|---:|---:|
+| digest arena_peak_bytes | 54,525,952 | **1,048,576** |
+| digest arena_blocks | 52 | **1** |
+| digest allocs | 230,214 | 653,077 |
+| digest thunk_evals | 129 | **8,256** |
+| digest beat_iters | 56 | 16,826 |
+| digest evac_allocs | 27 | 66,851 |
+| digestbench instructions | 152,573,220 | **820,087,049** (+437.5%) |
+| compile_instructions | 41,921,600 | 41,800,396 (−0.29%) |
+
+Every other benchmark is within a tenth of a per cent, and `scan`'s
+`beat_iters` moves 15 to 16. Nothing else in any vein.
+
+**The at-risk memo and the carry tier are in direct conflict, and this is the
+mechanism.** `thunk_evals` goes back to 8,256 — equal to `thunk_forces`, so
+every force re-evaluates, which is the state before yesterday's memo. The memo
+is correct and it is being correctly invalidated: the carry evacuation copies
+what is reachable from the staged value and rewinds the rest, and a memoized
+result the loop does not carry is exactly what the rewind takes. So the 52x
+memory win is bought by discarding the memos, and the recomputation is where
+the 5.4x work goes. Both changes are right on their own and each one's win is
+the other's cost.
+
+**The verdict: 74.31 → 73.75, a fall of 0.56.** Same host, same sweep, the
+repo's own baselines. Welfare names `digest_instructions` as the term that
+paid, at 0.373 points. **The carry tier is DECLINED.** wip/carry3 is not
+merged and the prefix exclusion stays.
+
+**A second measurement, which is the part worth arguing about.** Rerun both
+arms with the three digest baselines set to the main arm's own values — every
+digest ratio exactly one — and the answer reverses: main 70.14, carry
+**72.99**, a rise of 2.85. The same change is worse by 0.56 or better by 2.85
+depending on nothing but where the digest counters' reference sits.
+
+The reference is not a measurement. `entering` chose it this morning so a new
+counter would not move its dimension on landing day, which put
+`digest_peak_bytes` at a ratio of 11.2 — the model now asserts that the
+digest's memory has already improved elevenfold, and it has no history at all.
+On a satiating curve that assertion is not free: a counter placed at 11.2 is
+84.8% satisfied and a further 52x buys 0.15 of satisfaction, where the same 52x
+from parity buys 0.63. The rule spends most of a new counter's headroom on the
+day it enters, and the same placement makes the work counter's regression
+proportionally dearer. Both effects push the verdict the same way.
+
+**This is not grounds to move the reference now.** The rule was written for a
+real problem — entering at parity costs welfare on landing day, and here it
+costs 4.17 points — and a model is easiest to argue with when its answer is
+inconvenient, which is when the measurement deserves another look first. That
+was written in this log four days ago about this same benchmark and it applies
+to me again. So the decline stands on the model as it is.
+
+**The question the two numbers leave open, stated once and left open.** A
+newcomer needs two things that `entering` supplies with one number: a reference
+that reflects where the counter actually stands, and no score move on the day
+it lands. They can be separated — enter at parity and absorb the landing-day
+step in the floor, in the same PR, with the reason recorded. That is what
+`--set` exists for, except that `--set` refuses a fall by ruling, so the step
+would have to be a hand edit of bench/welfare_floor.json where a reviewer sees
+it, which is the designed override and the right shape for "the model gained a
+term". The cost is a visible four-point drop in the published number and an
+honest one in place of an invented history. Nobody should settle this while a
+particular change's verdict hangs on it; digestbench is the only counter that
+has ever entered by this rule, so there is one instance and it is this one.
