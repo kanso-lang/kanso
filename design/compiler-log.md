@@ -4995,7 +4995,9 @@ outweighs one bigger buffer.
 
 Four rows fall and six do not move: jsonbench -1.044%, oneshot -0.481%, basket
 -0.040%, encodebench -0.003%. `.text` is byte-identical for all nine binaries
-again, which is what a constant change should look like.
+again, which is what a constant change should look like. (Three more rows move
+once the tenure fix below joins the branch; the combined figures are at the end
+of that entry.)
 
 **The counters the shelf keeps.** A growth donates the outgrown buffer to the
 shelf and a later allocation takes it back, so halving the growths halves both
@@ -5062,6 +5064,30 @@ than freed at the pop. No allocation counter, no arena block, no peak, and
 widebench's `ten_frees` still reads 1 because its beat pops with a non-heap
 result. Every binary's `.text` rises 144 bytes, deepbench 160, and the machine
 code vein `text` lands on 729,106 across the nine.
+
+**The rows, measured by CI on the recorded Genoa.** Seven fall and three hold:
+
+```
+jsonbench     2,747,404,799 -> 2,718,705,899   -1.045%
+encodebench   7,393,600,245 -> 7,393,366,858   -0.003%
+oneshot          39,981,441 ->    39,789,223   -0.481%
+basket           56,449,207 ->    56,426,594   -0.040%
+deepbench       705,258,631 ->   705,257,898   -733
+pendbench       930,587,202 ->   930,587,200   -2
+indexbench        5,243,101 ->     5,242,731   -370
+```
+
+widebench, escapebench and digestbench are byte-identical. The first four are
+mostly the capacity change; the last three are this fix alone — a branch added
+to the beat pop and a free taken off it, which is what a change that removes
+work from a hot exit looks like when the exit runs a few thousand times.
+`compile_instructions` falls 1,320 for the reason the vein has recorded four
+times now: main.rs holds runtime.c as an `include_str!` and hashes it for the
+build cache key, so the C source's length moves the front end's arithmetic
+without moving its work. `compile_allocs` and `compile_peak_bytes` are
+identical.
+
+Welfare 74.6146 to 74.6196, and the floor is set.
 
 **What is not here.** A fixture that shows the bug without instrumentation. A
 forty-line nested-beat program does trip a detector — a record reachable from
