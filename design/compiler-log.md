@@ -3856,14 +3856,33 @@ deepbench went missing. kanso#1186 outlined `k_b_append_grow` for the same
 reason; this is the second instance, and the first where the growth was
 incidental rather than intended.
 
-**The work vein after the split, measured by CI.** `work_indexbench` 5,243,094
--> 5,243,104, ten instructions, and `work_deepbench`, `work_oneshot`,
-`work_basket`, `work_pendbench`, `work_widebench`, `work_encodebench`,
-`work_jsonbench` and `work_escapebench` are where the same measurement puts
-them. `work_digestbench` joins the vein at 152,573,619. `compile_instructions`
-41,496,870 -> 41,496,028, a fall of 842 and free.
+**The work vein after the split, measured by CI.** Nothing regressed and one
+row fell properly:
 
-**A fourth memo state, built on the misattribution and removed.** Before
+| counter | before | after | |
+|---|---:|---:|---:|
+| `work_pendbench` | 946,378,074 | 937,566,473 | **-0.93%** |
+| `work_encodebench` | 8,396,569,110 | 8,396,587,878 | +18,768 |
+| `work_indexbench` | 5,243,094 | 5,243,104 | +10 |
+| `work_widebench` | 63,997,213 | 63,997,231 | +18 |
+| `work_jsonbench` | 2,838,415,853 | 2,838,415,815 | -38 |
+| `work_basket` | 56,458,062 | 56,458,024 | -38 |
+| `work_deepbench` | 726,486,934 | 726,486,920 | -14 |
+| `work_escapebench` | 253,819,096 | 253,819,082 | -14 |
+| `work_oneshot` | 43,094,978 | 43,094,978 | 0 |
+| `work_digestbench` | — | 152,573,619 | joins |
+
+`compile_instructions` 41,496,870 -> 41,496,028, a fall of 842 and free.
+
+The deepbench row is fourteen below main, which is exactly what this container
+measured before the push — the local method and CI agree to the instruction on
+the one row both could see. pendbench's 0.93% is the memo doing its job on a
+program that forces cells inside a beat and used to re-evaluate every one.
+
+Welfare rises and is banked in the same change, per the rule that a gain
+nobody ratchets is a gain the next change is free to spend.
+
+**A fourth memo state, built on the misattribution and removed.****A fourth memo state, built on the misattribution and removed.** Before
 callgrind was asked, the four rises were blamed on the at-risk check running
 again and again on cells whose answer a rewind keeps taking, and a K_MEMO_SPENT
 state was added so such a cell stops asking. It was measured after the split
