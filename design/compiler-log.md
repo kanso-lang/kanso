@@ -4362,3 +4362,59 @@ change to move it has a direction to be judged against.
 **OPEN.** The digest reads zero here because the carry tier is declined. Nobody
 should read that as the walk being cheap — it is the counter being pointed at a
 workload that currently does not enter it.
+
+## 2026-09-01 — a branch proves the ratchet rows its own diff could have made blind
+
+**DONE.** kanso#1199 repaired two rows that went blind on 2026-08-30 and asked
+why the per-PR half had not caught either. The answer is sharper than "the
+cheap half is cheap": that half applies every mutation to a worktree of HEAD
+and fails if one no longer matches the source it patches, and **both mutations
+still applied**. #1171's sed matched and put its statement in a comment;
+#1188's sed matched and the build then failed. Applying is not proving, and
+only proving costs a build.
+
+So there is a middle, and it is cheap because the intersection is usually
+empty. A mutation names the source files its seds patch; a branch names the
+files it changes:
+
+    kanso run scripts/ratchet -- touched origin/main
+
+keeps the rows whose mutation script names a file the branch changed and proves
+that handful. Naming is the test because a mutation patches what it writes
+down. `touched origin/main list` names them and stops, for somebody deciding
+whether to spend the runner.
+
+**What it costs.** Measured on this container against the survivorship-counter
+branch, which touches src/runtime.c — the worst realistic case, because that
+file is patched by eight mutations: **thirteen rows, six minutes eight
+seconds, every one red.** One of the thirteen is the kq row #1199 had just
+repaired, so the mechanism selects exactly the row the incident was about. A
+branch touching src/lib.rs selects the compile-allocs row that #1157 and #1188
+made blind between them. A prose-only branch selects nothing and the step is
+a second.
+
+**What it does not cover, stated rather than left to be found.** A row can go
+blind from a distance. The guard #1157 added is in the file its mutation
+patches, which is why this catches it, but a change to what a GATE reads could
+hollow a row while touching no line any sed matches. `cover` still runs on
+every change and the nightly still proves the whole table; this is a third
+thing between them, not a replacement for either.
+
+`tests/a_branch_proves_the_rows_it_could_have_broken.rs` asserts the selection
+rather than the proving, because the proving is a build per row and the
+selection is the half that can go quietly wrong — a mutation whose paths stop
+matching selects nothing, exits zero, and reads as a branch that broke no rows.
+Three fixtures: a src/runtime.c branch selects the row #1171 killed and not the
+python-free row; a src/lib.rs branch selects the row #1157 and #1188 killed; a
+README-only branch selects nothing. Watched red both ways — with the naming
+test never matching, the two positive fixtures fail; with it always matching,
+the negative ones do.
+
+**The first CI run of the step was red, for a reason the spec could not see.**
+`git diff origin/main...HEAD` needs a merge base and `actions/checkout@v4`
+takes a shallow clone, so the diff failed outright and the ratchet job went red
+with nothing to do with a mutation. Fixed with `fetch-depth: 0` on that job,
+and the refusal now carries git's own stderr — "would not run" sent a reader to
+the ratchet where the answer was in the workflow. The lesson generalises past
+this row: a spec that enters where a user enters still cannot see the shape of
+the box CI enters from.
