@@ -85,12 +85,8 @@ fn a_digest_peak_that_grew_costs_welfare() {
 /// block above one that does not however long it takes.
 #[test]
 fn a_digest_that_got_slower_costs_welfare_too() {
-    let (ok, said) = scored(
-        "work",
-        "bench/instructions_golden.txt",
-        "digestbench ",
-        "digestbench 1525736190",
-    );
+    let (ok, said) =
+        scored("work", "bench/instructions_golden.txt", "digestbench ", "digestbench 1525736190");
     assert!(!ok, "a tenfold digest instruction count scored nothing:\n{said}");
     assert!(said.contains("digest_instructions"), "the fall names no digest row:\n{said}");
 }
