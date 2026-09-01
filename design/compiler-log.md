@@ -4827,3 +4827,44 @@ The run that produced these rows named a cpu nobody had seen: family 0x6 model
 the entry above counted. The pool holds at least five.
 
 Welfare 74.50 to 74.59, floor set.
+
+## 2026-09-01 (last) — the decode costs 98.3 instructions an input byte
+
+jsonbench decodes a 188,698-byte document 150 times for 2,781,834,449
+instructions, which is 18,545,563 a decode and 98.3 an input byte. Nothing in
+the tree stated that figure; the page states it now. It is the number to quote
+when somebody asks what a kanso decode costs, because it is independent of how
+big the document is and of how many times the benchmark runs it.
+
+**Where it sits, re-measured after the two runtime changes above.** Every
+function attributed to where it came from: 1,729,183,050 instructions in
+emitted kanso, 1,001,841,947 in `runtime.c`, 50,803,205 in libc — 62.2%, 36.0%
+and 1.8%. The same measurement on 2026-08-31 read 1,728,709,950 emitted against
+1,078,786,257 in the runtime. So the emitted half moved by 473,100 and the
+runtime half fell by 76,944,310, which is what two days of runtime work looks
+like from outside: `k_b_append_mut` went from 7.05% of the decode to 3.75%, and
+the largest runtime entries are now `k_b_put_mut` at 5.00%, `k_utf8_bad` at
+4.22% and `k_b_append_mut` at 3.75%.
+
+`value_for` is still the largest single symbol at 23.30%, and still a merged
+one — clang inlined `parse_string`, `parse_array`, `parse_object`,
+`parse_number` and `skip_ws` into it and none of the five appears under its own
+name. The 2026-08-31 entry said the runtime had become the smaller half of a
+decode; it is smaller again, and what is left of the larger half is the
+backend's output rather than anything the runtime can be asked to do better.
+
+**Two things measured in that profile, one worth taking and one not.**
+`k_utf8_bad` costs 117,522,450 instructions over 1,571,250 calls, and
+10,975,500 bytes pass through it, so the mean run is SEVEN bytes — the comment
+in the function claiming forty-one is wrong, and it is wrong in the direction
+that matters. At seven bytes the eight-byte loop usually never runs: its head
+executes 159,450 times against 1,571,250 calls, and the byte-at-a-time walk
+underneath answers for nearly every token. That walk is 30,347,250
+instructions, 25.8% of the function and 1.09% of the whole decode.
+
+The second is declined by the same profile. `k_stat_utf8_bytes += len` is
+ungated where every other counter tests `k_stats_on` first, and gating it
+would be a regression: it compiles to one `add` to memory, executed 1,571,250
+times, where the gate is a compare and a branch. Gating costs 1,571,250
+instructions and saves none. The rule that every counter is gated is a rule
+about counters expensive enough to gate.
