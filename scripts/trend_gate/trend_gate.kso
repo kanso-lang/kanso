@@ -43,6 +43,7 @@ type move
   ruled
   say
   worse
+  after
 
 # Presence counters (kernel pins) are news in either direction, but the hard
 # golden diff already forces those to be deliberate; here they are
@@ -536,14 +537,14 @@ fn unmeasured golden name before after false
 # A minted counter reading nought has nothing to report; one reading anything
 # else is worth a line, so a reader can see what the new counter first said.
 fn minted _ _ 0
-  move "" true false "" false
+  move "" true false "" false 0
 
 fn minted golden name after
   line = "minted: {name} = {commas after}  ({golden[1]!})\n"
-  move name true false line false
+  move name true false line false after
 
 fn unchanged _ _ _ _ true
-  move "" false false "" false
+  move "" false false "" false 0
 
 fn unchanged golden name before after false
   bare = bare_name name golden[2]!
@@ -575,7 +576,7 @@ fn bare_name name prefix
 fn told golden name before after worse ruled
   arrow = arrow_of worse ruled
   line = "{arrow}: {name} {commas before} -> {commas after}  ({golden[1]!})\n"
-  move name false ruled line worse
+  move name false ruled line worse after
 
 fn arrow_of true true
   "worsened"
@@ -694,10 +695,25 @@ fn said moves
 fn say_of m
   m.say
 
-# A worsening wants its counter named somewhere in this branch's log delta.
-# The listing is advisory: the sentence is reflection, not enforcement.
+# A worsening wants its counter named in this branch's log delta, and the
+# value it landed on quoted beside the name.
+#
+# The name alone is not enough, and a ratchet run said so: kanso#1205 raised
+# compile_instructions by 1,630 for a layout reason and wrote a paragraph
+# about it, and that paragraph then licensed `a_counter_worsens_for_nothing`
+# to set the same counter to 999,999,999 — the mutation ran, the gate stayed
+# green, and the row went BLIND. A substring match on a counter's name is a
+# blanket permit for that counter for the whole branch. The number is not: an
+# entry that explains a move states the figure it moved to, which is the
+# discipline the log already keeps, and no other move lands on it.
+#
+# And the listing enforces now. It printed and exited 0, so
+# `a_runtime_counter_worsens_for_nothing` could set jsonbench to 9,999,999,999,
+# be listed as unpriced, and still leave the gate green wherever the branch
+# had improvements to spend — which is every performance branch. Movement is
+# fine; silence is not, and a rule that only prints is silence.
 fn silent? added m
-  not_named? added m.key
+  either? (not_named? added m.key) (not_named? added (commas m.after))
 
 fn not_named? haystack needle
   length (text/split haystack needle) == 1
@@ -718,10 +734,11 @@ fn any_moved true
   io/write "every changed counter is priced (or improved).\n"
 
 fn listed quiet false
-  io/write "\nUNPRICED — these worsened with no sentence naming them in the\n"
-  >> io/write "compiler-log delta of this branch:\n"
+  io/write "\nUNPRICED — these worsened with no sentence naming them and the\n"
+  >> io/write "value they landed on in the compiler-log delta of this branch:\n"
   >> io/write (text/join (list/to_list (list/map quiet key_line)) "")
   >> io/write "{advice}\n"
+  >> os/exit 1
 
 fn key_line m
   "  {m.key}\n"

@@ -4703,9 +4703,9 @@ allocates identically and executes six per cent less work moves nothing else in
 the tree. Every binary also falls about 2,000 bytes, 2.4%, which is the
 inlined error text and call sequence leaving dozens of sites.
 
-**compile_instructions rises 1,630, and it is layout for the third time.**
-`kanso check lib/json` runs none of the runtime, so nothing the front end does
-changed. What changed is `include_str!("runtime.c")`, a static in the binary
+**compile_instructions rises 1,630 to 41,496,272, and it is layout for the
+third time.** `kanso check lib/json` runs none of the runtime, so nothing the
+front end does changed. What changed is `include_str!("runtime.c")`, a static in the binary
 that grew 2,962 bytes and shifted what follows it. Measured rather than
 assumed, because the same claim was made twice before on the strength of
 elimination: build this branch's front end against main's runtime.c and
@@ -4715,3 +4715,42 @@ rounds and visits hold.
 
 Welfare 74.33 to 74.50, floor set. kq links this runtime and owes a pin bump;
 its instructions vein will move and none of its allocation counters will.
+
+## 2026-09-01 (later still, second) — naming a counter licensed it, and the listing only printed
+
+The ratchet went red on the branch above, with two rows BLIND: `a counter
+worsens for nothing` and `a runtime counter worsens for nothing`. Both are
+trend-gate mutations, both had been proving something, and both stopped
+because of the shape of that branch rather than anything wrong with them.
+
+**A counter's name was a blanket permit.** The gate priced a worsening when
+the branch's compiler-log delta mentioned the counter anywhere. The branch
+above raised `compile_instructions` by 1,630 for a layout reason and wrote a
+paragraph explaining it — and that paragraph then licensed the mutation to set
+the same counter to 999,999,999. The gate printed `every changed counter is
+priced` and exited 0. Any branch that legitimately moves a counter and says so
+disarms the gate for that counter, which is every branch that touches a
+golden.
+
+**And the listing was advisory.** With the counter unnamed the gate printed
+UNPRICED, listed the row, and exited 0 anyway. So the runtime mutation — set
+jsonbench to 9,999,999,999 — was listed and still green. The pure-regression
+rule beside it could not catch that either: it refuses a branch where
+something worsens and nothing improves, and the branch above improves nine
+rows and ratchets the floor, so the licence was already bought.
+
+**What it takes now.** A worsening is priced when the log delta names the
+counter AND quotes the value it landed on. `compile_instructions` names
+41,496,272 above; the mutation's 999,999,999 appears nowhere, so it is
+unpriced. And unpriced exits 1 rather than printing. No band, no tolerance:
+the log already states the figure a move landed on, and this is the gate
+reading what the log is for.
+
+Both rows are red again, and the four other trend-gate mutations still are:
+`a worsening hidden behind a joining sample` and `a worsening paid for by an
+unclassified counter` were re-run against the new rule and both exit 1.
+
+The cost is that a branch worsening a counter must now write the number, not
+just the name. That is what the log's own rule already asks for — pin the
+number, never a band — so the gate is asking for the record it was always
+supposed to be reading.
