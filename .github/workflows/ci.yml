@@ -531,7 +531,15 @@ jobs:
     name: the ratchet (every gate has a mutation that turns it red)
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 because the `touched` step below diffs this branch
+      # against its merge base with main, and a shallow checkout has no merge
+      # base to find. On the first run of that step the diff failed outright
+      # and the job was red for a reason that had nothing to do with a
+      # mutation — the selection spec passes in a full worktree and could not
+      # see the runner's clone.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
       # Costs one compile and no builds: it reads this file against the table,
@@ -551,8 +559,8 @@ jobs:
       # minutes for the worst realistic case, a branch touching src/runtime.c,
       # which selects thirteen.
       #
-      # `git fetch` because checkout leaves no local main to diff against, and
-      # `touched` needs one to name this branch's files.
+      # `git fetch` because checkout leaves no local main branch to diff
+      # against even at full depth — it lands on a detached head.
       - name: prove the rows this branch could have made blind
         run: |
           git fetch origin main

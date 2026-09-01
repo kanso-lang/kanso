@@ -847,14 +847,17 @@ fn touched base mode
   os/run "git" ["diff" "--name-only" "{base}...HEAD"] . (d -> diffed d mode)
 
 fn diffed d mode
-  branch_files d.stdout mode (d.status == 0)
+  branch_files d mode (d.status == 0)
 
-fn branch_files _ _ false
-  io/write_err "ratchet: git diff would not name this branch's files\n"
-    . (_ -> os/exit 1)
+# Carrying git's own words, because the first thing this refusal caught was a
+# shallow checkout with no merge base to diff against, and "would not run" sent
+# a reader to the ratchet rather than to the workflow's fetch-depth.
+fn branch_files d _ false
+  said = "ratchet: git could not name this branch's files\n"
+  io/write_err "{said}{d.stderr}" . (_ -> os/exit 1)
 
-fn branch_files out mode true
-  named = list/select (text/split out "\n") (f -> length f > 0)
+fn branch_files d mode true
+  named = list/select (text/split d.stdout "\n") (f -> length f > 0)
   winnowing mode (list/to_list named) rows 1 []
 
 fn winnowing mode files list at acc

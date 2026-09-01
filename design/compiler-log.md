@@ -4409,3 +4409,12 @@ python-free row; a src/lib.rs branch selects the row #1157 and #1188 killed; a
 README-only branch selects nothing. Watched red both ways — with the naming
 test never matching, the two positive fixtures fail; with it always matching,
 the negative ones do.
+
+**The first CI run of the step was red, for a reason the spec could not see.**
+`git diff origin/main...HEAD` needs a merge base and `actions/checkout@v4`
+takes a shallow clone, so the diff failed outright and the ratchet job went red
+with nothing to do with a mutation. Fixed with `fetch-depth: 0` on that job,
+and the refusal now carries git's own stderr — "would not run" sent a reader to
+the ratchet where the answer was in the workflow. The lesson generalises past
+this row: a spec that enters where a user enters still cannot see the shape of
+the box CI enters from.
