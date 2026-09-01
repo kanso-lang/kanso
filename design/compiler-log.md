@@ -4853,9 +4853,18 @@ name. The 2026-08-31 entry said the runtime had become the smaller half of a
 decode; it is smaller again, and what is left of the larger half is the
 backend's output rather than anything the runtime can be asked to do better.
 
-**Two things seen in that profile and not taken.** `k_utf8_bad` walks its tail
-up to seven bytes one at a time where an unaligned eight-byte read of the last
-eight would answer it, worth about 19M (0.7%); and `k_stat_utf8_bytes += len`
-is ungated where every other counter tests `k_stats_on` first, worth about
-4.7M (0.17%). Neither carries its own change; both belong to whatever next
-touches that function.
+**Two things measured in that profile, one worth taking and one not.**
+`k_utf8_bad` costs 117,522,450 instructions over 1,571,250 calls, and
+10,975,500 bytes pass through it, so the mean run is SEVEN bytes — the comment
+in the function claiming forty-one is wrong, and it is wrong in the direction
+that matters. At seven bytes the eight-byte loop usually never runs: its head
+executes 159,450 times against 1,571,250 calls, and the byte-at-a-time walk
+underneath answers for nearly every token. That walk is 30,347,250
+instructions, 25.8% of the function and 1.09% of the whole decode.
+
+The second is declined by the same profile. `k_stat_utf8_bytes += len` is
+ungated where every other counter tests `k_stats_on` first, and gating it
+would be a regression: it compiles to one `add` to memory, executed 1,571,250
+times, where the gate is a compare and a branch. Gating costs 1,571,250
+instructions and saves none. The rule that every counter is gated is a rule
+about counters expensive enough to gate.
