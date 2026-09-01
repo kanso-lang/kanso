@@ -1079,6 +1079,41 @@ static void* k_ten_alloc(size_t n) {
     return out;
 }
 
+/* A tenure block holds copies the evacuation made because the value had lived
+   a lap, and `k_survives_x` answers yes for a pointer into one. That answer is
+   what lets the walk prune: a survivor whose immediate interior survives is
+   shared rather than copied, and the walk stops there. For the arena the prune
+   is sound, because arena allocation is monotonic and a survivor can only point
+   at storage older than itself. Tenure storage is younger than the survivors
+   that come to hold it, so the prune hides it — an arena record can carry a
+   tenured string with no arena pointer anywhere on the path to say so.
+   `k_beat_pop` then freed the block while that record was still reachable, and
+   the read segfaulted. The trend gate hit it whenever a counter in the first
+   golden it reads had moved: two frames of `k_copy_size` and a KStr in a
+   munmap'd page.
+
+   A heap result keeps the region alive — `k_beat_pop` does not rewind for one —
+   so the blocks a survivor may still point into are handed to the depth outside
+   rather than freed. They go at the first pop that does rewind, which is where
+   everything the beat allocated goes back. `k_ten_bytes` travels with them, so
+   `K_TEN_CAP` still bounds what one depth may hold.
+
+   One case is narrower rather than closed: a node BELOW that mark, repaired to
+   hold a tenured pointer, outlives the rewind that frees the block. The place
+   to close it is `k_repaired_settle`, which exists to move repaired slots into
+   the arena and does not move the ones that landed in tenure, because
+   `k_survives_x` answers yes for those too. Nothing measured has reached it. */
+static void k_ten_hand_up(long long d) {
+    if (!k_ten_blocks[d] || d == 0) return;
+    KTenBlock* tail = k_ten_blocks[d];
+    while (tail->next) tail = tail->next;
+    tail->next = k_ten_blocks[d - 1];
+    k_ten_blocks[d - 1] = k_ten_blocks[d];
+    k_ten_bytes[d - 1] += k_ten_bytes[d];
+    k_ten_blocks[d] = NULL;
+    k_ten_bytes[d] = 0;
+}
+
 static void k_ten_release(long long d) {
     KTenBlock* head = k_ten_blocks[d];
     /* `k_ten_any` summarises whether ANY of the sixty-four depths holds a
@@ -1758,7 +1793,8 @@ KValue k_beat_pop(KValue r) {
         k_beat_depth--;
         if (k_beat_depth < K_BEAT_MAX) {
             KCarry* c = &k_carries[k_beat_depth];
-            if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
+            int rewound = !k_is_heap(r.tag) && r.tag != K_THUNK;
+            if (rewound) {
                 k_beat_rewind(&k_beat_stack[k_beat_depth]);
             } else {
                 if (c->used_flag) {
@@ -1771,7 +1807,8 @@ KValue k_beat_pop(KValue r) {
                 k_viewreg_migrate(k_beat_depth);
                 k_permreg_migrate(k_beat_depth);
             }
-            k_ten_release(k_beat_depth);
+            if (rewound) k_ten_release(k_beat_depth);
+            else k_ten_hand_up(k_beat_depth);
             c->used_flag = 0;
         }
     }
@@ -5713,7 +5750,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     {
         k_stat_put_mut_grow++;
         long long need = 2 * (m->len + 1);
-        long long cap = 4;
+        long long cap = 8;
         while (cap < need) cap <<= 1;
         /* An accumulator's pairs go outside the arena for the same reason a
            list's items do: the loop's rewind reclaims the iteration's garbage

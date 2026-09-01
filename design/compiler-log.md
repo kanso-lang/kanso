@@ -4939,3 +4939,162 @@ allocations and peak are identical.
 `k_stats_on` first. Gating it would be a regression: it compiles to one `add`
 to memory, and the gate is a compare and a branch. The rule that every counter
 is gated is a rule about counters expensive enough to gate.
+
+## 2026-09-01 (last) — the growth path ran more often than the fast one
+
+`k_b_put_mut` was the largest runtime entry left in the decode: 139,045,650
+instructions over 1,254,150 calls, 110.9 each, 5.06% of jsonbench. The counters
+say what the profile only implies. put_mut_grow read 669,750 against
+put_mut_fast's 584,400 — more than half of every map insert reallocated the
+pairs buffer, memcpy'd it and donated the old one. Encode was the same shape at
+4,465 against 3,896.
+
+The arithmetic was in the growth arm. It started at `cap = 4` KValues, which is
+two pairs, and doubled from there, so a map of k keys grew at k = 1, 3, 5, 9,
+17. A JSON object with two keys therefore paid a growth for its first insert
+and a three-key object paid two, and the objects in this corpus are small
+enough that the doubling never got going. Four is room for two pairs, and it is
+the wrong four: the LIST path has never used it.
+
+`k_b_push_into_proven` sizes a fresh list's buffer with `cap = 4`, doubles
+while the length needs it, and then doubles once more unconditionally, so a
+list holding its first element gets eight KValues. `k_b_put_mut` did the first
+two steps and not the third, so a map holding its first pair got four. The two
+containers grow the same way and started a factor of two apart, and this change
+is the map taking the list's second doubling. Eight is not a constant tuned to
+this corpus; it is the number the sibling path already used, and the ladder
+below is the check rather than the choice.
+
+**The ladder, measured rather than reasoned about.**
+
+```
+cap   jsonbench       vs 4       put_mut_grow  arena_blocks  peak_bytes
+ 4    2,747,404,386      —          669,750         2          2,097,152
+ 8    2,718,705,486   -1.044%       419,850         2          2,097,152
+16    2,708,688,349   -1.409%       334,350         3          3,145,728
+32    2,710,734,799   -1.335%       334,350         3          3,145,728
+```
+
+Sixteen is the instruction minimum and the objective refuses it. Welfare reads
+74.14 there against a floor of 74.6054: the third arena block and the extra
+megabyte of peak cost 0.47 points, where the 0.37% of instructions sixteen buys
+over eight are worth a fraction of one. Eight reads 74.6146, a rise of 0.0092,
+and thirty-two is slower than sixteen for the same growth count because the
+memcpys it does are bigger.
+
+This is the trade the index was built to settle, and it settled it against the
+number a per-counter reading would have picked. The instruction vein alone says
+sixteen; the sum says eight.
+
+**What eight costs.** jsonbench's alloc_bytes goes 262,667,408 to 268,048,208,
+two per cent more bytes requested, and its allocs FALL 5,334,608 to 5,334,308.
+The extra bytes are transient — peak does not move on any benchmark, and
+neither does any arena block count. On the small fixtures the bytes fall too:
+`map_put.mem` reads 9,136 where it read 9,216, because one fewer allocation
+outweighs one bigger buffer.
+
+Four rows fall and six do not move: jsonbench -1.044%, oneshot -0.481%, basket
+-0.040%, encodebench -0.003%. `.text` is byte-identical for all nine binaries
+again, which is what a constant change should look like. (Three more rows move
+once the tenure fix below joins the branch; the combined figures are at the end
+of that entry.)
+
+**The counters the shelf keeps.** A growth donates the outgrown buffer to the
+shelf and a later allocation takes it back, so halving the growths halves both
+halves of that trade. `buf_reuse` reads 85,350 on jsonbench where it read
+334,950, `encode_buf_reuse` 1,780, `oneshot_buf_reuse` 569 and
+`basket_buf_reuse` 98 — every one of them a buffer nobody had to hand back
+because nobody outgrew one. `sh_buf` is the bytes the shelf saw pass through
+and it rises with the buffers being bigger: 143,306,400 on jsonbench,
+`encode_sh_buf` 73,270,544, `oneshot_sh_buf` 1,133,328. The same two bytes per
+pair show up as `encode_alloc_bytes` 853,137,424 and `oneshot_alloc_bytes`
+4,490,268. Basket goes the other way on both, because its maps are large enough
+that eight is one doubling it no longer needs.
+
+## 2026-09-01 (last, later) — the tenure block a survivor still pointed at
+
+kanso#1209 could not go green. The cost-goldens job died with `the program ran
+out of stack: recursion went deeper than the stack holds`, and the program that
+died was the trend gate. The message was wrong twice over: the stack was eight
+frames deep, and the fall was a SIGSEGV the parent translates to that sentence
+because native cannot see its own recursion.
+
+Reproduction, on origin/main at 21d5c933 with nothing else changed: move one
+digit in `bench/cost_golden.txt` and run `scripts/trend_gate`. Native
+segfaults; `--interp` prints the listing and exits 0. #1209 was the first
+change in a while to move a counter in that file, which is why it surfaced
+there and not earlier.
+
+**Where it died.** gdb puts the fault in `k_copy_size` reading `s->data` for a
+KStr at 0x7ffff7e45b10, an address in the hole between two mappings — a block
+malloc had served with mmap and freed back to the kernel. A `free`-recording
+wrapper named the site: `k_ten_release`, the tenure allocator's block release.
+The path from the beat's result to the dead byte was a list in the arena, a
+record in the arena, and a string in the freed block.
+
+**Why the walk could not see it.** `k_survives_x` answers yes for a pointer
+into a tenure block, and that answer is what lets the copy prune: a survivor
+whose immediate interior survives is shared rather than copied, and the walk
+stops there. For the arena the prune is sound, because arena allocation is
+monotonic — a survivor can only point at storage older than itself, which is
+therefore also a survivor. Tenure storage is younger than the survivors that
+come to hold it, so an arena record can carry a tenured string with no arena
+pointer anywhere on the path to say so. `k_beat_pop`'s copy-out walks the
+result with a null mark, which does turn the tenure answer off, and prunes at
+the arena list one level above the record. Then it freed the block.
+
+**The fix.** A heap result keeps the region alive — `k_beat_pop` does not
+rewind for one — so the blocks are handed to the depth outside instead of
+freed, and released on the branch that does rewind, which is where everything
+the beat allocated goes back. `k_ten_bytes` travels with the blocks, so
+`K_TEN_CAP` still bounds what one depth may hold.
+
+One case is narrower rather than closed, and the comment in runtime.c says so:
+a node below that mark, repaired during the beat to hold a tenured pointer,
+outlives the rewind that frees the block. `k_repaired_settle` is where it would
+close — it exists to move repaired slots into the arena and leaves the tenured
+ones where they are, because `k_survives_x` answers yes for those too. Making
+that pass tenure-blind was built and did NOT change the gate's crash, so the
+route this bug took is the one above; the residual is recorded rather than
+patched on a guess.
+
+**What it costs.** Across all nine benchmarks exactly one counter moves:
+`scan_ten_frees` 1 -> 0. One 256 KiB block on scanbench is now handed up rather
+than freed at the pop. No allocation counter, no arena block, no peak, and
+widebench's `ten_frees` still reads 1 because its beat pops with a non-heap
+result. Every binary's `.text` rises 144 bytes, deepbench 160, and the machine
+code vein `text` lands on 729,106 across the nine.
+
+**The rows, measured by CI on the recorded Genoa.** Seven fall and three hold:
+
+```
+jsonbench     2,747,404,799 -> 2,718,705,899   -1.045%
+encodebench   7,393,600,245 -> 7,393,366,858   -0.003%
+oneshot          39,981,441 ->    39,789,223   -0.481%
+basket           56,449,207 ->    56,426,594   -0.040%
+deepbench       705,258,631 ->   705,257,898   -733
+pendbench       930,587,202 ->   930,587,200   -2
+indexbench        5,243,101 ->     5,242,731   -370
+```
+
+widebench, escapebench and digestbench are byte-identical. The first four are
+mostly the capacity change; the last three are this fix alone — a branch added
+to the beat pop and a free taken off it, which is what a change that removes
+work from a hot exit looks like when the exit runs a few thousand times.
+`compile_instructions` falls 1,320 for the reason the vein has recorded four
+times now: main.rs holds runtime.c as an `include_str!` and hashes it for the
+build cache key, so the C source's length moves the front end's arithmetic
+without moving its work. `compile_allocs` and `compile_peak_bytes` are
+identical.
+
+Welfare 74.6146 to 74.6196, and the floor is set.
+
+**The fixture.** `tests/a_tenure_block_a_survivor_points_at.rs`. It took three
+things at once and no fewer: an inner beat that builds a batch, an outer beat
+that accumulates the batches so the batch nodes live a lap and are promoted,
+and a SECOND pass over the accumulated list so a later evacuation walks the
+promoted nodes after their block has gone. Every earlier attempt had two of the
+three and read green — the dangling pointer was there, a detector saw it, and
+nothing dereferenced it. Watched red on origin/main's runtime.c rebuilt in
+place: the assertion fails in 0.69 seconds. Green here in 21, with the oracle
+agreeing to the byte.

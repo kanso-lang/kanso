@@ -488,18 +488,24 @@
 # all. That is what a change with no dispatch-sensitive path in it looks like,
 # and it is the cleanest evidence this vein has produced that a delta can be
 # read across silicon even when a row cannot.
-jsonbench 2747404799
-encodebench 7393600245
-oneshot 39981441
-basket 56449207
-widebench 63874012
-deepbench 705258631
-escapebench 248370844
-pendbench 930587202
-indexbench 5243101
-digestbench 143471767
 # 2026-09-01: digestbench joins, at 152,573,619 retired instructions, measured
 # by CI because this host's glibc differs from the one this file is pinned to.
 # It is here because a benchmark counted on one axis and not the other is a
 # trade nothing can see: every change that buys the digest's memory spends
 # something in work, and this is where that something shows.
+# 2026-09-01 (last): seven rows fall and three hold. jsonbench -1.045% and
+# oneshot -0.481% are the map's initial pairs capacity going from four to
+# eight, which halves the growth arm. deepbench -733, pendbench -2 and
+# indexbench -370 are the tenure fix, which adds a branch to the beat pop and
+# takes a free off it. encodebench -0.003% and basket -0.040% carry a little of
+# both. Measured on CI's Genoa, family 0x19 model 0x11, the recorded silicon.
+jsonbench 2718705899
+encodebench 7393366858
+oneshot 39789223
+basket 56426594
+widebench 63874012
+deepbench 705257898
+escapebench 248370844
+pendbench 930587200
+indexbench 5242731
+digestbench 143471767
