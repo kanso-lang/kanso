@@ -7,7 +7,7 @@ Every claim is falsifiable against the tree or a named paper.
 
 ## Where every idea stands
 
-Fifteen ideas, and the state of each. The prose below carries the reasoning;
+Sixteen ideas, and the state of each. The prose below carries the reasoning;
 this says only which of them are in the tree.
 
 | # | idea | state |
@@ -27,6 +27,54 @@ this says only which of them are in the tree.
 | 5.1 | copy-or-pin for survivors | **its premise is gone** (rechecked 2026-08-24) — one-shot's evacuation is 3 allocations, not 63,967; #868 deleted the copy-out this was going to delete. Reposed below against where evacuation actually lives now |
 | 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |
 | 5.3 | the reuse delta — does dynamic reuse beat static? | **the well-posed form of "Perceus vs beats"** |
+| 5.4 | make the survivorship decision cheaper, not the copy | **new 2026-09-01, and it reframes 5.1 and 5.2** — measured below |
+
+## 5.4 — the deciding, not the copying (2026-09-01)
+
+Every 5.x idea in this memo is aimed at the same thing: evacuation COPIES too
+much, so pin what you can, or choose a policy by survivor ratio. On the one
+workload built to stress a streaming carry, the copies were never the cost.
+
+An 8,192-byte sha256 digest with the carry tier admitted:
+
+| what | count |
+|---|---:|
+| calls to the survivorship walk | 33,024 |
+| slots examined per call | 8,256 |
+| slot examinations, total | 272,646,144 |
+| heap slots found in any of them | 0 |
+| allocations that actually evacuated | 33,827 |
+
+The evacuation's copying was linear in the message throughout. What was
+quadratic was `k_slots_survive` asking, once per element, whether a list that
+grows with the message holds anything the rewind could take — and answering no
+every time, by walking the whole thing.
+
+So the family splits in two. 5.1 and 5.2 are about what to copy, and on this
+shape they would have saved nothing, because almost nothing was being copied.
+5.4 is about what it costs to decide, and it is where the time was.
+
+Two memos were built against it. `k_isv_list` caches whether a list deep-
+survives the OUTERMOST mark and is invalidated when that mark moves; it misses
+entirely on the streaming shape, because a list built inside the outer beat can
+never be below its mark. `k_isv_flat` caches the mark-INDEPENDENT half — this
+items array holds no heap slot and no thunk, so no rewind can take anything out
+from under it — keyed on the items pointer, with an epoch that moves on a push
+and a pop and not on a rewind. That is what made the carry tier buildable at
+all.
+
+It was still declined, and not for this: with the deciding memoized, the carry
+tier costs 5.4x the digest's retired instructions because the evacuation
+discards exactly the lazy memos the at-risk state was built to keep, and
+recomputing them is the bill. Welfare reads 74.31 against 73.75. The
+2026-09-01 log entries carry the sweep.
+
+**What this changes for the memo.** A survivorship check is O(arity) at every
+node it visits, and nothing in the tree bounds how often it is asked. The
+counters that would show it — `evac_allocs` and `evac_bytes` — count the
+copying, so a workload whose cost is entirely in the deciding reads as free in
+every vein. That is the gap this row names, and it is unmeasured outside the
+digest.
 
 ## What the evacuation counter changed (2026-08-07)
 
