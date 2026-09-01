@@ -66,7 +66,7 @@ fn the_counter_the_mutation_leans_on_is_still_unclassified() {
 
     let counter = raised(&mutation);
     assert!(
-        !named.iter().any(|n| *n == counter),
+        !named.contains(&counter),
         "the mutation raises `{counter}` to stand for a counter with no direction, and a \
          direction table now names it. Both halves of the mutation are classified \
          worsenings, so it proves a pure-regression rule rather than the third state. \
