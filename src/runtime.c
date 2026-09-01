@@ -5923,26 +5923,52 @@ KValue k_b_utf8(KValue lv, const char* origin) {
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
 
+/* Whether a run is ascii, which is the only question the wide pass below has
+   to answer for nearly every token a document holds. It is asked 1,571,250
+   times in one jsonbench run for 10,975,500 bytes, so the mean run is seven
+   bytes and the width that matters is the short one.
+
+   Every width is covered by at most two loads that overlap in the middle
+   rather than by a walk. A run of eight or more reads whole words and then
+   reads the LAST eight, which repeats bytes the loop already saw and needs no
+   arithmetic to know how many. A shorter run has no word to read, so four and
+   two bytes do the same trick a step down. Nothing here reads outside
+   `data[0..len)`. */
+static int k_all_ascii(const char* data, long long len) {
+    const unsigned long long hi = 0x8080808080808080ULL;
+    unsigned long long w;
+    if (len >= 8) {
+        for (long long j = 0; j + 8 <= len; j += 8) {
+            memcpy(&w, data + j, sizeof w);
+            if (w & hi) return 0;
+        }
+        memcpy(&w, data + len - 8, sizeof w);
+        return (w & hi) == 0;
+    }
+    if (len >= 4) {
+        uint32_t a, b;
+        memcpy(&a, data, 4);
+        memcpy(&b, data + len - 4, 4);
+        return ((a | b) & 0x80808080u) == 0;
+    }
+    if (len >= 2) {
+        uint16_t a, b;
+        memcpy(&a, data, 2);
+        memcpy(&b, data + len - 2, 2);
+        return ((a | b) & (uint16_t)0x8080u) == 0;
+    }
+    if (len == 1) return (uint8_t)data[0] < 0x80;
+    return 1;
+}
+
 static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     k_stat_utf8_bytes += len;
     /* A document's keys and values are ascii, and the wide pass is nearly all
        setup: seven constant loads and two zeroed accumulators before the first
-       block, against an average token of forty-one bytes. Eight bytes at a
-       time answers the whole question for an ascii run of any length and never
-       reaches that. A run that is not ascii falls through and the wide pass
-       reads it from the start, so the scan below is the only waste. */
-    {
-        long long j = 0;
-        for (; j + 8 <= len; j += 8) {
-            unsigned long long w;
-            memcpy(&w, data + j, sizeof w);
-            if (w & 0x8080808080808080ULL) break;
-        }
-        if (j + 8 > len) {
-            while (j < len && (uint8_t)data[j] < 0x80) j++;
-            if (j == len) return k_none();
-        }
-    }
+       block. The ascii test above answers the whole question without reaching
+       any of it. A run that is not ascii falls through and the wide pass reads
+       it from the start, so that test is the only waste. */
+    if (k_all_ascii(data, len)) return k_none();
 #if defined(__aarch64__)
     /* keiser & lemire, "validating utf-8 in less than one instruction per
        byte" (2021): three nibble lookups classify every two-byte window,

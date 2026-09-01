@@ -36,6 +36,12 @@ chars_head = "static long long harness_utf8_chars(const unsigned char* p,"
 
 harness_chars_sig = "{chars_head} long long len) \{"
 
+# The ascii predicate the validator asks first. It reads whole words and, for
+# a run under eight bytes, two narrower loads that overlap in the middle — so
+# it is the piece where a width bug would show as a read outside the run, and
+# it travels under its own name because the body above calls it by that name.
+ascii_sig = "static int k_all_ascii(const char* data, long long len) \{"
+
 extracted_path = "target/extracted.h"
 
 binary_path = "target/utf8_harness"
@@ -90,8 +96,9 @@ fn as_harness src
   named = swapped body signature harness_sig
   ok = swapped named "return k_none();" "return 1;"
   counted = swapped ok "k_stat_utf8_bytes += len;" ""
+  ascii = body_of src ascii_sig
   chars = swapped (body_of src chars_sig) chars_sig harness_chars_sig
-  "{header}{counted}\n{chars}\n"
+  "{header}{ascii}\n{counted}\n{chars}\n"
 
 # The validator's x86 path is written in ssse3 intrinsics, which clang refuses
 # to compile unless the target is told it has them.

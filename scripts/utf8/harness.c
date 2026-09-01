@@ -100,7 +100,7 @@ static void widths(unsigned char* buf, long long at, int room,
 }
 
 int main(void) {
-    unsigned char buf[8];
+    unsigned char buf[32];
     long long checked = 0, bad = 0;
     /* every one-, two- and three-byte string: 16.8 million, exhaustive over
        the whole range the fast path can reach */
@@ -123,12 +123,20 @@ int main(void) {
             }
         }
     }
-    /* four- and five-byte strings around the fast path's boundary, sampled
-       deterministically so a run is reproducible */
+    /* every length from four to twenty-four, sampled deterministically so a
+       run is reproducible.
+
+       The band used to stop at eight, which left the fast path's whole word
+       region unprobed: for a run of nine to fifteen bytes the loop reads one
+       word and something else has to answer for the remainder, and nothing
+       here ever handed it such a run. A mutation that made that remainder
+       answer for the wrong bytes passed this harness with 45 million cases
+       and zero mismatches. Twenty-four reaches past the sixteen-byte vector
+       boundary as well, so a lead byte can straddle either edge. */
     uint64_t st = 0x9E3779B97F4A7C15ull;
     for (long long t = 0; t < 20000000; t++) {
         st ^= st << 13; st ^= st >> 7; st ^= st << 17;
-        int len = 4 + (int)(st % 5);
+        int len = 4 + (int)(st % 21);
         for (int k = 0; k < len; k++) {
             st ^= st << 13; st ^= st >> 7; st ^= st << 17;
             /* bias toward ascii and toward lead bytes, where the edges live */

@@ -4868,3 +4868,56 @@ would be a regression: it compiles to one `add` to memory, executed 1,571,250
 times, where the gate is a compare and a branch. Gating costs 1,571,250
 instructions and saves none. The rule that every counter is gated is a rule
 about counters expensive enough to gate.
+
+## 2026-09-01 (last) — seven bytes, and a walk that answered for all of them
+
+The comment over `k_utf8_bad`'s ascii prologue said the average token was
+forty-one bytes. The counters say seven: jsonbench calls it 1,571,250 times
+for 10,975,500 bytes. That number decides the shape of the function. At
+forty-one the eight-byte loop does the work and the byte-at-a-time walk below
+it is a remainder; at seven the loop's head executes 159,450 times against
+1,571,250 calls and the walk answers for nearly every token in the document.
+Callgrind at instruction granularity puts the walk at 30,347,250 instructions
+— 25.8% of the function, 1.09% of the whole decode.
+
+`k_all_ascii` answers with loads that overlap instead. Eight bytes or more:
+read whole words while eight remain, then read the LAST eight, repeating bytes
+the loop already saw rather than walking whatever is left and without any
+arithmetic to work out how many that is. Under eight there is no word to read,
+so four and two do the same a step down, and one byte is one compare. Nothing
+reads outside `data[0..len)`, which is what makes the overlap free.
+
+Measured on this box, before and after, same binary set:
+
+```
+jsonbench    2,781,834,036 -> 2,747,404,386   -34,429,650  -1.238%
+oneshot         40,210,572 ->     39,981,042      -229,530  -0.571%
+widebench       64,076,836 ->     63,873,599      -203,237  -0.317%
+basket          56,457,221 ->     56,448,794        -8,427  -0.015%
+encodebench  7,393,828,977 ->  7,393,599,846      -229,131  -0.003%
+deepbench, escapebench, pendbench, indexbench, digestbench   identical
+```
+
+Five fall, five do not move, none rises. The whole of jsonbench's fall is
+`k_utf8_bad` itself: 117,522,450 down to 83,092,800. Re-splitting the decode
+by origin, the emitted half is byte-identical at 1,729,183,050 and the runtime
+half goes 1,001,841,947 to 967,380,120, which is what a change confined to
+`runtime.c` should look like from outside.
+
+**A mutation the harness could not see.** The differential extracts the
+validator's text from `src/runtime.c` rather than copying it, so it now
+extracts `k_all_ascii` too — the piece where a width bug would show. Breaking
+the four-byte overlap turns it red at once. Breaking the EIGHT-byte overlap
+did not: 45,189,025 cases, zero mismatches, with a validator that never looked
+past byte eight of a run. The sampled band ran from four to eight bytes, which
+is exactly the region where the word loop does everything and the tail has
+nothing to answer for, and `unsigned char buf[8]` was what held it there. The
+band now runs to twenty-four, which also reaches past the sixteen-byte vector
+boundary, and the same mutation fails on 1,097,135 cases. It is a ratchet row
+of its own now, so the band cannot quietly shrink back.
+
+**The other residual is declined, by the same profile.**
+`k_stat_utf8_bytes += len` is ungated where every other counter tests
+`k_stats_on` first. Gating it would be a regression: it compiles to one `add`
+to memory, and the gate is a compare and a branch. The rule that every counter
+is gated is a rule about counters expensive enough to gate.

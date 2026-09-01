@@ -475,6 +475,18 @@ validator = row
   (breaking "a_validator_the_reference_disagrees_with")
   release
 
+# A second row over the same sweep, because the sweep once could not see this
+# one. Its sampled band stopped at eight bytes, and a validator that never
+# reads past byte eight of a longer run passed 45,189,025 cases with nothing
+# to say. The band reaches twenty-four now; this row is what keeps it there.
+validator_tail = row
+  "a utf-8 validator that never looks at the end of a long run"
+  true
+  (whose "validator")
+  "utf-8 validator (differential vs an independent reference)"
+  (breaking "a_validator_that_skips_its_tail")
+  release
+
 landing = row
   "a landing sample and the output the page prints under it disagreeing"
   true
@@ -566,7 +578,9 @@ rows_c1d = text/concat rows_c1c [numeric effects]
 
 rows_c1e = text/concat rows_c1d [modules coverage]
 
-rows_c1f = text/concat rows_c1e [coverage_floor decoder validator]
+rows_c1f0 = text/concat rows_c1e [coverage_floor decoder]
+
+rows_c1f = text/concat rows_c1f0 [validator validator_tail]
 
 rows_c1g = text/concat rows_c1f [landing in_the_page shop_window]
 
