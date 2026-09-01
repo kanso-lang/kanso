@@ -736,7 +736,7 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <ul class="tech-ledger">
 <li><strong>rewinding arena allocation</strong> — the region lineage (tofte &amp; talpin, 1997), reshaped around loop iterations. allocation is a pointer bump, freeing is a pointer reset, no per-object headers anywhere.</li>
 <li><strong>compiler-proven beat boundaries</strong> — original to kanso. an analysis proves a loop's iterations keep nothing across the line, so the arena rewinds between iterations without a runtime check.</li>
-<li><strong>carry evacuation</strong> — original to kanso. the values an iteration does keep are copied across the rewind, deep-copy bounded by a static slot count.</li>
+<li><strong>carry evacuation</strong> &#8212; original to kanso. the values an iteration does keep are copied across the rewind, deep-copy bounded by a static slot count. deciding which values those are is bounded by nothing: the survivorship walk reads a node&#8217;s whole interior, so a loop carrying a list that grows asks a question that grows with it. section 33 has the measurement.</li>
 <li><strong>static reuse analysis</strong> — the perceus reuse idea (reinking, xie, de moura, leijen, PLDI 2021) without its counting. provably unique values mutate in place; push and append claim their buffer's frontier.</li>
 <li><strong>ownership signatures</strong> — whole-program borrow-vs-consume inference in the koka/fip lineage, printable per function, so ownership is a pinnable contract rather than an ambient verdict.</li>
 <li><strong>strictness analysis over demand</strong> — the mycroft/ghc lineage. lazy semantics, strict compilation wherever demand is provable; the json gauntlet compiles to zero thunks, golden-pinned.</li>
