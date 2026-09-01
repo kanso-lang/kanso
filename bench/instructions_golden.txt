@@ -469,16 +469,16 @@
 # encodebench falls to 7,393,828,977, oneshot to 40,210,572, deepbench to
 # 705,254,951, escapebench to 248,370,445; jsonbench, basket, widebench,
 # pendbench, indexbench and digestbench fall by less than a thousandth.
-jsonbench 2781834036
-encodebench 7393828977
-oneshot 40210572
-basket 56457221
-widebench 64076836
-deepbench 705254951
-escapebench 248370445
-pendbench 930586816
-indexbench 5242688
-digestbench 143471368
+jsonbench 2781834449
+encodebench 7393829376
+oneshot 40210971
+basket 56457634
+widebench 64077249
+deepbench 705258631
+escapebench 248370844
+pendbench 930587202
+indexbench 5243101
+digestbench 143471767
 # 2026-09-01: digestbench joins, at 152,573,619 retired instructions, measured
 # by CI because this host's glibc differs from the one this file is pinned to.
 # It is here because a benchmark counted on one axis and not the other is a

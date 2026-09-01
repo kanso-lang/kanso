@@ -4774,10 +4774,22 @@ path, so the summary that was correct on entry is correct on exit. And
 `k_ten_bytes[d]` cannot be non-zero with `k_ten_blocks[d]` NULL, because the
 only `+=` follows a push at that depth.
 
-encodebench falls to 7,393,828,977 (-6.05%), oneshot to 40,210,572 (-2.88%),
-deepbench to 705,254,951 (-1.68%), escapebench to 248,370,445 (-0.26%);
-jsonbench, basket, widebench, pendbench, indexbench and digestbench each fall
-by less than a thousandth. Nothing rises.
+encodebench falls to 7,393,829,376 (-6.05%), oneshot to 40,210,971 (-2.88%),
+deepbench to 705,258,631 (-1.68%), escapebench to 248,370,844 (-0.26%);
+jsonbench, basket, pendbench and digestbench each fall by less than a
+thousandth. Encodebench's fall is 476,323,632 on the runner and 476,323,632 in
+this container, on two different cpus — the saving is the walk, so it is
+host-invariant even where the totals are not.
+
+**work_widebench reads 64,077,249 and work_indexbench 5,243,101, each five
+instructions ABOVE the row it replaces, and the cause is silicon rather than
+this change.** The rows on main were counted on the AMD Genoa that ran the
+previous pull request; these were counted on an Intel the pool had not shown
+before. Measured in this container, where both arms sit on one cpu, the change
+takes 408 instructions off each of them. Five instructions on sixty-four
+million is what a cpu change looks like at this scale, and the gate is right to
+make that sentence exist rather than let two rises pass as noise — which is the
+discipline the entry above shipped, applied to its own author.
 
 **The same early-out in `k_chunkreg_migrate` was measured and dropped.** It is
 a wash — deepbench -225,082, widebench +40, basket +21 — and the change is
@@ -4805,6 +4817,13 @@ the other allocation counters and `ten_frees` the higher table beside
 `bytes_freed`, because with blocks held constant a fall in frees is a leak.
 
 `text` rises 1,072 to 727,778 — the two counters and the early return, about
-110 bytes a binary. That is the whole cost of the change on any vein.
+110 bytes a binary. `compile_instructions` rises 981 to 41,497,253, which is
+`include_str!("runtime.c")` growing again and shifting what follows it in the
+front end's binary, the same layout effect the entry above measured directly.
+Those two are the whole cost of the change on any vein.
+
+The run that produced these rows named a cpu nobody had seen: family 0x6 model
+0xcf, an Intel that is neither the Cascade Lake this container is nor the four
+the entry above counted. The pool holds at least five.
 
 Welfare 74.50 to 74.59, floor set.
