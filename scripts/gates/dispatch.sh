@@ -35,8 +35,14 @@
 #
 # cpuid[0x1] is excluded by measurement: its top byte is the initial APIC id,
 # and it took three values in six runs on one host while every other line held.
+#
+# On a host with no x86 loader — the macos/arm runner is one — there is no
+# block to read, so `name` says the cpu is unnamed and `differs` answers 2.
+# That arm is as real as the others and is pinned like them; the loader path
+# is overridable so it can be exercised anywhere, since a spec that could only
+# run on aarch64 would be a spec nobody watches fail.
 set -e
-loader=/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+loader=${KANSO_DISPATCH_LOADER:-/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2}
 verb=${1:-name}
 block=${2:-bench/dispatch.txt}
 scratch=$(mktemp -d)

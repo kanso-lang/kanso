@@ -22,9 +22,23 @@
 use std::path::Path;
 use std::process::Command;
 
-/// This host's block, filtered the way the script filters it.
-fn this_hosts_block() -> String {
-    let out = Command::new("/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")
+const LOADER: &str = "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2";
+
+/// Not every host has an x86 loader — the macos/arm runner does not — and the
+/// gate's answers there are different and equally load-bearing. Every fixture
+/// below states both arms rather than skipping one, because a spec that goes
+/// quiet on a host is a spec that host is not covered by.
+fn has_x86_loader() -> bool {
+    Path::new(LOADER).exists()
+}
+
+/// This host's block, filtered the way the script filters it. `None` where
+/// there is no loader to ask.
+fn this_hosts_block() -> Option<String> {
+    if !has_x86_loader() {
+        return None;
+    }
+    let out = Command::new(LOADER)
         .arg("--list-diagnostics")
         .output()
         .expect("the loader reports its diagnostics");
@@ -35,12 +49,18 @@ fn this_hosts_block() -> String {
         .filter(|l| !l.contains("features[0x0].cpuid[0x1]="))
         .collect();
     lines.sort_unstable();
-    format!("{}\n", lines.join("\n"))
+    Some(format!("{}\n", lines.join("\n")))
 }
 
 /// Run the script and answer its exit code and everything it said. `ci` sets
 /// GITHUB_ACTIONS the way a runner would.
-fn asked(verb: &str, block: Option<&str>, key: &str, ci: bool) -> (i32, String) {
+fn asked_with(
+    verb: &str,
+    block: Option<&str>,
+    key: &str,
+    ci: bool,
+    loader: Option<&str>,
+) -> (i32, String) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let stage = std::env::temp_dir().join(format!("kanso-silicon-{key}"));
     let _ = std::fs::remove_dir_all(&stage);
@@ -52,6 +72,9 @@ fn asked(verb: &str, block: Option<&str>, key: &str, ci: bool) -> (i32, String) 
 
     let mut run = Command::new("sh");
     run.arg(root.join("scripts/gates/dispatch.sh")).arg(verb).arg(&at);
+    if let Some(path) = loader {
+        run.env("KANSO_DISPATCH_LOADER", path);
+    }
     if ci {
         run.env("GITHUB_ACTIONS", "true");
     } else {
@@ -66,38 +89,88 @@ fn asked(verb: &str, block: Option<&str>, key: &str, ci: bool) -> (i32, String) 
     (done.status.code().expect("it exited"), said)
 }
 
+/// The gate as this host runs it.
+fn asked(verb: &str, block: Option<&str>, key: &str, ci: bool) -> (i32, String) {
+    asked_with(verb, block, key, ci, None)
+}
+
+/// The gate as a host with no x86 loader runs it. On aarch64 that is simply
+/// the truth; on x86 the override makes the same arm reachable, so the
+/// behaviour is watched everywhere rather than only where it happens to occur.
+fn asked_blind(verb: &str, block: Option<&str>, key: &str, ci: bool) -> (i32, String) {
+    asked_with(verb, block, key, ci, Some("/nonexistent-loader"))
+}
+
 /// Doctor one line the header prices: Prefer_ERMS selects a different memcpy.
-fn one_line_off() -> String {
-    let held = this_hosts_block();
+fn one_line_off() -> Option<String> {
+    let held = this_hosts_block()?;
     let doctored = held.replacen(
         "x86.cpu_features.preferred.Prefer_ERMS=0x0",
         "x86.cpu_features.preferred.Prefer_ERMS=0x1",
         1,
     );
     assert_ne!(doctored, held, "Prefer_ERMS moved; this fixture needs rewriting");
-    doctored
+    Some(doctored)
 }
 
 #[test]
 fn every_run_names_the_cpu_it_is_about_to_count_on() {
     let (code, said) = asked("name", None, "name", false);
     assert_eq!(code, 0, "naming a cpu never refuses: {said}");
-    assert!(
-        said.contains("family") && said.contains("model"),
-        "and names it by family and model, which is what a job log needs to \
-         make the next divergence one line instead of an afternoon: {said}"
+    if has_x86_loader() {
+        assert!(
+            said.contains("family") && said.contains("model"),
+            "and names it by family and model, which is what a job log needs to \
+             make the next divergence one line instead of an afternoon: {said}"
+        );
+    } else {
+        assert!(
+            said.contains("no x86 features"),
+            "and where there is no loader to ask, says so: {said}"
+        );
+    }
+}
+
+/// The no-x86 arm, reachable on every host. It has to answer 2 — never 0,
+/// which would let a moved row pass as verified, and never 1, which would
+/// blame silicon nobody read.
+#[test]
+fn a_host_with_no_loader_names_no_cpu_and_answers_two() {
+    let (code, said) = asked_blind("name", None, "blind-name", false);
+    assert_eq!(code, 0, "naming still never refuses: {said}");
+    assert!(said.contains("no x86 features"), "and says why: {said}");
+
+    let block = "x86.cpu_features.basic.family=0x6\n";
+    let (differs, told) = asked_blind("differs", Some(block), "blind-differs", false);
+    assert_eq!(
+        differs, 2,
+        "with a block recorded but no loader to compare it against, the answer \
+         is 'cannot tell', not yes or no: {told}"
     );
+    assert!(!told.contains("x86.cpu_features"), "and nothing is offered for pasting: {told}");
 }
 
 #[test]
 fn the_recorded_silicon_answers_nought() {
-    let (code, said) = asked("differs", Some(&this_hosts_block()), "same", false);
+    let Some(block) = this_hosts_block() else {
+        let (code, said) =
+            asked("differs", Some("x86.cpu_features.basic.kind=0x1\n"), "same", false);
+        assert_eq!(code, 2, "no loader here, so no comparison is possible: {said}");
+        return;
+    };
+    let (code, said) = asked("differs", Some(&block), "same", false);
     assert_eq!(code, 0, "this host matches the block it was made from: {said}");
 }
 
 #[test]
 fn other_silicon_answers_one_and_names_the_lines() {
-    let (code, said) = asked("differs", Some(&one_line_off()), "other", false);
+    let Some(off) = one_line_off() else {
+        let (code, said) =
+            asked("differs", Some("x86.cpu_features.basic.kind=0x1\n"), "other", false);
+        assert_eq!(code, 2, "no loader here, so no comparison is possible: {said}");
+        return;
+    };
+    let (code, said) = asked("differs", Some(&off), "other", false);
     assert_eq!(code, 1, "a differing block is answer 1: {said}");
     assert!(
         said.contains("Prefer_ERMS=0x1") && said.contains("Prefer_ERMS=0x0"),
@@ -123,7 +196,14 @@ fn nothing_recorded_answers_two_rather_than_excusing_anything() {
 /// runner's. Handing this box its own block back holds that door open.
 #[test]
 fn the_pasteable_block_prints_in_ci_and_nowhere_else() {
-    let off = one_line_off();
+    let Some(off) = one_line_off() else {
+        let (_, said) = asked("differs", Some("x86.cpu_features.basic.kind=0x1\n"), "paste", true);
+        assert!(
+            !said.contains("x86.cpu_features"),
+            "with no loader there is no block to offer, in CI or out: {said}"
+        );
+        return;
+    };
     let (_, here) = asked("differs", Some(&off), "nopaste", false);
     let (_, in_ci) = asked("differs", Some(&off), "paste", true);
 
@@ -154,7 +234,7 @@ fn a_verb_it_does_not_know_is_neither_yes_nor_no() {
     assert!(said.contains("refuse"), "and names what it was asked: {said}");
 }
 
-/// A block may only be taken from a run that BOTH names its cpu and matches
+/// A block may be taken only from a run that BOTH names its cpu and matches
 /// every row — and a run that matches never reaches `differs`, so it would
 /// never print one. That is a bootstrap with no first step, and this is the
 /// step: while no block is recorded, CI prints the whole thing. It stops the
@@ -168,13 +248,20 @@ fn ci_prints_a_whole_block_only_while_none_is_recorded() {
     );
 
     let (_, needed) = asked("name", None, "boot-ci", true);
+    let Some(block) = this_hosts_block() else {
+        assert!(
+            !needed.contains("x86.cpu_features"),
+            "with no loader there is no block to print, even in CI: {needed}"
+        );
+        return;
+    };
     assert!(
         needed.lines().filter(|l| l.starts_with("x86.cpu_features")).count() > 100,
         "in CI with nothing recorded, the whole block, or no run ever \
          produces one: {needed}"
     );
 
-    let (_, held) = asked("name", Some(&this_hosts_block()), "boot-done", true);
+    let (_, held) = asked("name", Some(&block), "boot-done", true);
     assert!(
         !held.contains("x86.cpu_features"),
         "and once a block is recorded it stops, so green runs stay quiet: \
