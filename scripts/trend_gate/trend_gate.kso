@@ -72,6 +72,13 @@ lower_h = ["jsonbench" "encodebench" "oneshot" "basket" "widebench"]
 
 lower_i = ["deepbench" "escapebench" "pendbench" "indexbench" "text"]
 
+# digestbench joined the work vein on 2026-08-31 and this list did not, so a
+# rise in it read as UNCLASSIFIED drift — a 6.5x regression passed green. It is
+# the row that matters most for staying honest here: every change that buys the
+# digest's peak spends work, and the peak side was classified from the first day
+# because `digest_arena_peak_bytes` strips to a name lower_c already held.
+lower_j = ["digestbench"]
+
 lower_ab = text/concat lower_a lower_b
 
 lower_cd = text/concat lower_c lower_d
@@ -81,7 +88,7 @@ lower_ef = text/concat lower_e (text/concat lower_f lower_g)
 # emitted_golden's four counters need no entry: `lines`, `calls`, `branches`
 # and `defines` are in lower_d already, for compile_golden. The prefix on the
 # file keeps the two sums apart; the direction is the same question either way.
-lower_run = text/concat lower_h lower_i
+lower_run = text/concat lower_h (text/concat lower_i lower_j)
 
 lower_efr = text/concat lower_ef lower_run
 
