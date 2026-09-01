@@ -4916,6 +4916,24 @@ band now runs to twenty-four, which also reaches past the sixteen-byte vector
 boundary, and the same mutation fails on 1,097,135 cases. It is a ratchet row
 of its own now, so the band cannot quietly shrink back.
 
+**CI's rows, and a delta that reads across silicon.** The runner counts
+jsonbench 2,781,834,449 -> 2,747,404,799 and the four other movers by
+-229,530, -203,237, -8,427 and -229,131. Every one of those five deltas is
+IDENTICAL to the container's, on a Genoa against a Cascade Lake. The absolute
+rows differ by a few hundred as they always do; the differences do not differ
+at all. A change with no dispatch-sensitive path in it can have its delta read
+across silicon even where its rows cannot, and this is the cleanest instance
+the vein has produced. Welfare 74.59 to 74.61, floor set.
+
+**Two veins that could have moved and did not.** `.text` is byte-identical for
+all nine benchmarks — a walk removed and a load ladder added come to the same
+size, so the machine-code golden, which carried 17% of the last regression,
+says nothing here and is right to. `compile_instructions` fell 161 (0.0004%),
+banked as layout: `kanso check lib/json` never emits, never links and never
+reads runtime.c's contents, but the compiler carries it as an `include_str!`,
+so a longer one moves the binary underneath the measured path. Front-end
+allocations and peak are identical.
+
 **The other residual is declined, by the same profile.**
 `k_stat_utf8_bytes += len` is ungated where every other counter tests
 `k_stats_on` first. Gating it would be a regression: it compiles to one `add`

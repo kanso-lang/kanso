@@ -774,7 +774,17 @@
 # allocations do not cost 0.19%; the inliner changed its mind about a small
 # function, which is the same layout effect the notes above describe. The
 # shorter source is kept because it is the right code.
-compile_instructions=41497253
+# 2026-09-01: 41,497,253 -> 41,497,092, a fall of 161 (0.0004%), banked as
+# layout. The change is `k_utf8_bad` in src/runtime.c. `kanso check lib/json`
+# compiles a library and runs no program, so it never emits, never links and
+# never reads runtime.c's contents — the one place that hashes them is
+# `cached_program_binary`, on the `kanso run` path. What it does do is carry
+# runtime.c as an `include_str!`, so a longer one moves the binary underneath
+# the measured path. The counters that measure only the front end's work say
+# the same: compile_allocs identical and compile_peak_bytes identical at
+# 713,606. Fifth movement of this vein with an untouched call graph.
+
+compile_instructions=41497092
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more
