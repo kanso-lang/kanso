@@ -383,12 +383,15 @@
 # the caller's. That is what the append fast path stops carrying: six
 # callee-saved pushes and a frame become three pushes, and encodebench falls
 # 3.06%. The five binaries that never link the grow path do not move.
-jsonbench text=85202
-encodebench text=102226
-oneshot text=102274
-basket text=94786
-widebench text=103282
-deepbench text=67074
-escapebench text=52898
-pendbench text=77794
-indexbench text=54690
+jsonbench text=85138
+encodebench text=102098
+oneshot text=102146
+basket text=94498
+widebench text=103154
+deepbench text=66962
+escapebench text=52914
+pendbench text=77954
+indexbench text=54594
+# 2026-09-01: every binary falls by about 100 bytes. `k_force` gained a third
+# memo state and lost the branch that declined one, and the arithmetic came
+# out slightly in favour.

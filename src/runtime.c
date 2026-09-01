@@ -55,6 +55,12 @@ typedef struct { long long len; const unsigned char* data; long long cap; } KByt
    never the beat arenas, so a pending thunk can't pin a rewindable region.
    Captured args are copied in at creation; the site dispatcher
    (codegen-emitted d_thunk_eval) runs the computation at first force. */
+/* `forced` carries three states rather than two. See k_force for why the
+   third one is a flag on the cell and not a list somewhere else. */
+#define K_MEMO_NONE 0
+#define K_MEMO_KEPT 1
+#define K_MEMO_AT_RISK 2
+
 typedef struct KThunk {
     long long rc;
     long long site;
@@ -127,7 +133,7 @@ KValue k_thunk_new(long long site, int argc, ...) {
     k_stat_thunk_allocs++;
     t->rc = 1;
     t->site = site;
-    t->forced = 0;
+    t->forced = K_MEMO_NONE;
     t->argc = argc;
     t->next_free = 0;
     va_list ap;
@@ -159,7 +165,7 @@ KValue k_caf_blackhole(void) {
     if (!t) { fputs("out of memory\n", stderr); exit(1); }
     t->rc = 1;
     t->site = K_SITE_BLACKHOLE;
-    t->forced = 0;
+    t->forced = K_MEMO_NONE;
     t->argc = 0;
     t->next_free = 0;
     KValue v;
@@ -210,26 +216,62 @@ KValue k_b_render_value(KValue v) {
     return k_render(v, 0);
 }
 
-/* A cell whose value was built inside the innermost beat cannot keep it: the
-   loop rewinds between iterations and the memo would point at reclaimed
-   arena while the cell still says it was forced. The call site that opens a
-   beat promises its arguments are already evaluated — a thunk is the one
-   argument that is not — so the memo is declined and the captures are kept
-   for the next force. Recomputing is what that broken promise costs;
-   answering out of freed memory is not a price worth paying instead. */
+/* A cell whose value was built inside the innermost beat cannot be memoized
+   outright: the loop rewinds between iterations, and the memo would point at
+   reclaimed arena while the cell still said it was forced. Declining it
+   outright is what that used to mean, and the cost is one whole evaluation on
+   every later force — in the streaming shape, once a block. sha256 forces one
+   cell sixty-four times a block and evaluated it sixty-four times.
+
+   So the memo is kept and marked AT RISK instead. A rewind may take the answer
+   away, and a carry evacuation may move it somewhere a rewind cannot reach —
+   k_deep_copy's thunk arm re-points `result` for exactly that reason — and
+   which of the two happened is a question with a cheap answer: is the storage
+   still in the live chain. Asked at the next force, where it costs a walk of a
+   block list rather than a re-evaluation, and answered once per force rather
+   than once per rewind.
+
+   A list of at-risk cells checked at each rewind would be the other shape and
+   is worse: a cell is refcounted and can be freed and handed out again while
+   the list still names it, so the list would have to be kept in step with the
+   free list. The flag rides on the cell and cannot go stale.
+
+   The captures are NOT dropped for an at-risk memo, because a cell that may be
+   asked to run again has to still have them. */
 static int k_memo_outlives(KValue result);
+
+/* Is an at-risk memo's answer still where it was left? A non-heap answer never
+   moved. A heap one is gone if the rewind retired the block it sat in, or left
+   the bump pointer below it. NULL mark means the whole live chain, which is
+   the question here: not "does it outlive some mark" but "is it still there".
+   Storage outside the arena — a builder's malloc, tenured bytes — reads as
+   gone, which costs a recompute and is never wrong. */
+static int k_still_live(const void* p);
+static int k_is_heap(long long tag);
+
+static int k_memo_still_there(KThunk* t) {
+    if (!k_is_heap(t->result.tag)) return 1;
+    return k_still_live((const void*)(intptr_t)t->result.payload);
+}
 
 KValue k_force(KValue v) {
     if (v.tag != K_THUNK) return v;
     KThunk* t = (KThunk*)v.payload;
     k_stat_thunk_forces++;
-    if (t->forced) return t->result;
+    if (t->forced == K_MEMO_KEPT) return t->result;
+    if (t->forced == K_MEMO_AT_RISK) {
+        if (k_memo_still_there(t)) return t->result;
+        t->forced = K_MEMO_NONE;
+    }
     if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
     k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
-    if (!k_memo_outlives(answer)) return answer;
     t->result = answer;
-    t->forced = 1;
+    if (!k_memo_outlives(answer)) {
+        t->forced = K_MEMO_AT_RISK;
+        return t->result;
+    }
+    t->forced = K_MEMO_KEPT;
     /* the computation ran; its captures are done */
     k_thunk_drop_args(t);
     return t->result;
@@ -804,6 +846,13 @@ static int k_survives(const void* p, KMark* m) {
         frontier = NULL;
     }
     return 0;
+}
+
+/* Is this address still in the live chain at all — the question an at-risk
+   memo asks after some rewind may have happened. A NULL mark is the whole
+   chain up to the bump pointer, which is exactly "not reclaimed". */
+static int k_still_live(const void* p) {
+    return k_survives(p, NULL);
 }
 
 /* Does this outlive the rewind, counting storage the carry tenured? Asked by
@@ -1887,7 +1936,7 @@ KValue k_caf_complete(KValue built, KValue seeded) {
     if (seeded.tag == K_THUNK) {
         KThunk* t = (KThunk*)seeded.payload;
         t->result = frozen;
-        t->forced = 1;
+        t->forced = K_MEMO_KEPT;
     }
     return frozen;
 }

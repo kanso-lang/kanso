@@ -3765,3 +3765,93 @@ Ratchet row `trend_adrift`, mutation
 (in `lower_d`, a real worsening) and `evac_allocs` in the digest golden (in
 neither table) in the same patch. A gate that reads the second as an
 improvement goes green; this one stays red.
+
+---
+
+## 2026-09-01 — a memo declined inside a beat, and the third state that keeps it
+
+**DONE.** Closes the 64x thread opened on 2026-08-31.
+
+`k_force` memoized a thunk's answer only when `k_memo_outlives` said the
+storage sat below the innermost beat mark. Inside a beat it usually does not,
+and the memo was declined outright: the cell stayed unforced and the whole
+computation ran again on the next force. In the streaming shape that is once a
+block. On the 8,192-byte digest, `thunk_forces` and `thunk_evals` were both
+8,256 — every single force re-evaluated.
+
+**The third state.** The memo is kept and marked AT RISK instead of declined.
+A rewind may take the answer away; a carry evacuation may move it somewhere a
+rewind cannot reach, which `k_deep_copy`'s thunk arm already does on purpose
+(`if (t->forced) t->result = k_deep_copy(t->result, cp)`). Which of the two
+happened has a cheap answer — is the storage still in the live chain — and it
+is asked at the next force, where it costs a walk of a block list instead of a
+re-evaluation. `forced` carries three values now rather than two, so the flag
+rides on the cell and there is no second structure to keep in step.
+
+**Why not a register of at-risk cells checked at each rewind.** That was
+written first and thrown away. A thunk cell is refcounted and can be freed and
+handed out again while a list still names it, so the list would have to be
+kept in step with the free list, and touching a freed cell to un-memo it is the
+bug the register exists to prevent. The flag cannot go stale because it dies
+with the cell.
+
+The captures are NOT dropped for an at-risk memo: a cell that may be asked to
+run again has to still have them. A kept memo drops them as before.
+
+**Measured on the digest benchmark, exclusion untouched, main as the base.**
+
+| counter | before | after |
+|---|---:|---:|
+| thunk_evals | 8,256 | **129** |
+| allocs | 652,817 | **230,214** (-64.7%) |
+| alloc_bytes | 81,846,129 | **54,149,841** (-33.8%) |
+| arena_peak_bytes | 82,837,504 | **54,525,952** (-34.2%) |
+| arena_blocks | 79 | 52 |
+| push_mut_fast | 628,289 | 514,511 |
+| push_mut_slow | 41,479 | 25,225 |
+| sh_buf | 73,376,000 | 52,051,280 |
+
+Wall clock, interleaved against a worktree of origin/main built in its own
+directory, best of five, this container: **0.093 s -> 0.039 s**, 2.4x.
+
+**`digest_buf_reuse` 24,768 -> 16,640 is the counter that fell the wrong way,
+and it is the same fact.** A buffer is reused when a builder finds one to
+reuse; 8,127 fewer evaluations build 8,128 fewer buffers, so there are fewer
+reuses to count. Nothing lost a reuse it used to get.
+
+**Every other vein is byte-identical**: decode, escape, pend, oneshot, basket,
+encode, wide, scan counters, and the emitted-code golden. The machine-code
+golden falls about a hundred bytes a binary — `k_force` gained a state and lost
+the branch that declined a memo.
+
+**encodebench is 1.5% slower in wall clock** (0.953 s against 0.967, best of
+nine interleaved) with every one of its counters byte-identical, so it is doing
+exactly the same work. The randomised-layout spread measured for this tree is
+2.97% to 3.79%, wider than this, and there is no counter to attribute it to.
+Recorded rather than explained.
+
+**Welfare is 74.3323 before and after.** No digest counter feeds the index, so
+a 64.7% fall in allocations and a 34.2% fall in peak on a real program scores
+zero — the omission digestbench (kanso#1195) exists to make visible, still
+open. Deliberately not wired here: adding a term to the objective in the same
+change the term would reward is the wrong order, and the baselines it takes
+should not be chosen by whoever benefits. **OPEN.**
+
+**The reduced fixture that would not reduce.** Four attempts at a
+postcard-sized program: a body binding used once, one used behind a two-arm
+dispatch, one built outside the loop and passed in, and one built inside the
+loop's own cluster and handed to a thirty-round inner loop — the shape sha256
+has, where `w = schedule ...` in `blocked` is read by `compress` on each of
+sixty-four rounds. Every one of them compiled strict: the demand analysis
+proved the binding needed and no thunk was allocated at all. So what pins this
+is bench/cost_golden_digest.txt, whose `thunk_evals` row is exact and which
+went 8,256 -> 129 under this change and back again when it was reverted. That
+is the observation the rule asks for, on a fixture larger than the rule wants.
+**OPEN:** what keeps sha256's schedule lazy where four hand-written copies of
+its shape are strict. Whoever answers that gets the postcard.
+
+**What this does NOT close.** The carry-tier prefix removal, built and measured
+on 2026-08-31 and on the entry above, is still not landed. This change removes
+the reason it could not be: with the memo kept, lifting the prefix no longer
+takes native's `thunk_evals` to 64 where the interpreter reads 1, which is the
+differential the oracle refuses. Re-measure and land it next.
