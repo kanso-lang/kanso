@@ -4996,3 +4996,77 @@ outweighs one bigger buffer.
 Four rows fall and six do not move: jsonbench -1.044%, oneshot -0.481%, basket
 -0.040%, encodebench -0.003%. `.text` is byte-identical for all nine binaries
 again, which is what a constant change should look like.
+
+**The counters the shelf keeps.** A growth donates the outgrown buffer to the
+shelf and a later allocation takes it back, so halving the growths halves both
+halves of that trade. `buf_reuse` reads 85,350 on jsonbench where it read
+334,950, `encode_buf_reuse` 1,780, `oneshot_buf_reuse` 569 and
+`basket_buf_reuse` 98 — every one of them a buffer nobody had to hand back
+because nobody outgrew one. `sh_buf` is the bytes the shelf saw pass through
+and it rises with the buffers being bigger: 143,306,400 on jsonbench,
+`encode_sh_buf` 73,270,544, `oneshot_sh_buf` 1,133,328. The same two bytes per
+pair show up as `encode_alloc_bytes` 853,137,424 and `oneshot_alloc_bytes`
+4,490,268. Basket goes the other way on both, because its maps are large enough
+that eight is one doubling it no longer needs.
+
+## 2026-09-01 (last, later) — the tenure block a survivor still pointed at
+
+kanso#1209 could not go green. The cost-goldens job died with `the program ran
+out of stack: recursion went deeper than the stack holds`, and the program that
+died was the trend gate. The message was wrong twice over: the stack was eight
+frames deep, and the fall was a SIGSEGV the parent translates to that sentence
+because native cannot see its own recursion.
+
+Reproduction, on origin/main at 21d5c933 with nothing else changed: move one
+digit in `bench/cost_golden.txt` and run `scripts/trend_gate`. Native
+segfaults; `--interp` prints the listing and exits 0. #1209 was the first
+change in a while to move a counter in that file, which is why it surfaced
+there and not earlier.
+
+**Where it died.** gdb puts the fault in `k_copy_size` reading `s->data` for a
+KStr at 0x7ffff7e45b10, an address in the hole between two mappings — a block
+malloc had served with mmap and freed back to the kernel. A `free`-recording
+wrapper named the site: `k_ten_release`, the tenure allocator's block release.
+The path from the beat's result to the dead byte was a list in the arena, a
+record in the arena, and a string in the freed block.
+
+**Why the walk could not see it.** `k_survives_x` answers yes for a pointer
+into a tenure block, and that answer is what lets the copy prune: a survivor
+whose immediate interior survives is shared rather than copied, and the walk
+stops there. For the arena the prune is sound, because arena allocation is
+monotonic — a survivor can only point at storage older than itself, which is
+therefore also a survivor. Tenure storage is younger than the survivors that
+come to hold it, so an arena record can carry a tenured string with no arena
+pointer anywhere on the path to say so. `k_beat_pop`'s copy-out walks the
+result with a null mark, which does turn the tenure answer off, and prunes at
+the arena list one level above the record. Then it freed the block.
+
+**The fix.** A heap result keeps the region alive — `k_beat_pop` does not
+rewind for one — so the blocks are handed to the depth outside instead of
+freed, and released on the branch that does rewind, which is where everything
+the beat allocated goes back. `k_ten_bytes` travels with the blocks, so
+`K_TEN_CAP` still bounds what one depth may hold.
+
+One case is narrower rather than closed, and the comment in runtime.c says so:
+a node below that mark, repaired during the beat to hold a tenured pointer,
+outlives the rewind that frees the block. `k_repaired_settle` is where it would
+close — it exists to move repaired slots into the arena and leaves the tenured
+ones where they are, because `k_survives_x` answers yes for those too. Making
+that pass tenure-blind was built and did NOT change the gate's crash, so the
+route this bug took is the one above; the residual is recorded rather than
+patched on a guess.
+
+**What it costs.** Across all nine benchmarks exactly one counter moves:
+`scan_ten_frees` 1 -> 0. One 256 KiB block on scanbench is now handed up rather
+than freed at the pop. No allocation counter, no arena block, no peak, and
+widebench's `ten_frees` still reads 1 because its beat pops with a non-heap
+result. Every binary's `.text` rises 144 bytes, deepbench 160, and the machine
+code vein `text` lands on 729,106 across the nine.
+
+**What is not here.** A fixture that shows the bug without instrumentation. A
+forty-line nested-beat program does trip a detector — a record reachable from
+the result sits in a block the release freed — but it reads the freed bytes
+back intact, so native and the oracle still agree and the program prints the
+right answer. The reproduction above is real and deterministic; the reduction
+is not found yet, and this entry says so rather than pretending the golden edit
+is a fixture.
