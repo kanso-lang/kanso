@@ -43,6 +43,14 @@ else
 fi
 grep -v '^#' bench/instructions_golden.txt > work_want.txt
 diff work_want.txt work.txt || {
+  # The rows again, after the diff and after the profile above it, because
+  # this file is pinned to a host and the sessions that have to regenerate it
+  # are on a different one — they read the numbers out of this log and copy
+  # them in. A diff eighty lines of callgrind output above the end of a step
+  # is a diagnostic the log API will not hand back, which is the same
+  # complaint the note above makes about step summaries.
+  echo "=== every row as measured here, to copy into the golden"
+  cat work.txt
   echo "::error::the work the benchmarks do changed. A rise is a"
   echo "::error::regression to explain and a fall is a win to bank —"
   echo "::error::say which in the PR and regenerate"
