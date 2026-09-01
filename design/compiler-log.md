@@ -4418,3 +4418,59 @@ and the refusal now carries git's own stderr — "would not run" sent a reader t
 the ratchet where the answer was in the workflow. The lesson generalises past
 this row: a spec that enters where a user enters still cannot see the shape of
 the box CI enters from.
+
+## 2026-09-01 — nine of the objective's counters stand on a rule, and nothing said which
+
+**DONE.** `entering` gives a counter new to the model a baseline of
+`now * standing`, where standing is the ratio whose satisfaction equals its
+dimension's current mean. Landing day is therefore neutral, which is the whole
+point: entering at parity instead — the rule before kanso#910 — makes a
+measurement-only change spend the floor, and an objective that charges for
+measuring is paying people not to measure.
+
+**The rule is not neutral about anything after landing day, and that was not
+written down.** Saturation is concave, so a counter granted a high standing has
+little headroom left and one entering at parity has a great deal; how much a
+later change to that counter is worth follows from where it entered. Measured
+on the carry-tier arms of 2026-09-01: with the digest baselines at their
+dimension's standing the trade scored **74.31 -> 73.75 and was declined**; the
+same two arms with those baselines at parity score **70.14 -> 72.99, an
+acceptance**. The entering rule decided that verdict.
+
+**Nine of twenty-one.** The floor file's own history says which counters were
+granted, because the commit that first wrote each baseline key is either an
+ancestor of kanso#910 — which added `entering` on 2026-08-14 — or a descendant
+of it:
+
+| counter | first written | granted? |
+|---|---|---|
+| `wide_instructions` | 2026-08-14, kanso#887 | no, predates the rule |
+| `deep_instructions` | 2026-08-15, kanso#912 | yes |
+| `scan_arena_blocks`, `scan_peak_bytes` | 2026-08-17, kanso#945 | yes |
+| `pending_instructions` | 2026-08-21, kanso#981 | yes |
+| `compile_allocs`, `compile_instructions` | 2026-08-25, kanso#1041 | yes |
+| `digest_arena_blocks`, `digest_instructions`, `digest_peak_bytes` | 2026-08-31, kanso#1198 | yes |
+
+Everything from 2026-07-26 to 2026-08-14 was measured or hand-seeded. So nine
+of the model's twenty-one counters have a reference no measurement produced,
+and until this the floor file recorded them exactly like the twelve that do.
+
+**The rule stays; the arbitrariness stops being invisible.** `granted` names
+them in `bench/welfare_floor.json`, `--set` carries the list forward and adds
+whatever this run had to grant, and the report prints a line naming them. The
+score is unchanged — 74.33 against a floor of 74.33 — because nothing about the
+computation moved. A reader comparing two counters' ratios is comparing unlike
+things unless they know which, and until now nobody could.
+
+`tests/a_granted_baseline_says_it_is_one.rs` pins both halves: the report names
+all nine and does NOT name `decode_instructions`, which predates the rule by a
+fortnight; and a run that has to grant a counter writes it into the floor
+without losing the ones an earlier run granted. Watched red both ways — remove
+the report line and the first fixture fails, drop the persistence and the
+second does.
+
+**OPEN, stated rather than buried.** Whether a granted baseline should be
+replaced by real history once the counter has some. The argument for is that a
+granted reference is a guess and a measured one is not; the argument against is
+that re-basing a counter mid-life moves the objective without saying so, which
+is the thing the ratchet exists to stop. Nothing here does it.
