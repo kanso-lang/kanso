@@ -3725,3 +3725,43 @@ entry and the floor re-set with its reason. That is the change that makes the
 objective able to arbitrate the trade it could not arbitrate today, and it
 wants doing on its own with the ratchet read carefully rather than bolted to
 the benchmark's arrival.
+
+---
+
+## 2026-09-01 — an unclassified counter could pay for a worsening
+
+**DONE.** The trend gate refuses "a pure regression: something got worse and
+nothing got better". `worsened?` reads a counter's direction out of two tables,
+`lower` and `higher`, and answers **false** for a name in neither. The listing
+then printed every move that was not worsened as `improved`, and `better` was
+built by rejecting the worsened ones. So a counter no table classifies landed
+in `better` whichever way it moved, and no worsening was ever alone.
+
+Found while lifting the carry-tier prefix (see the entry above): that change
+read `evac_allocs 27 -> 33,827`, `evac_bytes 1,520 -> 2,705,520` and
+`thunk_evals 1 -> 64` as three improvements. Each of those is work done, and
+each rose.
+
+A move whose counter no table names is now a third state. It prints as `moved`
+under an UNCLASSIFIED heading and counts toward neither side, so the
+pure-regression rule is decided only by counters with a direction. The heading
+also names them, which is the actionable half: a counter nothing classifies
+wants classifying, and until it is, the gate says so out loud rather than
+quietly crediting it.
+
+The direction tables are deliberately NOT extended here. Adding
+`evac_allocs`/`evac_bytes` to `lower` and calling it done would leave the same
+hole for the next unnamed counter, and the tables are a judgement about what a
+counter means that wants making one at a time rather than in a batch beside a
+gate fix. **OPEN:** the mem corpus alone carries `cohort_frees`,
+`cohort_kept`, `evac_allocs`, `evac_bytes`, `put_mut_fast`, `put_mut_grow`,
+`push_mut_fast`, `push_mut_slow`, `thunk_evals`, `str_scans`,
+`str_scan_bytes`, `view_allocs`, `view_frees`, `perm_live_bytes` and
+`perm_peak_bytes` with no direction. The gate now lists them on any run that
+moves one.
+
+Ratchet row `trend_adrift`, mutation
+`a_worsening_paid_for_by_an_unclassified_counter`: it raises `scanbench calls`
+(in `lower_d`, a real worsening) and `evac_allocs` in the digest golden (in
+neither table) in the same patch. A gate that reads the second as an
+improvement goes green; this one stays red.
