@@ -4299,13 +4299,37 @@ carry tier is not admitted: encodebench 129,873, pendbench 118,087, basket
 digestbench, which is the point: the pathology lives behind a prefix decision,
 and the counter is what will show it the day that decision moves.
 
-It costs about two retired instructions per slot, which is the branch itself:
-basket rises 32,004 on 16,002 slots and pendbench 236,166 on 118,087, both
-exactly twice. Accumulating once at the exit was written and measured and is
-**not** cheaper — the same two per slot on both — so the count stays where it
-is read. As a fraction: basket +0.057%, pendbench +0.025%, every other
-benchmark at or below 0.0002%. Welfare is 74.31 either way, the counter not
-being one of its terms.
+**What it costs, and a correction to what I first wrote.** The guard is
+`k_stats_on > 0`, read inside the loop, and I measured it on basket and
+pendbench, found two retired instructions per slot on both, and wrote that
+down as the rule. CI measured all ten and two of them do not follow it:
+
+| benchmark | slots | `work_*` delta | per slot |
+|---|---:|---:|---:|
+| basket | 16,002 | +32,004 | 2.00 |
+| pendbench | 118,087 | +236,180 | 2.00 |
+| encodebench | 129,873 | +5,104 | 0.04 |
+| widebench | 16,000 | +3 | 0.0002 |
+| deepbench | — | +1,456 | — |
+
+The guard is loop-invariant, so a compiler may hoist it out; these are ten
+separately compiled programs and it evidently did in two of them. The
+supporting evidence is that `k_slots_survive` costs 31 instructions a slot in
+basket and 12 in widebench with counters off — different code for the same
+source. Reading the assembly to confirm the hoist is not done, so the
+mechanism is an inference and the deltas are the measurement.
+
+Accumulating once at the exit instead was written and measured on the two
+benchmarks that pay: it is **not** cheaper — the same two per slot on both —
+so the count stays where it is read.
+
+As a fraction: `work_basket` +0.057%, `work_pendbench` +0.025%,
+`work_deepbench` +0.0002%, `work_encodebench` +0.00006%, `work_widebench`
++0.000005%. `text` rises 741,202 -> 744,562, a flat +368 bytes of machine code
+in every benchmark, which is the guard plus the extra argument the dump
+marshals. `compile_instructions` FELL 41,496,028 -> 41,494,642, unattributed:
+the front end does not run this code, and the only reachable connection is the
+runtime.c text the compiler carries. Welfare 74.33 against a floor of 74.33.
 
 **The hole it found.** The trend gate read the first reading as eight
 worsenings and refused the branch as a pure regression. `or_zero` cannot tell a
