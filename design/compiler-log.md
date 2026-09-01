@@ -4475,7 +4475,7 @@ granted reference is a guess and a measured one is not; the argument against is
 that re-basing a counter mid-life moves the objective without saying so, which
 is the thing the ratchet exists to stop. Nothing here does it.
 
-## 2026-09-01 — the runner pool is three CPUs, and the first fix for that was wrong
+## 2026-09-01 — the runner pool is four CPUs, and the first fix for that was wrong
 
 kq#85 established what moved four kq instruction rows between two runs: not a
 toolchain. Both job logs printed rustc 1.98.0 (88d9e12ae), LLVM 22.1.8, image
@@ -4629,4 +4629,4 @@ What is still unmeasured is how often the pool's CPUs actually move these rows
 exactly on another. If that turns out to be frequent, the answer is a golden
 per cpu, not a gate that shrugs.
 
-kq carries the same wiring and the same correction.
+kq carries the same wiring and owes the same correction.
