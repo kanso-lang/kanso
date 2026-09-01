@@ -83,6 +83,15 @@ static long long k_stat_utf8_bytes = 0;
 static long long k_stat_find2_calls = 0;
 static long long k_stat_append_fast = 0;
 static long long k_stat_append_grow = 0;
+/* The tenure allocator mallocs outside every other accounting: its blocks
+   move no allocation counter, no arena counter and no peak. So a change that
+   released none of them read GREEN on all nine counter gates and read as a
+   WIN on the instruction vein, because skipping the frees is cheaper than
+   doing them. Found on 2026-09-01 by breaking k_ten_release on purpose. A
+   free counter is what makes the leak visible: the block count is unmoved by
+   it, the free count goes to nought. */
+static long long k_stat_ten_blocks = 0;
+static long long k_stat_ten_frees = 0;
 static long long k_stat_utf8_zerocopy = 0;
 /* Characters counted by walking, which a string that can cache its count
    pays once and a builder pays on every read. Quadratic when a builder is
@@ -483,6 +492,8 @@ static void k_stats_dump(void) {
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
+    fprintf(stderr, "ten_blocks=%lld\nten_frees=%lld\n",
+            k_stat_ten_blocks, k_stat_ten_frees);
     fprintf(stderr,
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
@@ -1059,6 +1070,7 @@ static void* k_ten_alloc(size_t n) {
         nb->next = k_ten_blocks[d];
         k_ten_blocks[d] = nb;
         b = nb;
+        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_ten_blocks++;
     }
     void* out = b->data + b->used;
     b->used += n;
@@ -1068,11 +1080,18 @@ static void* k_ten_alloc(size_t n) {
 }
 
 static void k_ten_release(long long d) {
-    for (KTenBlock* b = k_ten_blocks[d]; b; ) {
+    KTenBlock* head = k_ten_blocks[d];
+    /* `k_ten_any` summarises whether ANY of the sixty-four depths holds a
+       block, and recomputing it walks all sixty-four. Only this depth can
+       have changed here, so a depth that held nothing leaves the summary
+       exactly as it was. Every beat pop used to pay the walk. */
+    if (!head) return;
+    for (KTenBlock* b = head; b; ) {
         KTenBlock* next = b->next;
         free(b->data);
         free(b);
         b = next;
+        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_ten_frees++;
     }
     k_ten_blocks[d] = NULL;
     k_ten_bytes[d] = 0;
