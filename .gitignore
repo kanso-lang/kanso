@@ -69,3 +69,5 @@ indexbench.ll
 /counters_escape.txt
 /counters_scan.txt
 .claude/settings.local.json
+/digestbench
+/counters_digest.txt

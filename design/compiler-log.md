@@ -3651,3 +3651,77 @@ The 2026-08-30 note beside `k_is_heap` says `k_copy_size` is 36% of deepbench
 and that a tenth `case` in the tag switch cost that benchmark 6.14%. The same
 walk is 80.66% here. deepbench is the closest thing the suite has to this
 shape and it is nowhere near it.
+
+## 2026-08-31 — digestbench: the one benchmark whose peak is the point
+
+SEARCHED FIRST: design/compiler-log.md, design/log/compiler-log-archive.md,
+design/*.md, and the benchmark corpus itself — `bench/` and
+`scripts/gates/build_benchmarks.sh`, which is the list this joins.
+
+The entries above this one describe a change that took an 8 KB sha256 digest
+from 79,691,776 arena bytes to 1,048,576 and scored **exactly zero** against
+welfare, and whose 52x wall-clock regression nothing in the corpus was shaped
+to notice. Both blindnesses are the same gap: every program the suite weighs
+either holds its whole subject on purpose — the decoder and the encoder do —
+or is small enough to sit in the arena's first block. So "does the peak grow
+with the input" is weighted at zero by omission.
+
+`bench/digestbench` is that shape. It reads `bench/digest_input.txt` — 8,192
+deterministic printable bytes — at runtime and digests it once. Runtime read
+for the reason bench/make_jsonbench already gives: a compile-time fixture
+would let the optimizer fold the digest and flatter every row. Once rather
+than in a loop, because the peak of one run is the number this exists for and
+a loop over a walk that never reclaims would measure the loop.
+
+What it reads today:
+
+```
+allocs=652817  alloc_bytes=81846129
+arena_blocks=79  arena_peak_bytes=82837504
+```
+
+82,837,504 arena bytes for 8,192 bytes of message — 10,112 bytes an input
+byte. sha256 walks its message sixty-four bytes at a time carrying eight state
+words, and everything a block builds is dead when the next one starts, so that
+number is a property of the algorithm in a compiler that reclaims between
+blocks and a property of the MESSAGE in one that does not. It is the second
+case, and `scripts/gates/digest_counters.sh` says so where a reader will meet
+it.
+
+It costs 0.333 s, which sits between jsonbench at 0.283 and encodebench at
+0.819 — the middle of what the suite already pays.
+
+WHY THE EMITTED VEIN WORSENS, and the gate defect it exposed.
+`emitted_other_defines` 1,163 -> 1,323, `emitted_other_calls` 12,739 ->
+14,310, `emitted_other_branches` 7,484 -> 8,341 and `emitted_other_lines`
+73,669 -> 82,751. Those four rows are SUMS over the benchmarks in
+`bench/emitted_golden_others.txt`, and a tenth benchmark adds a tenth
+program's code to each. No existing program emitted a line more than it did
+before; digestbench's own row is 160 defines, 1,571 calls, 857 branches and
+9,082 lines, and the four deltas are exactly it. The trend gate called that a
+pure regression and refused the change.
+
+The gate was right to sum and wrong to compare. `on_line` drops a line's
+leading name so the fields add across a golden's samples, which is the
+treatment compile_golden's five samples get and is correct for a fixed set —
+and meaningless the moment the set changes, which is the error library_box.sh
+names in its own domain. `against _ ""` already said a golden this branch
+CREATED has nothing to be compared against; the gate now says the same one
+level down, for a row added inside a golden that existed.
+
+It drops the joining sample from the current side and sums both over the
+samples they share. THE FIRST DRAFT SKIPPED THE WHOLE GOLDEN instead, and the
+mutation caught it: with `scanbench calls` moved 3,743 -> 9,999 in the same
+commit that adds a benchmark, the skip passed silently and the intersection
+still fails. Three mutations were run and all three answer right — a rise with
+no sample joining, a rise with one joining, and the real case where only a
+sample joins.
+
+STILL OPEN, and deliberately not done here: the welfare wiring. Adding
+`digest_peak_bytes` to `run_memory_counters` and `digest_instructions` to
+`run_speed_counters` re-baselines the index — every term is a ratio against
+`bench/welfare_floor.json`'s baseline block, so a new counter needs a baseline
+entry and the floor re-set with its reason. That is the change that makes the
+objective able to arbitrate the trade it could not arbitrate today, and it
+wants doing on its own with the ratchet read carefully rather than bolted to
+the benchmark's arrival.

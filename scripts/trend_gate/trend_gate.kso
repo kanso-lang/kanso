@@ -142,6 +142,11 @@ bench_scan = [["bench/cost_golden_scan.txt" "scan_"]]
 
 bench_wide = [["bench/cost_golden_wide.txt" "wide_"]]
 
+# The digest vein, added with the benchmark on 2026-08-31. `digest_peak_bytes`
+# is the row this whole benchmark exists for: it is what a streaming walk
+# holds, and it is linear in the message rather than constant.
+bench_digest = [["bench/cost_golden_digest.txt" "digest_"]]
+
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
@@ -154,7 +159,9 @@ bench_emits = text/concat bench_emitted bench_emitted_others
 
 bench_run = text/concat bench_work (text/concat bench_emits bench_text)
 
-bench_rest = text/concat bench_escape (text/concat bench_scan bench_wide)
+bench_wd = text/concat bench_wide bench_digest
+
+bench_rest = text/concat bench_escape (text/concat bench_scan bench_wd)
 
 bench_ce = text/concat bench_cd (text/concat bench_de bench_run)
 
@@ -216,6 +223,37 @@ fn on_line prefix line
   fields = list/to_list (list/select toks field?)
   named = list/to_list (list/map fields (f -> pair_of prefix f))
   shaped prefix toks named (length named)
+
+# The sample name `on_line` drops, recovered from the raw line. A golden that
+# sums across samples cannot tell a set that GREW from a sum that rose, and
+# every sum rises the moment a benchmark joins.
+fn lead_of line
+  toks = list/to_list (list/select (text/split line " ") said?)
+  fields = list/to_list (list/select toks field?)
+  leader toks (length fields > 0 and length toks > length fields)
+
+fn leader toks true
+  toks[1]!
+
+fn leader _ false
+  ""
+
+fn sample_names text
+  lines = list/select (text/split text "\n") body?
+  all = list/to_list (list/map lines lead_of)
+  list/to_list (list/select all said?)
+
+fn absent? group name
+  length (list/to_list (list/select group (g -> g == name))) == 0
+
+fn new_samples base_text ours
+  was = sample_names base_text
+  list/to_list (list/select (sample_names ours) (n -> absent? was n))
+
+fn without text joiners
+  drop = (l -> absent? joiners (lead_of l))
+  lines = list/select (text/split text "\n") drop
+  text/join (list/to_list lines) "\n"
 
 fn shaped prefix toks _ 0
   lone prefix toks (length toks == 2)
@@ -352,9 +390,39 @@ fn against golden base_text found
   os/read_file golden[1]!
     . (ours -> weighed golden golden[2]! base_text ours found)
 
+# The sums run over the samples BOTH sides have.
+#
+# These goldens sum their fields across samples on purpose — `on_line` drops
+# the leading name so `lines`, `calls`, `branches` and `defines` add up across
+# a file's programs. That is the right treatment for a fixed set and the wrong
+# one the moment a benchmark joins: every sum rises at once and not one
+# program already there emitted a line more than before. Adding a tenth
+# benchmark read defines 1,163 -> 1,323, calls 12,739 -> 14,310, branches
+# 7,484 -> 8,341 and lines 73,669 -> 82,751, and the four deltas were exactly
+# the new program's own row. The gate called that a pure regression.
+#
+# `against _ ""` above already says a golden this branch CREATED has nothing
+# to be compared against. This is the same sentence one level down, for a row
+# added inside a golden that existed — and it drops the joining sample rather
+# than the whole file, so a real rise in a program that was already there
+# still shows on the run that adds one. Skipping the file instead was written
+# first and measured: `scanbench calls 3,743 -> 9,999` went past it silently.
 fn weighed golden prefix base_text ours found
-  mine = counted ours prefix
+  joiners = new_samples base_text ours
+  mine = counted (without ours joiners) prefix
   theirs = counted base_text prefix
+  named_new golden joiners (length joiners == 0)
+    . (_ -> scored golden mine theirs found)
+
+fn named_new _ _ true
+  io/write ""
+
+fn named_new golden joiners false
+  listing = text/join joiners ", "
+  said_it = "a sample joined {golden[1]!} ({listing}); the sums"
+  io/write "{said_it} below are over the samples both sides have.\n"
+
+fn scored golden mine theirs found
   names = names_of (text/concat mine theirs)
   mine_t = totals mine
   theirs_t = totals theirs

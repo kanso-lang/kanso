@@ -38,3 +38,10 @@ indexbench defines=35 calls=159 branches=76 lines=1104
 # 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
 # 1,104 lines. It reads a string forward one character at a time, which is the
 # only shape in the tree that asks `s[i]` of multibyte text.
+digestbench defines=160 calls=1571 branches=857 lines=9082
+# 2026-08-31: digestbench joins, at 160 defines, 1,571 calls, 857 branches and
+# 9,082 lines. It is the only benchmark whose PEAK is the point — sha256 walks
+# a padded message sixty-four bytes at a time and everything a block builds is
+# dead when the next starts, so what it holds is a property of the algorithm
+# in a compiler that reclaims and a property of the message in one that does
+# not. It reads 82,837,504 arena bytes for an 8,192-byte message.

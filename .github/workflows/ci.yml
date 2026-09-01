@@ -318,6 +318,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/pend_counters.sh
+      # The only vein whose headline row is a PEAK rather than a total:
+      # sha256 holds the whole message live at once, so arena_peak_bytes here
+      # is the number a memory change moves. Every other benchmark's peak is
+      # bounded by its text and says nothing.
+      - name: digest counters
+        id: digest
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/digest_counters.sh
       - name: every vein had its say
         if: always()
         run: |
@@ -334,7 +343,8 @@ jobs:
                       "compile instructions:${{ steps.compile_ir.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
-                      "pending-cell counters:${{ steps.pend.outcome }}"; do
+                      "pending-cell counters:${{ steps.pend.outcome }}" \
+                      "digest counters:${{ steps.digest.outcome }}"; do
             case "$vein" in
               *:failure)
                 echo "::error::${vein%:*} disagrees with its golden"

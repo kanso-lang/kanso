@@ -1,0 +1,29 @@
+import "std/sha256"
+import "std/text"
+
+# The one benchmark whose PEAK is the point.
+#
+# Every other program in the corpus either holds its whole subject on purpose
+# — the decoder and the encoder do — or is small enough to sit in the arena's
+# first block. So the dimension "does the peak grow with the input" is
+# weighted at zero by omission, and on 2026-08-31 that let a change that took
+# an 8 KB digest from 79,691,776 arena bytes to 1,048,576 score exactly zero
+# against the welfare floor. It also let the same change's 52x wall-clock
+# regression through, because nothing in the suite runs long enough on an
+# input this shape to notice.
+#
+# sha256 is a streaming algorithm: it walks the padded message sixty-four
+# bytes at a time carrying eight state words, and everything a block builds is
+# dead the moment the next block starts. So `digest_peak_bytes` is a constant
+# in a compiler that reclaims and linear in the message in one that does not.
+# It reads about ten thousand bytes per input byte today, which is the second
+# number rather than the first.
+#
+# The message is read at runtime rather than embedded, the same reason
+# bench/make_jsonbench gives: a compile-time fixture would let the optimizer
+# fold the digest and flatter every row.
+#
+# One digest, not a loop. The peak of one run is the number this exists for,
+# and a loop over a walk that never reclaims would measure the loop instead.
+pub fn go raw
+  print "digested: {text/slice (sha256/hex (text/bytes raw)) 1 16}"
