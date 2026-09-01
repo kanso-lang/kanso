@@ -4630,3 +4630,129 @@ exactly on another. If that turns out to be frequent, the answer is a golden
 per cpu, not a gate that shrugs.
 
 kq carries the same wiring and owes the same correction.
+
+## 2026-09-01 (later still) — forty-seven instructions to store one byte
+
+`k_b_append_mut` is 2,000,259,200 instructions of encodebench, 23.82% of the
+run and the largest single symbol anywhere in the suite. It is called
+42,318,000 times, which is 47.3 instructions a call. The callgrind file has
+said so for weeks; reading it needed an id-to-name map, because callgrind names
+a function only on its first `cfn=` line and a grep for the name undercounts
+by two orders of magnitude — 461,200 against the true 42,318,000.
+
+Disassembled, the forty-seven are honest: the fast path really does execute
+that many instructions to put a comma in a buffer that already has room. Two
+causes, and both are the common path paying for a rare one.
+
+**The byte went to memory and came back.** The general path reaches its store
+through `src`, a `const unsigned char*` that is a phi of three predecessors —
+a string's data, a byte string's data, or the address of a one-byte local. So
+a byte a caller passed in a register was stored to a stack slot and reloaded
+four instructions later, and the frame that slot needs was built by every
+append of every shape. Straight-lining the byte case ahead of the other two
+keeps it in the register. In the same block, `a->len` was read three times
+where one would do: a store through `unsigned char*` aliases every field of
+the header it is stored into, so the compiler had to reload the length after
+writing the byte. Read once into a local, it does not.
+
+**And the frame served an error path.** `k_die` calls `exit`, and nothing said
+so. Unmarked, clang inlined its fprintf and its exit into every runtime entry
+that validates a tag — so the entry pushed the callee-saved registers that
+error path needs, and built a frame, before it could test anything. Marked
+`noreturn` and `noinline`, along with its eight siblings, it costs a call at
+the point of death and nothing anywhere else.
+
+| row | before | after | |
+|---|---:|---:|---:|
+| jsonbench | 2,838,415,815 | 2,781,834,881 | -1.99% |
+| encodebench | 8,396,592,982 | 7,870,153,008 | **-6.27%** |
+| oneshot | 43,094,978 | 41,401,995 | -3.93% |
+| basket | 56,490,028 | 56,459,146 | -0.05% |
+| widebench | 63,997,234 | 64,077,244 | **+0.13%** |
+| deepbench | 726,488,376 | 717,299,279 | -1.27% |
+| escapebench | 253,819,082 | 249,019,060 | -1.89% |
+| pendbench | 937,802,653 | 930,587,850 | -0.77% |
+| indexbench | 5,243,104 | 5,243,096 | -0.0002% |
+| digestbench | 152,573,619 | 143,472,199 | **-5.96%** |
+
+(CI's rows. The container this was developed in runs glibc 2.39-0ubuntu8.7
+against the runner's 2.39-0ubuntu8.8, so `measured_on` refuses a local
+regeneration and the numbers above come out of the instructions job.)
+
+The two changes were measured apart. `noreturn` alone is digestbench -5.97%,
+escapebench -1.89%, deepbench -1.27%, encodebench -1.27%, pendbench -0.77%,
+widebench -0.48%, jsonbench -0.40% — it reaches everything, because every
+benchmark runs runtime entries that validate a tag. The append split is the
+rest of encodebench's fall and most of jsonbench's.
+
+**work_widebench rises, and the objective was asked rather than told.** The
+split
+puts the string and byte-string cases behind a call into `k_b_append_wide`, and
+widebench appends strings, so every one of its appends pays that call: 384,000
+instructions. The alternative was built and measured — leave the byte case
+inline and outline nothing — and it costs widebench nothing, but gives back
+142M instructions on encodebench and 20M on jsonbench. It reads 74.47 where the
+split reads 74.50. The model prefers the split by 0.03, so the split shipped
+and the rise stands with its cause written down. This is the trade the weights
+exist to license, and the counterfactual is here so that a later reader can
+argue with the weights rather than with the measurement.
+
+Every allocation counter is byte-identical: all nine counter gates pass
+unchanged. That is the point of a separate instruction vein — a decode that
+allocates identically and executes six per cent less work moves nothing else in
+the tree. Every binary also falls about 2,000 bytes, 2.4%, which is the
+inlined error text and call sequence leaving dozens of sites.
+
+**compile_instructions rises 1,630 to 41,496,272, and it is layout for the
+third time.** `kanso check lib/json` runs none of the runtime, so nothing the
+front end does changed. What changed is `include_str!("runtime.c")`, a static in the binary
+that grew 2,962 bytes and shifted what follows it. Measured rather than
+assumed, because the same claim was made twice before on the strength of
+elimination: build this branch's front end against main's runtime.c and
+against this branch's, on one host, and read 41,922,834 and 41,925,168 — the
+same rise with no Rust changed at all. compile_allocs, compile_peak_bytes,
+rounds and visits hold.
+
+Welfare 74.33 to 74.50, floor set. kq links this runtime and owes a pin bump;
+its instructions vein will move and none of its allocation counters will.
+
+## 2026-09-01 (later still, second) — naming a counter licensed it, and the listing only printed
+
+The ratchet went red on the branch above, with two rows BLIND: `a counter
+worsens for nothing` and `a runtime counter worsens for nothing`. Both are
+trend-gate mutations, both had been proving something, and both stopped
+because of the shape of that branch rather than anything wrong with them.
+
+**A counter's name was a blanket permit.** The gate priced a worsening when
+the branch's compiler-log delta mentioned the counter anywhere. The branch
+above raised `compile_instructions` by 1,630 for a layout reason and wrote a
+paragraph explaining it — and that paragraph then licensed the mutation to set
+the same counter to `compile_instructions=999999999`. The gate printed `every
+changed counter is priced` and exited 0. (Written the way the mutation writes
+it, ungrouped: the rule below reads comma-grouped figures, and an entry that
+quotes a sentinel in the gate's own spelling prices it.) Any branch that legitimately moves a counter and says so
+disarms the gate for that counter, which is every branch that touches a
+golden.
+
+**And the listing was advisory.** With the counter unnamed the gate printed
+UNPRICED, listed the row, and exited 0 anyway. So the runtime mutation — set
+`jsonbench 9999999999` — was listed and still green. The pure-regression
+rule beside it could not catch that either: it refuses a branch where
+something worsens and nothing improves, and the branch above improves nine
+rows and ratchets the floor, so the licence was already bought.
+
+**What it takes now.** A worsening is priced when the log delta names the
+counter AND quotes the value it landed on. `compile_instructions` names
+41,496,272 above; the mutation's figure appears nowhere in the grouped form
+the gate reads, so it is unpriced. And unpriced exits 1 rather than printing. No band, no tolerance:
+the log already states the figure a move landed on, and this is the gate
+reading what the log is for.
+
+Both rows are red again, and the four other trend-gate mutations still are:
+`a worsening hidden behind a joining sample` and `a worsening paid for by an
+unclassified counter` were re-run against the new rule and both exit 1.
+
+The cost is that a branch worsening a counter must now write the number, not
+just the name. That is what the log's own rule already asks for — pin the
+number, never a band — so the gate is asking for the record it was always
+supposed to be reading.

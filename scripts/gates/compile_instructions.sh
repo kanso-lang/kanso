@@ -23,7 +23,7 @@ golden=bench/compile_instructions_golden.txt
 sh scripts/gates/measured_on.sh "$golden"
 
 # And which silicon is about to count it. This never refuses — the runner pool
-# holds at least three CPUs — it prints, and is asked a question below only if
+# holds at least four CPUs — it prints, and is asked a question below only if
 # the row has actually moved. scripts/gates/dispatch.sh carries the reasons.
 sh scripts/gates/dispatch.sh name
 

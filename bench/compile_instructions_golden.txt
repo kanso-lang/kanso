@@ -774,7 +774,7 @@
 # allocations do not cost 0.19%; the inliner changed its mind about a small
 # function, which is the same layout effect the notes above describe. The
 # shorter source is kept because it is the right code.
-compile_instructions=41494642
+compile_instructions=41496272
 # 2026-08-31: +22, and none of it is the front end. k_utf8_chars is twenty
 # lines added to src/runtime.c, which main.rs holds as an include_str! and
 # hashes for the build cache key; a longer string takes twenty-two more
@@ -799,3 +799,11 @@ compile_instructions=41494642
 # length and what follows it in the binary moves. compile_allocs,
 # compile_peak_bytes, rounds and visits are byte-identical, which is what says
 # the front end's work did not change.
+# 2026-09-01 (later): +1,630, and layout for the third time. The one-byte
+# append and the noreturn `k_die` are runtime changes; `kanso check lib/json`
+# runs none of the runtime. What moved is `include_str!("runtime.c")`, a static
+# in the binary that grew 2,962 bytes, shifting what follows it. Measured
+# directly rather than assumed: building this branch's front end against
+# main's runtime.c and against this branch's, on one host, reads 41,922,834
+# and 41,925,168 — the same +2,334 with no Rust changed at all. compile_allocs,
+# compile_peak_bytes, rounds and visits are byte-identical.

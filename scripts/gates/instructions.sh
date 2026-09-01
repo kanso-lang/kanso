@@ -16,7 +16,7 @@ set -e
 sh scripts/gates/measured_on.sh bench/instructions_golden.txt
 
 # And which silicon is about to count them. This never refuses — the runner
-# pool holds at least three CPUs, so a check that demanded one would be red on
+# pool holds at least four CPUs, so a check that demanded one would be red on
 # most runs for a reason no pull request causes. It prints, and it is asked a
 # question further down, only if a row has actually moved.
 sh scripts/gates/dispatch.sh name

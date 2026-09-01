@@ -156,7 +156,12 @@ KValue k_thunk_new(long long site, int argc, ...) {
    during the build loads a thunk rather than the zeroed global — which is an
    integer zero, and reads as one. Demanding it is the failure the oracle
    reports; holding it without demanding it renders as any pending cell. */
-void k_die(const char* msg);
+/* It calls exit, and saying so is worth instructions rather than tidiness.
+   Unmarked, clang inlines the fprintf and the exit into every caller that
+   validates a tag — so a hot runtime entry builds a frame and saves the
+   registers that error path needs before it can test anything, and pays for
+   them on the path that never dies. */
+__attribute__((noreturn, noinline)) void k_die(const char* msg);
 
 enum { K_SITE_BLACKHOLE = -1 };
 
@@ -2029,12 +2034,12 @@ static const char* k_c_off(void) { return k_color_mode() ? "\x1b[0m" : ""; }
 /* The interpreter is the oracle and it names what it was handed. A reader
    told only what was wanted has to guess, and the two engines have to agree
    anyway, so a type complaint carries the value that caused it. */
-static void k_die_value(const char* msg, KValue v);
-static void k_die_got(const char* msg, KValue v);
+__attribute__((noreturn, noinline)) static void k_die_value(const char* msg, KValue v);
+__attribute__((noreturn, noinline)) static void k_die_got(const char* msg, KValue v);
 
 static void k_itoa(char* buf, long long v);
 
-void k_die_arity(long long want, long long got) {
+__attribute__((noreturn, noinline)) void k_die_arity(long long want, long long got) {
     char w[24], g[24];
     k_itoa(w, want);
     k_itoa(g, got);
@@ -2043,13 +2048,13 @@ void k_die_arity(long long want, long long got) {
     exit(1);
 }
 
-void k_die_overload(const char* name) {
+__attribute__((noreturn, noinline)) void k_die_overload(const char* name) {
     fprintf(stderr, "%serror[runtime]:%s no overload of `%s` matches these arguments\n",
             k_c_err(), k_c_off(), name);
     exit(1);
 }
 
-void k_die(const char* msg) {
+__attribute__((noreturn, noinline)) void k_die(const char* msg) {
     fprintf(stderr, "%serror[runtime]:%s %s\n", k_c_err(), k_c_off(), msg);
     exit(1);
 }
@@ -2057,7 +2062,7 @@ void k_die(const char* msg) {
 /* A function value called with a count it does not take. A group names the
    arms that did not match; a builtin takes exactly one count and says both,
    which is the sentence the interpreter prints. */
-static void k_die_ref_arity(KFnref* r, long long got) {
+__attribute__((noreturn, noinline)) static void k_die_ref_arity(KFnref* r, long long got) {
     if (!r->builtin) k_die_overload(r->name);
     char w[24], g[24], said[128];
     k_itoa(w, r->arity);
@@ -2522,7 +2527,7 @@ KValue k_keyed_check(KValue v, long long entries) {
    unlike the socket handles in kanso#1094 that kanso hands out, and the clause
    after the semicolon is the only place the language says why a bind cannot
    simply fail over to another arm. */
-void k_die_destructure(KValue v, const char* ty) {
+__attribute__((noreturn, noinline)) void k_die_destructure(KValue v, const char* ty) {
     /* QUOTED, matching `render(self, &value, true)` at eval.rs:1283. Unquoted
        agrees for an int, a float and a list and diverges on a string — which a
        fixture holding one int would never have shown. */
@@ -2550,14 +2555,14 @@ void k_no_field(KValue v, const char* name) {
     exit(1);
 }
 
-static void k_die_got(const char* msg, KValue v) {
+__attribute__((noreturn, noinline)) static void k_die_got(const char* msg, KValue v) {
     KValue shown = k_render(v, 0);
     fprintf(stderr, "%serror[runtime]:%s %s, got %s\n", k_c_err(), k_c_off(), msg,
             k_as_str(shown)->data);
     exit(1);
 }
 
-static void k_die_value(const char* msg, KValue v) {
+__attribute__((noreturn, noinline)) static void k_die_value(const char* msg, KValue v) {
     KValue shown = k_render(v, 1);
     fprintf(stderr, "%serror[runtime]:%s %s, not %s\n", k_c_err(), k_c_off(), msg,
             k_as_str(shown)->data);
@@ -5233,7 +5238,7 @@ static void k_buf_flush(void) { memset(k_buf_free, 0, sizeof(k_buf_free)); }
 /* Naming the value is the difference between "something here is wrong" and
    "you passed 5 where a function goes". The interpreter has always named it;
    native said half as much, which the differential law does not allow. */
-static void k_die_not_callable(KValue f) {
+__attribute__((noreturn, noinline)) static void k_die_not_callable(KValue f) {
     KValue shown = k_render(f, 0);
     KStr* s = k_as_str(shown);
     char said[256];
@@ -6582,11 +6587,50 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
                                                         const unsigned char* src,
                                                         long long n, int mutate);
 
+static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
+                                                        KValue x, int mutate);
+
+/* A comma, a colon, a brace: three quarters of the appends the encoder makes
+   are one byte into spare capacity, and this is the whole of that case.
+
+   The general path below reaches its store through `src`, a pointer that is a
+   phi of three predecessors, so a byte arriving in a register was written to a
+   stack slot and read back — and the frame that slot needs is built by every
+   append, of any shape, before anything is tested. Split, the byte case is a
+   leaf: no frame, no callee-saved registers, and `a->len` read once into a
+   local rather than three times, because a store through `unsigned char*`
+   aliases every field of the header it is stored into. */
 static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     if (!k_not_failure(acc)) return acc;
     if (!k_not_failure(x)) return x;
     if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
     KBytes* a = k_as_bytes(acc);
+    if (x.tag == K_INT) {
+        long long alen = a->len;
+        long long acap0 = a->cap;
+        long long bcap = acap0 < 0 ? -acap0 : acap0;
+        unsigned char* data = (unsigned char*)a->data;
+        if (bcap) {
+            KBuf* bbuf = ((KBuf*)data) - 1;
+            if (bbuf->used == alen && alen + 1 <= bcap) {
+                k_stat_append_fast++;
+                data[alen] = (unsigned char)(x.payload & 0xff);
+                bbuf->used = alen + 1;
+                if (mutate) {
+                    a->len = alen + 1;
+                    return acc;
+                }
+                return k_bytes_owned(alen + 1, data, acap0);
+            }
+        }
+    }
+    return k_b_append_wide(acc, a, x, mutate);
+}
+
+/* Everything the byte case above is not: a string, a byte string, and the byte
+   that did not fit. Out of line so the common append stops paying its frame. */
+static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
+                                                        KValue x, int mutate) {
     const unsigned char* src;
     long long n;
     unsigned char one;
