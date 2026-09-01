@@ -5089,10 +5089,12 @@ identical.
 
 Welfare 74.6146 to 74.6196, and the floor is set.
 
-**What is not here.** A fixture that shows the bug without instrumentation. A
-forty-line nested-beat program does trip a detector — a record reachable from
-the result sits in a block the release freed — but it reads the freed bytes
-back intact, so native and the oracle still agree and the program prints the
-right answer. The reproduction above is real and deterministic; the reduction
-is not found yet, and this entry says so rather than pretending the golden edit
-is a fixture.
+**The fixture.** `tests/a_tenure_block_a_survivor_points_at.rs`. It took three
+things at once and no fewer: an inner beat that builds a batch, an outer beat
+that accumulates the batches so the batch nodes live a lap and are promoted,
+and a SECOND pass over the accumulated list so a later evacuation walks the
+promoted nodes after their block has gone. Every earlier attempt had two of the
+three and read green — the dangling pointer was there, a detector saw it, and
+nothing dereferenced it. Watched red on origin/main's runtime.c rebuilt in
+place: the assertion fails in 0.69 seconds. Green here in 21, with the oracle
+agreeing to the byte.
