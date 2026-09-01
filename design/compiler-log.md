@@ -4727,22 +4727,24 @@ because of the shape of that branch rather than anything wrong with them.
 the branch's compiler-log delta mentioned the counter anywhere. The branch
 above raised `compile_instructions` by 1,630 for a layout reason and wrote a
 paragraph explaining it — and that paragraph then licensed the mutation to set
-the same counter to 999,999,999. The gate printed `every changed counter is
-priced` and exited 0. Any branch that legitimately moves a counter and says so
+the same counter to `compile_instructions=999999999`. The gate printed `every
+changed counter is priced` and exited 0. (Written the way the mutation writes
+it, ungrouped: the rule below reads comma-grouped figures, and an entry that
+quotes a sentinel in the gate's own spelling prices it.) Any branch that legitimately moves a counter and says so
 disarms the gate for that counter, which is every branch that touches a
 golden.
 
 **And the listing was advisory.** With the counter unnamed the gate printed
 UNPRICED, listed the row, and exited 0 anyway. So the runtime mutation — set
-jsonbench to 9,999,999,999 — was listed and still green. The pure-regression
+`jsonbench 9999999999` — was listed and still green. The pure-regression
 rule beside it could not catch that either: it refuses a branch where
 something worsens and nothing improves, and the branch above improves nine
 rows and ratchets the floor, so the licence was already bought.
 
 **What it takes now.** A worsening is priced when the log delta names the
 counter AND quotes the value it landed on. `compile_instructions` names
-41,496,272 above; the mutation's 999,999,999 appears nowhere, so it is
-unpriced. And unpriced exits 1 rather than printing. No band, no tolerance:
+41,496,272 above; the mutation's figure appears nowhere in the grouped form
+the gate reads, so it is unpriced. And unpriced exits 1 rather than printing. No band, no tolerance:
 the log already states the figure a move landed on, and this is the gate
 reading what the log is for.
 
