@@ -451,10 +451,49 @@ fn digest_rows dig
 # chosen to mean what the rule above says: the standing the dimension already
 # has. Once the counter has real history that reference is behind it and
 # improvement pays from there.
+#
+# THE CHOICE IS NOT NEUTRAL AFTER LANDING DAY, and this is the part the rule
+# above does not say. Saturation is concave, so a counter granted a high
+# standing has little headroom left and one entering at parity has a great
+# deal, and how much a later change to that counter is worth follows from
+# where it entered. Measured on the carry-tier arms of 2026-09-01: with the
+# digest baselines at their dimension's standing the trade scored
+# 74.31 -> 73.75 and was declined; the same two arms with those baselines at
+# parity score 70.14 -> 72.99, which is an acceptance. The entering rule
+# decided that verdict.
+#
+# The rule stays, because the alternative pays people not to measure. What is
+# fixed here is that the arbitrariness was invisible: the floor file recorded
+# a granted baseline exactly like one with a measurement behind it. `granted`
+# now names them, `--set` carries the list forward, and the report says which
+# counters are standing on a rule.
+#
+# OPEN: whether a granted baseline should be replaced by real history once the
+# counter has some. Stated rather than buried; nothing here does it.
 fn baseline_of held now
   base = held["baseline"]!
   fresh = list/fold terms [] (acc t -> text/concat acc (entering base now t))
   merged base fresh
+
+# The names this run had to grant, for the report and for the floor file. Read
+# off the same condition `entering` uses, so the two cannot disagree.
+fn granted_now held
+  base = held["baseline"]!
+  list/to_list (list/fold terms [] (acc t -> text/concat acc (minted base t)))
+
+fn minted base t
+  list/to_list (list/select t.counters (c -> base[c] == none))
+
+# Every counter standing on a rule rather than a measurement: the ones this
+# run granted, plus the ones an earlier run granted and wrote down.
+fn granted_all held
+  text/concat (written_down held["granted"]) (granted_now held)
+
+fn written_down none
+  []
+
+fn written_down g
+  g
 
 fn entering base now t
   known = list/to_list (list/select t.counters (c -> base[c] != none))
@@ -557,7 +596,9 @@ fn paid base held value reason false
   rounded = 1.0 * units / 100.0
   note = list/to_h [["floor" rounded] ["why" reason]]
   grown_history = push (history_of held) note
-  out = [["baseline" base] ["floor" value] ["history" grown_history]]
+  standing_on = [["granted" (granted_all held)]]
+  keys = [["baseline" base] ["floor" value] ["history" grown_history]]
+  out = text/concat keys standing_on
   written (list/to_h out) value reason
 
 fn written held value reason
@@ -593,7 +634,23 @@ fn reported now base held value
   reason = text/slice (last_why held) 1 52
   tail = "(ceiling 100, ratchet {era_of held}: {reason}…)"
   io/write "{head}   {tail}\n"
+    . (_ -> on_a_rule held)
     . (_ -> detailed now base . (_ -> verdict value floor))
+
+# Which counters are standing on the entering rule rather than on a
+# measurement. A reader comparing two counters' ratios is comparing unlike
+# things unless they know which, and until this printed, nobody could.
+fn on_a_rule held
+  standing_on = granted_all held
+  ruled_by standing_on (length standing_on == 0)
+
+fn ruled_by _ true
+  io/write ""
+
+fn ruled_by standing_on false
+  listed = text/join standing_on ", "
+  said = "granted baselines (entered at their dimension's standing, never"
+  io/write "{said} measured): {listed}\n"
 
 fn moved? now base c
   base[c]! != now[c]!
