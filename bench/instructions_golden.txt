@@ -433,13 +433,13 @@
 # restarts at the front. basket carries the most of it because it sweeps text
 # across beats; the five rows under a thousandth are the store itself.
 jsonbench 2838415815
-encodebench 8396587878
+encodebench 8396592982
 oneshot 43094978
-basket 56458024
-widebench 63997231
-deepbench 726486920
+basket 56490028
+widebench 63997234
+deepbench 726488376
 escapebench 253819082
-pendbench 937566473
+pendbench 937802653
 indexbench 5243104
 digestbench 152573619
 # 2026-09-01: digestbench joins, at 152,573,619 retired instructions, measured

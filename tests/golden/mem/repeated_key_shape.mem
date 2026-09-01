@@ -8,6 +8,7 @@ perm_allocs=14
 beat_iters=0
 evac_allocs=0
 evac_bytes=0
+survive_slots=0
 put_mut_fast=58
 put_mut_grow=6
 push_mut_fast=0
