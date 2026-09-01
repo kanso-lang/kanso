@@ -3842,7 +3842,7 @@ reads **726,483,240** against main's 726,483,254 on this container: fourteen
 instructions BELOW main, measured on the same host with both binaries built in
 their own directories.
 
-`text` rises 740,226 -> 741,218 across the nine binaries, about 110 bytes
+`text` rises 740,226 -> 741,202 across the nine binaries, about 108 bytes
 each.
 `k_force_slow` is a real function now where the whole of `k_force` used to be
 one, so there is a second prologue and a call site to pay for. That is the
@@ -3855,6 +3855,20 @@ allocations, arena blocks and evacuations were all identical while 0.6% of
 deepbench went missing. kanso#1186 outlined `k_b_append_grow` for the same
 reason; this is the second instance, and the first where the growth was
 incidental rather than intended.
+
+**A fourth memo state, built on the misattribution and removed.** Before
+callgrind was asked, the four rises were blamed on the at-risk check running
+again and again on cells whose answer a rewind keeps taking, and a K_MEMO_SPENT
+state was added so such a cell stops asking. It was measured after the split
+and buys nothing: deepbench reads 726,483,240 with it and 726,483,240 without,
+and every counter in every vein is byte-identical either way. No program in the
+corpus exercises it. So it is gone, and the three states stand.
+
+The comment it carried asserted the 4,375,985 as ITS motivation, which was the
+misattribution written down as fact — the same number was `k_force`'s own
+inlining cost, and a plausible story reached for it first. A state that costs
+nothing to keep is still a state somebody has to read, and this one had a wrong
+measurement attached.
 
 **An intermediate state worth recording, because it nearly changed the
 objective.** Before the split was found, the four rises were taken at face
