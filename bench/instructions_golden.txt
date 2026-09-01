@@ -52,7 +52,32 @@
 # shape that matters.
 # 2026-08-13: basket 56,597,311 to 55,987,313, a fall of 609,998 and 1.08%.
 #
-# jsonbench +5 and oneshot +10 are noise; encodebench rises 4,414. An accumulator
+# #
+# 2026-09-01 (later): nine rows fall and one rises. Two changes to the runtime,
+# both about instructions the common path pays for the rare one.
+#
+# `k_die` and its eight siblings are noreturn and noinline now. Unmarked, clang
+# inlined the fprintf and the exit into every runtime entry that validates a
+# tag, so the entry built a frame and saved the registers that error path needs
+# before it could test anything, on the path that never dies. That alone is
+# digestbench -5.97%, deepbench -1.27%, escapebench -1.89%, pendbench -0.77%,
+# widebench -0.48%, encodebench -1.27%, jsonbench -0.40%.
+#
+# And the one-byte append is straight-lined and outlined from the rest. Two
+# thirds of the appends the encoder makes are a comma, a colon or a brace into
+# spare capacity; the general path reaches its store through a pointer that is
+# a phi of three predecessors, so a byte arriving in a register was written to
+# a stack slot and read back. 47.3 instructions a call became 36 over 42.3M
+# calls.
+#
+# widebench rises 0.12% and that is the split, not the noreturn: widebench
+# appends strings, so every one of its appends now pays a call into
+# k_b_append_wide. The alternative was measured — leave the byte case inline
+# and outline nothing — and it costs widebench nothing and reads 74.47 against
+# 74.50 on the objective, because it gives back 142M instructions on
+# encodebench and 20M on jsonbench to save 384k on widebench. The model prefers
+# the split, so the split is what shipped.
+jsonbench +5 and oneshot +10 are noise; encodebench rises 4,414. An accumulator
 # handed round a cycle is no longer re-seeded on every hop, and seeding copies the
 # whole string, so the work removed is larger than the carry's new flag and
 # branches cost. The allocation counters for all four benchmarks are unmoved —
@@ -432,16 +457,16 @@
 # sweep crossing a beat boundary used to resume where it left off and now
 # restarts at the front. basket carries the most of it because it sweeps text
 # across beats; the five rows under a thousandth are the store itself.
-jsonbench 2838415815
-encodebench 8396592982
-oneshot 43094978
-basket 56490028
-widebench 63997234
-deepbench 726488376
-escapebench 253819082
-pendbench 937802653
-indexbench 5243104
-digestbench 152573619
+jsonbench 2781834468
+encodebench 7870152609
+oneshot 41401596
+basket 56458733
+widebench 64076831
+deepbench 717295599
+escapebench 249018661
+pendbench 930587464
+indexbench 5242683
+digestbench 143471800
 # 2026-09-01: digestbench joins, at 152,573,619 retired instructions, measured
 # by CI because this host's glibc differs from the one this file is pinned to.
 # It is here because a benchmark counted on one axis and not the other is a
