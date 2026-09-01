@@ -15,6 +15,12 @@ set -e
 # Whose numbers these are, before spending a minute measuring against them.
 sh scripts/gates/measured_on.sh bench/instructions_golden.txt
 
+# And which silicon is about to count them. This never refuses — the runner
+# pool holds at least three CPUs, so a check that demanded one would be red on
+# most runs for a reason no pull request causes. It prints, and it is asked a
+# question further down, only if a row has actually moved.
+sh scripts/gates/dispatch.sh name
+
 # digestbench joined on 2026-09-01. Its peak is the row welfare weighs, and a
 # term counted on one axis and not the other is a trade the index cannot see:
 # every change that buys the digest's memory spends something here, and this is
@@ -51,6 +57,21 @@ diff work_want.txt work.txt || {
   # complaint the note above makes about step summaries.
   echo "=== every row as measured here, to copy into the golden"
   cat work.txt
+  # A row moved. Before calling that a regression, ask the one question that
+  # could make the two numbers incomparable — glibc dispatches memcpy and its
+  # neighbours by CPU feature, and this pool holds at least three CPUs.
+  # scripts/gates/dispatch.sh says why, and answers 2 when nothing is recorded
+  # to compare against, which is the case that gates exactly as it always did.
+  sh scripts/gates/dispatch.sh differs bench/dispatch.txt && silicon=0 \
+    || silicon=$?
+  if [ "$silicon" -eq 1 ]; then
+    echo "::warning::a row moved, and this is not the silicon these rows were"
+    echo "::warning::counted on, so THIS RUN DOES NOT GATE the instructions"
+    echo "::warning::vein. Nothing here says a regression happened or did not."
+    echo "::warning::Re-run until the job lands on the recorded cpu, or record"
+    echo "::warning::this one with a fresh sitting of every row."
+    exit 0
+  fi
   echo "::error::the work the benchmarks do changed. A rise is a"
   echo "::error::regression to explain and a fall is a win to bank —"
   echo "::error::say which in the PR and regenerate"
