@@ -13,19 +13,32 @@
 # byte of every multi-byte append there keeps every length and every counter
 # right and makes the contents wrong.
 #
-# kq leans on this: `text/append` appears seventy times in its query sources.
-# Under the mutation its suite dies with `invalid utf-8`, born in text/utf8.
+# kq leans on this: `text/append` appears seventy times in its query sources,
+# and its own counters read append_fast=242,226 on one query.
+#
+# THE ANCHOR IS THE MEMCPY, AND IT USED TO BE A LINE OFFSET. The first version
+# matched `k_stat_append_fast++;`, skipped one line and appended after it. That
+# worked until a comment was written above the copy, at which point the skipped
+# line became the comment's opening and the injected statement landed INSIDE
+# `/* ... */`. It was not code. The compiler built clean, kq's suite ran green,
+# and the script's own grep found its text in the file and reported success, so
+# the row went on claiming a proof it was not making. `scripts/ratchet -- prove`
+# reported it BLIND, nightly, and nothing read that.
+#
+# Substituting a statement cannot land in a comment: the anchor IS the code
+# being replaced. The grep below fails loudly if the copy is ever rewritten.
 #
 # WHAT THIS DOES NOT CLAIM. The same mutation is caught by `specs` too — three
 # golden tests fail under it. It proves this gate runs and reddens, not that kq
 # sees what the others miss. A mutation only kq catches would be a better row
 # and is not this one; the historical bug took an incident to find.
 set -e
-grep -qF 'k_stat_append_fast++;' src/runtime.c || {
-  echo "the in-place append moved; this mutation needs rewriting" >&2
+anchor='else memcpy((unsigned char*)a->data + a->len, src, (size_t)n);'
+grep -qF "$anchor" src/runtime.c || {
+  echo "the in-place append's copy moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i '/k_stat_append_fast++;/{n;a\
-            if (n > 1) ((unsigned char*)a->data)[a->len] = 0;
-}' src/runtime.c
-grep -qF 'if (n > 1) ((unsigned char*)a->data)[a->len] = 0;' src/runtime.c
+sed -i 's|else memcpy((unsigned char\*)a->data + a->len, src, (size_t)n);|else { memcpy((unsigned char*)a->data + a->len, src, (size_t)n); ((unsigned char*)a->data)[a->len] = 0; }|' \
+  src/runtime.c
+grep -qF 'memcpy((unsigned char*)a->data + a->len, src, (size_t)n); ((unsigned char*)a->data)[a->len] = 0;' \
+  src/runtime.c
