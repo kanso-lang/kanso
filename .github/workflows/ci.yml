@@ -542,6 +542,21 @@ jobs:
       # caught #1015 where a pull request has to answer it.
       - name: every ci job carries a mutation, and every mutation still applies
         run: ./target/release/kanso run scripts/ratchet
+      # And PROVE the handful this branch could have made blind. Applying is
+      # not proving: both rows that went blind on 2026-08-30 still applied, and
+      # the nightly said so the next morning, twice, to nobody. A mutation
+      # names the source files its seds patch and a branch names the files it
+      # changes; the intersection is empty for most branches and was one to
+      # three rows for the three merges that did the damage. Measured at six
+      # minutes for the worst realistic case, a branch touching src/runtime.c,
+      # which selects thirteen.
+      #
+      # `git fetch` because checkout leaves no local main to diff against, and
+      # `touched` needs one to name this branch's files.
+      - name: prove the rows this branch could have made blind
+        run: |
+          git fetch origin main
+          ./target/release/kanso run scripts/ratchet -- touched origin/main
 
   perf-history:
     name: perf history (appended to the history branch)

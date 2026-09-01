@@ -817,6 +817,93 @@ fn standing acc false
 fn shell dir cmd
   os/run "sh" ["-c" "cd {dir} && {cmd}"]
 
+# A mutation that still applies can still prove nothing. kanso#1157 put an
+# early return above the line compile_allocs_unwatched.sh patches, and the
+# patch went on applying — to a line eleven thousand of lib/json's twelve
+# thousand occurrences never reach. The counter moved by zero and the row was
+# blind. `applies_all` cannot see that, because applying is not proving, and
+# only proving costs a build. The nightly saw it the next morning, twice, and
+# said so to nobody.
+#
+# Both rows that went blind on 2026-08-30 were killed by a change to the very
+# file their own mutation patches, and which files a change touches is
+# something a pull request knows about itself:
+#
+#   kanso run scripts/ratchet -- touched origin/main
+#
+# keeps the rows whose mutation names a file the branch changed and proves that
+# handful. Naming is the test because a mutation patches what it writes down,
+# so a row naming nothing the branch touched cannot have been made inert by it.
+# The intersection is usually empty and occasionally one to three rows: #1171
+# touched src/runtime.c and #1157 and #1188 touched src/lib.rs, so all three
+# would have been answered on the pull request that broke them, for one to
+# three builds, and nothing on the rest.
+#
+# It is a middle, not a replacement. `cover` still runs on every change and
+# the nightly still proves the whole table, because a row can also go blind
+# from a distance — the guard #1157 added is in the file, but a change to what
+# a gate READS could hollow a row without touching a line any sed matches.
+fn touched base mode
+  os/run "git" ["diff" "--name-only" "{base}...HEAD"] . (d -> diffed d mode)
+
+fn diffed d mode
+  branch_files d.stdout mode (d.status == 0)
+
+fn branch_files _ _ false
+  io/write_err "ratchet: git diff would not name this branch's files\n"
+    . (_ -> os/exit 1)
+
+fn branch_files out mode true
+  named = list/select (text/split out "\n") (f -> length f > 0)
+  winnowing mode (list/to_list named) rows 1 []
+
+fn winnowing mode files list at acc
+  winnowed mode files list at acc (at > length list)
+
+fn winnowed mode _ _ _ acc true
+  handful mode acc
+
+fn winnowed mode files list at acc false
+  r = list[at]!
+  os/read_file (script_of r) . (s -> read_it mode files list at acc r s)
+
+# A row's mutation is a shell command and its script is the word after `sh `.
+fn script_of r
+  text/slice r.mutation 4 (length r.mutation)
+
+fn read_it mode files list at acc r s
+  reaches mode files list at acc r (list/any? files (f -> spells? s f))
+
+fn spells? text path
+  length (text/split text path) > 1
+
+fn reaches mode files list at acc _ false
+  winnowing mode files list (at + 1) acc
+
+fn reaches mode files list at acc r true
+  winnowing mode files list (at + 1) (push acc r)
+
+fn handful mode acc
+  chose mode acc (length acc == 0)
+
+fn chose _ _ true
+  io/write "ratchet: this branch touches no file any mutation patches\n"
+
+fn chose mode acc false
+  said = "ratchet: {length acc} rows patch a file this branch changed\n"
+  listed = list/to_list (list/map acc (r -> "  {r.job} — {r.claim}\n"))
+  body = text/join listed ""
+  io/write "{said}{body}" . (_ -> onto mode acc)
+
+# `list` names the handful and stops, the way somebody about to spend six
+# minutes of runner wants to know what they are spending it on. Anything else
+# proves them.
+fn onto "list" _
+  io/write ""
+
+fn onto _ acc
+  proving acc 1 []
+
 fn prove_all scope
   picked = list/to_list (list/select rows (r -> asked? scope r.dear))
   proving picked 1 []
@@ -913,18 +1000,30 @@ fn verb _ false
   cover
 
 fn chosen "prove" given
-  prove_all (scope_of given)
+  prove_all (second given "all")
+
+fn chosen "touched" given
+  touched (second given "origin/main") (third given "prove")
 
 fn chosen _ _
   cover
 
-fn scope_of given
-  narrowed given (length given > 1)
+fn second given fallback
+  beyond given fallback (length given > 1)
 
-fn narrowed given true
+fn beyond given _ true
   given[2]!
 
-fn narrowed _ false
-  "all"
+fn beyond _ fallback false
+  fallback
+
+fn third given fallback
+  past given fallback (length given > 2)
+
+fn past given _ true
+  given[3]!
+
+fn past _ fallback false
+  fallback
 
 pub play = os/args . (given -> asked given)
