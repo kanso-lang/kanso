@@ -115,10 +115,7 @@ fn nothing_recorded_answers_two_rather_than_excusing_anything() {
 
     let (empty_code, empty_said) =
         asked("differs", Some("# only a header, no block\n"), "empty", false);
-    assert_eq!(
-        empty_code, 2,
-        "and a file of nothing but comments is the same case: {empty_said}"
-    );
+    assert_eq!(empty_code, 2, "and a file of nothing but comments is the same case: {empty_said}");
 }
 
 /// measured_on.sh's header records why: a container printed a diff once,
