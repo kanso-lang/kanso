@@ -469,11 +469,30 @@
 # encodebench falls to 7,393,828,977, oneshot to 40,210,572, deepbench to
 # 705,254,951, escapebench to 248,370,445; jsonbench, basket, widebench,
 # pendbench, indexbench and digestbench fall by less than a thousandth.
-jsonbench 2781834449
-encodebench 7393829376
-oneshot 40210971
-basket 56457634
-widebench 64077249
+# 2026-09-01 (the ascii test): five rows fall, five do not move, none rises.
+#
+#   jsonbench    2,781,834,449 -> 2,747,404,799   -34,429,650   -1.238%
+#   oneshot         40,210,971 ->     39,981,441      -229,530   -0.571%
+#   widebench       64,077,249 ->     63,874,012      -203,237   -0.317%
+#   basket          56,457,634 ->     56,449,207        -8,427   -0.015%
+#   encodebench  7,393,829,376 ->  7,393,600,245      -229,131   -0.003%
+#   deepbench, escapebench, pendbench, indexbench, digestbench identical
+#
+# k_utf8_bad's ascii test answers a run of seven bytes — the mean length it is
+# handed — with two overlapping loads instead of a walk. The whole of
+# jsonbench's fall is that function: 117,522,450 to 83,092,800.
+#
+# Every one of these five deltas is IDENTICAL to the one measured in the
+# container on a Cascade Lake, against a runner on a Genoa. The absolute rows
+# differ by a few hundred as they always do; the differences do not differ at
+# all. That is what a change with no dispatch-sensitive path in it looks like,
+# and it is the cleanest evidence this vein has produced that a delta can be
+# read across silicon even when a row cannot.
+jsonbench 2747404799
+encodebench 7393600245
+oneshot 39981441
+basket 56449207
+widebench 63874012
 deepbench 705258631
 escapebench 248370844
 pendbench 930587202
