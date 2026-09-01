@@ -3856,6 +3856,13 @@ deepbench went missing. kanso#1186 outlined `k_b_append_grow` for the same
 reason; this is the second instance, and the first where the growth was
 incidental rather than intended.
 
+**The work vein after the split, measured by CI.** `work_indexbench` 5,243,094
+-> 5,243,104, ten instructions, and `work_deepbench`, `work_oneshot`,
+`work_basket`, `work_pendbench`, `work_widebench`, `work_encodebench`,
+`work_jsonbench` and `work_escapebench` are where the same measurement puts
+them. `work_digestbench` joins the vein at 152,573,619. `compile_instructions`
+41,496,870 -> 41,496,028, a fall of 842 and free.
+
 **A fourth memo state, built on the misattribution and removed.** Before
 callgrind was asked, the four rises were blamed on the at-risk check running
 again and again on cells whose answer a rewind keeps taking, and a K_MEMO_SPENT
