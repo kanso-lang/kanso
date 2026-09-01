@@ -55,12 +55,10 @@ diff compile_ir_want.txt compile_ir_got.txt || {
   sh scripts/gates/dispatch.sh differs bench/dispatch.txt && silicon=0 \
     || silicon=$?
   if [ "$silicon" -eq 1 ]; then
-    echo "::warning::the row moved, and this is not the silicon it was counted"
-    echo "::warning::on, so THIS RUN DOES NOT GATE the front end's instruction"
-    echo "::warning::vein. Nothing here says a regression happened or did not."
-    echo "::warning::Re-run until the job lands on the recorded cpu, or record"
-    echo "::warning::this one with a fresh sitting."
-    exit 0
+    echo "::error::and this is NOT the silicon the row was counted on, so the"
+    echo "::error::dispatch above may account for some of the move. It does not"
+    echo "::error::excuse it: re-run until the job lands on the recorded cpu,"
+    echo "::error::and say in the pull request which way it went."
   fi
   echo "::error::the work the FRONT END does changed. A rise is a regression"
   echo "::error::to explain and a fall is a win to bank — say which in"

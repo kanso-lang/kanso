@@ -29,9 +29,14 @@
 #             loader that reports no features
 #
 # A row that landed on its recorded value is right whatever counted it, so the
-# question is worth asking only about a row that moved. When the answer is
-# "other silicon", the honest report is that the run cannot say whether
-# anything regressed, which is neither green nor a regression.
+# question is worth asking only about a row that moved. "Other silicon" is
+# then printed BESIDE the failure and never instead of it. The first shape of
+# this let the gate exit green on that answer, which was wrong twice over:
+# three runs in four land on a cpu that is not the recorded one, so most real
+# regressions would have been waved through; and the ratchet's mutations
+# redden those same gates, so on those runs its rows would have gone BLIND,
+# which is the one thing the ratchet exists to prevent. What this answer buys
+# is a named cause in the failure, not an excuse from it.
 #
 # cpuid[0x1] is excluded by measurement: its top byte is the initial APIC id,
 # and it took three values in six runs on one host while every other line held.

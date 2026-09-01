@@ -57,20 +57,23 @@ diff work_want.txt work.txt || {
   # complaint the note above makes about step summaries.
   echo "=== every row as measured here, to copy into the golden"
   cat work.txt
-  # A row moved. Before calling that a regression, ask the one question that
-  # could make the two numbers incomparable — glibc dispatches memcpy and its
-  # neighbours by CPU feature, and this pool holds at least three CPUs.
-  # scripts/gates/dispatch.sh says why, and answers 2 when nothing is recorded
-  # to compare against, which is the case that gates exactly as it always did.
+  # A row moved. glibc dispatches memcpy and its neighbours by CPU feature and
+  # this pool holds at least four, so silicon is a live explanation — but it is
+  # an explanation printed BESIDE the failure, never instead of it. An earlier
+  # shape of this exited 0 here, and that was wrong twice over: three runs in
+  # four land on a cpu that is not the recorded one, so most real regressions
+  # would have been waved through; and the ratchet's own mutations redden this
+  # gate, so on those runs the rows would have gone BLIND — the one thing the
+  # ratchet exists to prevent. The diff below says whether silicon could
+  # account for it. Deciding that it does is a person's job, in the pull
+  # request, with the re-run that lands on the recorded cpu as the evidence.
   sh scripts/gates/dispatch.sh differs bench/dispatch.txt && silicon=0 \
     || silicon=$?
   if [ "$silicon" -eq 1 ]; then
-    echo "::warning::a row moved, and this is not the silicon these rows were"
-    echo "::warning::counted on, so THIS RUN DOES NOT GATE the instructions"
-    echo "::warning::vein. Nothing here says a regression happened or did not."
-    echo "::warning::Re-run until the job lands on the recorded cpu, or record"
-    echo "::warning::this one with a fresh sitting of every row."
-    exit 0
+    echo "::error::and this is NOT the silicon these rows were counted on, so"
+    echo "::error::the dispatch above may account for some of the move. It does"
+    echo "::error::not excuse it: re-run until the job lands on the recorded"
+    echo "::error::cpu, and say in the pull request which way it went."
   fi
   echo "::error::the work the benchmarks do changed. A rise is a"
   echo "::error::regression to explain and a fall is a win to bank —"

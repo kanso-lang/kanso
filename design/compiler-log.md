@@ -4475,7 +4475,7 @@ granted reference is a guess and a measured one is not; the argument against is
 that re-basing a counter mid-life moves the objective without saying so, which
 is the thing the ratchet exists to stop. Nothing here does it.
 
-## 2026-09-01 — the runner pool is three CPUs, and the first fix for that was wrong
+## 2026-09-01 — the runner pool is four CPUs, and the first fix for that was wrong
 
 kq#85 established what moved four kq instruction rows between two runs: not a
 toolchain. Both job logs printed rustc 1.98.0 (88d9e12ae), LLVM 22.1.8, image
@@ -4591,3 +4591,42 @@ on the fraction of runs that land on its recorded silicon, and nothing here
 measures that fraction. The honest options are a golden per CPU, or accepting
 that the vein reports more often than it gates. Nothing is decided; what is
 built refuses to lie about which case a given run is in.
+
+## 2026-09-01 (later) — the silicon note was an excuse, and would have blinded the ratchet
+
+The entry above shipped `scripts/gates/dispatch.sh` and wired it into both
+instruction gates. On answer 1 — a row moved, and this is not the silicon the
+rows were counted on — the gate printed a warning and **exited green**. That is
+wrong, and the argument is arithmetic rather than taste.
+
+**Most real regressions would have been waved through.** Four CPUs were seen in
+four runs that day. A block records one of them, so roughly three runs in four
+land somewhere else. On those runs any moved row — a genuine regression
+included — got the warning and a green tick.
+
+**And the ratchet's rows would have gone blind on the same runs.** Two of its
+mutations exist to redden exactly these gates: `a_counter_worsens_for_nothing`
+and the decoder's instruction row. Applied on a run that landed off the
+recorded cpu, the gate would have exited 0 and the mutation would have proved
+nothing. A row that proves nothing is a BLIND row, which is the single failure
+the ratchet was built to catch — kanso#1199 repaired two of them a few hours
+earlier. Shipping a mechanism that manufactures them is worse than shipping no
+mechanism.
+
+**What the answer is for.** The dispatch diff is a named cause printed beside a
+failure, never instead of one. Both gates now fail on a moved row whatever
+counted it, and when the silicon differs they say so and name the lines, so a
+reader knows in one screen whether to re-run for the recorded cpu or start
+reading the diff. Deciding that silicon accounts for a move is a person's job
+in a pull request, with a re-run on the recorded cpu as the evidence — it was
+never a thing a shell script should conclude on its own.
+
+This also settles, in the safe direction, the OPEN the entry above recorded.
+The vein does not report-instead-of-gate on a fraction of runs; it gates on all
+of them and explains itself on the fraction where the explanation is available.
+What is still unmeasured is how often the pool's CPUs actually move these rows
+— kq#85 saw 0.06% to 0.10% on one pair, and an AMD Genoa matched kq's golden
+exactly on another. If that turns out to be frequent, the answer is a golden
+per cpu, not a gate that shrugs.
+
+kq carries the same wiring and owes the same correction.
