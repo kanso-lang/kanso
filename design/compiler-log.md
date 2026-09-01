@@ -4474,3 +4474,109 @@ replaced by real history once the counter has some. The argument for is that a
 granted reference is a guess and a measured one is not; the argument against is
 that re-basing a counter mid-life moves the objective without saying so, which
 is the thing the ratchet exists to stop. Nothing here does it.
+
+## 2026-09-01 — the runner pool is three CPUs, and the first fix for that was wrong
+
+kq#85 established what moved four kq instruction rows between two runs: not a
+toolchain. Both job logs printed rustc 1.98.0 (88d9e12ae), LLVM 22.1.8, image
+ubuntu-24.04 20260823.283.1, glibc 2.39-0ubuntu8.8, valgrind 3.22.0-0ubuntu3,
+gdb 15.1 — every version identical to the commit hash. The one field that
+differed was `Azure Region`. Different silicon under the same image.
+
+**The mechanism, measured twice.** glibc resolves memcpy, memcmp, strlen and
+their neighbours by ifunc at load time, reading CPU features, so one libc runs
+different code on different CPUs. The first measurement swapped the resolver's
+choice on one host by tunable, on kq's `print_small` row:
+
+| GLIBC_TUNABLES | Ir | memcpy chosen |
+|---|---:|---|
+| default | 76,742,430 | `__memcpy_avx_unaligned_erms` |
+| `-AVX2_Usable` | 76,746,433 | `__memcpy_avx_unaligned_erms` |
+| `-AVX_Fast_Unaligned_Load` | 76,488,416 | `__memcpy_sse2_unaligned_erms` |
+| `-ERMS` | 76,262,756 | `__memcpy_avx_unaligned` |
+
+0.63% from the dispatch alone, against a runner shift of 0.06% to 0.10%.
+
+The second used a switch that actually differs between this container and a
+runner, after CI printed the runner's block:
+
+| GLIBC_TUNABLES | Ir | vs default |
+|---|---:|---:|
+| `rep_movsb_threshold=0x2000` (Intel, default) | 76,742,736 | — |
+| `rep_movsb_threshold=0x840` (a runner's) | 77,523,061 | **+1.02%** |
+| `non_temporal_threshold=0x1800000` (a runner's) | 76,744,279 | +0.00% |
+| both together | 76,744,207 | +0.00% |
+
+Byte-identical over two sittings each. One switch is worth ten times what the
+vein saw. The pair nearly cancels because glibc derives
+`rep_movsb_stop_threshold` from `non_temporal_threshold`, so no single line
+predicts a row.
+
+**The first fix was a pin, and CI killed it in two runs.** Record one host's
+feature block; refuse anywhere it does not match, the way `measured_on.sh`
+refuses a moved glibc. The first run refused and printed an AMD EPYC Zen 3
+Milan (family 0x19, model 0x1). The second refused and printed an Intel Ice
+Lake-SP (0x6/0x6a). The third, after the restructure below, named an AMD Genoa
+(0x19/0x11). This container is a Cascade Lake (0x6/0x55). **Four CPUs in four
+runs.** A check that refuses every run but one is red for a reason no pull
+request causes, which is a gate nobody can act on, and it would have been
+merged on the strength of a local verification that could not see the pool.
+
+**And on that fourth CPU every kq row matched exactly.** That qualifies the
+story rather than undoing it: kq#85's two runs really did differ by 0.06% to
+0.10% with every version identical, and a Genoa really does count kq's four
+rows byte for byte the same as whatever counted the golden. Both are what the
+ifunc account predicts — most CPUs land on the same memcpy and the counts are
+identical, and now and then one lands elsewhere and they are not. It also
+means the pool's heterogeneity is survivable rather than fatal, which is the
+difference between this vein reporting sometimes and being unusable.
+
+**What the fix is instead.** `scripts/gates/dispatch.sh` never refuses. It
+answers, and the two instruction gates ask only about a row that already moved:
+
+- `name` prints this host's CPU family and model on every run, so the next
+  divergence is one line of a job log rather than an afternoon of version
+  archaeology — which is what kq#85 cost.
+- `differs` answers 0 for the recorded silicon, 1 for other silicon with the
+  differing lines named, and 2 when there is nothing to compare against.
+
+A row landing on its recorded value is right whatever counted it, so the
+question is worth asking only about a row that moved. On answer 1 the gate says
+the run does not gate this vein and exits green — neither a pass nor a
+regression, because the run cannot establish either. Calling that a regression
+is exactly the mistake kq#85 spent a pull request undoing; this makes the
+correction structural.
+
+**`bench/dispatch.txt` is deliberately absent, in both repos.** It has to hold
+a CPU on which the rows are known to verify, and no run has both named its
+silicon and matched a golden — the naming only starts here. A guessed block
+would be worse than none, because it would let a real regression on the true
+recorded CPU read as other silicon. Answer 2 gates exactly as these veins
+always have, so the absence costs nothing and the block goes in from the first
+run that names its CPU and matches every row.
+
+One more thing had to be built before any of it could work: a block may be
+taken only from a run that BOTH names its CPU and matches every row, and a run
+that matches never reaches `differs`, which was the only place a block
+printed. A bootstrap with no first step. So while no block is recorded, CI
+prints the whole thing beside the rows, and stops the moment the file exists.
+
+`tests/the_silicon_a_row_was_counted_on.rs` pins all three answers plus three
+properties: the pasteable block prints under `GITHUB_ACTIONS` and nowhere else
+— `measured_on.sh`'s own header records a container printing a diff, somebody
+pasting, and the container's numbers landing in a golden over the runner's —
+an unknown verb answers 2 rather than a yes or a no nobody gave; and the
+bootstrap print happens in CI while nothing is recorded and stops once there
+is. Watched red five ways: a `differs` that always matches fails two fixtures,
+one that treats an absent block as a match fails the third, printing the block
+everywhere fails the fourth, and the bootstrap fails in both directions —
+never printing, and never stopping. The spec also caught a live bug on its first run:
+`grep -v '^#'` answers 1 on an all-comments file and `set -e` took the script
+out before it could say which answer it meant.
+
+**OPEN, and it is the real one.** These rows claim to be exact and the pool is
+not. Three CPUs seen in one day means an instruction golden gates properly only
+on the fraction of runs that land on its recorded silicon, and nothing here
+measures that fraction. The honest options are a golden per CPU, or accepting
+that the vein reports more often than it gates. Nothing is decided; what is
+built refuses to lie about which case a given run is in.

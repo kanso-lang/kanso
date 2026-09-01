@@ -22,6 +22,11 @@ set -e
 golden=bench/compile_instructions_golden.txt
 sh scripts/gates/measured_on.sh "$golden"
 
+# And which silicon is about to count it. This never refuses — the runner pool
+# holds at least three CPUs — it prints, and is asked a question below only if
+# the row has actually moved. scripts/gates/dispatch.sh carries the reasons.
+sh scripts/gates/dispatch.sh name
+
 sh scripts/gates/library_box.sh
 box=/tmp/kanso-compile-ir
 (
@@ -43,6 +48,20 @@ fi
 
 grep -v '^#' "$golden" > compile_ir_want.txt
 diff compile_ir_want.txt compile_ir_got.txt || {
+  # The row moved. glibc dispatches memcpy and its neighbours by CPU feature
+  # and the compiler runs them, so ask whether this is even the same silicon
+  # before calling it a regression. Answer 2 is "nothing recorded to compare
+  # against", which gates exactly as this always did.
+  sh scripts/gates/dispatch.sh differs bench/dispatch.txt && silicon=0 \
+    || silicon=$?
+  if [ "$silicon" -eq 1 ]; then
+    echo "::warning::the row moved, and this is not the silicon it was counted"
+    echo "::warning::on, so THIS RUN DOES NOT GATE the front end's instruction"
+    echo "::warning::vein. Nothing here says a regression happened or did not."
+    echo "::warning::Re-run until the job lands on the recorded cpu, or record"
+    echo "::warning::this one with a fresh sitting."
+    exit 0
+  fi
   echo "::error::the work the FRONT END does changed. A rise is a regression"
   echo "::error::to explain and a fall is a win to bank — say which in"
   echo "::error::design/compiler-log.md and regenerate $golden."
