@@ -1,0 +1,51 @@
+# The two halves of the tenure machinery that the benchmark corpus keeps
+# apart, in one program.
+#
+# `xs` is built INSIDE the bind, so it sits above the beat's mark, is copied
+# into the carry on every lap, and from the second lap its elements have lived
+# a lap and are promoted into a tenure block. `acc` is made BEFORE the first
+# bind, so it sits below the mark, and the copy walk repairs it rather than
+# copying it out. What goes into `acc` is an element OF `xs`, so a node below
+# the mark comes to hold a pointer into tenure — and `k_survives_x` answers
+# yes for such a pointer, which is exactly why `k_repaired_settle` leaves it
+# where it is.
+#
+# runtime.c said nothing measured had reached that. This reaches it. The
+# eleven benchmarks split into three that tenure and never repair (widebench,
+# indexbench, scanbench) and two that repair and never tenure (encodebench,
+# pendbench), and none that do both, which is why four earlier attempts
+# missed: the shapes are disjoint in everything the corpus runs.
+#
+# Reaching it is harmless here, and the reason is the fix kanso#1209 landed: a
+# beat whose result is a heap value hands its tenure blocks to the depth
+# outside instead of freeing them, so the block outlives the read below. That
+# is what `ten_blocks=1` beside `ten_frees=1` records. A change that stops
+# handing them up turns this fixture red instead of turning some future
+# program into a segfault in `k_copy_size`.
+import "std/io"
+import "std/list"
+
+fn wide n
+  fat = (i -> "element {i} with enough bytes in it to be worth promoting")
+  list/to_list (list/map (list/take list/naturals n) fat)
+
+fn gathered n xs acc
+  stepped (n - 1) xs (push acc xs[n]!)
+
+fn stepped 0 _ acc
+  acc
+
+fn stepped n xs acc
+  io/write "" . (_ -> gathered n xs acc)
+
+fn loaded acc
+  xs = wide 400
+  stepped (length xs) xs acc
+
+fn read_back out
+  io/write "kept {length out}, first {out[1]!}, last {out[400]!}\n"
+
+fn begin acc0
+  io/write "" . (_ -> loaded acc0) . read_back
+
+pub play = begin []

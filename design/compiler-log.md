@@ -5838,3 +5838,75 @@ list of benchmarks; both read the files.
 
 `work_scanbench` reports as MINTED rather than as a move, which is what
 kanso#1200 built that state for.
+
+## 2026-09-02 (eleventh) — the tenure residual is reached, and it is harmless
+
+runtime.c has said since kanso#1209 that one case was narrower rather than
+closed: a node below the beat's mark, repaired during the beat to hold a
+tenured pointer, outliving the rewind that frees the block. It ended "Nothing
+measured has reached it," and four attempts to write a program that did had
+failed.
+
+**Instrument the condition instead of guessing at programs.** A flag set for
+the duration of `k_repaired_settle` and a counter in `k_survives_x` that fires
+only when the yes came from `k_ten_holds` names the exact case. Across all
+eleven benchmarks, the full spec suite, the trend gate and the welfare script
+it fires zero times — and a second counter, incremented on every `k_survives_x`
+call during a settle, proves the detector is live rather than dead: it fires on
+encodebench and pendbench.
+
+**The two halves are disjoint, which is why the attempts failed.**
+
+```
+                ten_blocks   settles
+widebench            1          0
+indexbench           1          0
+scanbench            1          0
+encodebench          0          1
+pendbench            0          1
+the other six        0          0
+```
+
+Three benchmarks tenure and never repair; two repair and never tenure. No shape
+in the corpus does both, so no variation on a corpus shape was ever going to
+reach it. Naming the two conditions separately is what made the combination
+obvious.
+
+**The combination.** Tenuring needs the value copied into the carry buffer, so
+it must be built INSIDE the bind — above the mark, copied every lap, promoted
+from the second. Repair needs a container the walk finds below the mark, so the
+accumulator must be made BEFORE the first bind. Put an element of the first
+into the second and a node below the mark holds a pointer into tenure. First
+attempt with the list built outside the bind: repairs, `ten_blocks=0`. Moving
+one binding inside: `RESIDUAL REACHED`, `ten_blocks=1`, `ten_frees=1`.
+
+**And it is harmless, for the reason #1209 built.** The beat's result is a heap
+value, so `k_ten_hand_up` gives the block to the depth outside instead of
+freeing it at that pop, and it outlives every read of the repaired node. Native
+and the interpreter print the same bytes; valgrind reports nothing.
+
+`tests/golden/mem/a_repaired_node_below_the_mark_holds_tenure.kso` is the
+fixture, pinning `ten_blocks=1` beside `ten_frees=1` and `survive_slots=403`.
+It is the only program in the tree that reaches the case, so a change that
+stops handing tenure blocks up turns it red rather than turning some later
+program into the segfault in `k_copy_size` that started all of this. The
+comment in runtime.c is corrected: it said nothing had reached this, and
+something has.
+
+## 2026-09-02 (twelfth) — a comment in runtime.c moves the compile row
+
+The correction above turned `compile_instructions` red: 41,495,720 ->
+41,495,304, a fall of 416, from a change that is entirely a comment.
+
+`src/main.rs` reaches the runtime through `include_str!("runtime.c")`, so the
+file's bytes are part of the compiler's data section. `kanso check lib/json`
+never emits the runtime and never reads that string; the front end does exactly
+the work it did before, at slightly different addresses, and the count comes
+out 416 lower for it.
+
+Worth writing down because the obvious reading of a move in this row is that
+the front end changed, and here nothing in the front end was touched. A comment
+in runtime.c is not free in this vein, the direction is not predictable from
+the edit, and the number that fell is a layout artefact rather than a win to
+bank. It is recorded as an improvement because that is what the row says, and
+this paragraph is what stops the next reader crediting it to a pass.
