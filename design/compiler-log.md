@@ -5371,3 +5371,83 @@ really about, and the paragraph above says what bought it.
 the twin hands every subtype to it. Whether a one-level unwrap belongs in the
 twin is a measurement nobody has taken: the chain is usually one deep, and
 the loop is there for the case where it is not.
+
+## 2026-09-02 (later still) — the subtype unwrap, and the number that sent me after it
+
+The entry above closed with an open thread: `k_check_rec` still cost
+encodebench 116,146,800 instructions, a subtype still walked its chain in the
+runtime, and whether a one-level unwrap belonged in the twin was unmeasured.
+Two of those three claims are wrong, and finding out which took a build of the
+parent commit.
+
+**The correction.** At aaaee3f6, encodebench spent 156,995,200 in
+`k_check_rec` and 53,510,400 in `k_field`. That "before" figure is right. At
+39e0683a neither symbol is entered once — not by encodebench, and not by any
+of the other nine. The 116,146,800 does not appear in the profile at any
+threshold, and I cannot reconstruct where it came from. The mechanism was
+wrong too: encodebench declares no subtype, so nothing it matches could have
+walked a chain.
+
+**Why the corpus could never have answered the question.** Across
+`bench/` and `std/`, and across all of kq, the count of subtype declarations
+is zero. Forty-three appear in `tests/golden`, where they are pinned for
+correctness, and three in the book. So the twin's slow arm is dead code in
+every program any vein measures, and a profile row for the subtype path cannot
+exist. The open thread was about coverage, and no amount of profiling the
+corpus would have shown that.
+
+**Built anyway, and measured against a program that uses the feature.** A
+wrapper subtype over a two-field record, matched in a fold 200,000 laps deep,
+runs 311,819,732 instructions at 39e0683a, with `k_field` at 1.67% and
+`k_check_rec` at 1.28%. Two shapes of the unwrap were built. The first hoists
+the payload extraction to the entry block and shares it between the plain and
+subtype arms; the second keeps it inside each arm. Both answer identically,
+both empty the slow arm, and both land within nine instructions of each other:
+
+```
+                        subtype program    ten-benchmark corpus
+baseline                   311,819,732     (the pinned rows)
+shared extraction          302,019,731     three rows rise, two fall
+extraction in each arm     302,019,722     three rows rise, two fall
+```
+
+−3.14% where the feature is used. On the corpus, which does not use it:
+
+```
+                v1 (shared)          v2 (per-arm)
+jsonbench            +0.000%              +0.000%
+encodebench          -0.016%              +0.131%
+oneshot              -0.007%              +0.059%
+basket               +0.143%              +0.135%
+widebench            +0.000%              +0.000%
+deepbench            +0.000%              -0.008%
+escapebench          +0.000%              +0.000%
+pendbench            +0.642%              +0.214%
+indexbench           +0.000%              +0.000%
+digestbench          +1.207%              +1.201%
+```
+
+digestbench pays the most and pays it in one place: the whole
++1,626,177 sits in `d_list/fold_3`, the compiled fold, whose body carries
+inlined copies of both twins. A block that never executes still costs the
+function it sits in — it lengthens the body, moves the branches apart, and
+changes what the register allocator has to keep live across the loop. My
+first theory was the hoisted extraction, which is why v2 exists; v2 moved
+pendbench and left digestbench where it was, so the cause is the size of the
+twin rather than where inside it the extraction sits.
+
+**DECLINED, by the objective.** With the v2 rows substituted into
+`bench/instructions_golden.txt`, welfare reads 74.80 against a floor of 74.81
+and the gate goes red. A change that costs the corpus a hundredth of a welfare
+point to buy 3.14% on a program shape that appears nowhere the project
+measures is worse by the project's own stated preferences, and the weights are
+not what is wrong here. The twin keeps the shape #1211 gave it: every subtype
+goes to the runtime, which walks the chain.
+
+**What would change the answer.** A benchmark that declares a subtype. That
+is a real gap — the feature has 43 correctness fixtures and no cost row — but
+it is not a gap this entry should close on its own initiative, because adding a
+row means a new vein, a welfare term, a weight and a saturation, and the case
+for spending those on a feature no shipped program uses is a case somebody has
+to make. Recorded here so the next session that reads a `k_check_rec` row does
+not repeat the trip.
