@@ -5136,17 +5136,25 @@ The twins are generated against the body rather than carried in DECLARES,
 because an unused `internal` definition is free after optimization and not
 free in `bench/emitted_golden*.txt`.
 
-**The rows, measured locally against the same tree built both ways.** CI's
-numbers go in the goldens; these are the deltas.
+**The rows, measured by CI.** Six fall and four hold.
 
 ```
-encodebench   7,393,366,459 -> 7,257,716,059   -1.835%
-digestbench     143,471,368 ->   137,057,230   -4.471%
-pendbench       930,586,814 ->   912,183,826   -1.978%
-oneshot          39,788,824 ->    39,449,698   -0.852%
-deepbench       705,254,218 ->   701,522,218   -0.529%
-basket           56,426,181 ->    56,138,967   -0.509%
+digestbench     143,471,767 ->   137,057,629   -4.471%
+pendbench       930,587,200 ->   912,184,212   -1.978%
+encodebench   7,393,366,858 -> 7,257,716,458   -1.835%
+oneshot          39,789,223 ->    39,450,097   -0.852%
+deepbench       705,257,898 ->   701,525,898   -0.529%
+basket           56,426,594 ->    56,139,380   -0.509%
 ```
+
+This sitting is on family 0x6 model 0xad, not the recorded Genoa. The rows
+were also measured locally, on a third chip and a different glibc, and every
+delta agreed to within a per cent of itself — a per-row constant offset of
+about 400 separates the two hosts, which is the process startup the empty
+environment does not remove. The moves are two to four orders of magnitude
+larger than that, so the silicon is not what is being read here.
+
+**Welfare 74.6196 to 74.6928, and the floor is set.**
 
 jsonbench, widebench, escapebench and indexbench are byte-identical.
 jsonbench is the interesting one: it writes fifteen sites for the twins and
@@ -5179,6 +5187,23 @@ program dies on stack exhaustion. Reading arity from the capture count: output
 identical, caught instead by `bench/instructions_golden.txt`, where oneshot
 rises to 40,090,932, above the baseline it started from.
 
+**The disassembly says it worked the way the argument said it would.**
+`d_list/fold_go_3` in oneshot now tests the callable's tag ONCE, at `3cc4`,
+before the loop header at `3cd0` — and LLVM went further than hoisting: it
+unswitched the loop on that test and emitted two copies of the body, one for
+the closure case and one for everything else. The hot copy has no dispatch in
+it at all. That is where the few hundred bytes of `.text` went, and it is why
+`k_call2` has left oneshot's profile entirely; the top twenty is now
+`d_json/value_for_3` at 10.95%, `k_b_append_mut` at 9.40% and the fold itself
+at 3.31%.
+
+`w_klam17` sits at 3.10% and was checked as the next candidate: the emitter
+writes a plain-C wrapper beside every lifted lambda so `k_call{n}` has
+something to call at the C convention, and the wrapper looked like a pure
+`ccc`-to-`tailcc` hop worth deleting. It is not one. LLVM has inlined the
+lambda's body into the wrapper, so the symbol IS the body — a JSON string
+escape switch — and there is no forwarding frame to remove.
+
 **A divergence the fixture found on its way in.** The wasm backend disagreed
 with the other two engines about a value-headed call, in two ways, and neither
 had anything to do with this change — nothing had ever asked.
@@ -5197,6 +5222,32 @@ callable first, then reduce the failing arguments with
 `eval::accumulate_failures`. A single failure keeps its own handle rather than
 a copy of its value. Watched red before it was watched green: the corpus test
 prints both output strings side by side and names the sample.
+
+**Pricing the thirteen counters that worsened**, so the trend gate has its
+sentence and its number for each. Twelve of them count the same twenty-six
+lines of IR the generator writes per arity, times the arities a program uses.
+`emitted_defines` lands on 156 and `emitted_lines` on 11,580 for the decoder;
+`emitted_branches` on 1,174 and `emitted_calls` on 1,789 beside them.
+Across the other ten programs `emitted_other_defines` lands on 1,339,
+`emitted_other_calls` on 14,342, `emitted_other_branches` on 8,389 and
+`emitted_other_lines` on 83,175 — sixteen defines, thirty-two calls, forty-
+eight branches and 424 lines for ten programs at two arities each. The module
+sample in the compile golden lands on `module_defines` 78, `module_calls` 753,
+`module_branches` 375 and `module_lines` 4,480, the same two twins once.
+
+Those twelve count DEFINITIONS rather than code. The bodies are `internal` and
+`alwaysinline`, so after optimization they exist only at their call sites; the
+vein that says what actually got built is `text`, which lands on 730,978
+across the nine — 1,872 bytes for six binaries and nothing for the three whose
+sites the linker drops. Bought with 24.9 million instructions off the work
+vein.
+
+`compile_instructions` lands on 41,500,519, a rise of 4,747 on CI and a fall
+of 20,230 on this container for the same diff. `kanso check lib/json` emits
+nothing, so the code this change writes never runs during the measurement:
+both numbers are the front end's own layout moving under a larger codegen.rs,
+and the two hosts disagreeing on the sign is the clearest statement of that.
+`compile_allocs`, `compile_peak_bytes`, rounds and visits are byte-identical.
 
 **Not attempted.** Arity zero, three and four have twins and no call sites in
 any benchmark. The generator writes them if a program asks; nothing measured

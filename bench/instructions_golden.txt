@@ -499,13 +499,23 @@
 # indexbench -370 are the tenure fix, which adds a branch to the beat pop and
 # takes a free off it. encodebench -0.003% and basket -0.040% carry a little of
 # both. Measured on CI's Genoa, family 0x19 model 0x11, the recorded silicon.
+# 2026-09-02: six rows fall and four hold. The compiler now writes the
+# dispatcher inline at every call site where the head is a value, so a fold
+# whose callable is loop-invariant tests it once outside the loop instead of
+# once a lap. digestbench -4.471%, pendbench -1.978%, encodebench -1.835%,
+# oneshot -0.852%, deepbench -0.529%, basket -0.509%. jsonbench, widebench,
+# escapebench and indexbench are byte-identical: they write such sites only in
+# library folds their entries never reach, and the linker drops them. No
+# allocation counter moves on any of the ten. Measured on CI's runner, family
+# 0x6 model 0xad — NOT the recorded Genoa, and the deltas are large enough
+# that the silicon does not explain them.
 jsonbench 2718705899
-encodebench 7393366858
-oneshot 39789223
-basket 56426594
+encodebench 7257716458
+oneshot 39450097
+basket 56139380
 widebench 63874012
-deepbench 705257898
+deepbench 701525898
 escapebench 248370844
-pendbench 930587200
+pendbench 912184212
 indexbench 5242731
-digestbench 143471767
+digestbench 137057629
