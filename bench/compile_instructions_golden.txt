@@ -790,7 +790,13 @@
 # 41,921,612 against 41,901,382 — a FALL of 20,230 for the same diff. Two
 # hosts, opposite signs, one cause: neither is the front end doing more work.
 # compile_allocs, compile_peak_bytes, rounds and visits are byte-identical.
-compile_instructions=41500519
+# 2026-09-02 (later): -5,049, and layout for the sixth time. `kanso check
+# lib/json` emits nothing, so two new inline twins in DECLARES cannot run
+# during the measurement; what moved is the front end's own code layout under
+# a larger codegen.rs. It fell here and rose 4,747 for the change before it,
+# on the same host, for the same reason. compile_allocs, compile_peak_bytes,
+# rounds and visits are byte-identical.
+compile_instructions=41495470
 # 2026-09-01 (last): -1,320, and none of it is the front end either. This
 # branch changed src/runtime.c twice and no .rs file, and main.rs holds that C
 # as an include_str! it hashes for the build cache key. The counters that

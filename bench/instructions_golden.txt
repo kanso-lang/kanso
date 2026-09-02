@@ -509,13 +509,29 @@
 # allocation counter moves on any of the ten. Measured on CI's runner, family
 # 0x6 model 0xad — NOT the recorded Genoa, and the deltas are large enough
 # that the silicon does not explain them.
+# 2026-09-02 (later): seven rows fall, three hold, none rises. `k_check_rec`
+# and `k_field` are written inline at all 134 sites, so a record pattern test
+# and a record read stop being calls.
+#
+#   pendbench    -17.817%    encodebench   -4.270%    oneshot   -1.978%
+#   digestbench   -1.699%    deepbench     -1.319%    basket    -0.671%
+#   widebench     -0.426%
+#
+# pendbench carries it: its pending cells are records read once a lap in a
+# loop that does almost nothing else. jsonbench, escapebench and indexbench
+# hold — the decoder BUILDS records rather than matching them, and its
+# `k_field` sites sit in library code its entry never reaches.
+#
+# Counted on family 0x6 model 0xad, not the recorded Genoa. Every delta was
+# also measured in a container on a third chip and matched to the instruction,
+# the same way kq#91's four rows did.
 jsonbench 2718705899
-encodebench 7257716458
-oneshot 39450097
-basket 56139380
-widebench 63874012
-deepbench 701525898
+encodebench 6947804058
+oneshot 38669794
+basket 55762500
+widebench 63602012
+deepbench 692273898
 escapebench 248370844
-pendbench 912184212
+pendbench 749658206
 indexbench 5242731
-digestbench 137057629
+digestbench 134729413

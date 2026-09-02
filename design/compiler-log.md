@@ -5331,6 +5331,42 @@ and caught by the corpus: `K_SUB` 15 to 14 fails 2 of the golden suite's 10
 tests, `K_REC` 7 to 6 fails 5, and reading `nfields` from offset 16 instead of
 8 fails 5. Each was watched red before it was watched green.
 
+**The rows CI counted**, on family 0x6 model 0xad rather than the recorded
+Genoa. Every delta matched the container's to the instruction, the same way
+kq#91's four rows did on the same day.
+
+```
+pendbench       912,184,212 ->   749,658,206
+encodebench   7,257,716,458 -> 6,947,804,058
+oneshot          39,450,097 ->    38,669,794
+digestbench     137,057,629 ->   134,729,413
+deepbench       701,525,898 ->   692,273,898
+basket           56,139,380 ->    55,762,500
+widebench        63,874,012 ->    63,602,012
+```
+
+`compile_instructions` lands on 41,495,470, a FALL of 5,049 — and the change
+before this one ROSE 4,747 on the same host for the same reason. `kanso check
+lib/json` emits nothing, so neither number is the front end doing more or less
+work; both are its own code layout moving under a larger codegen.rs.
+`compile_allocs`, `compile_peak_bytes`, rounds and visits are byte-identical.
+
+**Welfare 74.6928 to 74.8069, and the floor is set.**
+
+**Pricing the seventeen counters that worsened.** Sixteen count the same two
+definitions the compiler now writes into every program, times the programs.
+The single-file samples in the compile golden land on `defines` 104, `calls`
+112, `branches` 87 and `lines` 1,787; the module sample on `module_defines`
+80, `module_calls` 756, `module_branches` 378 and `module_lines` 4,529. The
+decoder lands on `emitted_defines` 158, `emitted_calls` 1,792,
+`emitted_branches` 1,177 and `emitted_lines` 11,629, and across the other ten
+programs `emitted_other_defines` 1,359, `emitted_other_calls` 14,372,
+`emitted_other_branches` 8,419 and `emitted_other_lines` 83,669.
+
+The seventeenth is the one that counts code rather than definitions: `text`
+lands on 752,930 across the nine, up 21,952. That is the number this entry is
+really about, and the paragraph above says what bought it.
+
 **OPEN.** The subtype walk is what `k_check_rec` still costs encodebench, and
 the twin hands every subtype to it. Whether a one-level unwrap belongs in the
 twin is a measurement nobody has taken: the chain is usually one deep, and
