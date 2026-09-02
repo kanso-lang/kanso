@@ -2853,4 +2853,15 @@ largest runtime entries are `k_b_find2_below` at 7.28% (481,347,200),
 inlined the byte arm of, reached by every `"true"`, `"null"` and object key the
 encoder writes.
 
-Welfare **75.09 -> 75.19** on the predicted runner rows, ratcheted.
+**CI confirmed all eleven predicted rows exactly**, which is the seventh
+consecutive time the container-to-runner delta has transferred to the
+instruction. The one row that had to come from CI is the compile vein:
+`compile_instructions` lands on **41,501,391** against 41,495,304, a rise of
+6,087. The whole of it is the twin's body in the DECLARES string, which is data
+in the compiler's binary, so a longer prelude moves where everything after it
+lands — the same mechanism kanso#1216 recorded for a comment in `runtime.c`.
+`kanso check lib/json` never emits IR and never reads the prelude, so the front
+end does exactly the work it did before. 0.015% of a compile for 403 million
+instructions of encode.
+
+Welfare **75.09 -> 75.19** on the runner rows, ratcheted.
