@@ -2883,3 +2883,114 @@ asserting its own copy of the tool, which is the objection its own harness
 comment already makes about re-reading the goldens.
 
 Welfare **75.09 -> 75.19** on the runner rows, ratcheted.
+
+## 2026-09-02 (nineteenth) — the twins learn what the inference knows, and the append learns strings
+
+Three things, and the third only exists because the second was measured and
+beaten.
+
+**The non-strict index had no inline form at all.** `k_index_fast`, which
+kanso#1214 built, is the STRICT index's fallback and knows lists only. Every
+`xs[i]` written without the `!` went to the runtime by call — 7,237,200 of them
+in encodebench at thirty-five instructions apiece, 253,302,000, 3.83% of the
+benchmark. `k_b_at_fast` inlines the two containers that answer in one load: a
+list slot and a byte, which keep their length at offset 0 and their data
+pointer at offset 8. A map, a string, out of range, a failure: all of it falls
+through, so `none` and the utf-8 seek stay where they were written.
+
+**A site the inference has already decided keeps its call.** A container
+narrowed to STR can only take the index twin's slow arm, because the utf-8 seek
+does not inline. Those sites now call `k_b_at` directly and pay no tag test for
+a question answered at compile time. That removes indexbench's cost EXACTLY:
+5,342,321 back to **5,242,318**, the same number, with every other row
+byte-identical.
+
+**The same trick did NOT win for the append, and building both is how that was
+found.** Routing known-string appends past the twin scored welfare 75.22.
+Giving the twin a string arm that memcpys scored **75.25**. So the arm, not the
+route.
+
+**And the arm's first shape was wrong in a way jsonbench found.** Sharing the
+two arms' guards through a phi costs the BYTE path two instructions per append
+— a phi and a second branch — which is 15,357,900 of them inside jsonbench's
+`str_char`, because the decoder appends bytes and nothing else. Split into two
+arms that duplicate five loads each, the byte arm is byte-identical to what
+kanso#1221 shipped (checked: the only diff is `b`-prefixed labels) and
+jsonbench's cost halves.
+
+```
+                      shared guards      split arms
+  jsonbench            +0.604%            +0.286%
+  encodebench          -7.379%            -8.351%
+  oneshot              -1.518%            -2.112%
+  widebench            -1.631%            -1.931%
+  welfare                75.25              75.27
+```
+
+**The eleven, in this container, against kanso#1221 (62f66f30):**
+
+```
+encodebench  6,611,648,059 -> 6,059,516,328  -552,131,731  -8.351%
+oneshot         36,606,462 ->    35,833,347      -773,115  -2.112%
+widebench       63,809,599 ->    62,577,544    -1,232,055  -1.931%
+basket          54,722,493 ->    54,396,964      -325,529  -0.595%
+jsonbench    2,673,669,936 -> 2,681,323,231    +7,653,295  +0.286%
+```
+
+deepbench, escapebench, pendbench, indexbench, scanbench and digestbench are
+byte-identical. Welfare **75.19 -> 75.27**.
+
+**jsonbench's residual 7,653,295 is not the guards.** The byte arm's IR is the
+one kanso#1221 shipped, so whatever is left is downstream of LLVM's layout and
+inlining decisions on a bigger prelude — the effect kanso#1217 measured and
+named. It is recorded rather than explained away, and it is 0.286%.
+
+**kq collects most, because its printer is nothing but string appends.**
+Against its pin at 8dc6ec9e, container-measured:
+
+```
+print_small  70,032,882 -> 61,913,801  -11.59%
+print_big   711,281,956 -> 629,325,358 -11.52%
+path_small   19,081,110 ->  18,792,192  -1.51%
+path_big    198,938,968 -> 195,641,255  -1.66%
+```
+
+kanso at 8dc6ec9e and at 14fef781 give kq byte-identical rows and `.text`, so
+none of the six merges between them reaches kq and the whole move belongs to
+kanso#1221 and this change.
+
+**What pins what.** `an_index_without_the_bang_reaches_its_twin.kso` reads a
+list and a byte string in range and out, a map with INT keys and a string with
+a multi-byte character. Three of four mutations turn it red: the container test
+(`intmap 2` reads 0, a KMap header read as a KList), the bounds test (`xs[0]`
+answers `false`) and the list-versus-byte branch (`xs[2]` answers 0). The
+int-key tag test does not, masked the way kanso#1221's owned test was.
+
+`an_in_place_append_takes_a_whole_string.kso` alternates a byte and a five-byte
+string through one call site. Two of five mutations turn it red — the string's
+length read (802 and 48,996 against 2402 and 192,596) and the in-place length
+write (402 and 30,996). The capacity test is caught by valgrind and not by the
+output, exactly as the byte arm's was. The owned test and the string tag test
+are caught by neither, and for the reasons kanso#1221 already recorded: the
+capacity test masks the first and the corpus contains no shape that reaches
+the second.
+
+The two routing decisions are pinned by the instruction vein rather than by a
+fixture, and correctly so — they change what a program costs, not what it
+answers. Delete either and `bench/instructions_golden.txt` goes red on a row
+whose number is in this entry.
+
+**Every counter that moved, and what it landed on.** The two twins' bodies sit
+in the DECLARES prelude, so every program emits them whether or not it reaches
+them: one define, three calls, eight branches and 99 lines apiece for the
+decoder — `emitted_defines` 167, `emitted_calls` 1,805, `emitted_branches`
+1,201, `emitted_lines` 11,934 — and across the ten beside it
+`emitted_other_defines` 1,449, `emitted_other_calls` 14,502,
+`emitted_other_branches` 8,659, `emitted_other_lines` 86,723. The compile
+samples take the same prelude: `defines` 149, `calls` 182, `branches` 207,
+`lines` 3,312, and the module sample `module_defines` 89, `module_calls` 770,
+`module_branches` 402, `module_lines` 4,832.
+
+`text` lands on **1,010,694**, +5,744 for the two twins. `work_jsonbench`
+lands on **2,681,323,644**, and its 7,653,295 is the layout residual described
+above rather than work the guards do.

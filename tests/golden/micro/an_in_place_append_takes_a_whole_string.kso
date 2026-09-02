@@ -1,0 +1,29 @@
+# The in-place append's STRING arm, which is the encoder's `"true"`, `"null"`
+# and every object key: 7,670,800 of them in encodebench, each paying a call
+# into the runtime and a second call into the wide path behind it. The twin
+# copies n bytes into the accumulator's own spare room instead.
+#
+# Same accumulator, same tail recursion, and a byte and a five-byte string
+# through the SAME call site, so the two arms are exercised alternately and
+# the byte one has to keep answering while the string one is added. The sum
+# is printed beside the length because a length is right even when the
+# content is garbage: dropping the string's length read gives 802 and 48,996
+# here, and dropping the in-place length write gives 402 and 30,996.
+import "std/text"
+
+fn grown acc 0
+  acc
+
+fn grown acc n
+  grown (text/append (text/append acc (65 + n % 26)) "-mid-") (n - 1)
+
+fn summed acc _ 0
+  acc
+
+fn summed acc cs i
+  summed (acc + cs[i]!) cs (i - 1)
+
+pub play =
+  seed = text/append (text/bytes "!") 33
+  built = grown seed 400
+  print "{length built} {summed 0 built (length built)}"

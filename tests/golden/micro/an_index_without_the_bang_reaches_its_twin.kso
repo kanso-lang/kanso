@@ -1,0 +1,21 @@
+# The index written without the `!` inlines now, and this walks the arms of
+# the twin that does it. A list and a byte string are read in range and out;
+# a map with INT keys and a string with a multi-byte character are the two
+# shapes the twin must hand back to the runtime, and both are indexed by an
+# int so the container test is the only thing keeping them off the fast arm.
+# `none` for out of range and the utf-8 seek both stay in C, which is what
+# the `<none>` and the `é` below check.
+import "std/text"
+
+fn shown v
+  "{v}"
+
+pub play =
+  xs = [10 20 30]
+  bs = text/bytes "kanso"
+  ints = { 1:"one" 2:"two" }
+  s = "héllo"
+  print "list {shown xs[2]} {shown xs[9]} {shown xs[0]}"
+  print "bytes {shown bs[1]} {shown bs[5]} {shown bs[6]} {shown bs[0]}"
+  print "intmap {shown ints[2]} {shown ints[9]}"
+  print "str {shown s[2]} {shown s[9]}"

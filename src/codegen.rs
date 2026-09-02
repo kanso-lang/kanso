@@ -105,12 +105,19 @@ define internal %KValue @k_b_append_mut_byte(%KValue %acc, %KValue %x) alwaysinl
 chkx:
   %xtag = extractvalue %KValue %x, 0
   %isi = icmp eq i64 %xtag, 0
-  br i1 %isi, label %chks, label %slow
-chks:
-  %so = load i32, ptr @k_stats_on
-  %counting = icmp ne i32 %so, 0
-  br i1 %counting, label %slow, label %fast
-fast:
+  br i1 %isi, label %bstat, label %chkstr
+
+; The byte arm, kept whole and separate from the string arm below rather than
+; sharing their guards through a phi. Sharing costs the byte path two
+; instructions per append — a phi and a second branch — which is 15,357,900 of
+; them inside jsonbench's `str_char`, and the decoder appends bytes and nothing
+; else. Two arms that duplicate five loads are cheaper than one arm that asks
+; every byte which kind of append it is.
+bstat:
+  %bso = load i32, ptr @k_stats_on
+  %bcount = icmp ne i32 %bso, 0
+  br i1 %bcount, label %slow, label %bfast
+bfast:
   %bp = extractvalue %KValue %acc, 1
   %b = inttoptr i64 %bp to ptr
   %len = load i64, ptr %b
@@ -122,16 +129,16 @@ fast:
   %isneg = icmp slt i64 %cap, 0
   %capa = select i1 %isneg, i64 %capneg, i64 %cap
   %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %fr, label %slow
-fr:
+  br i1 %owned, label %bfr, label %slow
+bfr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
   %len1 = add i64 %len, 1
   %fits = icmp sle i64 %len1, %capa
   %ok = and i1 %atfront, %fits
-  br i1 %ok, label %write, label %slow
-write:
+  br i1 %ok, label %bwrite, label %slow
+bwrite:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1
   %byte = trunc i64 %xv to i8
@@ -139,6 +146,52 @@ write:
   store i64 %len1, ptr %usedp
   store i64 %len1, ptr %b
   ret %KValue %acc
+
+; The string arm. The same claim over n bytes, which is what the encoder's
+; `"true"`, `"null"` and every object key ask for: 7,670,800 of them in
+; encodebench, each paying a call into the runtime and a second call into the
+; wide path behind it.
+chkstr:
+  %iss = icmp eq i64 %xtag, 6
+  br i1 %iss, label %sstat, label %slow
+sstat:
+  %sso = load i32, ptr @k_stats_on
+  %scount = icmp ne i32 %sso, 0
+  br i1 %scount, label %slow, label %sfast
+sfast:
+  %xp = extractvalue %KValue %x, 1
+  %sp = inttoptr i64 %xp to ptr
+  %sdata = load ptr, ptr %sp
+  %slenp = getelementptr i8, ptr %sp, i64 8
+  %slen32 = load i32, ptr %slenp
+  %n = sext i32 %slen32 to i64
+  %sbp = extractvalue %KValue %acc, 1
+  %sb = inttoptr i64 %sbp to ptr
+  %slen = load i64, ptr %sb
+  %sdatap = getelementptr i8, ptr %sb, i64 8
+  %sadata = load ptr, ptr %sdatap
+  %scapp = getelementptr i8, ptr %sb, i64 16
+  %scap = load i64, ptr %scapp
+  %scapneg = sub i64 0, %scap
+  %sisneg = icmp slt i64 %scap, 0
+  %scapa = select i1 %sisneg, i64 %scapneg, i64 %scap
+  %sowned = icmp ne i64 %scap, 0
+  br i1 %sowned, label %sfr, label %slow
+sfr:
+  %susedp = getelementptr i8, ptr %sadata, i64 -8
+  %sused = load i64, ptr %susedp
+  %satfront = icmp eq i64 %sused, %slen
+  %slenn = add i64 %slen, %n
+  %sfits = icmp sle i64 %slenn, %scapa
+  %sok = and i1 %satfront, %sfits
+  br i1 %sok, label %swrite, label %slow
+swrite:
+  %sdst = getelementptr i8, ptr %sadata, i64 %slen
+  call void @llvm.memcpy.p0.p0.i64(ptr %sdst, ptr %sdata, i64 %n, i1 false)
+  store i64 %slenn, ptr %susedp
+  store i64 %slenn, ptr %sb
+  ret %KValue %acc
+
 slow:
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
@@ -412,6 +465,51 @@ slow:
   %s = call %KValue @k_index(%KValue %c, %KValue %k, ptr %o)
   ret %KValue %s
 }
+; The non-strict index. `k_index_fast` above is the STRICT form's fallback and
+; only knows lists; everything written without the `!` went to the runtime by
+; call, which is 7,237,200 of them in encodebench at thirty-five instructions
+; apiece. A list slot and a byte are one load each once the bounds are known,
+; and the two containers keep their length at the same offset. Out of range,
+; a map, a string, a failure: all of it falls through, so `none` and the
+; utf-8 seek stay where they were written.
+define internal %KValue @k_b_at_fast(%KValue %c, %KValue %k) alwaysinline {
+  %tk = extractvalue %KValue %k, 0
+  %isint = icmp eq i64 %tk, 0
+  br i1 %isint, label %shape, label %slow
+shape:
+  %tc = extractvalue %KValue %c, 0
+  %islist = icmp eq i64 %tc, 9
+  %isbytes = icmp eq i64 %tc, 13
+  %known = or i1 %islist, %isbytes
+  br i1 %known, label %bounds, label %slow
+bounds:
+  %pc = extractvalue %KValue %c, 1
+  %p = inttoptr i64 %pc to ptr
+  %len = load i64, ptr %p
+  %i = extractvalue %KValue %k, 1
+  %lo = icmp sgt i64 %i, 0
+  %hi = icmp sle i64 %i, %len
+  %inr = and i1 %lo, %hi
+  br i1 %inr, label %pick, label %slow
+pick:
+  %j = add i64 %i, -1
+  %dp = getelementptr i8, ptr %p, i64 8
+  %data = load ptr, ptr %dp
+  br i1 %islist, label %slot, label %byte
+slot:
+  %at = getelementptr %KValue, ptr %data, i64 %j
+  %v = load %KValue, ptr %at
+  ret %KValue %v
+byte:
+  %bp = getelementptr i8, ptr %data, i64 %j
+  %b = load i8, ptr %bp
+  %bz = zext i8 %b to i64
+  %r = insertvalue %KValue { i64 0, i64 undef }, i64 %bz, 1
+  ret %KValue %r
+slow:
+  %s = call %KValue @k_b_at(%KValue %c, %KValue %k)
+  ret %KValue %s
+}
 define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -533,6 +631,7 @@ declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
 declare %KValue @k_b_push_mut(%KValue, %KValue)
+declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)
 declare %KValue @k_b_append_mut(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
@@ -4085,7 +4184,15 @@ impl<'a> Backend<'a> {
     ) -> String {
         // The strict form's fallback is the twin, which answers a list index
         // without a call and hands the runtime everything else.
-        let slow_fn = if strict { "k_index_fast" } else { "k_b_at" };
+        // A container the inference knows is a string can only take the
+        // twin's slow arm — the utf-8 seek does not inline — so those sites
+        // keep the direct call and pay no tag test for a decision already
+        // made at compile time.
+        let slow_fn = match (strict, f.set_of(container) == STR) {
+            (true, _) => "k_index_fast",
+            (false, true) => "k_b_at",
+            (false, false) => "k_b_at_fast",
+        };
         let slow_extra = match strict {
             true => format!(", {}", self.origin_arg(f, span)),
             false => String::new(),
@@ -4797,9 +4904,8 @@ impl<'a> Backend<'a> {
             } else if name == "put" && in_place {
                 "put_mut"
             } else if name == "append" && in_place {
-                // the in-place byte claim inlines whole; a string, a byte
-                // string or a byte that does not fit falls through to the C
-                // path inside the twin
+                // the in-place byte claim inlines whole; a byte that does not
+                // fit falls through to the C path inside the twin
                 "append_mut_byte"
             } else if BIT_TWINS.contains(&name) {
                 // one machine op each where the operand tags say int and a
