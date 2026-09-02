@@ -5813,3 +5813,28 @@ name the benchmark.
 scanbench's row is a container measurement and a labelled placeholder until the
 runner replaces it; the gate is red on purpose until then, and the golden's
 comment says so.
+
+## 2026-09-02 (tenth) — the runner's scanbench row, and the spec that already existed
+
+scanbench's instruction row, counted on the runner: **1,423,437,886**. It went
+in as a placeholder at 1,423,437,473, what a container measured, so the gate had
+something to diff against and printed the real row in its job log. The two
+differ by 413, which is the same constant offset jsonbench carries between
+those hosts.
+
+**A spec I did not write caught what mine missed.**
+`every_benchmark_in_the_work_vein_has_a_direction` reddened on the first push:
+scanbench had a row in `bench/instructions_golden.txt` and no entry in the
+trend gate's `lower_*` tables, so a rise in it would have read as UNCLASSIFIED
+drift and the gate would have exited green. That spec exists because
+digestbench was omitted from the same list on 2026-08-31 and a 6.5x regression
+passed. It caught the next one in the pull request that created it, which is
+the whole point of writing the spec rather than the note.
+
+The coverage chain is now four links, not three: built → counted → rowed →
+weighed, and rowed → given a direction. `every_benchmark_is_in_the_objective`
+holds the first three and the older spec holds the fourth. Neither carries a
+list of benchmarks; both read the files.
+
+`work_scanbench` reports as MINTED rather than as a move, which is what
+kanso#1200 built that state for.

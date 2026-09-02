@@ -36,7 +36,9 @@ fn measured(gate: &str) -> BTreeSet<String> {
     let folded = gate.replace("\\\n", " ");
     let Some(open) = folded.find("for b in ") else { panic!("the gate no longer loops over `b`") };
     let tail = &folded[open + "for b in ".len()..];
-    let Some(shut) = tail.find("; do") else { panic!("the gate's loop no longer ends with `; do`") };
+    let Some(shut) = tail.find("; do") else {
+        panic!("the gate's loop no longer ends with `; do`")
+    };
     tail[..shut].split_whitespace().map(str::to_string).collect()
 }
 
