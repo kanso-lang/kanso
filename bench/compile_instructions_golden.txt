@@ -892,3 +892,32 @@ compile_instructions=41495096
 # a comment in `src/runtime.c`, +8,032 for two runtime edits and a twin, and
 # now −3,289 for another twin. The sign does not follow the direction of the
 # edit; it follows where the bytes after it land.
+#
+# 2026-09-02, LATER, AND THIS CORRECTS THE FOUR ENTRIES ABOVE. A pull request
+# that changed `docs/compiler.html` and `design/compiler-log.md` and nothing
+# else read 41,500,177 against a golden of 41,495,096. The compiler's inputs
+# were byte-identical — `git diff` between the two commits is two files, and
+# neither is compiled in or read by `include_str!` — and every other vein in
+# the same job matched to the digit: all eleven work rows, all fourteen
+# emitted counters, all eleven text rows, compile_allocs and compile_memory.
+#
+# So the row moves by at least 5,081 on this runner pool with nothing to
+# explain it, and `measured_on` cannot see why: it pins glibc and rustc, and
+# the pool is not one CPU. The gate below already knows — it reads
+# `scripts/gates/dispatch.sh` when the row moves and says to re-run until the
+# job lands on the recorded silicon.
+#
+# WHAT THAT DOES TO THE ENTRIES ABOVE. Four readings were recorded today as
+# layout effects, with prose about the sign not following the direction of the
+# edit: +6,087, -416, +8,032 and -3,289. Two of them are smaller than the
+# 5,081 this run moved with no edit at all, and the other two are the same
+# size. The layout story may still be true in part — a longer prelude really
+# does move the binary — but nothing in those measurements separates it from
+# the runner. They should be read as "the row moved, inside a band the pool
+# can produce on its own", and the confident causal sentences around them
+# should not be.
+#
+# The fix is not a tolerance. It is to record the silicon beside the row the
+# way kq's bench/instructions_golden.txt does, so a move can be asked the
+# question rather than narrated. Until that exists, a reading under about six
+# thousand carries no information about the change that produced it.

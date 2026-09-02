@@ -3288,3 +3288,44 @@ The mechanical gates cannot reach either defect. `golden_prose` reads
 log headings against page commits and the page had just moved. A profile share
 is not a golden, so nothing in the tree can diff it — which is why the rule is
 to walk the list rather than remember it.
+
+## 2026-09-02 — the compile row moved 5,081 with nothing changed, and four entries above are wrong about why
+
+This pull request changes `docs/compiler.html` and `design/compiler-log.md`.
+CI read `compile_instructions=41,500,177` against a golden of 41,495,096.
+
+The compiler's inputs are byte-identical between the two commits. `git diff`
+is those two files; neither is compiled in, neither is reached by
+`include_str!`, and `measured_on` confirmed the same rustc and the same
+glibc. Every other vein in the same job matched to the digit: eleven work
+rows, fourteen emitted counters, eleven text rows, `compile_allocs`,
+`compile_memory`. One row moved, and nothing in the diff can have moved it.
+
+**So the row's floor on this runner pool is at least 5,081.** The gate already
+suspects this — it reads `scripts/gates/dispatch.sh` whenever the row moves
+and says to re-run until the job lands on the recorded silicon — and kq spent
+three pull requests in August learning the same thing about its own rows.
+`measured_on` pins the toolchain, and the toolchain was never the whole host.
+
+**This corrects four entries above, all filed today.** I recorded +6,087,
+−416, +8,032 and −3,289 on this row as layout effects and wrote a causal
+sentence around each: that the prelude's length moves where the bytes after it
+land, and that the sign does not follow the direction of the edit. Two of
+those readings are smaller than the 5,081 a no-op produced, and the other two
+are the same size. The layout mechanism is real — a longer string in the
+binary does move what follows it — but none of those four measurements
+separates it from the runner, and I wrote as though they did. The honest form
+of all four is "the row moved, inside a band the pool can produce on its own".
+
+The pattern to notice is that the prose got more confident as the readings
+piled up. By the fourth I was writing that four consecutive commits had moved
+the row in an unpredictable direction and that this was what a layout effect
+looks like — a story that explains the data and was never tested against the
+null. The test cost one docs-only pull request and it was available all day.
+
+**What would fix it.** Not a tolerance: a band is a guess that stays green
+through the change it was written to catch. Record the dispatch block beside
+the row the way `kq/bench/instructions_golden.txt` does, so a move gets asked
+which silicon counted it before anybody explains it. That is a real piece of
+work and it is not this pull request's; it is filed here so the next reading
+of this row has the question in front of it.
