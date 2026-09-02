@@ -3003,3 +3003,118 @@ when the string arm made it dead — and between them the compiler's own
 sections shifted. Rounds, visits and allocations are byte-identical: nothing
 in the front end changed. Three consecutive commits have now moved this row
 +6,087, −416 and −11,038, and none of the three touched a pass.
+
+## 2026-09-02 — the born test that only fed a counter, and the seed map at two slots
+
+Two one-line changes to `src/runtime.c`, both in the same place: what an
+in-place mutation costs before it writes anything.
+
+### the born test
+
+`k_b_push_mut` is the in-place list push, emitted where the linearity analysis
+has proved the list uniquely owned. Its fast arm asked three questions: is this
+value on the frontier of its buffer, is there room, and was the header born
+inside this beat. The first two are four loads and two compares. The third,
+`k_born_this_beat`, reads the beat depth, the block chain and the mark on top
+of the beat stack, and off the head block it walks the chain to settle tenure
+exactly.
+
+Fail the third and the call went to `k_b_push_into_proven(lv, item, 1, 1)`.
+Read what that does with `mutate=1` and `proven=1`: the born line at its head
+is skipped for being proven, the frontier branch claims `l->items[l->len]`,
+bumps `buf->used`, bumps `l->len`, and returns the same `lv` the fast arm
+would have returned. Two paths, one behaviour, and the second one paid for a
+call, a beat-stack lookup, and sometimes the walk.
+
+So the born test was deciding which of two counters to increment.
+`k_stat_push_mut_fast` and `k_stat_push_mut_slow` are the only things
+downstream of it, and both are read only when `k_stats_on`. It sits inside
+that guard now, and the counters mean exactly what they meant: all nine cost
+goldens were byte-identical across this change taken alone, which is the
+evidence that nothing else moved.
+
+escapebench is where it shows. Its cost golden reads `push_mut_fast=3000`
+against `push_mut_slow=1200000`: 1.2 million frontier writes a run, every one
+of them going the long way round because the accumulator's header predates the
+beat. That is 32,097,000 instructions, 26.7 apiece.
+
+### the seed map
+
+`k_map_lit` gave an empty literal one pair of room — `k_buf(2 * (n ? n : 1))`
+— where the grow path it hands off to starts at four. Nothing writes `{}`
+except to put into it, so the second put always grew, and jsonbench's decoder
+writes a fresh `{}` per JSON object. A third of every map insert in the
+benchmark was a reallocation: `put_mut_grow` 419,850 against
+`put_mut_fast` 834,300.
+
+An empty literal starts at the grow path's own floor now. A literal with keys
+in it is a finished value and still gets exactly the room it needs.
+
+### what both did
+
+| benchmark   | before        | after         | delta        |          |
+|-------------|--------------:|--------------:|-------------:|---------:|
+| escapebench |   248,370,844 |   216,273,844 |  −32,097,000 | −12.923% |
+| basket      |    54,397,377 |    47,410,168 |   −6,987,209 | −12.848% |
+| digestbench |    98,969,254 |    89,615,426 |   −9,353,828 |  −9.451% |
+| pendbench   |   749,618,914 |   734,101,805 |  −15,517,109 |  −2.070% |
+| jsonbench   | 2,681,323,644 | 2,627,824,194 |  −53,499,450 |  −1.995% |
+| oneshot     |    35,833,746 |    35,476,818 |     −356,928 |  −0.996% |
+| widebench   |    62,577,957 |    62,243,248 |     −334,709 |  −0.535% |
+| encodebench | 6,059,516,727 | 6,058,924,662 |     −592,065 |  −0.010% |
+| scanbench   | 1,423,437,886 | 1,423,437,854 |          −32 |        — |
+| deepbench   |   677,481,898 |   677,481,898 |            0 |        — |
+| indexbench  |     5,242,731 |     5,242,731 |            0 |        — |
+
+Split between them: the born test is the whole of escapebench, digestbench,
+pendbench and widebench, and −18,096,450 of jsonbench. The seed map is the
+rest of jsonbench (−35,403,000), the whole of oneshot, and it cost basket
+28,669 instructions where it saved basket four allocations. deepbench and
+indexbench hold to the byte and their `.text` does not move: neither writes a
+proven in-place push nor an empty map literal, so neither function is in the
+binary.
+
+**Allocations.** jsonbench `allocs` 5,334,308 -> **4,999,958** (−6.27%),
+`alloc_bytes` 268,048,208 -> **259,660,208**, `sh_buf` 143,306,400 ->
+**134,918,400**, `put_mut_grow` 419,850 -> **85,500** with `put_mut_fast`
+834,300 -> **1,168,650**. oneshot and encodebench move the same way on the
+same counters (`put_mut_grow` 2,799 -> **570**), basket by four allocations.
+No counter in any of the nine goldens moves the wrong way.
+
+The lazy tier's vein sees it too. Six `.mem` goldens move, every one of them
+by exactly one grow: `fused_tally` allocs 96 -> 93, `growing_map` 1,615 ->
+1,614, `map_put` 102 -> 101, `readwrite_map` 310 -> 309,
+`repeated_key_shape` 7,389 -> 7,388, `tally_shape` 26 -> 25, and in each the
+`put_mut_grow` count falls by one while `put_mut_fast` rises by one. Those are
+programs of a few dozen puts, so a single reallocation is the whole of what
+the change can save them, and a single reallocation is what it saves.
+
+**What it cost.** `text` rises 1,010,694 -> **1,011,350**, +80 bytes on the
+four binaries that take both changes and +64 on the five that take one. An
+inlined frontier write is longer than a call to something that does it, and a
+literal that asks for eight slots writes a different immediate. That is the
+trade the objective cannot see, and §35 of the compiler page is about.
+
+**Welfare 75.27 -> 75.52**, ratcheted. The born test alone was 75.50; the seed
+map is the remaining 0.02, which is what a satiated allocation term pays for
+six per cent.
+
+The pin is `bench/instructions_golden.txt`. A fixture cannot catch the born
+test: the old code and the new code write the same bytes into the same slot
+and return the same value, which is the whole finding. Restore it to the fast
+arm's condition and nine rows in that vein go red on the numbers above.
+
+**The page's decode attribution is re-sat on top of this.** §07 read
+1,783,922,550 emitted against 841,939,256 runtime and 47,808,090 libc, a
+sitting taken before kanso#1222's index twin landed and so already a day
+stale when it shipped. It now reads 1,791,588,501 / 792,404,497 / 43,795,809
+of 2,627,823,781, which is 68.2% / 30.2% / 1.7% and **92.8 instructions per
+input byte** against 94.5. The runtime's share is falling for two reasons at
+once: the twins move its one-liners into the emitted code, and a guard that
+did nothing came out. `decode.allocs` on compiler.html and index.html moves
+5,334,308 -> 4,999,958 with it.
+
+`k_b_put_mut` is 3.70% of jsonbench and the next thing to look at. It has no
+dead guard to remove — `k_map_replace` returns on one branch while the map has
+no view built, and jsonbench's `view_allocs` is zero — so what is left there
+is the insert itself.

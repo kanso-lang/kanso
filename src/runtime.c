@@ -5628,7 +5628,12 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     /* literal keys arrive sorted and unique from the parser; k_map_sorted
        still recomputes on first read, cheaply (already sorted, no dups). */
     KMap* m = k_alloc(sizeof(KMap));
-    m->pairs = k_buf(2 * (n ? n : 1));
+    /* An empty literal is a seed, not a value: nothing writes `{}` except to
+       put into it, and at two slots the second put already had to grow. It
+       starts at the floor the grow path itself uses, so a small object is
+       built without a reallocation. A literal with keys in it is a finished
+       value and gets exactly the room it needs. */
+    m->pairs = k_buf(n ? 2 * n : 8);
     memcpy(m->pairs, flat_pairs, sizeof(KValue) * 2 * n);
     k_buf_of(m->pairs)->used = 2 * n;
     m->len = n;
@@ -6454,7 +6459,22 @@ KValue k_b_push(KValue lv, KValue item) { return k_b_push_into(lv, item, 0); }
 /* In-place push, emitted only where the linearity analysis proved the list is
    uniquely owned. On the frontier it mutates the header — no per-element
    allocation — which is the whole win; off the frontier it grows like a normal
-   push (a uniquely-owned list is never off-frontier unless it just grew). */
+   push (a uniquely-owned list is never off-frontier unless it just grew).
+
+   THE BORN-THIS-BEAT TEST DECIDES A COUNTER AND NOTHING ELSE, which is why it
+   is inside the `k_stats_on` guard. It used to stand in the fast arm's
+   condition, and a call that failed it went to k_b_push_into_proven with
+   mutate=1 and proven=1 — where the born line is skipped for being proven, the
+   same frontier slot is claimed, the same header is incremented, and the same
+   `lv` comes back. Two paths, one behaviour, and the second one paid for a
+   call plus a beat-stack lookup plus, off the head block, the walk that
+   settles tenure exactly. escapebench took that path 1,200,000 times a run
+   against 3,000 on the fast arm.
+
+   What the counters mean is unchanged: `push_mut_fast` still counts in-place
+   writes onto a header born inside this beat and `push_mut_slow` still counts
+   everything else, so all nine cost goldens are byte-identical across this
+   change. They cost nothing when nobody is counting. */
 KValue k_b_push_mut(KValue lv, KValue item) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) {
@@ -6465,14 +6485,17 @@ KValue k_b_push_mut(KValue lv, KValue item) {
     }
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
-    if (buf->used == l->len && l->len < k_buf_cap(buf) && k_born_this_beat(l)) {
+    if (buf->used == l->len && l->len < k_buf_cap(buf)) {
+        if (__builtin_expect(k_stats_on > 0, 0)) {
+            if (k_born_this_beat(l)) k_stat_push_mut_fast++;
+            else k_stat_push_mut_slow++;
+        }
         l->items[l->len] = item;
         buf->used++;
         l->len++;
-        k_stat_push_mut_fast++;
         return lv;
     }
-    k_stat_push_mut_slow++;
+    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_push_mut_slow++;
     return k_b_push_into_proven(lv, item, 1, 1);
 }
 
