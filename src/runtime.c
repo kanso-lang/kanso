@@ -1102,7 +1102,20 @@ static void* k_ten_alloc(size_t n) {
    hold a tenured pointer, outlives the rewind that frees the block. The place
    to close it is `k_repaired_settle`, which exists to move repaired slots into
    the arena and does not move the ones that landed in tenure, because
-   `k_survives_x` answers yes for those too. Nothing measured has reached it. */
+   `k_survives_x` answers yes for those too.
+
+   That is REACHED, and by exactly one program in the tree:
+   `tests/golden/mem/a_repaired_node_below_the_mark_holds_tenure.kso`. Four
+   earlier attempts missed it because the two halves are disjoint across the
+   benchmark corpus — widebench, indexbench and scanbench tenure and never
+   repair; encodebench and pendbench repair and never tenure — so no shape
+   already in the tree does both. Building the carried list inside the bind
+   and the accumulator outside it does. Reaching it is harmless, and the hand
+   up above is why: the beat's result is a heap value, so the block goes to
+   the depth outside instead of being freed, and it outlives every read of the
+   repaired node. The fixture pins `ten_blocks=1` beside `ten_frees=1` so that
+   a change which stops handing them up is a red test rather than a segfault
+   in the next program somebody writes this way. */
 static void k_ten_hand_up(long long d) {
     if (!k_ten_blocks[d] || d == 0) return;
     KTenBlock* tail = k_ten_blocks[d];
