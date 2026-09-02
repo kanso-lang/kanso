@@ -5600,8 +5600,35 @@ removing it because I could not reach it would be a guess about the lazy
 tier, and this log has one of those open already. The gap belongs to the lazy
 tier's coverage rather than to this change.
 
-Counters: one define, two calls, three branches and thirty-nine lines on every
-emitted program, and in `bench/compile_golden_modules.txt` `module_defines`
-86 -> 87, `module_calls` 763 -> 765, `module_branches` 386 -> 389,
-`module_lines` 4,646 -> 4,685. No allocation counter moves on any of the nine
-gates. Rounds and visits hold at 6 and 2,403.
+**Every counter this branch moved, and where it landed.** One define, two
+calls, three branches and thirty-nine lines on every emitted program, counted
+four times over by the four count veins. In `bench/compile_golden.txt`, summed
+over its five samples: `defines` 134 -> 139, `calls` 147 -> 157, `branches`
+127 -> 142, `lines` 2,372 -> 2,572. In `bench/compile_golden_modules.txt`:
+`module_defines` 86 -> 87, `module_calls` 763 -> 765, `module_branches`
+386 -> 389, `module_lines` 4,646 -> 4,685. In `bench/emitted_golden.txt`:
+`emitted_defines` 164 -> 165, `emitted_calls` 1,799 -> 1,801,
+`emitted_branches` 1,185 -> 1,188, `emitted_lines` 11,746 -> 11,785. In
+`bench/emitted_golden_others.txt`: `emitted_other_defines` 1,419 -> 1,429,
+`emitted_other_calls` 14,442 -> 14,462, `emitted_other_branches`
+8,499 -> 8,529, `emitted_other_lines` 84,833 -> 85,225. And `text`, the sum
+over eleven binaries, 992,854 -> 996,678 — five of them smaller, four larger,
+two unchanged, which the paragraph above breaks down.
+
+**The rows this needed were in the middle of a job log.** The instructions
+gate prints them, and then fourteen more gates run in the same job, two of
+them dumping a hundred lines of CPU features and forty of callgrind. The log
+API hands back a tail, so a session regenerating a golden either fetches the
+whole log or writes down a number it did not measure. kq hit this on
+2026-09-01 and fixed it by printing its rows after its own CPU dump; kanso's
+version is a step at the end of the job that cats `work.txt`, `emitted.txt`,
+`emitted_others.txt`, `text.txt` and `compile_ir_got.txt`, all of which are
+still on disk. It runs on green as well as red, because thirty lines is
+cheaper than the alternative and the numbers are worth having either way.
+
+`compile_instructions` 41,501,923 -> 41,495,720, a fall of 6,203. The compiler
+writes one more definition and does less work doing it, which is not a
+contradiction: what `DECLARES` holds changes what the emitter's own string
+handling does, and #1213 moved this the other way by 6,453 for the same
+reason. Rounds and visits hold at 6 and 2,403; the front end decides nothing
+different. No allocation counter moves on any of the nine gates.
