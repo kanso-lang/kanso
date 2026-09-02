@@ -323,6 +323,45 @@ slow:
   %s = call %KValue @k_b_bit_not(%KValue %a)
   ret %KValue %s
 }
+; A demanded index into a list is a bounds check and a load, and it costs a
+; call to reach. digestbench spends 21.7% of itself in `k_index`, at forty-one
+; instructions a call. The twin answers the list case where the element is a
+; plain value; a `none` element and a thunk both go to the runtime, the first
+; because `k_index` turns it into the missing-index err and the second because
+; forcing it is the runtime's job.
+define internal %KValue @k_index_fast(%KValue %c, %KValue %k, ptr %o) alwaysinline {
+  %tc = extractvalue %KValue %c, 0
+  %tk = extractvalue %KValue %k, 0
+  %islist = icmp eq i64 %tc, 9
+  %isint = icmp eq i64 %tk, 0
+  %shape = and i1 %islist, %isint
+  br i1 %shape, label %bounds, label %slow
+bounds:
+  %pc = extractvalue %KValue %c, 1
+  %l = inttoptr i64 %pc to ptr
+  %len = load i64, ptr %l
+  %i = extractvalue %KValue %k, 1
+  %lo = icmp sgt i64 %i, 0
+  %hi = icmp sle i64 %i, %len
+  %inr = and i1 %lo, %hi
+  br i1 %inr, label %read, label %slow
+read:
+  %ip = getelementptr i8, ptr %l, i64 8
+  %items = load ptr, ptr %ip
+  %j = add i64 %i, -1
+  %at = getelementptr %KValue, ptr %items, i64 %j
+  %v = load %KValue, ptr %at
+  %tv = extractvalue %KValue %v, 0
+  %isthunk = icmp eq i64 %tv, 14
+  %isnone = icmp eq i64 %tv, 4
+  %defer = or i1 %isthunk, %isnone
+  br i1 %defer, label %slow, label %done
+done:
+  ret %KValue %v
+slow:
+  %s = call %KValue @k_index(%KValue %c, %KValue %k, ptr %o)
+  ret %KValue %s
+}
 define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -3994,7 +4033,9 @@ impl<'a> Backend<'a> {
         strict: bool,
         span: Span,
     ) -> String {
-        let slow_fn = if strict { "k_index" } else { "k_b_at" };
+        // The strict form's fallback is the twin, which answers a list index
+        // without a call and hands the runtime everything else.
+        let slow_fn = if strict { "k_index_fast" } else { "k_b_at" };
         let slow_extra = match strict {
             true => format!(", {}", self.origin_arg(f, span)),
             false => String::new(),

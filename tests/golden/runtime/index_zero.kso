@@ -1,0 +1,7 @@
+# A list is indexed from one, so nought is out of range at the near end the
+# way nine is at the far end in index_missing.kso beside this. Without this
+# fixture nothing pins the near end, and a bounds test written `>= 0` instead
+# of `> 0` reads the word before the first element with every other fixture
+# in the tree still green.
+prices = [30 10 20]
+print "zeroth: {prices[0]!}"

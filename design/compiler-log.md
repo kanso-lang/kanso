@@ -5531,3 +5531,77 @@ Every one of those rises is the same six definitions counted again, and the
 95,586 -> 97,554 and nine rows unchanged.
 
 Welfare 74.81 -> 74.89.
+
+## 2026-09-02 (fifth) — a bounds check and a load, reached through a call
+
+`k_index` is what a demanded index compiles to — `l[i]!` — and it is
+digestbench's largest single item at 29,195,608 instructions, 21.7% of the
+benchmark, across 712,088 calls. Forty-one instructions a call for a bounds
+check and a sixteen-byte load. `emit_at` already inlines the bytes case where
+the sets prove it; the list case, which is what sha256 and every fold over a
+list does, went out to the runtime every time.
+
+A twin on the same pattern, used as the strict form's fallback so the existing
+inline structure is untouched. It answers where the container is a list, the
+key an int, the index in range, and the element a plain value. Three shapes go
+to the runtime and each for its own reason: a failure or any other container
+because the tag test fails, an out-of-range index because `k_index` owns the
+missing-index err, and a thunk because forcing is the runtime's job.
+
+```
+digestbench   123,591,300 ->  98,968,855   -19.922%
+deepbench     692,270,218 -> 677,478,218    -2.137%
+basket         55,762,087 ->  54,722,493    -1.864%
+oneshot        38,669,395 ->  38,048,160    -1.607%
+pendbench     749,657,820 -> 749,618,528    -0.005%
+encodebench 6,947,803,659 -> 7,014,919,659   +0.966%
+```
+
+jsonbench, widebench, escapebench and indexbench are byte-identical: they
+index bytes and strings, which already had the inline path. `k_index` leaves
+every profile.
+
+**encodebench's rise is one function.** All +67,116,000 of it is in
+`d_list/fold_3`, and nothing else moves at all. The fold does not index a list
+— it carries inlined copies of a twin it never reaches, and a longer body is
+a slower loop. This is the third time this vein has recorded that shape: the
+declined subtype unwrap paid it on digestbench, kanso#1211 paid it as `.text`,
+and here it is 0.97% of the largest benchmark. The trade is worth taking at
+19.9% against 1.0%, and welfare agrees: 74.89 -> 75.09.
+
+**`.text` goes both ways this time.** Five binaries shrink — encodebench
+-144, oneshot -592, widebench -144, deepbench -176 — and four grow:
+digestbench +2,272, scanbench +1,824, pendbench +640, basket +144. A call
+replaced by a short inline body changes what the inliner does with everything
+around it, and the direction is not predictable from the diff.
+
+**Two fixtures the corpus did not have.** Five decisions in the twin, and
+mutation found that only three of them were pinned by anything in the tree.
+
+- The low bound. `index_missing.kso` pins index 9 on a three-element list; no
+  fixture indexed at 0, and `>= 0` for `> 0` reads the word before the first
+  element with every existing fixture green. `index_zero.kso` pins it.
+- The stored `none`. A list literal holding one is refused where it is
+  written, so it looks unreachable — but `push (push [] 1) none` builds one at
+  run time, and `xs[2]!` on it is the missing-index err, because `at` answers
+  "not found" with a none and `k_index` cannot tell the two apart. Without the
+  deferral the twin answers `<none>`, which is a divergence from the
+  interpreter that would have shipped. `index_holds_a_none.kso` pins it.
+
+Both were watched failing: the mutated compiler reddens each golden with the
+message the fixture exists to hold.
+
+**The thunk deferral is not pinned, and I could not pin it.** No program I
+wrote put an unforced thunk in a list and read it with `!`, and no benchmark
+reaches one that way either — digestbench's 8,256 `k_force` calls come from
+`sha256/compress` and pendbench's 100 from `keep_4`, none through `k_index`.
+The guard mirrors the `k_force` that `k_index` itself does, and it stays:
+removing it because I could not reach it would be a guess about the lazy
+tier, and this log has one of those open already. The gap belongs to the lazy
+tier's coverage rather than to this change.
+
+Counters: one define, two calls, three branches and thirty-nine lines on every
+emitted program, and in `bench/compile_golden_modules.txt` `module_defines`
+86 -> 87, `module_calls` 763 -> 765, `module_branches` 386 -> 389,
+`module_lines` 4,646 -> 4,685. No allocation counter moves on any of the nine
+gates. Rounds and visits hold at 6 and 2,403.
