@@ -5672,3 +5672,47 @@ The first is unreachable by any program I could write: no fixture in the tree
 builds a list holding an unforced thunk and then indexes it. That gap belongs to
 the lazy tier's coverage rather than to this change, and it is recorded so the
 next session working the lazy tier finds it.
+
+## 2026-09-02 (seventh) — what the index twin costs kq, which indexes no lists
+
+kq is the corpus's one real program and it is not in the objective, so it gets
+measured by hand at each pin bump. Built `--release` by the same compiler
+either side of the index twin, in this container, four rows and the machine
+code:
+
+```
+print_small  69,857,190 ->  70,033,408   +0.252%
+print_big   709,519,790 -> 711,281,970   +0.248%
+path_small   19,079,322 ->  19,081,118   +0.009%
+path_big    198,937,158 -> 198,938,954   +0.001%
+.text           114,242 ->     114,098     -144 bytes
+```
+
+Every row rises. kq indexes byte strings and maps, never a list in a loop, so
+its fifteen index sites all take the twin's slow arm and pay the two tag reads,
+the two compares and the branch on the way to the call they were making
+anyway. The print rows carry it because printing walks every value; the path
+rows index once per run and move by 1,796 instructions, the same number twice.
+
+**This is the fourth sighting of the dead inline body**, and the first on a
+program outside the corpus: the declined subtype unwrap cost digestbench 1.2%,
+kanso#1211 paid for it in `.text`, this change pays for it in encodebench's
+`fold_3`, and here it is again in kq's printer. The twin is routed at every
+strict index the compiler emits, whatever the container is, because emit-time
+routing asks no question about the type. Four measurements now say the same
+thing about that, and the next move on this is to ask: `infer` already decides
+a type for the collection expression, so a twin routed only where the answer is
+a list would keep digestbench's fifth and give encodebench and kq their quarter
+per cent back. That is a measurement to take, not a conclusion.
+
+**The objective still says take the change**, and the objective is what
+decides: welfare 74.89 -> 75.09 on the corpus that carries the weights. kq's
+quarter of a per cent is real, it is recorded here rather than left for its pin
+bump to discover, and it is the price of digestbench's fifth.
+
+**The first run of this measurement was wrong and is worth saying why.** It
+built kq without `--release` and read 100,687,166 for print_small against a
+golden of 76,695,994, then reported the twin as costing kq nothing. kq's CI
+builds with `--release` and the deltas do not survive the difference: the
+unoptimised build hid the twin's cost entirely. A benchmark built differently
+from the way it is published measures a program nobody runs.
