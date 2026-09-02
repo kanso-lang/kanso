@@ -3329,3 +3329,14 @@ the row the way `kq/bench/instructions_golden.txt` does, so a move gets asked
 which silicon counted it before anybody explains it. That is a real piece of
 work and it is not this pull request's; it is filed here so the next reading
 of this row has the question in front of it.
+
+**The re-run closed it.** The next job on this branch, with the golden
+unchanged at 41,495,096 and nothing in the compiler touched, read 41,495,096
+and went green. So the row is 41,495,096 / 41,500,177 / 41,495,096 across
+three consecutive CI runs of the same compiler — bracketed, not a one-off.
+The spread is 5,081 and it belongs to the pool rather than to any diff.
+
+Writing that down matters more than the finding. The entry above corrects
+four readings I took as evidence on a single measurement each; leaving this
+one at a single measurement would have repeated the error inside the
+correction.
