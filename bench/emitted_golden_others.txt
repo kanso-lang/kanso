@@ -26,22 +26,30 @@
 # bindings of dead code in this program, and the pattern in any program that
 # repeats an interpolation inside a nested body. The walk has the arms now and
 # the two agree.
-encodebench defines=153 calls=1663 branches=1014 lines=10466
-oneshot defines=154 calls=1779 branches=1159 lines=11469
-basket defines=118 calls=1324 branches=726 lines=7181
-widebench defines=169 calls=1884 branches=1116 lines=11507
-deepbench defines=92 calls=840 branches=520 lines=5046
+encodebench defines=155 calls=1667 branches=1020 lines=10519
+oneshot defines=156 calls=1783 branches=1165 lines=11522
+basket defines=120 calls=1328 branches=732 lines=7234
+widebench defines=171 calls=1888 branches=1122 lines=11560
+deepbench defines=94 calls=844 branches=526 lines=5099
 escapebench defines=29 calls=97 branches=48 lines=708
-pendbench defines=106 calls=1250 branches=611 lines=6169
-scanbench defines=307 calls=3743 branches=2214 lines=20019
+pendbench defines=108 calls=1254 branches=617 lines=6222
+scanbench defines=309 calls=3747 branches=2220 lines=20072
 indexbench defines=35 calls=159 branches=76 lines=1104
 # 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
 # 1,104 lines. It reads a string forward one character at a time, which is the
 # only shape in the tree that asks `s[i]` of multibyte text.
-digestbench defines=160 calls=1571 branches=857 lines=9082
+digestbench defines=162 calls=1575 branches=863 lines=9135
 # 2026-08-31: digestbench joins, at 160 defines, 1,571 calls, 857 branches and
 # 9,082 lines. It is the only benchmark whose PEAK is the point — sha256 walks
 # a padded message sixty-four bytes at a time and everything a block builds is
 # dead when the next starts, so what it holds is a property of the algorithm
 # in a compiler that reclaims and a property of the message in one that does
 # not. It reads 82,837,504 arena bytes for an 8,192-byte message.
+# 2026-09-02: every one of the ten gains two defines, four calls, six
+# branches and fifty-three lines. The compiler now writes an inline dispatcher
+# beside each `k_call{n}` site — one twin per arity the program uses, and
+# every program here uses exactly two, arity one and arity two. The bodies are
+# `internal` and vanish into their call sites during optimization, so what
+# this vein counts is the definition rather than the code: `.text` rises by a
+# few hundred bytes where the sites are live and not at all where they are
+# not.

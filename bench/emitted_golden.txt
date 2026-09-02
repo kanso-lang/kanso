@@ -58,7 +58,12 @@
 # at each site is gone, which is where the forty-seven lines went. The change
 # is a correctness fix — native and wasm handed back the FIRST failing field
 # where the interpreter merged both reasons — and the code came out smaller.
-defines=154
-calls=1785
-branches=1168
-lines=11527
+# 2026-09-02: +2 defines, +4 calls, +6 branches, +53 lines. The two inline
+# dispatcher twins, arity one and arity two. The decoder writes fifteen call
+# sites for them and reaches none of them from its entry, so its `.text` is
+# byte-identical and its instruction row does not move: the twins are counted
+# here, written, and then dropped by the linker.
+defines=156
+calls=1789
+branches=1174
+lines=11580

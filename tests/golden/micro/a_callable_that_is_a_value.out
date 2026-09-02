@@ -1,0 +1,21 @@
+one lam: 30
+one ref: 6
+one kept: 10
+one closed: 9
+two lam: 12
+two ref: 7
+two closed: 27
+one lam bad: arg
+one drop bad: arg
+one kept bad: arg
+one ref bad: arg
+one closed bad: arg
+two drop bad a: a
+two drop bad b: b
+two drop bad ab: ["a" "b"]
+two ref bad b: b
+two closed bad b: b
+one dead: callee
+two dead: callee
+one both: callee
+two both: callee
