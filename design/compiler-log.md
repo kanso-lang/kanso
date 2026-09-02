@@ -5892,3 +5892,21 @@ stops handing tenure blocks up turns it red rather than turning some later
 program into the segfault in `k_copy_size` that started all of this. The
 comment in runtime.c is corrected: it said nothing had reached this, and
 something has.
+
+## 2026-09-02 (twelfth) — a comment in runtime.c moves the compile row
+
+The correction above turned `compile_instructions` red: 41,495,720 ->
+41,495,304, a fall of 416, from a change that is entirely a comment.
+
+`src/main.rs` reaches the runtime through `include_str!("runtime.c")`, so the
+file's bytes are part of the compiler's data section. `kanso check lib/json`
+never emits the runtime and never reads that string; the front end does exactly
+the work it did before, at slightly different addresses, and the count comes
+out 416 lower for it.
+
+Worth writing down because the obvious reading of a move in this row is that
+the front end changed, and here nothing in the front end was touched. A comment
+in runtime.c is not free in this vein, the direction is not predictable from
+the edit, and the number that fell is a layout artefact rather than a win to
+bank. It is recorded as an improvement because that is what the row says, and
+this paragraph is what stops the next reader crediting it to a pass.
