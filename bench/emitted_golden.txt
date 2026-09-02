@@ -63,7 +63,12 @@
 # sites for them and reaches none of them from its entry, so its `.text` is
 # byte-identical and its instruction row does not move: the twins are counted
 # here, written, and then dropped by the linker.
-defines=156
-calls=1789
-branches=1174
-lines=11580
+# 2026-09-02 (later): +2 defines, +3 calls, +3 branches, +49 lines — the two
+# inline record twins, `k_check_rec_fast` and `k_field_fast`. The decoder
+# writes 134 sites for them across the ten programs and reaches none of its own
+# from its entry, so once again this vein counts the definition and `.text`
+# counts nothing.
+defines=158
+calls=1792
+branches=1177
+lines=11629

@@ -405,12 +405,20 @@
 # not cover. jsonbench, escapebench and indexbench do not move: they write
 # such sites, but only in library folds their entry never reaches, so the
 # linker drops them. The instruction rows fall 0.5% to 4.5% for the bytes.
+# 2026-09-02 (later): six binaries rise 2,992 to 4,752 bytes, 3.0% to 6.1% —
+# the largest single move this vein has recorded. `k_field` and `k_check_rec`
+# are now written inline at all 134 sites the compiler emits for them, and a
+# record read plus a record pattern test is more code than a call. The three
+# that do not move write those sites only where their entry cannot reach.
+# It buys 17.8% of pendbench, 4.3% of encodebench and five smaller falls: the
+# trade is stated in design/compiler-log.md and the instruction vein carries
+# the other half of it.
 jsonbench text=83906
-encodebench text=100626
-oneshot text=100818
-basket text=93410
-widebench text=101698
-deepbench text=66338
+encodebench text=103618
+oneshot text=103826
+basket text=97874
+widebench text=105234
+deepbench text=69538
 escapebench text=52450
-pendbench text=77474
+pendbench text=82226
 indexbench text=54258

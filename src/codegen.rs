@@ -163,6 +163,55 @@ define internal i64 @k_check_int(%KValue %v, i64 %n) alwaysinline {
   %r = zext i1 %c to i64
   ret i64 %r
 }
+; A record read and a record pattern test, inlined for the shape that
+; happens: a value whose tag IS `K_REC`, so neither has a subtype wrapper to
+; walk. Between them `k_check_rec` and `k_field` are 2.90% of encodebench's
+; own instructions before the call frames at each of the 134 sites the
+; compiler writes for them, and a fold that matches a record pays both once a
+; lap. Everything with a `K_SUB` on it falls through to the runtime, which
+; walks the chain and answers as it always did — which is the same condition
+; the runtime itself branches on, so the twin answers every shape the runtime
+; answers without a call, and only a wrapper is left to it.
+define internal i64 @k_check_rec_fast(%KValue %v, i64 %t, i64 %n) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %issub = icmp eq i64 %tag, 15
+  br i1 %issub, label %slow, label %plain
+plain:
+  %isrec = icmp eq i64 %tag, 7
+  br i1 %isrec, label %rec, label %no
+no:
+  ret i64 0
+rec:
+  %p = extractvalue %KValue %v, 1
+  %r = inttoptr i64 %p to ptr
+  %tid = load i64, ptr %r
+  %np = getelementptr i8, ptr %r, i64 8
+  %nf = load i64, ptr %np
+  %et = icmp eq i64 %tid, %t
+  %en = icmp eq i64 %nf, %n
+  %both = and i1 %et, %en
+  %out = zext i1 %both to i64
+  ret i64 %out
+slow:
+  %s = call i64 @k_check_rec(%KValue %v, i64 %t, i64 %n)
+  ret i64 %s
+}
+define internal %KValue @k_field_fast(%KValue %v, i64 %i) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %issub = icmp eq i64 %tag, 15
+  br i1 %issub, label %slow, label %rec
+rec:
+  %p = extractvalue %KValue %v, 1
+  %r = inttoptr i64 %p to ptr
+  %fp = getelementptr i8, ptr %r, i64 16
+  %fields = load ptr, ptr %fp
+  %at = getelementptr %KValue, ptr %fields, i64 %i
+  %val = load %KValue, ptr %at
+  ret %KValue %val
+slow:
+  %s = call %KValue @k_field(%KValue %v, i64 %i)
+  ret %KValue %s
+}
 define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -1139,9 +1188,9 @@ impl<'a> Backend<'a> {
             // a boxed record reached a by-value slot (a construction bound or
             // passed outside tail position): unpack it into the convention
             let f0 = f.tmp();
-            f.line(&format!("{f0} = call %KValue @k_field(%KValue {e}, i64 0)"));
+            f.line(&format!("{f0} = call %KValue @k_field_fast(%KValue {e}, i64 0)"));
             let f1 = f.tmp();
-            f.line(&format!("{f1} = call %KValue @k_field(%KValue {e}, i64 1)"));
+            f.line(&format!("{f1} = call %KValue @k_field_fast(%KValue {e}, i64 1)"));
             let posp = f.tmp();
             f.line(&format!("{posp} = extractvalue %KValue {f0}, 1"));
             let sh = f.tmp();
@@ -2037,7 +2086,7 @@ impl<'a> Backend<'a> {
                             "call i64 @k_check_sub_rec(%KValue {value}, i64 {id}, i64 {nfields})"
                         ),
                         false => format!(
-                            "call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {nfields})"
+                            "call i64 @k_check_rec_fast(%KValue {value}, i64 {id}, i64 {nfields})"
                         ),
                     }
                 }
@@ -2603,13 +2652,13 @@ impl<'a> Backend<'a> {
                     self,
                     f,
                     format!(
-                        "call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {})",
+                        "call i64 @k_check_rec_fast(%KValue {value}, i64 {id}, i64 {})",
                         fields.len()
                     ),
                 );
                 for (i, field) in fields.iter().enumerate() {
                     let fv = f.tmp();
-                    f.line(&format!("{fv} = call %KValue @k_field(%KValue {value}, i64 {i})"));
+                    f.line(&format!("{fv} = call %KValue @k_field_fast(%KValue {value}, i64 {i})"));
                     self.emit_pattern(f, &fv, field, fail)?;
                 }
                 // the as-pattern's name takes the value that matched, so an
@@ -2742,7 +2791,7 @@ impl<'a> Backend<'a> {
                                 .ok_or_else(|| format!("native backend: unknown type `{ty}`"))?;
                             let c = f.tmp();
                             f.line(&format!(
-                                "{c} = call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {})",
+                                "{c} = call i64 @k_check_rec_fast(%KValue {value}, i64 {id}, i64 {})",
                                 fields.len()
                             ));
                             let b = f.tmp();
@@ -2765,7 +2814,7 @@ impl<'a> Backend<'a> {
                                 if let Pattern::Var(name, _) = field {
                                     let fv = f.tmp();
                                     f.line(&format!(
-                                        "{fv} = call %KValue @k_field(%KValue {value}, i64 {i})"
+                                        "{fv} = call %KValue @k_field_fast(%KValue {value}, i64 {i})"
                                     ));
                                     f.bind(name, &fv);
                                 }
