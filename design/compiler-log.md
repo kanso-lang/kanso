@@ -2994,3 +2994,12 @@ samples take the same prelude: `defines` 149, `calls` 182, `branches` 207,
 `text` lands on **1,010,694**, +5,744 for the two twins. `work_jsonbench`
 lands on **2,681,323,644**, and its 7,653,295 is the layout residual described
 above rather than work the guards do.
+
+`compile_instructions` lands on **41,490,353**, a FALL of 11,038 against
+41,501,391, measured on CI because a container cannot count this row. Two
+things in the commit are data the front end never reads — the prelude grew by
+the index twin and the append's second arm, and `arg_is_str` left `codegen.rs`
+when the string arm made it dead — and between them the compiler's own
+sections shifted. Rounds, visits and allocations are byte-identical: nothing
+in the front end changed. Three consecutive commits have now moved this row
++6,087, −416 and −11,038, and none of the three touched a pass.
