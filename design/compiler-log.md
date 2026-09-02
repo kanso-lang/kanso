@@ -3156,9 +3156,11 @@ compile samples take the same prelude: `defines` **154**, `calls` **187**,
 
 Every one of those is the price of a prelude that now carries five twins, and
 every one is paid by programs that never reach them — the trade #1217
-measured and the objective declines to weigh. `compile_instructions` read
-41,497,526 on CI for the first two changes alone, a rise of 7,173 on
-41,490,353; the third moves it again and CI has the last word.
+measured and the objective declines to weigh. `compile_instructions` lands on
+**41,498,385**, a rise of 8,032 on 41,490,353. CI read 41,497,526 for the
+first two changes alone, so the twin is 859 of it. Rounds, visits and
+allocations hold across all three: the front end was not touched, and what
+moved is the length of a string the compiler carries and never reads.
 
 **The page's decode attribution is re-sat on top of this.** §07 read
 1,783,922,550 emitted against 841,939,256 runtime and 47,808,090 libc, a
