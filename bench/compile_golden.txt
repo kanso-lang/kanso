@@ -7,8 +7,8 @@
 # to buy runtime work, or the reverse. Movement is fine and silence is not:
 # regenerate deliberately and record which way it went, and why, in
 # design/compiler-log.md beside the runtime goldens.
-recursion lines=565 calls=33 branches=34 defines=29 rounds=4 visits=45
-dispatch lines=561 calls=34 branches=33 defines=29 rounds=2 visits=13
-guards lines=558 calls=32 branches=34 defines=29 rounds=2 visits=25
-records lines=609 calls=37 branches=37 defines=29 rounds=2 visits=20
-build_block lines=534 calls=26 branches=29 defines=28 rounds=2 visits=12
+recursion lines=662 calls=37 branches=42 defines=30 rounds=4 visits=45
+dispatch lines=658 calls=38 branches=41 defines=30 rounds=2 visits=13
+guards lines=655 calls=36 branches=42 defines=30 rounds=2 visits=25
+records lines=706 calls=41 branches=45 defines=30 rounds=2 visits=20
+build_block lines=631 calls=30 branches=37 defines=29 rounds=2 visits=12

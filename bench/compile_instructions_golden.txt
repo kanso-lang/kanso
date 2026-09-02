@@ -796,7 +796,7 @@
 # a larger codegen.rs. It fell here and rose 4,747 for the change before it,
 # on the same host, for the same reason. compile_allocs, compile_peak_bytes,
 # rounds and visits are byte-identical.
-compile_instructions=41501391
+compile_instructions=41490353
 # 2026-09-01 (last): -1,320, and none of it is the front end either. This
 # branch changed src/runtime.c twice and no .rs file, and main.rs holds that C
 # as an include_str! it hashes for the build cache key. The counters that
@@ -864,3 +864,16 @@ compile_instructions=41501391
 # `runtime.c`. `kanso check lib/json` never emits IR and never reads the
 # prelude; the front end does exactly the work it did before. 6,087 on 41.5
 # million is 0.015%, and it buys 403 million instructions of encode.
+#
+# 2026-09-02: 41,501,391 -> 41,490,353, a fall of 11,038. Two things moved in
+# the same commit and both are data rather than work: the DECLARES prelude
+# grew again — the non-strict index twin, and the append twin's second arm —
+# and `arg_is_str` was deleted from `codegen.rs` because the string arm made
+# it dead. `kanso check lib/json` emits no IR and reads neither, so the front
+# end does the same work it did before, in a different place, and the count
+# came out 11,038 lower. Rounds, visits and allocations are byte-identical.
+#
+# Three consecutive entries now: +6,087 for a longer prelude, -416 for a
+# comment, -11,038 for a longer prelude and a deleted helper. The sign does
+# not follow the size of the edit or its direction, which is what a layout
+# effect looks like.
