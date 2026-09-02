@@ -5510,4 +5510,24 @@ digest out of memory. Admitting a shift of 64 to the fast path replaces
 `a_shift_past_the_word`'s refusal with a garbage address. Nothing new had to
 be written: the pins were already there.
 
+**Every counter this branch moved, and where it landed.** The four count
+veins price the same six definitions four times over, once per corpus they
+watch. In `bench/compile_golden.txt`, summed over its five samples: `defines`
+104 -> 134, `calls` 112 -> 147, `branches` 87 -> 127, `lines` 1,787 -> 2,372.
+In `bench/compile_golden_modules.txt`: `module_defines` 80 -> 86,
+`module_calls` 756 -> 763, `module_branches` 378 -> 386, `module_lines`
+4,529 -> 4,646. In `bench/emitted_golden.txt`, the decoder alone:
+`emitted_defines` 158 -> 164, `emitted_calls` 1,792 -> 1,799,
+`emitted_branches` 1,177 -> 1,185, `emitted_lines` 11,629 -> 11,746. In
+`bench/emitted_golden_others.txt`, summed over its ten:
+`emitted_other_defines` 1,359 -> 1,419, `emitted_other_calls`
+14,372 -> 14,442, `emitted_other_branches` 8,419 -> 8,499,
+`emitted_other_lines` 83,669 -> 84,833. And `compile_instructions`
+41,495,470 -> 41,501,923, +6,453, which is what writing those definitions
+costs the front end; rounds and visits do not move.
+
+Every one of those rises is the same six definitions counted again, and the
+`.text` row is what says whether any of it reaches a binary: digestbench
+95,586 -> 97,554 and nine rows unchanged.
+
 Welfare 74.81 -> 74.89.

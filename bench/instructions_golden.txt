@@ -534,4 +534,9 @@ deepbench 692273898
 escapebench 248370844
 pendbench 749658206
 indexbench 5242731
-digestbench 134729413
+digestbench 123591699
+# 2026-09-02: digestbench 134,729,413 -> 123,591,699, -8.267%. Six bit
+# builtins gained inline twins; the five it uses were 7.9% of it at about
+# twenty-two instructions a call for one instruction of work. Every other row
+# is byte-identical. The container that built the change measured the same
+# delta to the instruction, the third time the two hosts have agreed exactly.
