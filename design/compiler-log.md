@@ -3226,6 +3226,11 @@ Six programs emit a twin they cannot reach and pay its bytes; five reach one
 and pay nothing for it. The objective weighs the first at zero, which §35 of
 the compiler page is about, and the second at the numbers in the table.
 
+`compile_instructions` lands on **41,495,096**, a FALL of 3,289 measured on
+CI. The prelude grew and the row went down — the fourth reading in a day from
+a change the front end never runs, and the fourth time the sign has not
+followed the direction of the edit.
+
 **Welfare 75.54 -> 75.73**, ratcheted. Four ratchets in a day: 75.27, 75.50,
 75.52, 75.54, 75.73.
 
