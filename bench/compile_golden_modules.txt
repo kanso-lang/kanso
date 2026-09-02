@@ -5,4 +5,4 @@
 #
 # Kept apart from that file because the welfare index sums its rows: a sample
 # added there reads as a regression the size of the sample.
-module lines=4832 calls=770 branches=402 defines=89 rounds=6 visits=2403
+module lines=4897 calls=771 branches=408 defines=90 rounds=6 visits=2403
