@@ -877,3 +877,9 @@ compile_instructions=41490353
 # comment, -11,038 for a longer prelude and a deleted helper. The sign does
 # not follow the size of the edit or its direction, which is what a layout
 # effect looks like.
+#
+# 2026-09-02 (kanso#1223): the born-this-beat removal and the seed map read
+# 41,497,526 on CI, a rise of 7,173 on 41,490,353, for two changes that touch
+# only `src/runtime.c` — which the compiler carries as a string through
+# `include_str!` and never reads while checking. The map-insert twin in the
+# same PR moves the prelude again and the row with it.

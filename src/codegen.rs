@@ -465,6 +465,72 @@ slow:
   %s = call %KValue @k_index(%KValue %c, %KValue %k, ptr %o)
   ret %KValue %s
 }
+; The in-place map insert, where the linearity analysis proved the map unique.
+; The C spends a 312-byte frame and six callee-saved registers on every call,
+; grow or not, because the growth arm and the view insert live in the same
+; function; jsonbench pays that 1,254,150 times a decode run at seventy-eight
+; instructions apiece. A map with no sorted view built is the whole of what
+; the fast arm needs: `k_map_replace` answers on one branch, the view insert
+; is a no-op, and the write is two slots at the frontier. Anything else -- a
+; built view, a full buffer, a key that is not an int or a string, a failure
+; in any of the three -- takes the call.
+define internal %KValue @k_b_put_mut_fast(%KValue %mv, %KValue %k, %KValue %v) alwaysinline {
+  %tm = extractvalue %KValue %mv, 0
+  %ismap = icmp eq i64 %tm, 10
+  br i1 %ismap, label %pkey, label %pslow
+pkey:
+  %tk = extractvalue %KValue %k, 0
+  %ki = icmp eq i64 %tk, 0
+  %ks = icmp eq i64 %tk, 6
+  %keyok = or i1 %ki, %ks
+  br i1 %keyok, label %pval, label %pslow
+pval:
+  %tv = extractvalue %KValue %v, 0
+  %vbad = icmp eq i64 %tv, 5
+  br i1 %vbad, label %pslow, label %pstat
+pstat:
+  %pso = load i32, ptr @k_stats_on
+  %pcounting = icmp ne i32 %pso, 0
+  br i1 %pcounting, label %pslow, label %pshape
+pshape:
+  %pmi = extractvalue %KValue %mv, 1
+  %m = inttoptr i64 %pmi to ptr
+  %sortedp = getelementptr i8, ptr %m, i64 16
+  %sorted = load ptr, ptr %sortedp
+  %hasview = icmp ne ptr %sorted, null
+  br i1 %hasview, label %pslow, label %proom
+proom:
+  %mlen = load i64, ptr %m
+  %pairspp = getelementptr i8, ptr %m, i64 8
+  %pairs = load ptr, ptr %pairspp
+  %pbuf = getelementptr i8, ptr %pairs, i64 -16
+  %pcap = load i64, ptr %pbuf
+  %pusedp = getelementptr i8, ptr %pbuf, i64 8
+  %pused = load i64, ptr %pusedp
+  %mlen2 = shl i64 %mlen, 1
+  %pfront = icmp eq i64 %pused, %mlen2
+  %pneed = add i64 %mlen2, 2
+  %pneg = icmp slt i64 %pcap, 0
+  %pncap = sub i64 0, %pcap
+  %pcapa = select i1 %pneg, i64 %pncap, i64 %pcap
+  %pfits = icmp sle i64 %pneed, %pcapa
+  %pok = and i1 %pfront, %pfits
+  br i1 %pok, label %pwrite, label %pslow
+pwrite:
+  %kslot = getelementptr %KValue, ptr %pairs, i64 %mlen2
+  store %KValue %k, ptr %kslot
+  %vidx = add i64 %mlen2, 1
+  %vslot = getelementptr %KValue, ptr %pairs, i64 %vidx
+  store %KValue %v, ptr %vslot
+  store i64 %pneed, ptr %pusedp
+  %mlen1 = add i64 %mlen, 1
+  store i64 %mlen1, ptr %m
+  ret %KValue %mv
+pslow:
+  %pr = call %KValue @k_b_put_mut(%KValue %mv, %KValue %k, %KValue %v)
+  ret %KValue %pr
+}
+
 ; The non-strict index. `k_index_fast` above is the STRICT form's fallback and
 ; only knows lists; everything written without the `!` went to the runtime by
 ; call, which is 7,237,200 of them in encodebench at thirty-five instructions
@@ -4902,7 +4968,9 @@ impl<'a> Backend<'a> {
             let sym = if name == "push" && in_place {
                 "push_mut"
             } else if name == "put" && in_place {
-                "put_mut"
+                // the twin writes the frontier pair itself where the map has
+                // no sorted view; everything else falls to the C by call
+                "put_mut_fast"
             } else if name == "append" && in_place {
                 // the in-place byte claim inlines whole; a byte that does not
                 // fit falls through to the C path inside the twin

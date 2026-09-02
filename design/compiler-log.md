@@ -3095,14 +3095,70 @@ inlined frontier write is longer than a call to something that does it, and a
 literal that asks for eight slots writes a different immediate. That is the
 trade the objective cannot see, and §35 of the compiler page is about.
 
-**Welfare 75.27 -> 75.52**, ratcheted. The born test alone was 75.50; the seed
-map is the remaining 0.02, which is what a satiated allocation term pays for
-six per cent.
+**Welfare 75.27 -> 75.54**, ratcheted twice. The born test alone was 75.50,
+the seed map took it to 75.52 — 0.02 for six per cent of jsonbench's
+allocations, which is what a satiated term pays — and the map insert the last
+0.02.
 
 The pin is `bench/instructions_golden.txt`. A fixture cannot catch the born
 test: the old code and the new code write the same bytes into the same slot
 and return the same value, which is the whole finding. Restore it to the fast
 arm's condition and nine rows in that vein go red on the numbers above.
+
+### the map insert
+
+`k_b_put_mut` was the other 3.70% of jsonbench, and its cost is not in the
+work it does. `objdump` shows a 312-byte stack frame and six callee-saved
+pushes on entry, paid by every call, grow or not, because the growth arm and
+the sorted-view insert live in the same function. jsonbench makes 1,254,150 of
+those calls a run at 77.6 instructions apiece.
+
+A map with no sorted view built is the whole of what a fast arm needs.
+`k_map_replace` answers on one branch when `m->sorted` is NULL, the view
+insert is a no-op, and the write is two slots at the frontier. jsonbench's
+`view_allocs` reads zero, so every one of its inserts is that case.
+`k_b_put_mut_fast` in the DECLARES prelude does it: tag `K_MAP`, key an int or
+a string, value not a failure, counting off, no view, frontier and room, then
+two stores and a length. A built view, a full buffer, anything else at all:
+the call.
+
+Against the two changes above, that is jsonbench 2,627,824,194 ->
+**2,556,080,244**, −71,743,950 or **−2.730%**; oneshot −478,293 or −1.348%;
+encodebench −478,293 or −0.008%; basket +12,792, its whole cost. The other
+seven benchmarks are byte-identical, and so are all nine cost goldens.
+
+### all three, against b05ee1b2
+
+| benchmark   | before        | after         | delta         |          |
+|-------------|--------------:|--------------:|--------------:|---------:|
+| escapebench |   248,370,844 |   216,273,844 |   −32,097,000 | −12.923% |
+| basket      |    54,397,377 |    47,422,960 |    −6,974,417 | −12.821% |
+| digestbench |    98,969,254 |    89,615,426 |    −9,353,828 |  −9.451% |
+| jsonbench   | 2,681,323,644 | 2,556,080,244 | −125,243,400 |  −4.671% |
+| oneshot     |    35,833,746 |    34,998,525 |      −835,221 |  −2.331% |
+| pendbench   |   749,618,914 |   734,101,805 |   −15,517,109 |  −2.070% |
+| widebench   |    62,577,957 |    62,243,248 |      −334,709 |  −0.535% |
+| encodebench | 6,059,516,727 | 6,058,446,369 |    −1,070,358 |  −0.018% |
+| scanbench   | 1,423,437,886 | 1,423,437,854 |           −32 |        — |
+| deepbench   |   677,481,898 |   677,481,898 |             0 |        — |
+| indexbench  |     5,242,731 |     5,242,731 |             0 |        — |
+
+**Every counter that moved, and what it landed on.** The put twin's body sits
+in the prelude, so every program emits it: `emitted_defines` **168**,
+`emitted_calls` **1,806**, `emitted_branches` **1,207**, `emitted_lines`
+**12,000** for the decoder, and across the ten beside it
+`emitted_other_defines` **1,459**, `emitted_other_calls` **14,512**,
+`emitted_other_branches` **8,719**, `emitted_other_lines` **87,385**. The
+compile samples take the same prelude: `defines` **154**, `calls` **187**,
+`branches` **237**, `lines` **3,642**, and the module sample
+`module_defines` **90**, `module_calls` **771**, `module_branches` **408**,
+`module_lines` **4,897**. `text` lands on **1,012,534**.
+
+Every one of those is the price of a prelude that now carries five twins, and
+every one is paid by programs that never reach them — the trade #1217
+measured and the objective declines to weigh. `compile_instructions` read
+41,497,526 on CI for the first two changes alone, a rise of 7,173 on
+41,490,353; the third moves it again and CI has the last word.
 
 **The page's decode attribution is re-sat on top of this.** §07 read
 1,783,922,550 emitted against 841,939,256 runtime and 47,808,090 libc, a

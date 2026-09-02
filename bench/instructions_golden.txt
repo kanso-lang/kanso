@@ -551,10 +551,10 @@
 # peak_bytes were in the welfare model the whole time and its work was in
 # nothing, so a change that gave the arena back per position and spent ten
 # times the instructions doing it scored as a pure gain.
-jsonbench 2627824194
-encodebench 6058924662
-oneshot 35476818
-basket 47410168
+jsonbench 2556080244
+encodebench 6058446369
+oneshot 34998525
+basket 47422960
 widebench 62243248
 deepbench 677481898
 escapebench 216273844
