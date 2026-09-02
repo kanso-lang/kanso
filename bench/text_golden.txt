@@ -398,12 +398,19 @@
 # block a survivor may still point into is handed to the depth outside instead
 # of freed, so the pop carries a second short function and a branch. It closes
 # a use-after-free, and the counter it costs is scan_ten_frees.
+# 2026-09-02: six binaries rise 192 to 672 bytes, 0.28% to 0.60%. The
+# dispatcher is now inlined at each call site the compiler writes for a
+# callable that is a value, and every such site carries the tag test, the
+# arity test and a fallback call to `k_call{n}` for everything the arm does
+# not cover. jsonbench, escapebench and indexbench do not move: they write
+# such sites, but only in library folds their entry never reaches, so the
+# linker drops them. The instruction rows fall 0.5% to 4.5% for the bytes.
 jsonbench text=83906
-encodebench text=100338
-oneshot text=100530
-basket text=92850
-widebench text=101410
-deepbench text=66146
+encodebench text=100626
+oneshot text=100818
+basket text=93410
+widebench text=101698
+deepbench text=66338
 escapebench text=52450
-pendbench text=77218
+pendbench text=77474
 indexbench text=54258

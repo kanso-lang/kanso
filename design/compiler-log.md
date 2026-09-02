@@ -5098,3 +5098,166 @@ three and read green — the dangling pointer was there, a detector saw it, and
 nothing dereferenced it. Watched red on origin/main's runtime.c rebuilt in
 place: the assertion fails in 0.69 seconds. Green here in 21, with the oracle
 agreeing to the byte.
+
+## 2026-09-02 — the dispatcher moves to the call site
+
+**DONE** (kanso#PR). A call whose head is a value — a lambda, a parameter, a
+bound function — compiles to `call @k_call{n}`, and the runtime dispatcher it
+lands in is 26 instructions for arity two. Ten of them ask about the callable:
+is it a failure, is it a closure, does its arity match. A fold passes the same
+callable through its self-call unchanged, so once TailCallElim turns the
+`musttail` recursion into a loop those ten are loop-invariant and LICM would
+hoist them out. LICM cannot hoist across a call, and the dispatcher is a call.
+
+Deleting every one of those ten checks from `k_call2` bounded the prize at
+437,205 instructions on oneshot, 1.096%. That number corrected an earlier
+estimate of 0.51%, which had counted only the fold's 29,147 applications;
+oneshot makes about 43,720 `k_call2` calls in all.
+
+**Two levers were tried before the one that shipped.** LTO is real here —
+`cached_runtime_object` compiles runtime.c to genuine LLVM bitcode under
+`-O3 -flto`, and `k_call2` is internalized in the linked module — but the
+inliner declines it on cost. `__attribute__((always_inline))` on the C
+definition is ignored without a warning, and `.text` came back byte-identical
+at 100,530: the repo's working pattern is `static inline
+__attribute__((always_inline))`, and `k_call2` cannot be static because the
+emitted `.ll` calls the symbol by name.
+
+**What shipped.** `call_twin` in codegen.rs writes an `internal alwaysinline`
+twin per arity the program uses, in the module the optimizer is already in —
+the same shape as `k_force_fast` and `k_b_append_byte`, which exist in
+DECLARES for the same reason. The twin covers a closure of the arity written
+with no failure in an argument, and everything else calls `k_call{n}`, which
+re-asks the lot and answers as before. That is why the twin may test in a
+different order from the runtime: the arm only fires where all the orders
+agree.
+
+The twins are generated against the body rather than carried in DECLARES,
+because an unused `internal` definition is free after optimization and not
+free in `bench/emitted_golden*.txt`.
+
+**The rows, measured by CI.** Six fall and four hold.
+
+```
+digestbench     143,471,767 ->   137,057,629   -4.471%
+pendbench       930,587,200 ->   912,184,212   -1.978%
+encodebench   7,393,366,858 -> 7,257,716,458   -1.835%
+oneshot          39,789,223 ->    39,450,097   -0.852%
+deepbench       705,257,898 ->   701,525,898   -0.529%
+basket           56,426,594 ->    56,139,380   -0.509%
+```
+
+This sitting is on family 0x6 model 0xad, not the recorded Genoa. The rows
+were also measured locally, on a third chip and a different glibc, and every
+delta agreed to within a per cent of itself — a per-row constant offset of
+about 400 separates the two hosts, which is the process startup the empty
+environment does not remove. The moves are two to four orders of magnitude
+larger than that, so the silicon is not what is being read here.
+
+**Welfare 74.6196 to 74.6928, and the floor is set.**
+
+jsonbench, widebench, escapebench and indexbench are byte-identical.
+jsonbench is the interesting one: it writes fifteen sites for the twins and
+reaches none of them from its entry, so the linker drops both twins and its
+`.text` does not move either. The decoder does not dispatch on a value.
+
+**What it costs.** Six binaries gain 192 to 672 bytes of `.text`, 0.28% to
+0.60%; the three that never link a live site gain nothing. Every emitted
+program gains two defines, four calls, six branches and fifty-three lines.
+No allocation counter moves, on any of the nine — all nine counter gates are
+byte-identical. `compile_golden.txt` does not move; only the module sample in
+`compile_golden_modules.txt` does, by the same two defines.
+
+**The fixture.** `tests/golden/micro/a_callable_that_is_a_value.kso`, on all
+three engines and again under a release build. Nineteen lines of output over
+arity one and two: a lambda, a fnref, a capturing closure, a lambda that
+ignores its argument, a failing argument in each position, both failing, and
+a failing callable.
+
+The failing arguments are computed inside a body, not passed by a caller. The
+first version passed them in, and a declared group refuses a failing argument
+before its body runs — so the dispatch was never reached and the whole family
+read green under every mutation.
+
+Four mutations, four verdicts. Dropping the argument failure test: red,
+because a lambda that ignores its argument answers 42 where the dispatcher
+answered the failure. Reading the env pointer or the fn pointer from the wrong
+slot: red, and loudly — the capturing closures jump into nothing and the
+program dies on stack exhaustion. Reading arity from the capture count: output
+identical, caught instead by `bench/instructions_golden.txt`, where oneshot
+rises to 40,090,932, above the baseline it started from.
+
+**The disassembly says it worked the way the argument said it would.**
+`d_list/fold_go_3` in oneshot now tests the callable's tag ONCE, at `3cc4`,
+before the loop header at `3cd0` — and LLVM went further than hoisting: it
+unswitched the loop on that test and emitted two copies of the body, one for
+the closure case and one for everything else. The hot copy has no dispatch in
+it at all. That is where the few hundred bytes of `.text` went, and it is why
+`k_call2` has left oneshot's profile entirely; the top twenty is now
+`d_json/value_for_3` at 10.95%, `k_b_append_mut` at 9.40% and the fold itself
+at 3.31%.
+
+`w_klam17` sits at 3.10% and was checked as the next candidate: the emitter
+writes a plain-C wrapper beside every lifted lambda so `k_call{n}` has
+something to call at the C convention, and the wrapper looked like a pure
+`ccc`-to-`tailcc` hop worth deleting. It is not one. LLVM has inlined the
+lambda's body into the wrapper, so the symbol IS the body — a JSON string
+escape switch — and there is no forwarding frame to remove.
+
+**A divergence the fixture found on its way in.** The wasm backend disagreed
+with the other two engines about a value-headed call, in two ways, and neither
+had anything to do with this change — nothing had ever asked.
+`call_closure` in wasm_rt.rs read its arguments before its callable and handed
+back the first failing argument. `k_call2` and the interpreter both name a
+failing CALLABLE first, and both MERGE two failing arguments into one err
+carrying both reasons. So `bad (boom "a") (boom "b")` answered `a` on the page
+and `["a" "b"]` on the two engines that agree, and a call with a failure in
+both the head and an argument named the argument on the page and the head
+everywhere else.
+
+Both are the same reading `rt_mkrec` already applies to a record's fields —
+its comment says returning the first failure there "was a divergence from the
+oracle that no fixture built" — and the fix is the same two lines: test the
+callable first, then reduce the failing arguments with
+`eval::accumulate_failures`. A single failure keeps its own handle rather than
+a copy of its value. Watched red before it was watched green: the corpus test
+prints both output strings side by side and names the sample.
+
+**Pricing the thirteen counters that worsened**, so the trend gate has its
+sentence and its number for each. Twelve of them count the same twenty-six
+lines of IR the generator writes per arity, times the arities a program uses.
+`emitted_defines` lands on 156 and `emitted_lines` on 11,580 for the decoder;
+`emitted_branches` on 1,174 and `emitted_calls` on 1,789 beside them.
+Across the other ten programs `emitted_other_defines` lands on 1,339,
+`emitted_other_calls` on 14,342, `emitted_other_branches` on 8,389 and
+`emitted_other_lines` on 83,175 — sixteen defines, thirty-two calls, forty-
+eight branches and 424 lines for ten programs at two arities each. The module
+sample in the compile golden lands on `module_defines` 78, `module_calls` 753,
+`module_branches` 375 and `module_lines` 4,480, the same two twins once.
+
+Those twelve count DEFINITIONS rather than code. The bodies are `internal` and
+`alwaysinline`, so after optimization they exist only at their call sites; the
+vein that says what actually got built is `text`, which lands on 730,978
+across the nine — 1,872 bytes for six binaries and nothing for the three whose
+sites the linker drops. Bought with 24.9 million instructions off the work
+vein.
+
+`compile_instructions` lands on 41,500,519, a rise of 4,747 on CI and a fall
+of 20,230 on this container for the same diff. `kanso check lib/json` emits
+nothing, so the code this change writes never runs during the measurement:
+both numbers are the front end's own layout moving under a larger codegen.rs,
+and the two hosts disagreeing on the sign is the clearest statement of that.
+`compile_allocs`, `compile_peak_bytes`, rounds and visits are byte-identical.
+
+**Not attempted.** Arity zero, three and four have twins and no call sites in
+any benchmark. The generator writes them if a program asks; nothing measured
+does.
+
+**OPEN, small, unpinned.** `k_call2` tests its arguments for failure before it
+tests arity; the interpreter tests arity first. A value-headed call with the
+wrong arity AND a failing argument would therefore return the failure on
+native and die with an arity message on the oracle. No program in the corpus
+reaches it and I did not find a way to write one — a literal lambda's arity is
+checked at compile time, and reaching the runtime check means passing a
+callable of one arity into a body that applies another. Recorded rather than
+guessed at.

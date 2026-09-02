@@ -1,0 +1,158 @@
+# A call whose head is a value rather than a declared name dispatches at run
+# time, and the compiler now writes that dispatch inline: a tag test, an arity
+# test, and the indirect call, with everything else falling through to the
+# runtime's `k_call{n}`. The arm that fires must answer exactly what the
+# dispatcher answered, and the shapes it declines must reach the dispatcher
+# unchanged. Both halves are here.
+#
+# The failing arguments come from inside a body rather than from a caller.
+# A declared group refuses a failing argument before its body runs, so
+# `apply1 lam1 (boom "arg")` never reaches the dispatch at all — the whole
+# family was written that way first and could not fail under any mutation.
+#
+# A failing callable answers before a failing argument, and both failing
+# arguments merge. The wasm backend agreed with neither until this fixture
+# asked: `call_closure` in wasm_rt.rs read the arguments first and handed back
+# the first of them, where `k_call2` and the interpreter both name the callable
+# and both merge two failing arguments into one err. Fixed in the same change.
+#
+# Four mutations, four verdicts. Dropping the argument failure test: red,
+# because a lambda that ignores its argument then answers 42 where the
+# dispatcher answered the failure. Reading the env or the fn pointer from the
+# wrong slot: red, and loudly — the closures that capture jump somewhere else.
+# Reading arity from the capture count: green here and caught instead by
+# bench/instructions_golden.txt, where oneshot rises 641,234.
+import "std/testing"
+
+fn as_text reason
+  "{reason}"
+
+fn boom what
+  err what
+
+fn twice x
+  x + x
+
+fn plus a b
+  a + b
+
+fn apply1 g v
+  g v
+
+fn apply2 g a b
+  g a b
+
+fn one_failing g what
+  g (boom what)
+
+fn two_failing_a g what b
+  g (boom what) b
+
+fn two_failing_b g a what
+  g a (boom what)
+
+fn two_failing_ab g wa wb
+  g (boom wa) (boom wb)
+
+fn dead_head1 what v
+  bad = boom what
+  bad v
+
+fn dead_head2 what a b
+  bad = boom what
+  bad a b
+
+fn dead_and_bad1 wc wa
+  bad = boom wc
+  bad (boom wa)
+
+fn dead_and_bad2 wc wa wb
+  bad = boom wc
+  bad (boom wa) (boom wb)
+
+fn adder n
+  (x -> x + n)
+
+fn scaler n
+  (a b -> (a + b) * n)
+
+held = 7
+
+lam1 = (x -> x * 10)
+
+lam2 = (a b -> a * b)
+
+drop1 = (_ -> 42)
+
+drop2 = (_ _ -> 99)
+
+kept1 = (x -> x + held)
+
+closed1 = adder 5
+
+closed2 = scaler 3
+
+one_lam = apply1 lam1 3
+
+one_ref = apply1 twice 3
+
+one_kept = apply1 kept1 3
+
+one_closed = apply1 closed1 4
+
+two_lam = apply2 lam2 3 4
+
+two_ref = apply2 plus 3 4
+
+two_closed = apply2 closed2 4 5
+
+one_lam_bad = one_failing lam1 "arg"
+
+one_drop_bad = one_failing drop1 "arg"
+
+one_kept_bad = one_failing kept1 "arg"
+
+one_ref_bad = one_failing twice "arg"
+
+one_closed_bad = one_failing closed1 "arg"
+
+two_drop_bad_a = two_failing_a drop2 "a" 4
+
+two_drop_bad_b = two_failing_b drop2 3 "b"
+
+two_drop_bad_ab = two_failing_ab drop2 "a" "b"
+
+two_ref_bad_b = two_failing_b plus 3 "b"
+
+two_closed_bad_b = two_failing_b closed2 4 "b"
+
+one_dead = dead_head1 "callee" 3
+
+two_dead = dead_head2 "callee" 3 4
+
+one_both = dead_and_bad1 "callee" "arg"
+
+two_both = dead_and_bad2 "callee" "a" "b"
+
+pub play =
+  print "one lam: {one_lam}"
+  >> print "one ref: {one_ref}"
+  >> print "one kept: {one_kept}"
+  >> print "one closed: {one_closed}"
+  >> print "two lam: {two_lam}"
+  >> print "two ref: {two_ref}"
+  >> print "two closed: {two_closed}"
+  >> print "one lam bad: {testing/when_failed one_lam_bad as_text}"
+  >> print "one drop bad: {testing/when_failed one_drop_bad as_text}"
+  >> print "one kept bad: {testing/when_failed one_kept_bad as_text}"
+  >> print "one ref bad: {testing/when_failed one_ref_bad as_text}"
+  >> print "one closed bad: {testing/when_failed one_closed_bad as_text}"
+  >> print "two drop bad a: {testing/when_failed two_drop_bad_a as_text}"
+  >> print "two drop bad b: {testing/when_failed two_drop_bad_b as_text}"
+  >> print "two drop bad ab: {testing/when_failed two_drop_bad_ab as_text}"
+  >> print "two ref bad b: {testing/when_failed two_ref_bad_b as_text}"
+  >> print "two closed bad b: {testing/when_failed two_closed_bad_b as_text}"
+  >> print "one dead: {testing/when_failed one_dead as_text}"
+  >> print "two dead: {testing/when_failed two_dead as_text}"
+  >> print "one both: {testing/when_failed one_both as_text}"
+  >> print "two both: {testing/when_failed two_both as_text}"

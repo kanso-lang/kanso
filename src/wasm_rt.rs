@@ -246,11 +246,39 @@ fn closure_slot(h: u32) -> Slot {
 }
 
 fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
+    // A failing CALLABLE answers before a failing argument does. The other two
+    // engines both read it that way — `k_call2` returns `f` on its first line
+    // and the interpreter never reaches its own `call_closure` with a failed
+    // head — and this asked the arguments first, so a call with a failure in
+    // both positions named the argument here and the callable there.
+    if let Slot::V(ref value) = slot(c_h) {
+        if is_failure(value) {
+            return c_h;
+        }
+    }
+    // Two failing arguments are two facts, and the one that lost the race to
+    // be first is not less true. `rt_mkrec` reads a record's fields that way
+    // and says so; a call whose head is a VALUE reaches the oracle's
+    // `call_closure`, which merges the same way, and this returned the first.
+    // One failure keeps its own handle rather than a copy of its value.
+    let mut failing: Vec<(u32, Value)> = Vec::new();
     for &h in &arg_handles {
         if let Slot::V(v) = slot(h) {
             if is_failure(&v) {
-                return h;
+                failing.push((h, v));
             }
+        }
+    }
+    match failing.len() {
+        0 => {}
+        1 => return failing[0].0,
+        _ => {
+            let merged = failing
+                .into_iter()
+                .map(|(_, v)| v)
+                .reduce(crate::eval::accumulate_failures)
+                .expect("more than one failure");
+            return push(Slot::V(merged));
         }
     }
     let Slot::C { tidx, env, arity } = closure_slot(c_h) else {

@@ -887,6 +887,75 @@ fn named_as_a_value(text: &str, temp: &str) -> bool {
     })
 }
 
+/// The dispatcher, inlined at the call site for the shape that actually
+/// happens: a closure of the arity written, with no failure in an argument.
+///
+/// `k_call2` is 26 instructions and a fold applies it once a lap. Ten of the
+/// 26 ask about the callable — is it a failure, is it a closure, does its
+/// arity match — and a fold passes the same callable through its self-call
+/// unchanged, so those ten are loop-invariant and LICM can hoist them out of
+/// the loop TailCallElim makes of the recursion. It cannot hoist across a
+/// call, which is what the runtime dispatcher is: LTO sees the body and
+/// declines to inline it on cost, and `always_inline` on the C definition is
+/// ignored because the emitted `.ll` calls the symbol by name. So the test
+/// is emitted here instead, in the module the optimizer is already in.
+///
+/// Every shape the fast arm does not cover falls through to `k_call{n}`,
+/// which re-asks everything and answers exactly as before — a failing
+/// callable, a fnref, a wrong arity, a failing argument. That is why the
+/// order here may differ from the runtime's: the arm only fires where all
+/// the orders agree.
+fn call_twin(n: usize) -> String {
+    let args: String = (0..n).map(|i| format!(", %KValue %a{i}")).collect();
+    let mut s = String::new();
+    let _ =
+        writeln!(s, "define internal %KValue @k_call{n}_fast(%KValue %f{args}) alwaysinline {{");
+    let _ = writeln!(s, "  %ftag = extractvalue %KValue %f, 0");
+    let _ = writeln!(s, "  %isclo = icmp eq i64 %ftag, 11");
+    let _ = writeln!(s, "  br i1 %isclo, label %arity, label %slow");
+    let _ = writeln!(s, "arity:");
+    let _ = writeln!(s, "  %fp = extractvalue %KValue %f, 1");
+    let _ = writeln!(s, "  %c = inttoptr i64 %fp to ptr");
+    let _ = writeln!(s, "  %arp = getelementptr i8, ptr %c, i64 24");
+    let _ = writeln!(s, "  %ar = load i64, ptr %arp");
+    let _ = writeln!(s, "  %okar = icmp eq i64 %ar, {n}");
+    let _ = writeln!(s, "  br i1 %okar, label %args, label %slow");
+    let _ = writeln!(s, "args:");
+    for i in 0..n {
+        let _ = writeln!(s, "  %t{i} = extractvalue %KValue %a{i}, 0");
+        let _ = writeln!(s, "  %e{i} = icmp eq i64 %t{i}, 5");
+    }
+    for i in 1..n {
+        let prev = match i {
+            1 => "%e0".to_string(),
+            _ => format!("%or{}", i - 1),
+        };
+        let _ = writeln!(s, "  %or{i} = or i1 {prev}, %e{i}");
+    }
+    match n {
+        0 => {
+            let _ = writeln!(s, "  br label %go");
+        }
+        1 => {
+            let _ = writeln!(s, "  br i1 %e0, label %slow, label %go");
+        }
+        _ => {
+            let _ = writeln!(s, "  br i1 %or{}, label %slow, label %go", n - 1);
+        }
+    }
+    let _ = writeln!(s, "go:");
+    let _ = writeln!(s, "  %envp = getelementptr i8, ptr %c, i64 8");
+    let _ = writeln!(s, "  %env = load ptr, ptr %envp");
+    let _ = writeln!(s, "  %fnp = load ptr, ptr %c");
+    let _ = writeln!(s, "  %r = call %KValue %fnp(ptr %env{args})");
+    let _ = writeln!(s, "  ret %KValue %r");
+    let _ = writeln!(s, "slow:");
+    let _ = writeln!(s, "  %s = call %KValue @k_call{n}(%KValue %f{args})");
+    let _ = writeln!(s, "  ret %KValue %s");
+    let _ = writeln!(s, "}}");
+    s
+}
+
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
 /// module qualifier's slash.
 fn wsym(name: &str, arity: usize) -> String {
@@ -1566,10 +1635,20 @@ impl<'a> Backend<'a> {
             true => prune_unnamed(&self.body, &dsym(crate::ast::ENTRY, 0)),
             false => self.body.clone(),
         };
+        // One inline dispatcher per arity the program actually writes. An
+        // unused `internal` definition costs nothing after optimization, but
+        // it does cost a line, a define and a branch in the emitted golden —
+        // so the twins are generated against the body rather than carried in
+        // DECLARES the way the other inline helpers are.
+        let call_twins: String = (0..=4)
+            .filter(|n| body.contains(&format!("@k_call{n}_fast(")))
+            .map(call_twin)
+            .collect();
         let declares: String = {
             let referenced = |sym: &str| {
                 let probe = format!("@{sym}(");
                 body.contains(&probe)
+                    || call_twins.contains(&probe)
                     || DECLARES
                         .lines()
                         .filter(|l| !l.starts_with("declare"))
@@ -1589,6 +1668,7 @@ impl<'a> Backend<'a> {
         };
         let mut out = declares;
         out.push('\n');
+        out.push_str(&call_twins);
         for cell in &self.caf_cells {
             let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
             let _ = writeln!(out, "@{cell}_ready = internal global i8 0");
@@ -4061,7 +4141,7 @@ impl<'a> Backend<'a> {
             }
             let arg_ir: String = arg_vals.iter().map(|v| format!(", %KValue {v}")).collect();
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_call{n}(%KValue {callee}{arg_ir})"));
+            f.line(&format!("{t} = call %KValue @k_call{n}_fast(%KValue {callee}{arg_ir})"));
             f.record(&t, TOP);
             return Ok(t);
         }

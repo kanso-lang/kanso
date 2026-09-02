@@ -20,7 +20,7 @@ this says only which of them are in the tree.
 | 3.6 | TRMC | **shipped** (#394, #395), and **widened** 2026-08-23 — the operand proof comes off the shape, so `n * fact (n - 1)` qualifies without Inference threaded from check |
 | 3.7 | cohort-counting soundness ratchet test | **shipped** |
 | 4.1 | static reuse-in-place inside the build-block | **declined**, measured |
-| 4.2 | tag-hoist under monomorphism speculation | **already harvested** |
+| 4.2 | tag-hoist under monomorphism speculation | **half harvested**, corrected 2026-09-02 — harvested for a value's tag in a numeric loop, and NOT for a callable's tag at a dispatch, which was worth 1.096% of oneshot and shipped in #1210 |
 | 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
 | 4.4 | build-blocks hosting in-place graph algorithms | **not expressible today** — the blocker is the block-born rule, not the theorem |
 | 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
@@ -423,6 +423,19 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
   compilation. What remains, if the price is ever judged too high: a range
   analysis that discharges the check where bounds are provable, which
   needs specialization to see a caller's constant.
+
+  **Corrected 2026-09-02.** "Already harvested" was measured on a value's
+  tag in a monomorphic numeric loop, and read for a year as covering the
+  whole family. It does not cover the CALLABLE's tag. A fold applies its
+  reducer through `k_call{n}`, whose first ten instructions ask whether the
+  callable is a failure, whether it is a closure, and whether its arity
+  matches — all invariant across the loop, and all behind a call, where LICM
+  cannot reach them. Deleting them bounded the prize at 437,205 instructions
+  on oneshot, 1.096%. #1210 emits the test inline instead, LLVM unswitches
+  the loop on it, and six benchmark rows fall 0.5% to 4.5%. The lesson for
+  this ledger is that "no tag left in the loop" was a claim about one loop:
+  the tags a dispatcher asks about are in the caller's loop, not the
+  callee's, and no measurement of the callee can see them.
 - **Auto-SoA via whole-program field-touch — DECLINED for want of a
   customer (measured 2026-07-28), with the prize recorded so it can be
   reopened.** The prize is real: 200,000 three-field records traversed
