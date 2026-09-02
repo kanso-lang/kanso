@@ -3247,3 +3247,44 @@ The pin is `bench/instructions_golden.txt`, and it is the right one: the twin
 writes the same bytes the C writes into the same slot and returns the same
 value, so no fixture can tell them apart. Route the site back to `push_mut`
 and nine rows in that vein go red on the numbers above.
+
+## 2026-09-02 — the sweep the page owed after four twins
+
+The number-bearing surfaces are a checklist rather than a memory, and this is
+what walking them found after #1221 through #1224.
+
+**§08 ranked dragonbox on a profile that no longer exists.** It read: ryū
+takes 3.8% of encode, and sits behind an append-and-copy pair at 19.5% and the
+encode walker at 13.5%, so dragonbox's margin would recover about one per cent
+and the idea is ranked rather than queued. Every figure in that sentence moved.
+encodebench fell 13.6% across the four twins, and it fell by removing the
+appends: `k_b_append_wide` is off the profile entirely now, under a tenth of a
+per cent, where it was 5.92%. The denominator shrank and ryū did not, so
+`render_ryu` is **7.71%** of 6,057,833,055 — the fifth largest entry, ahead of
+`k_beat_rewind` and the libc memcpy. What it sits behind is `encode_onto` at
+13.83%, and nothing else.
+
+The conclusion survives and its reasoning did not, which is the failure mode
+this checklist exists for. A reader checking the ranking would have found ryū
+twice the share the page gave it, behind one thing rather than two, and no way
+to tell whether the ordering had been re-thought or just left. The paragraph
+now says which sitting it belongs to and what moved it.
+
+**§07's follow-on paragraph had arithmetic that stopped connecting.** It
+explains #1221 by naming the sitting before it — 1,729,183,050 emitted against
+941,714,306 runtime — and the fall and rise that took it to the next one. §07
+above has since been re-sat twice, so the numbers a reader would add up landed
+on a sitting the page no longer showed. The paragraph now says so in its first
+clause. Nothing in it was wrong; it had quietly stopped being about the
+paragraph above it.
+
+Two surfaces checked and left alone. `docs/numbers.html`'s 2,545,249,871 and
+2,762,364,162 are a named historical episode about counters versus
+instructions, past tense and still true. The decode board's ms/decode column
+is a dated hand sitting on a quiet box, which is a release step.
+
+The mechanical gates cannot reach either defect. `golden_prose` reads
+`data-golden` tags and both figures were untagged prose; `page_drift` counts
+log headings against page commits and the page had just moved. A profile share
+is not a golden, so nothing in the tree can diff it — which is why the rule is
+to walk the list rather than remember it.
