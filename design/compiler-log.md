@@ -5767,3 +5767,74 @@ annotated `/tmp/cg.encodebench`, a profile file left over from an earlier
 session, and read a total of 8,396,592,003 against a benchmark that retires
 7,014,919,659. A stale profile answers confidently and wrongly. Build the
 binary, run it, annotate the file that run wrote, in one script.
+
+## 2026-09-02 (ninth) — three benchmarks the objective could not see
+
+`scripts/gates/instructions.sh` swept ten of the eleven benchmarks
+`build_benchmarks.sh` builds. The eleventh was scanbench, and its absence was
+the worse kind: its `arena_blocks` and `peak_bytes` are both welfare terms, so
+a change that gave the arena back per position and spent ten times the
+instructions doing it scored as a pure gain. That is the exact asymmetry the
+digest paragraph in that gate warns about, written a day earlier about a
+different benchmark.
+
+Two more were missing at the other end. escapebench and indexbench had rows in
+`bench/instructions_golden.txt` — the trend gate reads them, a regression in
+either turns CI red — and `scripts/welfare/welfare.kso` read neither. Their
+work was weighed at zero in the one number that decides whether a change is
+worth having.
+
+So: scanbench joins the gate, and `scan_instructions`, `escape_instructions`
+and `index_instructions` join the model as an `edge_work` group.
+
+**Landing day moves the number by nothing, and that is measurable rather than
+asserted.** All three enter as granted baselines at their dimension's standing,
+which reads +265.9% for each of them, the run-speed dimension's current
+average. Welfare before: 75.09. Welfare after: 75.09. The rule that a granted
+baseline enters neutral is doing exactly what #1198 said it would.
+
+**A note on how this was nearly got wrong.** The first reading was 74.23, a
+fall of 0.86, which would have been a real argument about the weights. It was
+the placeholder: scanbench's row was `0` at that point, and a current value of
+zero is better than any baseline, which sends that term through the guard for
+division and out the other side distorted. With the real magnitude in place the
+number does not move. A placeholder that is not obviously a placeholder is a
+measurement waiting to be believed.
+
+**And the spec, because the list was the problem.**
+`tests/every_benchmark_is_in_the_objective.rs` reads the three files and holds
+them together: every benchmark built has its instructions counted, every one
+counted has a row, every row is read by the model. It carries no list of its
+own — a list here would be the twelfth place to forget. Each of the three
+assertions was watched failing: removing scanbench from the gate's loop, its
+row from the golden, and escapebench from `worked` each redden exactly one and
+name the benchmark.
+
+scanbench's row is a container measurement and a labelled placeholder until the
+runner replaces it; the gate is red on purpose until then, and the golden's
+comment says so.
+
+## 2026-09-02 (tenth) — the runner's scanbench row, and the spec that already existed
+
+scanbench's instruction row, counted on the runner: **1,423,437,886**. It went
+in as a placeholder at 1,423,437,473, what a container measured, so the gate had
+something to diff against and printed the real row in its job log. The two
+differ by 413, which is the same constant offset jsonbench carries between
+those hosts.
+
+**A spec I did not write caught what mine missed.**
+`every_benchmark_in_the_work_vein_has_a_direction` reddened on the first push:
+scanbench had a row in `bench/instructions_golden.txt` and no entry in the
+trend gate's `lower_*` tables, so a rise in it would have read as UNCLASSIFIED
+drift and the gate would have exited green. That spec exists because
+digestbench was omitted from the same list on 2026-08-31 and a 6.5x regression
+passed. It caught the next one in the pull request that created it, which is
+the whole point of writing the spec rather than the note.
+
+The coverage chain is now four links, not three: built → counted → rowed →
+weighed, and rowed → given a direction. `every_benchmark_is_in_the_objective`
+holds the first three and the older spec holds the fourth. Neither carries a
+list of benchmarks; both read the files.
+
+`work_scanbench` reports as MINTED rather than as a move, which is what
+kanso#1200 built that state for.

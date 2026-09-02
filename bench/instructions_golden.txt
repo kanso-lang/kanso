@@ -534,6 +534,7 @@ deepbench 677481898
 escapebench 248370844
 pendbench 749618914
 indexbench 5242731
+scanbench 1423437886
 digestbench 98969254
 # 2026-09-02: digestbench 134,729,413 -> 123,591,699, -8.267%. Six bit
 # builtins gained inline twins; the five it uses were 7.9% of it at about
@@ -549,3 +550,15 @@ digestbench 98969254
 # widebench, escapebench and indexbench hold to the digit: the decoder
 # indexes a byte string rather than a list, so it takes the slow arm and the
 # twin costs it nothing measurable.
+# 2026-09-02 (third): scanbench joins the vein at 1,423,437,886, counted on the
+# runner. It went in as a placeholder first — 1,423,437,473, what a container
+# measured — so the gate had something to diff against and printed the real row
+# in its job log. The two differ by 413, which is the same constant offset
+# jsonbench carries between those hosts, and is the sixth time the pair have
+# agreed that closely.
+#
+# The reason it was missing: `scripts/gates/instructions.sh` swept ten of the
+# eleven benchmarks and nobody noticed which. scanbench's arena_blocks and
+# peak_bytes were in the welfare model the whole time and its work was in
+# nothing, so a change that gave the arena back per position and spent ten
+# times the instructions doing it scored as a pure gain.
