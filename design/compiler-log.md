@@ -2864,4 +2864,22 @@ lands — the same mechanism kanso#1216 recorded for a comment in `runtime.c`.
 end does exactly the work it did before. 0.015% of a compile for 403 million
 instructions of encode.
 
+**One spec went red, and it is a real find rather than this change's.**
+`tests/welfare_saturates_each_counter.rs` asserts what a single runaway
+counter can contribute to the run-speed term, and its number is a property of
+how MANY run-speed counters there are. It read 49.16 over eight. This change's
+`--set` was the first ratchet since kanso#1215 minted `scan_instructions`,
+`escape_instructions` and `index_instructions` four hours earlier, so the
+floor's baseline gained three names and the fixture — which takes its names
+from that baseline — divides by eleven now: (10/3 + 1024/1026) / 11 * 0.30
+plus the other three terms is **48.48**, which is what both hosts read.
+
+**A minted counter enters the baseline at the next ratchet, not at the merge
+that mints it.** So kanso#1215 left this spec green and the next `--set`
+turned it red, whoever ran it. That latency is now written into the spec
+beside the number, with what to recompute when it happens. The number stays
+pinned rather than derived: a spec that recomputes what the tool computes is
+asserting its own copy of the tool, which is the objection its own harness
+comment already makes about re-reading the goldens.
+
 Welfare **75.09 -> 75.19** on the runner rows, ratcheted.

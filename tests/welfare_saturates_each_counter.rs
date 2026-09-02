@@ -124,17 +124,28 @@ fn every_counter_at_parity_scores_the_weights_alone() {
     assert_eq!(scored("parity", &[]), "welfare 46.67");
 }
 
-/// One of the eight run-speed counters a thousand times better than its
-/// baseline, the other seven at parity. Saturating each counter first bounds
+/// One of the eleven run-speed counters a thousand times better than its
+/// baseline, the other ten at parity. Saturating each counter first bounds
 /// what the runaway can contribute at one, so the term is
-/// (7/3 + 1024/1026) / 8 * 0.30 and the score is 49.16.
+/// (10/3 + 1024/1026) / 11 * 0.30 and the score is 48.48.
 ///
 /// Saturating the MEAN instead answers well above this on the same fixture:
-/// the mean ratio is (7 + 1024)/8 = 128.88 and its satisfaction is 0.9847, so
-/// one benchmark takes the run-speed term almost to its ceiling while seven
+/// the mean ratio is (10 + 1024)/11 = 94.0 and its satisfaction is 0.9791, so
+/// one benchmark takes the run-speed term almost to its ceiling while ten
 /// others sit at parity. That is the shape the ruling closed, and it is what
 /// this number is here to catch.
+///
+/// THE COUNT IS WHAT MOVES THIS NUMBER, and it moves LATE. It read 49.16 over
+/// eight counters until kanso#1221, four hours after kanso#1215 minted
+/// `scan_instructions`, `escape_instructions` and `index_instructions` — a
+/// minted counter enters the floor's baseline at the next ratchet rather than
+/// at the merge that mints it, and this fixture takes its names from that
+/// baseline. So a pull request that adds a run-speed counter leaves this spec
+/// green and the NEXT `--set` turns it red. Recompute the fraction above from
+/// the new count when that happens; the number is pinned rather than derived
+/// on purpose, because a spec that recomputes what the tool computes is
+/// asserting its own copy of the tool.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 49.16");
+    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 48.48");
 }
