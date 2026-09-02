@@ -26,19 +26,19 @@
 # bindings of dead code in this program, and the pattern in any program that
 # repeats an interpolation inside a nested body. The walk has the arms now and
 # the two agree.
-encodebench defines=155 calls=1667 branches=1020 lines=10519
-oneshot defines=156 calls=1783 branches=1165 lines=11522
-basket defines=120 calls=1328 branches=732 lines=7234
-widebench defines=171 calls=1888 branches=1122 lines=11560
-deepbench defines=94 calls=844 branches=526 lines=5099
-escapebench defines=29 calls=97 branches=48 lines=708
-pendbench defines=108 calls=1254 branches=617 lines=6222
-scanbench defines=309 calls=3747 branches=2220 lines=20072
-indexbench defines=35 calls=159 branches=76 lines=1104
+encodebench defines=157 calls=1670 branches=1023 lines=10568
+oneshot defines=158 calls=1786 branches=1168 lines=11571
+basket defines=122 calls=1331 branches=735 lines=7283
+widebench defines=173 calls=1891 branches=1125 lines=11609
+deepbench defines=96 calls=847 branches=529 lines=5148
+escapebench defines=31 calls=100 branches=51 lines=759
+pendbench defines=110 calls=1257 branches=620 lines=6271
+scanbench defines=311 calls=3750 branches=2223 lines=20121
+indexbench defines=37 calls=162 branches=79 lines=1155
 # 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
 # 1,104 lines. It reads a string forward one character at a time, which is the
 # only shape in the tree that asks `s[i]` of multibyte text.
-digestbench defines=162 calls=1575 branches=863 lines=9135
+digestbench defines=164 calls=1578 branches=866 lines=9184
 # 2026-08-31: digestbench joins, at 160 defines, 1,571 calls, 857 branches and
 # 9,082 lines. It is the only benchmark whose PEAK is the point — sha256 walks
 # a padded message sixty-four bytes at a time and everything a block builds is
@@ -53,3 +53,9 @@ digestbench defines=162 calls=1575 branches=863 lines=9135
 # this vein counts is the definition rather than the code: `.text` rises by a
 # few hundred bytes where the sites are live and not at all where they are
 # not.
+# 2026-09-02 (later): every one of the ten gains the same two defines, three
+# calls, three branches and forty-nine lines. Unlike the call twins these are
+# carried in DECLARES rather than generated against the body, the way their
+# siblings `k_check_tag`, `k_check_int` and `k_check_bool` already are: every
+# program that has a record type writes both, and the two that do not still
+# carry the definitions for a line each.
