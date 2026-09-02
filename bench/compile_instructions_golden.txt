@@ -796,7 +796,7 @@
 # a larger codegen.rs. It fell here and rose 4,747 for the change before it,
 # on the same host, for the same reason. compile_allocs, compile_peak_bytes,
 # rounds and visits are byte-identical.
-compile_instructions=41498385
+compile_instructions=41495096
 # 2026-09-01 (last): -1,320, and none of it is the front end either. This
 # branch changed src/runtime.c twice and no .rs file, and main.rs holds that C
 # as an include_str! it hashes for the build cache key. The counters that
@@ -885,3 +885,10 @@ compile_instructions=41498385
 # to the prelude took it to 41,498,385, a further 859 and a total rise of
 # 8,032. Rounds, visits and allocations hold across all three; nothing in the
 # front end was touched.
+#
+# 2026-09-02 (kanso#1224): 41,498,385 -> 41,495,096, a FALL of 3,289 for a
+# prelude that grew by a fifth twin. Four readings in a day, all from changes
+# the front end never runs: +6,087 and −11,038 for a longer prelude, −416 for
+# a comment in `src/runtime.c`, +8,032 for two runtime edits and a twin, and
+# now −3,289 for another twin. The sign does not follow the direction of the
+# edit; it follows where the bytes after it land.

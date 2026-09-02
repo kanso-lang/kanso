@@ -465,6 +465,50 @@ slow:
   %s = call %KValue @k_index(%KValue %c, %KValue %k, ptr %o)
   ret %KValue %s
 }
+; The in-place list push, the same shape as the map insert below it. The C
+; opens with six callee-saved pushes and a 168-byte frame on every call --
+; the growth arm and the buffer bookkeeping share the function -- and behind
+; that its fast path is thirteen instructions. jsonbench makes 1,459,800 of
+; these a run at 59.7 apiece. Since the born-this-beat test came out of the
+; fast arm the guard is four loads and two compares, so the whole thing fits
+; here: on the frontier with room, claim the slot and bump both lengths.
+define internal %KValue @k_b_push_mut_fast(%KValue %lv, %KValue %item) alwaysinline {
+  %ltag = extractvalue %KValue %lv, 0
+  %islist = icmp eq i64 %ltag, 9
+  br i1 %islist, label %lstat, label %lslow
+lstat:
+  %lso = load i32, ptr @k_stats_on
+  %lcounting = icmp ne i32 %lso, 0
+  br i1 %lcounting, label %lslow, label %lshape
+lshape:
+  %lpi = extractvalue %KValue %lv, 1
+  %l = inttoptr i64 %lpi to ptr
+  %llen = load i64, ptr %l
+  %itemspp = getelementptr i8, ptr %l, i64 8
+  %items = load ptr, ptr %itemspp
+  %lbuf = getelementptr i8, ptr %items, i64 -16
+  %lcap = load i64, ptr %lbuf
+  %lusedp = getelementptr i8, ptr %lbuf, i64 8
+  %lused = load i64, ptr %lusedp
+  %lfront = icmp eq i64 %lused, %llen
+  %lneg = icmp slt i64 %lcap, 0
+  %lncap = sub i64 0, %lcap
+  %lcapa = select i1 %lneg, i64 %lncap, i64 %lcap
+  %lfits = icmp slt i64 %llen, %lcapa
+  %lok = and i1 %lfront, %lfits
+  br i1 %lok, label %lwrite, label %lslow
+lwrite:
+  %lslot = getelementptr %KValue, ptr %items, i64 %llen
+  store %KValue %item, ptr %lslot
+  %llen1 = add i64 %llen, 1
+  store i64 %llen1, ptr %lusedp
+  store i64 %llen1, ptr %l
+  ret %KValue %lv
+lslow:
+  %lr = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
+  ret %KValue %lr
+}
+
 ; The in-place map insert, where the linearity analysis proved the map unique.
 ; The C spends a 312-byte frame and six callee-saved registers on every call,
 ; grow or not, because the growth arm and the view insert live in the same
@@ -4966,7 +5010,9 @@ impl<'a> Backend<'a> {
                 span.col as usize,
             ));
             let sym = if name == "push" && in_place {
-                "push_mut"
+                // the twin claims the frontier slot itself; a grow, a full
+                // buffer or anything that is not a list falls to the C
+                "push_mut_fast"
             } else if name == "put" && in_place {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call

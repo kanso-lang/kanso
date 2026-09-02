@@ -78,7 +78,7 @@
 # lines everywhere, for the demanded-index twin. The decoder's own `.text` does
 # not move: it indexes bytes and strings, and the twin it now carries is
 # unreachable from its entry.
-defines=168
-calls=1806
-branches=1207
-lines=12000
+defines=169
+calls=1808
+branches=1210
+lines=12044

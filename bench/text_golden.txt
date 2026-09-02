@@ -420,14 +420,14 @@
 # +2,272, scanbench +1,824, pendbench +640, basket +144. jsonbench, escapebench
 # and indexbench are unchanged; they index bytes and strings, which already had
 # an inline path.
-jsonbench text=85602
-encodebench text=106114
-oneshot text=108690
-basket text=99490
-widebench text=109426
+jsonbench text=85682
+encodebench text=107026
+oneshot text=108770
+basket text=100050
+widebench text=110338
 deepbench text=69362
-escapebench text=52514
-pendbench text=82930
+escapebench text=52722
+pendbench text=83362
 indexbench text=54258
-scanbench text=144258
-digestbench text=99890
+scanbench text=144850
+digestbench text=100322
