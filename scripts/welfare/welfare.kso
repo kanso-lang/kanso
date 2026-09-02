@@ -123,7 +123,20 @@ held_work = text/concat held_small held_shapes
 # beside the retention makes the trade a number instead of a preference.
 digest_work = ["digest_instructions"]
 
-run_speed_counters = text/concat (text/concat decode_work held_work) digest_work
+# Three benchmarks ran in the corpus for weeks with their work weighed at
+# nothing. scanbench had no instruction row at all — its two memory counters
+# were in the model and the gate that counts instructions never listed it — and
+# escapebench and indexbench had rows in bench/instructions_golden.txt that
+# nothing here read. A dimension a model leaves out it weights at zero, so a
+# change that made string indexing twice as slow to save an allocation would
+# have scored as a gain. They enter at their dimension's standing like every
+# other granted baseline; landing day moves the number by nothing, and from
+# here they pay and charge like the rest.
+edge_work = ["scan_instructions" "escape_instructions" "index_instructions"]
+
+paced_work = text/concat digest_work edge_work
+
+run_speed_counters = text/concat (text/concat decode_work held_work) paced_work
 
 decode_memory = ["decode_peak_bytes" "decode_arena_blocks"]
 
@@ -285,8 +298,12 @@ fn worked work
   pi = [["deep_instructions" work["deepbench"]!]]
   ni = [["pending_instructions" work["pendbench"]!]]
   gi = [["digest_instructions" work["digestbench"]!]]
+  si = [["scan_instructions" work["scanbench"]!]]
+  xi = [["escape_instructions" work["escapebench"]!]]
+  ii = [["index_instructions" work["indexbench"]!]]
+  edge = text/concat si (text/concat xi ii)
   more = text/concat (text/concat wi pi) (text/concat ni gi)
-  rest = text/concat oi (text/concat bi more)
+  rest = text/concat oi (text/concat bi (text/concat more edge))
   text/concat (text/concat di ei) rest
 
 fn gathered d db dp e eb ep o b bp c v l

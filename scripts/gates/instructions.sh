@@ -25,8 +25,15 @@ sh scripts/gates/dispatch.sh name
 # term counted on one axis and not the other is a trade the index cannot see:
 # every change that buys the digest's memory spends something here, and this is
 # where that something has to show.
+#
+# scanbench joined on 2026-09-02, and it was the last of the eleven this gate
+# could not see. Its two memory counters are in the objective and its work was
+# in nothing, which is the exact asymmetry the digest paragraph above warns
+# about: a change that gives the arena back per position and spends ten times
+# the instructions doing it scored zero everywhere. Twelve seconds under
+# callgrind.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench digestbench; do
+         indexbench scanbench digestbench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
     >/dev/null 2>/tmp/ir.$b
