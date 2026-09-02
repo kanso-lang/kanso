@@ -26,19 +26,9 @@
 # bindings of dead code in this program, and the pattern in any program that
 # repeats an interpolation inside a nested body. The walk has the arms now and
 # the two agree.
-encodebench defines=164 calls=1679 branches=1034 lines=10724
-oneshot defines=165 calls=1795 branches=1179 lines=11727
-basket defines=129 calls=1340 branches=746 lines=7439
-widebench defines=180 calls=1900 branches=1136 lines=11765
-deepbench defines=103 calls=856 branches=540 lines=5304
-escapebench defines=38 calls=109 branches=62 lines=916
-pendbench defines=117 calls=1266 branches=631 lines=6427
-scanbench defines=318 calls=3759 branches=2234 lines=20277
-indexbench defines=44 calls=171 branches=90 lines=1312
 # 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
 # 1,104 lines. It reads a string forward one character at a time, which is the
 # only shape in the tree that asks `s[i]` of multibyte text.
-digestbench defines=171 calls=1587 branches=877 lines=9334
 # 2026-08-31: digestbench joins, at 160 defines, 1,571 calls, 857 branches and
 # 9,082 lines. It is the only benchmark whose PEAK is the point — sha256 walks
 # a padded message sixty-four bytes at a time and everything a block builds is
@@ -68,3 +58,13 @@ digestbench defines=171 calls=1587 branches=877 lines=9334
 # thirty-nine lines on all ten. `.text` is where they differ: five of these
 # binaries get smaller and four get larger, because replacing a call with a
 # short inline body changes what the inliner does around it.
+encodebench defines=165 calls=1680 branches=1039 lines=10774
+oneshot defines=166 calls=1796 branches=1184 lines=11777
+basket defines=130 calls=1341 branches=751 lines=7490
+widebench defines=181 calls=1901 branches=1141 lines=11815
+deepbench defines=104 calls=857 branches=545 lines=5355
+escapebench defines=39 calls=110 branches=67 lines=967
+pendbench defines=118 calls=1267 branches=636 lines=6478
+scanbench defines=319 calls=3760 branches=2239 lines=20328
+indexbench defines=45 calls=172 branches=95 lines=1363
+digestbench defines=172 calls=1588 branches=882 lines=9385

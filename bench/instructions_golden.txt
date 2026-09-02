@@ -525,17 +525,6 @@
 # Counted on family 0x6 model 0xad, not the recorded Genoa. Every delta was
 # also measured in a container on a third chip and matched to the instruction,
 # the same way kq#91's four rows did.
-jsonbench 2718705899
-encodebench 7014920058
-oneshot 38048559
-basket 54722906
-widebench 63602012
-deepbench 677481898
-escapebench 248370844
-pendbench 749618914
-indexbench 5242731
-scanbench 1423437886
-digestbench 98969254
 # 2026-09-02: digestbench 134,729,413 -> 123,591,699, -8.267%. Six bit
 # builtins gained inline twins; the five it uses were 7.9% of it at about
 # twenty-two instructions a call for one instruction of work. Every other row
@@ -562,3 +551,14 @@ digestbench 98969254
 # peak_bytes were in the welfare model the whole time and its work was in
 # nothing, so a change that gave the arena back per position and spent ten
 # times the instructions doing it scored as a pure gain.
+jsonbench 2673670349
+encodebench 6611648458
+oneshot 36606861
+basket 54722906
+widebench 63810012
+deepbench 677481898
+escapebench 248370844
+pendbench 749618914
+indexbench 5242731
+scanbench 1423437886
+digestbench 98969254

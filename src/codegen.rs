@@ -93,6 +93,56 @@ slow:
   %f = call %KValue @k_b_append(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
+; The same claim where the linearity analysis proved the accumulator unique.
+; It is the one above with the header work removed: nothing is allocated, the
+; length is written where it already sits, and the argument comes back. That
+; header claim is all the twin above does after the store, so the mutating
+; append had the smaller body and was the only one still paying a call.
+define internal %KValue @k_b_append_mut_byte(%KValue %acc, %KValue %x) alwaysinline {
+  %atag = extractvalue %KValue %acc, 0
+  %isb = icmp eq i64 %atag, 13
+  br i1 %isb, label %chkx, label %slow
+chkx:
+  %xtag = extractvalue %KValue %x, 0
+  %isi = icmp eq i64 %xtag, 0
+  br i1 %isi, label %chks, label %slow
+chks:
+  %so = load i32, ptr @k_stats_on
+  %counting = icmp ne i32 %so, 0
+  br i1 %counting, label %slow, label %fast
+fast:
+  %bp = extractvalue %KValue %acc, 1
+  %b = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %b
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
+  %capp = getelementptr i8, ptr %b, i64 16
+  %cap = load i64, ptr %capp
+  %capneg = sub i64 0, %cap
+  %isneg = icmp slt i64 %cap, 0
+  %capa = select i1 %isneg, i64 %capneg, i64 %cap
+  %owned = icmp ne i64 %cap, 0
+  br i1 %owned, label %fr, label %slow
+fr:
+  %usedp = getelementptr i8, ptr %data, i64 -8
+  %used = load i64, ptr %usedp
+  %atfront = icmp eq i64 %used, %len
+  %len1 = add i64 %len, 1
+  %fits = icmp sle i64 %len1, %capa
+  %ok = and i1 %atfront, %fits
+  br i1 %ok, label %write, label %slow
+write:
+  %dst = getelementptr i8, ptr %data, i64 %len
+  %xv = extractvalue %KValue %x, 1
+  %byte = trunc i64 %xv to i8
+  store i8 %byte, ptr %dst
+  store i64 %len1, ptr %usedp
+  store i64 %len1, ptr %b
+  ret %KValue %acc
+slow:
+  %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
+  ret %KValue %f
+}
 define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %is_list = icmp eq i64 %tag, 9
@@ -4747,7 +4797,10 @@ impl<'a> Backend<'a> {
             } else if name == "put" && in_place {
                 "put_mut"
             } else if name == "append" && in_place {
-                "append_mut"
+                // the in-place byte claim inlines whole; a string, a byte
+                // string or a byte that does not fit falls through to the C
+                // path inside the twin
+                "append_mut_byte"
             } else if BIT_TWINS.contains(&name) {
                 // one machine op each where the operand tags say int and a
                 // shift is in range. `&` `|` `^` reach the twin through the
