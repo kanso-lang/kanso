@@ -58,13 +58,13 @@
 # thirty-nine lines on all ten. `.text` is where they differ: five of these
 # binaries get smaller and four get larger, because replacing a call with a
 # short inline body changes what the inliner does around it.
-encodebench defines=167 calls=1684 branches=1053 lines=10939
-oneshot defines=168 calls=1800 branches=1198 lines=11942
-basket defines=132 calls=1345 branches=765 lines=7655
-widebench defines=183 calls=1905 branches=1155 lines=11980
-deepbench defines=106 calls=861 branches=559 lines=5520
-escapebench defines=41 calls=114 branches=81 lines=1134
-pendbench defines=120 calls=1271 branches=650 lines=6643
-scanbench defines=321 calls=3764 branches=2253 lines=20493
-indexbench defines=47 calls=176 branches=109 lines=1529
-digestbench defines=174 calls=1592 branches=896 lines=9550
+encodebench defines=168 calls=1686 branches=1056 lines=10983
+oneshot defines=169 calls=1802 branches=1201 lines=11986
+basket defines=133 calls=1347 branches=768 lines=7699
+widebench defines=184 calls=1907 branches=1158 lines=12024
+deepbench defines=107 calls=863 branches=562 lines=5564
+escapebench defines=42 calls=116 branches=84 lines=1178
+pendbench defines=121 calls=1273 branches=653 lines=6687
+scanbench defines=322 calls=3766 branches=2256 lines=20537
+indexbench defines=48 calls=178 branches=112 lines=1574
+digestbench defines=175 calls=1594 branches=899 lines=9594

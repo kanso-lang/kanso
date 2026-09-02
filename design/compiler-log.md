@@ -3176,3 +3176,69 @@ did nothing came out. `decode.allocs` on compiler.html and index.html moves
 dead guard to remove — `k_map_replace` returns on one branch while the map has
 no view built, and jsonbench's `view_allocs` is zero — so what is left there
 is the insert itself.
+
+## 2026-09-02 — the in-place list push inlines
+
+`k_b_push_mut` was the largest runtime symbol left in the decode after
+kanso#1223, at 3.41% and 87,223,800 instructions over 1,459,800 calls. Its
+fast path is thirteen instructions. `objdump` shows what the other forty-seven
+are: six callee-saved pushes and `sub $0xa8,%rsp` on entry, paid whether the
+call grows the list or not, because the growth arm and the buffer bookkeeping
+share the function.
+
+Removing the born-this-beat test in #1223 left a guard small enough to write
+in the prelude: tag `K_LIST`, counting off, `buf->used == l->len`,
+`l->len < k_buf_cap(buf)`. Then one sixteen-byte store into the frontier slot
+and two lengths. `k_b_push_mut_fast` does that; a grow, a full buffer, a value
+that is not a list, all take the call.
+
+| benchmark   | before        | after         | delta        |          |
+|-------------|--------------:|--------------:|-------------:|---------:|
+| escapebench |   216,273,844 |   185,475,844 |  −30,798,000 | −14.240% |
+| digestbench |    89,615,426 |    81,237,955 |   −8,377,471 |  −9.349% |
+| basket      |    47,422,960 |    45,028,689 |   −2,394,271 |  −5.049% |
+| pendbench   |   734,101,805 |   715,729,140 |  −18,372,665 |  −2.503% |
+| jsonbench   | 2,556,080,244 | 2,533,005,144 |  −23,075,100 |  −0.903% |
+| widebench   |    62,243,248 |    61,843,521 |     −399,727 |  −0.642% |
+| oneshot     |    34,998,525 |    34,844,691 |     −153,834 |  −0.440% |
+| encodebench | 6,058,446,369 | 6,057,833,454 |     −612,915 |  −0.010% |
+| scanbench   | 1,423,437,854 | 1,423,437,774 |          −80 |        — |
+| deepbench   |   677,481,898 |   677,481,898 |            0 |        — |
+| indexbench  |     5,242,731 |     5,242,731 |            0 |        — |
+
+escapebench is the shape this suits: 1,203,000 in-place pushes a run and
+almost nothing else, so the frame it stopped paying is nearly the whole of
+what it does. All nine cost goldens are byte-identical — the twin claims the
+same slot the C claims, and the counters bail it to the C when anyone is
+counting.
+
+Four twins have now been added to the prelude in a day, and the trade is the
+same every time. **Every counter that moved, and what it landed on:**
+`emitted_defines` **169**, `emitted_calls` **1,808**, `emitted_branches`
+**1,210**, `emitted_lines` **12,044**; `emitted_other_defines` **1,469**,
+`emitted_other_calls` **14,532**, `emitted_other_branches` **8,749**,
+`emitted_other_lines` **87,826**; the compile sample's `defines` **159**,
+`calls` **197**, `branches` **252**, `lines` **3,862**, and the module
+sample's `module_defines` **91**, `module_calls` **773**, `module_branches`
+**411**, `module_lines` **4,940**. `text` lands on **1,016,742**.
+
+Six programs emit a twin they cannot reach and pay its bytes; five reach one
+and pay nothing for it. The objective weighs the first at zero, which §35 of
+the compiler page is about, and the second at the numbers in the table.
+
+**Welfare 75.54 -> 75.73**, ratcheted. Four ratchets in a day: 75.27, 75.50,
+75.52, 75.54, 75.73.
+
+**The page's decode attribution moves again**, and this time the shape of it
+does. §07 now reads 1,849,923,051 emitted against 639,250,897 runtime and
+43,795,809 libc of 2,533,004,731 — **73.0% / 25.2% / 1.7%**, and **89.5
+instructions per input byte** against 92.8. The runtime's share was 31.5% two
+entries ago. `k_b_put_mut`, `k_b_push_mut` and `k_b_at` led its list at the
+start of the day and none of the three is in it now; what is left at the top
+is `k_b_find2` at 3.36%, `k_utf8_bad` at 3.28% and `k_b_to_float` at 2.51%,
+which are algorithms rather than call overhead.
+
+The pin is `bench/instructions_golden.txt`, and it is the right one: the twin
+writes the same bytes the C writes into the same slot and returns the same
+value, so no fixture can tell them apart. Route the site back to `push_mut`
+and nine rows in that vein go red on the numbers above.
