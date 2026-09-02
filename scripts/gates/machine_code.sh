@@ -20,8 +20,13 @@ size --format=sysv ./jsonbench >/dev/null 2>&1 || {
   echo "::error::host running it does not have. The linux runner does."
   exit 1
 }
+# scanbench and digestbench joined the corpus after this gate was written and
+# nobody extended the list, so the two newest benchmarks were the two this vein
+# could not see. The bit twins landed on digestbench and moved its `.text` by
+# 1,968 bytes with every row here byte-identical, which is the shape of move
+# this file exists to catch.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench; do
+         indexbench scanbench digestbench; do
   printf '%s text=%s\n' "$b" "$(size --format=sysv ./$b | awk '/^\.text/{print $2}')"
 done > text.txt
 grep -v '^#' bench/text_golden.txt > text_want.txt

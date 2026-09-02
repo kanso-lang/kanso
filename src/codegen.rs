@@ -212,6 +212,117 @@ slow:
   %s = call %KValue @k_field(%KValue %v, i64 %i)
   ret %KValue %s
 }
+; Bitwise work is a machine op wearing a call. Each of these takes two ints,
+; does one instruction to them and boxes the answer, and digestbench spends
+; 7.9% of itself in the five of them at about twenty-two instructions a call.
+; The twin does the whole thing where the operand tags say int, which is every
+; call the digest makes; anything else — a failure, a float, a shift outside
+; nought to sixty-three — falls to the C entry, which answers as it always did
+; and owns every diagnostic.
+define internal %KValue @k_b_bit_and_fast(%KValue %a, %KValue %b) alwaysinline {
+  %ta = extractvalue %KValue %a, 0
+  %tb = extractvalue %KValue %b, 0
+  %oa = icmp eq i64 %ta, 0
+  %ob = icmp eq i64 %tb, 0
+  %ok = and i1 %oa, %ob
+  br i1 %ok, label %ints, label %slow
+ints:
+  %pa = extractvalue %KValue %a, 1
+  %pb = extractvalue %KValue %b, 1
+  %r = and i64 %pa, %pb
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
+  ret %KValue %v
+slow:
+  %s = call %KValue @k_b_bit_and(%KValue %a, %KValue %b)
+  ret %KValue %s
+}
+define internal %KValue @k_b_bit_or_fast(%KValue %a, %KValue %b) alwaysinline {
+  %ta = extractvalue %KValue %a, 0
+  %tb = extractvalue %KValue %b, 0
+  %oa = icmp eq i64 %ta, 0
+  %ob = icmp eq i64 %tb, 0
+  %ok = and i1 %oa, %ob
+  br i1 %ok, label %ints, label %slow
+ints:
+  %pa = extractvalue %KValue %a, 1
+  %pb = extractvalue %KValue %b, 1
+  %r = or i64 %pa, %pb
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
+  ret %KValue %v
+slow:
+  %s = call %KValue @k_b_bit_or(%KValue %a, %KValue %b)
+  ret %KValue %s
+}
+define internal %KValue @k_b_bit_xor_fast(%KValue %a, %KValue %b) alwaysinline {
+  %ta = extractvalue %KValue %a, 0
+  %tb = extractvalue %KValue %b, 0
+  %oa = icmp eq i64 %ta, 0
+  %ob = icmp eq i64 %tb, 0
+  %ok = and i1 %oa, %ob
+  br i1 %ok, label %ints, label %slow
+ints:
+  %pa = extractvalue %KValue %a, 1
+  %pb = extractvalue %KValue %b, 1
+  %r = xor i64 %pa, %pb
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
+  ret %KValue %v
+slow:
+  %s = call %KValue @k_b_bit_xor(%KValue %a, %KValue %b)
+  ret %KValue %s
+}
+define internal %KValue @k_b_bit_shl_fast(%KValue %a, %KValue %b) alwaysinline {
+  %ta = extractvalue %KValue %a, 0
+  %tb = extractvalue %KValue %b, 0
+  %oa = icmp eq i64 %ta, 0
+  %ob = icmp eq i64 %tb, 0
+  %ok = and i1 %oa, %ob
+  br i1 %ok, label %range, label %slow
+range:
+  %pb = extractvalue %KValue %b, 1
+  %inr = icmp ult i64 %pb, 64
+  br i1 %inr, label %go, label %slow
+go:
+  %pa = extractvalue %KValue %a, 1
+  %r = shl i64 %pa, %pb
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
+  ret %KValue %v
+slow:
+  %s = call %KValue @k_b_bit_shl(%KValue %a, %KValue %b)
+  ret %KValue %s
+}
+define internal %KValue @k_b_bit_shr_fast(%KValue %a, %KValue %b) alwaysinline {
+  %ta = extractvalue %KValue %a, 0
+  %tb = extractvalue %KValue %b, 0
+  %oa = icmp eq i64 %ta, 0
+  %ob = icmp eq i64 %tb, 0
+  %ok = and i1 %oa, %ob
+  br i1 %ok, label %range, label %slow
+range:
+  %pb = extractvalue %KValue %b, 1
+  %inr = icmp ult i64 %pb, 64
+  br i1 %inr, label %go, label %slow
+go:
+  %pa = extractvalue %KValue %a, 1
+  %r = ashr i64 %pa, %pb
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
+  ret %KValue %v
+slow:
+  %s = call %KValue @k_b_bit_shr(%KValue %a, %KValue %b)
+  ret %KValue %s
+}
+define internal %KValue @k_b_bit_not_fast(%KValue %a) alwaysinline {
+  %ta = extractvalue %KValue %a, 0
+  %oa = icmp eq i64 %ta, 0
+  br i1 %oa, label %int, label %slow
+int:
+  %pa = extractvalue %KValue %a, 1
+  %r = xor i64 %pa, -1
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %r, 1
+  ret %KValue %v
+slow:
+  %s = call %KValue @k_b_bit_not(%KValue %a)
+  ret %KValue %s
+}
 define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -426,6 +537,26 @@ pub(crate) const BUILTIN_CALLS: [&str; 55] = [
     "to_float",
     "to_int",
 ];
+
+/// The bit builtins that have an inline twin. Each is one machine op on two
+/// ints, and a call to reach it; the twin does the int case where the tags
+/// allow and leaves every other shape to the C entry that owns the message.
+pub(crate) const BIT_TWINS: [&str; 6] =
+    ["bit_and", "bit_or", "bit_xor", "bit_not", "bit_shl", "bit_shr"];
+
+/// The twin's name for one of them. Separate from the table so a name added
+/// to one without the other does not compile.
+fn bit_twin(name: &str) -> &'static str {
+    match name {
+        "bit_and" => "bit_and_fast",
+        "bit_or" => "bit_or_fast",
+        "bit_xor" => "bit_xor_fast",
+        "bit_not" => "bit_not_fast",
+        "bit_shl" => "bit_shl_fast",
+        "bit_shr" => "bit_shr_fast",
+        other => unreachable!("bit_twin asked for `{other}`, which BIT_TWINS does not hold"),
+    }
+}
 
 /// The count a builtin the native backend emits a direct call for takes.
 /// Membership is this file's business — which builtins get a C entry rather
@@ -3708,9 +3839,9 @@ impl<'a> Backend<'a> {
             "<=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 3)"),
             ">" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 4)"),
             ">=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 5)"),
-            "&" => format!("call %KValue @k_b_bit_and(%KValue {a}, %KValue {b})"),
-            "|" => format!("call %KValue @k_b_bit_or(%KValue {a}, %KValue {b})"),
-            "^" => format!("call %KValue @k_b_bit_xor(%KValue {a}, %KValue {b})"),
+            "&" => format!("call %KValue @k_b_bit_and_fast(%KValue {a}, %KValue {b})"),
+            "|" => format!("call %KValue @k_b_bit_or_fast(%KValue {a}, %KValue {b})"),
+            "^" => format!("call %KValue @k_b_bit_xor_fast(%KValue {a}, %KValue {b})"),
             // An operator the parser accepts and this does not know used to
             // land on the last arm and compare, which is a wrong answer with
             // nothing said. Naming every operator means a new one refuses to
@@ -4576,6 +4707,12 @@ impl<'a> Backend<'a> {
                 "put_mut"
             } else if name == "append" && in_place {
                 "append_mut"
+            } else if BIT_TWINS.contains(&name) {
+                // one machine op each where the operand tags say int and a
+                // shift is in range. `&` `|` `^` reach the twin through the
+                // operator route; these are the same work written as a name,
+                // which is how lib/bits spells what no operator says.
+                bit_twin(name)
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"

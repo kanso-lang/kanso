@@ -26,19 +26,19 @@
 # bindings of dead code in this program, and the pattern in any program that
 # repeats an interpolation inside a nested body. The walk has the arms now and
 # the two agree.
-encodebench defines=157 calls=1670 branches=1023 lines=10568
-oneshot defines=158 calls=1786 branches=1168 lines=11571
-basket defines=122 calls=1331 branches=735 lines=7283
-widebench defines=173 calls=1891 branches=1125 lines=11609
-deepbench defines=96 calls=847 branches=529 lines=5148
-escapebench defines=31 calls=100 branches=51 lines=759
-pendbench defines=110 calls=1257 branches=620 lines=6271
-scanbench defines=311 calls=3750 branches=2223 lines=20121
-indexbench defines=37 calls=162 branches=79 lines=1155
+encodebench defines=163 calls=1677 branches=1031 lines=10685
+oneshot defines=164 calls=1793 branches=1176 lines=11688
+basket defines=128 calls=1338 branches=743 lines=7400
+widebench defines=179 calls=1898 branches=1133 lines=11726
+deepbench defines=102 calls=854 branches=537 lines=5265
+escapebench defines=37 calls=107 branches=59 lines=876
+pendbench defines=116 calls=1264 branches=628 lines=6388
+scanbench defines=317 calls=3757 branches=2231 lines=20238
+indexbench defines=43 calls=169 branches=87 lines=1272
 # 2026-08-31: indexbench joins, at 35 defines, 159 calls, 76 branches and
 # 1,104 lines. It reads a string forward one character at a time, which is the
 # only shape in the tree that asks `s[i]` of multibyte text.
-digestbench defines=164 calls=1578 branches=866 lines=9184
+digestbench defines=170 calls=1585 branches=874 lines=9295
 # 2026-08-31: digestbench joins, at 160 defines, 1,571 calls, 857 branches and
 # 9,082 lines. It is the only benchmark whose PEAK is the point — sha256 walks
 # a padded message sixty-four bytes at a time and everything a block builds is
@@ -59,3 +59,8 @@ digestbench defines=164 calls=1578 branches=866 lines=9184
 # siblings `k_check_tag`, `k_check_int` and `k_check_bool` already are: every
 # program that has a record type writes both, and the two that do not still
 # carry the definitions for a line each.
+# 2026-09-02 (later still): the same six defines, seven calls, eight branches
+# and 117 lines everywhere. Six bit builtins gained inline twins. Only
+# digestbench calls any of them, and it is the only binary whose `.text`
+# moves: 95,586 to 97,554. The other nine carry six unreachable definitions
+# that the linker removes.
