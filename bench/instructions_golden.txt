@@ -526,17 +526,26 @@
 # also measured in a container on a third chip and matched to the instruction,
 # the same way kq#91's four rows did.
 jsonbench 2718705899
-encodebench 6947804058
-oneshot 38669794
-basket 55762500
+encodebench 7014920058
+oneshot 38048559
+basket 54722906
 widebench 63602012
-deepbench 692273898
+deepbench 677481898
 escapebench 248370844
-pendbench 749658206
+pendbench 749618914
 indexbench 5242731
-digestbench 123591699
+digestbench 98969254
 # 2026-09-02: digestbench 134,729,413 -> 123,591,699, -8.267%. Six bit
 # builtins gained inline twins; the five it uses were 7.9% of it at about
 # twenty-two instructions a call for one instruction of work. Every other row
 # is byte-identical. The container that built the change measured the same
 # delta to the instruction, the third time the two hosts have agreed exactly.
+# 2026-09-02 (second): the strict index gained an inline twin, and the rows
+# split. digestbench 123,591,699 -> 98,969,254, -19.922%, the largest single
+# fall this vein has recorded; deepbench -2.137%, basket -1.864%, oneshot
+# -1.607%, pendbench -0.005%. encodebench went the other way,
+# 6,947,804,058 -> 7,014,920,058, +0.966%, all of it in `d_list`/`fold_3`
+# where the twin's body lengthens a loop that never reaches it. jsonbench,
+# widebench, escapebench and indexbench hold to the digit: the decoder
+# indexes a byte string rather than a list, so it takes the slow arm and the
+# twin costs it nothing measurable.

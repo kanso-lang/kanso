@@ -1,0 +1,7 @@
+# A list literal holding `none` is refused where it is written, but `push`
+# builds one at run time, and the sentinel `at` answers "not found" with is
+# then indistinguishable from an element. `k_index` resolves that the only
+# way it can: a demanded read of a stored none is the missing-index err, the
+# same answer an out-of-range read gives.
+xs = push (push [] 1) none
+print "second: {xs[2]!}"

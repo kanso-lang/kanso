@@ -327,6 +327,27 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/digest_counters.sh
+      # The rows a failing vein wants copied into its golden are printed by
+      # the gate that measured them, which is fourteen gates and two callgrind
+      # dumps from the end of this job. The log API hands back a tail, so a
+      # session regenerating a golden either fetches the whole log or works
+      # from a number it did not measure. kq hit this first and fixed it the
+      # same way. Every file here is still on disk; printing them last costs
+      # nothing and puts them where the tail reaches.
+      - name: the rows as measured here, to copy into the goldens
+        # always, not failure: every gate above is continue-on-error, so the
+        # job has not failed yet when this runs — the verdict step below is
+        # what fails. Printing on a green run costs thirty lines and is the
+        # difference between a session having the numbers and guessing them.
+        if: always()
+        run: |
+          for f in work.txt emitted.txt emitted_others.txt text.txt; do
+            [ -f "$f" ] || continue
+            echo "=== $f"
+            cat "$f"
+          done
+          [ -f compile_ir_got.txt ] && { echo "=== compile_ir_got.txt"; cat compile_ir_got.txt; }
+          exit 0
       - name: every vein had its say
         if: always()
         run: |

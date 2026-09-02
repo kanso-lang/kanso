@@ -414,18 +414,20 @@
 # trade is stated in design/compiler-log.md and the instruction vein carries
 # the other half of it.
 jsonbench text=83906
-encodebench text=103618
-oneshot text=103826
-basket text=97874
-widebench text=105234
-deepbench text=69538
+encodebench text=103474
+oneshot text=103234
+basket text=98018
+widebench text=105090
+deepbench text=69362
 escapebench text=52450
-pendbench text=82226
+pendbench text=82866
 indexbench text=54258
-scanbench text=142370
-digestbench text=97554
-# 2026-09-02: scanbench and digestbench join. Both entered the corpus on
-# 2026-08-31 and the list in the gate was not extended, so the two newest
-# benchmarks were the two this vein could not see. digestbench is the one the
-# bit twins land on: 95,586 bytes before them, 97,554 after, while the nine
-# rows above are byte-identical because the linker drops what nothing calls.
+scanbench text=144194
+digestbench text=99826
+# 2026-09-02 (later): a demanded list index inlines to a bounds check and a
+# load. Five binaries SHRINK — encodebench -144, oneshot -592, widebench -144,
+# deepbench -176 — because a call site replaced by a short inline body changes
+# what the inliner does with everything around it. Four grow: digestbench
+# +2,272, scanbench +1,824, pendbench +640, basket +144. jsonbench, escapebench
+# and indexbench are unchanged; they index bytes and strings, which already had
+# an inline path.

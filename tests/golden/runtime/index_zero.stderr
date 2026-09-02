@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the entry: "missing index 0"
+  born in the entry at index_zero.kso:7

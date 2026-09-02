@@ -796,7 +796,7 @@
 # a larger codegen.rs. It fell here and rose 4,747 for the change before it,
 # on the same host, for the same reason. compile_allocs, compile_peak_bytes,
 # rounds and visits are byte-identical.
-compile_instructions=41501923
+compile_instructions=41495720
 # 2026-09-01 (last): -1,320, and none of it is the front end either. This
 # branch changed src/runtime.c twice and no .rs file, and main.rs holds that C
 # as an include_str! it hashes for the build cache key. The counters that
@@ -841,3 +841,7 @@ compile_instructions=41501923
 # 2026-09-02: 41,495,470 -> 41,501,923, +6,453 (+0.016%). The compiler writes
 # six more definitions into every module it emits, and writing them costs it
 # this. Rounds and visits do not move: the front end decides nothing extra.
+# 2026-09-02 (later): 41,501,923 -> 41,495,720, -6,203. The compiler writes
+# one more definition into every module and does less work doing it. What
+# DECLARES holds changes what the emitter's own string handling costs, and the
+# entry above moved this the other way by 6,453 for the same reason.
