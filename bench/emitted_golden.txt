@@ -68,7 +68,13 @@
 # writes 134 sites for them across the ten programs and reaches none of its own
 # from its entry, so once again this vein counts the definition and `.text`
 # counts nothing.
-defines=158
-calls=1792
-branches=1177
-lines=11629
+defines=164
+calls=1799
+branches=1185
+lines=11746
+# 2026-09-02 (later still): six more defines, seven more calls, eight more
+# branches and 117 more lines, here and in the other file. Six bit builtins
+# gained inline twins in DECLARES, the way the record twins above did. The
+# decoder does no bitwise work at all and still carries the six definitions,
+# because DECLARES is written whole; the linker drops them and its `.text` is
+# byte-identical.

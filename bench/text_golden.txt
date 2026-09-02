@@ -422,3 +422,10 @@ deepbench text=69538
 escapebench text=52450
 pendbench text=82226
 indexbench text=54258
+scanbench text=142370
+digestbench text=97554
+# 2026-09-02: scanbench and digestbench join. Both entered the corpus on
+# 2026-08-31 and the list in the gate was not extended, so the two newest
+# benchmarks were the two this vein could not see. digestbench is the one the
+# bit twins land on: 95,586 bytes before them, 97,554 after, while the nine
+# rows above are byte-identical because the linker drops what nothing calls.
