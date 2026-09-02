@@ -5632,3 +5632,43 @@ contradiction: what `DECLARES` holds changes what the emitter's own string
 handling does, and #1213 moved this the other way by 6,453 for the same
 reason. Rounds and visits hold at 6 and 2,403; the front end decides nothing
 different. No allocation counter moves on any of the nine gates.
+
+## 2026-09-02 (sixth) — the index twin's rows, as the runner counted them
+
+The entry above priced the index twin from container measurements, because
+`measured_on` refuses a local regeneration of the instruction rows and says so.
+The runner has now counted them, and this is what went into
+`bench/instructions_golden.txt`:
+
+```
+jsonbench   2,718,705,899   unchanged
+encodebench 6,947,804,058 -> 7,014,920,058   +0.966%
+oneshot        38,669,794 ->    38,048,559   -1.607%
+basket         55,762,500 ->    54,722,906   -1.864%
+widebench      63,602,012   unchanged
+deepbench     692,273,898 ->   677,481,898   -2.137%
+escapebench   248,370,844   unchanged
+pendbench     749,658,206 ->   749,618,914   -0.005%
+indexbench      5,242,731   unchanged
+digestbench   123,591,699 ->    98,969,254  -19.922%
+```
+
+Every delta matches the container's to within the constant offset the two hosts
+have always carried, which is the fourth time they have agreed. The container
+read encodebench's rise at +67,116,000 and the runner reads it at +67,116,000 —
+the same number, not the same percentage, because the bases differ by 399
+instructions of process startup.
+
+**`work_encodebench` pays and `work_digestbench` is paid.** The rise is the dead inline body
+again, the third recorded instance: `d_list`'s `fold_3` indexes nothing, reaches
+the twin's slow arm never, and still carries its bounds check and its two loads
+in the loop body. digestbench indexes a list on every lap and falls by a fifth.
+The trade is worth taking on the sum — welfare goes 74.89 to 75.09 — but the
+term that paid is named here rather than argued away.
+
+**What is still unpinned.** The twin defers a thunk and a stored `none` to
+`k_index`, and `tests/golden/runtime/index_holds_a_none.kso` pins the second.
+The first is unreachable by any program I could write: no fixture in the tree
+builds a list holding an unforced thunk and then indexes it. That gap belongs to
+the lazy tier's coverage rather than to this change, and it is recorded so the
+next session working the lazy tier finds it.
