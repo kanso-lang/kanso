@@ -413,17 +413,6 @@
 # It buys 17.8% of pendbench, 4.3% of encodebench and five smaller falls: the
 # trade is stated in design/compiler-log.md and the instruction vein carries
 # the other half of it.
-jsonbench text=83906
-encodebench text=103474
-oneshot text=103234
-basket text=98018
-widebench text=105090
-deepbench text=69362
-escapebench text=52450
-pendbench text=82866
-indexbench text=54258
-scanbench text=144194
-digestbench text=99826
 # 2026-09-02 (later): a demanded list index inlines to a bounds check and a
 # load. Five binaries SHRINK — encodebench -144, oneshot -592, widebench -144,
 # deepbench -176 — because a call site replaced by a short inline body changes
@@ -431,3 +420,14 @@ digestbench text=99826
 # +2,272, scanbench +1,824, pendbench +640, basket +144. jsonbench, escapebench
 # and indexbench are unchanged; they index bytes and strings, which already had
 # an inline path.
+jsonbench text=84882
+encodebench text=104978
+oneshot text=107314
+basket text=98018
+widebench text=106802
+deepbench text=69362
+escapebench text=52450
+pendbench text=82866
+indexbench text=54258
+scanbench text=144194
+digestbench text=99826

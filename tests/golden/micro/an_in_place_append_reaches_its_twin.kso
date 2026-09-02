@@ -1,0 +1,30 @@
+# The in-place byte append inlines, and this walks the arms of the twin that
+# does it. The accumulator is threaded through a tail recursion, which is what
+# makes the site in-place; a byte and a string go through the SAME call site,
+# so the twin's tag test is the only thing keeping the string off the fast arm.
+# Without it the string's payload is truncated to a byte and stored, and the
+# sum below moves. The length is written back into the header the accumulator
+# already holds, and a twin that forgets that write loses every byte it just
+# stored. Both were watched failing.
+#
+# The seed is a `bytes` of a literal, so the first append lands on storage the
+# accumulator does not own and has to fall through. Four thousand bytes takes
+# it through two growths.
+import "std/text"
+
+fn grown acc 0
+  acc
+
+fn grown acc n
+  grown (text/append (text/append acc (65 + n % 26)) "-") (n - 1)
+
+fn summed acc _ 0
+  acc
+
+fn summed acc cs i
+  summed (acc + cs[i]!) cs (i - 1)
+
+pub play =
+  seed = text/append (text/bytes "!") 33
+  built = grown seed 2000
+  print "{length built} {summed 0 built (length built)}"

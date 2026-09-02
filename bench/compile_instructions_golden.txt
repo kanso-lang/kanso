@@ -796,7 +796,7 @@
 # a larger codegen.rs. It fell here and rose 4,747 for the change before it,
 # on the same host, for the same reason. compile_allocs, compile_peak_bytes,
 # rounds and visits are byte-identical.
-compile_instructions=41495304
+compile_instructions=41501391
 # 2026-09-01 (last): -1,320, and none of it is the front end either. This
 # branch changed src/runtime.c twice and no .rs file, and main.rs holds that C
 # as an include_str! it hashes for the build cache key. The counters that
@@ -856,3 +856,11 @@ compile_instructions=41495304
 # the front end changed, and here nothing in the front end was touched. A
 # comment is not free in this vein, and the direction it moves is not
 # predictable from the edit.
+#
+# 2026-09-02: 41,495,304 -> 41,501,391, a rise of 6,087, and the whole of it is
+# the mutating append twin's body in the DECLARES string. That string is data
+# in the compiler's binary, so a longer prelude moves where everything after it
+# lands, the same mechanism the entry above describes for a comment in
+# `runtime.c`. `kanso check lib/json` never emits IR and never reads the
+# prelude; the front end does exactly the work it did before. 6,087 on 41.5
+# million is 0.015%, and it buys 403 million instructions of encode.
