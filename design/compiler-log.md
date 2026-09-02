@@ -3247,3 +3247,96 @@ The pin is `bench/instructions_golden.txt`, and it is the right one: the twin
 writes the same bytes the C writes into the same slot and returns the same
 value, so no fixture can tell them apart. Route the site back to `push_mut`
 and nine rows in that vein go red on the numbers above.
+
+## 2026-09-02 — the sweep the page owed after four twins
+
+The number-bearing surfaces are a checklist rather than a memory, and this is
+what walking them found after #1221 through #1224.
+
+**§08 ranked dragonbox on a profile that no longer exists.** It read: ryū
+takes 3.8% of encode, and sits behind an append-and-copy pair at 19.5% and the
+encode walker at 13.5%, so dragonbox's margin would recover about one per cent
+and the idea is ranked rather than queued. Every figure in that sentence moved.
+encodebench fell 13.6% across the four twins, and it fell by removing the
+appends: `k_b_append_wide` is off the profile entirely now, under a tenth of a
+per cent, where it was 5.92%. The denominator shrank and ryū did not, so
+`render_ryu` is **7.71%** of 6,057,833,055 — the fifth largest entry, ahead of
+`k_beat_rewind` and the libc memcpy. What it sits behind is `encode_onto` at
+13.83%, and nothing else.
+
+The conclusion survives and its reasoning did not, which is the failure mode
+this checklist exists for. A reader checking the ranking would have found ryū
+twice the share the page gave it, behind one thing rather than two, and no way
+to tell whether the ordering had been re-thought or just left. The paragraph
+now says which sitting it belongs to and what moved it.
+
+**§07's follow-on paragraph had arithmetic that stopped connecting.** It
+explains #1221 by naming the sitting before it — 1,729,183,050 emitted against
+941,714,306 runtime — and the fall and rise that took it to the next one. §07
+above has since been re-sat twice, so the numbers a reader would add up landed
+on a sitting the page no longer showed. The paragraph now says so in its first
+clause. Nothing in it was wrong; it had quietly stopped being about the
+paragraph above it.
+
+Two surfaces checked and left alone. `docs/numbers.html`'s 2,545,249,871 and
+2,762,364,162 are a named historical episode about counters versus
+instructions, past tense and still true. The decode board's ms/decode column
+is a dated hand sitting on a quiet box, which is a release step.
+
+The mechanical gates cannot reach either defect. `golden_prose` reads
+`data-golden` tags and both figures were untagged prose; `page_drift` counts
+log headings against page commits and the page had just moved. A profile share
+is not a golden, so nothing in the tree can diff it — which is why the rule is
+to walk the list rather than remember it.
+
+## 2026-09-02 — the compile row moved 5,081 with nothing changed, and four entries above are wrong about why
+
+This pull request changes `docs/compiler.html` and `design/compiler-log.md`.
+CI read `compile_instructions=41,500,177` against a golden of 41,495,096.
+
+The compiler's inputs are byte-identical between the two commits. `git diff`
+is those two files; neither is compiled in, neither is reached by
+`include_str!`, and `measured_on` confirmed the same rustc and the same
+glibc. Every other vein in the same job matched to the digit: eleven work
+rows, fourteen emitted counters, eleven text rows, `compile_allocs`,
+`compile_memory`. One row moved, and nothing in the diff can have moved it.
+
+**So the row's floor on this runner pool is at least 5,081.** The gate already
+suspects this — it reads `scripts/gates/dispatch.sh` whenever the row moves
+and says to re-run until the job lands on the recorded silicon — and kq spent
+three pull requests in August learning the same thing about its own rows.
+`measured_on` pins the toolchain, and the toolchain was never the whole host.
+
+**This corrects four entries above, all filed today.** I recorded +6,087,
+−416, +8,032 and −3,289 on this row as layout effects and wrote a causal
+sentence around each: that the prelude's length moves where the bytes after it
+land, and that the sign does not follow the direction of the edit. Two of
+those readings are smaller than the 5,081 a no-op produced, and the other two
+are the same size. The layout mechanism is real — a longer string in the
+binary does move what follows it — but none of those four measurements
+separates it from the runner, and I wrote as though they did. The honest form
+of all four is "the row moved, inside a band the pool can produce on its own".
+
+The pattern to notice is that the prose got more confident as the readings
+piled up. By the fourth I was writing that four consecutive commits had moved
+the row in an unpredictable direction and that this was what a layout effect
+looks like — a story that explains the data and was never tested against the
+null. The test cost one docs-only pull request and it was available all day.
+
+**What would fix it.** Not a tolerance: a band is a guess that stays green
+through the change it was written to catch. Record the dispatch block beside
+the row the way `kq/bench/instructions_golden.txt` does, so a move gets asked
+which silicon counted it before anybody explains it. That is a real piece of
+work and it is not this pull request's; it is filed here so the next reading
+of this row has the question in front of it.
+
+**The re-run closed it.** The next job on this branch, with the golden
+unchanged at 41,495,096 and nothing in the compiler touched, read 41,495,096
+and went green. So the row is 41,495,096 / 41,500,177 / 41,495,096 across
+three consecutive CI runs of the same compiler — bracketed, not a one-off.
+The spread is 5,081 and it belongs to the pool rather than to any diff.
+
+Writing that down matters more than the finding. The entry above corrects
+four readings I took as evidence on a single measurement each; leaving this
+one at a single measurement would have repeated the error inside the
+correction.
