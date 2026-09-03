@@ -3616,3 +3616,20 @@ pinned two ways: record the environment, or stop counting the part that
 varies. The first needs a discriminator nobody has found yet — the dispatch
 block is not it. The second is available now and is what the gate's header
 already claims to measure.
+
+**And it has already failed on main.** The claim above — that a pull request
+changing nothing would fail this gate on some runners — was an inference from
+the readings. It does not need to be: main's own `ci` run at **9541196f**, on
+2026-09-02, failed with `compile instructions disagrees with its golden` and
+every other row in that vein green. That commit is a merge that had just
+regenerated the row, so the golden it was checked against was its own.
+
+So the gate has already gone red on merged history, on a commit whose author
+had just pinned the number it was checked against. Whatever this row is
+measuring, it is not something a branch can be held responsible for, and the
+seventh reading on this branch — 41,500,974 again — is the fourth head in a
+row to say so.
+
+That is the whole of the case for leaving the golden at main's value and
+sending the question on rather than pinning a number that will be wrong on
+the next runner.
