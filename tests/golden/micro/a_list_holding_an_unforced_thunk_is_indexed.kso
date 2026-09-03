@@ -1,0 +1,42 @@
+# kanso#1214's entry recorded a gap: "the twin defers a thunk and a stored
+# `none` to `k_index`, and index_holds_a_none.kso pins the second. The first is
+# unreachable by any program I could write: no fixture in the tree builds a
+# list holding an unforced thunk and then indexes it."
+#
+# `x = [x]` builds one. The element is a thunk until something demands it —
+# native reports thunk_allocs=1, thunk_forces=1, thunk_evals=1 here — so every
+# index below meets a thunk before anything else has.
+#
+# WHAT THIS PINS is the three engines agreeing on that shape, which none of
+# them had been asked about. It does NOT pin the deferral, and the difference
+# was measured rather than assumed: with the twin's `%isthunk` test changed to
+# compare against an impossible tag, so a thunk is handed straight back where
+# `k_index` would have forced it, this program's output is unchanged AND all
+# six thunk counters are unchanged. Removing `k_force` from `k_index` likewise
+# leaves it identical. Every consumer of an indexed value forces it, so the
+# deferral decides WHERE the force happens and never whether — which is why no
+# fixture can pin it, and is the answer to the gap rather than a fixture for
+# it.
+#
+# Three shapes because the twin has three answers. `x[1]!` demands. `x[1]`
+# does not, and the interpolation that reads it does. `plain[2]!` indexes past
+# the thunk to a plain element, which is the fast arm with a thunk sitting in
+# the same list — the shape that breaks if the twin ever decides by the LIST
+# rather than by the element it found.
+#
+# A knot unfolds to a one-element list holding itself, so `length` answers 1
+# without walking the cycle.
+x = [x]
+
+strict = x[1]!
+
+loose = x[1]
+
+plain = [x 7]
+
+past = plain[2]!
+
+pub play =
+  print "strict: {length strict}"
+  >> print "loose: {length loose}"
+  >> print "past: {past}"

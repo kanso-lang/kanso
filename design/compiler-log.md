@@ -4263,3 +4263,76 @@ dispatch had served both.
 The fixture is tests/golden/runtime/a_wrong_arity_call_carrying_a_failing_argument.kso,
 watched red before green on native — it answered `error[endpoint]: unhandled
 err reached the entry: "second"` where the oracle said the arity.
+
+THE INDEX TWIN'S THUNK DEFERRAL CANNOT BE PINNED, AND THAT IS THE ANSWER. The
+2026-09-02 entry for the index twin left a gap: `k_index_fast` defers a thunk
+and a stored `none` to `k_index`, `index_holds_a_none.kso` pins the second, and
+the first was "unreachable by any program I could write: no fixture in the tree
+builds a list holding an unforced thunk and then indexes it".
+
+Half of that is wrong and half of it is deeper than it looked.
+
+A program reaches it: `x = [x]`. The element is a thunk until something demands
+it, and native reports thunk_allocs=1, thunk_forces=1, thunk_evals=1 for a
+program that does nothing but index it. So the shape is writable, and the
+corpus now has it — three engines, three index forms, agreeing.
+
+But the deferral has no observable, which is why no fixture pins it. Measured
+two ways rather than argued:
+
+  the twin's `%isthunk` test changed to compare an impossible tag, so a thunk
+  is handed straight back where `k_index` would have forced it
+    -> output identical, and all six thunk counters identical
+
+  `k_force` removed from `k_index` entirely
+    -> output identical
+
+Every consumer of an indexed value forces it. The deferral decides WHERE the
+force happens and never whether, so nothing a program can print or count tells
+the two apart. A fixture asserting the deferral would be green with the
+deferral removed, which is the shape this log has caught before and the reason
+a spec gets watched red first.
+
+What went in is therefore a differential pin and says so in its own comment: the
+three engines agree on indexing a list that holds an unforced thunk, which none
+of them had been asked about. The gap is closed by determining that there was
+nothing there to pin, not by pinning it.
+
+THE BASELINE PASS CAUGHT A BLIND ROW ON ITS FIRST RUNTIME-TOUCHING PULL
+REQUEST. kanso#1228 landed at 07:35 and kanso#1229 was the next branch to
+touch src/runtime.c. Its ratchet job went red:
+
+  ratchet: the baseline is not green
+  ratchet: 18 rows patch a file this branch changed
+    ALREADY RED cost goldens (deterministic ratchet, no clocks)
+    ALREADY RED utf-8 validator (differential vs an independent reference)
+
+The utf-8 one is a real blind row and the diagnosis is exact. `validator_tail`
+claims "a utf-8 validator that never looks at the end of a long run" and its
+mutation is `a_validator_that_skips_its_tail.sh`, which points the tail read
+back at the start. Its GATE read `whose "validator"`, which expands to
+`sh scripts/gates/measured_on.sh bench/validator_golden.txt` — and there is no
+validator vein. The file has never existed. `measured_on.sh` exits 2 on it with
+`sed: can't read`, on every host, before and after any mutation, so `prove`
+recorded the row as `red` and it proved nothing from the day it was written.
+
+The gate is now the sweep the claim is about, the same one the row above it
+uses, and the row was watched red for the first time in its life: with the
+mutation applied, `scripts/utf8_differential` reports
+
+  MISMATCH len=11 bytes=3f 16 55 56 66 56 4a 38 a8 27 0d got=1 want=0
+  45189025 checked, 1097135 mismatches
+
+against `0 mismatches` clean.
+
+The cost-goldens one is not diagnosed yet, and the reason is a weakness in the
+report I wrote: `ALREADY RED` named the JOB and not the GATE, and a job carries
+up to seventeen gates. Guessing which from a job name is exactly the shape of
+reasoning this log keeps catching, so the line names the gate now and the next
+run says which rather than my inferring it.
+
+Two things worth stating about the timing. The pass found this on its first
+opportunity, which is the argument for it made concretely rather than
+hypothetically. And it found it by being red on MY pull request — the check
+cost its author a cycle before it cost anyone else one, which is the right way
+round for a check like this to arrive.

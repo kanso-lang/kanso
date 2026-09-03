@@ -515,10 +515,19 @@ validator = row
 # one. Its sampled band stopped at eight bytes, and a validator that never
 # reads past byte eight of a longer run passed 45,189,025 cases with nothing
 # to say. The band reaches twenty-four now; this row is what keeps it there.
+#
+# Its gate read `whose "validator"` until 2026-09-03, which is
+# `measured_on.sh bench/validator_golden.txt` — and there is no validator
+# vein, so the file has never existed and the gate was red on every host
+# before any mutation ran. The row therefore reported `red` and proved
+# nothing from the day it was written. `prove`'s baseline pass found it on
+# the first runtime-touching pull request after that pass landed, which is
+# the whole reason the pass exists. The gate is the sweep the claim is about,
+# the same one the row above it uses.
 validator_tail = row
   "a utf-8 validator that never looks at the end of a long run"
   true
-  (whose "validator")
+  "./target/release/kanso run scripts/utf8_differential"
   "utf-8 validator (differential vs an independent reference)"
   (breaking "a_validator_that_skips_its_tail")
   release
@@ -1057,11 +1066,13 @@ fn base_gate picked pairs at acc p _
   greening picked pairs (at + 1) (push acc (presumed p))
 
 fn unmade p
-  finding "  UNBUILT {p.job}: the baseline would not build\n" false
+  said = "  UNBUILT {p.job}\n    gate: {p.gate}\n"
+  finding "{said}    the baseline would not build\n" false
 
 fn presumed p
+  said = "  ALREADY RED {p.job}\n    gate: {p.gate}\n"
   why = "red before any mutation, so no row sharing it is proof"
-  finding "  ALREADY RED {p.job}: {why}\n" false
+  finding "{said}    {why}\n" false
 
 fn unmutated picked pairs acc
   settled_base picked pairs acc (length acc == 0)
