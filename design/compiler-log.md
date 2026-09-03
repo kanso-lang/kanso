@@ -4150,3 +4150,57 @@ without the tunables was kanso#1226, which passed on two agreeing chips and
 broke on the third. The prediction that framed this — converge or fail — was
 too coarse for the system it was about, which is its own lesson about naming a
 falsifier: name one that can come back with an answer you did not list.
+
+THE RATCHET NEVER ASKED WHAT THE GATE SAID FIRST. `prove` applies a mutation
+in a worktree of HEAD, runs the gate, and reads a non-zero exit as the
+mutation's doing. It never ran the gate before the mutation, so a gate already
+red on HEAD was credited to every mutation sharing it — the rows pass, the run
+reports "every row turned its gate red", and none of them proved anything.
+
+That is the defect the whole table exists to catch, sitting inside the table's
+own harness, and it is reachable rather than theoretical: `prove` builds in a
+worktree with a shared target directory and scratch paths under /tmp that
+ci.yml never uses, and a gate red for one of those looks identical to a gate
+red for the mutation. The nightly would have said "every row turned its gate
+red" either way.
+
+`prove` now reads every gate once on an unmutated worktree and refuses to go
+on if any is red. Deduplicated on (gate, setup), because the 62 rows name only
+50 distinct pairs — nine share the diagnostic-coverage gate, four share the
+trend gate — so the baseline costs 50 gate runs beside the 62 the proving
+already pays. One worktree serves the pass, since nothing mutates it: only the
+first setup's build is cold. The nightly has been running 24 to 29 minutes
+against a 90-minute timeout, and the gates are the cheaper half of that.
+
+The fixture had to enter where the ratchet enters, so it runs the real `prove`
+over one row twice: once on a clean worktree of HEAD, once on a HEAD carrying
+a tracked .py file, which is exactly what python-free refuses. The mutation
+applies in both and the gate goes red in both. On the old code the second run
+exits zero saying the row was proved; watched, then fixed. python-free is the
+row because it is the cheapest end-to-end one in the table — no setup, a gate
+that is two git greps — so both halves cost about five seconds.
+
+Proving one row needed a way to name one row, so a scope word other than
+`all` or `cheap` now selects by job name. That opened a second false green
+immediately: a scope matching nothing selected no rows and reported that every
+row turned its gate red. A typo was enough. It is refused now, with its own
+fixture.
+
+What the baseline does not cover, stated rather than assumed: it reads HEAD
+before any row runs, so a mutation that dirties a shared scratch path and
+reddens a LATER row's gate is still counted as that row's proof. No two rows
+share a scratch path today. If any ever do, the answer is to re-read that one
+gate, not to widen this pass.
+
+Two counts in the workflow comments were stale, and reading them for this
+change is how they were found. ci.yml said the per-PR `touched` step selects
+thirteen rows and takes six minutes for a branch touching src/runtime.c; on
+2026-09-03 it selects TWENTY-THREE and took 11m51s and 12m05s on two runs of
+one branch, and nothing was watching that number grow. ratchet.yml said the nightly proves "a dozen" rows; it is
+62. Both now say what they measure, and the nightly's six successful runs
+between 2026-08-26 and 2026-09-02 took 24 to 29 minutes against its 90-minute
+timeout.
+
+The baseline for those 23 selected rows is 22 pairs, so the per-PR step gains
+roughly its own gate half. That is a prediction rather than a measurement: the
+next runtime-touching branch's job log settles it.

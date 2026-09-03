@@ -12,12 +12,14 @@ import "std/text"
 # So every job in .github/workflows/ci.yml carries at least one row here: a
 # defect to introduce and the command that must then go red. `cover` checks
 # that correspondence and costs nothing, so it runs on every change and a new
-# job cannot land without its row. `prove` applies each mutation in a scratch
-# worktree and refuses a gate that stayed green.
+# job cannot land without its row. `prove` reads every gate once on an
+# unmutated worktree, then applies each mutation in a scratch worktree of its
+# own and refuses a gate that stayed green.
 #
 #   kanso run scripts/ratchet                 every job has a row
 #   kanso run scripts/ratchet -- prove        every row turns its gate red
 #   kanso run scripts/ratchet -- prove cheap  the rows that need no build
+#   kanso run scripts/ratchet -- prove utf-8  the rows whose job name says so
 #
 # `prove` is authoritative on linux, where every gate can run. A gate needing
 # a tool the host lacks says so and exits non-zero, which reads here as red
@@ -47,6 +49,13 @@ type unproven
 type finding
   line
   ok
+
+# One (gate, setup) pair the baseline reads once, named by the first row that
+# carries it.
+type pair
+  gate
+  job
+  setup
 
 no_setup = "true"
 
@@ -948,17 +957,124 @@ fn onto "list" _
   io/write ""
 
 fn onto _ acc
-  proving acc 1 []
+  baselined acc
 
 fn prove_all scope
-  picked = list/to_list (list/select rows (r -> asked? scope r.dear))
-  proving picked 1 []
+  picked = list/to_list (list/select rows (r -> asked? scope r))
+  chose_rows scope picked (length picked == 0)
 
-fn asked? "cheap" true
-  false
+# A scope naming no row would otherwise prove nothing and report that every
+# row turned its gate red, which is the same false green in miniature.
+fn chose_rows scope _ true
+  io/write_err "ratchet: no row is named by `{scope}`\n" . (_ -> os/exit 1)
 
-fn asked? _ _
+fn chose_rows _ picked false
+  baselined picked
+
+fn asked? "all" _
   true
+
+fn asked? "cheap" r
+  not r.dear
+
+# Any other word selects by job name, so a spec — or somebody debugging one
+# row — can prove a single gate without paying for sixty.
+fn asked? scope r
+  spells? r.job scope
+
+# A row is proof only if the gate it reddened was green to begin with, and
+# nothing checked that. `after_gate` read a non-zero exit as the mutation's
+# doing, so a gate already red on HEAD would have been credited to every
+# mutation that shares it: the rows would pass while proving nothing, which is
+# the exact defect this table exists to catch, sitting inside the table's own
+# harness. It is not a hypothetical shape: `prove` builds in a worktree with a
+# shared target directory and stub scratch dirs that ci.yml does not use, and a
+# gate red for one of those reasons looks identical to a gate red for the
+# mutation.
+#
+# So every gate is read once on an unmutated worktree first, and a baseline
+# that is not green stops the run rather than colouring it. Deduplicated
+# because the 62 rows name 50 distinct (gate, setup) pairs — nine rows share
+# the diagnostic-coverage gate and four share the trend gate — so the baseline
+# costs 50 gate runs beside the 62 the proving already pays. One worktree
+# serves the whole pass: nothing mutates it, so there is nothing to restore
+# between pairs and only the first setup's build is cold.
+#
+# It reads HEAD before any row runs, so it answers for the tree and not for
+# what a row leaves behind: a mutation that dirties a shared scratch path and
+# reddens a LATER row's gate is still counted as that row's proof. Rows do not
+# share scratch paths today, and the fix if one ever does is to re-read that
+# gate rather than to widen this pass.
+base_dir = "/tmp/kanso-ratchet-base"
+
+fn pairs_in list at acc
+  pair_seen list at acc (at > length list)
+
+fn pair_seen _ _ acc true
+  acc
+
+fn pair_seen list at acc false
+  r = list[at]!
+  same? = (p -> p.gate == r.gate and p.setup == r.setup)
+  kept list at acc r (list/any? acc same?)
+
+fn kept list at acc _ true
+  pairs_in list (at + 1) acc
+
+fn kept list at acc r false
+  pairs_in list (at + 1) (push acc (pair r.gate r.job r.setup))
+
+fn baselined picked
+  made = ["worktree" "add" "--detach" "--force" base_dir "HEAD"]
+  os/run "git" made . (_ -> base_linked picked)
+
+fn base_linked picked
+  linking = "mkdir -p {shared_target} && ln -s {shared_target} target"
+  pairs = pairs_in picked 1 []
+  shell base_dir linking . (_ -> greening picked pairs 1 [])
+
+fn greening picked pairs at acc
+  greened picked pairs at acc (at > length pairs)
+
+fn greened picked pairs _ acc true
+  os/run "git" ["worktree" "remove" "--force" base_dir]
+    . (_ -> unmutated picked pairs acc)
+
+fn greened picked pairs at acc false
+  p = pairs[at]!
+  shell base_dir p.setup . (s -> base_setup picked pairs at acc p s.status)
+
+fn base_setup picked pairs at acc p 0
+  shell base_dir p.gate . (g -> base_gate picked pairs at acc p g.status)
+
+fn base_setup picked pairs at acc p _
+  greening picked pairs (at + 1) (push acc (unmade p))
+
+fn base_gate picked pairs at acc _ 0
+  greening picked pairs (at + 1) acc
+
+fn base_gate picked pairs at acc p _
+  greening picked pairs (at + 1) (push acc (presumed p))
+
+fn unmade p
+  finding "  UNBUILT {p.job}: the baseline would not build\n" false
+
+fn presumed p
+  why = "red before any mutation, so no row sharing it is proof"
+  finding "  ALREADY RED {p.job}: {why}\n" false
+
+fn unmutated picked pairs acc
+  settled_base picked pairs acc (length acc == 0)
+
+fn settled_base picked pairs _ true
+  said = "ratchet: {length pairs} gates green before any mutation\n"
+  io/write said . (_ -> proving picked 1 [])
+
+fn settled_base _ _ acc false
+  lines = list/to_list (list/map acc (f -> f.line))
+  body = text/join lines ""
+  said = "ratchet: the baseline is not green\n"
+  io/write_err "{said}{body}" . (_ -> os/exit 1)
 
 fn proving list at acc
   proven list at acc (at > length list)
