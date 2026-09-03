@@ -379,13 +379,15 @@ host_measures = row
   (breaking "a_refusal_that_tells_you_to_read_rows_it_never_printed")
   no_setup
 
-# The chart replays the current formula over the stored rows — ruled
-# 2026-08-31 — and the page is static, so the rule is written twice: once in
-# scripts/welfare and once in javascript. Two statements of one rule drift, and
-# this one drifts where nobody looks, because a wrong replay still draws a line.
-# The spec runs the page's own two functions rather than a copy of them.
+# The welfare column is written over the stored rows under the current formula
+# — ruled 2026-08-31, restated 2026-09-03 as one line rewritten in place — so
+# the rule is written twice: scripts/welfare scores the goldens and
+# scripts/welfare_rescore scores a row. Two statements of one rule drift, and
+# this one drifts where nobody looks, because a wrong column still draws a
+# line. The spec runs both tools on one set of readings and requires the same
+# answer.
 chart_replay = row
-  "a chart replaying a formula that is no longer the one being ruled on"
+  "a written column that no longer agrees with the formula being ruled on"
   false
   "cargo test --test the_score_says_what_it_was_made_of"
   "specs (unit, golden, differential)"
@@ -425,10 +427,10 @@ perf_row = row
   release
 
 # The row assembles and the row is COMPLETE are two properties, and perf_row
-# above only watches the first. The replay ruled on 2026-08-31 starts at the
-# first row carrying every counter the objective weighs, so a row whose
-# counters are spelled some other way is one the chart silently skips — which
-# is what the newest row was doing when it held 12 of 24 and nothing said so.
+# above only watches the first. A row is scored on the counters it carries, so
+# a row whose counters are spelled some other way is scored on less of the
+# objective than every other point on the line while looking like all of them
+# — which is what the newest row was doing when it held 12 of 24.
 objective_row = row
   "a row whose counters are spelled where the objective cannot find them"
   false

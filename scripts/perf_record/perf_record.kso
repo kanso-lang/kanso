@@ -238,9 +238,9 @@ fn welfare_score _
 # with the model: the digest counters joined the objective in #1198 and scan,
 # escape and index in #1215, and none of them joined the row. Measured on
 # 2026-09-03, the newest row held 12 of the 24 counters the formula reads,
-# `compile_instructions` among the missing — so the chart replay ruled on
-# 2026-08-31 had no commit whose counter set was complete, and would have drawn
-# nothing.
+# `compile_instructions` among the missing — so a row scored under the formula
+# ruled on 2026-08-31 would have been scored on half of it, and every row of
+# the line would have been.
 #
 # Asking welfare closes that by construction. A counter that enters the model
 # enters the row in the same commit, because there is no second list to update.
