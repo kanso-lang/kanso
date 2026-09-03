@@ -448,3 +448,14 @@
 # property of the host's memory map, and one more shared library in the process
 # moves this row 32,090 with the compiler doing identical work. That is the
 # thing "make them consistent" would then have to reach.
+family0x19-model0x11 41834008
+#
+# THE FIRST READING UNDER BOTH FIXES, from CI at 18:05 on Zen 4
+# (family0x19-model0x11), binary sha b0e5a906c73d. The job log printed
+# `compile_aslr disabled=yes`, so setarch took on the runner. 41,834,008.
+#
+# It is NOT comparable to the 41,831,767 / 41,832,275 pair above: the binary
+# changed with the sorted read_dir, .text 2,514,718 -> 2,517,278, and this file
+# already records that the binary moves the row by thousands on its own. What
+# the pair tests is whether a SECOND reading on this binary agrees with this
+# one. One reading cannot answer a question about two values.
