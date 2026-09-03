@@ -29,6 +29,19 @@ sh scripts/gates/dispatch.sh name
 
 sh scripts/gates/library_box.sh
 box=/tmp/kanso-compile-ir
+
+# WHICH BINARY COUNTED IT. Cargo builds are not bit-reproducible by default,
+# and a binary whose data and bss differ starts the heap at a different break.
+# That moves how much work malloc does to service an identical request
+# sequence without moving a single instruction the compiler executes — which
+# is exactly the shape this row's variance has: seven readings, four distinct
+# values, every kanso symbol identical to the instruction across a pair of
+# them and only glibc's allocator moving. Printed on every run, green or red,
+# so a hash can be paired with the value the row landed on.
+printf 'compile_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
+size --format=sysv "$box/kanso" \
+  | awk '/^\.(text|data|bss)[ \t]/ { printf "compile_binary %s=%s\n", $1, $2 }'
+
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin valgrind --tool=callgrind \
