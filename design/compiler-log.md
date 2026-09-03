@@ -3451,3 +3451,26 @@ branches into one. That is a second change and it waits for this one to land.
 It is written down here rather than built now because the branch rule is one
 open pull request at a time, and because the number above is what makes the
 case for it.
+
+**Two corrections to the paragraph above, both from building it rather than
+reasoning about it.** The summary word collapses *four* conditions into one,
+not six: the buffer shelf's flag is global rather than per depth, and the
+block test is about arena state that no registration site can summarise. So
+the fast path goes from six tests to three, not to one.
+
+And the prototype was built and measured rather than left as a plan. A single
+`k_beat_enc[depth]`, set at the four registration sites and cleared where the
+slow rewind empties all three registries together, with all nine counter gates
+green: escapebench 143,403,373 → 130,167,353, **−9.23%**; the fused chain
+32,083,715 → 30,483,715, **−4.99%**; basket 41,211,873 → 40,299,752, −2.21%.
+It is a second pull request, held behind this one by the branch rule, and it
+is worth having.
+
+**The ratchet caught the move, which is what it is for.** `k_seek_str = NULL`
+went from one site to two — the slow rewind and the inline fast path — at
+different indentations, and the cursor mutation's own guard reported that its
+target had moved rather than silently deleting one of the two. Deleting one
+would have left the running path resetting the cursor and the mutation would
+have gone green while proving nothing. It now removes both, and reddens the
+beat differential at 16 of 96 layout pairs, the figure its comment already
+records.
