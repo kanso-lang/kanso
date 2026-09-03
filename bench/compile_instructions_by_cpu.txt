@@ -153,7 +153,7 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
-family0x19-model0x1 41831767
+family0x19-model0x1 41832275
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -184,7 +184,6 @@ family0x6-model0xcf 41831767
 # evidence is that they agree here, not that they agree. A row that merged them
 # would be a prediction, and the only thing this file predicts is that an
 # unrecorded chip gets a sitting.
-family0x19-model0x11 41831767
 
 # 2026-09-03, THE THIRD CAUSE, and it is the one this file said it could not
 # rule out. compile_instructions.sh prints a `compile_sample cpu= sha= row=`
@@ -265,3 +264,33 @@ family0x19-model0x11 41831767
 # the heap layout when the binary, the cpu features, glibc, valgrind and the
 # environment all agree? Not "is it the cpu" — that is answered, and the
 # answer is no.
+#
+# 2026-09-03, AND THE CARRY WAS WRONG ON ITS FIRST TEST. The note above carried
+# the Zen 3 and Zen 4 rows across the rustc bump, arguing that a measurement
+# existed and that deleting correct values to force sittings bought nothing.
+# CI landed on Zen 3 one run later and read 41,832,275 against the carried
+# 41,831,767. This file already had the rule and it is the right one: A VALUE
+# MEASURED AGAINST THE OLD BINARY IS WORSE THAN NO VALUE. Zen 3 is recorded
+# from CI's own reading; Zen 4 is REMOVED, because it has still never been
+# measured on this binary and carrying it a second time would be making the
+# same mistake with the same argument.
+#
+# What the four readings now say, all on tunables pinned:
+#
+#   12:33  family0x6-model0xcf   sha 55fb850296d1  41,832,275
+#   13:05  family0x6-model0xcf   sha 55fb850296d1  41,831,767
+#   16:25  family0x6-model0xcf   sha de5bfab22fbd  41,831,767
+#   16:35  family0x19-model0x1   sha de5bfab22fbd  41,832,275
+#
+# Two values, 508 apart, and NEITHER THE CHIP NOR THE BINARY PICKS ONE. One
+# chip produced both on one binary; two chips produced different values on one
+# binary. The header of this file set out what the next runs would test — "if
+# the chips still disagree, pinning was the wrong explanation and the tunables
+# come out again" — and this is that answer arriving, with the spread down from
+# 5,064 to 508 rather than gone.
+#
+# An exact per-chip pin cannot hold against a bimodal value: a row set to
+# either mode is red about half the time on a chip that produces both. That is
+# a design question about this vein rather than a number to re-sit, and it is
+# filed for Clay in design/pending-gavels.md. Until it is ruled, the rows below
+# are CI's own most recent readings and nothing more.

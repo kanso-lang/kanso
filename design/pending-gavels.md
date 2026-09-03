@@ -50,7 +50,60 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-Nothing. The section stays so the next entry has somewhere to land.
+### The compile-instructions row is bimodal, and a per-chip pin cannot hold it (2026-09-03)
+
+**BLOCKING kanso#1232 and every branch after it.** You ruled on 2026-09-02
+(log: "the row moves with the CPU, so record it") that
+`bench/compile_instructions_by_cpu.txt` keys the front end's instruction count
+by silicon. That premise is falsified. Four readings, all with the glibc
+tunables pinned:
+
+| when | key | binary sha | rustc | counted |
+| --- | --- | --- | --- | ---: |
+| 12:33 | family0x6-model0xcf | 55fb850296d1 | 1.98.0 | 41,832,275 |
+| 13:05 | family0x6-model0xcf | 55fb850296d1 | 1.98.0 | 41,831,767 |
+| 16:25 | family0x6-model0xcf | de5bfab22fbd | 1.98.1 | 41,831,767 |
+| 16:35 | family0x19-model0x1 | de5bfab22fbd | 1.98.1 | 41,832,275 |
+
+Two values 508 apart. One chip produced both on one binary; two chips produced
+different values on one binary. **Neither the key nor the binary picks a mode.**
+
+What moves is measured, not guessed: the two runs at 12:33 and 13:05 printed
+byte-identical 123-line CPU feature blocks, every kanso symbol agreed to the
+instruction, and the whole difference sits in `_int_malloc` (+580), `_int_free`
+(+19) and `memcmp-avx2-movbe` (-66) — an alignment difference downstream of a
+heap layout difference. Pinning the tunables took the spread from 5,064 to 508
+and did not close it. Five consecutive container runs on one binary read one
+value every time, so it is not run-to-run jitter within a host.
+
+**Why this blocks.** An exact row is red about half the time on a chip that
+produces both modes. The file's own header set out what these runs would test —
+"if the chips still disagree, pinning was the wrong explanation and the tunables
+come out again" — and this is that answer.
+
+The options, none of them free:
+
+1. **Find the term.** Something outside the pinned tunables moves the heap
+   layout. Cost: unbounded, and three sessions have now spent time on it.
+2. **Pin the pair.** Record both modes per chip and accept either. Cheap and
+   honest, and it weakens the vein to catching moves larger than 508 — the
+   dimension exists because a change once moved a quarter of the compiler's
+   work with every other counter silent, and 508 is far below that.
+3. **Drop the exact pin for a trend.** Contradicts the no-tolerance-bands
+   ruling of 2026-08-24 head on, and that ruling has a measurement behind it.
+4. **Retire the vein.** It has caught real moves; this is the expensive option
+   to be sure about.
+
+**RECOMMENDATION: 2.** It keeps an exact comparison against a known set of
+values rather than a band, states the bimodality instead of hiding it in slack,
+and leaves 1 open as research rather than a blocker.
+
+Filed with it, not blocking: `measured_on.sh` reads rustc as major.minor.patch,
+and the 1.98.0 -> 1.98.1 bump reddened three gates while moving no allocation
+or peak counter. Its own header says to pin what has been shown to matter. One
+observation; the next point release is the second.
+
+The section stays so the next entry has somewhere to land.
 (The sha256 digest question sat here briefly and was bounced on
 2026-08-29: performance questions with no surface area are the
 implementer's, per this file's own charter. The log carries the

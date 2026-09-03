@@ -20,50 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (seventh) — what the index twin costs kq, which indexes no lists
-
-kq is the corpus's one real program and it is not in the objective, so it gets
-measured by hand at each pin bump. Built `--release` by the same compiler
-either side of the index twin, in this container, four rows and the machine
-code:
-
-```
-print_small  69,857,190 ->  70,033,408   +0.252%
-print_big   709,519,790 -> 711,281,970   +0.248%
-path_small   19,079,322 ->  19,081,118   +0.009%
-path_big    198,937,158 -> 198,938,954   +0.001%
-.text           114,242 ->     114,098     -144 bytes
-```
-
-Every row rises. kq indexes byte strings and maps, never a list in a loop, so
-its fifteen index sites all take the twin's slow arm and pay the two tag reads,
-the two compares and the branch on the way to the call they were making
-anyway. The print rows carry it because printing walks every value; the path
-rows index once per run and move by 1,796 instructions, the same number twice.
-
-**This is the fourth sighting of the dead inline body**, and the first on a
-program outside the corpus: the declined subtype unwrap cost digestbench 1.2%,
-kanso#1211 paid for it in `.text`, this change pays for it in encodebench's
-`fold_3`, and here it is again in kq's printer. The twin is routed at every
-strict index the compiler emits, whatever the container is, because emit-time
-routing asks no question about the type. Four measurements now say the same
-thing about that, and the next move on this is to ask: `infer` already decides
-a type for the collection expression, so a twin routed only where the answer is
-a list would keep digestbench's fifth and give encodebench and kq their quarter
-per cent back. That is a measurement to take, not a conclusion.
-
-**The objective still says take the change**, and the objective is what
-decides: welfare 74.89 -> 75.09 on the corpus that carries the weights. kq's
-quarter of a per cent is real, it is recorded here rather than left for its pin
-bump to discover, and it is the price of digestbench's fifth.
-
-**The first run of this measurement was wrong and is worth saying why.** It
-built kq without `--release` and read 100,687,166 for print_small against a
-golden of 76,695,994, then reported the twin as costing kq nothing. kq's CI
-builds with `--release` and the deltas do not survive the difference: the
-unoptimised build hid the twin's cost entirely. A benchmark built differently
-from the way it is published measures a program nobody runs.
-
 ## 2026-09-02 (eighth) — two ways to stop the twin costing encodebench, both measured, both dead
 
 The entry above said routing the twin only where `infer` says a list can arrive
@@ -2919,3 +2875,48 @@ moved by nothing, so deleting two correct values to force sittings that would
 reproduce them buys nothing. The assumption is written into the file and is
 self-correcting: a carried row that is wrong goes red the first time CI lands
 on that chip, which is the signal a missing row would have given one run later.
+
+## 2026-09-03 (fourth) — the carry was wrong one run later, and the row is bimodal
+
+**CORRECTS the entry above on two counts.** That entry said the rustc point
+release "moved nothing" and defended carrying two chip rows across it. CI
+answered both within ten minutes.
+
+**The carry. DONE, the other way.** `bench/compile_instructions_by_cpu.txt`
+already carried the rule — *a value measured against the old binary is worse
+than no value* — and the entry above overrode it with an argument: a
+measurement existed, the toolchain changes the binary identically for every
+chip, and deleting correct values to force sittings that would reproduce them
+buys nothing. CI landed on Zen 3 one run later and read 41,832,275 against the
+carried 41,831,767. The rule was right and the argument was wrong. Zen 3 is
+recorded from CI's own reading; **Zen 4 is removed**, because it has still
+never been measured on this binary and carrying it a second time would be the
+same mistake with the same argument.
+
+**The row is bimodal, and it is CLAY'S CALL.** Four readings, tunables pinned:
+
+| when | key | binary sha | rustc | counted |
+| --- | --- | --- | --- | ---: |
+| 12:33 | family0x6-model0xcf | 55fb850296d1 | 1.98.0 | 41,832,275 |
+| 13:05 | family0x6-model0xcf | 55fb850296d1 | 1.98.0 | 41,831,767 |
+| 16:25 | family0x6-model0xcf | de5bfab22fbd | 1.98.1 | 41,831,767 |
+| 16:35 | family0x19-model0x1 | de5bfab22fbd | 1.98.1 | 41,832,275 |
+
+Two values 508 apart. One chip produced both on one binary; two chips produced
+different values on one binary. Neither the key nor the binary picks a mode,
+so the 2026-09-02 ruling this file was built on — *the row moves with the CPU,
+so record it* — rests on a premise that does not hold. The file's own header
+had set out what these runs would test, and this is the branch it named: the
+chips still disagree, so pinning was not the whole explanation.
+
+An exact row is red about half the time on a chip that produces both modes.
+That is a design question rather than a number to re-sit, and it is filed in
+design/pending-gavels.md with four options and a recommendation. **It blocks
+kanso#1232 and every branch after it**, because no value in that file makes CI
+reliably green until it is ruled.
+
+So the sitting's honest reading is narrower than the entry above claimed: the
+allocation and peak counters reproduced exactly across the toolchain bump, on
+every host that has run them, and the instruction count cannot be said to have
+moved or held, because it has two values and the bump is not separable from
+the bimodality. compiler.html §40 is corrected to match.
