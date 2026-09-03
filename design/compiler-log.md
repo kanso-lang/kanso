@@ -20,107 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (fifth) — a bounds check and a load, reached through a call
-
-`k_index` is what a demanded index compiles to — `l[i]!` — and it is
-digestbench's largest single item at 29,195,608 instructions, 21.7% of the
-benchmark, across 712,088 calls. Forty-one instructions a call for a bounds
-check and a sixteen-byte load. `emit_at` already inlines the bytes case where
-the sets prove it; the list case, which is what sha256 and every fold over a
-list does, went out to the runtime every time.
-
-A twin on the same pattern, used as the strict form's fallback so the existing
-inline structure is untouched. It answers where the container is a list, the
-key an int, the index in range, and the element a plain value. Three shapes go
-to the runtime and each for its own reason: a failure or any other container
-because the tag test fails, an out-of-range index because `k_index` owns the
-missing-index err, and a thunk because forcing is the runtime's job.
-
-```
-digestbench   123,591,300 ->  98,968,855   -19.922%
-deepbench     692,270,218 -> 677,478,218    -2.137%
-basket         55,762,087 ->  54,722,493    -1.864%
-oneshot        38,669,395 ->  38,048,160    -1.607%
-pendbench     749,657,820 -> 749,618,528    -0.005%
-encodebench 6,947,803,659 -> 7,014,919,659   +0.966%
-```
-
-jsonbench, widebench, escapebench and indexbench are byte-identical: they
-index bytes and strings, which already had the inline path. `k_index` leaves
-every profile.
-
-**encodebench's rise is one function.** All +67,116,000 of it is in
-`d_list/fold_3`, and nothing else moves at all. The fold does not index a list
-— it carries inlined copies of a twin it never reaches, and a longer body is
-a slower loop. This is the third time this vein has recorded that shape: the
-declined subtype unwrap paid it on digestbench, kanso#1211 paid it as `.text`,
-and here it is 0.97% of the largest benchmark. The trade is worth taking at
-19.9% against 1.0%, and welfare agrees: 74.89 -> 75.09.
-
-**`.text` goes both ways this time.** Five binaries shrink — encodebench
--144, oneshot -592, widebench -144, deepbench -176 — and four grow:
-digestbench +2,272, scanbench +1,824, pendbench +640, basket +144. A call
-replaced by a short inline body changes what the inliner does with everything
-around it, and the direction is not predictable from the diff.
-
-**Two fixtures the corpus did not have.** Five decisions in the twin, and
-mutation found that only three of them were pinned by anything in the tree.
-
-- The low bound. `index_missing.kso` pins index 9 on a three-element list; no
-  fixture indexed at 0, and `>= 0` for `> 0` reads the word before the first
-  element with every existing fixture green. `index_zero.kso` pins it.
-- The stored `none`. A list literal holding one is refused where it is
-  written, so it looks unreachable — but `push (push [] 1) none` builds one at
-  run time, and `xs[2]!` on it is the missing-index err, because `at` answers
-  "not found" with a none and `k_index` cannot tell the two apart. Without the
-  deferral the twin answers `<none>`, which is a divergence from the
-  interpreter that would have shipped. `index_holds_a_none.kso` pins it.
-
-Both were watched failing: the mutated compiler reddens each golden with the
-message the fixture exists to hold.
-
-**The thunk deferral is not pinned, and I could not pin it.** No program I
-wrote put an unforced thunk in a list and read it with `!`, and no benchmark
-reaches one that way either — digestbench's 8,256 `k_force` calls come from
-`sha256/compress` and pendbench's 100 from `keep_4`, none through `k_index`.
-The guard mirrors the `k_force` that `k_index` itself does, and it stays:
-removing it because I could not reach it would be a guess about the lazy
-tier, and this log has one of those open already. The gap belongs to the lazy
-tier's coverage rather than to this change.
-
-**Every counter this branch moved, and where it landed.** One define, two
-calls, three branches and thirty-nine lines on every emitted program, counted
-four times over by the four count veins. In `bench/compile_golden.txt`, summed
-over its five samples: `defines` 134 -> 139, `calls` 147 -> 157, `branches`
-127 -> 142, `lines` 2,372 -> 2,572. In `bench/compile_golden_modules.txt`:
-`module_defines` 86 -> 87, `module_calls` 763 -> 765, `module_branches`
-386 -> 389, `module_lines` 4,646 -> 4,685. In `bench/emitted_golden.txt`:
-`emitted_defines` 164 -> 165, `emitted_calls` 1,799 -> 1,801,
-`emitted_branches` 1,185 -> 1,188, `emitted_lines` 11,746 -> 11,785. In
-`bench/emitted_golden_others.txt`: `emitted_other_defines` 1,419 -> 1,429,
-`emitted_other_calls` 14,442 -> 14,462, `emitted_other_branches`
-8,499 -> 8,529, `emitted_other_lines` 84,833 -> 85,225. And `text`, the sum
-over eleven binaries, 992,854 -> 996,678 — five of them smaller, four larger,
-two unchanged, which the paragraph above breaks down.
-
-**The rows this needed were in the middle of a job log.** The instructions
-gate prints them, and then fourteen more gates run in the same job, two of
-them dumping a hundred lines of CPU features and forty of callgrind. The log
-API hands back a tail, so a session regenerating a golden either fetches the
-whole log or writes down a number it did not measure. kq hit this on
-2026-09-01 and fixed it by printing its rows after its own CPU dump; kanso's
-version is a step at the end of the job that cats `work.txt`, `emitted.txt`,
-`emitted_others.txt`, `text.txt` and `compile_ir_got.txt`, all of which are
-still on disk. It runs on green as well as red, because thirty lines is
-cheaper than the alternative and the numbers are worth having either way.
-
-`compile_instructions` 41,501,923 -> 41,495,720, a fall of 6,203. The compiler
-writes one more definition and does less work doing it, which is not a
-contradiction: what `DECLARES` holds changes what the emitter's own string
-handling does, and #1213 moved this the other way by 6,453 for the same
-reason. Rounds and visits hold at 6 and 2,403; the front end decides nothing
-different. No allocation counter moves on any of the nine gates.
-
 ## 2026-09-02 (sixth) — the index twin's rows, as the runner counted them
 
 The entry above priced the index twin from container measurements, because
@@ -2953,3 +2852,73 @@ the block and reddens exactly those three.
 
 The gap was cheap to find only because a mistake walked into it. Nothing else
 in the tree reads this file, so nothing else could have.
+
+## 2026-09-03 (later) — the chip was not the answer, and a refusal nobody could act on
+
+Two corrections to the entry above it, one of them to a claim it made.
+
+**The 508 is glibc's allocator, and the cpu is ruled out. CORRECTS the entry
+above.** That entry left the thread OPEN and proposed cache sizes and derived
+thresholds as the candidates. That guess is wrong and the measurement was
+available the whole time.
+
+Both runs printed their full 123-line cpu feature block — no `bench/dispatch.txt`
+is recorded, and `dispatch.sh name` dumps the block in CI while none is. The two
+blocks are byte-identical: every feature word, the stepping, and
+`data_cache_size` among them. Both ran glibc 2.39-0ubuntu8.8, callgrind 3.22.0
+and rustc 1.98.0, on binary sha 55fb850296d1.
+
+The same two job logs carry the profiles. Every kanso symbol agrees to the
+instruction across the pair — `eval_expr'2` 1,633,593 both times, `check_merged`
+1,589,240, `lex_line` 866,486, `parse` 589,004. Three rows differ:
+
+| | 12:33 | 13:05 | |
+| --- | ---: | ---: | ---: |
+| `_int_malloc` | 1,551,384 | 1,551,964 | +580 |
+| `_int_free` | 1,522,333 | 1,522,352 | +19 |
+| `memcmp-avx2-movbe` | 1,353,408 | 1,353,342 | −66 |
+
+All three are glibc. The front end executed the identical instruction sequence
+and the allocator did not, which is the same shape the by-cpu file's header
+records for the 5,064 cluster the tunables were pinned to remove: `_int_malloc`
+and `memcmp` moving together, an alignment difference downstream of a heap
+layout difference. Pinning the tunables shrank it from 5,064 to 508 and did not
+remove it.
+
+Five consecutive runs in a container on one binary read 42,235,790 every time,
+so the count is deterministic per host and the 508 is not run-to-run jitter.
+
+**Still OPEN**, with a narrower question: what moves the heap layout when the
+binary, the cpu features, glibc, valgrind and the environment all agree? "Is it
+the cpu" is answered, and the answer is no.
+
+**A refusal nobody could act on. DONE.** The runner's rustc moved 1.98.0 ->
+1.98.1 and all three compile veins refused at once. The refusal is right — the
+rows belong to the toolchain that measured them. What follows it was not.
+
+Every compile gate called `measured_on.sh` under `set -e`, so the mismatch
+stopped the gate before it measured anything, and each then printed that
+refusal's standing advice: *let CI measure it and copy the rows out of the job
+log.* There were no rows in the job log. The only host allowed to produce them
+is the one that just stopped, so a branch in this state could not be brought to
+green by anybody — not by CI, which stopped, and not from a container, which
+may never record its own numbers.
+
+`scripts/gates/host_gate.sh` answers two questions where `measured_on` answered
+one. A container may neither compare nor measure: its numbers going into a
+golden over the runner's is the accident `measured_on` exists after, so it stops
+and prints nothing. CI may not compare and MUST measure, because CI's sitting is
+the only one that may ever be recorded — it measures, prints the rows under
+`::error::`, and still fails. `dispatch.sh` already draws this line the same way
+and for the same reason.
+
+`compile_instructions` additionally does not read its row against any recorded
+chip on such a host, since a row from an unnamed host has no chip to be read
+against.
+
+Four specs, both directions watched red: with the CI arm removed the run that
+must measure stops, and with it always taken the container that must stop
+measures. Ratchet row `host_measures`.
+
+The three goldens are NOT re-sat here. This makes CI able to report the sitting
+they need, which was the missing step; the numbers follow from the next run.
