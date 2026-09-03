@@ -4825,6 +4825,11 @@ pendbench      715,732,938 ->    715,732,552    -0.0001%
 scanbench    1,423,437,576 ->  1,423,437,163    -0.0000%
 ```
 
+Those are the CONTAINER's, which is where the ratios in this entry come from
+because a ratio needs both ends measured on one box. The runner's rows are the
+ones the golden takes, and it reads the seven small ones as not moving at all;
+the paragraph below has them.
+
 **Nothing rises.** The jsonbench figure carries the single-pass number scan
 above it as well; this change is 13.56% of it on its own, 2,428,220,306 to
 2,098,859,754. **widebench is the clean attribution**: it vendors its own copy
@@ -4883,17 +4888,38 @@ EXACTLY where they were: jsonbench 2,098,860,167, oneshot 31,427,567, widebench
 deepbench, escapebench, pendbench, indexbench, scanbench or digestbench. The
 container's few-hundred-instruction falls on those seven were the container.
 
-The compiler pays for it twice, and both are priced here. `compile_instructions`
-41,631,998 -> 41,831,767 on family0x19-model0x1, a rise of 199,769 or 0.48%,
-and this one is real front-end work rather than the embedded-source shift the
-by-cpu file's header describes: deciding a raw switch costs a range test per
-group and a wider case list than the tree it replaces. `compile_peak_bytes`
-713,606 -> 715,275, a rise of 1,669 or 0.23%, which is that case list being
-held while it is decided. Rounds hold at 40. The Zen 4 row is removed rather
-than carried forward, per that file's rule about values measured against an old
-binary. **Welfare 76.0100 -> 76.1800**: the objective takes the trade, and
-compile cost satiates at 0.5 against runtime's 2.0, which is exactly the
-asymmetry it was weighted for.
+**The compiler pays, and the first attribution I wrote for it was wrong.**
+Three compile counters rise — `compile_instructions` 41,631,998 -> 41,831,767
+(+0.48%), `compile_peak_bytes` 713,606 -> 715,275 (+0.23%), `compile_allocs`
+25,394 -> 25,485 (+0.36%) — and I priced all three against the raw byte switch,
+because it was the larger change and the rises arrived with it. **`kanso check`
+never runs the backend.** It lexes, parses, infers, runs provenance and the
+advisories, and stops; a codegen change cannot reach those rows except through
+the binary's layout. Every one of them belongs to the json library's extra arms.
+
+Held rather than reasoned, because a reason that sounds right is what produced
+the wrong version. With the codegen change reverted and lib/json untouched, the
+container reads `compile_allocs=25485` and `compile_peak_bytes=715275` — the
+same two numbers as the branch head, to the byte. And the instruction row,
+three builds under the same tunables:
+
+```
+main                                 42,032,508
+the library change alone             42,238,115   +205,607
+the library change and the switch    42,235,790     -2,325
+```
+
+The switch gives 2,325 BACK, inside the layout band the by-cpu file documents in
+thousands. Rounds hold at 40. The Zen 4 row is removed rather than carried
+forward, per that file's rule about values measured against an old binary.
+**Welfare 76.0100 -> 76.1700**: the objective takes the trade, and compile cost
+satiates at 0.5 against runtime's 2.0, which is exactly the asymmetry it was
+weighted for.
+
+The lesson is the one this log keeps relearning from a different direction. Two
+changes shipped together, one large and one small, and every unexplained number
+attached itself to the large one. What separated them was not an argument about
+mechanisms but two rebuilds and four counters.
 
 **A comment claimed a property the machine code contradicted, and nothing in
 the tree could see it.** That is the same family as #1137's four pins that

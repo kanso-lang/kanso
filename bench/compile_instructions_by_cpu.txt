@@ -117,12 +117,23 @@
 # binary. They stay keyed separately: the evidence is that they agree here, not
 # that they agree.
 
-# RE-SAT ON 2026-09-03 for the raw byte switch, and this one IS front-end work
-# rather than an embedded-source shift: 41,631,998 -> 41,831,767 on the same
-# family and model, +199,769, or 0.48%. The backend writes a different dispatch
-# tree for every byte-dispatching group, and deciding it costs more than the
-# tree it replaced — an extra range test per group and a wider switch. It buys
-# 17.14% of the decoder's runtime, which is the trade the objective weighs.
+# RE-SAT ON 2026-09-03: 41,631,998 -> 41,831,767 on the same family and model,
+# +199,769, or 0.48%. This IS front-end work, and it belongs to the json
+# library's extra arms rather than to the raw byte switch that shipped in the
+# same branch. `kanso check` never runs the backend, so a codegen change can
+# only reach this row through the binary's layout — the second cause named
+# above.
+#
+# Decomposed on the container, three builds, same tunables:
+#
+#   main                                 42,032,508
+#   the library change alone             42,238,115   +205,607
+#   the library change and the switch    42,235,790     -2,325
+#
+# So the library is the whole of it and the switch gives 2,325 back, which is
+# inside the layout band this file's header documents in thousands. The rise
+# buys 17.14% of the decoder's runtime, which is the trade the objective
+# weighs.
 #
 # The Zen 4 row is removed rather than carried forward, for the reason written
 # above: it was measured against the previous binary and a value measured

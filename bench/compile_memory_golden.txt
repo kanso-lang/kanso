@@ -100,9 +100,12 @@ front_end_visits=17169
 # out, so the header and the rounding a small heap block costs are gone with
 # it. rounds and visits do not move at all, which is the check that this
 # changed how the front end holds names rather than what it decided.
-# 2026-09-03 (the raw byte switch): 713,606 -> 715,275, a RISE of 1,669, or
-# 0.23%. Banked as the price of a 17.14% fall in the decoder's runtime. The
-# backend decides a raw switch per byte-dispatching group and holds the extra
-# case list while it does; rounds do not move and visits move only for the json
-# library change above, so the front end decides the same things.
+# 2026-09-03 (a number's bytes are read once): 713,606 -> 715,275, a RISE of
+# 1,669, or 0.23%, and it is the json library's extra arms rather than the raw
+# byte switch that shipped beside them. `kanso check` runs the lexer, the
+# parser, inference, provenance and the advisories and stops — the backend
+# never runs — so a codegen change cannot reach this row at all. Held rather
+# than reasoned: with the codegen change reverted and lib/json unchanged, the
+# container reads 715,275 and 25,485, the same two numbers as the branch head,
+# to the byte. Banked as the price of a 17.14% fall in the decoder's runtime.
 compile_peak_bytes=715275

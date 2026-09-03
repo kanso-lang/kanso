@@ -233,4 +233,10 @@
 # that and 4,470 is names over the threshold plus the conversions at the
 # boundaries where declaration-keyed tables still hold Strings, and those are
 # filled once per declaration rather than once per mention.
-compile_allocs=25394
+# 2026-09-03 (a number's bytes are read once): 25,394 -> 25,485, a RISE of 91,
+# or 0.36%. It belongs to the json library's extra arms and NOT to the raw byte
+# switch in the same branch: `kanso check` runs the lexer, the parser,
+# inference, provenance and the advisories and stops, so the backend never
+# runs. Held: with the codegen change reverted and lib/json unchanged, the
+# container reads 25,485 and 715,275 — the same two numbers, to the byte.
+compile_allocs=25485
