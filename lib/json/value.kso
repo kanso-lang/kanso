@@ -84,8 +84,7 @@ fn parse_array cs p
   array_open cs cs[p2] p2
 
 fn parse_number cs p
-  q = number_end cs p
-  parsed q (number_value cs p (q - 1))
+  scan cs p p false
 
 fn parse_object cs p
   p2 = skip_ws cs p

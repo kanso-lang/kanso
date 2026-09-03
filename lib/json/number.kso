@@ -1,48 +1,47 @@
 import "std/text"
 
-fn mark_from? cs p q
-  if (p > q) false (mark_step? cs cs[p] p q)
+# The scan and the float test used to be two walks over the same bytes: one
+# asking where the number ends, one asking whether a `.`, `e` or `E` went
+# past. The mark rides along with the scan now, so each number's bytes are
+# read once. It rides as a boolean argument rather than in a record beside
+# the end position, because a record here is an allocation per number.
+fn scan cs start p marked
+  scan_at cs cs[p] start p marked
 
 # float marks: . E e
-fn mark_step? _ none _ _
-  false
+fn scan_at cs 46 start p _
+  scan cs start (p + 1) true
 
-fn mark_step? _ 46 _ _
-  true
+fn scan_at cs 69 start p _
+  scan cs start (p + 1) true
 
-fn mark_step? _ 69 _ _
-  true
+fn scan_at cs 101 start p _
+  scan cs start (p + 1) true
 
-fn mark_step? _ 101 _ _
-  true
+# the signs a number may carry, which say nothing about its kind
+fn scan_at cs 43 start p marked
+  scan cs start (p + 1) marked
 
-fn mark_step? cs _ p q
-  mark_from? cs (p + 1) q
+fn scan_at cs 45 start p marked
+  scan cs start (p + 1) marked
 
-# number bytes: + - . E e, then the ascii digits
-fn number_char? 43
-  true
+fn scan_at cs none start p marked
+  number_done cs start p marked
 
-fn number_char? 45
-  true
+fn scan_at cs c start p marked
+  digit_step cs start p marked (47 < c and c < 58)
 
-fn number_char? 46
-  true
+fn digit_step cs start p marked true
+  scan cs start (p + 1) marked
 
-fn number_char? 69
-  true
+fn digit_step cs start p marked false
+  number_done cs start p marked
 
-fn number_char? 101
-  true
+fn number_done cs start p true
+  parsed p (number_ok start (text/to_float (text/slice cs start (p - 1))))
 
-fn number_char? none
-  false
-
-fn number_char? c
-  47 < c and c < 58
-
-fn number_end cs p
-  if (number_char? cs[p]) (number_end cs (p + 1)) p
+fn number_done cs start p false
+  parsed p (number_ok start (text/to_int (text/slice cs start (p - 1))))
 
 fn number_ok p (err _)
   fail p "invalid number"
@@ -58,8 +57,3 @@ fn number_start? none
 
 fn number_start? c
   47 < c and c < 58
-
-fn number_value cs p q
-  digits = text/slice cs p q
-  raw = if (mark_from? cs p q) (text/to_float digits) (text/to_int digits)
-  number_ok p raw

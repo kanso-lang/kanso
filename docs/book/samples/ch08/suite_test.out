@@ -2,7 +2,11 @@ test_decode_array ... ok
 test_decode_bool ... ok
 test_decode_escapes ... ok
 test_decode_float ... ok
+test_decode_exponent ... ok
+test_decode_exponent_upper ... ok
+test_decode_exponent_signed ... ok
 test_decode_int ... ok
+test_decode_negative ... ok
 test_decode_nested ... ok
 test_decode_object ... ok
 test_decode_string ... ok
@@ -17,4 +21,4 @@ test_encode_nested ... ok
 test_error_position ... ok
 test_error_trailing ... ok
 test_roundtrip ... ok
-19 passed, 0 failed
+23 passed, 0 failed

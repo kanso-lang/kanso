@@ -439,9 +439,14 @@
 # because the linker drops the helpers they never reach. Zero instructions:
 # all eleven work rows are byte-identical across this change, which is why
 # only this vein and the runtime corpus can see it at all.
-jsonbench text=85922
+# 2026-09-03 (a number's bytes are read once): jsonbench 85,922 -> 85,874 and
+# oneshot 109,026 -> 108,978, a fall of 48 bytes each. The json library reads a
+# number's bytes once instead of twice, so a whole second scanner is gone from
+# both; the emitted line count rises because the surviving scanner carries the
+# float mark as an argument, and the linker keeps less than the source says.
+jsonbench text=85874
 encodebench text=107266
-oneshot text=109026
+oneshot text=108978
 basket text=100290
 widebench text=110594
 deepbench text=69570

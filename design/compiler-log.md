@@ -4673,3 +4673,114 @@ toolchain spec read a comment beside an install, the machine-code spec read an
 error message beside a diff, the host-bound spec read a binding beside a list,
 and this one read a failure count beside a run count. Every one of them was
 adjacent to the property and satisfiable without it.
+
+---
+
+## 2026-09-03 — A NUMBER'S BYTES WERE WALKED TWICE
+
+**SHIPPED.** `lib/json` read every number twice. `number_end` walked the bytes
+asking where the number stopped, and `mark_from?` walked the same bytes again
+asking whether a `.`, `e` or `E` had gone past, because the answer decides
+`to_int` against `to_float`. The scan carries the mark as a boolean argument
+now, so one walk answers both questions.
+
+```
+jsonbench   2,533,092,019 -> 2,428,220,306    -104,871,713, or 4.14%
+```
+
+Measured in the container, three runs, same digits. The runner's own rows are
+what land in `bench/instructions_golden.txt`; this is the size of the move, not
+the number to paste.
+
+**The profile says exactly where it went.** `value_for` was the largest symbol
+in the decode at 648,032,400, and it was a merged one — clang had inlined the
+whole value-parsing path into it, the number scanner included. It reads
+239,779,050 now, and the surviving scanner stands as its own symbol at
+272,697,300. 648.0 - 239.8 - 272.7 leaves 135.5M, and the total fell 104.9M:
+the difference is the arms the merged function no longer carries.
+
+**What it cost.** The front end visits 17,169 expressions on `lib/json` where it
+visited 16,806, a rise of 2.2%, and the emitted decoder gains 89 lines and 20
+calls while losing one define. Two small walkers became one larger one with an
+extra argument. `.text` FALLS 48 bytes on jsonbench and on oneshot, which is the
+second scanner leaving. No allocation counter moves at all — the same slice, the
+same `to_int` or `to_float`, per number — which is why this is a change the cost
+goldens could not have seen and the instructions vein could.
+
+**The counters, by name, and where they landed.** `front_end_visits` 16,806 ->
+17,169. `emitted_calls` 1,808 -> 1,828 and `emitted_lines` 12,044 -> 12,133 for
+the decoder; `emitted_other_calls` 14,532 -> 14,552 and `emitted_other_lines`
+87,826 -> 87,915 for the eight beside it, all of that move being oneshot, which
+imports the same library. `emitted_defines` and `emitted_other_defines` each
+fall by one, and `text` falls 96 bytes over the eleven programs. Every one of
+those five rises is the same fact: one scanner with an extra argument and more
+arms, where there used to be two with none.
+
+**The mark rides as an argument rather than in a record beside the end
+position.** A record would have been an allocation per number: 4,217 of them per
+decode, 632,550 over the benchmark, and that is a term welfare weighs where
+instructions on this path are one it weighs more lightly. The boolean costs
+nothing and the arms read the same.
+
+**Two new arms had no coverage at all.** `e` and `E` never appeared in
+`lib/json/json_test.kso` before today — the float tests were all `3.25` and
+`2.5`, so the exponent forms went through a scanner nobody had exercised.
+`test_decode_exponent`, `test_decode_exponent_upper`,
+`test_decode_exponent_signed` and `test_decode_negative` are new, and each was
+watched red first: dropping the `101` arm's `true` reds `test_decode_exponent`
+with `invalid number` at position 1, and deleting the `69` arm reds
+`test_decode_exponent_upper` with `unexpected trailing characters` at 2. The
+third falsifier — a `digit_step` that drops the mark — the LANGUAGE refuses:
+`marked` becomes an unused binding and the compiler will not build it.
+
+**OPEN.** `bench/widebench/widebench/` and `bench/encodebench/encodebench/`
+carry their own copies of the json library, and they differ from `lib/json`
+already — widebench's has a `pretty.kso` the shipped library does not. They are
+frozen fixtures rather than stale copies, and nothing in the tree says so. They
+are left alone here; whether a benchmark that vendors a library should track it
+is a question worth asking once rather than per change.
+
+---
+
+## 2026-09-03 — DECLINED: THE ESCAPED-STRING TAIL DOES NOT WANT A RUN SCAN
+
+**DECLINED by measurement, +1.16%.** A clean json string is found with one
+`find2` and copied with one slice. A string with an escape in it is not: past
+the first backslash, `str_chars` walks the rest one byte at a time, through a
+dispatch and a one-byte append each. Making the tail scan runs the way the head
+does — `find2` to the next quote or backslash, then append the run in one
+copy — reads like the obvious fix.
+
+```
+jsonbench   2,533,092,019 -> 2,562,563,906    +29,472,300, or 1.16%
+```
+
+**The distribution is why.** In `bench/large.json`, 1,773 of 11,057 strings
+carry an escape, and they hold 4,562 runs between them totalling 16,895 bytes:
+a mean run of **3.7 bytes**, with 1,029 of the runs empty because escapes come
+back to back. The per-run fixed cost measured about 300 instructions — 113 in
+the scanner's own glue, 75 in `find2`, 46 in `k_b_slice`, 49 in the wide append
+— against the 50 instructions a byte the walk costs. The run has to be six bytes
+before it breaks even and it is under four.
+
+**A fused `append(acc, slice(cs, a, b))` does not rescue it.** `k_b_utf8_slice`
+already exists for the same shape one line above, so the pattern is available;
+it would take back the 46 instructions the slice allocation costs, which leaves
+the change roughly 60M worse than doing nothing.
+
+**What the probe found instead is worth keeping.** Two programs, a clean string
+and one with a single leading escape, at 2,000 / 4,000 / 8,000 bytes:
+
+```
+clean    213,329   264,566   366,562     25.6 instructions a byte
+escaped  316,640   469,253   773,152     76.0 instructions a byte
+```
+
+Linear in both, so there is no quadratic hiding here. But a byte in an escaped
+string's tail costs about **50 instructions more** than the same byte in a clean
+one, and that is the language's per-byte dispatch-and-append, not anything
+`lib/json` chose. The disassembly of `str_char` is 41 instructions round the
+loop: six to index, ten to box the byte and unbox it again for the dispatch,
+eight to dispatch, thirteen for the in-place append including two loads of
+`k_stats_on`, four for bookkeeping. Whoever wants this path faster should go
+after those ten, not after the number of walks.

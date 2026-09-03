@@ -78,7 +78,14 @@
 # lines everywhere, for the demanded-index twin. The decoder's own `.text` does
 # not move: it indexes bytes and strings, and the twin it now carries is
 # unreachable from its entry.
-defines=169
-calls=1808
+# 2026-09-03 (a number's bytes are read once): one define fewer, twenty more
+# calls and 89 more lines, in the decoder and in oneshot beside it. The json
+# library used to walk a number twice — `number_end` to find where it stopped,
+# `mark_from?` over the same bytes to decide float or int — and the mark rides
+# the single scan now. Two small walkers became one larger one with an extra
+# argument, which is why the line count rises while the work falls: jsonbench
+# retires 4.14% fewer instructions for it. `branches` does not move.
+defines=168
+calls=1828
 branches=1210
-lines=12044
+lines=12133
