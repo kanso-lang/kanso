@@ -1253,15 +1253,27 @@ fn reported list acc
   lines = list/to_list (list/map acc (f -> f.line))
   body = text/join lines ""
   bad = list/to_list (list/select acc (f -> not f.ok))
-  io/write "ratchet: {length list} rows\n{body}" . (_ -> settled bad)
+  io/write "ratchet: {length list} rows\n{body}" . (_ -> settled list bad)
 
-fn settled bad
-  told bad (length bad == 0)
+fn settled list bad
+  closed list bad (length bad == 0)
 
-fn told _ true
+# An empty list here is not success. When every row a branch selected shares a
+# host-bound gate, `kept_provable` drops them all and the loop has nothing to
+# run — and the old wording congratulated it, which is the false green this
+# whole pass exists to refuse. Nothing was proved, the run says so, and it does
+# not fail, because no diff could have proved them on this runner.
+fn closed list _ true
+  none_left (length list == 0)
+
+fn none_left true
+  said = "ratchet: no row on this runner could be proved; none was claimed\n"
+  io/write_err said
+
+fn none_left false
   io/write "ratchet: every row turned its gate red\n"
 
-fn told bad false
+fn closed _ bad false
   io/write_err "ratchet: {length bad} rows proved nothing\n" . (_ -> os/exit 1)
 
 fn asked given

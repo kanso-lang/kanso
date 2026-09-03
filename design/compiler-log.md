@@ -4634,3 +4634,42 @@ holding. The common thread is that each read something ADJACENT to the thing it
 meant to assert — a comment beside an install, an error message beside a diff, a
 binding beside a list. Trying to make the check fail is what found all three, and
 it cost one `sed` each.
+
+---
+
+## 2026-09-03 — THE SKIP I ADDED AN HOUR AGO HAD A FALSE GREEN IN IT
+
+**DONE.** `kept_provable` drops every row sharing a host-bound gate, and the
+proving pass then runs the rest. When the rest is empty — a branch whose whole
+selection is host-bound — the loop had nothing to do and the closing line said
+
+```
+ratchet: 0 rows
+ratchet: every row turned its gate red
+```
+
+which congratulates a run that proved nothing. That is the exact shape the pass
+exists to refuse, reintroduced by the fix for it, and it survived because the
+`told` arms dispatch on whether any row FAILED and no arm asked whether any row
+RAN.
+
+The empty case says so now and does not fail, because no diff could have proved
+those rows on this runner:
+
+```
+ratchet: no row on this runner could be proved; none was claimed
+```
+
+**Found by reading the summary path rather than by a spec**, and the reason
+there is no fixture is worth stating: constructing one needs a scope whose every
+selected row is host-bound, and `asked?` selects by job name, so the cheapest
+such scope drags in seventeen rows and their builds. The behavioural proof is
+the nightly. What is pinned per-pull-request is the list
+(`tests/a_host_bound_gate_is_reported_not_credited.rs`), which is where a
+mistake is actually likely.
+
+**Four in one day now**, and the pattern has stopped being a coincidence: the
+toolchain spec read a comment beside an install, the machine-code spec read an
+error message beside a diff, the host-bound spec read a binding beside a list,
+and this one read a failure count beside a run count. Every one of them was
+adjacent to the property and satisfiable without it.
