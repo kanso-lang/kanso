@@ -9,7 +9,14 @@ set -e
 
 # Whose bytes these are. .text is what the toolchain made of the source, so a
 # different clang answers a different number for code nobody touched.
-sh scripts/gates/measured_on.sh bench/text_golden.txt
+# A host the golden does not name still MEASURES on CI, so the job log carries
+# the sitting the refusal tells a reader to copy. scripts/gates/host_gate.sh
+# carries the reasons; 3 means measure, print, and refuse without comparing.
+host=0
+sh scripts/gates/host_gate.sh bench/text_golden.txt || host=$?
+if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
+  exit "$host"
+fi
 
 # Apple's size takes no --format, and the awk downstream then reads an empty
 # section size for every benchmark, so the diff goes red on four blank values
@@ -29,6 +36,14 @@ for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pe
          indexbench scanbench digestbench; do
   printf '%s text=%s\n' "$b" "$(size --format=sysv ./$b | awk '/^\.text/{print $2}')"
 done > text.txt
+# Measured, and on a host the golden does not name that is as far as this goes.
+if [ "$host" -eq 3 ]; then
+  echo "::error::this runner's sitting, to copy into bench/text_golden.txt"
+  echo "::error::together with its measured-on line. NOTHING IS COMPARED:"
+  sed 's/^/::error::    /' text.txt
+  exit 1
+fi
+
 grep -v '^#' bench/text_golden.txt > text_want.txt
 diff text_want.txt text.txt || {
   echo "::error::the machine code changed size. A rise is a"
