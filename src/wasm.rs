@@ -123,7 +123,7 @@ impl Executor for BrowserExecutor {
         Err("the playground has no stdin".to_string())
     }
 
-    fn read_file(&mut self, path: &str) -> Result<String, String> {
+    fn read_file(&mut self, path: &str) -> Result<Option<String>, String> {
         Err(format!("the playground has no filesystem: cannot read {path}"))
     }
 

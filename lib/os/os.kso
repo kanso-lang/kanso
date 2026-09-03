@@ -26,6 +26,18 @@ pub type process
   stderr
   stdout
 
+# A file that is not there is an outcome a caller can anticipate, so it is
+# data: `read_file` answers `text | file_not_found` and both arms dispatch
+# like any values. The failure channel is kept for what the program did not
+# plan for — a permission, a device, bytes that are not text. Ruled
+# 2026-09-03: "if you know it's possible for them to not be there, you
+# wouldn't use an exception, you'd just return a file_not_found type."
+# One field, so it is a transparent nominal subtype: the value IS the path,
+# carrying the tag that dispatch reads. `fn orders (file_not_found p)` binds
+# `p` to the path string.
+pub type file_not_found
+  path
+
 pub args = builtin_args
 
 # An unset variable reads as none: not being configured is ordinary.
@@ -57,8 +69,25 @@ pub fn list_dir path
 pub fn make_dir path
   builtin_make_dir path
 
+# The builtin answers two things, so the wrapper reads its list: a builtin
+# cannot name a type that is declared here. Same shape `run` uses.
 pub fn read_file path
-  builtin_read_file path
+  builtin_read_file path . (r -> found path r)
+
+# The caller insisting the file is there. The bang is the choice of channel,
+# and the suffix contract holds it to it: a `!` name must be able to answer a
+# failure, which this one does by turning the anticipated arm back into one.
+pub fn read_file! path
+  read_file path . insisted
+
+fn found path r
+  if r[1]! r[2]! (file_not_found path)
+
+fn insisted (file_not_found f)
+  err "cannot read {f}: no such file"
+
+fn insisted text
+  text
 
 # Starting a process is a description like any other effect. The answer is
 # three things, so the wrapper reads the builtin's list into a record: a
