@@ -341,3 +341,24 @@ family0x19-model0x1 41832275
 # for. Every row below is CI's own most recent reading and nothing is
 # predicted from another chip.
 family0x19-model0x11 41831767
+#
+# 2026-09-03, THE SIXTH READING, and it closes the question this file was
+# named to answer. A run against the fully-recorded table above — all three
+# chips present, each from CI's own sitting — counted 41,831,767 and refused.
+# The only row not already holding that value is Zen 3, so Zen 3 read the LOW
+# mode eighteen minutes after reading the high one, on sha de5bfab22fbd.
+#
+#   family0x6-model0xcf   has read BOTH, on one binary, twelve minutes apart
+#   family0x19-model0x1   has read BOTH, on one binary, eighteen minutes apart
+#   family0x19-model0x11  has read the low mode once
+#
+# TWO OF THREE CHIPS HAVE PRODUCED BOTH VALUES ON ONE BINARY. The mode is not
+# a property of the silicon, so the modes are GLOBAL rather than per-chip and
+# the key this file is built on separates nothing. A per-chip exact pin cannot
+# hold, and neither can any single value.
+#
+# The rows are NOT flipped to the value just seen. Chasing the mode would make
+# CI quiet and destroy the evidence the ruling needs, and it is the one move
+# this file's own history warns about most. They stay as CI measured them.
+# Further readings are appended to the table in design/pending-gavels.md
+# rather than earning a note here each time; six is enough to decide on.

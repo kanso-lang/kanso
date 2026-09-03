@@ -20,31 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (tenth) — the runner's scanbench row, and the spec that already existed
-
-scanbench's instruction row, counted on the runner: **1,423,437,886**. It went
-in as a placeholder at 1,423,437,473, what a container measured, so the gate had
-something to diff against and printed the real row in its job log. The two
-differ by 413, which is the same constant offset jsonbench carries between
-those hosts.
-
-**A spec I did not write caught what mine missed.**
-`every_benchmark_in_the_work_vein_has_a_direction` reddened on the first push:
-scanbench had a row in `bench/instructions_golden.txt` and no entry in the
-trend gate's `lower_*` tables, so a rise in it would have read as UNCLASSIFIED
-drift and the gate would have exited green. That spec exists because
-digestbench was omitted from the same list on 2026-08-31 and a 6.5x regression
-passed. It caught the next one in the pull request that created it, which is
-the whole point of writing the spec rather than the note.
-
-The coverage chain is now four links, not three: built → counted → rowed →
-weighed, and rowed → given a direction. `every_benchmark_is_in_the_objective`
-holds the first three and the older spec holds the fourth. Neither carries a
-list of benchmarks; both read the files.
-
-`work_scanbench` reports as MINTED rather than as a move, which is what
-kanso#1200 built that state for.
-
 ## 2026-09-02 (eleventh) — the tenure residual is reached, and it is harmless
 
 runtime.c has said since kanso#1209 that one case was narrower rather than
@@ -2880,3 +2855,34 @@ Every row is CI's own most recent reading now and nothing is predicted from
 another chip. Whether that is a stable arrangement or a coin flip per run is
 the question in design/pending-gavels.md, unchanged by this reading except
 that it is now five measurements rather than four.
+
+## 2026-09-03 (seventh) — two of three chips have produced both values
+
+A run against the fully recorded table — all three chips present, every row
+from CI's own sitting — counted 41,831,767 and refused. The only row not
+already holding that value is Zen 3, which read 41,832,275 eighteen minutes
+earlier on the same binary.
+
+| chip | on sha de5bfab22fbd |
+| --- | --- |
+| family0x6-model0xcf | both values, twelve minutes apart |
+| family0x19-model0x1 | both values, eighteen minutes apart |
+| family0x19-model0x11 | the low value once |
+
+**So the mode is not a property of the silicon.** Two of three chips have
+produced both, on one binary, with byte-identical CPU feature blocks where
+those were compared. The modes are GLOBAL and the key
+`bench/compile_instructions_by_cpu.txt` is built on separates nothing.
+
+That simplifies what is filed rather than complicating it: what wants
+recording is two acceptable values for the vein, not two per chip. The
+ledger entry says so now.
+
+**The rows are not flipped to the value just seen**, and this is the entry
+that has to say why, because six readings in one afternoon is exactly the
+pressure under which a session starts chasing. Setting each row to whatever
+CI last read would make the gate green and would delete the finding, and the
+finding is the only thing here worth having. They stay as measured.
+
+Six readings is enough to decide on, so further ones go into the ledger's
+table rather than earning entries here.

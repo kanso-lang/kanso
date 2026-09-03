@@ -65,11 +65,17 @@ tunables pinned:
 | 16:25 | family0x6-model0xcf | de5bfab22fbd | 1.98.1 | 41,831,767 |
 | 16:35 | family0x19-model0x1 | de5bfab22fbd | 1.98.1 | 41,832,275 |
 | 16:46 | family0x19-model0x11 | de5bfab22fbd | 1.98.1 | 41,831,767 |
+| 16:53 | family0x19-model0x1 | de5bfab22fbd | 1.98.1 | 41,831,767 |
 
-Two values 508 apart, over **three chips on one binary**: Intel low, Zen 3
-high, Zen 4 low — and Intel has read high as well, on one binary, twenty
-minutes apart. **Neither the key nor the binary picks a mode**, which is the
-premise the file is named for.
+Two values 508 apart, over three chips on one binary. **Two of the three have
+now produced BOTH values on that one binary** — Intel twelve minutes apart,
+Zen 3 eighteen minutes apart — and the sixth reading came from a run against a
+fully recorded table, every row from CI's own sitting.
+
+So the mode is not a property of the silicon. **The modes are global, not
+per-chip**, and the key this file is built on separates nothing. That makes the
+recommendation below simpler than when it was written: what wants recording is
+two acceptable values for the vein, not two per chip.
 
 What moves is measured, not guessed: the two runs at 12:33 and 13:05 printed
 byte-identical 123-line CPU feature blocks, every kanso symbol agreed to the
