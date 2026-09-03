@@ -5009,15 +5009,22 @@ in the direction that matters: run against the fixed book it is silent, and
 renaming `ws?` in the library reddens it in two lines. That rename is the
 ratchet mutation.
 
-**What it still does not cover, deliberately.** A title that resolves nowhere
-is left alone, the same allowance book_panels makes: ch07 names
-`teahouse/menu.kso`, ch09 names a file in the vse repository, ch10 names
-`samples/ch10/classify.kso` from the wrong root. Those are three more panels
-nothing reads, and the reason to stop here is that each wants a different
-resolution rule rather than the same one again. A title that resolves to a FILE
-beside its chapter is skipped for a different reason: book_panels owns it, and
-reading ch07's `shop.kso` panel against its `shop/` directory is how this first
-went wrong.
+**What it does not yet cover, and a claim I got wrong on the way.** Three
+panels remain unread: ch07's `teahouse/menu.kso`, ch09's `vse/methods.kso`,
+ch10's `samples/ch10/classify.kso`. The first version of this entry said each
+wants a different resolution rule. That is wrong and two rules reach all three:
+ch10's titles are written relative to `docs/book`, so the rule is
+`<chapters>/<title>`; ch07's and ch09's are written relative to a sample
+directory one level in — `samples/ch07/teahouse/` holds `main.kso` and a
+package dir `teahouse/`, and `samples/ch09/vse/` has the same shape — so the
+rule is `<samples>/<chapter>/<first segment>/<title>`. ch09's `vse/` is a
+sample package in this repository, not the vse repo, which the first version
+also had wrong. Both rules are a follow-up because ch09 has six such panels and
+drift found there would bury the ch08 fixes.
+
+A title that resolves to a FILE beside its chapter stays skipped for a
+different reason: book_panels owns it, and reading ch07's `shop.kso` panel
+against its `shop/` directory is how this first went wrong.
 
 **And the prose went with them.** Four paragraphs described the old
 implementations — the byte-array constants, the four hex digits read inline

@@ -277,11 +277,13 @@ fn checked qs at found after
 fn checking _ _ found after true
   after found
 
-# Two shapes resolve, and a title that resolves as neither is left alone — the
-# same allowance book_panels makes. ch07 titles a panel `teahouse/menu.kso`
-# for a directory that is not there, ch09 names a file in another repository
-# entirely; this checks the panels that quote THIS tree and says nothing about
-# the rest.
+# Two shapes resolve, and a title that resolves as neither is left alone for
+# now. Three panels sit in that gap and their titles are written against two
+# other roots: ch10's `samples/ch10/classify.kso` is relative to docs/book,
+# and ch07's `teahouse/menu.kso` and ch09's `vse/methods.kso` are relative to
+# a sample directory one level in. Two more rules reach all three, and they
+# are deliberately not here: ch09 has six such panels and finding drift there
+# would bury the ch08 fixes this shipped with.
 fn checking qs at found after false
   q = qs[at]!
   on = (there -> as_file qs at found after q there)
