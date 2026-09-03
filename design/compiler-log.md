@@ -3589,3 +3589,30 @@ the per-object split is 33,586,490 in the compiler against 7,982,541 in libc;
 it is the second number that moves on the runner. Changing what a published
 counter measures is Clay's call, not a session's, and it is filed as one
 rather than done here.
+
+**A sixth reading, and it repeats a previous one exactly.** The run after the
+entry above read **41,500,974** — the same value, to the instruction, that a
+run two heads earlier produced. Six readings of an untouched front end now
+give four distinct values, two of them seen twice:
+
+    41,495,096  ×2      41,495,850  ×1
+    41,500,177  ×1      41,500,974  ×2
+
+That is not continuous noise. Noise does not land on the same eight-digit
+number twice in six tries. It is a small set of discrete environments, each
+deterministic within itself — which is also what the container says, where
+three consecutive runs of the same box give 41,904,811 every time.
+
+So the row is deterministic per environment and the pool holds several. The
+comparison in the entry above rules out the obvious discriminator: the two
+runs it examined took the same `__memcmp_avx2_movbe` dispatch and differed
+only inside glibc's allocator. Whatever separates the environments, it is
+finer than the dispatch block and it does not touch a single instruction the
+compiler executes — every `kanso::` symbol was identical across the pair.
+
+This sharpens the question filed for Clay rather than changing it. A row that
+is deterministic per environment and varies across a pool of them can be
+pinned two ways: record the environment, or stop counting the part that
+varies. The first needs a discriminator nobody has found yet — the dispatch
+block is not it. The second is available now and is what the gate's header
+already claims to measure.
