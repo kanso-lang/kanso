@@ -429,14 +429,14 @@
 # basket -8.476%, encodebench -2.824%, and the eleven together -1.842%.
 # escapebench pays the largest share here, +816, and takes the largest
 # fall there, which is the trade stated in one benchmark.
-jsonbench text=86354
-encodebench text=107714
-oneshot text=109442
-basket text=100738
-widebench text=111010
-deepbench text=69794
-escapebench text=53538
-pendbench text=83842
-indexbench text=54770
-scanbench text=145538
-digestbench text=101010
+jsonbench text=85922
+encodebench text=107250
+oneshot text=109010
+basket text=100274
+widebench text=110578
+deepbench text=69554
+escapebench text=52290
+pendbench text=83490
+indexbench text=54146
+scanbench text=145074
+digestbench text=100578

@@ -3878,3 +3878,91 @@ keying the row rather than widening it, now standing on a measurement instead
 of on two readings and a guess.
 
 Two of five chips have rows. The remaining three refuse until CI lands on them.
+
+## 2026-09-03 — the summary word, and an inline the caller's budget took away
+
+Searched the log, the archive and design/ for prior art on the rewind's
+condition tests and on inlining budgets before filing: the archive carries the
+`k_permreg_flush`/`_held` and `k_viewreg_migrate`/`_held` splits and #1217's
+noinline finding, and neither covers this.
+
+`k_beat_iter`'s fast path read four per-depth registries — `chunkreg_n`,
+`chunkreg_spill`, `viewreg_n`, `permreg_n` — to answer one question: is there
+anything at this depth. `k_reg_any[d]` answers it in one load, each registry
+owning a bit and clearing its own. A summary any of them could clear goes stale
+the first time a pop empties one and leaves another holding entries.
+
+**The first working version was a regression, and the reason was not the change
+itself.** encodebench rose 50,161,245 against a 13,079,983 fall on escapebench:
+net +37M, +0.32% across the eleven. The profile diffed by function:
+
+```
++50,719,623  k_viewreg_migrate      out of line
++41,898,819  k_permreg_migrate      out of line
+-40,255,992  k_beat_iter            the inlined cost leaving
+ -2,205,210  k_beat_pop
+```
+
+Both wrappers had been inlined into `k_beat_iter` and were now real calls.
+Shrinking `k_beat_rewind` changed the inliner's budget IN ITS CALLER, so
+removing work pushed two hot wrappers out of line and paid four times the gain.
+Moving the summary's clears out of the flush bodies did not bring them back —
+encodebench stayed at +50.2M. The trigger is the caller's budget, not the
+callee's size, which is why a smaller callee did not help.
+
+`always_inline` on the three wrappers states what the baseline was already
+doing. CI's rows, all eleven:
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 143,403,772 | 130,170,751 | −9.2278% |
+| basket | 41,212,286 | 40,300,172 | −2.2132% |
+| encodebench | 5,886,751,256 | 5,848,702,451 | −0.6463% |
+| oneshot | 34,417,553 | 34,322,446 | −0.2763% |
+| deepbench | 677,021,033 | 676,465,730 | −0.0820% |
+| indexbench | 5,242,500 | 5,242,363 | −0.0026% |
+| digestbench | 81,252,746 | 81,252,316 | −0.0005% |
+| scanbench | 1,423,437,681 | 1,423,437,576 | −0.0000% |
+| jsonbench | 2,533,091,740 | 2,533,092,019 | +279 |
+| pendbench | 715,731,751 | 715,732,938 | +1,187 |
+| widebench | 61,858,297 | 61,890,181 | +31,884 |
+| **all eleven** | **11,603,420,615** | **11,550,608,943** | **−0.4551%** |
+
+Welfare 75.95 → 76.01, ratcheted in the same commit. `text` falls
+1,023,750 → 1,018,166, five and a half kilobytes across eleven binaries: the
+code each call site gains by inlining is more than paid for by the three
+wrappers no longer standing as functions of their own.
+
+The pins are load-bearing and invisible to every vein but this one — the counter
+gates are byte-identical whether a call is inlined or not, and the emitted
+golden counts what the compiler wrote rather than what llvm did with it. So
+`an_inline_pin_the_inliner_undoes.sh` strips all three, watched red before
+green: encodebench 5,848,702,052 → 5,936,910,092 on the container.
+
+**And the compile row moved without the front end moving.** `compile_instructions`
+went 41,495,850 → 41,498,829 on the same chip, family0x19-model0x11, +2,979.
+`src/main.rs` embeds the runtime with `include_str!("runtime.c")`, so a runtime
+change changes the compiler binary while changing no compiler code: `.text`,
+`.data` and `.bss` are byte-identical at 2,513,746 / 2,648 / 304 across the two
+runs and only the sha differs. The embedded source grew, the rodata after it
+shifted, and the front end does the same work at different addresses.
+
+That is a second thing this row responds to, beside the silicon #1226 keyed it
+by, and the two are not separable by keying: any runtime edit invalidates every
+chip at once. The Intel and Zen 3 rows were removed rather than carried
+forward, because a value measured against the old binary is worse than none.
+They are re-sittings when they next refuse, not new chips, and the table's
+header now says so.
+
+Three counters worsened and are priced here. `work_jsonbench` lands on
+2,533,092,019, up 279 instructions on a 2.5-billion-instruction program.
+`work_pendbench` lands on 715,732,938, up 1,187. `work_widebench` lands on
+61,890,181, up 31,884 — the largest of the three at 0.0515% of its own row.
+
+All three are the same effect, and it is the one the fast path is for: a
+program that rewinds rarely never reaches the case the summary word makes
+cheap, so it pays the word's store at its registrations and collects nothing
+back. widebench registers the most of the three, which is why it pays the most.
+The eleven together fall 52,811,672 instructions, so the trade is 33,350 spent
+against 52,845,022 saved — a ratio of about 1,585 to one, and the same shape as
+kanso#1226's four risers.
