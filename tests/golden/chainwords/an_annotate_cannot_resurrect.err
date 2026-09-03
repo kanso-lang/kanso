@@ -1,3 +1,4 @@
-error[endpoint]: unhandled err reached the executor: "config: cannot read no-such-file.txt: no such file or unreadable"
+error[endpoint]: unhandled err reached the executor: "config: cannot read no-such-file.txt: no such file"
   born in an_annotate_cannot_resurrect/play at an_annotate_cannot_resurrect.kso:11
-  caused by: "cannot read no-such-file.txt: no such file or unreadable"
+  caused by: "cannot read no-such-file.txt: no such file"
+  born in os/insisted at std/os/os.kso:87
