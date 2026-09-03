@@ -41382,3 +41382,108 @@ so three runs settle it: same cpu and same sha with different rows means it is
 neither; same cpu with the sha tracking the row means it is the binary; the
 same sha on two cpus tracking the row means it is the silicon. That is the
 measurement the last two entries should have started from.
+
+## 2026-09-03 — RETRACTION: the compile row IS this change's, by 5,621, and it falls
+
+Three entries above say this row's movement is not this branch's, and one of
+them says main's own history settles it. That was wrong, and the experiment
+that shows it took four minutes and should have been the first thing run.
+
+Same container, same toolchain, same chip, same library box, only `src/`
+differing between the two arms, two runs each:
+
+    my src/     sha 52b28b027c23    41,904,811    41,904,811
+    main's src/ sha 1780ba089b7f    41,910,432    41,910,432
+
+**−5,621, and it repeats to the instruction.** `src/runtime.c` is
+`include_str!`'d into the compiler; this branch grew it by fifty lines; the
+compiler's bytes moved and the front end's counted work fell. That is a real
+movement of this row caused by this diff, and a fall is a win to bank — which
+is exactly what the gate has been asking for since the first red.
+
+**The first attempt at this experiment was also wrong and nearly got
+announced.** It restored `src/` without rebuilding, so both arms measured the
+same binary and agreed; the agreement looked like a null result. The fix was
+to print the binary's sha on every measurement rather than trust that a
+checkout implies a build. Every measurement above carries its sha for that
+reason.
+
+**What stands and what does not.** The chip variance is real: every head on
+this branch from f8fd75cb onward carries identical `src/`, and CI read both
+41,500,974 and 41,495,850 across them, twice each. So the row moves about
+5,124 with the silicon and about 5,621 with this diff, the two are the same
+size, and that is why they were confused. What does not stand is "not this
+PR's": it is this PR's, and separately it is also the pool's.
+
+**What that costs.** The golden was regenerated to 41,500,974 and then
+reverted on the strength of the claim now retracted. The revert was the wrong
+move. The row still cannot be pinned to a single value while the pool holds
+two chips — #247 is unaffected — but this branch owed a regeneration and a
+sentence saying the front end got cheaper, and it said the opposite instead.
+
+**The pattern, stated once more because this is the fourth.** Four times today
+a number moved, a mechanism was reached for, and the mechanism was asserted
+before the experiment that separates it from the alternative. Layout, then
+silicon-is-dead, then silicon-is-back, now this. The experiment has been cheap
+every single time. The rule that would have caught all four: when a number
+moves, change exactly one thing and measure both arms, before writing a word
+about why.
+
+## 2026-09-03 — the compile row gets a key, and a refusal you can watch
+
+Searched the log tail and `design/log/compiler-log-archive.md` for prior
+attempts at per-host instruction rows: kq#85 and kq#86 (the rows say which
+silicon counted them), and the `dispatch.sh` header's record of a
+"record one block, refuse elsewhere" design that CI killed in two runs. This
+is the third shape and the first that neither refuses everywhere nor skips.
+
+**What the row now is.** `bench/compile_instructions_by_cpu.txt` holds one
+value per chip, keyed by `scripts/gates/dispatch.sh key` — family and model
+and nothing else, so a firmware revision cannot move a row that is otherwise
+right. The gate reads the row for the silicon it landed on.
+`bench/compile_instructions_golden.txt` keeps its bare
+`compile_instructions=`, because welfare, the trend gate and `golden_prose`
+all read that file for one number, and the gate checks on every run that the
+bare line equals the table's first row. That check costs two file reads and
+catches the drift nothing else in the tree can see: welfare reads only the
+golden, the gate reads only the table, and a re-sitting that updated one of
+them would leave the objective tracking a number no chip counted.
+
+**Four ways to be wrong, one way to be right, and none of the four is a
+warning.** No rows at all; the golden drifted from the reference row; this
+chip has no row; the row moved on the chip that counted it. The third is the
+one the design turns on. Skipping there is the cheap answer and it is the
+answer CI already rejected: three runs in four land on a cpu that is not any
+given recorded one, so most regressions would go through, and this harness's
+own mutations redden these same gates, so on those runs its rows would go
+blind.
+
+**Why not a band.** The chip moves this row about 5,124 and the beat-rewind
+split moves it −5,621. A tolerance wide enough to swallow the first swallows
+the second, which is the whole signal. Pin the number, key the noise.
+
+**Watched failing.** The four refusals live in
+`scripts/gates/compile_ir_row.sh` rather than inside the gate, because the
+gate's own answer costs a callgrind run over the whole front end and refuses
+outright on any host whose toolchain is not the recorded one — on a container
+it is red before it reads a row at all, which is a gate no spec can drive.
+Split out, it is two files and four strings.
+`tests/a_compile_row_is_read_against_its_own_chip.rs` drives all five outcomes
+in forty milliseconds. Three breaks, each reddening exactly the specs it
+should and no others: waving an unrecorded chip through (1 red), dropping the
+golden/table drift check (2 red), and turning the row comparison into a
+±10,000 band (2 red). The first is now a ratchet row, `compile_ir_keyed`, on
+the specs job.
+
+**The front end got 5,621 instructions cheaper on this branch**, and this is
+where that is stated rather than only inside the retraction above. The
+same-chip experiment is in the previous entry. It is a fall and it is banked;
+the golden and the table land on the value CI reads, one chip per run.
+
+**What this costs, said plainly.** A change that moves the front end
+invalidates every chip's row at once, and only CI may write them — the values
+belong to its glibc and its rustc, which `measured_on.sh` pins on the table as
+well as the golden. So such a change takes several red pushes to re-pin, each
+printing the exact line to paste. The table therefore ships with no rows: the
+first runs say what to add. The alternative that costs nothing is a row that
+reads the runner.

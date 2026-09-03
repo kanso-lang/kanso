@@ -1,0 +1,7 @@
+# The other half of the same contract: a `?` name must answer bool. A query
+# that answers a string is the same lie in the other direction — the caller
+# reads the mark and expects to branch on the answer.
+fn ready? x
+  "{x} maybe"
+
+pub play = print (ready? "it")

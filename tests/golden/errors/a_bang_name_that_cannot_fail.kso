@@ -1,0 +1,11 @@
+# The suffix grammar has teeth, ruled in July and again on 2026-09-03: a `!`
+# name's answer typeset must include an err type. A bang that cannot fail is a
+# lie in the name — `foo[k]!` differs from `foo[k]` precisely by being able to
+# fail, and a declaration claiming the same and delivering a plain string tells
+# the reader the opposite of what it does.
+#
+# This compiled clean before the contract was enforced, and printed `hi!`.
+fn shout! x
+  "{x}!"
+
+pub play = print (shout! "hi")

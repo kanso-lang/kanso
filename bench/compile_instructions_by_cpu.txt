@@ -153,7 +153,6 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
-family0x6-model0xcf 41831767 41832275
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -167,7 +166,6 @@ family0x6-model0xcf 41831767 41832275
 # row per chip and against any single tolerance: 508 would fit inside a band
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
-family0x19-model0x1 41831767 41832275
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
 # family0x19-model0x11 rather than carry a value measured against the previous
@@ -340,7 +338,6 @@ family0x19-model0x1 41831767 41832275
 # chip does not select the mode, which is the whole premise this file is named
 # for. Every row below is CI's own most recent reading and nothing is
 # predicted from another chip.
-family0x19-model0x11 41831767 41832275
 #
 # 2026-09-03, THE SIXTH READING, and it closes the question this file was
 # named to answer. A run against the fully-recorded table above — all three
@@ -551,7 +548,6 @@ family0x19-model0x11 41831767 41832275
 # and the argument that the per-chip key is separating nothing on this binary.
 # Not acted on: the key costs nothing while it is right about something else,
 # and one binary is not enough to retire it.
-family0x6-model0xad 41832275
 
 # 2026-09-03, THE THIRD CHIP SHOWS BOTH. CI on kanso#1235 counted 41,831,767 on
 # family0x19-model0x1, whose row pinned only 41,832,275, on binary sha
@@ -581,3 +577,67 @@ family0x6-model0xad 41832275
 # is still right about the CROSS-BINARY case the header decomposes, where two
 # chips read 5,124 apart on one binary.
 
+
+
+# 2026-09-03, EVERY ROW CLEARED AGAIN, and this time by an ordinary change to
+# the compiler rather than by anything this vein is arguing about. The `!`
+# suffix refusal adds a branch to check_merged, so the binary is new — CI's
+# sha is 0804abe57190 where every reading in every block above was taken on
+# de5bfab22fbd. This file's rule then decides the rest, and it is the rule it
+# has now been taught twice: A VALUE MEASURED AGAINST THE OLD BINARY IS WORSE
+# THAN NO VALUE. Three rows go, one stays because CI re-sat it.
+#
+#   18:33  family0x6-model0xcf  0804abe57190  41,829,232
+#
+# THE FALL IS NOT THE COMPILER GETTING FASTER, and saying so is the whole
+# point of writing this down. The row fell 2,535 against the reference and the
+# front end got MORE expensive doing it. Measured on the container, the same
+# binary pair built with and without the check:
+#
+#   without the check   42,235,790
+#   with the check      42,240,325   +4,535
+#
+# and the profile diff attributes all of it. Exactly one kanso symbol moves:
+#
+#   kanso::check::check_merged                          +848
+#
+# The rest is glibc's startup parse of /proc/self/maps, the term this file
+# found on 2026-09-03 and Clay ruled stays counted:
+#
+#   __vfscanf_internal                                +2,360
+#   ____strtoul_l_internal                            +1,158
+#   _IO_sputbackc, getdelim, _IO_setb, sscanf, the rest  ~860
+#   __memcmp_avx2_movbe                                 -841
+#
+# So the honest reading of CI's 2,535 fall is +848 of front-end work and about
+# 7,070 of maps-parse and allocator movement going the other way on a
+# differently-laid-out binary. The container makes the same term go the other
+# way on the same source change, which is what a term keyed to the host's
+# memory map rather than to the code does.
+#
+# The row is a SINGLE, and this is the cost of that. Three chips have produced
+# both modes on one binary, so an exact pin on one reading is expected to
+# refuse about half the time until a second reading makes it a pair. Writing
+# 41,829,740 here to pre-empt that would be predicting a number nobody has
+# counted, which this file refuses on every page. It goes red, CI counts, and
+# the second reading is a measurement.
+family0x6-model0xcf 41829232
+
+# 2026-09-03, THE SITTING THE REFUSAL ASKED FOR, and the two chips agree. CI
+# landed on Zen 3 next, found no row for it — the block above had just removed
+# its stale one — and refused rather than passing on somebody else's number.
+# It counted 41,829,232 on sha 0804abe57190: family0x6-model0xcf's value TO
+# THE INSTRUCTION, on the same binary.
+#
+#   21:33  family0x6-model0xcf   0804abe57190  41,829,232
+#   21:42  family0x19-model0x1   0804abe57190  41,829,232
+#
+# That is worth more than a row. On the PREVIOUS binary these two chips had
+# each produced both modes, 508 apart, and the file's standing question was
+# what still moves the heap layout when everything measurable agrees. Here
+# they do not differ at all. It is two readings and so it settles nothing —
+# each chip has shown one mode once, which is exactly the state that preceded
+# the last disagreement — but it is the first binary on which the vein has
+# seen cross-chip agreement rather than the pair, and the next reading on
+# either chip is the one that says whether the modes came back.
+family0x19-model0x1 41829232

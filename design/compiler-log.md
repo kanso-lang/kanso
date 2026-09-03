@@ -20,111 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — RETRACTION: the compile row IS this change's, by 5,621, and it falls
-
-Three entries above say this row's movement is not this branch's, and one of
-them says main's own history settles it. That was wrong, and the experiment
-that shows it took four minutes and should have been the first thing run.
-
-Same container, same toolchain, same chip, same library box, only `src/`
-differing between the two arms, two runs each:
-
-    my src/     sha 52b28b027c23    41,904,811    41,904,811
-    main's src/ sha 1780ba089b7f    41,910,432    41,910,432
-
-**−5,621, and it repeats to the instruction.** `src/runtime.c` is
-`include_str!`'d into the compiler; this branch grew it by fifty lines; the
-compiler's bytes moved and the front end's counted work fell. That is a real
-movement of this row caused by this diff, and a fall is a win to bank — which
-is exactly what the gate has been asking for since the first red.
-
-**The first attempt at this experiment was also wrong and nearly got
-announced.** It restored `src/` without rebuilding, so both arms measured the
-same binary and agreed; the agreement looked like a null result. The fix was
-to print the binary's sha on every measurement rather than trust that a
-checkout implies a build. Every measurement above carries its sha for that
-reason.
-
-**What stands and what does not.** The chip variance is real: every head on
-this branch from f8fd75cb onward carries identical `src/`, and CI read both
-41,500,974 and 41,495,850 across them, twice each. So the row moves about
-5,124 with the silicon and about 5,621 with this diff, the two are the same
-size, and that is why they were confused. What does not stand is "not this
-PR's": it is this PR's, and separately it is also the pool's.
-
-**What that costs.** The golden was regenerated to 41,500,974 and then
-reverted on the strength of the claim now retracted. The revert was the wrong
-move. The row still cannot be pinned to a single value while the pool holds
-two chips — #247 is unaffected — but this branch owed a regeneration and a
-sentence saying the front end got cheaper, and it said the opposite instead.
-
-**The pattern, stated once more because this is the fourth.** Four times today
-a number moved, a mechanism was reached for, and the mechanism was asserted
-before the experiment that separates it from the alternative. Layout, then
-silicon-is-dead, then silicon-is-back, now this. The experiment has been cheap
-every single time. The rule that would have caught all four: when a number
-moves, change exactly one thing and measure both arms, before writing a word
-about why.
-
-## 2026-09-03 — the compile row gets a key, and a refusal you can watch
-
-Searched the log tail and `design/log/compiler-log-archive.md` for prior
-attempts at per-host instruction rows: kq#85 and kq#86 (the rows say which
-silicon counted them), and the `dispatch.sh` header's record of a
-"record one block, refuse elsewhere" design that CI killed in two runs. This
-is the third shape and the first that neither refuses everywhere nor skips.
-
-**What the row now is.** `bench/compile_instructions_by_cpu.txt` holds one
-value per chip, keyed by `scripts/gates/dispatch.sh key` — family and model
-and nothing else, so a firmware revision cannot move a row that is otherwise
-right. The gate reads the row for the silicon it landed on.
-`bench/compile_instructions_golden.txt` keeps its bare
-`compile_instructions=`, because welfare, the trend gate and `golden_prose`
-all read that file for one number, and the gate checks on every run that the
-bare line equals the table's first row. That check costs two file reads and
-catches the drift nothing else in the tree can see: welfare reads only the
-golden, the gate reads only the table, and a re-sitting that updated one of
-them would leave the objective tracking a number no chip counted.
-
-**Four ways to be wrong, one way to be right, and none of the four is a
-warning.** No rows at all; the golden drifted from the reference row; this
-chip has no row; the row moved on the chip that counted it. The third is the
-one the design turns on. Skipping there is the cheap answer and it is the
-answer CI already rejected: three runs in four land on a cpu that is not any
-given recorded one, so most regressions would go through, and this harness's
-own mutations redden these same gates, so on those runs its rows would go
-blind.
-
-**Why not a band.** The chip moves this row about 5,124 and the beat-rewind
-split moves it −5,621. A tolerance wide enough to swallow the first swallows
-the second, which is the whole signal. Pin the number, key the noise.
-
-**Watched failing.** The four refusals live in
-`scripts/gates/compile_ir_row.sh` rather than inside the gate, because the
-gate's own answer costs a callgrind run over the whole front end and refuses
-outright on any host whose toolchain is not the recorded one — on a container
-it is red before it reads a row at all, which is a gate no spec can drive.
-Split out, it is two files and four strings.
-`tests/a_compile_row_is_read_against_its_own_chip.rs` drives all five outcomes
-in forty milliseconds. Three breaks, each reddening exactly the specs it
-should and no others: waving an unrecorded chip through (1 red), dropping the
-golden/table drift check (2 red), and turning the row comparison into a
-±10,000 band (2 red). The first is now a ratchet row, `compile_ir_keyed`, on
-the specs job.
-
-**The front end got 5,621 instructions cheaper on this branch**, and this is
-where that is stated rather than only inside the retraction above. The
-same-chip experiment is in the previous entry. It is a fall and it is banked;
-the golden and the table land on the value CI reads, one chip per run.
-
-**What this costs, said plainly.** A change that moves the front end
-invalidates every chip's row at once, and only CI may write them — the values
-belong to its glibc and its rustc, which `measured_on.sh` pins on the table as
-well as the golden. So such a change takes several red pushes to re-pin, each
-printing the exact line to paste. The table therefore ships with no rows: the
-first runs say what to add. The alternative that costs nothing is a row that
-reads the runner.
-
 ## 2026-09-03, LATER — the first chip's row, and it is a fifth cpu
 
 Searched the log tail and the archive for the pool's known cpus before calling
@@ -2440,3 +2335,160 @@ right about the cross-binary case the header decomposes, where two chips read
 The mechanism is still the open question and is unchanged by this: glibc's
 `/proc/self/maps` parse fits the signature, and what is not established is that
 two runs differ in their maps by the 508 this needs.
+
+## 2026-09-03 — gavel: the suffix contracts are refusals, as ruled in July
+
+On "What a `!` name promises on the declaration side" (#272), Clay:
+"rule it." Option 1 — and it is not new. The July suffix-grammar
+ruling (archive, "The suffix grammar, with teeth") already said: "Both
+suffixes are checked contracts, not conventions: a `?` function must
+answer bool, and a `!` function's answer typeset must include an err
+type. The checker refuses violations of either." The entry did not
+cite it; the only news is that the contract was never implemented —
+`pub fn shout! x` answering a plain string compiles today.
+
+Under effects-are-types the contract reads directly off the answer
+type: **a `!` name must answer a result; a `?` name must answer bool;
+the checker refuses either violation at the declaration.** A bang
+that cannot fail is a lie in the name — `foo[k]!` differs from
+`foo[k]` precisely by being able to fail. The implementation question
+the entry raised (can infer see whether an answer reaches the failure
+channel) dissolved with failures becoming a type: the checker reads
+the declared or inferred answer type, the same way it reads any
+other. Options 2 (unchecked convention) and 3 (std-only) would
+respectively reverse a standing ruling and mint a two-tier rule the
+language has nowhere else; both declined. Enforce both suffixes in
+the same change, since `?` sits in the identical unimplemented state.
+The ledger entry leaves with this commit wherever it lives.
+
+## 2026-09-03 — the bang half of the suffix contract, and the half already built
+
+**DONE.** Searched the live log and the archive before filing, and this time
+for the right phrase: the archive's "The suffix grammar, with teeth" is the
+July ruling, and Clay's gavel above cites it. That search is what my #272
+ledger entry skipped, which is how a settled question got asked again.
+
+**The correction the fixtures forced.** Both the gavel and my own survey said
+`?` sat in the identical unimplemented state as `!`. It does not. A fixture
+answering a string from `ready?` is already refused, by a check in check.rs
+that reads the same inferred answer set this change reads:
+
+    error[naming]: `ready?` asks a question: a `?` function answers true or
+    false (err may ride along)
+
+So only the bang half was missing, and the change is one condition beside the
+one that was already there.
+
+**The measurement that explains why nobody noticed.** There are ZERO
+`!`-suffixed declarations anywhere in the tree, against 353 `?`-suffixed ones.
+The contract was unenforced because nothing exercised it. That also fixes the
+ordering with the io half: `io/read_file!` will be the first `!` name the
+language has ever had, so the guard lands before the name it guards rather
+than after.
+
+**The rule, mirroring the query direction exactly.** A `!` name's answer set
+must contain ERR. It fires on a provable lie only — an empty set means
+inference learned nothing, and TOP, which a generic driver widens to, still
+holds ERR, so neither is accused. That conservatism is not new caution; it is
+copied from the `?` direction, which has run over 353 declarations without a
+false positive.
+
+**Watched red, then watched the fixture prove itself.** `shout!` answering a
+plain string compiled clean and printed `hi!` before the change. After it, the
+refusal fires. Then the check was disabled and the corpus went red on that
+fixture, which is the half that matters: a golden that cannot fail is a golden
+that proves nothing.
+
+Diagnostics 309 to 310, none newly unpinned. All eight gate scripts and every
+std module still check. The compile counters could not be measured here — the
+container runs rustc 1.94.1 against the goldens' 1.98.1, which is the host pin
+doing its job — so CI reads them.
+
+## 2026-09-03 — CI read the compile row, and the fall is not the compiler
+
+Searched the live log and the archive before filing. The maps-parse term is
+recorded here twice already — the 2026-09-03 entries that found it and the
+by-cpu table's own note — and neither says what happens when an ordinary
+change moves it. Nothing in either file records a compile row falling while
+the front end rose, so that part is new.
+
+The entry above ended by saying CI would read the compile counters this
+container cannot. It did, and the row refused: the table pinned 41,831,767 /
+41,832,275 on family0x6-model0xcf and the run counted 41,829,232, a fall of
+2,535.
+
+**The front end got more expensive while the row fell.** A differential
+settles it without needing the host pin, because a difference between two
+builds on one machine does not care what rustc CI runs. Same source, with the
+check and without, everything else held:
+
+    without the check   42,235,790
+    with the check      42,240,325   +4,535
+
+The profile diff attributes all of it, and exactly one kanso symbol moves:
+
+    kanso::check::check_merged                          +848
+
+The rest is glibc's startup parse of /proc/self/maps:
+
+    __vfscanf_internal                                +2,360
+    ____strtoul_l_internal                            +1,158
+    __memcmp_avx2_movbe                                 -841
+    getdelim, _IO_sputbackc, _IO_setb, sscanf, the rest  ~860
+
+So CI's 2,535 fall is +848 of front-end work and roughly 7,070 of maps-parse
+and allocator movement going the other way on a differently laid-out binary.
+The container moves that term the other way on the same source change. That is
+what a term keyed to the host's memory map rather than to the code does, and
+it is the mechanism this vein measured a few entries ago: one more shared
+library in the process moves the row +32,090 with the compiler executing
+identical instructions.
+
+The gate asks a change to say whether its move is a regression to explain or a
+win to bank. This one is neither. The compiler costs 848 more instructions to
+run, for a refusal it did not have, and the row it is measured by went down.
+
+**Every row cleared; one survives because CI re-sat it.** The binary is new —
+sha 0804abe57190 against the de5bfab22fbd every recorded reading was taken on
+— so the file's own rule decides the rest: a value measured against the old
+binary is worse than no value. Three rows go. family0x6-model0xcf holds
+41,829,232 as a SINGLE, and the golden's bare line follows it.
+
+The single is expected to refuse. Three chips have produced both modes on one
+binary, so an exact pin on one reading goes red about half the time until a
+second makes it a pair. Writing 41,829,740 to pre-empt that would be recording
+a number nobody counted, which this file refuses on every page.
+
+**Welfare does not move.** 73.06 against a floor of 73.06. 2,535 out of 41.8
+million is 0.006%, and compile cost satiates at 0.5, so the term does not
+reach two decimal places. There is nothing to ratchet.
+
+`docs/compiler.html`'s tagged figure moves with the golden; golden_prose was
+what caught it.
+
+## 2026-09-03 — the second chip, and the two agree to the instruction
+
+The row cleared in the entry above left one chip recorded, and said the single
+was expected to refuse. It did, one run later and for the other reason the
+gate has: CI landed on Zen 3, whose stale row had just been removed, and
+refused because no row named it.
+
+It counted 41,829,232 — family0x6-model0xcf's value exactly, on the same
+binary sha 0804abe57190.
+
+    21:33  family0x6-model0xcf   0804abe57190   41,829,232
+    21:42  family0x19-model0x1   0804abe57190   41,829,232
+
+On the previous binary those two chips had each produced BOTH modes, 508
+apart, and this file's standing question was what still moves the heap layout
+when the binary, the cpu features, glibc, valgrind and the environment all
+agree. On this binary they do not differ at all.
+
+Two readings settle nothing. Each chip has shown one mode once, which is the
+same state that preceded the last disagreement, and reading agreement into it
+now would be the mistake this vein keeps catching. What it is: the first
+binary on which cross-chip agreement has been seen rather than the pair. The
+next reading on either chip is what says whether the modes came back.
+
+The row is recorded from CI's own sitting, which is what every row in this
+file is.
