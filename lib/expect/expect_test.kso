@@ -1,0 +1,20 @@
+# A match answers `true`, which is what the runner needs to pass a test.
+test_equal_matches = expect 42 . to (equal 42)
+
+test_equal_matches_a_list = expect [1 2] . to (equal [1 2])
+
+test_be_true_matches = expect (1 == 1) . to be_true
+
+# And a mismatch answers the RECORD, which is the whole point: these assert
+# the failure's shape, so the diff a reader sees is pinned rather than assumed.
+test_equal_says_what_it_wanted =
+  said = expect 42 . to (equal 43)
+  said == mismatch 43 42
+
+test_equal_says_it_for_text =
+  said = expect "a" . to (equal "b")
+  said == mismatch "b" "a"
+
+test_be_true_says_what_it_got =
+  said = expect false . to be_true
+  said == not_true false
