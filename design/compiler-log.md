@@ -20,38 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (sixteenth) — the log back to forty
-
-116 entries and 6,030 lines, against the rule at the top of this file that it
-holds the last forty. The oldest 76 move to `design/log/compiler-log-archive.md`
-unedited, which takes the live file to 2,680 lines and the archive to 946
-entries.
-
-Nothing is rewritten and nothing is summarised. Checked rather than asserted:
-986 entries before across the two files and 986 after, the forty kept are the
-last forty byte-for-byte, the archive is its old contents followed by the moved
-76 byte-for-byte, and the live file's header is unchanged. The header already
-said "the last forty entries" while the file held 116; it is true again.
-
-kanso#1166 moved 72 the same way on 2026-08-29 and kanso#1183 did it again on
-2026-08-31, which is roughly one trim a day at the rate this log is being
-appended to. That is the cost of the discipline working.
-
-**One thing the trim surfaced, and it is not the log's.** The full suite came
-back with two wasm specs refusing to run: `docs/kanso.wasm predates
-codegen.rs`. Nothing in this change touches the compiler — `src/codegen.rs` is
-byte-identical to main — but the `noinline` experiment of kanso#1217 edited it
-and `git checkout` gave it a new mtime on the way back. The guard compares
-timestamps, so a file whose content never changed reads as newer than the blob.
-Rebuilding the blob produced a byte-identical `docs/kanso.wasm`, which is the
-proof the content was never the issue.
-
-That behaviour is known and was DECLINED with reasons: a content hash costs a
-build to compute and the mtime comparison catches the case it exists for. This
-entry records the false positive it does produce, so the next session that
-meets it after reverting an experiment recognises it in one line instead of
-hunting a compiler change that is not there.
-
 ## 2026-09-02 (seventeenth) — the page owes §35, and the drift gate said so
 
 The log-trim branch went red on `scripts/page_drift`: four entries since
@@ -3039,3 +3007,53 @@ the granted-baseline machinery. That machinery exists to admit a counter going
 forward at its dimension's standing, not to backfill a history it was never in.
 Not resolved here, because what the recorded line MEANS is his to say and not a
 matter of how to compute it.
+
+## 2026-09-03 — the replay could not be computed, and the reason is the rows
+
+**DONE for the prerequisite, the chart itself still to build.** Searched the
+live log and the archive before filing: the 2026-08-31 directive rules the
+replay and the rider of today restates it against the page's older sentence.
+Neither says what the stored rows contain, which turned out to be the thing
+that decides whether a replay is possible at all.
+
+**The rows carry 12 of the 24 counters the formula reads.** Measured on the
+newest row in the perf-history branch — commit `a100f4f`, this afternoon's
+merge:
+
+    missing: wide_instructions, deep_instructions, pending_instructions,
+             digest_instructions, scan_instructions, escape_instructions,
+             index_instructions, scan_arena_blocks, scan_peak_bytes,
+             digest_peak_bytes, digest_arena_blocks, compile_instructions
+
+`compile_instructions` among them, which is the vein this whole day was about.
+`perf_record` writes a hand-picked list that has not kept step with the model:
+the digest counters joined the objective in #1198 and scan, escape and index in
+#1215, and none of them joined the row.
+
+So the rider's rule — "the replayed series begins at the first commit for which
+every counter in the current formula exists" — names no commit. Applied to the
+data as it stands the replayed line is EMPTY, and would have been empty however
+carefully the chart was written. That is worth stating plainly because the
+failure would have looked like a charting bug.
+
+**The fix is that the objective names its own counter set.** `welfare
+--counters` prints the `name=value` pairs `score` was given, and `perf_record`
+records those. Assembling the list a second time in `perf_record` is what
+produced this: two lists drift the first time a counter joins the model, and
+nothing was watching the second one. Printed from where the score is computed,
+the row cannot fall behind the formula — a counter that enters the model enters
+the row in the same commit.
+
+Three specs, two of them watched red against main's welfare, where the flag
+prints the banner instead of a counter set. The third pins that asking what was
+scored does not move the floor, because a second door to the ratchet is the one
+thing this must never become.
+
+**STILL TO BUILD, and it needs rows that do not exist yet.** `perf_record` has
+to carry the printed set into the history row, and the chart has to replay the
+current formula over the rows that carry it. The replayed line then starts at
+the first commit merged after that lands, which satisfies "no backfill" by
+construction rather than by a rule anyone has to remember. The recorded
+`welfare` field stays for the earlier rows, drawn distinctly and labeled as
+scored under earlier definitions, and `bench/welfare_floor.json` remains the
+audit trail either way.

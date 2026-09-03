@@ -604,9 +604,34 @@ fn against now held
   value = score now base
   os/args . (a -> either now base held value a)
 
+# THE COUNTER SET THE SCORE WAS MADE OF, one `name=value` a line.
+#
+# perf_record writes a history row per merged commit and the chart reads those
+# rows. Until now the row carried a hand-picked dozen counters and the score as
+# a recorded number, which is why the replay ruled on 2026-08-31 could not be
+# computed: on 2026-09-03 the newest row held 12 of the 24 counters the formula
+# reads, `compile_instructions` among the missing, so "the first commit for
+# which every counter exists" named no commit at all.
+#
+# Printing the set HERE rather than assembling it again in perf_record is the
+# point. The two would drift the first time a counter joined the model, and a
+# chart replaying a formula over a counter set that no longer matches it is a
+# chart that lies quietly. This prints exactly what `score` was given.
 fn either now base held value args
   asked_to_set = length args > 0 and args[1]! == "--set"
-  chosen now base held value args asked_to_set
+  asked_counters = length args > 0 and args[1]! == "--counters"
+  routed now base held value args asked_to_set asked_counters
+
+fn routed now _ _ _ _ _ true
+  counters_of now
+
+fn routed now base held value args setting _
+  chosen now base held value args setting
+
+fn counters_of now
+  kept = list/to_list (list/select counter_names (c -> now[c] != none))
+  lines = list/to_list (list/map kept (c -> "{c}={now[c]!}\n"))
+  io/write (text/join lines "")
 
 fn chosen _ base held value args true
   reason = text/join (list/to_list (list/drop args 1)) " "

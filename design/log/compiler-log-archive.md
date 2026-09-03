@@ -40368,3 +40368,35 @@ starts reading the vein, with the measurement in the failure message, and red
 the other way if the gate stops diffing the golden — an exclusion from the
 objective is not permission to stop counting the thing. Both halves were
 watched failing.
+
+## 2026-09-02 (sixteenth) — the log back to forty
+
+116 entries and 6,030 lines, against the rule at the top of this file that it
+holds the last forty. The oldest 76 move to `design/log/compiler-log-archive.md`
+unedited, which takes the live file to 2,680 lines and the archive to 946
+entries.
+
+Nothing is rewritten and nothing is summarised. Checked rather than asserted:
+986 entries before across the two files and 986 after, the forty kept are the
+last forty byte-for-byte, the archive is its old contents followed by the moved
+76 byte-for-byte, and the live file's header is unchanged. The header already
+said "the last forty entries" while the file held 116; it is true again.
+
+kanso#1166 moved 72 the same way on 2026-08-29 and kanso#1183 did it again on
+2026-08-31, which is roughly one trim a day at the rate this log is being
+appended to. That is the cost of the discipline working.
+
+**One thing the trim surfaced, and it is not the log's.** The full suite came
+back with two wasm specs refusing to run: `docs/kanso.wasm predates
+codegen.rs`. Nothing in this change touches the compiler — `src/codegen.rs` is
+byte-identical to main — but the `noinline` experiment of kanso#1217 edited it
+and `git checkout` gave it a new mtime on the way back. The guard compares
+timestamps, so a file whose content never changed reads as newer than the blob.
+Rebuilding the blob produced a byte-identical `docs/kanso.wasm`, which is the
+proof the content was never the issue.
+
+That behaviour is known and was DECLINED with reasons: a content hash costs a
+build to compute and the mtime comparison catches the case it exists for. This
+entry records the false positive it does produce, so the next session that
+meets it after reverting an experiment recognises it in one line instead of
+hunting a compiler change that is not there.
