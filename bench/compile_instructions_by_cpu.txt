@@ -109,4 +109,12 @@
 # binary are removed rather than carried forward, for the reason already written
 # above: a value measured against the old binary is worse than no value. They
 # are re-sittings when they next refuse, not new chips.
+# Zen 4 re-sat from the run at 51a671b2, which printed the paste-ready line
+# itself. On THIS binary the two AMD models agree to the instruction, where on
+# the previous one they read 41,503,893 and 41,498,829 — 5,064 apart. The
+# paragraph above says two models sharing a value once is not evidence they
+# share a value, and this is the same pair doing it a second time on a third
+# binary. They stay keyed separately: the evidence is that they agree here, not
+# that they agree.
 family0x19-model0x1 41631998
+family0x19-model0x11 41631998
