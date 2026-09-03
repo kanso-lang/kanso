@@ -1,0 +1,29 @@
+term run speed (advertised)|0.15|2.0|decode_instructions,encode_instructions
+term run speed (guards)|0.15|2.0|oneshot_instructions,basket_instructions,wide_instructions,deep_instructions,pending_instructions,digest_instructions,scan_instructions,escape_instructions,index_instructions
+term run memory|0.26|2.0|decode_peak_bytes,decode_arena_blocks,encode_peak_bytes,encode_arena_blocks,oneshot_peak_bytes,basket_peak_bytes,scan_arena_blocks,scan_peak_bytes,digest_peak_bytes,digest_arena_blocks
+term compile speed|0.32|0.5|compile_instructions,compile_allocs
+term compile memory|0.12|0.5|compile_peak_bytes
+base decode_instructions=3266896510
+base encode_instructions=9283777698
+base oneshot_instructions=64555398
+base basket_instructions=56717877
+base wide_instructions=11627314301
+base deep_instructions=22725608867
+base pending_instructions=27967269671
+base digest_instructions=500922381
+base scan_instructions=5288235565
+base escape_instructions=922726270
+base index_instructions=19477349
+base decode_peak_bytes=24421728
+base decode_arena_blocks=4
+base encode_peak_bytes=120730889
+base encode_arena_blocks=2205
+base oneshot_peak_bytes=7273364
+base basket_peak_bytes=405971199
+base scan_arena_blocks=21251
+base scan_peak_bytes=22283122283
+base digest_peak_bytes=610272059
+base digest_arena_blocks=582
+base compile_instructions=57029831
+base compile_allocs=62110
+base compile_peak_bytes=819217
