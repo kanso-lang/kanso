@@ -50,6 +50,25 @@ type finding
   line
   ok
 
+# A gate whose answer is only meaningful where its golden was measured.
+#
+# `bench/instructions_golden.txt` pins eleven exact counts and the runner pool
+# is not one machine. On 2026-09-03 the cost-goldens job and the ratchet job,
+# on ONE commit, read `digestbench 81252316` and `81252330` — fourteen apart,
+# two runners, one image, one glibc. A row whose gate diffs those counts is red
+# on any runner but the golden's, whatever the mutation did.
+#
+# That is not the branch's failure and no diff fixes it, so the baseline reports
+# such a gate and does not fail on it. The row is NOT credited either: the
+# proving pass skips every row sharing that gate and says so. The distinction
+# is the whole point — before kanso#1228 a red gate was counted as proof, which
+# is the blindness; saying out loud that a row went unproven this run is the
+# opposite of that, and on a run that lands on the golden's silicon the row is
+# proved normally.
+type bound
+  gate
+  why
+
 # One (gate, setup) pair the baseline reads once, named by the first row that
 # carries it.
 type pair
@@ -112,6 +131,25 @@ fn gating name
 # rather than a script of their own.
 fn whose vein
   "sh scripts/gates/measured_on.sh bench/{vein}_golden.txt"
+
+why_exact = "its golden is exact counts and the pool is not one machine"
+
+work_gate = "sh scripts/gates/instructions.sh"
+
+front_gate = "sh scripts/gates/compile_instructions.sh"
+
+bound_a = bound work_gate why_exact
+
+bound_b = bound front_gate why_exact
+
+host_bound = [bound_a bound_b]
+
+fn host_bound? gate
+  list/any? host_bound (e -> e.gate == gate)
+
+fn why_bound gate
+  found = list/to_list (list/select host_bound (e -> e.gate == gate))
+  found[1]!.why
 
 formatting = row
   "a file rustfmt would rewrite"
@@ -515,10 +553,19 @@ validator = row
 # one. Its sampled band stopped at eight bytes, and a validator that never
 # reads past byte eight of a longer run passed 45,189,025 cases with nothing
 # to say. The band reaches twenty-four now; this row is what keeps it there.
+#
+# Its gate read `whose "validator"` until 2026-09-03, which is
+# `measured_on.sh bench/validator_golden.txt` — and there is no validator
+# vein, so the file has never existed and the gate was red on every host
+# before any mutation ran. The row therefore reported `red` and proved
+# nothing from the day it was written. `prove`'s baseline pass found it on
+# the first runtime-touching pull request after that pass landed, which is
+# the whole reason the pass exists. The gate is the sweep the claim is about,
+# the same one the row above it uses.
 validator_tail = row
   "a utf-8 validator that never looks at the end of a long run"
   true
-  (whose "validator")
+  "./target/release/kanso run scripts/utf8_differential"
   "utf-8 validator (differential vs an independent reference)"
   (breaking "a_validator_that_skips_its_tail")
   release
@@ -1045,36 +1092,101 @@ fn greened picked pairs at acc false
   shell base_dir p.setup . (s -> base_setup picked pairs at acc p s.status)
 
 fn base_setup picked pairs at acc p 0
-  shell base_dir p.gate . (g -> base_gate picked pairs at acc p g.status)
+  shell base_dir p.gate . (g -> base_gate picked pairs at acc p g)
 
-fn base_setup picked pairs at acc p _
-  greening picked pairs (at + 1) (push acc (unmade p))
+fn base_setup picked pairs at acc p s
+  greening picked pairs (at + 1) (push acc (unmade p s))
 
-fn base_gate picked pairs at acc _ 0
+fn base_gate picked pairs at acc p g
+  read_gate picked pairs at acc p g (g.status == 0)
+
+fn read_gate picked pairs at acc _ _ true
   greening picked pairs (at + 1) acc
 
-fn base_gate picked pairs at acc p _
-  greening picked pairs (at + 1) (push acc (presumed p))
+fn read_gate picked pairs at acc p g false
+  greening picked pairs (at + 1) (push acc (presumed p g))
 
-fn unmade p
-  finding "  UNBUILT {p.job}: the baseline would not build\n" false
+# The last two dozen lines of what the gate said, indented under the finding.
+#
+# Naming the gate was the previous shape of this, and it answered the question
+# it was built for on its first run: `sh scripts/gates/instructions.sh`, red
+# because valgrind was not on the ratchet's box. It could not answer the SECOND
+# one. With valgrind installed the same gate was still red, and a report that
+# says only which gate leaves the reader with a list of hypotheses and no way
+# to choose — which is the shape of reasoning this repo keeps catching. A gate
+# writes down why it failed; the ratchet was throwing that away.
+#
+# TWENTY-FOUR because eight was not enough on the first run that used it. The
+# instructions gate prints the cpu it is about to count on, then eleven rows,
+# then its diff, then six lines of advice — and eight lines caught the advice
+# and one row. The row it caught was the useful part (`digestbench 81252330`
+# against the cost-goldens job's 81252316 on the same commit), so the next one
+# should carry the whole diff and the cpu line rather than needing a second run
+# to ask again.
+fn spoke r
+  said = "{r.stdout}{r.stderr}"
+  lines = text/split said "\n"
+  over = length lines - 24
+  tail = list/to_list (list/drop lines (chose_drop over (over > 0)))
+  text/join (list/to_list (list/map tail (l -> "      {l}\n"))) ""
 
-fn presumed p
+fn chose_drop over true
+  over
+
+fn chose_drop _ false
+  0
+
+fn unmade p r
+  said = "  UNBUILT {p.job}\n    gate: {p.gate}\n"
+  finding "{said}    the baseline would not build\n{spoke r}" false
+
+fn presumed p r
+  told p r (host_bound? p.gate)
+
+fn told p r true
+  said = "  UNPROVEN THIS RUN {p.job}\n    gate: {p.gate}\n"
+  why = "{why_bound p.gate}, so this run cannot prove a row sharing it"
+  finding "{said}    {why}\n{spoke r}" true
+
+fn told p r false
+  said = "  ALREADY RED {p.job}\n    gate: {p.gate}\n"
   why = "red before any mutation, so no row sharing it is proof"
-  finding "  ALREADY RED {p.job}: {why}\n" false
+  finding "{said}    {why}\n{spoke r}" false
 
 fn unmutated picked pairs acc
-  settled_base picked pairs acc (length acc == 0)
+  bad = list/to_list (list/select acc (f -> not f.ok))
+  settled_base picked pairs acc (length bad == 0)
 
-fn settled_base picked pairs _ true
-  said = "ratchet: {length pairs} gates green before any mutation\n"
-  io/write said . (_ -> proving picked 1 [])
+# A note is printed and then the run carries on; only a finding nobody excused
+# stops it. Both go to stderr, because a row that went unproven is news.
+fn settled_base picked pairs acc true
+  said = green_line pairs acc (length acc == 0)
+  io/write_err (said_with acc said) . (_ -> proving (kept_provable picked) 1 [])
+
+# Two numbers when any gate went unproven, because "green" would be a claim
+# about gates this runner never answered. One number when none did, which is
+# the ordinary run and the wording the spec has pinned since kanso#1228.
+fn green_line pairs _ true
+  "ratchet: {length pairs} gates green before any mutation\n"
+
+fn green_line pairs acc false
+  read = length pairs
+  "ratchet: {read} gates read, {length acc} unproven on this runner\n"
 
 fn settled_base _ _ acc false
+  said = "ratchet: the baseline is not green\n"
+  io/write_err (said_with acc said) . (_ -> os/exit 1)
+
+fn said_with acc said
   lines = list/to_list (list/map acc (f -> f.line))
   body = text/join lines ""
-  said = "ratchet: the baseline is not green\n"
-  io/write_err "{said}{body}" . (_ -> os/exit 1)
+  "{said}{body}"
+
+# A row whose gate this run cannot answer is not run under mutation either:
+# applying a mutation to an already-red gate and reading red is the credit the
+# baseline exists to refuse.
+fn kept_provable picked
+  list/to_list (list/select picked (r -> not host_bound? r.gate))
 
 fn proving list at acc
   proven list at acc (at > length list)
@@ -1141,15 +1253,27 @@ fn reported list acc
   lines = list/to_list (list/map acc (f -> f.line))
   body = text/join lines ""
   bad = list/to_list (list/select acc (f -> not f.ok))
-  io/write "ratchet: {length list} rows\n{body}" . (_ -> settled bad)
+  io/write "ratchet: {length list} rows\n{body}" . (_ -> settled list bad)
 
-fn settled bad
-  told bad (length bad == 0)
+fn settled list bad
+  closed list bad (length bad == 0)
 
-fn told _ true
+# An empty list here is not success. When every row a branch selected shares a
+# host-bound gate, `kept_provable` drops them all and the loop has nothing to
+# run — and the old wording congratulated it, which is the false green this
+# whole pass exists to refuse. Nothing was proved, the run says so, and it does
+# not fail, because no diff could have proved them on this runner.
+fn closed list _ true
+  none_left (length list == 0)
+
+fn none_left true
+  said = "ratchet: no row on this runner could be proved; none was claimed\n"
+  io/write_err said
+
+fn none_left false
   io/write "ratchet: every row turned its gate red\n"
 
-fn told bad false
+fn closed _ bad false
   io/write_err "ratchet: {length bad} rows proved nothing\n" . (_ -> os/exit 1)
 
 fn asked given

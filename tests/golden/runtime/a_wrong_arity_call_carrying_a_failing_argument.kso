@@ -1,0 +1,26 @@
+# A value-headed call whose arity is wrong AND whose argument fails. The
+# arity check answers first on every engine: a wrong-arity call is a broken
+# program, and letting the failing argument answer instead hides the break
+# exactly when a value happens to fail.
+#
+# The checker cannot catch it. A function-typed parameter's arity is not read
+# at the call site, so `two_b lam1 3 "second"` compiles and the dispatch
+# happens at run time — which is what makes this a differential question
+# rather than a diagnostic one.
+#
+# Recorded as OPEN and believed unreachable on 2026-09-02: "no program in the
+# corpus reaches it and I did not find a way to write one". This is one.
+# `k_call{n}` tested every argument for failure before it tested arity, so
+# native answered `second` and exited 0 where the oracle died here. Both
+# orders are the same now, and this fixture is what says so.
+fn boom what
+  err what
+
+fn two_b g a what
+  g a (boom what)
+
+lam1 = (x -> x * 10)
+
+bad = two_b lam1 3 "second"
+
+pub play = print "{bad}"

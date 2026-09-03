@@ -111,6 +111,16 @@ fn a_gate_red_before_the_mutation_is_refused_rather_than_credited() {
         "nothing may claim the row was proved:\n{said}"
     );
     assert!(said.contains("ALREADY RED"), "the refusal says which gate was red first:\n{said}");
+    // And WHY. Naming the gate answered the question it was built for on its
+    // first CI run and could not answer the second: with valgrind installed the
+    // same gate was still red, and a report that says only which gate leaves a
+    // reader with hypotheses and no way to choose. The gate wrote down its
+    // reason; the ratchet was throwing it away. Here that reason is the file
+    // the fixture committed.
+    assert!(
+        said.contains("crept_in.py"),
+        "the refusal carries the gate's own words, not just its name:\n{said}"
+    );
 }
 
 #[test]

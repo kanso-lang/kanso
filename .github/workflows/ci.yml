@@ -562,6 +562,11 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      # The ratchet runs other jobs' gates, so it needs what those jobs
+      # install. It had neither valgrind nor the wasm target, and the two rows
+      # whose gate runs callgrind were red here before any mutation was
+      # applied — which the ratchet reads as proof. See the script's header.
+      - run: sh scripts/ratchet/toolchain.sh
       - run: cargo build --release
       # Costs one compile and no builds: it reads this file against the table,
       # then applies every mutation in a throwaway worktree to check it still
@@ -582,6 +587,9 @@ jobs:
       # thirteen rows and ran in six minutes when this comment was first
       # written; on 2026-09-03 it selects TWENTY-THREE and took 11m51s and
       # 12m05s on two runs of one branch, and nothing was watching that grow.
+      # Those runs could not execute the callgrind gates at all — see the
+      # toolchain step above — so they undercount a runtime branch by two
+      # callgrind passes on the baseline and two more under mutation.
       # `prove` now also reads each selected row's gate once before mutating
       # it, which is 22 gate runs on top of those 23 rows — the added cost is
       # the gate half of what the step already pays, since the baseline shares

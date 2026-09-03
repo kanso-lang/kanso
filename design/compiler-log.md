@@ -4204,3 +4204,472 @@ timeout.
 The baseline for those 23 selected rows is 22 pairs, so the per-PR step gains
 roughly its own gate half. That is a prediction rather than a measurement: the
 next runtime-touching branch's job log settles it.
+
+A WRONG-ARITY CALL WITH A FAILING ARGUMENT ANSWERED DIFFERENTLY ON EVERY
+ENGINE. The entry of 2026-09-02 recorded this as OPEN, small and unpinned, and
+said "no program in the corpus reaches it and I did not find a way to write
+one". Here is one:
+
+  fn boom what
+    err what
+
+  fn two_b g a what
+    g a (boom what)
+
+  lam1 = (x -> x * 10)
+
+  bad = two_b lam1 3 "second"
+
+The checker does not read a function-typed parameter's arity at the call site,
+so passing a one-argument lambda into a body that applies two compiles, and the
+count is settled at run time. There the three engines disagreed:
+
+  interpreter   error[runtime]: this function takes 1 argument(s), got 2, exit 1
+  native        prints "second", exit 0
+  wasm          the same as native
+
+`k_call1` through `k_call4` and wasm's `call_closure` tested every argument for
+failure before they tested arity. `eval.rs` refuses the callable in `call` and
+the count in `call_closure`, both above its argument test. The oracle is the
+oracle, so the two compiled engines moved: the callable is asked whether it is
+callable and whether its arity matches, and only then do failing arguments
+propagate. A wrong-arity call is a broken program, and a value that happens to
+fail must not be what hides the break.
+
+The same reorder settles a second case nobody had asked about. A call on a
+value that is not callable at all, with a failing argument, answered with the
+failure on native and with "is not callable" on the oracle; the not-callable
+refusal now comes first on all three.
+
+WHY IT SURVIVED THE FIRST THREE PROBES, which is the part worth remembering:
+`kanso run <dir>` COMPILES NATIVE. The interpreter is `kanso run <dir>
+--interp`. Three probes written to compare the engines ran native twice, agreed
+with themselves, and read as evidence that the divergence was unreachable. The
+comment on `run_interpreted` says so in one line and the probes never asked it.
+
+Cost, and it is only visible in one vein. All nine allocation gates and
+`bench/emitted_golden.txt` are byte-identical, and so are all eleven rows of
+`bench/instructions_golden.txt` — the reordered tests sit in a path the
+benchmarks never take, since the emitted fast dispatch already tests tag, arity
+and arguments in that order and falls through to `k_call{n}` only for the
+shapes it declines. `bench/text_golden.txt` rises 128 bytes in total:
+1,018,166 -> 1,018,294, sixteen bytes on each of eight benchmarks, and
+jsonbench, escapebench and indexbench hold still because the linker drops the
+helpers they never reach. The sixteen bytes are one extra copy of the argument
+test: it had to move below the arity check in BOTH the closure arm and the
+fnref arm of `k_call2`, `k_call3` and `k_call4`, where one copy above the tag
+dispatch had served both.
+
+The fixture is tests/golden/runtime/a_wrong_arity_call_carrying_a_failing_argument.kso,
+watched red before green on native — it answered `error[endpoint]: unhandled
+err reached the entry: "second"` where the oracle said the arity.
+
+THE INDEX TWIN'S THUNK DEFERRAL CANNOT BE PINNED, AND THAT IS THE ANSWER. The
+2026-09-02 entry for the index twin left a gap: `k_index_fast` defers a thunk
+and a stored `none` to `k_index`, `index_holds_a_none.kso` pins the second, and
+the first was "unreachable by any program I could write: no fixture in the tree
+builds a list holding an unforced thunk and then indexes it".
+
+Half of that is wrong and half of it is deeper than it looked.
+
+A program reaches it: `x = [x]`. The element is a thunk until something demands
+it, and native reports thunk_allocs=1, thunk_forces=1, thunk_evals=1 for a
+program that does nothing but index it. So the shape is writable, and the
+corpus now has it — three engines, three index forms, agreeing.
+
+But the deferral has no observable, which is why no fixture pins it. Measured
+two ways rather than argued:
+
+  the twin's `%isthunk` test changed to compare an impossible tag, so a thunk
+  is handed straight back where `k_index` would have forced it
+    -> output identical, and all six thunk counters identical
+
+  `k_force` removed from `k_index` entirely
+    -> output identical
+
+Every consumer of an indexed value forces it. The deferral decides WHERE the
+force happens and never whether, so nothing a program can print or count tells
+the two apart. A fixture asserting the deferral would be green with the
+deferral removed, which is the shape this log has caught before and the reason
+a spec gets watched red first.
+
+What went in is therefore a differential pin and says so in its own comment: the
+three engines agree on indexing a list that holds an unforced thunk, which none
+of them had been asked about. The gap is closed by determining that there was
+nothing there to pin, not by pinning it.
+
+THE BASELINE PASS CAUGHT A BLIND ROW ON ITS FIRST RUNTIME-TOUCHING PULL
+REQUEST. kanso#1228 landed at 07:35 and kanso#1229 was the next branch to
+touch src/runtime.c. Its ratchet job went red:
+
+  ratchet: the baseline is not green
+  ratchet: 18 rows patch a file this branch changed
+    ALREADY RED cost goldens (deterministic ratchet, no clocks)
+    ALREADY RED utf-8 validator (differential vs an independent reference)
+
+The utf-8 one is a real blind row and the diagnosis is exact. `validator_tail`
+claims "a utf-8 validator that never looks at the end of a long run" and its
+mutation is `a_validator_that_skips_its_tail.sh`, which points the tail read
+back at the start. Its GATE read `whose "validator"`, which expands to
+`sh scripts/gates/measured_on.sh bench/validator_golden.txt` — and there is no
+validator vein. The file has never existed. `measured_on.sh` exits 2 on it with
+`sed: can't read`, on every host, before and after any mutation, so `prove`
+recorded the row as `red` and it proved nothing from the day it was written.
+
+The gate is now the sweep the claim is about, the same one the row above it
+uses, and the row was watched red for the first time in its life: with the
+mutation applied, `scripts/utf8_differential` reports
+
+  MISMATCH len=11 bytes=3f 16 55 56 66 56 4a 38 a8 27 0d got=1 want=0
+  45189025 checked, 1097135 mismatches
+
+against `0 mismatches` clean.
+
+The cost-goldens one is not diagnosed yet, and the reason is a weakness in the
+report I wrote: `ALREADY RED` named the JOB and not the GATE, and a job carries
+up to seventeen gates. Guessing which from a job name is exactly the shape of
+reasoning this log keeps catching, so the line names the gate now and the next
+run says which rather than my inferring it.
+
+Two things worth stating about the timing. The pass found this on its first
+opportunity, which is the argument for it made concretely rather than
+hypothetically. And it found it by being red on MY pull request — the check
+cost its author a cycle before it cost anyone else one, which is the right way
+round for a check like this to arrive.
+
+---
+
+## 2026-09-03 — THE RATCHET RAN OTHER JOBS' GATES ON A BOX THAT HELD NONE OF THEIR TOOLS
+
+**DONE.** The gate-naming line added in the previous commit answered on its
+first CI run, and the answer was a second blind row:
+
+```
+ALREADY RED cost goldens (deterministic ratchet, no clocks)
+  gate: sh scripts/gates/instructions.sh
+  red before any mutation, so no row sharing it is proof
+```
+
+`scripts/gates/instructions.sh` runs callgrind over the eleven benchmarks.
+valgrind is installed at exactly one place in `.github/workflows/ci.yml` —
+inside the cost goldens job, four steps before that gate. Neither the nightly
+`prove` job nor the per-pull-request `touched` step installed it. Both run that
+gate. `set -e` plus a missing binary is a non-zero exit, the gate was red before
+any mutation was applied, and the ratchet reads a red gate as proof.
+
+Two rows, not one. `scripts/gates/compile_instructions.sh` runs callgrind over
+the front end and belongs to the same job, so `compile_ir` — "front-end work
+that costs instructions and moves no other counter" — was blind by the same
+mechanism. It was never selected on this branch because its mutation patches
+front-end files, which is why the report named only the first.
+
+A third, conditional on what a branch touches: `in_the_page`'s gate is
+`bash scripts/browser_differential.sh`, which rebuilds `docs/kanso.wasm`.
+`ratchet.yml` added `rustup target add wasm32-unknown-unknown` deliberately and
+said why; the `touched` step in `ci.yml` was written later (#1201) and never got
+it. A branch touching `src/wasm.rs` would have failed that row's gate on the
+build.
+
+**The shape is one thing, and it is not "somebody forgot valgrind".** Every
+other job in ci.yml installs what its own gates need and nothing else, which is
+right for that job. The ratchet runs ALL of their gates and had a base image.
+Nothing related the two, so the ratchet's environment could fall behind any job
+that grew a dependency, silently, one row at a time.
+
+So the ratchet's setup is now `scripts/ratchet/toolchain.sh`, run by both
+workflows, and `tests/the_ratchet_carries_what_its_gates_need.rs` keeps it a
+superset: every package `ci.yml` apt-installs and every rust target it adds must
+be installed there too. A package added to any job and not to the script turns
+the specs job red.
+
+**The first draft of that spec could not have failed.** It asked whether
+`toolchain.sh` *contained the string* `valgrind` anywhere — and the script's
+own header, which explains why valgrind is there, names it four times. With the
+install commented out the check stayed green. That is the family kanso#1137
+found four of: a comment is not a pin. The check reads install LINES on both
+sides now, skipping comments, and a third test pins that a commented-out
+install counts as installing nothing. Watched red both ways before it was
+believed: `ci.yml installs ["jq", "valgrind"] ... and
+scripts/ratchet/toolchain.sh does not`.
+
+**Cost.** Two callgrind passes on the baseline and two more under mutation for
+a runtime-touching branch, on top of the 11m51s/12m05s two runs of this branch
+took — figures which undercounted because those gates could not run at all.
+Both workflow comments now say so rather than carrying a number that was
+measured with the gates absent.
+
+**OPEN.** `bench/instructions_golden.txt` is not keyed per silicon the way
+`compile_instructions` was in #1226, and the ratchet job lands on whatever CPU
+the pool gives it. The eleven rows have held across the cost goldens job's own
+runs, so the working assumption is that they are dispatch-insensitive in a way
+kq's `print_small` is not — but the ratchet baseline is now a second, independent
+sitting of those rows on a second, unrelated runner, and if that assumption is
+wrong this is where it will say so. The first baseline that reports the rows
+moved rather than the gate missing is the evidence to read.
+
+---
+
+## 2026-09-03 — THE SIXTH CHECK RESTING ON A MENTION, AND IT WAS THE ONE THAT CITED THE OTHER FIVE
+
+**DONE.** Writing `tests/the_ratchet_carries_what_its_gates_need.rs` earlier today
+produced a first draft that could not fail: it asked whether
+`scripts/ratchet/toolchain.sh` *contained the string* `valgrind`, and the
+script's own header, which explains why valgrind is there, names it four times.
+That is the kanso#1137 family. Having walked into it, the obvious next question
+was whether anything already in the tree had the same shape.
+
+One did, and its header cites kanso#1137 by name:
+
+```rust
+// tests/the_objective_does_not_weigh_machine_code_size.rs
+assert!(gate.contains("bench/text_golden.txt"), "…no longer diffs …, so nothing
+        counts what the compiler emits…");
+```
+
+`scripts/gates/machine_code.sh` names the golden three times: the host check at
+line 12, the diff at line 32, and one line of its `::error::` message at 37.
+Replace the first two with nothing and the gate reads no golden at all — and the
+spec passes, certifying the exact state its own failure text describes.
+Measured, not reasoned:
+
+```
+--- remaining mentions:
+37:  echo "::error::bench/text_golden.txt. Allocation counters cannot"
+test the_machine_code_vein_is_still_gated ... ok
+```
+
+Both halves read operative lines now — comments dropped, and lines whose whole
+job is to print a diagnostic dropped with them — and a third test holds the
+counterexample so the file cannot drift back. Watched red on the gutted gate and
+green on the restored one.
+
+**Reading lines is still not running the gate**, and the entry says so where a
+reader will find it: the behavioural proof is the ratchet's `machine_code` row,
+which applies a defect nightly and refuses a gate that stayed green. The spec is
+the cheap per-pull-request half of the same split the ratchet itself documents.
+
+**The sweep found no seventh.** Every test that reads a repository file was
+checked for a positive `contains` against prose-bearing text. Three others take
+that shape and all three read data rather than source: `bench/welfare_floor.json`
+(no comments), emitted LLVM IR, and a hako lock file. The rest assert on a
+tool's output, which is where a spec should be entering anyway.
+
+**The pattern worth carrying.** Both instances today were written by somebody
+who knew the rule — this file's own header argues it, and the toolchain spec was
+drafted an hour after reading it. Knowing the rule does not catch the case;
+trying to make the check fail does. The cost of that attempt is one `sed` and
+one `cargo test`.
+
+---
+
+## 2026-09-03 — THE COMPILE ROW MOVED 992 AND THE FRONT END DID NOT
+
+**DONE.** CI refused the branch on the vein that is keyed by silicon:
+
+```
+the work the FRONT END does changed on family0x19-model0x1:
+bench/compile_instructions_by_cpu.txt says 41631006 and this run counted 41631998.
+The row is keyed by silicon, so the runner is not the answer here:
+the same family and model counted both numbers.
+```
+
+`compile_instructions` **41,631,006 -> 41,631,998, +992 (+0.0024%)**, and the
+cause is written in that file's own header from earlier the same day:
+`src/main.rs` embeds the runtime with `include_str!("runtime.c")`, so a change
+to the runtime changes the compiler binary even when it changes no compiler
+code. The wrong-arity reorder added a few lines of C; the embedded source grew,
+the rodata after it shifted, and the front end does the same work at different
+addresses. `compile_allocs`, `compile_peak_bytes` and every fixpoint counter are
+byte-identical, which is what says the work did not change.
+
+The Zen 3 row (0x19/0x1) this run landed on is re-sat. The Intel (0x6/0xcf) and
+Zen 4 (0x19/0x11) rows are removed rather than carried forward, on the rule
+already recorded there: a value measured against the old binary is worse than no
+value. They are re-sittings when they next refuse, and each costs one red run.
+
+**This is the second time in one day this file has been emptied for the same
+mechanism**, and the price is now visible rather than argued: a runtime change
+of any size costs one red CI run per chip in the pool before the vein reads
+clean again. Whether the vein should measure the front end against a binary
+that embeds the runtime is a real question and it is not this change's to
+answer; what is clear is that `include_str!` makes "the front end moved" and
+"the runtime moved" indistinguishable to this row, and only the other three
+compile counters can tell them apart.
+
+Welfare is 76.01 before and after — 992 parts in 41.6 million is below the
+hundredth the score is rounded to.
+
+---
+
+## 2026-09-03 — THE REPORT NAMED THE GATE AND NOT ITS REASON
+
+**DONE.** Naming the gate in `ALREADY RED` answered the question it was built
+for on its first CI run — `sh scripts/gates/instructions.sh`, red because
+valgrind was not on the ratchet's box — and could not answer the second. With
+valgrind installed by `scripts/ratchet/toolchain.sh` the same gate is **still
+red on the baseline**, and a line that says only which gate leaves a reader
+holding hypotheses with no way to choose between them. The gate wrote down why
+it failed; the ratchet was throwing that away.
+
+`ALREADY RED` and `UNBUILT` now carry the last eight lines the gate printed,
+indented under the finding. Watched red on the fixture that commits a tracked
+python file: without the gate's words the refusal does not contain
+`crept_in.py`, and the spec says so.
+
+**One hypothesis is already dead.** The obvious candidate was the worktree: the
+baseline builds in `/tmp/kanso-ratchet-base` against a shared target symlink,
+and paths baked into a binary would move an instruction count the way a run id
+that gained a digit does. Built both ways and compared:
+
+```
+8a406faa2e27030c41bc8dd12ab9750fe5ddb408afe54cedd52ce66f5cd475d3  ./jsonbench
+8a406faa2e27030c41bc8dd12ab9750fe5ddb408afe54cedd52ce66f5cd475d3  /tmp/kanso-pathtest/jsonbench
+```
+
+Byte-identical. The benchmark does not depend on the directory it was built in,
+so whatever reddens that gate on the ratchet's runner is something else.
+
+**OPEN, and the next run answers it.** The live candidate is the one recorded
+two entries ago: `bench/instructions_golden.txt` is not keyed per silicon the
+way `compile_instructions` is, and the ratchet job lands on whatever CPU the
+pool gives it — a second, independent sitting of those eleven rows on a runner
+unrelated to the cost-goldens job's. If the gate's own words turn out to be a
+row diff, that settles it and the vein needs the treatment kanso#1226 gave the
+compile row. If they are something else entirely, they will say so, which is
+the whole point of printing them.
+
+---
+
+## 2026-09-03 — TWO SITTINGS OF THE SAME ELEVEN ROWS IN ONE COMMIT, AND THEY DISAGREE
+
+**MEASURED.** Printing the gate's own words paid on its first run. The
+baseline's refusal now reads:
+
+```
+ALREADY RED cost goldens (deterministic ratchet, no clocks)
+  gate: sh scripts/gates/instructions.sh
+  red before any mutation, so no row sharing it is proof
+    digestbench 81252330
+    the work the benchmarks do changed. A rise is a regression to explain…
+```
+
+`digestbench 81252330`. The cost-goldens job, **on the same commit**, measured
+`81252316`. Fourteen instructions apart, two jobs, two runners
+(1000054847 and 1000054838), one image and one glibc.
+
+**This is the first time the eleven rows have been sat twice in one commit.**
+Every earlier reading came from one job on one runner per run, so the vein has
+only ever been compared against itself across commits — where a chip change and
+a code change are the same event. The log has carried the question since
+2026-09-01: *"These rows claim to be exact and the pool is not… nothing here
+measures that fraction."* This measures it, at n=1: two runners, one row, +14.
+
+**Two hypotheses are dead.** The benchmark binary is byte-identical between the
+repo root and a worktree built against a shared target symlink
+(`7779456c957c6cff…` both), and running the same binary from those two
+directories gives the same count to the instruction (81,251,917 twice, in this
+container). So neither the build directory nor the run directory moves it.
+
+**What is NOT decided, and deliberately.** One row on one pair of runners is a
+data point, not a design. The options are a golden per chip (the treatment
+kanso#1226 gave the compile row, at eleven rows times the pool instead of one),
+declaring the two callgrind gates unprovable by the ratchet (two rows blind by
+declaration, which is what the ratchet exists to prevent), or something that
+compares the mutated measurement against the baseline's own rather than against
+a golden. Choosing between them on one number is the shape of reasoning this log
+keeps catching, and the pending-gavels ledger is explicitly not for
+implementation questions — this one is the file-holder's, answered here.
+
+So the evidence gathers instead: the captured tail goes from eight lines to
+twenty-four, which is enough for the cpu line `dispatch.sh name` prints and the
+whole eleven-row diff. Every runtime-touching pull request from here is another
+paired sitting, attributable to its silicon, at no extra cost. The decision gets
+made on a table rather than on a pair.
+
+---
+
+## 2026-09-03 — A FOURTH SHAPE: REPORTED AND NOT CREDITED
+
+**DONE, and it corrects the entry above.** That entry listed three ways out of
+the paired-sitting problem — a golden per chip, declaring the two callgrind
+gates unprovable, or comparing the mutation against the baseline's own
+measurement — and said choosing between them on one data point was premature.
+It was, and it still is. What the entry missed is that none of them has to be
+chosen, because the question it was answering was the wrong one.
+
+The ratchet's baseline asks *is this gate red for a reason other than the
+mutation*. For `sh scripts/gates/instructions.sh` on a foreign runner the answer
+is yes, and that is a fact about the ROW rather than about the branch. So the
+row is **reported and not credited**: the baseline prints `UNPROVEN THIS RUN`
+with the gate's own words and does not fail, and the proving pass drops every
+row sharing that gate instead of applying a mutation to a gate already red.
+
+**That is the opposite of the blindness kanso#1228 was built to catch, and the
+difference is one word.** Before, a red gate was silently counted as PROOF. Now
+it is silently counted as nothing, and says so out loud. On a run that lands on
+the golden's silicon the row is proved normally, so this costs coverage only on
+the runs where coverage was never available.
+
+**The danger is the list, not the mechanism** — an entry excusing a gate that is
+not silicon-bound turns a real failure into a note. So the list is pinned to a
+property of the gates rather than to anyone's judgement:
+`tests/a_host_bound_gate_is_reported_not_credited.rs` requires `host_bound` to
+be exactly the set of gate scripts that invoke callgrind on an operative line. A
+new callgrind gate left undeclared turns it red; a declared gate that runs none
+turns it red too.
+
+**That spec's own first draft could not fail, which makes three today.** It read
+the `bound` BINDINGS rather than the `host_bound` LIST, so removing an entry
+from the list left it green — the binding was still there and the list it was
+absent from was never opened. Watched red the second time, and the failure names
+both sides:
+
+```
+  left: ["sh scripts/gates/instructions.sh"]
+ right: ["sh scripts/gates/compile_instructions.sh", "sh scripts/gates/instructions.sh"]
+```
+
+Three checks in one day whose first draft was satisfiable without the property
+holding. The common thread is that each read something ADJACENT to the thing it
+meant to assert — a comment beside an install, an error message beside a diff, a
+binding beside a list. Trying to make the check fail is what found all three, and
+it cost one `sed` each.
+
+---
+
+## 2026-09-03 — THE SKIP I ADDED AN HOUR AGO HAD A FALSE GREEN IN IT
+
+**DONE.** `kept_provable` drops every row sharing a host-bound gate, and the
+proving pass then runs the rest. When the rest is empty — a branch whose whole
+selection is host-bound — the loop had nothing to do and the closing line said
+
+```
+ratchet: 0 rows
+ratchet: every row turned its gate red
+```
+
+which congratulates a run that proved nothing. That is the exact shape the pass
+exists to refuse, reintroduced by the fix for it, and it survived because the
+`told` arms dispatch on whether any row FAILED and no arm asked whether any row
+RAN.
+
+The empty case says so now and does not fail, because no diff could have proved
+those rows on this runner:
+
+```
+ratchet: no row on this runner could be proved; none was claimed
+```
+
+**Found by reading the summary path rather than by a spec**, and the reason
+there is no fixture is worth stating: constructing one needs a scope whose every
+selected row is host-bound, and `asked?` selects by job name, so the cheapest
+such scope drags in seventeen rows and their builds. The behavioural proof is
+the nightly. What is pinned per-pull-request is the list
+(`tests/a_host_bound_gate_is_reported_not_credited.rs`), which is where a
+mistake is actually likely.
+
+**Four in one day now**, and the pattern has stopped being a coincidence: the
+toolchain spec read a comment beside an install, the machine-code spec read an
+error message beside a diff, the host-bound spec read a binding beside a list,
+and this one read a failure count beside a run count. Every one of them was
+adjacent to the property and satisfiable without it.

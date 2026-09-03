@@ -429,14 +429,24 @@
 # basket -8.476%, encodebench -2.824%, and the eleven together -1.842%.
 # escapebench pays the largest share here, +816, and takes the largest
 # fall there, which is the trade stated in one benchmark.
+#
+# 2026-09-03: eight rows rise 16 bytes each and three hold still. `k_call2`,
+# `k_call3` and `k_call4` tested every argument for failure before they tested
+# arity, which let a wrong-arity call answer with the failure and exit 0 where
+# the oracle died. The test moved below the arity check, and it had to move
+# into BOTH the closure arm and the fnref arm — one extra copy of it per
+# helper, which is the 16 bytes. jsonbench, escapebench and indexbench hold
+# because the linker drops the helpers they never reach. Zero instructions:
+# all eleven work rows are byte-identical across this change, which is why
+# only this vein and the runtime corpus can see it at all.
 jsonbench text=85922
-encodebench text=107250
-oneshot text=109010
-basket text=100274
-widebench text=110578
-deepbench text=69554
+encodebench text=107266
+oneshot text=109026
+basket text=100290
+widebench text=110594
+deepbench text=69570
 escapebench text=52290
-pendbench text=83490
+pendbench text=83506
 indexbench text=54146
-scanbench text=145074
-digestbench text=100578
+scanbench text=145090
+digestbench text=100594
