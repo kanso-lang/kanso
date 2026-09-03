@@ -6,7 +6,7 @@ import "std/os"
 # only thing it walks to; a pin that is not a release stays where it is,
 # which is the dev-sha discipline made structural.
 pub fn updating dir only
-  os/read_file "{dir}/hako.lock" . (text -> opened dir only (parse text))
+  os/read_file! "{dir}/hako.lock" . (text -> opened dir only (parse text))
 
 fn opened dir only pins
   nothing_pinned = refused "hako.lock pins nothing — run `kanso install` first"

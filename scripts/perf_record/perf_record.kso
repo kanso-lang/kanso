@@ -258,20 +258,20 @@ fn score_in text
   parts[2]!
 
 fn stamped r
-  os/read_file "bench/cost_golden.txt" . (d -> with_decode (head_line r) d)
+  os/read_file! "bench/cost_golden.txt" . (d -> with_decode (head_line r) d)
 
 fn with_decode line d
-  os/read_file "bench/cost_golden_encode.txt" . (e -> with_encode line d e)
+  os/read_file! "bench/cost_golden_encode.txt" . (e -> with_encode line d e)
 
 fn with_encode line d e
-  os/read_file "bench/cost_golden_oneshot.txt" . (o -> with_oneshot line d e o)
+  os/read_file! "bench/cost_golden_oneshot.txt" . (o -> with_oneshot line d e o)
 
 fn with_oneshot line d e o
-  os/read_file "bench/cost_golden_basket.txt"
+  os/read_file! "bench/cost_golden_basket.txt"
     . (bk -> with_basket line d e o bk)
 
 fn with_basket line d e o bk
-  os/read_file "bench/compile_golden.txt" . (c -> recorded line d e o bk c)
+  os/read_file! "bench/compile_golden.txt" . (c -> recorded line d e o bk c)
 
 fn recorded line d e o bk c
   every_watched d e o bk . (_ -> costed line d e o bk c)
@@ -296,10 +296,10 @@ fn assembled line d e o bk c cc w wc
   measured = text/concat own scored
   tail = text/concat rest measured
   rows = text/concat (described line) (text/concat veins tail)
-  os/read_file "bench/instructions_golden.txt" . (w -> with_work rows w)
+  os/read_file! "bench/instructions_golden.txt" . (w -> with_work rows w)
 
 fn with_work rows w
-  os/read_file "bench/text_golden.txt" . (t -> written rows w t)
+  os/read_file! "bench/text_golden.txt" . (t -> written rows w t)
 
 fn prefixed prefix names
   list/to_list (list/map names (n -> "{prefix}{n}"))

@@ -61,6 +61,6 @@ fn usage true _
 
 fn usage false given
   chapter = given[1]!
-  os/read_file chapter . (src -> onto chapter src)
+  os/read_file! chapter . (src -> onto chapter src)
 
 pub play = os/args . with_args

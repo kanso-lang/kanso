@@ -143,17 +143,17 @@ exit_in_group = shape
   ""
 
 read_fails = shape
-  "os/read_file \"/no/such/file\" . (_ -> io/write \"read\")"
+  "os/read_file! \"/no/such/file\" . (_ -> io/write \"read\")"
   "a read that fails"
   ""
 
 read_bound_twice = shape
-  "os/read_file \"/no/f\" . (_ -> io/write \"a\") . (_ -> io/write \"b\")"
+  "os/read_file! \"/no/f\" . (_ -> io/write \"a\") . (_ -> io/write \"b\")"
   "a failed read, bound twice"
   ""
 
 read_beside = shape
-  "os/read_file \"/no/such/file\"\n  io/write \"b\""
+  "os/read_file! \"/no/such/file\"\n  io/write \"b\""
   "a failed read beside a write"
   "b"
 

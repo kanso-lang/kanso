@@ -1,4 +1,4 @@
 import "./encodebench"
 import "std/os"
 
-os/read_file "bench/large.json" . (s -> rounds (decode s) 400 0)
+os/read_file! "bench/large.json" . (s -> rounds (decode s) 400 0)

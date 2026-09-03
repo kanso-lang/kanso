@@ -1,6 +1,6 @@
 import "std/os"
 
-fn orders (err _)
+fn orders (file_not_found _)
   "no orders yet"
 
 fn orders text

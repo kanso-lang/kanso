@@ -478,7 +478,7 @@ fn filled s width false
   left "{s} " width
 
 fn asked path
-  os/read_file path
+  os/read_file! path
 
 fn gauge d e o b c held w s ir ca g
   comp = compile_totals c
@@ -491,7 +491,7 @@ fn gauge d e o b c held w s ir ca g
   tr = counters ca
   dig = counters g
   now = measured dc ec (counters o) (counters b) comp cm work scan built tr dig
-  os/read_file floor_path . (held -> against now (json/decode held))
+  os/read_file! floor_path . (held -> against now (json/decode held))
 
 # The digest bench's peak is the row it exists for; its block count comes
 # along because a peak alone cannot say whether the arena grew once or often.

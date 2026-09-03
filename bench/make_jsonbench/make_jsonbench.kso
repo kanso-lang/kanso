@@ -32,7 +32,7 @@ main_text = """
   import "./jsonbench"
   import "std/os"
 
-  os/read_file "bench/large.json" . go
+  os/read_file! "bench/large.json" . go
 """
 
 ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
@@ -45,10 +45,10 @@ copied = plain "number" . (_ -> plain "scan") . (_ -> plain "text")
   . (_ -> plain "value") . (_ -> trimmed) . (_ -> written)
 
 fn plain name
-  os/read_file "lib/json/{name}.kso"
+  os/read_file! "lib/json/{name}.kso"
     . (s -> os/write_file "{module_dir}/{name}.kso" s)
 
-trimmed = os/read_file "lib/json/json.kso" . stripped
+trimmed = os/read_file! "lib/json/json.kso" . stripped
 
 fn stripped source
   os/write_file "{module_dir}/json.kso" (kept source)

@@ -2,3 +2,5 @@ plan:
   write_file "order.txt"
   read_file "order.txt"
   . <continuation>
+  . <continuation>
+  . <continuation>

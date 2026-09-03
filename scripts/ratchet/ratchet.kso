@@ -923,7 +923,7 @@ fn stale declared
   both = text/concat claimed excused
   list/to_list (list/select both (n -> not known? declared n))
 
-cover = os/read_file workflow . (text -> against (jobs_in text))
+cover = os/read_file! workflow . (text -> against (jobs_in text))
 
 fn against declared
   gaps = missing declared
@@ -1050,7 +1050,7 @@ fn winnowed mode _ _ _ acc true
 
 fn winnowed mode files list at acc false
   r = list[at]!
-  os/read_file (script_of r) . (s -> read_it mode files list at acc r s)
+  os/read_file! (script_of r) . (s -> read_it mode files list at acc r s)
 
 # A row's mutation is a shell command and its script is the word after `sh `.
 fn script_of r

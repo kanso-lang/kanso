@@ -7,7 +7,7 @@ import "std/text"
 # network; saying whether a pin has fallen behind does, so the remote is
 # asked once per pin and a remote that does not answer says so.
 pub fn listing dir
-  os/read_file "{dir}/hako.lock" . shown
+  os/read_file! "{dir}/hako.lock" . shown
 
 fn shown text
   described (parse text)

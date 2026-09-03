@@ -7,4 +7,4 @@ fn announce text
 fn major_of text
   text/to_int text
 
-os/read_file "garbage.txt" . announce
+os/read_file! "garbage.txt" . announce

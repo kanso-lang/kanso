@@ -115,7 +115,7 @@ fn reading _ _ acc after true
 fn reading wanted at acc after false
   path = wanted[at]!
   on = (body -> read_next wanted at acc after path body)
-  os/read_file path . on
+  os/read_file! path . on
 
 fn read_next wanted at acc after path body
   read_each wanted (at + 1) (push acc (source_file path body)) after
@@ -139,7 +139,7 @@ fn walking _ _ drift write true
 fn walking names at drift write false
   name = names[at]!
   on = (raw -> one_chapter names at drift write name raw)
-  os/read_file "{chapters}/{name}" . on
+  os/read_file! "{chapters}/{name}" . on
 
 fn one_chapter names at drift write name raw
   dir = dir_of name

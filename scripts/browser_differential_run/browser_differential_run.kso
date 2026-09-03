@@ -135,7 +135,7 @@ fn counted progs
 fn with_page progs
   page = page_for progs
   on = (w -> with_engine progs page w)
-  os/read_file "docs/kanso.wasm" . on
+  os/read_file! "docs/kanso.wasm" . on
 
 fn with_engine progs page w
   set = served page w
@@ -201,14 +201,14 @@ fn more_files _ _ acc book true
 
 fn more_files paths at acc book false
   on = (src -> one_file paths at acc book src)
-  os/read_file paths[at]! . on
+  os/read_file! paths[at]! . on
 
 fn book_read paths at acc
   more_book_files paths at acc (at > length paths)
 
 fn more_book_files _ _ acc true
   on = (js -> with_playground acc js)
-  os/read_file "docs/play.js" . on
+  os/read_file! "docs/play.js" . on
 
 fn with_playground acc js
   written = playground_from js
@@ -238,11 +238,11 @@ fn book_maybe paths at acc _ false
 fn book_maybe paths at acc path true
   recorded = recorded_of path
   on = (said -> book_with_out paths at acc path said)
-  os/read_file recorded . on
+  os/read_file! recorded . on
 
 fn book_with_out paths at acc path said
   on = (src -> book_one paths at acc path said src)
-  os/read_file path . on
+  os/read_file! path . on
 
 fn book_one paths at acc path said src
   kept = book_keep acc path src said
@@ -683,7 +683,7 @@ fn kept_crash acc _ _
 # the other. Each line is a path and the text the wasm engine answers instead.
 fn with_gaps progs seen
   on = (text -> against progs seen (gaps_from text) 1 [] 0 0)
-  os/read_file "tests/golden/wasm_gaps.txt" . on
+  os/read_file! "tests/golden/wasm_gaps.txt" . on
 
 fn gaps_from text
   lines = text/split text "\n"
