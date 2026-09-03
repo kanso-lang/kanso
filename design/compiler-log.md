@@ -3436,3 +3436,18 @@ profiles the twins were chasing, and the beat machinery is not a builtin. The
 question that found it was Clay's, about a construct the benchmark set does
 not cover well. That is an argument for the fused chain having a benchmark of
 its own, which it does not have and which the eleven do not substitute for.
+
+**The fixture that started it, measured after.** The 200,000-element
+`map`/`select`/`sum` chain goes 38,883,703 → 32,083,715, **−17.49%**, and
+`k_beat_rewind` is off its profile altogether. What is left of the rewind is
+`k_beat_iter` at 8,000,000 — 40 instructions an iteration where rewind and
+iter together were 74. It is still 24.93% of that program.
+
+So the seam is not finished, and the shape of what remains is visible: of
+those 40, about twenty are the six condition tests and three are the stores
+they guard. A single summary word per depth — maintained at the four
+registration sites, read once here — would collapse six loads and six
+branches into one. That is a second change and it waits for this one to land.
+It is written down here rather than built now because the branch rule is one
+open pull request at a time, and because the number above is what makes the
+case for it.
