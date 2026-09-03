@@ -153,7 +153,7 @@ family0x19-model0x1 41831767
 # row per chip and against any single tolerance: 508 would fit inside a band
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
-family0x6-model0xcf 41832275
+family0x6-model0xcf 41831767
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
 # family0x19-model0x11 rather than carry a value measured against the previous
@@ -171,3 +171,38 @@ family0x6-model0xcf 41832275
 # would be a prediction, and the only thing this file predicts is that an
 # unrecorded chip gets a sitting.
 family0x19-model0x11 41831767
+
+# 2026-09-03, THE THIRD CAUSE, and it is the one this file said it could not
+# rule out. compile_instructions.sh prints a `compile_sample cpu= sha= row=`
+# line on every run precisely so that "same cpu and same sha with different
+# rows would mean something is moving that neither the key nor the diff can
+# see". That is what happened.
+#
+# family0x6-model0xcf, binary sha 55fb850296d1, two runs:
+#
+#   12:33  41,832,275   (the sitting that first recorded this chip)
+#   13:05  41,831,767   (a branch whose whole diff is two markdown files)
+#
+# 508 apart, same key, same binary. So the key does not determine the row, and
+# the premise this file rests on is weaker than it claimed. Nothing in the
+# second branch can reach the front end — design/compiler-log.md and its
+# archive, nothing else — so a front-end change is ruled out by the diff.
+#
+# The row moves to 41,831,767 because three readings now say it (Zen 3, Zen 4,
+# and this chip at 13:05) against one that says 41,832,275, and because a row
+# CI disagrees with two times in three is worse than one that is merely not
+# yet explained. That is a choice under uncertainty and not a measurement:
+# the honest state is TWO readings of one key on one binary, differing.
+#
+# OPEN, and it wants a sitting rather than a guess: run the box several times
+# on one Emerald Rapids runner and see whether the value is bimodal there the
+# way it was across the two AMD models before the tunables were pinned. If it
+# is, the missing term is something the pinned tunables do not cover, and the
+# candidates are the ones the header already names as excluded from the key —
+# cache sizes and derived thresholds — reaching the row by a path other than
+# the malloc and string tunables this gate sets.
+#
+# The row itself is edited in place above rather than appended here, because
+# the reader takes the FIRST row matching a key and stops. A second
+# family0x6-model0xcf line at the bottom of this file would be read by nobody
+# and would look authoritative to everybody, which is how a golden goes quiet.
