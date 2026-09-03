@@ -66,20 +66,24 @@
 # they are re-sittings, and the number to paste comes from that run's log the
 # same way.
 #
-# WHAT THE ROWS SHOWED, on the binary before the one above. The key is family
-# and model, which is finer than the silicon effect: two AMD models — Zen 3
-# (0x19/0x1) and Zen 4 (0x19/0x11) — agreed to the instruction at 41,495,850,
-# while the Intel (0x6/0xcf) read 41,500,974. That fits the mechanism, since
-# what the SILICON moves is which memcpy and memcmp glibc's ifunc resolver
-# picks, and it picks by feature set rather than by model. Keying finer than
-# that costs extra rows and never lets a wrong value through, so it stays as
-# it is; a key coarse enough to merge the two AMDs would be a guess about
-# which future chip belongs in which bucket.
+# THE FAMILY-AND-MODEL KEY IS NOT OVER-KEYING, and the evidence arrived by
+# falsifying the opposite claim. On the binary before this one, Zen 3
+# (0x19/0x1) and Zen 4 (0x19/0x11) agreed to the instruction at 41,495,850,
+# against the Intel's (0x6/0xcf) 41,500,974 — which read as the key being finer
+# than the effect, since glibc's ifunc resolver picks memcpy and memcmp by
+# feature set rather than by model. On this binary the same two models read
+# 41,503,893 and 41,498,829: they differ by 5,064.
 #
-# Two things move this row, then, and only one of them is the chip. The other
-# is the binary, and a row is only ever comparable within one of those.
+# So the agreement was a property of that binary's layout, not of the silicon,
+# and a key coarse enough to merge the two AMDs would have carried one model's
+# number for the other from this commit onward. Two models sharing a value once
+# is not evidence they share a value.
+#
+# Two things move this row and only one of them is the chip. The other is the
+# binary, and a row is only ever comparable within one of those.
 #
 # Rows are `<dispatch.sh key> <retired instructions>`. CI's toolchain owns
 # these values and CI is the only thing that may write them, one chip per run,
 # out of the job log.
 family0x19-model0x11 41498829
+family0x19-model0x1 41503893

@@ -3981,3 +3981,24 @@ two were never comparable. Nothing about the front end got faster. A gate that
 reads one number cannot see a change of what the number is OF, which is the
 same shape as the runner-versus-silicon confusion kanso#1226 fixed, one level
 up.
+
+The re-sitting falsified the claim this table's header had been carrying since
+kanso#1226, which is the best thing a re-sitting can do. That header said the
+family-and-model key was FINER than the effect, on the evidence that Zen 3
+(0x19/0x1) and Zen 4 (0x19/0x11) both read 41,495,850 while the Intel read
+41,500,974 — glibc's resolver picks memcpy and memcmp by feature set, so two
+models sharing a feature set should share a number.
+
+On this binary they read 41,503,893 and 41,498,829. They differ by 5,064.
+
+The agreement was a property of that binary's layout rather than of the
+silicon, and a key coarse enough to merge the two AMDs — which the header
+argued against on other grounds, and which I had half-talked myself into —
+would from this commit onward have carried one model's number for the other.
+Two models sharing a value once is not evidence that they share a value. The
+header now says that instead.
+
+I also guessed wrong about which chip this run landed on, reasoning from the
+arithmetic (41,503,893 - 41,500,974 = 2,919, close to the Zen 4's +2,979) that
+it must be the Intel. It was the Zen 3, whose old row happened to sit 5,124
+below. The gate prints the key; there was no reason to infer it.
