@@ -426,13 +426,13 @@ perf_row = row
 
 # The row assembles and the row is COMPLETE are two properties, and perf_row
 # above only watches the first. The replay ruled on 2026-08-31 starts at the
-# first row carrying every counter the objective weighs, so a row that drops
-# the scored group is one the chart silently skips — which is what the newest
-# row was doing when it held 12 of 24.
+# first row carrying every counter the objective weighs, so a row whose
+# counters are spelled some other way is one the chart silently skips — which
+# is what the newest row was doing when it held 12 of 24 and nothing said so.
 objective_row = row
-  "a history row without the counters the objective weighs"
+  "a row whose counters are spelled where the objective cannot find them"
   false
-  "sh scripts/gates/row_carries_the_objective.sh /tmp/record.json"
+  "sh scripts/gates/row_carries_the_objective.sh"
   "perf history (appended to the history branch)"
   (breaking "a_row_loses_a_counter_the_objective_weighs")
   release

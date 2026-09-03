@@ -16,7 +16,15 @@
 # release build in a debug job is a spec that fails for its environment.
 set -e
 cd "$(dirname "$0")/../.."
-row=${1:?usage: row_carries_the_objective.sh <row.json>}
+# CI hands in the row it just built, so the gate reads the artifact rather than
+# a second one. Run without an argument it builds its own, which is what lets
+# the ratchet read it standalone before mutating anything.
+row=$1
+if [ -z "$row" ]; then
+  row=$(mktemp)
+  trap 'rm -f "$row"' EXIT
+  ./target/release/kanso run scripts/perf_record > "$row"
+fi
 
 missing=''
 count=0
