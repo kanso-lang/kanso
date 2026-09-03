@@ -4916,6 +4916,17 @@ forward, per that file's rule about values measured against an old binary.
 satiates at 0.5 against runtime's 2.0, which is exactly the asymmetry it was
 weighted for.
 
+**The published scoreboard is dated now, and says which way it is stale.** The
+per-decode floors in §08 — kanso 0.87 ms against serde_json's 0.90, naive rust's
+1.04 and go's 2.05 — come from seven interleaved rounds on 2026-08-07, by the
+slope method, and nothing on the page said so. They are re-sat at a release and
+not on demand, because randomised-layout timing puts the spread within one tree
+at about three per cent and this box is not idle. So the caption carries the
+date, and a paragraph under the block says the decoder has moved a long way
+since and names these two changes as 17.14% of it. Publishing a number I cannot
+honestly re-measure would be worse than publishing a stale one that says it is
+stale.
+
 The lesson is the one this log keeps relearning from a different direction. Two
 changes shipped together, one large and one small, and every unexplained number
 attached itself to the large one. What separated them was not an argument about

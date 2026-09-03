@@ -794,7 +794,7 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <p>none of the numbers on this page ask to be believed. here is the scoreboard and the recipe. every engine reads the file at runtime—an embedded constant would let llvm fold the decode away—and the kanso harness accumulates a checksum so the loop provably runs.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">the scoreboard—per-decode floors from one interleaved sitting, and how to reproduce it</div>
+  <div class="code-panel-title">the scoreboard&mdash;per-decode floors from one interleaved sitting on 2026-08-07, and how to reproduce it</div>
   <pre><code><span class="c"># kanso, shipped default    ~0.87 ms   4.2 mb rss, flat  (arenas, §03)</span>
 <span class="c"># serde_json (hand-tuned)   ~0.90 ms   6.8 mb rss</span>
 <span class="c"># reasonably-written rust   ~1.04 ms   6.9 mb rss</span>
@@ -811,6 +811,8 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
 </div>
 
 <h3>the ratchet</h3>
+
+<p><strong>the floors above are a dated sitting and the decoder has moved a long way since.</strong> a wall-clock floor is only worth publishing off an idle machine, and randomised-layout timing puts the spread WITHIN a single tree at about three per cent &#8212; larger than most single changes &#8212; so these rows are re-sat at a release and not on demand. what has happened since 2026-08-07 is on the record in the vein that can be read any day, and &#167;38 and &#167;39 are only the most recent of it: those two alone take <strong>17.14%</strong> off what a decode retires. every row above is therefore a ceiling on its floor, stale in the direction that flatters nobody, and the ratios between the lanes are what that sitting was for.</p>
 
 <p>a benchmark that drifts from one machine or one afternoon to the next isn't evidence of much. so the wins are pinned to counts that can't drift, not to wall-clock time. the 150-decode gauntlet is a deterministic program, so it performs the exact same number of allocations every run, on every machine, on both architectures. ci commits those counts to a golden file and diffs against it: <strong data-golden="decode.allocs">4,999,958</strong> allocations, <strong data-golden="decode.arena_blocks">2</strong> arena blocks, <strong data-golden="decode.beat_iters">151</strong> beat iterations—bit-identical on arm64 and x86_64. that arena count across 150 decodes is the flat-memory guarantee written as a constant; 151 beat iterations is one rewind per decode plus one for the program itself, on the record. a change that nudges any of those numbers fails the build before anyone has to squint at a flaky stopwatch, which is how the three ladder rungs stay put and how the next regression announces itself as a failing diff in the pull request that caused it.</p>
 
