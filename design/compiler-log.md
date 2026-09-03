@@ -4121,3 +4121,32 @@ no chip has yet been read twice under the tunables. Three chips with three
 readings and two values is consistent with per-chip determinism and also with a
 coin that has landed the same way twice. The next collision on a recorded chip
 is what settles it, and until then this is evidence rather than a result.
+
+THE FALSIFIER FIRED, AND IT PASSED. A run landed on family0x19-model0x1, which
+already had a row, and counted 41,631,006 — its own recorded value. That chip
+had produced BOTH 41,495,850 and 41,503,893 under the unpinned measurement. The
+intra-chip flapping is gone, and the tunables are what removed it.
+
+The outcome is neither of the two this experiment predicted. It was set up as
+"all chips converge, so the per-chip key is vestigial" against "chips still
+disagree, so pinning was wrong". What happened is the third case:
+
+  pinning fixed the flapping, AND the per-chip key is still load-bearing.
+
+  family0x19-model0x1    41,631,006   Zen 3   ┐ agree, and each repeats itself
+  family0x19-model0x11   41,631,006   Zen 4   ┘
+  family0x6-model0xcf    41,635,958   Intel   ← 4,952, stable
+
+Two mechanisms of the same size were stacked on one number. Heap layout moved
+it 5,064 and varied within a chip; dispatch moves it 4,952 and does not. Pinning
+removes the first and leaves the second, which is a real property of the silicon
+and exactly what kanso#1226 keyed for. So both pieces stay: the tunables make a
+chip repeat itself, the key keeps two chips that genuinely differ from being
+compared.
+
+Neither piece is enough alone, and that is why this took five readings to see.
+The tunables without the key would compare an Intel against an AMD. The key
+without the tunables was kanso#1226, which passed on two agreeing chips and
+broke on the third. The prediction that framed this — converge or fail — was
+too coarse for the system it was about, which is its own lesson about naming a
+falsifier: name one that can come back with an answer you did not list.
