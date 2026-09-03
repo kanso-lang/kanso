@@ -10,11 +10,15 @@ description: "one row per merged commit: what a run costs, what compiling costs,
 
 <p>every merged commit, one row each. every number is a deterministic count, so any machine extends the series and none can smear it. ci measures the commit under test, appends it as the last point, and redraws this chart on every pull request; what merges is what you see here.</p>
 
-<p>the welfare line is recorded, not recomputed. the score a commit shipped with is a fact about that commit, and replaying history against today's baseline would rewrite it. it is also the one line with a rule attached: no change to the compiler may lower it, and a change that would gets optimized until it holds. every other number here is a softer gate — a counter may worsen only if something else improved, and each worsening needs a written sentence naming why.</p>
+<p>the welfare line is computed here, in the browser, from each commit's counters against today's baseline and today's weights. that is what makes the points comparable: a score read back from the row it shipped in was produced by whatever definition happened to be in force that week, and two such numbers are answers to two different questions. it is also the one line with a rule attached: no change to the compiler may lower it, and a change that would gets optimized until it holds. every other number here is a softer gate — a counter may worsen only if something else improved, and each worsening needs a written sentence naming why.</p>
 
-<p>one thing does lower it, and there is a step in this line where it happened. a change to the scoring function is a change to what the project says it wants, and the score falls or rises with the definition rather than with the code. on 2026-08-29 the saturation curve moved from the average of a term's counter ratios to each ratio individually, which stops one runaway counter carrying a whole dimension, and the floor fell 87.85 to 73.83 in the commit that made the change. no counter moved that day. because the line is recorded rather than recomputed, the points either side of that step were scored by different functions and cannot be compared to each other; what each half shows is the direction the compiler moved under the ruler in force at the time. every such change is in the history of bench/welfare_floor.json with the reason written beside it, which is the only way the number is allowed to fall.</p>
+<p>the formula the chart replays is published by the same job that writes the rows, at <code>model.txt</code> on the history branch: every term with its weight, its satiation and the counters it reads, and the baseline each counter is measured against. the page carries the arithmetic and none of the numbers. a weight retyped into a chart would survive the next gavel that moved it, and the line would go on showing a formula nobody ruled while looking exactly as authoritative.</p>
 
-<p>each line is scaled to its own range, because an instruction count and a byte peak cannot share an axis and stay readable. what the chart shows is shape — which way a number went and when it stepped. the horizontal axis is commit order, because commits are what the ratchet acts on. a line starts where its counters start: the schema grew with the project, so the compile lines reach back to the first recorded row while the welfare line begins where the score was first written down.</p>
+<p>there are two welfare lines, and they answer different questions. the solid one is the replay, and it can be read end to end. it begins at the first commit whose row carries every counter the formula reads — the row's schema grew with the model, and scoring an older commit would mean inventing the numbers nobody recorded for it. the dashed one is what each commit shipped with, and it steps where the definition did: on 2026-08-29 the saturation curve moved from the average of a term's counter ratios to each ratio individually, which stops one runaway counter carrying a whole dimension, and the floor fell 87.85 to 73.83 in the commit that made the change with no counter moving. the dashed line cannot be read across that step. both lines share one scale, so where they overlap the gap between them is the difference the definitions make.</p>
+
+<p>a change to the scoring function is a change to what the project says it wants, and it is the one thing allowed to lower the number. every such change is in the history of <code>bench/welfare_floor.json</code> with the reason written beside it.</p>
+
+<p>each line is scaled to its own range, because an instruction count and a byte peak cannot share an axis and stay readable. what the chart shows is shape — which way a number went and when it stepped. the horizontal axis is commit order, because commits are what the ratchet acts on. a line starts where its counters start: the schema grew with the project, so the compile lines reach back to the first recorded row while the replayed welfare line begins where the last of the counters it needs was first recorded.</p>
 
 <p>two of these lines have a gap in them. the run-memory and compile-memory series were blank for a stretch because the program that writes these rows was miscompiled: an interpolation shared one buffer across a loop, so five groups of counters left it with their key names run together into a single key each. the rows were written, the job was green, and the chart simply could not find the numbers. the compiler bug is fixed, and so is the reason nothing caught it — the row is now checked against the same lists on the way out as on the way in, and the check runs on every pull request rather than only after a merge. a completeness check on the inputs is not one on the outputs.</p>
 
@@ -33,7 +37,11 @@ every binary links the same runtime and summing them would count it four times.
 <code>compile_rounds + compile_visits + emitted_lines</code> — fixpoint rounds,
 expressions the fixpoint looked at, and lines the emitter wrote.
 <strong>compile memory</strong> is <code>compile_peak_bytes</code>.
-<strong>welfare</strong> is the score the commit shipped with.</p>
+<strong>welfare (replayed)</strong> is each row's counters scored by the
+model at <code>model.txt</code>: for every term, the mean over its counters of
+<code>r / (r + satiation)</code> where <code>r</code> is baseline over the row's
+reading, weighted and summed, times a hundred. <strong>welfare (recorded)</strong>
+is the number the commit shipped with, under the definition of its day.</p>
 
 <p>every one of these is an exact integer a rerun reproduces, which is what lets them be diffed rather than eyeballed. the memory and size lines reproduce on any machine; the instruction line reproduces on one compiler, because instruction count is what an optimiser's inlining choices move most, and a toolchain change steps every row of it at once.</p>
 
@@ -93,7 +101,15 @@ expressions the fixpoint looked at, and lines the emitter wrote.
 
 <script>
 (async function () {
-  const HISTORY = 'https://raw.githubusercontent.com/kanso-lang/kanso/perf-history/history.jsonl';
+  const BRANCH = 'https://raw.githubusercontent.com/kanso-lang/kanso/perf-history/';
+  const HISTORY = BRANCH + 'history.jsonl';
+  // The scoring model as scripts/welfare emits it, written by the same ci job
+  // that appends the row. The page holds the arithmetic and none of the
+  // numbers: a weight retyped here survives the gavel that moves it.
+  //
+  //   term <name>|<weight>|<satiation>|<counter,counter,...>
+  //   base <counter>=<value>
+  const MODEL = BRANCH + 'model.txt';
   const panel = document.getElementById('perf-panel');
   const WATCHED = [
     ['decoding a 188 kb document, 150 times', null, null],
@@ -138,6 +154,47 @@ expressions the fixpoint looked at, and lines the emitter wrote.
     ['emitted_branches', 'branches emitted',
      'Conditional branches in the generated ir. Whole-program inference deletes type checks it can prove unnecessary, and each deletion shows up here. This is the number that fell when proven paths stopped carrying tag checks and failure guards.'],
   ];
+  function parseModel(text) {
+    const terms = [], base = {};
+    for (const line of text.split('\n')) {
+      if (line.startsWith('term ')) {
+        const [name, weight, satiation, counters] = line.slice(5).split('|');
+        terms.push({
+          name,
+          weight: parseFloat(weight),
+          satiation: parseFloat(satiation),
+          counters: counters.split(','),
+        });
+      } else if (line.startsWith('base ')) {
+        const at = line.indexOf('=');
+        base[line.slice(5, at)] = parseFloat(line.slice(at + 1));
+      }
+    }
+    return terms.length && Object.keys(base).length ? { terms, base } : null;
+  }
+  // The rule, as the 2026-08-29 gavel states it: saturate each counter on its
+  // own, average within the term, weight, sum. Answers null for a row missing
+  // any counter the model reads — the schema grew with the model, and scoring
+  // an older row would mean inventing the readings nobody took.
+  //
+  // A counter that reached zero is better than any baseline, and dividing by
+  // it would say infinity rather than "as good as this gets", so both sides
+  // read a zero as a half. welfare does the same, for the same reason.
+  function replayScore(row, model) {
+    const live = (n) => (n === 0 ? 0.5 : n);
+    let total = 0;
+    for (const term of model.terms) {
+      let sum = 0;
+      for (const c of term.counters) {
+        const now = row[c], base = model.base[c];
+        if (typeof now !== 'number' || typeof base !== 'number') return null;
+        const r = live(base) / live(now);
+        sum += r / (r + term.satiation);
+      }
+      total += (sum / term.counters.length) * term.weight;
+    }
+    return 100 * total;
+  }
   // The chart reads the same rows as the panel below it. Drawing it here
   // rather than committing an svg is what lets the series extend without a
   // write: ci appends a row to the history branch and the next reader sees it.
@@ -154,10 +211,15 @@ expressions the fixpoint looked at, and lines the emitter wrote.
     ['#38bdf8', 'compile work',
      (r) => sum(sum(r.compile_rounds, r.compile_visits), r.emitted_lines)],
     ['#fb923c', 'compile memory', (r) => r.compile_peak_bytes],
-    // recorded rather than recomputed: the score a commit shipped with is a
-    // fact about that commit. Hundredths, so integer scaling keeps real moves.
-    ['#4ade80', 'welfare',
-     (r) => (r.welfare == null ? null : Math.round(parseFloat(r.welfare) * 100))],
+    // Both in hundredths, so integer scaling keeps a real move visible, and
+    // both in one scale group: drawn to their own ranges they would look alike
+    // and mean different things, and the gap where they overlap is the whole
+    // point — it is what the definition changes cost.
+    ['#4ade80', 'welfare (replayed)',
+     (r) => (r.replayed == null ? null : Math.round(r.replayed * 100)), 'welfare'],
+    ['#4ade80', 'welfare (recorded)',
+     (r) => (r.welfare == null ? null : Math.round(parseFloat(r.welfare) * 100)),
+     'welfare', 'dashed'],
   ];
   function sum(a, b) {
     return a == null || b == null ? null : a + b;
@@ -168,15 +230,35 @@ expressions the fixpoint looked at, and lines the emitter wrote.
     const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
     const total = rows.length;
     const at = (i) => PAD + (i * (W - 2 * PAD)) / Math.max(total - 1, 1);
-    const parts = TREND.map(([colour, , read]) => {
+    const read = ([, , fn]) => {
       const pts = [];
       rows.forEach((r, i) => {
-        const v = read(r);
+        const v = fn(r);
         if (typeof v === 'number' && !Number.isNaN(v)) pts.push([i, v]);
       });
+      return pts;
+    };
+    // Series naming the same group are drawn to one scale. Two welfare lines
+    // on independent ranges would each fill the plot and the reader would
+    // compare shapes that share no axis.
+    const range = new Map();
+    TREND.forEach((series) => {
+      const group = series[3];
+      if (!group) return;
+      const vals = read(series).map((p) => p[1]);
+      if (!vals.length) return;
+      const had = range.get(group);
+      range.set(group, had
+        ? [Math.min(had[0], ...vals), Math.max(had[1], ...vals)]
+        : [Math.min(...vals), Math.max(...vals)]);
+    });
+    const parts = TREND.map((series) => {
+      const [colour, , , group, dashed] = series;
+      const pts = read(series);
       if (!pts.length) return '';
       const vals = pts.map((p) => p[1]);
-      const lo = Math.min(...vals), hi = Math.max(...vals);
+      const [lo, hi] = range.get(group)
+        || [Math.min(...vals), Math.max(...vals)];
       // A near-flat series draws flat: scaling to its own range would make a
       // fifteen-byte wiggle on an 819-kilobyte peak fill the plot, and a
       // reader is right to read that as a cliff.
@@ -185,28 +267,40 @@ expressions the fixpoint looked at, and lines the emitter wrote.
       const mid = (lo + hi) / 2, low = mid - span / 2;
       const y = (v) => (span === 0 ? H / 2 : TOP + USABLE - ((v - low) * USABLE) / span);
       const coords = pts.map(([i, v]) => `${Math.round(at(i))},${Math.round(y(v))}`).join(' ');
-      return `<polyline fill="none" stroke="${colour}" stroke-width="2" points="${coords}"/>`;
+      const dash = dashed ? ' stroke-dasharray="6 4"' : '';
+      return `<polyline fill="none" stroke="${colour}" stroke-width="2"${dash} points="${coords}"/>`;
     });
     // The keys are spaced by how many there are. A fixed pitch fit five and
     // ran off the right edge at six, and the next line added would do it again.
     const perRow = Math.min(TREND.length, 4);
     const pitch = (W - 2 * PAD) / perRow;
     const rows_ = Math.ceil(TREND.length / perRow);
-    const keys = TREND.map(([colour, label], i) => {
+    const keys = TREND.map(([colour, label, , , dashed], i) => {
       const x = PAD + (i % perRow) * pitch;
       const ky = H - 16 - (rows_ - 1 - Math.floor(i / perRow)) * 22;
-      return `<rect x="${x}" y="${ky - 9}" width="22" height="3" fill="${colour}"/>` +
-        `<text x="${x + 30}" y="${ky}" class="trend-key">${label}</text>`;
+      // the swatch carries the same dash as the line, or the two welfare keys
+      // would be one colour twice with nothing to tell them apart
+      const swatch = dashed
+        ? `<line x1="${x}" y1="${ky - 7}" x2="${x + 22}" y2="${ky - 7}" ` +
+          `stroke="${colour}" stroke-width="3" stroke-dasharray="5 3"/>`
+        : `<rect x="${x}" y="${ky - 9}" width="22" height="3" fill="${colour}"/>`;
+      return swatch + `<text x="${x + 30}" y="${ky}" class="trend-key">${label}</text>`;
     });
     host.innerHTML = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" ` +
       `aria-label="${TREND.length} measures across ${total} commits">` +
       parts.join('\n') + '\n' + keys.join('\n') + '</svg>';
   }
   const host = document.getElementById('trend-chart');
-  let rows;
+  let rows, model = null;
   try {
     const text = await (await fetch(HISTORY, { cache: 'no-store' })).text();
     rows = text.trim().split('\n').filter(Boolean).map(JSON.parse);
+    // The model is fetched separately and its absence is survivable: the
+    // recorded line still draws, and the replayed one is simply missing
+    // rather than drawn from stale numbers baked into this page.
+    try {
+      model = parseModel(await (await fetch(MODEL, { cache: 'no-store' })).text());
+    } catch (e) { model = null; }
   } catch (e) {
     const away = '<p class="perf-loading">the history is published by ci on push to main; it is not reachable from here right now.</p>';
     host.innerHTML = away;
@@ -214,6 +308,7 @@ expressions the fixpoint looked at, and lines the emitter wrote.
     return;
   }
   if (!rows.length) { host.innerHTML = '<p class="perf-loading">no history recorded yet.</p>'; return; }
+  if (model) rows.forEach((r) => { r.replayed = replayScore(r, model); });
   drawTrend(rows);
   const last = rows[rows.length - 1];
   const prev = rows.length > 1 ? rows[rows.length - 2] : null;

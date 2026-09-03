@@ -83,12 +83,40 @@ floor_path = "bench/welfare_floor.json"
 # keeps paying for improvement. Runtime at 2.0: a decoder eight times faster is
 # eight times faster. Compile at 0.5: a front end already answering in six
 # milliseconds gains almost nothing from three.
-d_run_speed = dimension run_speed_counters "run speed" 2.0 0.30
+# RUN SPEED IS TWO TERMS, not one, and they are halves of the same 0.30. Ruled
+# by Clay 2026-09-02: half the weight is the advertised workloads — decode and
+# encode, the rows the front page makes claims about and the workload the
+# language exists for — and half is every other run benchmark, the shape guards
+# that stress the memory model and catch pathologies.
+#
+# Two terms of 0.15 is exactly a mean of the two halves at 0.30, and it reports
+# better: the breakdown says which half moved. The rule is "advertised versus
+# everything else", so a benchmark added later lands in the guard half without
+# this line needing an edit — guard_work is defined as the remainder.
+#
+# What it buys: a shape win no longer scores as if a real workload got faster.
+# Nine guards against two advertised rows meant a guard carried nine times an
+# advertised row's share of the term, so the front page's own claims were the
+# smallest thing in it. The guards stay fully armed against regression, at half
+# the term rather than nine elevenths of it.
+d_run_advertised = dimension advertised_work "run speed (advertised)" 2.0 0.15
 
-d_run_memory = dimension run_memory_counters "run memory" 2.0 0.30
+d_run_guards = dimension guard_work "run speed (guards)" 2.0 0.15
 
-d_compile_speed = dimension compile_speed_counters "compile speed" 0.5 0.28
+# Compile speed rises and run memory funds it. Ruled the same day, from the
+# objective restated: "the core thing we're attempting to optimize for here is
+# ultimately developer happiness. performance should be insane, but if a
+# language doesn't compile wickedly fast, like go, devs may choose not to use it
+# in the first place." A developer feels compile latency on every edit and feels
+# peak memory only when something falls over. The memory model is the identity;
+# the order the objective punishes regressions in is the order developers
+# notice them.
+d_run_memory = dimension run_memory_counters "run memory" 2.0 0.26
 
+d_compile_speed = dimension compile_speed_counters "compile speed" 0.5 0.32
+
+# Unchanged at 0.12: the compiler's own footprint is a CI-container guard
+# rather than something a developer perceives.
 d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.12
 
 # Retired instructions, which is what a run costs. Laziness is priced here and
@@ -138,6 +166,16 @@ paced_work = text/concat digest_work edge_work
 
 run_speed_counters = text/concat (text/concat decode_work held_work) paced_work
 
+# THE ADVERTISED HALF. decode_work already holds exactly the two rows the front
+# page makes claims about — jsonbench's decode and encodebench's encode — so
+# this names them rather than re-listing them, and the two stay in step.
+advertised_work = decode_work
+
+# THE GUARD HALF: everything else in run speed. Written as the remainder rather
+# than as a list, so a benchmark added to any of the lists above lands here
+# without this line or the gavel entry needing an edit.
+guard_work = text/concat held_work paced_work
+
 decode_memory = ["decode_peak_bytes" "decode_arena_blocks"]
 
 encode_memory = ["encode_peak_bytes" "encode_arena_blocks"]
@@ -182,7 +220,11 @@ compile_speed_counters = ["compile_instructions" "compile_allocs"]
 
 compile_memory_counters = ["compile_peak_bytes"]
 
-terms = [d_run_speed d_run_memory d_compile_speed d_compile_memory]
+run_terms = [d_run_advertised d_run_guards d_run_memory]
+
+compile_terms = [d_compile_speed d_compile_memory]
+
+terms = text/concat run_terms compile_terms
 
 # The baseline and the per-counter breakdown are keyed by counter, because a
 # counter is what is measured; a dimension is what it is measured FOR.
@@ -562,9 +604,73 @@ fn against now held
   value = score now base
   os/args . (a -> either now base held value a)
 
+# THE COUNTER SET THE SCORE WAS MADE OF, one `name=value` a line.
+#
+# perf_record writes a history row per merged commit and the chart reads those
+# rows. Until now the row carried a hand-picked dozen counters and the score as
+# a recorded number, which is why the replay ruled on 2026-08-31 could not be
+# computed: on 2026-09-03 the newest row held 12 of the 24 counters the formula
+# reads, `compile_instructions` among the missing, so "the first commit for
+# which every counter exists" named no commit at all.
+#
+# Printing the set HERE rather than assembling it again in perf_record is the
+# point. The two would drift the first time a counter joined the model, and a
+# chart replaying a formula over a counter set that no longer matches it is a
+# chart that lies quietly. This prints exactly what `score` was given.
 fn either now base held value args
   asked_to_set = length args > 0 and args[1]! == "--set"
-  chosen now base held value args asked_to_set
+  asked_counters = length args > 0 and args[1]! == "--counters"
+  asked_model = length args > 0 and args[1]! == "--model"
+  picked now base held value args asked_to_set asked_counters asked_model
+
+fn picked _ base _ _ _ _ _ true
+  model_of base
+
+fn picked now base held value args setting counting _
+  routed now base held value args setting counting
+
+fn routed now _ _ _ _ _ true
+  counters_of now
+
+fn routed now base held value args setting _
+  chosen now base held value args setting
+
+# THE MODEL ITSELF: every term with its weight, satiation and counters, and the
+# baseline each counter is measured against.
+#
+# The chart has to replay the current formula over the stored rows — ruled
+# 2026-08-31, restated 2026-09-03 against the page's older sentence — and a
+# static page computes in javascript. That leaves two things that could be
+# copied onto the page and go stale: the arithmetic, and the numbers it uses.
+#
+# The numbers are the dangerous half and they come from here. A weight retyped
+# into a chart is a weight that keeps its old value through the next gavel, and
+# the line would then show a formula nobody ruled while looking exactly as
+# authoritative. The arithmetic is four lines and fixed by ruling — saturate
+# each counter, mean within a term, weight, sum — so the page restates that and
+# a spec holds it against this tool's own answer.
+#
+# One line a term and one a baseline, the shape every other vein in this tree
+# uses. json was the first attempt and it was the wrong reach: a reader then
+# needs a parser, and the two readers that matter — a spec here and the chart's
+# javascript — would each grow their own.
+#
+#   term <name>|<weight>|<satiation>|<counter,counter,...>
+#   base <counter>=<value>
+fn term_line t
+  listed_counters = text/join t.counters ","
+  "term {t.name}|{t.weight}|{t.satiation}|{listed_counters}\n"
+
+fn model_of base
+  shaped = list/to_list (list/map terms term_line)
+  kept = list/select counter_names (c -> base[c] != none)
+  held = list/to_list (list/map kept (c -> "base {c}={base[c]!}\n"))
+  io/write "{text/join shaped ""}{text/join held ""}"
+
+fn counters_of now
+  kept = list/to_list (list/select counter_names (c -> now[c] != none))
+  lines = list/to_list (list/map kept (c -> "{c}={now[c]!}\n"))
+  io/write (text/join lines "")
 
 fn chosen _ base held value args true
   reason = text/join (list/to_list (list/drop args 1)) " "

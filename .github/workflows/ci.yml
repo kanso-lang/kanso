@@ -620,6 +620,20 @@ jobs:
       # counter's key used to reach main before anything ran this.
       - name: the row assembles, with every counter it extracted
         run: ./target/release/kanso run scripts/perf_record > /tmp/record.json
+      # The replay starts at the first row carrying the whole counter set, so a
+      # row that loses one is a row it must skip. perf_record builds the group
+      # from the objective and cannot drift from it; what this reads is the row
+      # as written, in case the group is dropped where the row is assembled.
+      - name: the row carries every counter the objective weighs
+        run: sh scripts/gates/row_carries_the_objective.sh /tmp/record.json
+      # The chart replays the current formula over the stored rows, so it needs
+      # the formula's parameters as well as the rows. Publishing them beside
+      # the history is what stops the weights being retyped into the page,
+      # where they would survive the next gavel and draw a formula nobody
+      # ruled. Unlike the history this file is replaced, not appended: it
+      # describes the model as it stands, and its history is welfare_floor.json.
+      - name: the model the chart replays
+        run: ./target/release/kanso run scripts/welfare -- --model > /tmp/model.txt
       - name: append to the history branch
         if: github.ref == 'refs/heads/main'
         run: |
@@ -638,7 +652,8 @@ jobs:
           cat /tmp/record.json >> history.jsonl
           # keep the file bounded; the chart shows a trend, not an archive
           tail -n 500 history.jsonl > history.tmp && mv history.tmp history.jsonl
-          git add -f history.jsonl
+          cp /tmp/model.txt model.txt
+          git add -f history.jsonl model.txt
           git commit -m "perf: $(git rev-parse --short "$GITHUB_SHA")" || exit 0
           git push origin perf-history
 

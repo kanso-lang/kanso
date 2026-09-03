@@ -115,25 +115,27 @@ fn now_of(told: &str, name: &str) -> Option<u128> {
     after.split_whitespace().next()?.replace(',', "").parse().ok()
 }
 
-/// Every ratio exactly one, so the score is the weights and nothing else:
-/// run speed and run memory saturate at 1/(1+2.0) and carry 0.30 each,
-/// compile speed and compile memory at 1/(1+0.5) carrying 0.28 and 0.12.
-/// 100 * (0.10 + 0.10 + 0.18667 + 0.08).
+/// Every ratio exactly one, so the score is the weights and nothing else.
+/// The three run terms saturate at 1/(1+2.0) and carry 0.15, 0.15 and 0.26;
+/// the two compile terms at 1/(1+0.5) carry 0.32 and 0.12.
+/// 100 * (0.05 + 0.05 + 0.08667 + 0.21333 + 0.08).
+///
+/// It read 46.67 under the weights before Clay's 2026-09-02 gavel, when run
+/// speed was one term of 0.30, run memory 0.30 and compile speed 0.28.
 #[test]
 fn every_counter_at_parity_scores_the_weights_alone() {
-    assert_eq!(scored("parity", &[]), "welfare 46.67");
+    assert_eq!(scored("parity", &[]), "welfare 48.00");
 }
 
-/// One of the eleven run-speed counters a thousand times better than its
-/// baseline, the other ten at parity. Saturating each counter first bounds
-/// what the runaway can contribute at one, so the term is
-/// (10/3 + 1024/1026) / 11 * 0.30 and the score is 48.48.
+/// One of the nine GUARD counters a thousand times better than its baseline,
+/// the other eight and both advertised rows at parity. Saturating each
+/// counter first bounds what the runaway can contribute at one, so the guard
+/// term is (8/3 + 1024/1026) / 9 * 0.15 and the score is 49.11.
 ///
-/// Saturating the MEAN instead answers well above this on the same fixture:
-/// the mean ratio is (10 + 1024)/11 = 94.0 and its satisfaction is 0.9791, so
-/// one benchmark takes the run-speed term almost to its ceiling while ten
-/// others sit at parity. That is the shape the ruling closed, and it is what
-/// this number is here to catch.
+/// Saturating the MEAN instead answers well above this on the same fixture,
+/// which is the shape the 2026-08-29 ruling closed and what this number is
+/// here to catch: one benchmark would take its term almost to the ceiling
+/// while every other sat at parity.
 ///
 /// THE COUNT IS WHAT MOVES THIS NUMBER, and it moves LATE. It read 49.16 over
 /// eight counters until kanso#1221, four hours after kanso#1215 minted
@@ -147,5 +149,31 @@ fn every_counter_at_parity_scores_the_weights_alone() {
 /// asserting its own copy of the tool.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 48.48");
+    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 49.11");
+}
+
+/// THE HALVES ARE NOT INTERCHANGEABLE. The same thousandfold win is worth
+/// more on an advertised row than on a guard, and that is the whole content
+/// of Clay's 2026-09-02 split: half the run-speed weight belongs to decode
+/// and encode — the rows the front page makes claims about — and half to the
+/// nine shape guards between them.
+///
+/// Before the split all eleven counters sat in one term and the two fixtures
+/// below scored the SAME number, 48.48, because a counter was a counter. A
+/// shape win scored as if a real workload had got faster. These two numbers
+/// differing is the property; their order is the direction.
+///
+/// The gap is large because the halves are unequal in count as well as in
+/// kind: a runaway is one of two advertised rows and one of nine guards, so
+/// it moves its half by 1/2 rather than by 1/9.
+#[test]
+fn a_win_on_an_advertised_row_outscores_the_same_win_on_a_guard() {
+    let advertised = scored("advertised", &[("decode_instructions", 1024)]);
+    let guard = scored("guard", &[("wide_instructions", 1024)]);
+    assert_eq!(advertised, "welfare 52.99", "an advertised runaway");
+    assert_eq!(guard, "welfare 49.11", "the same runaway on a guard");
+    assert!(
+        advertised > guard,
+        "the advertised half is worth more per counter: {advertised} against {guard}"
+    );
 }

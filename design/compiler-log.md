@@ -20,418 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 — the compile row moved 5,081 with nothing changed, and four entries above are wrong about why
-
-This pull request changes `docs/compiler.html` and `design/compiler-log.md`.
-CI read `compile_instructions=41,500,177` against a golden of 41,495,096.
-
-The compiler's inputs are byte-identical between the two commits. `git diff`
-is those two files; neither is compiled in, neither is reached by
-`include_str!`, and `measured_on` confirmed the same rustc and the same
-glibc. Every other vein in the same job matched to the digit: eleven work
-rows, fourteen emitted counters, eleven text rows, `compile_allocs`,
-`compile_memory`. One row moved, and nothing in the diff can have moved it.
-
-**So the row's floor on this runner pool is at least 5,081.** The gate already
-suspects this — it reads `scripts/gates/dispatch.sh` whenever the row moves
-and says to re-run until the job lands on the recorded silicon — and kq spent
-three pull requests in August learning the same thing about its own rows.
-`measured_on` pins the toolchain, and the toolchain was never the whole host.
-
-**This corrects four entries above, all filed today.** I recorded +6,087,
-−416, +8,032 and −3,289 on this row as layout effects and wrote a causal
-sentence around each: that the prelude's length moves where the bytes after it
-land, and that the sign does not follow the direction of the edit. Two of
-those readings are smaller than the 5,081 a no-op produced, and the other two
-are the same size. The layout mechanism is real — a longer string in the
-binary does move what follows it — but none of those four measurements
-separates it from the runner, and I wrote as though they did. The honest form
-of all four is "the row moved, inside a band the pool can produce on its own".
-
-The pattern to notice is that the prose got more confident as the readings
-piled up. By the fourth I was writing that four consecutive commits had moved
-the row in an unpredictable direction and that this was what a layout effect
-looks like — a story that explains the data and was never tested against the
-null. The test cost one docs-only pull request and it was available all day.
-
-**What would fix it.** Not a tolerance: a band is a guess that stays green
-through the change it was written to catch. Record the dispatch block beside
-the row the way `kq/bench/instructions_golden.txt` does, so a move gets asked
-which silicon counted it before anybody explains it. That is a real piece of
-work and it is not this pull request's; it is filed here so the next reading
-of this row has the question in front of it.
-
-**The re-run closed it.** The next job on this branch, with the golden
-unchanged at 41,495,096 and nothing in the compiler touched, read 41,495,096
-and went green. So the row is 41,495,096 / 41,500,177 / 41,495,096 across
-three consecutive CI runs of the same compiler — bracketed, not a one-off.
-The spread is 5,081 and it belongs to the pool rather than to any diff.
-
-Writing that down matters more than the finding. The entry above corrects
-four readings I took as evidence on a single measurement each; leaving this
-one at a single measurement would have repeated the error inside the
-correction.
-
-## 2026-09-03 — the rewind's empty test paid a frame, and it is a third of a beat loop
-
-Clay asked whether the fused chain operators had been swept in. They had not.
-The day's four twins were driven by the eleven benchmarks' profiles, and a
-fused adapter chain — `map`, `select`, `sum` deforested into one flat loop —
-is not well represented in those. So I built one: 200,000 elements through
-`list/map . list/select . list/sum`, and profiled it.
-
-`k_beat_rewind` was 32.92% of it. Not the loop body, not a builtin — the
-per-iteration rewind that reclaims the iteration's garbage.
-
-That was not a property of the fixture. On escapebench the same function is
-**43.66%** of the program: 80,970,118 of 185,475,445 instructions across
-1,206,001 rewinds, 67 instructions each. On basket, 16.21%. The one function
-was larger than any seam the four twins reached.
-
-**Where the 67 went.** The disassembly says it in the first ten instructions:
-six callee-saved pushes and a stack sub, before any work. The frame is there
-for four loops — the buffer shelf's flush, and the chunk, view and permanent
-registries — none of which runs on any of those 1,206,001 rewinds. Then
-`k_buf_flush` unconditionally memsets the twelve-pointer shelf, six `movaps`
-clearing a shelf that was already clear. What the common case actually needs
-is three stores: `k_arena`, `k_arena_left`, `k_seek_str`.
-
-**The change.** Two pieces, both idiomatic here. The shelf gets a dirty flag,
-so its memset becomes one test for a program that never donates a buffer. And
-`k_beat_rewind` splits: an inline empty test at the four call sites, with the
-frame and the four loops left behind in `k_beat_rewind_slow`. That is the same
-split `k_permreg_flush`/`_held` and `k_viewreg_migrate`/`_held` already make
-one level down; it is worth more here because a beat loop rewinds once per
-iteration where those run once per pop. `k_beat_iter` is now a leaf with no
-frame at all, ~39 instructions on the fast path against 74 before.
-
-| benchmark | before | after | |
-|---|---|---|---|
-| escapebench | 185,475,844 | 143,403,373 | −22.684% |
-| basket | 45,028,689 | 41,211,873 | −8.476% |
-| encodebench | 6,057,833,454 | 5,886,750,857 | −2.824% |
-| oneshot | 34,844,691 | 34,417,154 | −1.227% |
-| deepbench | 677,481,898 | 677,017,353 | −0.069% |
-| indexbench | 5,242,731 | 5,242,087 | −0.012% |
-| scanbench | 1,423,437,774 | 1,423,437,268 | −0.000% |
-| pendbench | 715,729,140 | 715,731,365 | +0.000% |
-| jsonbench | 2,533,005,144 | 2,533,091,327 | +0.003% |
-| digestbench | 81,237,955 | 81,252,347 | +0.018% |
-| widebench | 61,843,521 | 61,857,884 | +0.023% |
-| **all eleven** | **11,821,160,841** | **11,603,412,888** | **−1.842%** |
-
-The three small rises are programs with few beat iterations paying the inline
-test at their pops where the old code paid a call. 86,183 instructions on a
-2.5-billion-instruction decode is the largest of them. These are container
-readings; CI supplies the rows that land in the golden.
-
-`.text` rises on every row, 432 to 816 bytes — four copies of the test. The
-header of `bench/text_golden.txt` says which benchmark paid most and which
-gained most, and they are the same one.
-
-**No counter moves, and the corpus was asked how much of that it can see.**
-The three flush loops and the block retire are the only code in the rewind
-that touches a statistic, so the fast path being taken exactly when all four
-would do nothing means every cost golden stays byte-identical. All nine are.
-But "byte-identical counters prove equivalence" is a claim about what the
-corpus can observe, so I dropped each of the six conditions in turn and ran
-the nine counter gates and the golden suite against each.
-
-Three are pinned. Without the shelf's dirty test five counter gates
-**segfault** — a shelf entry outliving its arena region hands a freed pointer
-to the next grower, which is exactly the failure the flag exists to prevent.
-Without the chunk registry's test, encode's counters move. Without the block
-test, encode's and scan's move and four goldens fail.
-
-Three are not: `k_chunkreg_spill`, `k_viewreg_n`, and the permanent registry's.
-Dropping any of them leaves every gate and every golden green. The reason is
-one fact, and I found it by instrumenting the rewind rather than guessing:
-**on every program in the corpus, a rewind that finds a registry non-empty is
-also a rewind that has moved on from its mark's block**, so the block test
-reaches the slow path first and the registry tests never decide anything.
-Counted over the benchmarks: `chunkreg_spill` is non-zero at no rewind at all;
-escapebench has 3,000 rewinds with a non-empty permanent registry and the same
-3,000 have changed block; encodebench has 400 with a non-empty chunk registry.
-
-I wrote a fixture to isolate the view registry — a map born inside a beat and
-asked for its sorted view — and it registered 500 views at 500 rewinds and
-**still** did not catch the mutation, because those 500 rewinds had also taken
-a new block. A fixture that cannot fail is worse than none, so it is not in
-this pull request. The conditions stay: that the two travel together is a
-property of the programs in the corpus, not of the code, and the next program
-need not oblige.
-
-**What is left.** The naming is the finding. `k_beat_rewind` did not show up in
-any earlier profile sweep because the sweeps were reading the benchmarks whose
-profiles the twins were chasing, and the beat machinery is not a builtin. The
-question that found it was Clay's, about a construct the benchmark set does
-not cover well. That is an argument for the fused chain having a benchmark of
-its own, which it does not have and which the eleven do not substitute for.
-
-**The fixture that started it, measured after.** The 200,000-element
-`map`/`select`/`sum` chain goes 38,883,703 → 32,083,715, **−17.49%**, and
-`k_beat_rewind` is off its profile altogether. What is left of the rewind is
-`k_beat_iter` at 8,000,000 — 40 instructions an iteration where rewind and
-iter together were 74. It is still 24.93% of that program.
-
-So the seam is not finished, and the shape of what remains is visible: of
-those 40, about twenty are the six condition tests and three are the stores
-they guard. A single summary word per depth — maintained at the four
-registration sites, read once here — would collapse six loads and six
-branches into one. That is a second change and it waits for this one to land.
-It is written down here rather than built now because the branch rule is one
-open pull request at a time, and because the number above is what makes the
-case for it.
-
-**Two corrections to the paragraph above, both from building it rather than
-reasoning about it.** The summary word collapses *four* conditions into one,
-not six: the buffer shelf's flag is global rather than per depth, and the
-block test is about arena state that no registration site can summarise. So
-the fast path goes from six tests to three, not to one.
-
-And the prototype was built and measured rather than left as a plan. A single
-`k_beat_enc[depth]`, set at the four registration sites and cleared where the
-slow rewind empties all three registries together, with all nine counter gates
-green: escapebench 143,403,373 → 130,167,353, **−9.23%**; the fused chain
-32,083,715 → 30,483,715, **−4.99%**; basket 41,211,873 → 40,299,752, −2.21%.
-It is a second pull request, held behind this one by the branch rule, and it
-is worth having.
-
-**The ratchet caught the move, which is what it is for.** `k_seek_str = NULL`
-went from one site to two — the slow rewind and the inline fast path — at
-different indentations, and the cursor mutation's own guard reported that its
-target had moved rather than silently deleting one of the two. Deleting one
-would have left the running path resetting the cursor and the mutation would
-have gone green while proving nothing. It now removes both, and reddens the
-beat differential at 16 of 96 layout pairs, the figure its comment already
-records.
-
-**CI's rows, and they agree with the container.** The instruction vein is
-regenerated from the runner, where the container readings above were a
-direction rather than a pin. Every row lands within about four hundred
-instructions of what the container said, which is the offset those two hosts
-have carried all along.
-
-| benchmark | before | after | |
-|---|---|---|---|
-| escapebench | 185,475,844 | 143,403,772 | −22.6833% |
-| basket | 45,028,689 | 41,212,286 | −8.4755% |
-| encodebench | 6,057,833,454 | 5,886,751,256 | −2.8241% |
-| oneshot | 34,844,691 | 34,417,553 | −1.2258% |
-| deepbench | 677,481,898 | 677,021,033 | −0.0680% |
-| indexbench | 5,242,731 | 5,242,500 | −0.0044% |
-| scanbench | 1,423,437,774 | 1,423,437,681 | −0.0000% |
-| pendbench | 715,729,140 | 715,731,751 | +2,611 |
-| jsonbench | 2,533,005,144 | 2,533,091,740 | +86,596 |
-| digestbench | 81,237,955 | 81,252,746 | +14,791 |
-| widebench | 61,843,521 | 61,858,297 | +14,776 |
-| all eleven | 11,821,160,841 | 11,603,420,615 | −1.8420% |
-
-Four rows worsen and each is stated here as required: **jsonbench** rises
-**86,596**, **digestbench** rises **14,791**, **widebench** rises **14,776**,
-**pendbench** rises **2,611**. All four are programs with few beat iterations
-— 151, 56, 40 and 134 — that now pay the inline empty test at their pops
-where they used to pay a call, and none of the four is a tenth of a per cent.
-They are the price of escapebench's 42 million and encodebench's 171 million.
-
-**compile_instructions** reads **41,500,974** against a golden of 41,495,096,
-a rise of **5,878** with nothing in the front end touched by this change. The
-entry above it in this log established that this row moves 5,081 on a
-docs-only pull request with byte-identical compiler inputs, across three
-consecutive runs of the same compiler. 5,878 is that band. It is regenerated
-rather than explained, and the reason it is not explained is the finding
-recorded yesterday: nothing here separates a layout effect from the runner
-pool, and writing a causal sentence around a number this size is the error
-that entry corrects.
-
-**The five worsened counters, named as the gate spells them.**
-`work_jsonbench` lands on **2,533,091,740**, `work_digestbench` on
-**81,252,746**, `work_widebench` on **61,858,297**, `work_pendbench` on
-**715,731,751**. Those four are the programs with 151, 56, 40 and 134 beat
-iterations: too few for the fast path to repay, so they pay the inline empty
-test at their pops where the old code paid a call, and the largest of the four
-is 0.018% of its program. `compile_instructions` lands on **41,500,974**,
-inside the pool band the entry above measured.
-
-`text` lands on **1,023,750** against 1,016,742 — the eleven binaries together
-grow **7,008 bytes**, 432 to 816 each, which is four copies of a twenty-
-instruction test at the four rewind call sites. That is the trade this change
-is: seven kilobytes of machine code for 217,740,226 instructions.
-
-## 2026-09-03, LATER — the compile row's move is glibc's allocator, and that corrects the task filed for it
-
-The entry above pinned `compile_instructions` at 41,500,974 from CI. The next
-run of the **same commit's front end** read **41,495,850**. Five readings now
-exist for a compiler nothing has touched:
-
-    41,495,096   41,500,177   41,495,096   41,500,974   41,495,850
-
-Two clusters about 5,228 apart, each internally within 800. Yesterday's entry
-called this "the pool" and declined to explain it, and filed a task to record
-the dispatch block beside the row the way kq does, so a move could be asked
-which silicon counted it.
-
-**That task's premise is wrong, and this is the measurement that says so.**
-CI prints the profile on every run, so the two runs can be compared function
-by function:
-
-| symbol | 41,500,974 | 41,495,850 | delta |
-|---|---|---|---|
-| `kanso::infer::eval_expr'2` | 1,616,100 | 1,616,100 | 0 |
-| `kanso::check::check_merged` | 1,598,577 | 1,598,577 | 0 |
-| `_int_malloc` | 1,554,268 | 1,551,398 | **−2,870** |
-| `_int_free` | 1,516,161 | 1,516,378 | **+217** |
-| `__memcmp_avx2_movbe` | 1,346,853 | 1,345,486 | **−1,367** |
-| `HashMap::insert` | 1,302,885 | 1,302,885 | 0 |
-| `kanso::infer::infer` | 1,234,092 | 1,234,092 | 0 |
-| `malloc` | 1,113,407 | 1,113,407 | 0 |
-| `kanso::infer::eval_expr` | 876,900 | 876,900 | 0 |
-| `kanso::lexer::lex_line` | 857,892 | 857,892 | 0 |
-| `free` | 711,340 | 711,340 | 0 |
-| `kanso::parser::parse` | 591,666 | 591,666 | 0 |
-| `kanso::mentions_in_expr'2` | 533,848 | 533,848 | 0 |
-
-**Every symbol in the compiler is identical to the instruction. Three glibc
-symbols move and nothing else does.** And both runs took the same dispatch —
-`__memcmp_avx2_movbe` on each — so recording the dispatch block would have
-found the two runs indistinguishable and explained nothing. The silicon
-hypothesis is dead, and it is dead by the same test that killed the layout
-one: comparing against the null instead of fitting a story to a number.
-
-What is left is glibc's allocator. `_int_malloc`'s bin walks depend on the
-heap's starting layout, and the allocation *sizes* cannot be what differs
-because the compiler's own counts are byte-identical. The most likely
-remaining cause is that the two runs ran binaries whose data and bss differ
-slightly, moving the initial break — which changes malloc's work without
-changing a single instruction the compiler executes.
-
-**The row is red on main too.** `bench/compile_instructions_golden.txt` holds
-41,495,096 and this runner reads 41,495,850, so a pull request that changed
-nothing at all would fail this gate on this runner. It is not this change's
-regression, and this branch does not carry a bump for it: the golden is left
-at main's value.
-
-**What would actually fix it**, and it is a decision rather than a repair:
-the row should count the instructions attributed to the kanso binary rather
-than the process. That is what the gate's own header says it measures — "what
-the FRONT END costs to run" — and it is the part that is deterministic. On
-this container three consecutive runs of the box give 41,904,811 exactly, and
-the per-object split is 33,586,490 in the compiler against 7,982,541 in libc;
-it is the second number that moves on the runner. Changing what a published
-counter measures is Clay's call, not a session's, and it is filed as one
-rather than done here.
-
-**A sixth reading, and it repeats a previous one exactly.** The run after the
-entry above read **41,500,974** — the same value, to the instruction, that a
-run two heads earlier produced. Six readings of an untouched front end now
-give four distinct values, two of them seen twice:
-
-    41,495,096  ×2      41,495,850  ×1
-    41,500,177  ×1      41,500,974  ×2
-
-That is not continuous noise. Noise does not land on the same eight-digit
-number twice in six tries. It is a small set of discrete environments, each
-deterministic within itself — which is also what the container says, where
-three consecutive runs of the same box give 41,904,811 every time.
-
-So the row is deterministic per environment and the pool holds several. The
-comparison in the entry above rules out the obvious discriminator: the two
-runs it examined took the same `__memcmp_avx2_movbe` dispatch and differed
-only inside glibc's allocator. Whatever separates the environments, it is
-finer than the dispatch block and it does not touch a single instruction the
-compiler executes — every `kanso::` symbol was identical across the pair.
-
-This sharpens the question filed for Clay rather than changing it. A row that
-is deterministic per environment and varies across a pool of them can be
-pinned two ways: record the environment, or stop counting the part that
-varies. The first needs a discriminator nobody has found yet — the dispatch
-block is not it. The second is available now and is what the gate's header
-already claims to measure.
-
-**And it has already failed on main.** The claim above — that a pull request
-changing nothing would fail this gate on some runners — was an inference from
-the readings. It does not need to be: main's own `ci` run at **9541196f**, on
-2026-09-02, failed with `compile instructions disagrees with its golden` and
-every other row in that vein green. That commit is a merge that had just
-regenerated the row, so the golden it was checked against was its own.
-
-So the gate has already gone red on merged history, on a commit whose author
-had just pinned the number it was checked against. Whatever this row is
-measuring, it is not something a branch can be held responsible for, and the
-seventh reading on this branch — 41,500,974 again — is the fourth head in a
-row to say so.
-
-That is the whole of the case for leaving the golden at main's value and
-sending the question on rather than pinning a number that will be wrong on
-the next runner.
-
-## 2026-09-03, LATER STILL — the silicon hypothesis was right and I killed it on the wrong evidence
-
-The gate now prints the binary that counted the row. It answered a different
-question than it was aimed at, and the answer is that two entries above are
-wrong.
-
-The two CI runs compared earlier ran on **different CPUs**. The gate has been
-printing the dispatch block all along and both blocks were in the job logs;
-they differ:
-
-| field | run at 41,500,974 | run at 41,495,850 |
-|---|---|---|
-| `features[0x2].cpuid[0x0]` | 0xa10f11 | 0xa00f11 |
-| `features[0x5].cpuid[0x1]` | 0x30100015 | 0x30000015 |
-| `level2_cache_size` | 0x100000 | 0x80000 |
-| `rep_movsb_stop_threshold` | 0x100000 | 0x80000 |
-
-**What I did wrong.** I compared which `memcmp` implementation glibc had
-selected — `__memcmp_avx2_movbe` on both — and concluded the two runs were on
-indistinguishable silicon. That is the wrong field. The selected function is
-one output of the dispatch; the CPUID word and the cache-derived tunables are
-others, and those differ. I then wrote that "the silicon hypothesis is dead,
-killed by the same test that killed the layout one" — which is the same error
-the layout entry corrects, committed in the act of claiming not to.
-
-The pattern is now three for three: a number moved, I reached for a mechanism,
-and the mechanism was asserted from evidence that did not separate it from the
-alternative. Twice the mechanism was wrong. The one thing that has worked every
-time is comparing two runs field by field and reading what actually differs.
-
-**What follows.** Task #244 was right and its closure was not. Recording the
-dispatch block beside the row is the fix, exactly as `kq/bench/instructions_golden.txt`
-already does and for the reason kq#86 already gave. The row is deterministic
-per CPU and the pool holds at least two; pinning it per recorded silicon is
-the shape that works.
-
-That also means the two invasive options are off the table, and Clay's
-instinct to keep libc counted survives intact: libc's cost stays in the row
-because it is a real cost of how this compiler allocates, and the row stops
-lying because it says which chip counted it.
-
-**What is NOT claimed here.** How a different L2 size produces 2,870 fewer
-instructions inside `_int_malloc` is not established. `_int_malloc` does not
-call memcpy, and the mechanism could run through heap addresses, alignment,
-or something else entirely. What is observed is that the environments differ
-in a way the gate already records, and that is enough to attribute the row
-without inventing the chain. Inventing the chain is what went wrong twice.
-
-**A second cause is live and I had not checked it either.** Before pinning a
-row per chip, one thing had to be ruled out and was not: `src/runtime.c` is
-`include_str!`'d into the compiler. Every commit on this branch changed it, so
-every head built a different compiler binary — different bytes, different
-place for the heap to start — without altering one instruction the front end
-executes when it checks a library.
-
-So two candidate causes are live at once, the silicon and the binary, and the
-readings so far cannot separate them. Four values, two identified chips, and
-several different binaries across the heads that produced them. Pinning per
-chip would be building on the same kind of half-checked story that has now
-been wrong twice, so it waits.
-
-What is added instead is one greppable line per run — cpu, binary sha, row —
-so three runs settle it: same cpu and same sha with different rows means it is
-neither; same cpu with the sha tracking the row means it is the binary; the
-same sha on two cpus tracking the row means it is the silicon. That is the
-measurement the last two entries should have started from.
-
 ## 2026-09-03 — RETRACTION: the compile row IS this change's, by 5,621, and it falls
 
 Three entries above say this row's movement is not this branch's, and one of
@@ -2379,6 +1967,7 @@ both reopens the question, and then the fallback is the pinned pair,
 never blindness. The entry leaves Blocking with this commit; the
 rustc-patch rider is the implementer's (the pin did its job;
 regenerate with a sentence).
+
 ## 2026-09-03 (tenth) — the bimodal row is made deterministic, not excused
 
 **DONE for the two suspects, OPEN for the answer.** Supersedes the OPEN
@@ -2528,6 +2117,226 @@ it is not established that two runners differ in their maps by the 508 this
 needs. The row would have to print the map's line count beside the count to
 say. Nothing rests on the answer now that the pair holds the gate green.
 
+## 2026-09-03 — the weights move to the developer's order of noticing
+
+**DONE for the weights and the floor, HELD for the replay.** Implements the
+gavel of 2026-09-02, which recorded the argument and left the build. Searched
+the live log and `design/log/compiler-log-archive.md` before filing: the
+archive carries the 2026-08-29 saturation ruling and the entries that priced
+0.30/0.30/0.28/0.12, and nothing there implements this split.
+
+    term                    was    now   satiation
+    run speed (advertised)         0.15  2.0    new half
+    run speed (guards)             0.15  2.0    new half
+    run speed               0.30    —    2.0    splits
+    run memory              0.30   0.26  2.0
+    compile speed           0.28   0.32  0.5
+    compile memory          0.12   0.12  0.5    (unchanged)
+
+**Two terms of 0.15, not one term averaging two halves.** They are the same
+arithmetic and the pair reports better: the breakdown says which half moved.
+The guard half is written as the REMAINDER — `guard_work` is `held_work` plus
+`paced_work` — so a benchmark added later lands there without this entry or
+that line needing an edit, which is what "advertised versus everything else"
+asks for.
+
+**What the split buys, in the numbers.** Nine guards against two advertised
+rows meant a guard carried nine elevenths of the run-speed term and the front
+page's own claims carried two elevenths. A shape win scored as if a real
+workload had got faster. On the parity fixture a thousandfold win now scores
+**52.99** on an advertised row against **49.11** on a guard; before the split
+both read **48.48**, because a counter was a counter.
+
+**The score falls 76.1743 to 73.0623 and nothing about the compiler changed.**
+Both halves of that are worth stating. The fall is real — under the developer's
+stated order of noticing the project is further from ideal than the old weights
+said, because compile cost is the weakest dimension (+36.3% instructions,
++143.7% allocations against baseline) and it just gained weight, while run
+memory, which is strong, lost some. And it is not a regression: no counter
+moved, and scores either side of this commit were taken with different rulers.
+That is the second such step in this line; the first is the 2026-08-29
+saturation ruling, 87.85 to 73.83.
+
+**The floor is edited by hand, and the tool asked for that.** `--set` refuses
+to lower the objective — "A fall means the change is worse by the project's
+stated preferences ... this is Clay's call to make, in conversation — not a
+flag's. (The floor file itself can be edited by hand, where a reviewer will see
+it.)" The gavel is that conversation, so the reason goes in the history entry
+and the number goes in the file, where the diff shows it. The refusal is right
+and stays; a flag that could lower the floor is a flag that could launder a
+regression.
+
+Three specs, and the two that existed were watched red at the numbers above
+before the pins moved. The new one —
+`a_win_on_an_advertised_row_outscores_the_same_win_on_a_guard` — was watched
+red against the unsplit formula, where it read 48.48 for both fixtures, which
+is exactly the property it exists to deny.
+
+**HELD, and sent to Clay: the chart replay.** The gavel ends "the chart replay
+re-run so the history reads under one definition." `docs/numbers.html` states
+the opposite rule and stated it before the gavel: "the welfare line is
+recorded, not recomputed. the score a commit shipped with is a fact about that
+commit, and replaying history against today's baseline would rewrite it." It
+already carries the 2026-08-29 step documented as a discontinuity rather than
+replayed.
+
+A replay is also under-determined, which is the part the gavel could not have
+known. The objective's counter set has grown — the digest in #1198, scan,
+escape and index in #1215 — so a commit whose goldens predate a counter has no
+value for it, and scoring it under today's formula means inventing one through
+the granted-baseline machinery. That machinery exists to admit a counter going
+forward at its dimension's standing, not to backfill a history it was never in.
+Not resolved here, because what the recorded line MEANS is his to say and not a
+matter of how to compute it.
+
+## 2026-09-03 — the replay could not be computed, and the reason is the rows
+
+**DONE for the prerequisite, the chart itself still to build.** Searched the
+live log and the archive before filing: the 2026-08-31 directive rules the
+replay and the rider of today restates it against the page's older sentence.
+Neither says what the stored rows contain, which turned out to be the thing
+that decides whether a replay is possible at all.
+
+**The rows carry 12 of the 24 counters the formula reads.** Measured on the
+newest row in the perf-history branch — commit `a100f4f`, this afternoon's
+merge:
+
+    missing: wide_instructions, deep_instructions, pending_instructions,
+             digest_instructions, scan_instructions, escape_instructions,
+             index_instructions, scan_arena_blocks, scan_peak_bytes,
+             digest_peak_bytes, digest_arena_blocks, compile_instructions
+
+`compile_instructions` among them, which is the vein this whole day was about.
+`perf_record` writes a hand-picked list that has not kept step with the model:
+the digest counters joined the objective in #1198 and scan, escape and index in
+#1215, and none of them joined the row.
+
+So the rider's rule — "the replayed series begins at the first commit for which
+every counter in the current formula exists" — names no commit. Applied to the
+data as it stands the replayed line is EMPTY, and would have been empty however
+carefully the chart was written. That is worth stating plainly because the
+failure would have looked like a charting bug.
+
+**The fix is that the objective names its own counter set.** `welfare
+--counters` prints the `name=value` pairs `score` was given, and `perf_record`
+records those. Assembling the list a second time in `perf_record` is what
+produced this: two lists drift the first time a counter joins the model, and
+nothing was watching the second one. Printed from where the score is computed,
+the row cannot fall behind the formula — a counter that enters the model enters
+the row in the same commit.
+
+Three specs, two of them watched red against main's welfare, where the flag
+prints the banner instead of a counter set. The third pins that asking what was
+scored does not move the floor, because a second door to the ratchet is the one
+thing this must never become.
+
+**STILL TO BUILD, and it needs rows that do not exist yet.** `perf_record` has
+to carry the printed set into the history row, and the chart has to replay the
+current formula over the rows that carry it. The replayed line then starts at
+the first commit merged after that lands, which satisfies "no backfill" by
+construction rather than by a rule anyone has to remember. The recorded
+`welfare` field stays for the earlier rows, drawn distinctly and labeled as
+scored under earlier definitions, and `bench/welfare_floor.json` remains the
+audit trail either way.
+
+## 2026-09-03 — the objective emits its own model, so the chart can replay it
+
+**DONE for the parameters, the chart still to draw.** Searched the live log and
+the archive before filing: the entry above records that the rows carried 12 of
+24 counters and fixes that; nothing there covers where the WEIGHTS reach the
+chart from, which is the second half of the same problem.
+
+The replay has to happen on the page, because the page is static and the rule
+is "the current formula and baseline over the stored rows" — a value computed
+once and stored cannot re-score old rows when the formula next moves. That puts
+two things at risk of being copied onto the page: the numbers and the
+arithmetic.
+
+**The numbers are the dangerous half and now come from the tool.** `welfare
+--model` prints the terms and the baseline in the shape every other vein here
+uses:
+
+    term run speed (advertised)|0.15|2.0|decode_instructions,encode_instructions
+    base decode_instructions=3266896510
+
+A weight retyped into a chart is a weight that survives the next gavel, and the
+line would then show a formula nobody ruled while looking exactly as
+authoritative. Emitted, it cannot: the 0.32 that landed this afternoon is in
+that output because it is in the model.
+
+**json was the first attempt and was the wrong reach.** It made both readers —
+this repo's spec and the chart's javascript — grow a parser apiece. Lines cost
+neither.
+
+**The arithmetic is restated on the page, and a spec makes that safe.**
+`the_model_and_the_rule_reproduce_the_score` reads only `--model` and
+`--counters`, applies the rule as a reader of the 2026-08-29 gavel would state
+it — saturate `r / (r + s)` per counter, mean within the term, weight, sum —
+and asserts the answer against welfare's own banner. It agrees to 73.06. That
+agreement is evidence rather than tautology because the test shares no code
+with the tool; it is written from the ruling, not from the implementation.
+
+A second spec pins that the weights sum to one. A term added without taking
+weight from another reweighs every other term silently, which is a change to
+what the project wants made by arithmetic instead of by a gavel.
+
+Both were watched red. Emitting `t.satiation` where the weight belongs made the
+reproduction spec answer 479.0922 against welfare's 73.06 — the restatement and
+the tool disagreeing is exactly the failure it exists to catch. Raising the
+compile-speed weight to 0.33 made the sum spec say 1.0100000000000002.
+
+**STILL TO DRAW.** numbers.html reads the emitted model, replays over the rows
+carrying the full counter set, starts the line at the first such row, keeps the
+earlier rows' recorded scores in a visibly distinct style labelled as scored
+under earlier definitions, and its "recorded, not recomputed" sentence is
+rewritten to match. That needs a real row, which CI writes on the commit after
+the counter-set change lands. The sentence and the chart move together: a page
+claiming a replay it does not perform is the one outcome worse than the stale
+sentence.
+
+## 2026-09-03 (second) — the chart replays, and the sentence that denied it is gone
+
+**DONE.** Searched the live log and the archive before filing: the entry above
+built `welfare --model` and left the drawing undone, and the 2026-08-31
+directive "the welfare chart replays the current formula" is the ruling this
+answers. Nothing in either file draws it.
+
+**Two lines where there was one.** The solid one is the replay: every row
+scored by the model and baseline in force today, so its points can be read
+against each other. The dashed one is what each commit shipped with, kept
+because it is the record and it is where the 2026-08-29 definition step lives.
+They share a scale. Drawn to their own ranges each would fill the plot and the
+reader would compare two shapes with no axis between them, when the gap where
+they overlap is the thing worth seeing.
+
+**No backfill, and it is a spec rather than an intention.** `replayScore`
+answers null for a row missing any counter the model reads, so the solid line
+starts at the first row carrying the whole set — today that is the commit after
+the counter-set change, and before it the rows genuinely do not hold the
+numbers. `a_row_missing_a_counter_is_not_scored` pins it at three rows: whole,
+partial, empty. Watched red by making a missing counter skip rather than
+refuse, which scored a half-row 16.67 and drew it beside real points.
+
+**The page's own functions are what the spec runs.** `parseModel` and
+`replayScore` are lifted out of the html by brace matching and run under node
+against `welfare --model` and `welfare --counters`; the answer has to be
+welfare's own. A copy pasted into a test would agree with itself forever.
+Watched red by replacing the saturation term with a constant: 72.2758 against
+73.06, which is exactly the size of drift that looks like a real move.
+
+**`model.txt` sits beside `history.jsonl`,** written by the same job, replaced
+rather than appended — it describes the model as it stands and its history is
+welfare_floor.json. If it cannot be fetched the recorded line still draws and
+the replayed one is absent, which is the right failure: a page with no numbers
+beats a page with stale ones.
+
+**The sentence is gone.** "the welfare line is recorded, not recomputed" was
+true when written and stopped being true on 2026-08-31. The page now says the
+score is computed in the browser from each commit's counters against today's
+baseline, and says where the baseline comes from.
+
+The ratchet gained `chart_replay`, anchored on the saturation term rather than
+a number, because the number moves whenever the compiler does.
 
 ## 2026-09-03 — gavel: failures are for the exceptional; the bang chooses the channel
 
