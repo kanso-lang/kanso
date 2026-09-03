@@ -5,9 +5,16 @@ name: ratchet
 # already applies to specs ("never trust a test you have not seen fail"),
 # lifted to the gates themselves.
 #
-# Nightly rather than per-PR because a row costs a build and there are a dozen
-# of them. What runs on every change is the cheap half, `scripts/ratchet` with
-# no argument, which only checks that every job has a row.
+# Nightly rather than per-PR because a row costs a build and there are 62 of
+# them, plus the 50 distinct gates the baseline reads on an unmutated worktree
+# first — without which a gate already red on HEAD is credited to every
+# mutation that shares it. What runs on every change is the cheap half,
+# `scripts/ratchet` with no argument, which only checks that every job has a
+# row, and `touched`, which proves the handful the branch could have blinded.
+#
+# Successful runs have taken 24 to 29 minutes against the 90-minute timeout,
+# measured over the six that finished between 2026-08-26 and 2026-09-02. The
+# baseline adds gate runs and no builds.
 on:
   schedule:
     - cron: '0 9 * * *'

@@ -576,9 +576,17 @@ jobs:
       # the nightly said so the next morning, twice, to nobody. A mutation
       # names the source files its seds patch and a branch names the files it
       # changes; the intersection is empty for most branches and was one to
-      # three rows for the three merges that did the damage. Measured at six
-      # minutes for the worst realistic case, a branch touching src/runtime.c,
-      # which selects thirteen.
+      # three rows for the three merges that did the damage.
+      #
+      # The worst realistic case is a branch touching src/runtime.c. It selected
+      # thirteen rows and ran in six minutes when this comment was first
+      # written; on 2026-09-03 it selects TWENTY-THREE and took 11m51s and
+      # 12m05s on two runs of one branch, and nothing was watching that grow.
+      # `prove` now also reads each selected row's gate once before mutating
+      # it, which is 22 gate runs on top of those 23 rows — the added cost is
+      # the gate half of what the step already pays, since the baseline shares
+      # one worktree and one build. The next runtime-touching branch's job log
+      # is where that lands.
       #
       # `git fetch` because checkout leaves no local main branch to diff
       # against even at full depth — it lands on a detached head.
