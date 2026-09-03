@@ -1054,25 +1054,50 @@ fn greened picked pairs at acc false
   shell base_dir p.setup . (s -> base_setup picked pairs at acc p s.status)
 
 fn base_setup picked pairs at acc p 0
-  shell base_dir p.gate . (g -> base_gate picked pairs at acc p g.status)
+  shell base_dir p.gate . (g -> base_gate picked pairs at acc p g)
 
-fn base_setup picked pairs at acc p _
-  greening picked pairs (at + 1) (push acc (unmade p))
+fn base_setup picked pairs at acc p s
+  greening picked pairs (at + 1) (push acc (unmade p s))
 
-fn base_gate picked pairs at acc _ 0
+fn base_gate picked pairs at acc p g
+  read_gate picked pairs at acc p g (g.status == 0)
+
+fn read_gate picked pairs at acc _ _ true
   greening picked pairs (at + 1) acc
 
-fn base_gate picked pairs at acc p _
-  greening picked pairs (at + 1) (push acc (presumed p))
+fn read_gate picked pairs at acc p g false
+  greening picked pairs (at + 1) (push acc (presumed p g))
 
-fn unmade p
+# The last few lines of what the gate said, indented under the finding.
+#
+# Naming the gate was the previous shape of this, and it answered the question
+# it was built for on its first run: `sh scripts/gates/instructions.sh`, red
+# because valgrind was not on the ratchet's box. It could not answer the SECOND
+# one. With valgrind installed the same gate was still red, and a report that
+# says only which gate leaves the reader with a list of hypotheses and no way
+# to choose — which is the shape of reasoning this repo keeps catching. A gate
+# writes down why it failed; the ratchet was throwing that away.
+fn spoke r
+  said = "{r.stdout}{r.stderr}"
+  lines = text/split said "\n"
+  over = length lines - 8
+  tail = list/to_list (list/drop lines (chose_drop over (over > 0)))
+  text/join (list/to_list (list/map tail (l -> "      {l}\n"))) ""
+
+fn chose_drop over true
+  over
+
+fn chose_drop _ false
+  0
+
+fn unmade p r
   said = "  UNBUILT {p.job}\n    gate: {p.gate}\n"
-  finding "{said}    the baseline would not build\n" false
+  finding "{said}    the baseline would not build\n{spoke r}" false
 
-fn presumed p
+fn presumed p r
   said = "  ALREADY RED {p.job}\n    gate: {p.gate}\n"
   why = "red before any mutation, so no row sharing it is proof"
-  finding "{said}    {why}\n" false
+  finding "{said}    {why}\n{spoke r}" false
 
 fn unmutated picked pairs acc
   settled_base picked pairs acc (length acc == 0)
