@@ -4959,3 +4959,102 @@ the tree could see it.** That is the same family as #1137's four pins that
 rested on prose — except that one was a spec reading a comment, and this was a
 comment asserting an optimiser outcome. The optimiser is entitled to change its
 mind between releases; a claim about what it will do belongs in a counter.
+
+## 2026-09-03 — EIGHT BOOK PANELS QUOTED A LIBRARY NOBODY WAS CHECKING THEM AGAINST
+
+The landing page says every code panel in the book is executed against the real
+toolchain before it may appear. Ten were not, and four of those had drifted so
+far they printed code the language cannot compile.
+
+**How the gap is shaped.** `scripts/book_panels` regenerates a panel by
+resolving its title to a sample it owns: `<samples>/<title>`, or a bare
+filename one directory deeper. The deeper branch compares a path's LAST SEGMENT
+to the whole title, so a title carrying a slash — `lib/json/number.kso` — can
+never match, and the harness leaves it alone by design: "a name that is nowhere
+is left alone: the panel may be quoting something this does not own." A
+directory-module title falls in the same hole from the other side, because
+`literal.kso` names `samples/ch08/literal/` rather than a file. Eight ch08
+panels quote `lib/json`, two quote directory modules, and nothing read any of
+them.
+
+**What was in them.** The `lib/json/text.kso` panels wrote `at cs n` for the
+index; there is no `at` under any spelling, so that panel has been printing a
+name error for as long as `cs[n]` has been the syntax. They also wrote
+`concat [] (slice ...)` where the library writes `append (bytes "")`. The
+`scan.kso` panel named `_is_ws` for a function renamed `ws?`. The `value.kso`
+panel named three byte-array constants and a `_word` that sliced the tail out
+and compared arrays — the library replaced all of it with `rue?`, `alse?` and
+`ull?` comparing bytes where they sit. The two directory-module panels still
+showed a `pub play` and a `told`/`chosen` reporting pair from before those
+samples were split into `main`/`lit`/`report`.
+
+**Why the check is structural.** These panels are excerpts with editorial
+changes: a private declaration gains a leading `_`, a module qualifier is
+dropped, a field gains a `:type` the file leaves bare. So the text cannot be
+compared and the panel cannot be regenerated. Two properties survive every one
+of those changes:
+
+  every declaration the panel shows is declared in the file it names, and
+  every name the panel uses is a name that file can reach.
+
+`scripts/book_quotes` checks both. The reachable set is read off the package
+rather than listed: its own declarations and bindings, the tail of every
+qualified name it calls, and every bare name its own code uses. So a panel may
+name what the file could name, and there is no table of builtins here to go
+stale in its turn — which is the failure mode a hand-written list would have
+reproduced one level up.
+
+It found eleven things across four panels and nothing else, and it is precise
+in the direction that matters: run against the fixed book it is silent, and
+renaming `ws?` in the library reddens it in two lines. That rename is the
+ratchet mutation.
+
+**And then the gap closed, because the claim about it was wrong twice.** The
+first version of this entry said the three remaining panels each want a
+different resolution rule, and that ch09's `vse/methods.kso` names a file in
+the vse repository. Both are wrong. Two rules reach all three: ch10's titles
+are written relative to `docs/book`, and ch07's and ch09's relative to a
+sample directory one level in — `samples/ch07/teahouse/` holds `main.kso`
+beside a package dir `teahouse/`, and `samples/ch09/vse/` the same. ch09's
+`vse/` is a sample package in this repository.
+
+Both rules are in, and they found four more panels in two more chapters:
+
+- ch07's `teahouse/menu.kso` showed `fn describe (err reason)` — an arm naming
+  its own package's err. The language refuses that and the sample dropped it.
+  **The chapter contradicted itself on one page**: the panel three inches below
+  demonstrates the replacement, `testing/when_failed pocky (r -> ...)`, and
+  only that one was machine-checked, because book_panels owns it.
+- ch07's `teahouse/menu_test.kso` showed a hand-written `err?` predicate where
+  the file imports `std/testing` and calls `testing/failed?`.
+- ch10's `pingpong.kso` wrote `even`/`odd` for the file's `even?`/`odd?`, and
+  wrapped the statements in a `main =` the file does not have.
+- ch10's `classify.kso` had the same `main` wrapper.
+
+Fourteen panels across four chapters, on a page that says every one of them is
+executed against the real toolchain before it may appear.
+
+**ch09 is clean, and that was verified rather than assumed.** Six panels there
+quote `vse/`, and silence from a checker is worth nothing until you have seen
+it speak: inserting a declaration no file has into the ch09 panel reddens the
+gate in two lines. So the silence is coverage.
+
+**One false-positive class had to go first.** `true`, `false` and `none` are
+literals the grammar provides, and the reachable set is read off the package's
+own text, so a small file that happens never to write `false` was forbidding a
+panel from showing an arm that answers it. They are always reachable now. That
+is the only exception, and it is a list of spellings rather than of names —
+which is what keeps it from becoming the builtin table this deliberately does
+not have.
+
+A title that resolves to a FILE beside its chapter stays skipped for a
+different reason: book_panels owns it, and reading ch07's `shop.kso` panel
+against its `shop/` directory is how this first went wrong.
+
+**And the prose went with them.** Four paragraphs described the old
+implementations — the byte-array constants, the four hex digits read inline
+before `_str_hex4` existed, the sample's helpers as "verbatim from
+number.kso" when they are the shape the library left behind. Nothing checks
+prose against code and nothing here proposes to; what the gate buys is that
+the CODE beside the prose can no longer drift silently, which is what made the
+prose wrong.

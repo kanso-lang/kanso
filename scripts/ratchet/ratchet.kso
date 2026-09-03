@@ -453,6 +453,20 @@ book_outputs = row
   (breaking "drifted_book_output")
   release
 
+# book_check.sh runs two harnesses, and they fail for different reasons. The
+# first regenerates a panel from the sample it renders; the second reads the
+# panels that harness cannot resolve — a title naming a file this repository
+# owns, or a directory module — against what those files declare and can name.
+# One row per harness, because a mutation that reddens one leaves the other
+# green, which is the whole point of asking.
+book_quotes = row
+  "a panel quoting a library the library no longer matches"
+  true
+  "./target/release/kanso run scripts/book_quotes"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "a_quoting_panel_stops_matching_its_file")
+  release
+
 diagnostics = row
   "one engine wording a failure the other does not"
   true
@@ -647,7 +661,7 @@ rows_b1e = text/concat rows_b1d2 [compile_ir_keyed inline_pin]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
-rows_c1 = [welfare_floor grammar book_outputs error_corpus trend]
+rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
 rows_c1a = text/concat rows_c1 [perf_row trend_runtime trend_joined]
 

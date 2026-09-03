@@ -1,0 +1,23 @@
+The json library in widebench/ is a FROZEN COPY, deliberately.
+
+bench/jsonbench is generated from lib/json by bench/make_jsonbench on every
+build and is gitignored, so it tracks the library by construction. This one
+does not: its five files were taken at 919d2ef3 (2026-08-14) and committed,
+and they now differ from lib/json by 216 lines. bench/encodebench carries the
+same snapshot for the same reason.
+
+WHAT THE FREEZE BUYS. With the library held still, a move in this benchmark is
+attributable to the COMPILER alone. kanso#1230 is the evidence: it shipped a
+library change and a codegen change together, and every unexplained number
+attached itself to the larger one until widebench separated them — the raw
+byte switch alone, -3.85%, with no library change able to reach it. A
+benchmark that tracked lib/json could not have answered that question.
+
+WHAT IT THEREFORE CANNOT SEE. A kernel deleted from lib/json is still measured
+here, so these rows are not library coverage and must not be read as such.
+bench/jsonbench is what watches the shipped library; this watches the compiler
+that builds it.
+
+So a difference between this directory and lib/json is the point rather than a
+drift to repair. Re-take the snapshot only deliberately, and say in the commit
+which sha it came from and why the old control was retired.

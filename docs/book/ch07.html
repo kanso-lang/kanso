@@ -20,10 +20,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">base_price</span> item
   <span class="f">err</span> <span class="s">"we do not serve <span class="i">{item}</span>"</span>
 
-<span class="k">fn</span> <span class="f">describe</span> (<span class="f">err</span> reason)
-  <span class="s">"gomen: <span class="i">{reason}</span>"</span>
-
-<span class="k">fn</span> <span class="f">describe</span> n
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">describe</span> n
   <span class="s">"<span class="i">{n}</span> yen, service included"</span>
 
 <span class="k">pub</span> <span class="k">fn</span> <span class="f">price</span> item
@@ -116,17 +113,13 @@ service <span class="o">=</span> <span class="n">50</span></code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">teahouse/menu_test.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">err?</span> (<span class="f">err</span> _)
-  <span class="f">true</span>
-
-<span class="k">fn</span> <span class="f">err?</span> _
-  <span class="f">false</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/testing"</span>
 
 test_base_price_raw <span class="o">=</span> <span class="f">base_price</span> <span class="s">"dango"</span> <span class="o">==</span> <span class="n">350</span>
 
 test_dango_price <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span> <span class="o">==</span> <span class="n">400</span>
 
-test_unknown_item_fails <span class="o">=</span> <span class="f">err?</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+test_unknown_item_fails <span class="o">=</span> <span class="f">testing/failed?</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test teahouse</div>
     <pre><code>test_base_price_raw ... ok

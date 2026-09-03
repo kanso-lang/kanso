@@ -23,26 +23,26 @@ fn digit? none
 fn digit? c
   47 < c and c < 58
 
-fn is_ws? 9
+fn ws? 9
   true
 
-fn is_ws? 10
+fn ws? 10
   true
 
-fn is_ws? 13
+fn ws? 13
   true
 
-fn is_ws? 32
+fn ws? 32
   true
 
-fn is_ws? none
+fn ws? none
   false
 
-fn is_ws? _
+fn ws? _
   false
 
 fn skip_ws cs p
-  if (is_ws? cs[p]) (skip_ws cs (p + 1)) p
+  if (ws? cs[p]) (skip_ws cs (p + 1)) p
 
 fn trailing cs p v
   if (p > length cs) v (fail p "unexpected trailing characters")
