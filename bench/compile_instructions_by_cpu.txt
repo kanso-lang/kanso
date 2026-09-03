@@ -154,3 +154,20 @@ family0x19-model0x1 41831767
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
 family0x6-model0xcf 41832275
+
+# 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
+# family0x19-model0x11 rather than carry a value measured against the previous
+# binary, and said the row comes back "when it next refuses, not a new chip".
+# It refused here, and this is the sitting.
+#
+# It reads 41,831,767 — Zen 3's value to the instruction, on the same binary,
+# sha 55fb850296d1 printed on both runs. So on this binary the three recorded
+# chips read 41,831,767 (Zen 3), 41,831,767 (Zen 4) and 41,832,275 (Emerald
+# Rapids): the two AMD models agree and the Intel one is 508 away.
+#
+# That is the THIRD binary on which the two AMD models have agreed, and they
+# stay keyed apart anyway, for the reason the header already gives: the
+# evidence is that they agree here, not that they agree. A row that merged them
+# would be a prediction, and the only thing this file predicts is that an
+# unrecorded chip gets a sitting.
+family0x19-model0x11 41831767
