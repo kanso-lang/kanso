@@ -87,3 +87,4 @@
 # out of the job log.
 family0x19-model0x11 41498829
 family0x19-model0x1 41503893
+family0x6-model0x6a 41498829
