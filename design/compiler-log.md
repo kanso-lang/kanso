@@ -2877,3 +2877,174 @@ and that is worth recording rather than counting as coverage.
 **The surface shape is still Clay's**, and the ledger entry stays until he
 rules on it. What has changed is that it is now a thing to read rather than a
 thing to imagine, and the evidence for wanting it is a measurement.
+
+## 2026-08-31 — rider: pure fallibility is boxed too
+
+Clay raised `foo["bar"]!` against the effects-are-types gavel: an err
+with no io underneath — value or effect? A crash-semantics reading
+(insistence violated = defect, halt) was proposed and DECLINED by
+Clay on the shipped mechanism: "you just get an error back and you
+can handle it however you want and it bubbles up. so maybe it should
+be an effect after all... since that's the only way to enforce the
+bubbling." That entailment is the ruling:
+
+- **Any operation whose answer includes an err yields `<t>effect`,
+  io or not.** The box is defined by fallibility — the unresolved
+  outcome — and io was never the criterion. One failure system.
+- `foo["bar"]` stays the data form: the value or `none`, absence as
+  ordinary data, no box (and post-`done`, `none` is unambiguous).
+- `foo["bar"]!` yields `<v>effect`; the suffix-grammar contract ("a
+  `!` function's answer typeset includes an err") re-reads as: a `!`
+  operation answers a box.
+- The bang family stays rescuable under the standing license — the
+  map-collision reasoning holds (the err is raised in std, std is
+  foreign to every caller). Nothing supersedes.
+- Enforcement is why: under explicit elimination the box is the only
+  carrier that makes bubbling mandatory. A bare err would need the
+  retired railway; a box cannot be dropped or mistaken for a value.
+
+Separately proposed and AWAITING GAVEL: the fused chain operators
+(`.>` bind, `.!` annotate, `.?` rescue — reviving the archived `.>`
+of 2026-08-16), bare-function right-hand sides, sole spelling in
+chain position with the words remaining prefix functions. Not ruled;
+recorded so the proposal is not re-derived.
+
+## 2026-08-31 — gavel: the fused chain operators
+
+Clay: "the fused operators are a Go." The three combinators gain
+fused chain spellings — the chain dot plus one character of channel:
+
+    config = io/read_file path
+      .> json/parse                      # chain through bind
+      .! (e -> "config: {e.reason}")     # chain through annotate
+      .? when_failed                     # chain through rescue
+
+- Each is pure sugar with a fixed desugaring: `x .> f` IS `bind x f`,
+  `.!` annotate, `.?` rescue. Semantics, licenses, and the auto-
+  rewrap live at the words; the parser learns three operators, not
+  three meanings. `.>` revives the archived spelling of 2026-08-16.
+- The right-hand side is a bare function — a lambda, a named
+  function, or a dispatch group — no wrapper lambda for the common
+  case: `.> json/parse`, `.? when_failed`.
+- **In chain position the fused operators are the only spelling.**
+  `. bind (f)` retires as a chain form, superseding the 2026-08-29
+  keep-the-dot ruling for the three combinators specifically; plain
+  `.` application chaining is untouched. The words remain ordinary
+  prefix functions everywhere else (`rescue (foo["bar"]!) handler`),
+  so each position has exactly one spelling.
+- All three land together, per the no-yagni-in-language-design rule:
+  a chain that can `.>` but must fall back to a word for annotate
+  would be the inconsistency this family exists to remove.
+- Pure fallibility benefits identically:
+  `foo["bar"]! .? (e -> "anonymous")` is one-line handling with no
+  ceremony, per the boxed-fallibility rider above.
+
+## 2026-08-31 — directive: the welfare chart replays the current formula
+
+Clay, seeing the #184 re-scoring as a cliff in the trend chart: the
+graph should be continuous. The history rows store raw counters per
+merge, so the chart's welfare line is to be RECOMPUTED — today's
+formula, today's baseline, replayed over every stored row — rather
+than plotting the number as it was computed at the time. The cliff
+disappears because it was never a change in the compiler.
+
+Rules of the replay:
+- The recomputed series starts where its counters start. A segment
+  computed over a subset of counters (before the instruction or
+  text veins existed) is either omitted or visibly labeled; it is
+  never passed off as the full formula.
+- The floor history in bench/welfare_floor.json stays exactly as it
+  is — it is the audit trail of when the objective moved, and it is
+  not smoothed. The chart reads the replay; the audit reads the
+  floor file.
+- Every future formula or baseline change re-runs the replay in the
+  same PR, so the chart is always one definition applied everywhere,
+  never a splice.
+
+## 2026-09-02 — gavel: the weights, tuned to the developer's order of noticing
+
+Clay, asked whether the welfare weights were justifiably optimal,
+restated the objective: "the core thing we're attempting to optimize
+for here is ultimately developer happiness. performance should be
+insane, but if a language doesn't compile wickedly fast, like go,
+devs may choose not to use it in the first place." He took the
+recommendation that followed. The weights argument, recorded as the
+doctrine requires before the floor moves:
+
+    term             was    now   satiation
+    run speed        0.30   0.30  2.0   (unchanged)
+    run memory       0.30   0.26  2.0
+    compile speed    0.28   0.32  0.5
+    compile memory   0.12   0.12  0.5   (unchanged)
+
+- **Compile speed rises, funded from run memory.** A developer feels
+  compile latency on every edit and feels peak memory only when
+  something falls over. Compile latency is an adoption gate; the
+  memory model is the identity, but the objective's job is to punish
+  regressions in the order developers notice them. Compile memory
+  stays at 0.12 — the compiler's own footprint is a CI-container
+  guard, not something a developer perceives.
+- **The run-speed term splits in two halves.** Half is the equal-
+  weighted mean of the advertised workloads — decode (jsonbench) and
+  encode (encodebench), the rows the front page makes claims about
+  and the workload the language exists for. Half is the equal-
+  weighted mean of every other run benchmark in the objective — the
+  shape guards, today oneshot, basket, wide, deep, pending, scan and
+  digest (the last two joined in #1215) — which stress the memory
+  model and protect against pathologies. The rule is "advertised
+  versus everything else", so a benchmark added later lands in the
+  guard half without this entry needing an edit. A shape win no longer scores as if a real workload
+  got faster; the guards stay fully armed against regression. Per-
+  counter saturation (the #184 ruling) applies inside each half
+  before its mean.
+- **Satiation constants stand.** Compile at 0.5 already says the
+  target is instant and past instant nothing more is bought, with
+  the curve's asymmetry making a compile regression cost more than
+  the equivalent gain earns — the adoption-gate shape. Runtime at
+  2.0 says eight times faster is eight times faster.
+- **The exclusions stand**: wall time (nondeterministic), binary
+  size (measured pointing the wrong way, #1217/#1219, pinned by
+  spec), and everything unmeasurable, which the floor-permeable-to-
+  language rule keeps welfare from vetoing.
+
+Lands as a weights change: recorded here, `--set` in the same PR with
+this entry's reason, the floor re-set, and the chart replay re-run so
+the history reads under one definition.
+
+## 2026-09-03 — gavel: the bimodal row is made deterministic, not excused
+
+On "The compile-instructions row is bimodal" (#265), Clay declined
+both the pinned pair and an exclusion of glibc from the count: "if
+changes to the compiler can interact with glibc in a way that means
+generally more/less work, which the 'compiler's own instructions'
+measure would be blind to, then we need a way to include glibc's
+instructions but make them consistent, like how rspec can run with a
+seed... you run some instruction at the top to clear out the glibc
+state in test mode. this is crucial to be specific about."
+
+So the ruling is option 1 with the term named. The measured signature
+— five consecutive runs in one container agree exactly, two runners
+with the same binary and chip disagree — says the randomness is fixed
+at container birth, not per exec. Two suspects fit that shape and
+both are cheap to test:
+
+1. **Directory read order.** `kanso check lib/json` reads a source
+   directory; ext4's readdir order is a hash order seeded per
+   filesystem instance, so a fresh runner disk orders the same files
+   differently, consistently within one VM. If the loader does not
+   sort entries before compiling them, the allocation sequence — and
+   so the heap layout, and so the alignment paths in `_int_malloc`
+   and `memcmp` — differs per VM. This is a build-determinism defect
+   independent of the vein: the compiler's work must never depend on
+   inode hashes. Fix: sort in the loader.
+2. **ASLR.** Heap base and mmap addresses randomize per exec unless
+   disabled; `setarch -R` around the measurement removes the term.
+
+Environment (env -i), glibc tunables and glibc revision are already
+pinned. Apply both fixes, measure on several fresh runners; if the two
+modes collapse to one, glibc stays in the count under a single exact
+pin — no pair, no band, no exclusion. Only a residual that survives
+both reopens the question, and then the fallback is the pinned pair,
+never blindness. The entry leaves Blocking with this commit; the
+rustc-patch rider is the implementer's (the pin did its job;
+regenerate with a sentence).
