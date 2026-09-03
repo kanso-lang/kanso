@@ -31,7 +31,21 @@
 # moves when a test file changes its imports answers a question nobody asked.
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
-# measured-on rustc=1.98.0
+# measured-on rustc=1.98.1
+#
+# 2026-09-03: the runner's rustc moved 1.98.0 -> 1.98.1 and this line moves
+# with it. THE POINT RELEASE MOVED NOTHING. CI re-sat all three compile veins
+# under 1.98.1 on family0x6-model0xcf, binary sha de5bfab22fbd, and every
+# number came back identical to the one recorded under 1.98.0:
+# compile_allocs 25,485, compile_peak_bytes 715,275, compile_instructions
+# 41,831,767. Only the measured-on line changes.
+#
+# That is one datum against the granularity this file pins. measured_on.sh's
+# own header says of rustc: "the upstream version only ... nothing here shows
+# a point release moving a count, and pinning tighter than the evidence reds
+# the gate on changes that are not changes." A patch bump reddening three
+# gates while moving no number is exactly that shape. It is ONE observation
+# and the pin is not loosened on it; the next point release is the second.
 #
 # 2026-08-30 (a dispatch group is a range): 763,868 -> 742,572, a fall of
 # 21,296 or 2.8%. Banked. `infer`'s dispatch table held one heap `Vec<usize>`

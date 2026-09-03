@@ -15,7 +15,7 @@
 # bare `compile_instructions=` for welfare, the trend gate and golden_prose.
 # <key> is scripts/gates/dispatch.sh `key`. <counted> is what this run read.
 #
-# Four ways to be wrong and one way to be right. None of the four is a warning:
+# Five ways to be wrong and one way to be right. None of the five is a warning:
 # an unknown number never passes.
 set -e
 table=$1
@@ -37,6 +37,30 @@ if [ -z "$rows" ]; then
   echo "::error::    $key $got"
   echo "::error::"
   echo "::error::and set compile_instructions=$got in $golden to match."
+  exit 1
+fi
+
+# A key may appear once. The lookup below takes the first row matching a key
+# and stops, so a second row for the same chip is read by nobody and looks
+# authoritative to everybody — which is how a golden goes quiet. It is not a
+# hypothetical: the Emerald Rapids row was once corrected in place AND appended
+# in one edit, and every gate stayed green on the file that resulted. Checked
+# before the lookup so the reader is told about the duplicate rather than sent
+# to re-sit a front end that did not move.
+dupes=$(echo "$rows" | awk '{print $1}' | sort | uniq -d)
+
+if [ -n "$dupes" ]; then
+  echo "::error::$table has more than one row for a chip:"
+  for d in $dupes; do
+    echo "::error::"
+    echo "::error::    $d"
+    echo "$rows" | awk -v k="$d" '$1 == k { print "::error::        " $0 }'
+  done
+  echo "::error::"
+  echo "::error::Only the first is ever read, so the rest say nothing while"
+  echo "::error::looking like a sitting. A re-sitting EDITS the chip's row"
+  echo "::error::where it stands; it does not append a second one. Delete the"
+  echo "::error::duplicates, keeping the value the re-sitting meant."
   exit 1
 fi
 

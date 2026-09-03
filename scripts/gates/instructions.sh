@@ -13,7 +13,14 @@
 set -e
 
 # Whose numbers these are, before spending a minute measuring against them.
-sh scripts/gates/measured_on.sh bench/instructions_golden.txt
+# A host the golden does not name still MEASURES on CI, so the job log carries
+# the sitting the refusal tells a reader to copy. scripts/gates/host_gate.sh
+# carries the reasons; 3 means measure, print, and refuse without comparing.
+host=0
+sh scripts/gates/host_gate.sh bench/instructions_golden.txt || host=$?
+if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
+  exit "$host"
+fi
 
 # And which silicon is about to count them. This never refuses — the runner
 # pool holds at least four CPUs, so a check that demanded one would be red on
@@ -54,6 +61,14 @@ if command -v callgrind_annotate >/dev/null; then
 else
   echo "=== no callgrind_annotate on this host, so no breakdown"
 fi
+# Measured, and on a host the golden does not name that is as far as this goes.
+if [ "$host" -eq 3 ]; then
+  echo "::error::this runner's sitting, to copy into bench/instructions_golden.txt"
+  echo "::error::together with its measured-on line. NOTHING IS COMPARED:"
+  sed 's/^/::error::    /' work.txt
+  exit 1
+fi
+
 grep -v '^#' bench/instructions_golden.txt > work_want.txt
 diff work_want.txt work.txt || {
   # The rows again, after the diff and after the profile above it, because

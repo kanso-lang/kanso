@@ -26,8 +26,23 @@
 set -e
 golden=bench/compile_instructions_golden.txt
 table=bench/compile_instructions_by_cpu.txt
-sh scripts/gates/measured_on.sh "$golden"
-sh scripts/gates/measured_on.sh "$table"
+# A host neither file names still MEASURES on CI, so the job log carries the
+# sitting the refusal tells a reader to copy. scripts/gates/host_gate.sh carries
+# the reasons; 3 means measure, print, and fail at the end. Both files are asked,
+# and the worse answer wins — a stop from either is a stop.
+host=0
+sh scripts/gates/host_gate.sh "$golden" || host=$?
+if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
+  exit "$host"
+fi
+tablehost=0
+sh scripts/gates/host_gate.sh "$table" || tablehost=$?
+if [ "$tablehost" -ne 0 ] && [ "$tablehost" -ne 3 ]; then
+  exit "$tablehost"
+fi
+if [ "$tablehost" -eq 3 ]; then
+  host=3
+fi
 
 # And which silicon is about to count it, which decides WHICH ROW this run is
 # read against. The pool is at least four CPUs and glibc picks its memcpy by
@@ -109,6 +124,13 @@ fi
 # Which row this run is read against, and whether it landed on it.
 # scripts/gates/compile_ir_row.sh is a separate file so its four refusals can
 # be watched failing without a callgrind run each time.
+if [ "$host" -eq 3 ]; then
+  echo "::error::the row above is this runner's sitting on a host $table does"
+  echo "::error::not name, so it is NOT read against any recorded chip. Copy it"
+  echo "::error::into $table and $golden together with the measured-on lines."
+  exit 1
+fi
+
 sh scripts/gates/compile_ir_row.sh "$table" "$golden" \
   "$(sh scripts/gates/dispatch.sh key)" \
   "$(sed -n 's/^compile_instructions=//p' compile_ir_got.txt)"

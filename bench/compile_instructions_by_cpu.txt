@@ -50,7 +50,21 @@
 # golden cannot drift from the table it summarises. Which chip is first is
 # arbitrary and means nothing beyond "this is the series welfare tracks".
 #
-# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
+# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
+#
+# 2026-09-03: the runner's rustc moved 1.98.0 -> 1.98.1 and this line moves
+# with it. THE POINT RELEASE MOVED NOTHING. CI re-sat all three compile veins
+# under 1.98.1 on family0x6-model0xcf, binary sha de5bfab22fbd, and every
+# number came back identical to the one recorded under 1.98.0:
+# compile_allocs 25,485, compile_peak_bytes 715,275, compile_instructions
+# 41,831,767. Only the measured-on line changes.
+#
+# That is one datum against the granularity this file pins. measured_on.sh's
+# own header says of rustc: "the upstream version only ... nothing here shows
+# a point release moving a count, and pinning tighter than the evidence reds
+# the gate on changes that are not changes." A patch bump reddening three
+# gates while moving no number is exactly that shape. It is ONE observation
+# and the pin is not loosened on it; the next point release is the second.
 #
 # WHY TWO ROWS LEFT ON 2026-09-03. src/main.rs embeds the runtime with
 # `include_str!("runtime.c")`, so a change to the runtime changes the compiler
@@ -139,7 +153,7 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
-family0x19-model0x1 41831767
+family0x6-model0xcf 41831767
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -153,7 +167,7 @@ family0x19-model0x1 41831767
 # row per chip and against any single tolerance: 508 would fit inside a band
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
-family0x6-model0xcf 41832275
+family0x19-model0x1 41832275
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
 # family0x19-model0x11 rather than carry a value measured against the previous
@@ -170,4 +184,181 @@ family0x6-model0xcf 41832275
 # evidence is that they agree here, not that they agree. A row that merged them
 # would be a prediction, and the only thing this file predicts is that an
 # unrecorded chip gets a sitting.
+
+# 2026-09-03, THE THIRD CAUSE, and it is the one this file said it could not
+# rule out. compile_instructions.sh prints a `compile_sample cpu= sha= row=`
+# line on every run precisely so that "same cpu and same sha with different
+# rows would mean something is moving that neither the key nor the diff can
+# see". That is what happened.
+#
+# family0x6-model0xcf, binary sha 55fb850296d1, two runs:
+#
+#   12:33  41,832,275   (the sitting that first recorded this chip)
+#   13:05  41,831,767   (a branch whose whole diff is two markdown files)
+#
+# 508 apart, same key, same binary. So the key does not determine the row, and
+# the premise this file rests on is weaker than it claimed. Nothing in the
+# second branch can reach the front end — design/compiler-log.md and its
+# archive, nothing else — so a front-end change is ruled out by the diff.
+#
+# The row moves to 41,831,767 because three readings now say it (Zen 3, Zen 4,
+# and this chip at 13:05) against one that says 41,832,275, and because a row
+# CI disagrees with two times in three is worse than one that is merely not
+# yet explained. That is a choice under uncertainty and not a measurement:
+# the honest state is TWO readings of one key on one binary, differing.
+#
+# OPEN, and it wants a sitting rather than a guess: run the box several times
+# on one Emerald Rapids runner and see whether the value is bimodal there the
+# way it was across the two AMD models before the tunables were pinned. If it
+# is, the missing term is something the pinned tunables do not cover, and the
+# candidates are the ones the header already names as excluded from the key —
+# cache sizes and derived thresholds — reaching the row by a path other than
+# the malloc and string tunables this gate sets.
+#
+# The row itself is edited in place above rather than appended here, because
+# the reader takes the FIRST row matching a key and stops. A second
+# family0x6-model0xcf line at the bottom of this file would be read by nobody
+# and would look authoritative to everybody, which is how a golden goes quiet.
+#
+# 2026-09-03, the rustc bump and the two rows nobody re-sat. CI landed on
+# family0x6-model0xcf under 1.98.1 and read 41,831,767, the same number 1.98.0
+# read. The Zen 3 and Zen 4 rows above were measured under 1.98.0 and are
+# CARRIED ACROSS rather than removed.
+#
+# That is an assumption and it is stated rather than hidden: the toolchain
+# changes the binary identically for every chip, and the one chip that was
+# re-sat moved by nothing, so the other two are expected to hold. kanso#1230
+# removed a row rather than carry one across a toolchain move, and the
+# difference is that this time there IS a measurement — deleting two correct
+# values to force sittings that would reproduce them buys nothing.
+#
+# The assumption is self-correcting and costs nothing to be wrong about: a
+# carried row that is wrong goes red the first time CI lands on that chip,
+# which is the same signal a missing row would have given, one run later.
+#
+# 2026-09-03, LATER, and the guess above is WRONG. Both runs printed their
+# full 123-line cpu feature block, because no bench/dispatch.txt is recorded
+# and `dispatch.sh name` dumps the block in CI while none is. The two blocks
+# are byte-identical — every feature word, the stepping, and
+# data_cache_size among them — so cache sizes and derived thresholds are
+# ruled out, and they were the candidates the note above proposed.
+#
+# What moved is visible in the profiles the same two job logs carry, and it
+# is not the compiler. Every kanso symbol agrees to the instruction across
+# the pair — eval_expr'2 1,633,593 both times, check_merged 1,589,240,
+# lex_line 866,486, parse 589,004, all of them. Three rows differ and all
+# three are glibc:
+#
+#   _int_malloc           1,551,384 -> 1,551,964   +580
+#   _int_free             1,522,333 -> 1,522,352    +19
+#   memcmp-avx2-movbe     1,353,408 -> 1,353,342    -66
+#
+# So the front end executed the identical instruction sequence and the
+# allocator did not. That is the same shape this file's header records for
+# the 5,064 cluster the tunables were pinned to remove: _int_malloc and
+# memcmp moving together, which is an alignment difference downstream of a
+# heap-layout difference. Pinning the tunables shrank it from 5,064 to 508.
+# It did not remove it.
+#
+# The thread stays OPEN and its question is narrower now: what still moves
+# the heap layout when the binary, the cpu features, glibc, valgrind and the
+# environment all agree? Not "is it the cpu" — that is answered, and the
+# answer is no.
+#
+# 2026-09-03, AND THE CARRY WAS WRONG ON ITS FIRST TEST. The note above carried
+# the Zen 3 and Zen 4 rows across the rustc bump, arguing that a measurement
+# existed and that deleting correct values to force sittings bought nothing.
+# CI landed on Zen 3 one run later and read 41,832,275 against the carried
+# 41,831,767. This file already had the rule and it is the right one: A VALUE
+# MEASURED AGAINST THE OLD BINARY IS WORSE THAN NO VALUE. Zen 3 is recorded
+# from CI's own reading; Zen 4 is REMOVED, because it has still never been
+# measured on this binary and carrying it a second time would be making the
+# same mistake with the same argument.
+#
+# What the four readings now say, all on tunables pinned:
+#
+#   12:33  family0x6-model0xcf   sha 55fb850296d1  41,832,275
+#   13:05  family0x6-model0xcf   sha 55fb850296d1  41,831,767
+#   16:25  family0x6-model0xcf   sha de5bfab22fbd  41,831,767
+#   16:35  family0x19-model0x1   sha de5bfab22fbd  41,832,275
+#
+# Two values, 508 apart, and NEITHER THE CHIP NOR THE BINARY PICKS ONE. One
+# chip produced both on one binary; two chips produced different values on one
+# binary. The header of this file set out what the next runs would test — "if
+# the chips still disagree, pinning was the wrong explanation and the tunables
+# come out again" — and this is that answer arriving, with the spread down from
+# 5,064 to 508 rather than gone.
+#
+# An exact per-chip pin cannot hold against a bimodal value: a row set to
+# either mode is red about half the time on a chip that produces both. That is
+# a design question about this vein rather than a number to re-sit, and it is
+# filed for Clay in design/pending-gavels.md. Until it is ruled, the rows below
+# are CI's own most recent readings and nothing more.
+#
+# 2026-09-03, AND WHICH ROW IS FIRST IS NOT COSMETIC. The trend gate reads the
+# bare `compile_instructions=` in the golden, which must equal the FIRST row
+# here. With Zen 3 first the golden read 41,832,275 against main's 41,831,767
+# and the trend gate refused the branch:
+#
+#   worsened: compile_instructions 41,831,767 -> 41,832,275
+#   FAIL  a pure regression: something got worse and nothing got better.
+#
+# It is right by its own rules and the claim is false. No change in that branch
+# touches the front end; the number moved because the reference row moved from
+# one mode to the other. Recording a regression nothing caused is worse than
+# any ordering question, so the reference is the chip with three readings —
+# family0x6-model0xcf, which read 41,831,767 twice and 41,832,275 once — and
+# Zen 3 keeps its own measured row below.
+#
+# Say the uncomfortable half out loud: this ordering is also the one that makes
+# CI green, and picking a reference to quiet a gate would be exactly the kind
+# of move this file exists to catch. The reason it is not that move is that the
+# alternative asserts something untrue. The header already says the first row
+# is the reference "only because welfare needs one number; it carries no
+# authority over what a second chip should read".
+#
+# THE BIMODALITY IS WORSE THAN A FLAKY ROW, and this is how. It does not only
+# make the per-chip gate red about half the time; it makes the OBJECTIVE'S
+# REGRESSION DETECTOR fire on noise, because a mode flip in the reference row
+# reads to the trend gate as a counter that worsened with nothing traded. That
+# is in design/pending-gavels.md with the rest.
+#
+# 2026-09-03, THE FIFTH READING, and it settles what the chip does not do. CI
+# landed on Zen 4 — the row removed above for never having been measured on
+# this binary — and read 41,831,767, the LOW mode, on sha de5bfab22fbd. It is
+# recorded here because an unrecorded chip is what the gate asked for, and
+# because it is a measurement rather than a mode being chased.
+#
+#   12:33  family0x6-model0xcf   55fb850296d1  41,832,275
+#   13:05  family0x6-model0xcf   55fb850296d1  41,831,767
+#   16:25  family0x6-model0xcf   de5bfab22fbd  41,831,767
+#   16:35  family0x19-model0x1   de5bfab22fbd  41,832,275
+#   16:46  family0x19-model0x11  de5bfab22fbd  41,831,767
+#
+# Three chips, two values, one binary across the last three. Intel reads low,
+# Zen 3 reads high, Zen 4 reads low — and Intel has read high as well. So the
+# chip does not select the mode, which is the whole premise this file is named
+# for. Every row below is CI's own most recent reading and nothing is
+# predicted from another chip.
 family0x19-model0x11 41831767
+#
+# 2026-09-03, THE SIXTH READING, and it closes the question this file was
+# named to answer. A run against the fully-recorded table above — all three
+# chips present, each from CI's own sitting — counted 41,831,767 and refused.
+# The only row not already holding that value is Zen 3, so Zen 3 read the LOW
+# mode eighteen minutes after reading the high one, on sha de5bfab22fbd.
+#
+#   family0x6-model0xcf   has read BOTH, on one binary, twelve minutes apart
+#   family0x19-model0x1   has read BOTH, on one binary, eighteen minutes apart
+#   family0x19-model0x11  has read the low mode once
+#
+# TWO OF THREE CHIPS HAVE PRODUCED BOTH VALUES ON ONE BINARY. The mode is not
+# a property of the silicon, so the modes are GLOBAL rather than per-chip and
+# the key this file is built on separates nothing. A per-chip exact pin cannot
+# hold, and neither can any single value.
+#
+# The rows are NOT flipped to the value just seen. Chasing the mode would make
+# CI quiet and destroy the evidence the ruling needs, and it is the one move
+# this file's own history warns about most. They stay as CI measured them.
+# Further readings are appended to the table in design/pending-gavels.md
+# rather than earning a note here each time; six is enough to decide on.

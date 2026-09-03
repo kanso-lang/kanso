@@ -14,12 +14,17 @@
 //! change moved this row -5,621, which is the same size as the chip effect. A
 //! tolerance wide enough to swallow the noise swallows the signal.
 //!
-//! So the noise gets a key, and the four failures below are the whole of what
-//! keying it means. The one that matters most is the third: an unrecorded chip
-//! REFUSES. Letting it pass is exactly the design CI killed in two runs, where
-//! three runs in four landed on an unrecorded cpu and would have waved a
-//! regression through — and the ratchet's mutations redden these same gates,
-//! so on those runs its rows would have gone blind.
+//! So the noise gets a key, and the failures below are the whole of what keying
+//! it means. The one that matters most is the unrecorded chip: it REFUSES.
+//! Letting it pass is exactly the design CI killed in two runs, where three
+//! runs in four landed on an unrecorded cpu and would have waved a regression
+//! through — and the ratchet's mutations redden these same gates, so on those
+//! runs its rows would have gone blind.
+//!
+//! The last three came later and from a mistake rather than a design: the row
+//! for one chip was corrected in place AND appended in a single edit, the
+//! lookup reads the first match and stops, and every gate stayed green over a
+//! file holding two authorities for one key.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -226,4 +231,78 @@ fn a_missing_argument_is_neither_a_pass_nor_a_regression() {
         .output()
         .expect("the script runs");
     assert_eq!(out.status.code(), Some(2), "usage is its own answer");
+}
+
+/// Two rows for one key. `awk '$1 == k { print $2; exit }'` takes the first and
+/// stops, so the second is read by nobody — and a line in a golden that nobody
+/// reads is the shape this repo keeps finding green and blind. It happened
+/// while the Emerald Rapids row was being corrected: the row was edited in
+/// place AND appended, and every gate stayed green on a file that then held two
+/// different-looking authorities for one chip.
+///
+/// The duplicate is refused whether or not the two rows agree, because the
+/// defect is the second line existing, not its value. A pair that agrees today
+/// is a pair that disagrees after the next re-sitting touches one of them.
+#[test]
+fn two_rows_for_one_chip_refuse_even_when_they_agree() {
+    let answer = asked(
+        "dup-agree",
+        &table_of(&[
+            ("family0x6-model0x55", "41495096"),
+            ("family0x19-model0x1", "41500974"),
+            ("family0x6-model0x55", "41495096"),
+        ]),
+        &golden_of("41495096"),
+        "family0x6-model0x55",
+        "41495096",
+    );
+    assert!(answer.refused(), "a duplicated key refuses: {}", answer.said);
+    assert!(
+        answer.said.contains("family0x6-model0x55"),
+        "and names the key that is doubled: {}",
+        answer.said
+    );
+}
+
+/// The same table where the two rows disagree, and the run counts what the
+/// SECOND row says. This one refuses either way — the first row does not match,
+/// so the moved-row refusal fires — which is why the assertion is about WHICH
+/// refusal. A reader sent to re-sit the front end when the actual defect is two
+/// lines for one chip is sent to the wrong place, and re-sitting would write a
+/// third row into a file that already had one too many.
+#[test]
+fn a_second_row_for_a_chip_is_not_reported_as_a_moved_front_end() {
+    let answer = asked(
+        "dup-differ",
+        &table_of(&[("family0x6-model0x55", "41495096"), ("family0x6-model0x55", "41489475")]),
+        &golden_of("41495096"),
+        "family0x6-model0x55",
+        "41489475",
+    );
+    assert!(answer.refused(), "the later row does not quietly become the answer: {}", answer.said);
+    assert!(
+        !answer.said.contains("FRONT END"),
+        "and the reader is not sent to re-sit a compiler that did not move: {}",
+        answer.said
+    );
+}
+
+/// A duplicate anywhere in the table is a refusal, not only one on the chip
+/// this run landed on. Otherwise the file stays broken for every run but the
+/// unlucky one, which is how the unrecorded-chip design went wrong the first
+/// time: three runs in four never look at the row that matters.
+#[test]
+fn a_duplicate_on_another_chip_refuses_too() {
+    let answer = asked(
+        "dup-elsewhere",
+        &table_of(&[
+            ("family0x6-model0x55", "41495096"),
+            ("family0x19-model0x1", "41500974"),
+            ("family0x19-model0x1", "41500974"),
+        ]),
+        &golden_of("41495096"),
+        "family0x6-model0x55",
+        "41495096",
+    );
+    assert!(answer.refused(), "the file is wrong whoever is reading it: {}", answer.said);
 }

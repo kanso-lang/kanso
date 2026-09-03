@@ -19,8 +19,26 @@ for k in rounds visits; do
     exit 1
   fi
 done
-sh scripts/gates/measured_on.sh "$golden"
+# A host the golden does not name still MEASURES on CI, so the job log carries
+# the sitting the refusal tells a reader to copy. scripts/gates/host_gate.sh
+# carries the reasons; 3 means measure, print, and fail at the end.
+host=0
+sh scripts/gates/host_gate.sh "$golden" || host=$?
+if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
+  exit "$host"
+fi
 got=$(grep '^compile_peak_bytes=' counters_compile.txt | cut -d= -f2)
+
+# Measured, and on a host the golden does not name that is as far as this goes:
+# the rows are printed for CI's job log and nothing is compared against them.
+if [ "$host" -eq 3 ]; then
+  echo "::error::this runner's sitting, to copy into $golden together with its"
+  echo "::error::measured-on line. NOTHING IS COMPARED:"
+  grep -E '^(compile_peak_bytes|front_end_rounds|front_end_visits)=' \
+    counters_compile.txt | sed 's/^/::error::    /'
+  exit 1
+fi
+
 want=$(grep '^compile_peak_bytes=' "$golden" | cut -d= -f2)
 echo "front end holds ${got} bytes; golden ${want}"
 if [ "$got" != "$want" ]; then
