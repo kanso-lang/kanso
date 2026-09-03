@@ -50,6 +50,25 @@ type finding
   line
   ok
 
+# A gate whose answer is only meaningful where its golden was measured.
+#
+# `bench/instructions_golden.txt` pins eleven exact counts and the runner pool
+# is not one machine. On 2026-09-03 the cost-goldens job and the ratchet job,
+# on ONE commit, read `digestbench 81252316` and `81252330` — fourteen apart,
+# two runners, one image, one glibc. A row whose gate diffs those counts is red
+# on any runner but the golden's, whatever the mutation did.
+#
+# That is not the branch's failure and no diff fixes it, so the baseline reports
+# such a gate and does not fail on it. The row is NOT credited either: the
+# proving pass skips every row sharing that gate and says so. The distinction
+# is the whole point — before kanso#1228 a red gate was counted as proof, which
+# is the blindness; saying out loud that a row went unproven this run is the
+# opposite of that, and on a run that lands on the golden's silicon the row is
+# proved normally.
+type bound
+  gate
+  why
+
 # One (gate, setup) pair the baseline reads once, named by the first row that
 # carries it.
 type pair
@@ -112,6 +131,25 @@ fn gating name
 # rather than a script of their own.
 fn whose vein
   "sh scripts/gates/measured_on.sh bench/{vein}_golden.txt"
+
+why_exact = "its golden is exact counts and the pool is not one machine"
+
+work_gate = "sh scripts/gates/instructions.sh"
+
+front_gate = "sh scripts/gates/compile_instructions.sh"
+
+bound_a = bound work_gate why_exact
+
+bound_b = bound front_gate why_exact
+
+host_bound = [bound_a bound_b]
+
+fn host_bound? gate
+  list/any? host_bound (e -> e.gate == gate)
+
+fn why_bound gate
+  found = list/to_list (list/select host_bound (e -> e.gate == gate))
+  found[1]!.why
 
 formatting = row
   "a file rustfmt would rewrite"
@@ -1103,22 +1141,42 @@ fn unmade p r
   finding "{said}    the baseline would not build\n{spoke r}" false
 
 fn presumed p r
+  told p r (host_bound? p.gate)
+
+fn told p r true
+  said = "  UNPROVEN THIS RUN {p.job}\n    gate: {p.gate}\n"
+  why = "{why_bound p.gate}, so this run cannot prove a row sharing it"
+  finding "{said}    {why}\n{spoke r}" true
+
+fn told p r false
   said = "  ALREADY RED {p.job}\n    gate: {p.gate}\n"
   why = "red before any mutation, so no row sharing it is proof"
   finding "{said}    {why}\n{spoke r}" false
 
 fn unmutated picked pairs acc
-  settled_base picked pairs acc (length acc == 0)
+  bad = list/to_list (list/select acc (f -> not f.ok))
+  settled_base picked pairs acc (length bad == 0)
 
-fn settled_base picked pairs _ true
-  said = "ratchet: {length pairs} gates green before any mutation\n"
-  io/write said . (_ -> proving picked 1 [])
+# A note is printed and then the run carries on; only a finding nobody excused
+# stops it. Both go to stderr, because a row that went unproven is news.
+fn settled_base picked pairs acc true
+  said = "ratchet: {length pairs} gates read before any mutation\n"
+  io/write_err (said_with acc said) . (_ -> proving (kept_provable picked) 1 [])
 
 fn settled_base _ _ acc false
+  said = "ratchet: the baseline is not green\n"
+  io/write_err (said_with acc said) . (_ -> os/exit 1)
+
+fn said_with acc said
   lines = list/to_list (list/map acc (f -> f.line))
   body = text/join lines ""
-  said = "ratchet: the baseline is not green\n"
-  io/write_err "{said}{body}" . (_ -> os/exit 1)
+  "{said}{body}"
+
+# A row whose gate this run cannot answer is not run under mutation either:
+# applying a mutation to an already-red gate and reading red is the credit the
+# baseline exists to refuse.
+fn kept_provable picked
+  list/to_list (list/select picked (r -> not host_bound? r.gate))
 
 fn proving list at acc
   proven list at acc (at > length list)

@@ -4585,3 +4585,52 @@ twenty-four, which is enough for the cpu line `dispatch.sh name` prints and the
 whole eleven-row diff. Every runtime-touching pull request from here is another
 paired sitting, attributable to its silicon, at no extra cost. The decision gets
 made on a table rather than on a pair.
+
+---
+
+## 2026-09-03 — A FOURTH SHAPE: REPORTED AND NOT CREDITED
+
+**DONE, and it corrects the entry above.** That entry listed three ways out of
+the paired-sitting problem — a golden per chip, declaring the two callgrind
+gates unprovable, or comparing the mutation against the baseline's own
+measurement — and said choosing between them on one data point was premature.
+It was, and it still is. What the entry missed is that none of them has to be
+chosen, because the question it was answering was the wrong one.
+
+The ratchet's baseline asks *is this gate red for a reason other than the
+mutation*. For `sh scripts/gates/instructions.sh` on a foreign runner the answer
+is yes, and that is a fact about the ROW rather than about the branch. So the
+row is **reported and not credited**: the baseline prints `UNPROVEN THIS RUN`
+with the gate's own words and does not fail, and the proving pass drops every
+row sharing that gate instead of applying a mutation to a gate already red.
+
+**That is the opposite of the blindness kanso#1228 was built to catch, and the
+difference is one word.** Before, a red gate was silently counted as PROOF. Now
+it is silently counted as nothing, and says so out loud. On a run that lands on
+the golden's silicon the row is proved normally, so this costs coverage only on
+the runs where coverage was never available.
+
+**The danger is the list, not the mechanism** — an entry excusing a gate that is
+not silicon-bound turns a real failure into a note. So the list is pinned to a
+property of the gates rather than to anyone's judgement:
+`tests/a_host_bound_gate_is_reported_not_credited.rs` requires `host_bound` to
+be exactly the set of gate scripts that invoke callgrind on an operative line. A
+new callgrind gate left undeclared turns it red; a declared gate that runs none
+turns it red too.
+
+**That spec's own first draft could not fail, which makes three today.** It read
+the `bound` BINDINGS rather than the `host_bound` LIST, so removing an entry
+from the list left it green — the binding was still there and the list it was
+absent from was never opened. Watched red the second time, and the failure names
+both sides:
+
+```
+  left: ["sh scripts/gates/instructions.sh"]
+ right: ["sh scripts/gates/compile_instructions.sh", "sh scripts/gates/instructions.sh"]
+```
+
+Three checks in one day whose first draft was satisfiable without the property
+holding. The common thread is that each read something ADJACENT to the thing it
+meant to assert — a comment beside an install, an error message beside a diff, a
+binding beside a list. Trying to make the check fail is what found all three, and
+it cost one `sed` each.
