@@ -231,6 +231,27 @@ fn compiler_cost _
 fn welfare_score _
   os/run "./target/release/kanso" ["run" "scripts/welfare"]
 
+# THE COUNTER SET THE SCORE WAS MADE OF, asked of the objective rather than
+# assembled here a second time.
+#
+# The row used to carry a hand-picked dozen, and the list stopped keeping step
+# with the model: the digest counters joined the objective in #1198 and scan,
+# escape and index in #1215, and none of them joined the row. Measured on
+# 2026-09-03, the newest row held 12 of the 24 counters the formula reads,
+# `compile_instructions` among the missing — so the chart replay ruled on
+# 2026-08-31 had no commit whose counter set was complete, and would have drawn
+# nothing.
+#
+# Asking welfare closes that by construction. A counter that enters the model
+# enters the row in the same commit, because there is no second list to update.
+fn welfare_counters _
+  os/run "./target/release/kanso" ["run" "scripts/welfare" "--" "--counters"]
+
+# Every `name=value` the objective printed, unfiltered: the set IS the filter.
+fn scored_counters text
+  lines = list/to_list (list/select (text/split text "\n") pair?)
+  list/to_list (list/map lines (l -> kept "" l))
+
 # `welfare 65.56   floor 65.56  (...)` — the second field is the score.
 fn score_in text
   parts = text/split (text/split text "\n")[1]! " "
@@ -259,16 +280,18 @@ fn costed line d e o bk c
   compiler_cost 0 . (cc -> with_cost line d e o bk c cc)
 
 fn with_cost line d e o bk c cc
-  welfare_score 0 . (w -> assembled line d e o bk c cc w)
+  welfare_score 0
+    . (w -> welfare_counters 0 . (wc -> assembled line d e o bk c cc w wc))
 
-fn assembled line d e o bk c cc w
+fn assembled line d e o bk c cc w wc
   decode = counters d decode_watched ""
   encode = counters e encode_watched "encode_"
   oneshot = counters o oneshot_watched "oneshot_"
   basket = counters bk basket_all "basket_"
   veins = text/concat decode encode
   own = counters cc.stderr compiler_watched ""
-  scored = [["welfare" (score_in w.stdout)]]
+  banner = [["welfare" (score_in w.stdout)]]
+  scored = text/concat banner (scored_counters wc.stdout)
   rest = text/concat (text/concat oneshot basket) (compile_work c)
   measured = text/concat own scored
   tail = text/concat rest measured

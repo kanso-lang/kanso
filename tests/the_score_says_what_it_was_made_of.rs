@@ -94,3 +94,36 @@ fn asking_what_was_scored_does_not_move_the_floor() {
     let after = std::fs::read(&floor).expect("the floor reads");
     assert_eq!(before, after, "--counters is a report, not a ratchet");
 }
+
+/// The history row carries every counter the formula reads.
+///
+/// This is the property the chart replay rests on, and it was false until now:
+/// on 2026-09-03 the newest row in the perf-history branch held 12 of the 24,
+/// so "the first commit whose counter set is complete" named no commit and the
+/// replayed line would have been empty.
+///
+/// It is asserted against `welfare --counters` rather than against a list
+/// written here, because a list written here is a THIRD copy and would drift
+/// the same way the second one did. The row and the objective have to agree;
+/// what they agree ON is welfare's business.
+#[test]
+fn the_history_row_carries_the_whole_counter_set() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg(root.join("scripts/perf_record"))
+        .current_dir(root)
+        .output()
+        .expect("perf_record runs");
+    let row = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(out.status.success(), "perf_record assembles a row: {row}");
+
+    for line in counters().lines() {
+        let name = line.split('=').next().expect("a named counter");
+        assert!(
+            row.contains(&format!("\"{name}\"")),
+            "the row is missing {name}, which the formula weighs — the replayed \
+             line cannot start while that is true"
+        );
+    }
+}
