@@ -251,10 +251,30 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
     // and the interpreter never reaches its own `call_closure` with a failed
     // head — and this asked the arguments first, so a call with a failure in
     // both positions named the argument here and the callable there.
+    //
+    // The arity check answers before a failing argument too, for the same
+    // reason: a wrong-arity call is a broken program and a value that happens
+    // to fail must not hide the break. All three engines had the arguments
+    // first until 2026-09-03, and
+    // tests/golden/runtime/a_wrong_arity_call_carrying_a_failing_argument.kso
+    // is the program that told them apart.
     if let Slot::V(ref value) = slot(c_h) {
         if is_failure(value) {
             return c_h;
         }
+    }
+    let Slot::C { tidx, env, arity } = closure_slot(c_h) else {
+        let v = slot(c_h);
+        if let Slot::V(value) = v {
+            if is_failure(&value) {
+                return c_h;
+            }
+            die(format!("`{}` is not callable", render_demanded(&value, false)));
+        }
+        die("this value is not callable".to_string());
+    };
+    if arity >= 0 && arity as usize != arg_handles.len() {
+        die(format!("this function takes {arity} argument(s), got {}", arg_handles.len()));
     }
     // Two failing arguments are two facts, and the one that lost the race to
     // be first is not less true. `rt_mkrec` reads a record's fields that way
@@ -280,19 +300,6 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
                 .expect("more than one failure");
             return push(Slot::V(merged));
         }
-    }
-    let Slot::C { tidx, env, arity } = closure_slot(c_h) else {
-        let v = slot(c_h);
-        if let Slot::V(value) = v {
-            if is_failure(&value) {
-                return c_h;
-            }
-            die(format!("`{}` is not callable", render_demanded(&value, false)));
-        }
-        die("this value is not callable".to_string());
-    };
-    if arity >= 0 && arity as usize != arg_handles.len() {
-        die(format!("this function takes {arity} argument(s), got {}", arg_handles.len()));
     }
     let args = push(Slot::E(Rc::new(arg_handles)));
     unsafe { k_callback(tidx, env, args) }

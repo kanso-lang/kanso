@@ -4204,3 +4204,62 @@ timeout.
 The baseline for those 23 selected rows is 22 pairs, so the per-PR step gains
 roughly its own gate half. That is a prediction rather than a measurement: the
 next runtime-touching branch's job log settles it.
+
+A WRONG-ARITY CALL WITH A FAILING ARGUMENT ANSWERED DIFFERENTLY ON EVERY
+ENGINE. The entry of 2026-09-02 recorded this as OPEN, small and unpinned, and
+said "no program in the corpus reaches it and I did not find a way to write
+one". Here is one:
+
+  fn boom what
+    err what
+
+  fn two_b g a what
+    g a (boom what)
+
+  lam1 = (x -> x * 10)
+
+  bad = two_b lam1 3 "second"
+
+The checker does not read a function-typed parameter's arity at the call site,
+so passing a one-argument lambda into a body that applies two compiles, and the
+count is settled at run time. There the three engines disagreed:
+
+  interpreter   error[runtime]: this function takes 1 argument(s), got 2, exit 1
+  native        prints "second", exit 0
+  wasm          the same as native
+
+`k_call1` through `k_call4` and wasm's `call_closure` tested every argument for
+failure before they tested arity. `eval.rs` refuses the callable in `call` and
+the count in `call_closure`, both above its argument test. The oracle is the
+oracle, so the two compiled engines moved: the callable is asked whether it is
+callable and whether its arity matches, and only then do failing arguments
+propagate. A wrong-arity call is a broken program, and a value that happens to
+fail must not be what hides the break.
+
+The same reorder settles a second case nobody had asked about. A call on a
+value that is not callable at all, with a failing argument, answered with the
+failure on native and with "is not callable" on the oracle; the not-callable
+refusal now comes first on all three.
+
+WHY IT SURVIVED THE FIRST THREE PROBES, which is the part worth remembering:
+`kanso run <dir>` COMPILES NATIVE. The interpreter is `kanso run <dir>
+--interp`. Three probes written to compare the engines ran native twice, agreed
+with themselves, and read as evidence that the divergence was unreachable. The
+comment on `run_interpreted` says so in one line and the probes never asked it.
+
+Cost, and it is only visible in one vein. All nine allocation gates and
+`bench/emitted_golden.txt` are byte-identical, and so are all eleven rows of
+`bench/instructions_golden.txt` — the reordered tests sit in a path the
+benchmarks never take, since the emitted fast dispatch already tests tag, arity
+and arguments in that order and falls through to `k_call{n}` only for the
+shapes it declines. `bench/text_golden.txt` rises 128 bytes in total:
+1,018,166 -> 1,018,294, sixteen bytes on each of eight benchmarks, and
+jsonbench, escapebench and indexbench hold still because the linker drops the
+helpers they never reach. The sixteen bytes are one extra copy of the argument
+test: it had to move below the arity check in BOTH the closure arm and the
+fnref arm of `k_call2`, `k_call3` and `k_call4`, where one copy above the tag
+dispatch had served both.
+
+The fixture is tests/golden/runtime/a_wrong_arity_call_carrying_a_failing_argument.kso,
+watched red before green on native — it answered `error[endpoint]: unhandled
+err reached the entry: "second"` where the oracle said the arity.

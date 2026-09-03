@@ -5532,9 +5532,9 @@ KValue k_call0(KValue f) {
 KValue k_call1(KValue f, KValue a) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
-        if (!k_not_failure(a)) return a;
         KClosure* c = (KClosure*)(intptr_t)f.payload;
         if (c->arity != 1) k_die_arity(c->arity, 1);
+        if (!k_not_failure(a)) return a;
         return c->fn(c->env, a);
     }
     if (f.tag == K_FNREF) {
@@ -5550,20 +5550,31 @@ KValue k_call1(KValue f, KValue a) {
    is stored generically; cast it to the arity the call site knows, which is
    only sound once the value agrees it takes that many — a cast through the
    wrong signature leaves the extra argument in a register the callee never
-   reads, and the call answers as though it were never written. Failures in
-   the callable or any argument propagate before the body runs, matching the
-   dispatcher. */
+   reads, and the call answers as though it were never written.
+
+   The ORDER is the interpreter's, and it took a fixture to get right. A
+   failing callable answers first, then the callable is asked whether it is
+   callable at all and whether its arity matches, and only then do failing
+   arguments propagate. Testing the arguments first — which these did until
+   2026-09-03 — makes a wrong-arity call answer with the failure and exit 0
+   where the oracle dies, and a call on a value that is not callable do the
+   same. A wrong-arity call is a broken program, and a value that happens to
+   fail must not be what hides the break. `eval.rs` refuses the callable in
+   `call` and the count in `call_closure`, both above its argument test;
+   tests/golden/runtime/a_wrong_arity_call_carrying_a_failing_argument.kso is
+   the program that reaches it. */
 KValue k_call2(KValue f, KValue a, KValue b) {
     if (!k_not_failure(f)) return f;
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
         if (c->arity != 2) k_die_arity(c->arity, 2);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         return ((KValue(*)(void*, KValue, KValue))c->fn)(c->env, a, b);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 2) k_die_ref_arity(r, 2);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
     k_die_not_callable(f);
@@ -5572,16 +5583,18 @@ KValue k_call2(KValue f, KValue a, KValue b) {
 
 KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     if (!k_not_failure(f)) return f;
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-    if (!k_not_failure(c)) return c;
     if (f.tag == K_CLOSURE) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
         if (cl->arity != 3) k_die_arity(cl->arity, 3);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+        if (!k_not_failure(c)) return c;
         return ((KValue(*)(void*, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 3) k_die_ref_arity(r, 3);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+        if (!k_not_failure(c)) return c;
         return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
     k_die_not_callable(f);
@@ -5590,17 +5603,20 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
 
 KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     if (!k_not_failure(f)) return f;
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-    if (!k_not_failure(c)) return c;
-    if (!k_not_failure(d)) return d;
     if (f.tag == K_CLOSURE) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
         if (cl->arity != 4) k_die_arity(cl->arity, 4);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+        if (!k_not_failure(c)) return c;
+        if (!k_not_failure(d)) return d;
         return ((KValue(*)(void*, KValue, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c, d);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
         if (r->arity != 4) k_die_ref_arity(r, 4);
+        if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+        if (!k_not_failure(c)) return c;
+        if (!k_not_failure(d)) return d;
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die_not_callable(f);
