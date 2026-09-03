@@ -1068,7 +1068,7 @@ fn read_gate picked pairs at acc _ _ true
 fn read_gate picked pairs at acc p g false
   greening picked pairs (at + 1) (push acc (presumed p g))
 
-# The last few lines of what the gate said, indented under the finding.
+# The last two dozen lines of what the gate said, indented under the finding.
 #
 # Naming the gate was the previous shape of this, and it answered the question
 # it was built for on its first run: `sh scripts/gates/instructions.sh`, red
@@ -1077,10 +1077,18 @@ fn read_gate picked pairs at acc p g false
 # says only which gate leaves the reader with a list of hypotheses and no way
 # to choose — which is the shape of reasoning this repo keeps catching. A gate
 # writes down why it failed; the ratchet was throwing that away.
+#
+# TWENTY-FOUR because eight was not enough on the first run that used it. The
+# instructions gate prints the cpu it is about to count on, then eleven rows,
+# then its diff, then six lines of advice — and eight lines caught the advice
+# and one row. The row it caught was the useful part (`digestbench 81252330`
+# against the cost-goldens job's 81252316 on the same commit), so the next one
+# should carry the whole diff and the cpu line rather than needing a second run
+# to ask again.
 fn spoke r
   said = "{r.stdout}{r.stderr}"
   lines = text/split said "\n"
-  over = length lines - 8
+  over = length lines - 24
   tail = list/to_list (list/drop lines (chose_drop over (over > 0)))
   text/join (list/to_list (list/map tail (l -> "      {l}\n"))) ""
 
