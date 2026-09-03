@@ -1499,6 +1499,25 @@ rescue when_failed</code></pre>
 
 <p>the granularity question the refusal raised &#8212; whether rustc should be read as major.minor &#8212; stands on its own, because a patch bump that reddens three gates while moving no counter is the shape the rule was written against, and one observation is not enough to loosen a pin.</p>
 
+<h2 id="sitting"><span class="sec-num">41</span>a sitting, and the four things it settled</h2>
+
+<p>five rulings landed in one sitting, and four of them change what a reader of this page should expect. they are collected here rather than given a section each, because they were decided together and two of them only make sense beside each other.</p>
+
+<p><strong>fallibility is what the box is for, and io was never the criterion.</strong> <code>foo["bar"]!</code> raised the question: an err with no io underneath — a value, or an effect? treating a violated insistence as a defect that halts was proposed and declined. any operation whose answer can include an err yields <code>&lt;t&gt;effect</code>, io or not, and there is one failure system rather than two. <code>foo["bar"]</code> stays the data form — the value or <code>none</code>, absence as ordinary data, no box. the reason is enforcement: under explicit elimination the box is the only thing that makes propagation a contract instead of a convention.</p>
+
+<p><strong>the three combinators get fused chain spellings.</strong> <code>.&gt;</code> is bind, <code>.!</code> is annotate, <code>.?</code> is rescue — the chain dot plus one character of channel:</p>
+
+<pre><code>config = io/read_file path
+  .&gt; json/parse
+  .! (e -&gt; "config: {e.reason}")
+  .? when_failed</code></pre>
+
+<p>each is sugar with a fixed desugaring, so the parser learns three operators and not three meanings; the semantics, the licenses and the auto-rewrap all stay at the words. the right-hand side is a bare function, so the common case needs no wrapper lambda. in chain position the fused spelling is the only one, which retires <code>. bind (f)</code> as a chain form.</p>
+
+<p><strong>the weights moved, and the argument is recorded because the doctrine requires it before the floor does.</strong> compile speed rises from 0.28 to 0.32, funded from run memory at 0.30 to 0.26. a developer feels compile latency on every edit and feels peak memory only when something falls over, so compile latency is an adoption gate where the memory model is an identity. compile memory stays at 0.12: the compiler's own footprint is a container guard rather than something anyone perceives. the run-speed term splits into an advertised half and a guards half. the objective's job is to punish regressions in the order a developer notices them, and until this sitting it did not.</p>
+
+<p><strong>the bimodal compile row is made deterministic rather than excused.</strong> §40 left that row reading two values 508 apart on one binary and one chip, with the options being to pin both, band it, or stop counting glibc. the last was declined outright: if a change to the compiler can make glibc do more work, a measure of the compiler&#39;s own instructions goes blind to exactly that, so glibc stays in the count. the other two waited on two candidate causes, and both failed &#8212; readdir order was already sorted where a compile reads it, and disabling address randomization changed nothing on the container or on the runners. so the row pins the pair, which is what the ruling allowed once a residual survived both: two exact values, a third refused, and the number the objective reads still the first of them. the mechanism is still open. the count includes glibc parsing /proc/self/maps for the stack bounds before main, one more shared library in the process moves the row 32,090, and that cost belongs to the host rather than to the compiler; what is not established is that two runners&#39; maps differ by the 508 this needs.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
