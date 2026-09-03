@@ -30,9 +30,7 @@
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
 use crate::hash::{Map as HashMap, Set as HashSet};
-use crate::infer::{
-    self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, MAP, NONE, REC, STR,
-};
+use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, MAP, NONE, REC, STR};
 
 /// A function group: its name and arity.
 pub type Group = (String, usize);

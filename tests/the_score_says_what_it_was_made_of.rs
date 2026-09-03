@@ -119,8 +119,7 @@ fn the_rescored_column_is_the_score_the_tool_reports() {
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).expect("a staging directory");
     let history = stage.join("history.jsonl");
-    std::fs::write(&history, format!("{{{row}\"commit\":\"staged\"}}\n"))
-        .expect("the row writes");
+    std::fs::write(&history, format!("{{{row}\"commit\":\"staged\"}}\n")).expect("the row writes");
 
     let model = ask(root, &["--", "--model"]);
     let mut child = Command::new(env!("CARGO_BIN_EXE_kanso"))

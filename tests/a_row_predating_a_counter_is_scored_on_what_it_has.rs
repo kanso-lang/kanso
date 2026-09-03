@@ -161,10 +161,8 @@ fn a_counter_at_zero_reads_as_a_half() {
 /// be a different file with the same numbers in it.
 #[test]
 fn the_file_keeps_its_order_and_every_row_gets_a_column() {
-    let said = rescored(
-        "order",
-        &[WHOLE, HALF_A_TERM, NO_COMPILE_TERM, TWICE_AS_GOOD, ONE_AT_ZERO],
-    );
+    let said =
+        rescored("order", &[WHOLE, HALF_A_TERM, NO_COMPILE_TERM, TWICE_AS_GOOD, ONE_AT_ZERO]);
     let commits: Vec<&str> = said
         .iter()
         .map(|l| {
