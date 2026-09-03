@@ -64,9 +64,12 @@ tunables pinned:
 | 13:05 | family0x6-model0xcf | 55fb850296d1 | 1.98.0 | 41,831,767 |
 | 16:25 | family0x6-model0xcf | de5bfab22fbd | 1.98.1 | 41,831,767 |
 | 16:35 | family0x19-model0x1 | de5bfab22fbd | 1.98.1 | 41,832,275 |
+| 16:46 | family0x19-model0x11 | de5bfab22fbd | 1.98.1 | 41,831,767 |
 
-Two values 508 apart. One chip produced both on one binary; two chips produced
-different values on one binary. **Neither the key nor the binary picks a mode.**
+Two values 508 apart, over **three chips on one binary**: Intel low, Zen 3
+high, Zen 4 low — and Intel has read high as well, on one binary, twenty
+minutes apart. **Neither the key nor the binary picks a mode**, which is the
+premise the file is named for.
 
 What moves is measured, not guessed: the two runs at 12:33 and 13:05 printed
 byte-identical 123-line CPU feature blocks, every kanso symbol agreed to the

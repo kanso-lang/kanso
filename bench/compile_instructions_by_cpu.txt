@@ -322,3 +322,22 @@ family0x19-model0x1 41832275
 # REGRESSION DETECTOR fire on noise, because a mode flip in the reference row
 # reads to the trend gate as a counter that worsened with nothing traded. That
 # is in design/pending-gavels.md with the rest.
+#
+# 2026-09-03, THE FIFTH READING, and it settles what the chip does not do. CI
+# landed on Zen 4 — the row removed above for never having been measured on
+# this binary — and read 41,831,767, the LOW mode, on sha de5bfab22fbd. It is
+# recorded here because an unrecorded chip is what the gate asked for, and
+# because it is a measurement rather than a mode being chased.
+#
+#   12:33  family0x6-model0xcf   55fb850296d1  41,832,275
+#   13:05  family0x6-model0xcf   55fb850296d1  41,831,767
+#   16:25  family0x6-model0xcf   de5bfab22fbd  41,831,767
+#   16:35  family0x19-model0x1   de5bfab22fbd  41,832,275
+#   16:46  family0x19-model0x11  de5bfab22fbd  41,831,767
+#
+# Three chips, two values, one binary across the last three. Intel reads low,
+# Zen 3 reads high, Zen 4 reads low — and Intel has read high as well. So the
+# chip does not select the mode, which is the whole premise this file is named
+# for. Every row below is CI's own most recent reading and nothing is
+# predicted from another chip.
+family0x19-model0x11 41831767

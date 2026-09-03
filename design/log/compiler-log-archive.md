@@ -40106,3 +40106,49 @@ annotated `/tmp/cg.encodebench`, a profile file left over from an earlier
 session, and read a total of 8,396,592,003 against a benchmark that retires
 7,014,919,659. A stale profile answers confidently and wrongly. Build the
 binary, run it, annotate the file that run wrote, in one script.
+
+## 2026-09-02 (ninth) — three benchmarks the objective could not see
+
+`scripts/gates/instructions.sh` swept ten of the eleven benchmarks
+`build_benchmarks.sh` builds. The eleventh was scanbench, and its absence was
+the worse kind: its `arena_blocks` and `peak_bytes` are both welfare terms, so
+a change that gave the arena back per position and spent ten times the
+instructions doing it scored as a pure gain. That is the exact asymmetry the
+digest paragraph in that gate warns about, written a day earlier about a
+different benchmark.
+
+Two more were missing at the other end. escapebench and indexbench had rows in
+`bench/instructions_golden.txt` — the trend gate reads them, a regression in
+either turns CI red — and `scripts/welfare/welfare.kso` read neither. Their
+work was weighed at zero in the one number that decides whether a change is
+worth having.
+
+So: scanbench joins the gate, and `scan_instructions`, `escape_instructions`
+and `index_instructions` join the model as an `edge_work` group.
+
+**Landing day moves the number by nothing, and that is measurable rather than
+asserted.** All three enter as granted baselines at their dimension's standing,
+which reads +265.9% for each of them, the run-speed dimension's current
+average. Welfare before: 75.09. Welfare after: 75.09. The rule that a granted
+baseline enters neutral is doing exactly what #1198 said it would.
+
+**A note on how this was nearly got wrong.** The first reading was 74.23, a
+fall of 0.86, which would have been a real argument about the weights. It was
+the placeholder: scanbench's row was `0` at that point, and a current value of
+zero is better than any baseline, which sends that term through the guard for
+division and out the other side distorted. With the real magnitude in place the
+number does not move. A placeholder that is not obviously a placeholder is a
+measurement waiting to be believed.
+
+**And the spec, because the list was the problem.**
+`tests/every_benchmark_is_in_the_objective.rs` reads the three files and holds
+them together: every benchmark built has its instructions counted, every one
+counted has a row, every row is read by the model. It carries no list of its
+own — a list here would be the twelfth place to forget. Each of the three
+assertions was watched failing: removing scanbench from the gate's loop, its
+row from the golden, and escapebench from `worked` each redden exactly one and
+name the benchmark.
+
+scanbench's row is a container measurement and a labelled placeholder until the
+runner replaces it; the gate is red on purpose until then, and the golden's
+comment says so.

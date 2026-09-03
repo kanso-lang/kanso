@@ -20,52 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (ninth) — three benchmarks the objective could not see
-
-`scripts/gates/instructions.sh` swept ten of the eleven benchmarks
-`build_benchmarks.sh` builds. The eleventh was scanbench, and its absence was
-the worse kind: its `arena_blocks` and `peak_bytes` are both welfare terms, so
-a change that gave the arena back per position and spent ten times the
-instructions doing it scored as a pure gain. That is the exact asymmetry the
-digest paragraph in that gate warns about, written a day earlier about a
-different benchmark.
-
-Two more were missing at the other end. escapebench and indexbench had rows in
-`bench/instructions_golden.txt` — the trend gate reads them, a regression in
-either turns CI red — and `scripts/welfare/welfare.kso` read neither. Their
-work was weighed at zero in the one number that decides whether a change is
-worth having.
-
-So: scanbench joins the gate, and `scan_instructions`, `escape_instructions`
-and `index_instructions` join the model as an `edge_work` group.
-
-**Landing day moves the number by nothing, and that is measurable rather than
-asserted.** All three enter as granted baselines at their dimension's standing,
-which reads +265.9% for each of them, the run-speed dimension's current
-average. Welfare before: 75.09. Welfare after: 75.09. The rule that a granted
-baseline enters neutral is doing exactly what #1198 said it would.
-
-**A note on how this was nearly got wrong.** The first reading was 74.23, a
-fall of 0.86, which would have been a real argument about the weights. It was
-the placeholder: scanbench's row was `0` at that point, and a current value of
-zero is better than any baseline, which sends that term through the guard for
-division and out the other side distorted. With the real magnitude in place the
-number does not move. A placeholder that is not obviously a placeholder is a
-measurement waiting to be believed.
-
-**And the spec, because the list was the problem.**
-`tests/every_benchmark_is_in_the_objective.rs` reads the three files and holds
-them together: every benchmark built has its instructions counted, every one
-counted has a row, every row is read by the model. It carries no list of its
-own — a list here would be the twelfth place to forget. Each of the three
-assertions was watched failing: removing scanbench from the gate's loop, its
-row from the golden, and escapebench from `worked` each redden exactly one and
-name the benchmark.
-
-scanbench's row is a container measurement and a labelled placeholder until the
-runner replaces it; the gate is red on purpose until then, and the golden's
-comment says so.
-
 ## 2026-09-02 (tenth) — the runner's scanbench row, and the spec that already existed
 
 scanbench's instruction row, counted on the runner: **1,423,437,886**. It went
@@ -2899,3 +2853,30 @@ down rather than assumed, since the two are indistinguishable from the diff.
 
 Added to the ledger entry as the strongest argument for ruling this rather than
 living with it.
+
+## 2026-09-03 (sixth) — the fifth reading, and three chips is enough
+
+CI landed on Zen 4 — the row removed an hour earlier for never having been
+measured on this binary — and read 41,831,767, the low mode, on sha
+de5bfab22fbd. Recorded, because an unrecorded chip is exactly what the gate
+asks for and because it is a measurement rather than a mode being chased.
+
+|  | family0x6-model0xcf | family0x19-model0x1 | family0x19-model0x11 |
+| --- | --- | --- | --- |
+| on sha de5bfab22fbd | 41,831,767 | 41,832,275 | 41,831,767 |
+| earlier, sha 55fb850296d1 | both | — | — |
+
+Three chips, two values, one binary across all three. Intel reads low, Zen 3
+reads high, Zen 4 reads low — and Intel read high as well, twenty minutes
+before it read low, on one binary with byte-identical CPU feature blocks.
+
+**So the chip does not select the mode**, and that is the whole premise
+`bench/compile_instructions_by_cpu.txt` is named for. Two chips agreeing is
+what the file already warns is not evidence they agree; three chips split two
+against one, with the odd one out having previously read the other value, is
+evidence of something else entirely.
+
+Every row is CI's own most recent reading now and nothing is predicted from
+another chip. Whether that is a stable arrangement or a coin flip per run is
+the question in design/pending-gavels.md, unchanged by this reading except
+that it is now five measurements rather than four.
