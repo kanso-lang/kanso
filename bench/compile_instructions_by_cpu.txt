@@ -55,3 +55,4 @@
 # Rows are `<dispatch.sh key> <retired instructions>`. None yet: the values
 # belong to CI's toolchain and CI is the only thing that may write them, one
 # chip per run, out of the job log.
+family0x6-model0xcf 41500974

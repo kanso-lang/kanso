@@ -3805,3 +3805,47 @@ well as the golden. So such a change takes several red pushes to re-pin, each
 printing the exact line to paste. The table therefore ships with no rows: the
 first runs say what to add. The alternative that costs nothing is a row that
 reads the runner.
+
+## 2026-09-03, LATER — the first chip's row, and it is a fifth cpu
+
+Searched the log tail and the archive for the pool's known cpus before calling
+this one new: `dispatch.sh`'s header and §34 of the page name four — an AMD
+EPYC Zen 3 (family 0x19 model 0x1), an Intel Ice Lake-SP (0x6/0x6a), an AMD
+Genoa, and the Cascade Lake (0x6/0x55) this container is. The run that counted
+today's row is **family 0x6 model 0xcf**, which is none of them. Five cpus in
+the pool, not four, and the gate found the fifth by refusing rather than by
+anybody going looking.
+
+    family0x6-model0xcf 41500974
+
+That is the first row of `bench/compile_instructions_by_cpu.txt`, and by the
+rule in its header it is the reference series, so
+`bench/compile_instructions_golden.txt` moves with it:
+
+    compile_instructions 41,495,096 -> 41,500,974
+
+**This is a re-basing and not a regression, and the difference matters.** The
+old value was counted on a chip nobody recorded, on main. The new one is
+counted on 0x6/0xcf, on this branch. Subtracting them is exactly the operation
+the keying exists to forbid — 5,878 is the size of the chip effect and the size
+of this branch's real move, which is why the two were confused for a day. What
+this branch does to the front end was measured the only way that answers it:
+same container, same toolchain, same chip, only `src/` differing, binary sha
+printed on both reads, **-5,621 repeating to the instruction**. That
+measurement stands and this row does not bear on it.
+
+**What is now pinned and what is not.** One chip of five has a row. The other
+four refuse until CI lands on them, printing the line to paste. Until then this
+gate is red on four runs in five, which is the bootstrap cost the table's header
+states rather than hides. `compile_binary sha256=74abf73ef677` and
+`.text=2513746` are printed beside the row, so a later disagreement on this same
+chip can be asked whether the binary moved.
+
+**One thing to watch.** While the table lacks a chip's row the gate is red for a
+reason no mutation caused, and the ratchet's `prove` reports BLIND only when a
+gate stays GREEN — it never checks the gate was green before. So `compile_ir`
+proves nothing on a nightly that lands on an unrecorded chip. That hole is older
+than this change (`compile_ir_host_unpinned` has always had it, since
+`measured_on` can refuse on its own) and it is filed rather than fixed here,
+because a green-before run roughly doubles the nightly's setup-and-gate work and
+wants that cost measured in its own pull request.
