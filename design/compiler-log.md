@@ -2812,3 +2812,65 @@ property of the host's memory map — is still the only mechanism that fits, and
 it is not established that two runners differ in their maps by the 508 this
 needs. The row would have to print the map's line count beside the count to
 say. Nothing rests on the answer now that the pair holds the gate green.
+
+
+## 2026-09-03 — gavel: failures are for the exceptional; the bang chooses the channel
+
+Clay, correcting a "map ten files and collect the results" example:
+"if you're talking about files you expect to be there, then them not
+being there is exceptional. if you know it's possible for them to not
+be there, you wouldn't use an exception, you'd just return a
+file_not_found type." Gaveled as doctrine:
+
+- **A failure is for the exceptional. An anticipated outcome is
+  data.** If an alternative is part of the operation's normal
+  vocabulary, the answer is a typeset — `text | file_not_found` — and
+  dispatch handles both arms like any values: no box, no bubbling, no
+  rescue license. The failure channel, with its provenance and cause
+  chain, is for what the program did not plan for.
+- **The bang chooses the channel, everywhere.** The map rule already
+  ruled — `foo[k]` answers `none` as data, `foo[k]!` answers a
+  failure — generalizes to every operation with an anticipated
+  alternative, io included: `io/read_file path` answers
+  `text | file_not_found`; `io/read_file! path` is the caller
+  insisting, and a violation bubbles as a failure. The suffix
+  grammar's contract (a `!` name answers a box) is the same rule seen
+  from the declaration side. The canonical chain reads
+  `io/read_file! path .> json/parse .! ... .? when_failed`.
+- **Downstream, not decisions:** containers may still hold results
+  (test matchers, supervisors, #1057), since holding is neither
+  proceeding-as-success nor an unmarked conversion; and the io
+  boundary deep-demands the program's final value, so a failure
+  buried in an output structure fails the run unless it was rescued
+  into data first.
+
+The renaming of the box from `effect` to `result` is recommended
+beside this and awaits its own word.
+
+## 2026-09-03 — rider: the replay is ruled; the page's rule yields to it
+
+The cloud session held the chart replay because docs/numbers.html
+says "the welfare line is recorded, not recomputed... replaying
+history against today's baseline would rewrite it," and because the
+counter set has grown (digest in #1198; scan, escape, index in #1215),
+so a commit predating a counter has no value for it. Both points are
+answered by the record as it stands:
+
+- **The page's rule is older than the gavel and yields to it** —
+  later replaces older. Clay ruled the replay on 2026-08-31 ("yes"),
+  seeing the #184 re-scoring as a cliff that "was never a change in
+  the compiler." The page's sentence is rewritten to say what the
+  chart now shows: the current formula and baseline, replayed over
+  the stored rows, so the line is one definition applied everywhere.
+- **No backfilling.** The replayed series begins at the first commit
+  for which every counter in the current formula exists. Earlier
+  history is not invented through the granted-baseline machinery
+  (which admits a counter going forward, never backward); it is
+  either omitted or drawn from the recorded scores in a visibly
+  distinct style and labeled as scored under earlier definitions.
+  The directive of 2026-08-31 already said this; it is restated here
+  so it cannot be read as under-determined.
+- **The audit trail is untouched.** bench/welfare_floor.json keeps
+  every step with its reason — the 87.85 -> 73.83 re-scoring
+  included — and that file, not the chart, is where "what did a
+  commit ship with" is answered.
