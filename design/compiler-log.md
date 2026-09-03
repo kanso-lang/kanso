@@ -4784,3 +4784,100 @@ loop: six to index, ten to box the byte and unbox it again for the dispatch,
 eight to dispatch, thirteen for the in-place append including two loads of
 `k_stats_on`, four for bookkeeping. Whoever wants this path faster should go
 after those ten, not after the number of walks.
+
+---
+
+## 2026-09-03 — A BYTE SWITCH THAT REBUILT THE BYTE BEFORE IT LOOKED AT IT
+
+**SHIPPED, and it is the largest single runtime move this log holds.** A group
+whose arms discriminate on a byte read out of a byte string crosses the call
+boundary as a raw `i64` — the byte, or 256 for the `none` a read past the end
+answers. `rebox_params` then rebuilt a `KValue` from that raw value, and the
+dispatch tree pulled the rebuilt struct apart again: tag out, compare to 0,
+payload out, switch. The comment above the reconstruction said the round trip
+"folds back into a raw switch". **It does not.** `str_char`'s loop:
+
+```
+5132:  cmp    $0x4,%rax
+5136:  cmove  %rbp,%rcx        ; 256 for none, on the caller's side
+513c:  cmp    $0x100,%rcx
+5143:  sete   %dl
+5146:  cmove  %r13,%rcx
+514a:  shl    $0x2,%edx
+514d:  test   %edx,%edx        ; the tag test the tree wrote
+```
+
+Seven instructions a byte to take apart a value that was never assembled, and
+every byte-dispatching function in the decoder paid it. The tree switches on
+`%xNr` directly now, with 256 as the `none` case.
+
+```
+jsonbench    2,533,092,019 -> 2,098,859,754   -17.1424%
+oneshot         34,322,446 ->     31,427,168    -8.4355%
+widebench       61,890,181 ->     59,506,049    -3.8522%
+encodebench  5,848,702,451 ->  5,846,994,368    -0.0292%
+indexbench       5,242,363 ->      5,241,950    -0.0079%
+basket          40,300,172 ->     40,299,759    -0.0010%
+deepbench      676,465,730 ->    676,462,050    -0.0005%
+digestbench     81,252,316 ->     81,251,917    -0.0005%
+escapebench    130,170,751 ->    130,170,352    -0.0003%
+pendbench      715,732,938 ->    715,732,552    -0.0001%
+scanbench    1,423,437,576 ->  1,423,437,163    -0.0000%
+```
+
+**Nothing rises.** The jsonbench figure carries the single-pass number scan
+above it as well; this change is 13.56% of it on its own, 2,428,220,306 to
+2,098,859,754. **widebench is the clean attribution**: it vendors its own copy
+of the json library, frozen, so the 3.85% there is the dispatch and nothing
+else. The seven programs that do not dispatch on bytes move by four hundred
+instructions or fewer, which is the compiler emitting a slightly different
+module and the linker laying it out differently.
+
+**The counters, against the branch point rather than against the entry above
+it, because that is what the trend gate reads:** `emitted_calls` 1,808 ->
+1,820, `emitted_branches` 1,210 -> 1,186, `emitted_lines` 12,044 -> 12,053,
+`emitted_other_calls` 14,532 -> 14,526, `emitted_other_branches` 8,749 ->
+8,673, `emitted_other_lines` 87,826 -> 87,659, `emitted_defines` 169 -> 168 and
+`emitted_other_defines` 1,469 -> 1,468. Calls and lines rise because the number
+scan above bought them; the two changes pull those two counters in opposite
+directions and the scan pulls harder. **Branches only fall**, in the decoder
+and in the eight beside it, and that is this change alone: nothing about the
+number scan removes a branch. `text` falls 8,080 bytes over the eleven
+programs — 1,936 on jsonbench, 2,080 on encodebench, 1,888 on oneshot and 2,080
+on widebench, and not a byte on the other seven. Rounds and
+visits on `lib/json` do not move at all, which is the check that this changed
+what the backend writes rather than what the front end decides. No allocation
+counter moves.
+
+**One literal had to be guarded, and the fixture found it before CI did.** 256
+is the sentinel, so a program that writes `fn kind 256` — an arm no byte can
+ever reach — would send every read past the end of a byte string to that arm.
+The boxed tree is immune because it tests the tag before it looks at the
+payload. The divergence was real and I watched it:
+
+```
+--- native      --- interpreter
+bracket         bracket
+quote           quote
+a byte that cannot be    some other byte
+```
+
+A group with any int literal outside 0..255 stays on the boxed path, where the
+arm stays as dead as the oracle says it is.
+`tests/a_byte_arm_no_byte_can_reach.rs` pins both halves — the impossible
+literal and an ordinary byte group beside it, so a change that disabled the
+fast path everywhere would not read as a pass. Watched red against the
+unguarded draft, with the two engines' answers printed side by side.
+
+**Why the emitted-line count is the presence counter here.** There is no
+observable output that distinguishes a raw switch from a boxed one; what
+distinguishes them is `emitted_branches`, which falls by 24 in the decoder and
+76 across the eight beside it because the tag test and the none test are gone
+from every byte-dispatching call. Revert the change and that counter goes straight back
+up, which is what the vein is for.
+
+**A comment claimed a property the machine code contradicted, and nothing in
+the tree could see it.** That is the same family as #1137's four pins that
+rested on prose — except that one was a spec reading a comment, and this was a
+comment asserting an optimiser outcome. The optimiser is entitled to change its
+mind between releases; a claim about what it will do belongs in a counter.

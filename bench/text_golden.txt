@@ -444,11 +444,16 @@
 # number's bytes once instead of twice, so a whole second scanner is gone from
 # both; the emitted line count rises because the surviving scanner carries the
 # float mark as an argument, and the linker keeps less than the source says.
-jsonbench text=85874
-encodebench text=107266
-oneshot text=108978
+# 2026-09-03 (a byte switch on the byte): jsonbench 85,874 -> 83,938,
+# encodebench 107,266 -> 105,186, oneshot 108,978 -> 107,090 and widebench
+# 110,594 -> 108,514 — 1,936 to 2,080 bytes each, and the seven programs that
+# do not dispatch on bytes do not move at all. The dispatch tree stopped
+# rebuilding a KValue from a raw byte only to pull it apart again.
+jsonbench text=83938
+encodebench text=105186
+oneshot text=107090
 basket text=100290
-widebench text=110594
+widebench text=108514
 deepbench text=69570
 escapebench text=52290
 pendbench text=83506

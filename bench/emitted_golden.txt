@@ -85,7 +85,14 @@
 # the single scan now. Two small walkers became one larger one with an extra
 # argument, which is why the line count rises while the work falls: jsonbench
 # retires 4.14% fewer instructions for it. `branches` does not move.
+# 2026-09-03 (a byte switch on the byte): eight calls, twenty-four branches
+# and eighty lines fewer in the decoder, and the same shape in the four
+# programs beside it that dispatch on bytes. A group whose discriminator
+# crossed as a raw i64 had that i64 rebuilt into a KValue for the dispatch
+# tree to take apart again; the tree switches on the raw value now. The
+# branches this drops are the tag test and the none test the tree wrote per
+# call. jsonbench retires 13.56% fewer instructions for it.
 defines=168
-calls=1828
-branches=1210
-lines=12133
+calls=1820
+branches=1186
+lines=12053

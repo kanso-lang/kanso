@@ -2402,40 +2402,85 @@ impl<'a> Backend<'a> {
                 _ => generic_arm = Some(k),
             }
         }
-        let is_int = f.tmp();
-        f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
-        let int_block = f.label();
-        let not_int = f.label();
-        f.line(&format!("br i1 {is_int}, label %{int_block}, label %{not_int}"));
-        f.start_block(&int_block);
-        let payload = inline_payload(&mut f, &dv);
         let generic_label = match generic_arm {
             Some(k) => format!("arm{k}"),
             None => "nomatch".to_string(),
         };
-        let cases: Vec<String> =
-            int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
-        f.line(&format!(
-            "switch i64 {payload}, label %{generic_label} [
+        // A byte discriminator crossed as a raw i64 — the byte, or 256 for
+        // none — and `rebox_params` rebuilt a KValue from it for the tree below
+        // to take apart again. The comment there says the round trip folds back
+        // into a raw switch. It does not: `str_char`'s loop spends seven
+        // instructions a byte on `cmp $0x100 / sete / cmove / shl` before it
+        // reaches its first arm, and every byte-dispatching function in the
+        // json decoder pays the same. Switch on the raw value instead, with 256
+        // standing for the `none` arm. The rebox stays emitted for the arms
+        // whose bodies read the byte as a value; where none do it is dead and
+        // the optimiser drops it, and where some do it sinks into those arms.
+        //
+        // Only when every nullary arm is `none`: a byte is never `true` or
+        // `false`, so a group naming one is not the shape this describes.
+        //
+        // And only when every int arm is a byte. 256 is the sentinel this
+        // switch reads as `none`, so a group that writes `fn kind 256` would
+        // send a read past the end of a byte string to that arm — an arm no
+        // byte can ever reach. The boxed tree below is immune, because it
+        // tests the tag before it looks at the payload, and the divergence was
+        // real: `kind cs[3]` on a two-byte string answered "a byte that cannot
+        // be" on native against the interpreter's "some other byte". A literal
+        // outside 0..255 keeps its group on the boxed path, where it stays
+        // dead the way the oracle says it is.
+        let raw_switchable = self.is_byte_disc(name, arity, disc)
+            && nullary_cases.iter().all(|(t, _)| *t == K_NONE)
+            && int_cases
+                .iter()
+                .all(|(n, _)| n.parse::<i128>().is_ok_and(|v| (0..=255).contains(&v)));
+        if raw_switchable {
+            let mut cases: Vec<String> =
+                int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
+            for (_, l) in &nullary_cases {
+                cases.push(format!("    i64 256, label %{l}"));
+            }
+            f.line(&format!(
+                "switch i64 %x{disc}r, label %{generic_label} [
 {}
   ]",
-            cases.join(
-                "
+                cases.join(
+                    "
 "
-            )
-        ));
-        f.start_block(&not_int);
-        // nullary tags, then generic (non-failure) or propagation
-        for (t, l) in &nullary_cases {
-            let hit = f.tmp();
-            f.line(&format!("{hit} = icmp eq i64 {tag}, {t}"));
-            let next = f.label();
-            f.line(&format!("br i1 {hit}, label %{l}, label %{next}"));
-            f.start_block(&next);
+                )
+            ));
+        } else {
+            let is_int = f.tmp();
+            f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
+            let int_block = f.label();
+            let not_int = f.label();
+            f.line(&format!("br i1 {is_int}, label %{int_block}, label %{not_int}"));
+            f.start_block(&int_block);
+            let payload = inline_payload(&mut f, &dv);
+            let cases: Vec<String> =
+                int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
+            f.line(&format!(
+                "switch i64 {payload}, label %{generic_label} [
+{}
+  ]",
+                cases.join(
+                    "
+"
+                )
+            ));
+            f.start_block(&not_int);
+            // nullary tags, then generic (non-failure) or propagation
+            for (t, l) in &nullary_cases {
+                let hit = f.tmp();
+                f.line(&format!("{hit} = icmp eq i64 {tag}, {t}"));
+                let next = f.label();
+                f.line(&format!("br i1 {hit}, label %{l}, label %{next}"));
+                f.start_block(&next);
+            }
+            let disc_ok = inline_not_failure(&mut f, &dv);
+            let nomatch = "nomatch".to_string();
+            f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %{nomatch}"));
         }
-        let disc_ok = inline_not_failure(&mut f, &dv);
-        let nomatch = "nomatch".to_string();
-        f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %{nomatch}"));
         f.start_block("nomatch");
         // no arm matched: the discriminator is the only possible failure here
         let disc_fail = f.tmp();
