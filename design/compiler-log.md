@@ -4049,3 +4049,34 @@ compile_ir_keyed ratchet row goes with it. If the chips still disagree, pinning
 was wrong too and the tunables come back out. Clay had no preference between
 this and keying by the full tunable block; this one is chosen because it removes
 the variable rather than describing it, and because one CI run falsifies it.
+
+FIRST READING UNDER THE PINNED TUNABLES, and it supports the diagnosis without
+settling it. family0x19-model0x1 counts 41,631,006. Its profile reads
+
+  _int_malloc          1,551,398
+  _int_free            1,516,378
+  __memcmp_avx2_movbe  1,346,206
+
+which is the LOW cluster's three numbers to the instruction. That chip sat in
+the high cluster before pinning, so the tunables moved it, and moved it onto
+the other cluster rather than somewhere new. That is what a controlling
+variable looks like. One chip is not convergence; the next distinct chip
+decides it.
+
+`compile_instructions` is priced here at 41,631,006, up 132,177 on the
+41,498,829 the same measurement gave unpinned. The compiler did no more work:
+the pinned thresholds are not any machine's native ones, so the run takes a
+memcpy path no host would have chosen and __memcpy_avx_unaligned_erms enters
+the profile's top fifteen at 619,555 where it was absent before.
+
+THE OBJECTIVE'S BASELINE WAS RESCALED RATHER THAN THE FLOOR LOWERED. welfare
+weighs baseline over current, so a changed instrument reads as a regression it
+is not. The baseline moves 56,848,763 -> 57,029,831, the ratio it stands for
+held to nine decimal places at 1.369888, and the number is 76.01 before and
+after. Landing day moves it by nothing, which is the rule this file already
+states for a counter entering at its dimension's standing.
+
+Re-granting was tried first and rejected: dropping the baseline so welfare
+re-grants at standing paid 1.37 points that no work earned. Granting at
+standing is neutral for a counter ENTERING the model and a gift to one already
+in it. The rescale is the honest form.
