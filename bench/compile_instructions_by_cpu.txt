@@ -99,3 +99,4 @@
 # answer is worth the runs; a row nobody can compare measures nothing.
 #
 family0x19-model0x1 41631006
+family0x6-model0xcf 41635958

@@ -4080,3 +4080,21 @@ Re-granting was tried first and rejected: dropping the baseline so welfare
 re-grants at standing paid 1.37 points that no work earned. Granting at
 standing is neutral for a counter ENTERING the model and a gift to one already
 in it. The rescale is the honest form.
+
+SECOND PINNED READING, and it does not decide the experiment. family0x6-model0xcf
+counts 41,635,958 against family0x19-model0x1's 41,631,006 — 4,952 apart, where
+the unpinned clusters were 5,064 apart. Similar magnitude, shifted level.
+
+It is tempting to read that as the tunables having failed, and that reading
+would be wrong. The defect being chased is ONE CHIP giving TWO values. What is
+in hand now is two chips giving two values, which is what per-chip determinism
+looks like. A single reading per chip cannot tell "pinning fixed the flapping"
+from "pinning only moved the level", because both predict exactly this table.
+
+The deciding observation is a repeat on a chip that already has a row: matching
+its own recorded value is the success case, disagreeing with it is the failure
+case, and the gate reports either without being asked. So the rows accumulate
+and the next collision answers it. Naming the falsifier in advance is the point
+— it is the same discipline as watching a mutation go red before it goes green,
+and it is what was missing when the per-chip key was declared to work on two
+agreeing chips.
