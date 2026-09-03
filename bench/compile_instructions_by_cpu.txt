@@ -206,3 +206,32 @@ family0x19-model0x11 41831767
 # the reader takes the FIRST row matching a key and stops. A second
 # family0x6-model0xcf line at the bottom of this file would be read by nobody
 # and would look authoritative to everybody, which is how a golden goes quiet.
+#
+# 2026-09-03, LATER, and the guess above is WRONG. Both runs printed their
+# full 123-line cpu feature block, because no bench/dispatch.txt is recorded
+# and `dispatch.sh name` dumps the block in CI while none is. The two blocks
+# are byte-identical — every feature word, the stepping, and
+# data_cache_size among them — so cache sizes and derived thresholds are
+# ruled out, and they were the candidates the note above proposed.
+#
+# What moved is visible in the profiles the same two job logs carry, and it
+# is not the compiler. Every kanso symbol agrees to the instruction across
+# the pair — eval_expr'2 1,633,593 both times, check_merged 1,589,240,
+# lex_line 866,486, parse 589,004, all of them. Three rows differ and all
+# three are glibc:
+#
+#   _int_malloc           1,551,384 -> 1,551,964   +580
+#   _int_free             1,522,333 -> 1,522,352    +19
+#   memcmp-avx2-movbe     1,353,408 -> 1,353,342    -66
+#
+# So the front end executed the identical instruction sequence and the
+# allocator did not. That is the same shape this file's header records for
+# the 5,064 cluster the tunables were pinned to remove: _int_malloc and
+# memcmp moving together, which is an alignment difference downstream of a
+# heap-layout difference. Pinning the tunables shrank it from 5,064 to 508.
+# It did not remove it.
+#
+# The thread stays OPEN and its question is narrower now: what still moves
+# the heap layout when the binary, the cpu features, glibc, valgrind and the
+# environment all agree? Not "is it the cpu" — that is answered, and the
+# answer is no.

@@ -353,6 +353,18 @@ compile_ir_doubled = row
   (breaking "a_second_row_for_one_chip_is_read_by_nobody")
   no_setup
 
+# A refusal is only as good as what it leaves a reader able to do. This one
+# told CI to copy rows out of a job log that could not contain them, because
+# the gate stopped before it measured. The row watches the two answers stay
+# separate: a container may not measure, CI must.
+host_measures = row
+  "a refusal that sends a reader to rows the gate never printed"
+  false
+  "cargo test --test a_host_that_may_not_be_compared_may_still_be_measured"
+  "specs (unit, golden, differential)"
+  (breaking "a_refusal_that_tells_you_to_read_rows_it_never_printed")
+  no_setup
+
 inline_pin = row
   "an inline pin the inliner undoes, and a hot wrapper going out of line"
   false
@@ -672,7 +684,9 @@ rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host]
 
 rows_b1e0 = text/concat rows_b1d2 [compile_ir_keyed compile_ir_doubled]
 
-rows_b1e = text/concat rows_b1e0 [inline_pin]
+rows_b1e1 = text/concat rows_b1e0 [host_measures]
+
+rows_b1e = text/concat rows_b1e1 [inline_pin]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
