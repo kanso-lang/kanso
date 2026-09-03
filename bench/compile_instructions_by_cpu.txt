@@ -622,3 +622,22 @@
 # counted, which this file refuses on every page. It goes red, CI counts, and
 # the second reading is a measurement.
 family0x6-model0xcf 41829232
+
+# 2026-09-03, THE SITTING THE REFUSAL ASKED FOR, and the two chips agree. CI
+# landed on Zen 3 next, found no row for it — the block above had just removed
+# its stale one — and refused rather than passing on somebody else's number.
+# It counted 41,829,232 on sha 0804abe57190: family0x6-model0xcf's value TO
+# THE INSTRUCTION, on the same binary.
+#
+#   21:33  family0x6-model0xcf   0804abe57190  41,829,232
+#   21:42  family0x19-model0x1   0804abe57190  41,829,232
+#
+# That is worth more than a row. On the PREVIOUS binary these two chips had
+# each produced both modes, 508 apart, and the file's standing question was
+# what still moves the heap layout when everything measurable agrees. Here
+# they do not differ at all. It is two readings and so it settles nothing —
+# each chip has shown one mode once, which is exactly the state that preceded
+# the last disagreement — but it is the first binary on which the vein has
+# seen cross-chip agreement rather than the pair, and the next reading on
+# either chip is the one that says whether the modes came back.
+family0x19-model0x1 41829232
