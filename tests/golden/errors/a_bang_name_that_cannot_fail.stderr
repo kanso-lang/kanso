@@ -1,0 +1,4 @@
+error[naming]: `shout!` wears a bang: a `!` function's answer must be able to be a failure
+  --> tests/golden/errors/a_bang_name_that_cannot_fail.kso:8:4
+   8 | fn shout! x
+          ^

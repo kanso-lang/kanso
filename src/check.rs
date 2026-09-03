@@ -1313,6 +1313,25 @@ fn check_predicates(
                 span,
             ));
         }
+        // The other suffix, ruled in July and again on 2026-09-03: a `!` name's
+        // answer typeset must include an err type. A bang that cannot fail is a
+        // lie in the name — `foo[k]!` differs from `foo[k]` precisely by being
+        // able to fail, so a declaration wearing the mark and answering a plain
+        // value tells the reader the opposite of what it does.
+        //
+        // Fires on a provable lie only, the same conservatism the `?` direction
+        // takes: an empty set means inference learned nothing, and TOP (what a
+        // generic driver widens to) still holds ERR, so neither is accused.
+        if short.ends_with('!') && set != 0 && set & ERR == 0 {
+            diags.push(Diagnostic::new(
+                "naming",
+                format!(
+                    "`{short}` wears a bang: a `!` function's answer \
+                     must be able to be a failure"
+                ),
+                span,
+            ));
+        }
     }
 }
 

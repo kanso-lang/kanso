@@ -20,65 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — the compile row gets a key, and a refusal you can watch
-
-Searched the log tail and `design/log/compiler-log-archive.md` for prior
-attempts at per-host instruction rows: kq#85 and kq#86 (the rows say which
-silicon counted them), and the `dispatch.sh` header's record of a
-"record one block, refuse elsewhere" design that CI killed in two runs. This
-is the third shape and the first that neither refuses everywhere nor skips.
-
-**What the row now is.** `bench/compile_instructions_by_cpu.txt` holds one
-value per chip, keyed by `scripts/gates/dispatch.sh key` — family and model
-and nothing else, so a firmware revision cannot move a row that is otherwise
-right. The gate reads the row for the silicon it landed on.
-`bench/compile_instructions_golden.txt` keeps its bare
-`compile_instructions=`, because welfare, the trend gate and `golden_prose`
-all read that file for one number, and the gate checks on every run that the
-bare line equals the table's first row. That check costs two file reads and
-catches the drift nothing else in the tree can see: welfare reads only the
-golden, the gate reads only the table, and a re-sitting that updated one of
-them would leave the objective tracking a number no chip counted.
-
-**Four ways to be wrong, one way to be right, and none of the four is a
-warning.** No rows at all; the golden drifted from the reference row; this
-chip has no row; the row moved on the chip that counted it. The third is the
-one the design turns on. Skipping there is the cheap answer and it is the
-answer CI already rejected: three runs in four land on a cpu that is not any
-given recorded one, so most regressions would go through, and this harness's
-own mutations redden these same gates, so on those runs its rows would go
-blind.
-
-**Why not a band.** The chip moves this row about 5,124 and the beat-rewind
-split moves it −5,621. A tolerance wide enough to swallow the first swallows
-the second, which is the whole signal. Pin the number, key the noise.
-
-**Watched failing.** The four refusals live in
-`scripts/gates/compile_ir_row.sh` rather than inside the gate, because the
-gate's own answer costs a callgrind run over the whole front end and refuses
-outright on any host whose toolchain is not the recorded one — on a container
-it is red before it reads a row at all, which is a gate no spec can drive.
-Split out, it is two files and four strings.
-`tests/a_compile_row_is_read_against_its_own_chip.rs` drives all five outcomes
-in forty milliseconds. Three breaks, each reddening exactly the specs it
-should and no others: waving an unrecorded chip through (1 red), dropping the
-golden/table drift check (2 red), and turning the row comparison into a
-±10,000 band (2 red). The first is now a ratchet row, `compile_ir_keyed`, on
-the specs job.
-
-**The front end got 5,621 instructions cheaper on this branch**, and this is
-where that is stated rather than only inside the retraction above. The
-same-chip experiment is in the previous entry. It is a fall and it is banked;
-the golden and the table land on the value CI reads, one chip per run.
-
-**What this costs, said plainly.** A change that moves the front end
-invalidates every chip's row at once, and only CI may write them — the values
-belong to its glibc and its rustc, which `measured_on.sh` pins on the table as
-well as the golden. So such a change takes several red pushes to re-pin, each
-printing the exact line to paste. The table therefore ships with no rows: the
-first runs say what to add. The alternative that costs nothing is a row that
-reads the runner.
-
 ## 2026-09-03, LATER — the first chip's row, and it is a fifth cpu
 
 Searched the log tail and the archive for the pool's known cpus before calling
@@ -2419,3 +2360,46 @@ respectively reverse a standing ruling and mint a two-tier rule the
 language has nowhere else; both declined. Enforce both suffixes in
 the same change, since `?` sits in the identical unimplemented state.
 The ledger entry leaves with this commit wherever it lives.
+
+## 2026-09-03 — the bang half of the suffix contract, and the half already built
+
+**DONE.** Searched the live log and the archive before filing, and this time
+for the right phrase: the archive's "The suffix grammar, with teeth" is the
+July ruling, and Clay's gavel above cites it. That search is what my #272
+ledger entry skipped, which is how a settled question got asked again.
+
+**The correction the fixtures forced.** Both the gavel and my own survey said
+`?` sat in the identical unimplemented state as `!`. It does not. A fixture
+answering a string from `ready?` is already refused, by a check in check.rs
+that reads the same inferred answer set this change reads:
+
+    error[naming]: `ready?` asks a question: a `?` function answers true or
+    false (err may ride along)
+
+So only the bang half was missing, and the change is one condition beside the
+one that was already there.
+
+**The measurement that explains why nobody noticed.** There are ZERO
+`!`-suffixed declarations anywhere in the tree, against 353 `?`-suffixed ones.
+The contract was unenforced because nothing exercised it. That also fixes the
+ordering with the io half: `io/read_file!` will be the first `!` name the
+language has ever had, so the guard lands before the name it guards rather
+than after.
+
+**The rule, mirroring the query direction exactly.** A `!` name's answer set
+must contain ERR. It fires on a provable lie only — an empty set means
+inference learned nothing, and TOP, which a generic driver widens to, still
+holds ERR, so neither is accused. That conservatism is not new caution; it is
+copied from the `?` direction, which has run over 353 declarations without a
+false positive.
+
+**Watched red, then watched the fixture prove itself.** `shout!` answering a
+plain string compiled clean and printed `hi!` before the change. After it, the
+refusal fires. Then the check was disabled and the corpus went red on that
+fixture, which is the half that matters: a golden that cannot fail is a golden
+that proves nothing.
+
+Diagnostics 309 to 310, none newly unpinned. All eight gate scripts and every
+std module still check. The compile counters could not be measured here — the
+container runs rustc 1.94.1 against the goldens' 1.98.1, which is the host pin
+doing its job — so CI reads them.
