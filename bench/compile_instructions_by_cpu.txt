@@ -167,7 +167,7 @@ family0x6-model0xcf 41831767 41832275
 # row per chip and against any single tolerance: 508 would fit inside a band
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
-family0x19-model0x1 41832275
+family0x19-model0x1 41831767 41832275
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
 # family0x19-model0x11 rather than carry a value measured against the previous
