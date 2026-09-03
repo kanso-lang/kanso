@@ -3340,3 +3340,99 @@ Writing that down matters more than the finding. The entry above corrects
 four readings I took as evidence on a single measurement each; leaving this
 one at a single measurement would have repeated the error inside the
 correction.
+
+## 2026-09-03 — the rewind's empty test paid a frame, and it is a third of a beat loop
+
+Clay asked whether the fused chain operators had been swept in. They had not.
+The day's four twins were driven by the eleven benchmarks' profiles, and a
+fused adapter chain — `map`, `select`, `sum` deforested into one flat loop —
+is not well represented in those. So I built one: 200,000 elements through
+`list/map . list/select . list/sum`, and profiled it.
+
+`k_beat_rewind` was 32.92% of it. Not the loop body, not a builtin — the
+per-iteration rewind that reclaims the iteration's garbage.
+
+That was not a property of the fixture. On escapebench the same function is
+**43.66%** of the program: 80,970,118 of 185,475,445 instructions across
+1,206,001 rewinds, 67 instructions each. On basket, 16.21%. The one function
+was larger than any seam the four twins reached.
+
+**Where the 67 went.** The disassembly says it in the first ten instructions:
+six callee-saved pushes and a stack sub, before any work. The frame is there
+for four loops — the buffer shelf's flush, and the chunk, view and permanent
+registries — none of which runs on any of those 1,206,001 rewinds. Then
+`k_buf_flush` unconditionally memsets the twelve-pointer shelf, six `movaps`
+clearing a shelf that was already clear. What the common case actually needs
+is three stores: `k_arena`, `k_arena_left`, `k_seek_str`.
+
+**The change.** Two pieces, both idiomatic here. The shelf gets a dirty flag,
+so its memset becomes one test for a program that never donates a buffer. And
+`k_beat_rewind` splits: an inline empty test at the four call sites, with the
+frame and the four loops left behind in `k_beat_rewind_slow`. That is the same
+split `k_permreg_flush`/`_held` and `k_viewreg_migrate`/`_held` already make
+one level down; it is worth more here because a beat loop rewinds once per
+iteration where those run once per pop. `k_beat_iter` is now a leaf with no
+frame at all, ~39 instructions on the fast path against 74 before.
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 185,475,844 | 143,403,373 | −22.684% |
+| basket | 45,028,689 | 41,211,873 | −8.476% |
+| encodebench | 6,057,833,454 | 5,886,750,857 | −2.824% |
+| oneshot | 34,844,691 | 34,417,154 | −1.227% |
+| deepbench | 677,481,898 | 677,017,353 | −0.069% |
+| indexbench | 5,242,731 | 5,242,087 | −0.012% |
+| scanbench | 1,423,437,774 | 1,423,437,268 | −0.000% |
+| pendbench | 715,729,140 | 715,731,365 | +0.000% |
+| jsonbench | 2,533,005,144 | 2,533,091,327 | +0.003% |
+| digestbench | 81,237,955 | 81,252,347 | +0.018% |
+| widebench | 61,843,521 | 61,857,884 | +0.023% |
+| **all eleven** | **11,821,160,841** | **11,603,412,888** | **−1.842%** |
+
+The three small rises are programs with few beat iterations paying the inline
+test at their pops where the old code paid a call. 86,183 instructions on a
+2.5-billion-instruction decode is the largest of them. These are container
+readings; CI supplies the rows that land in the golden.
+
+`.text` rises on every row, 432 to 816 bytes — four copies of the test. The
+header of `bench/text_golden.txt` says which benchmark paid most and which
+gained most, and they are the same one.
+
+**No counter moves, and the corpus was asked how much of that it can see.**
+The three flush loops and the block retire are the only code in the rewind
+that touches a statistic, so the fast path being taken exactly when all four
+would do nothing means every cost golden stays byte-identical. All nine are.
+But "byte-identical counters prove equivalence" is a claim about what the
+corpus can observe, so I dropped each of the six conditions in turn and ran
+the nine counter gates and the golden suite against each.
+
+Three are pinned. Without the shelf's dirty test five counter gates
+**segfault** — a shelf entry outliving its arena region hands a freed pointer
+to the next grower, which is exactly the failure the flag exists to prevent.
+Without the chunk registry's test, encode's counters move. Without the block
+test, encode's and scan's move and four goldens fail.
+
+Three are not: `k_chunkreg_spill`, `k_viewreg_n`, and the permanent registry's.
+Dropping any of them leaves every gate and every golden green. The reason is
+one fact, and I found it by instrumenting the rewind rather than guessing:
+**on every program in the corpus, a rewind that finds a registry non-empty is
+also a rewind that has moved on from its mark's block**, so the block test
+reaches the slow path first and the registry tests never decide anything.
+Counted over the benchmarks: `chunkreg_spill` is non-zero at no rewind at all;
+escapebench has 3,000 rewinds with a non-empty permanent registry and the same
+3,000 have changed block; encodebench has 400 with a non-empty chunk registry.
+
+I wrote a fixture to isolate the view registry — a map born inside a beat and
+asked for its sorted view — and it registered 500 views at 500 rewinds and
+**still** did not catch the mutation, because those 500 rewinds had also taken
+a new block. A fixture that cannot fail is worse than none, so it is not in
+this pull request. The conditions stay: that the two travel together is a
+property of the programs in the corpus, not of the code, and the next program
+need not oblige.
+
+**What is left.** The naming is the finding. `k_beat_rewind` did not show up in
+any earlier profile sweep because the sweeps were reading the benchmarks whose
+profiles the twins were chasing, and the beat machinery is not a builtin. The
+question that found it was Clay's, about a construct the benchmark set does
+not cover well. That is an argument for the fused chain having a benchmark of
+its own, which it does not have and which the eleven do not substitute for.

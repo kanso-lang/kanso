@@ -586,6 +586,11 @@ typedef struct { KBlock* block; char* ptr; size_t left; long long bytes; } KMark
 static KMark k_beat_stack[K_BEAT_MAX];
 static int k_beat_depth = 0;
 
+/* Whether anything is on the buffer shelf. The shelf is twelve pointers and
+   the flush is a 96-byte memset, which a beat loop paid once an iteration to
+   clear a shelf that was already empty. Programs that never donate a buffer
+   never write it, so the memset becomes one test. */
+static int k_buf_dirty = 0;
 static void k_buf_flush(void);
 
 /* Malloc-backed builder chunks handed to strings by the zerocopy finish.
@@ -762,7 +767,7 @@ static void k_chunkreg_migrate(int d) {
     k_chunkreg_spill[d] = 0;
 }
 
-static void k_beat_rewind(KMark* m) {
+static void k_beat_rewind_slow(KMark* m) {
     k_buf_flush();
     long long d = m - k_beat_stack;
     if (d >= 0 && d < K_BEAT_MAX) {
@@ -790,6 +795,58 @@ static void k_beat_rewind(KMark* m) {
     if (k_blocks && k_arena + k_arena_left != (char*)(k_blocks + 1) + k_blocks->cap) {
         k_die("a beat mark and the arena disagree about the room that is left");
     }
+}
+
+/* What a rewind does in the common case is write three words. Everything else
+   above — the buffer shelf, the three registries, retiring blocks — is
+   conditional on state most programs never reach, and the call that finds all
+   of it empty still pays the six callee-saved pushes those loops need. So the
+   empty test moves out to the call site and the frame stays behind, which is
+   the same split the view registry's migrate and the permanent registry's
+   flush already make one level down. It is worth more here: a beat loop
+   rewinds once per iteration, where those are once per pop.
+
+   Measured before the split, on three programs whose beat loops dominate:
+   escapebench spent 80,970,118 of 185,475,445 instructions in this function,
+   43.66%, across 1,206,001 rewinds — 67 instructions each, every one of them
+   over an empty shelf and three empty registries. basket spent 16.21%. A
+   200,000-element fused map/select/sum spent 32.92%.
+
+   No counter moves: the three flush loops and the block retire are the only
+   code here that touches a statistic, and the fast path is taken exactly when
+   all four would do nothing, so every cost golden stays byte-identical.
+
+   How much of that the corpus can actually see was measured rather than
+   assumed, by dropping each test in turn. Three are pinned: without the buffer
+   shelf's test five counter gates segfault, because a shelf entry that
+   outlives its arena region hands a freed pointer to the next grower; without
+   the chunk registry's, encode's counters move; without the block test,
+   encode's and scan's do. The other three are not, and the reason is one fact:
+   on every program in the corpus, a rewind that finds a registry non-empty is
+   also a rewind that took a new block, so the block test reaches the slow path
+   first and the registry tests never decide anything. Counted over the eleven
+   benchmarks, chunkreg_spill is non-zero at no rewind at all; escapebench has
+   3,000 rewinds with a non-empty permanent registry and the same 3,000 have
+   moved on from their mark's block; a fixture written to isolate the view
+   registry got 500 and 500. That the two travel together is a property of the
+   programs, not of the code, so the tests stay. */
+static inline void k_beat_rewind(KMark* m) {
+    long long d = m - k_beat_stack;
+    if (__builtin_expect(d >= 0 && d < K_BEAT_MAX
+                         && !k_buf_dirty
+                         && k_chunkreg_n[d] == 0 && k_chunkreg_spill[d] == 0
+                         && k_viewreg_n[d] == 0
+                         && !(k_permreg_any && k_permreg_n[d] != 0)
+                         && k_blocks == m->block, 1)) {
+        k_arena = m->ptr;
+        k_arena_left = m->left;
+        k_seek_str = NULL;
+        if (k_blocks && k_arena + k_arena_left != (char*)(k_blocks + 1) + k_blocks->cap) {
+            k_die("a beat mark and the arena disagree about the room that is left");
+        }
+        return;
+    }
+    k_beat_rewind_slow(m);
 }
 
 void k_carry_clear(int depth);
@@ -5300,9 +5357,14 @@ static void k_buf_donate(KValue* items) {
     if (c < 0) return;
     b->used = (long long)(intptr_t)k_buf_free[c];
     k_buf_free[c] = b;
+    k_buf_dirty = 1;
 }
 
-static void k_buf_flush(void) { memset(k_buf_free, 0, sizeof(k_buf_free)); }
+static void k_buf_flush(void) {
+    if (!k_buf_dirty) return;
+    memset(k_buf_free, 0, sizeof(k_buf_free));
+    k_buf_dirty = 0;
+}
 
 /* Naming the value is the difference between "something here is wrong" and
    "you passed 5 where a function goes". The interpreter has always named it;
