@@ -20,52 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — RETRACTION: the compile row IS this change's, by 5,621, and it falls
-
-Three entries above say this row's movement is not this branch's, and one of
-them says main's own history settles it. That was wrong, and the experiment
-that shows it took four minutes and should have been the first thing run.
-
-Same container, same toolchain, same chip, same library box, only `src/`
-differing between the two arms, two runs each:
-
-    my src/     sha 52b28b027c23    41,904,811    41,904,811
-    main's src/ sha 1780ba089b7f    41,910,432    41,910,432
-
-**−5,621, and it repeats to the instruction.** `src/runtime.c` is
-`include_str!`'d into the compiler; this branch grew it by fifty lines; the
-compiler's bytes moved and the front end's counted work fell. That is a real
-movement of this row caused by this diff, and a fall is a win to bank — which
-is exactly what the gate has been asking for since the first red.
-
-**The first attempt at this experiment was also wrong and nearly got
-announced.** It restored `src/` without rebuilding, so both arms measured the
-same binary and agreed; the agreement looked like a null result. The fix was
-to print the binary's sha on every measurement rather than trust that a
-checkout implies a build. Every measurement above carries its sha for that
-reason.
-
-**What stands and what does not.** The chip variance is real: every head on
-this branch from f8fd75cb onward carries identical `src/`, and CI read both
-41,500,974 and 41,495,850 across them, twice each. So the row moves about
-5,124 with the silicon and about 5,621 with this diff, the two are the same
-size, and that is why they were confused. What does not stand is "not this
-PR's": it is this PR's, and separately it is also the pool's.
-
-**What that costs.** The golden was regenerated to 41,500,974 and then
-reverted on the strength of the claim now retracted. The revert was the wrong
-move. The row still cannot be pinned to a single value while the pool holds
-two chips — #247 is unaffected — but this branch owed a regeneration and a
-sentence saying the front end got cheaper, and it said the opposite instead.
-
-**The pattern, stated once more because this is the fourth.** Four times today
-a number moved, a mechanism was reached for, and the mechanism was asserted
-before the experiment that separates it from the alternative. Layout, then
-silicon-is-dead, then silicon-is-back, now this. The experiment has been cheap
-every single time. The rule that would have caught all four: when a number
-moves, change exactly one thing and measure both arms, before writing a word
-about why.
-
 ## 2026-09-03 — the compile row gets a key, and a refusal you can watch
 
 Searched the log tail and `design/log/compiler-log-archive.md` for prior
@@ -2440,3 +2394,28 @@ right about the cross-binary case the header decomposes, where two chips read
 The mechanism is still the open question and is unchanged by this: glibc's
 `/proc/self/maps` parse fits the signature, and what is not established is that
 two runs differ in their maps by the 508 this needs.
+
+## 2026-09-03 — gavel: the suffix contracts are refusals, as ruled in July
+
+On "What a `!` name promises on the declaration side" (#272), Clay:
+"rule it." Option 1 — and it is not new. The July suffix-grammar
+ruling (archive, "The suffix grammar, with teeth") already said: "Both
+suffixes are checked contracts, not conventions: a `?` function must
+answer bool, and a `!` function's answer typeset must include an err
+type. The checker refuses violations of either." The entry did not
+cite it; the only news is that the contract was never implemented —
+`pub fn shout! x` answering a plain string compiles today.
+
+Under effects-are-types the contract reads directly off the answer
+type: **a `!` name must answer a result; a `?` name must answer bool;
+the checker refuses either violation at the declaration.** A bang
+that cannot fail is a lie in the name — `foo[k]!` differs from
+`foo[k]` precisely by being able to fail. The implementation question
+the entry raised (can infer see whether an answer reaches the failure
+channel) dissolved with failures becoming a type: the checker reads
+the declared or inferred answer type, the same way it reads any
+other. Options 2 (unchecked convention) and 3 (std-only) would
+respectively reverse a standing ruling and mint a two-tier rule the
+language has nowhere else; both declined. Enforce both suffixes in
+the same change, since `?` sits in the identical unimplemented state.
+The ledger entry leaves with this commit wherever it lives.

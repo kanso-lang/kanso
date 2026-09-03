@@ -60,41 +60,6 @@ research mandate it left with.)
 ## Open, not blocking
 
 
-### What a `!` name promises on the declaration side (Clay's call, 2026-09-03)
-
-The exceptional-vs-data gavel says "the suffix grammar's contract (a `!`
-name answers a box) is the same rule seen from the declaration side."
-Measured on the tree the day it was ruled: nothing enforces that. A
-`!`-suffixed name is grammatical, resolvable and callable, and
-
-    pub fn shout! x
-      "{x}!"
-
-compiles and prints `hi!` with no complaint. So the contract exists as
-doctrine and not as a refusal.
-
-What is unclear is the checkable form, and it is a design question
-rather than an implementation one:
-
-1. **A `!` name whose answer can never carry a failure is refused.**
-   The strong reading, and the one that matches the map rule — `foo[k]!`
-   differs from `foo[k]` precisely by being able to fail, so a bang that
-   cannot is a lie in the name. Needs infer to answer "can this
-   declaration's answer reach the failure channel", which is a real
-   question about what the pass knows today.
-2. **A `!` name is a naming convention and stays unchecked.** Cheapest,
-   and consistent with the language having no linter — but then the
-   parenthetical in the gavel describes nothing the compiler does.
-3. **Something narrower**, e.g. the rule binds only on the std surface
-   where `io/read_file` and `io/read_file!` must differ, and a user's
-   own `!` name is theirs to spell.
-
-Not blocking: the io half of the same gavel — `io/read_file` answering
-`text | file_not_found` and `io/read_file!` answering a failure — is
-stated concretely enough to build without this, and is where the work
-goes meanwhile.
-
-
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
 
 **RE-PREMISED AGAIN 2026-08-29 by the effects-are-types gavel, which
