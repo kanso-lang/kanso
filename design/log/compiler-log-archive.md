@@ -805,6 +805,7 @@ semantics now cost less than the code they replaced. The ch10 counters
 sample fell 4033 → 29 allocations. Follow-ups queued: fuse take/drop
 bounds into the scan, tally/group_by/tso_h reducers, and the
 defunctionalized-thunk pool sharing this composition machinery.
+
 ## 2026-07-22 evening: fusion is syntactic — keep the chain in sight
 
 The kq pretty-print race exposed the pass's blindness: a width-forced
@@ -1045,6 +1046,7 @@ page (short-circuit and/or shipped as && / ||; negative literals and
 <div class="lore"><figure><svg class="sprite" viewBox="0 0 22 19" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="7" y="2" width="8" height="1" fill="#f03a00"/><rect x="6" y="3" width="10" height="1" fill="#f03a00"/><rect x="5" y="4" width="12" height="1" fill="#f03a00"/><rect x="4" y="5" width="1" height="1" fill="#f03a00"/><rect x="5" y="5" width="2" height="1" fill="#ff7a52"/><rect x="7" y="5" width="11" height="1" fill="#f03a00"/><rect x="4" y="6" width="1" height="1" fill="#f03a00"/><rect x="5" y="6" width="2" height="1" fill="#ff7a52"/><rect x="7" y="6" width="11" height="1" fill="#f03a00"/><rect x="3" y="7" width="16" height="1" fill="#f03a00"/><rect x="3" y="8" width="4" height="1" fill="#f03a00"/><rect x="7" y="8" width="1" height="1" fill="#2b2320"/><rect x="8" y="8" width="1" height="1" fill="#faf3e3"/><rect x="9" y="8" width="4" height="1" fill="#f03a00"/><rect x="13" y="8" width="1" height="1" fill="#2b2320"/><rect x="14" y="8" width="1" height="1" fill="#faf3e3"/><rect x="15" y="8" width="4" height="1" fill="#f03a00"/><rect x="3" y="9" width="4" height="1" fill="#f03a00"/><rect x="7" y="9" width="2" height="1" fill="#2b2320"/><rect x="9" y="9" width="4" height="1" fill="#f03a00"/><rect x="13" y="9" width="2" height="1" fill="#2b2320"/><rect x="15" y="9" width="4" height="1" fill="#f03a00"/><rect x="2" y="10" width="5" height="1" fill="#f03a00"/><rect x="7" y="10" width="2" height="1" fill="#2b2320"/><rect x="9" y="10" width="4" height="1" fill="#f03a00"/><rect x="13" y="10" width="2" height="1" fill="#2b2320"/><rect x="15" y="10" width="5" height="1" fill="#f03a00"/><rect x="3" y="11" width="4" height="1" fill="#f03a00"/><rect x="7" y="11" width="2" height="1" fill="#2b2320"/><rect x="9" y="11" width="4" height="1" fill="#f03a00"/><rect x="13" y="11" width="2" height="1" fill="#2b2320"/><rect x="15" y="11" width="4" height="1" fill="#f03a00"/><rect x="3" y="12" width="16" height="1" fill="#f03a00"/><rect x="3" y="13" width="6" height="1" fill="#f03a00"/><rect x="9" y="13" width="4" height="1" fill="#2b2320"/><rect x="13" y="13" width="6" height="1" fill="#f03a00"/><rect x="4" y="14" width="14" height="1" fill="#f03a00"/><rect x="5" y="15" width="12" height="1" fill="#f03a00"/><rect x="6" y="16" width="10" height="1" fill="#f03a00"/><rect x="4" y="17" width="13" height="1" fill="#f03a00"/></svg><figcaption>err—always arrives, never uninvited</figcaption></figure></div>
 
 ```
+
 ## 2026-07-23 — PLAN: cell-RC wiring (mined queue item 0)
 
 The demand fragment constrains where thunk cells can flow, and the
@@ -1152,6 +1154,7 @@ right). Differential golden examples/utf8_strict.kso pins overlong/
 surrogate rejection and U+10FFFF acceptance on both engines. The
 nibble-lookup vector tier for dirty blocks is the next cut, same
 harness as gate.
+
 ## 2026-07-23 — PLAN: subtypes v1 (REPL-testable slice)
 
 Ratified design (memory: kanso-subtypes): `type post_body string` —
@@ -1249,6 +1252,7 @@ same sitting: path 5.1/20.6ms (1.54x/1.64x), pretty 8.7/62.8ms
 slower tool more). kq README table updated to this sitting with idle
 floors footnoted. All five kernel presence counters now CI-pinned in
 the encode cost golden (#175).
+
 ## 2026-07-23 — PLAN: ryū/dragonbox rendering (queue item 1, the last big kernel)
 
 Staged so the gate exists before the core (the EL lesson):
@@ -2670,6 +2674,7 @@ follow arms rather than groups.
 
 Gavel BB's branch now builds against main after a rebase across a hundred
 and ninety-four commits, and the feature works:
+
 ## 2026-07-24 — return guards land: gavel BB is in the language
 
 `return X if C` works on both engines, build blocks still work, and the
@@ -4669,6 +4674,7 @@ code — so the picker path passed while a plain edit-then-run could be broken.
 It now types a program into the editor and presses the button, then does it
 again through ⌘⏎, which is a separate listener. Both probes were watched
 failing against a stubbed click handler before the change went in.
+
 ## 2026-07-26 — SHIPPED: the utf-8 validator was paying vector setup on five-byte keys
 
 Started the ledger sweep with a profile rather than a guess: four thousand
@@ -4767,6 +4773,7 @@ handed to anything until the block closes. Values from outside stay ordinary,
 and the constructor itself has to remain callable or nothing can be built.
 
 Both halves wait on Clay.
+
 ## 2026-07-26 — asset digests, because a query stamp only narrows the window
 
 Clay asked for the rails technique rather than the build-time query that went
@@ -5717,6 +5724,7 @@ point. Seven terms are a model of what the project wants, not the thing itself.
 Wall time is absent because it cannot be made deterministic, and whatever a
 model leaves out it weights at zero — so arguing the model is the intended way
 to change it, not a workaround.
+
 ## 2026-07-26 — `some` is retired, having been a rename of a type that should not exist
 
 Clay: "there is no `some` construct as i already stated. that was nonsensical."
@@ -5830,6 +5838,7 @@ strings so a colon inside a string is never read as an annotation.
 Clay's own workaround for the cache is in editors/README.md now, because
 removing and re-adding the bundle is not always enough: untick, apply, tick,
 apply.
+
 ## 2026-07-26 — CORRECTION: non-nullability is derived, not declared
 
 I wrote that retiring `some` left non-nullability "currently unstatable", and
@@ -6327,6 +6336,7 @@ Worth noting which check caught it. Not a unit test and not the goldens: the
 book, where a sample's printed output is compared to what the chapter says it
 prints. The error message is user-facing text and the book is the only place
 that reads it as a user would.
+
 ## 2026-07-26 — diagnosing the stopping problem
 
 Clay: "the point of the loop is as a last resort so even if you stop working,
@@ -6366,6 +6376,7 @@ something already went wrong. Recorded because I had been treating a wakeup as
 a natural end-of-shift, which inverts what it is for. Only Clay arms, disarms or
 retimes it — I dropped it earlier today without being asked, which was the
 clearest instance of the whole problem.
+
 ## 2026-07-26 — RULED: trust the editor. And what a typeset still says that inference cannot
 
 Clay, on the committee's locality objection: "we're sticking by kanso. don't
@@ -6993,6 +7004,7 @@ per interned literal.
 
 Peak moves half a megabyte; this one was churn, and the wall clock is where
 churn shows.
+
 ## 2026-07-27 — one function, one spelling: module loops reach the beat tier
 
 Enrollment gives every imported pub a bare-named twin so both spellings
@@ -7049,6 +7061,7 @@ land exactly on shelf classes — the first cut rounded up past them and paid
 peak for it, which the measurement caught the same hour. The decode-peak row
 now reads in kq's favor by two megabytes. The buf_reuse counter pins the
 mechanism in every vein.
+
 ## 2026-07-27 — pop-rewind for chained loops: built, measured, declined
 
 The theory: k_beat_pop keeps a heap result's region alive, so every nested
@@ -13390,6 +13403,7 @@ So the option is not "declined because it exposes another bug" but "declined
 because it is half a change". Anyone returning to it has to un-classify the
 loop as well, which is a much larger move and buys nothing over the memo rule
 that shipped.
+
 ## An effect handed to a parameter nobody reads
 
 `kanso check` refuses it now. An effect is a description and a description
@@ -13619,42 +13633,6 @@ removes the question along with the flag.
 So the port is ordinary kanso: `io/write_file` builds the page, `io/run` calls
 chrome once, `std/json` reads the payload back. No new builtin, no new engine
 surface, nothing to keep byte-identical across three engines.
-
-## The last two python scripts need no browser automation after all
-
-Clay cleared building whatever it took to get off python, including browser
-automation. Measured first, and the answer is that none is needed.
-
-`browser_differential.py` looks like it wants three capabilities kanso does not
-have: a process started without waiting for it, a local http server for the
-page to POST its report to, and a process kill. All three exist to work around
-two properties of the page rather than of the browser: it fetches the engine
-over http, and it reports over http.
-
-Take both away and it collapses into one `io/run`. The engine inlines as base64
-and instantiates through `new WebAssembly.Instance(new WebAssembly.Module(b))`,
-which is synchronous, so there is no fetch and no await anywhere. The page
-writes its payload into a `<pre>` it already has. Chrome runs once with
-`--headless=new --dump-dom` over a `file://` url and prints the finished dom to
-stdout, which is captured process output like any other.
-
-Proved on the real harness rather than a toy: the actual PAGE from the python,
-with the fetch deleted, both awaits replaced by synchronous instantiation, and
-the POST replaced by a dom write. Two programs through the whole path — compile
-to wasm, instantiate, execute, read output — answering `sync harness works` and
-`14` for `{2 + 3 * 4}`. Chrome returns promptly.
-
-Two dead ends, recorded so nobody re-walks them. `--virtual-time-budget` is the
-usual way to make `--dump-dom` wait for async work and it hangs here: virtual
-time advances only while the page is idle, and a cpu-bound wasm run never
-yields, so a 600-second budget waited 600 seconds of wall clock and timed out.
-Fetching the engine from `file://` does work with `--allow-file-access-from-files`
-— the probe that appeared to refuse it was missing an import object of its own,
-not hitting CORS — but inlining removes the question along with the flag.
-
-So the port is ordinary kanso: `io/write_file` builds the page, `io/run` calls
-chrome once, `std/json` reads the payload back. No new builtin, no new engine
-surface, nothing to hold byte-identical across three engines.
 
 ## A correction: the synchronous browser harness does not scale to the corpus
 
@@ -16633,6 +16611,7 @@ wrong for a genuinely imported type where `lib/pair` is what the program says.
 
 Keeping the two apart matters because the first being fixed made it tempting to
 call the second fixed too. It is not, and it still decides five micro goldens.
+
 ## the basket does text now, because it did none (2026-08-03)
 
 Four pull requests improving text handling each moved welfare by nothing, and
@@ -16666,6 +16645,7 @@ move — the document is small beside the hundred-thousand-element accumulator
 that already sets it.
 
 Widening a corpus has to bank nothing, or the widening becomes the argument.
+
 ## An ordering arm did not survive an import, and one line said which group did
 
 The generated-entry probe over the micro corpus turned up
@@ -18421,6 +18401,7 @@ acceptable is the question, and it is Clay's.
 The seven book samples wait on it. Under the current design they teach catching
 a failure; under the contention they teach handling a value, and writing them
 twice is the one outcome nobody wants.
+
 ## 2026-08-08 — an operator asks both its operands
 
 An arm naming its type in the second position — `fn + _ b:money` — compiled on
@@ -18541,6 +18522,7 @@ trivia. One threshold does not serve both.
 What this leaves for the frontier: those 63,967 copies are not waste any policy
 here would remove. Avoiding them without retaining the garbage takes reference
 counting, which is the Perceus measurement that has still never been run.
+
 ## 2026-08-08 — what crosses a beat boundary
 
 The Perceus comparison has been blocked on a number nobody had: how much of
@@ -19439,6 +19421,7 @@ call taking a pointer and a length would skip the header entirely, which is
 worth about two per cent of decode if the rest of the path is unchanged.
 
 Not built. Recorded because the number is measured and the shape is specific.
+
 ## 2026-08-10 — utf8 of a slice, and two ways to be green and wrong
 
 The decoder built one byte view per scalar token: 3,091,200 of them, 83.5
@@ -20934,6 +20917,7 @@ so the wording could drift with nothing to say so. The new text says what a
 cluster IS rather than asserting what it does, which stays accurate whether or
 not a cluster entered from inside its own tail cycle behaves differently. That
 remains unmeasured, as does `CarryBeat`, whose text contains the same phrase.
+
 ## 2026-08-14 (last) — a fifth shelf, and the same absence twice
 
 `bench/deepbench` was built to answer the welfare question on #903: the corpus
@@ -22256,6 +22240,7 @@ may suggest cargo run without Rust-the-language knowing either word.
 The shipped entry-file hint ("run its definitions beside their
 statements with `kanso play`") is ratified as-is; future diagnostics
 may hint verbs freely.
+
 ## 2026-08-18 — the qualified door, and two more re-export gaps behind it
 
 `geo/order` named nothing where `order` resolved, and the axis was not
@@ -22372,6 +22357,7 @@ The lesson is about evidence rather than types. A refusal is not evidence
 of a defect until the program is known to be well formed, and two of the
 three reproductions here were not. What separated them was checking how
 the corpus already spells the construct.
+
 ## 2026-08-18 — GAVEL: equality refuses a value that names itself
 
 Clay, ruling #235: "to me 'which object is this' makes more sense... how could
@@ -22540,6 +22526,7 @@ are indistinguishable from the output alone.
 Pinned by tests/golden/micro/a_knot_equals_the_same_cycle_built_in_a_block.kso,
 which is also why the refusal is scoped to a pair of CELLS: that is the only
 place the question is unanswerable.
+
 ## 2026-08-19 — gavel 15 built: the wall defers, and the loop runs
 
 A loop written with `>>` now runs to the end on both engines. Four hundred
@@ -22834,6 +22821,7 @@ validator; only recombination of VALID programs found the shape no
 human had written — a truncated `if` is not a typo anyone makes, it
 is two programs' halves meeting. The corpus is the mutation fuel, so
 every golden added makes the fuzzer smarter.
+
 ## 2026-08-20 — gavel 1b enforced: only a type's owner constructs one
 
 Ruled by Clay ("yes 251 is mine"), so this is 1b implemented rather than a
@@ -22871,7 +22859,6 @@ that quietly weakens a fixture does not announce itself.
 reason so its own err can be rescued under a borrowed name. That no longer
 compiles, so the advisory cannot fire. Its test pins the refusal instead of
 being deleted; the advisory stays live where the reason is genuinely foreign.
-
 
 ## 2026-08-20 (later) — the fuzzer's second find, and a list line falsified
 
@@ -23161,7 +23148,6 @@ hold. The machine-code and instructions veins gain a pendbench row,
 stamped from the runner in this PR, and the trend gate enrolls the
 pend counters with the thunk family in its direction tables.
 
-
 ## 2026-08-20 — the shorthands JSON already has, paid for by dead code
 
 A second differential wave (2,000 fresh seeded documents, the durable
@@ -23256,6 +23242,7 @@ list-naming-adjacent should be built until the word comes. The word
 came within the hour, in the parallel session: "list seems like the
 name. you've convinced me." Ruled, recorded, never re-asked — the
 book owes one sentence saying contiguous, constant-time index.
+
 ## 2026-08-21 — what render's cycle guard costs, measured
 
 Task #258 carries Clay's condition on the in-walk cycle guard — "if it's
@@ -23955,6 +23942,7 @@ that was set against the stale reading.
 
 Nothing is changed here. This branch leaves the golden alone: its own ten bytes
 are inside any reading of it, and the 376 predate it.
+
 ## 2026-08-23 — the python that crept back is out, and a gate watches now
 
 The 2026-08-09 entry declared the repo python-free. Within three days it was
@@ -23988,6 +23976,7 @@ ratchet row: no tracked .py file, no python3 call outside design/'s history
 and the one mutation whose job is to introduce one. Watched red three ways —
 the stale racer before its deletion, a python3 line appended to book_check
 (the row's mutation), a tracked creep.py — and green on the clean tree.
+
 ## 2026-08-23 — one ledger: pending decisions live in pending-gavels, and nowhere else
 
 Clay ruled it in the developer chat, verbatim intent: "110% UNIFY those
@@ -26396,6 +26385,7 @@ It carries a row and a mutation now, and the mutation is the original bug
 rather than a stand-in: it collapses the interpolated key to a constant, so
 every pair in a group shares one name and `list/to_h` keeps the last. Watched
 red, and it names all thirty.
+
 ## 2026-08-25 — how wide a record-type set has to be, measured before building one
 
 The read half of gavel 1b needs a per-expression record-type set, and the
@@ -26877,6 +26867,7 @@ and "make a qualified name" (26 `format!` sites, 23 of them in lib.rs's
 qualification machinery). A name carrying its module and base answers both
 structurally, and it is a fraction of the conversion. Whoever returns to this
 should measure that, not the interner.
+
 ## 2026-08-25 — gavel: welfare measures what compiling costs, not what it counts
 
 Clay ruled the sweep's first entry, and against its recommendation. Told
@@ -26985,6 +26976,7 @@ The forbidden move stands: packaging a compensating optimization into a
 feature's own pull request to hide its cost is index-gaming either way —
 the feature's fall and the optimization's gain each deserve their own
 attributed record.
+
 ## 2026-08-26 — the error corpus had no ratchet row, and now has one
 
 The ratchet's rule is one row per CI job, and `specs (unit, golden,
@@ -27203,6 +27195,7 @@ the trend gate had none. It is a step inside the cost-goldens job, and the
 ratchet's own coverage check is per JOB, so a step-level gate hides behind the
 rows its neighbours carry. That is a general gap and this closes one instance
 of it, not the gap.
+
 ## 2026-08-26 — json stops reading its own failure (written 2026-08-21, landed today)
 
 The work below was done on 2026-08-21 and sat in a draft pull request until
@@ -27370,6 +27363,7 @@ here.
 Of the 0.79 the swap cost on the old goldens, the instrument fix gave 0.14
 back before the floor was set, which is the honest order: fix what is measured
 first, then read the number.
+
 ## 2026-08-26 — a merged err came out of a hop nested on native and flat everywhere else
 
 Three failures answer three reasons however they were grouped. That is the
@@ -29497,7 +29491,6 @@ never enters it. Allocations and peak are identical at 61,981 and 822,004.
 Banked in `bench/compile_instructions_golden.txt` with that reading written
 beside it, the same way the +167 of the previous day was.
 
-
 ## 2026-08-27 — a hash that remembers every block it has read
 
 `scripts/fingerprint` was OOM-killed digesting the site. The kernel's report
@@ -29732,8 +29725,6 @@ path, which `specs` on linux passed. The reason wants rewriting to say what
 actually holds: `prove` is authoritative on linux and cannot run a macOS gate
 at all. That is about the harness's reach rather than about the mutations, and
 it is a separate change from this one.
-
-
 
 ## 2026-08-27 — the last excuse, and a ratio measured further out
 
@@ -31099,6 +31090,7 @@ runtime, so no compile vein and no cost golden can move. `docs/kanso.wasm` is
 rebuilt in the same commit because the walk refuses to run against a blob older
 than its source — a guard worth naming, since it turns a stale artifact into a
 red test rather than a green one that proves nothing.
+
 ## 2026-08-27 — the walk could not say how much it had walked
 
 The test that catches every three-engine divergence — the one that caught the
@@ -32018,7 +32010,6 @@ runs per module and `kanso check lib/json` has three, so building a
 sixty-two-entry map each time cost half of what the scans had — construction
 was the cost, not lookup, and the 335 probes were never the problem.
 
-
 ## 2026-08-29 — a module is named the way an import writes it
 
 DONE. Two imports a reader spells the same way got two spellings back:
@@ -32812,6 +32803,7 @@ the runner against -419 in the container: opposite signs on one diff, layout.
 The arm is a branch on a walk that already ran, and `lib/json` declares no
 typeset, so the borrowed set is empty and the branch never fires on the
 measured path.
+
 ## 2026-08-29 — `fields.is_empty()` is not the same question as "is this a value"
 
 The typeset sweep turned up a second divergence one name over. `type age int`
@@ -34845,6 +34837,7 @@ the complete instruction set a container gets — and the sync script
 is deleted. #146 closes: there was never anything to attach. If a
 cross-project memory is ever really wanted, it starts by actually
 creating the repo, and the section comes back with it.
+
 ## 2026-08-30 — the last per-line scratch, and a decision filed
 
 ```
@@ -40250,7 +40243,6 @@ the edit, and the number that fell is a layout artefact rather than a win to
 bank. It is recorded as an improvement because that is what the row says, and
 this paragraph is what stops the next reader crediting it to a pass.
 
-
 ## 2026-09-02 (thirteenth) — the 67 million is a lost specialisation, and the fix is declined
 
 kanso#1214 left one thing unexplained: encodebench pays +67,116,000 for the
@@ -40573,3 +40565,820 @@ asserting its own copy of the tool, which is the objection its own harness
 comment already makes about re-reading the goldens.
 
 Welfare **75.09 -> 75.19** on the runner rows, ratcheted.
+
+## 2026-09-02 (nineteenth) — the twins learn what the inference knows, and the append learns strings
+
+Three things, and the third only exists because the second was measured and
+beaten.
+
+**The non-strict index had no inline form at all.** `k_index_fast`, which
+kanso#1214 built, is the STRICT index's fallback and knows lists only. Every
+`xs[i]` written without the `!` went to the runtime by call — 7,237,200 of them
+in encodebench at thirty-five instructions apiece, 253,302,000, 3.83% of the
+benchmark. `k_b_at_fast` inlines the two containers that answer in one load: a
+list slot and a byte, which keep their length at offset 0 and their data
+pointer at offset 8. A map, a string, out of range, a failure: all of it falls
+through, so `none` and the utf-8 seek stay where they were written.
+
+**A site the inference has already decided keeps its call.** A container
+narrowed to STR can only take the index twin's slow arm, because the utf-8 seek
+does not inline. Those sites now call `k_b_at` directly and pay no tag test for
+a question answered at compile time. That removes indexbench's cost EXACTLY:
+5,342,321 back to **5,242,318**, the same number, with every other row
+byte-identical.
+
+**The same trick did NOT win for the append, and building both is how that was
+found.** Routing known-string appends past the twin scored welfare 75.22.
+Giving the twin a string arm that memcpys scored **75.25**. So the arm, not the
+route.
+
+**And the arm's first shape was wrong in a way jsonbench found.** Sharing the
+two arms' guards through a phi costs the BYTE path two instructions per append
+— a phi and a second branch — which is 15,357,900 of them inside jsonbench's
+`str_char`, because the decoder appends bytes and nothing else. Split into two
+arms that duplicate five loads each, the byte arm is byte-identical to what
+kanso#1221 shipped (checked: the only diff is `b`-prefixed labels) and
+jsonbench's cost halves.
+
+```
+                      shared guards      split arms
+  jsonbench            +0.604%            +0.286%
+  encodebench          -7.379%            -8.351%
+  oneshot              -1.518%            -2.112%
+  widebench            -1.631%            -1.931%
+  welfare                75.25              75.27
+```
+
+**The eleven, in this container, against kanso#1221 (62f66f30):**
+
+```
+encodebench  6,611,648,059 -> 6,059,516,328  -552,131,731  -8.351%
+oneshot         36,606,462 ->    35,833,347      -773,115  -2.112%
+widebench       63,809,599 ->    62,577,544    -1,232,055  -1.931%
+basket          54,722,493 ->    54,396,964      -325,529  -0.595%
+jsonbench    2,673,669,936 -> 2,681,323,231    +7,653,295  +0.286%
+```
+
+deepbench, escapebench, pendbench, indexbench, scanbench and digestbench are
+byte-identical. Welfare **75.19 -> 75.27**.
+
+**jsonbench's residual 7,653,295 is not the guards.** The byte arm's IR is the
+one kanso#1221 shipped, so whatever is left is downstream of LLVM's layout and
+inlining decisions on a bigger prelude — the effect kanso#1217 measured and
+named. It is recorded rather than explained away, and it is 0.286%.
+
+**kq collects most, because its printer is nothing but string appends.**
+Against its pin at 8dc6ec9e, container-measured:
+
+```
+print_small  70,032,882 -> 61,913,801  -11.59%
+print_big   711,281,956 -> 629,325,358 -11.52%
+path_small   19,081,110 ->  18,792,192  -1.51%
+path_big    198,938,968 -> 195,641,255  -1.66%
+```
+
+kanso at 8dc6ec9e and at 14fef781 give kq byte-identical rows and `.text`, so
+none of the six merges between them reaches kq and the whole move belongs to
+kanso#1221 and this change.
+
+**What pins what.** `an_index_without_the_bang_reaches_its_twin.kso` reads a
+list and a byte string in range and out, a map with INT keys and a string with
+a multi-byte character. Three of four mutations turn it red: the container test
+(`intmap 2` reads 0, a KMap header read as a KList), the bounds test (`xs[0]`
+answers `false`) and the list-versus-byte branch (`xs[2]` answers 0). The
+int-key tag test does not, masked the way kanso#1221's owned test was.
+
+`an_in_place_append_takes_a_whole_string.kso` alternates a byte and a five-byte
+string through one call site. Two of five mutations turn it red — the string's
+length read (802 and 48,996 against 2402 and 192,596) and the in-place length
+write (402 and 30,996). The capacity test is caught by valgrind and not by the
+output, exactly as the byte arm's was. The owned test and the string tag test
+are caught by neither, and for the reasons kanso#1221 already recorded: the
+capacity test masks the first and the corpus contains no shape that reaches
+the second.
+
+The two routing decisions are pinned by the instruction vein rather than by a
+fixture, and correctly so — they change what a program costs, not what it
+answers. Delete either and `bench/instructions_golden.txt` goes red on a row
+whose number is in this entry.
+
+**Every counter that moved, and what it landed on.** The two twins' bodies sit
+in the DECLARES prelude, so every program emits them whether or not it reaches
+them: one define, three calls, eight branches and 99 lines apiece for the
+decoder — `emitted_defines` 167, `emitted_calls` 1,805, `emitted_branches`
+1,201, `emitted_lines` 11,934 — and across the ten beside it
+`emitted_other_defines` 1,449, `emitted_other_calls` 14,502,
+`emitted_other_branches` 8,659, `emitted_other_lines` 86,723. The compile
+samples take the same prelude: `defines` 149, `calls` 182, `branches` 207,
+`lines` 3,312, and the module sample `module_defines` 89, `module_calls` 770,
+`module_branches` 402, `module_lines` 4,832.
+
+`text` lands on **1,010,694**, +5,744 for the two twins. `work_jsonbench`
+lands on **2,681,323,644**, and its 7,653,295 is the layout residual described
+above rather than work the guards do.
+
+`compile_instructions` lands on **41,490,353**, a FALL of 11,038 against
+41,501,391, measured on CI because a container cannot count this row. Two
+things in the commit are data the front end never reads — the prelude grew by
+the index twin and the append's second arm, and `arg_is_str` left `codegen.rs`
+when the string arm made it dead — and between them the compiler's own
+sections shifted. Rounds, visits and allocations are byte-identical: nothing
+in the front end changed. Three consecutive commits have now moved this row
++6,087, −416 and −11,038, and none of the three touched a pass.
+
+## 2026-09-02 — the born test that only fed a counter, and the seed map at two slots
+
+Two one-line changes to `src/runtime.c`, both in the same place: what an
+in-place mutation costs before it writes anything.
+
+### the born test
+
+`k_b_push_mut` is the in-place list push, emitted where the linearity analysis
+has proved the list uniquely owned. Its fast arm asked three questions: is this
+value on the frontier of its buffer, is there room, and was the header born
+inside this beat. The first two are four loads and two compares. The third,
+`k_born_this_beat`, reads the beat depth, the block chain and the mark on top
+of the beat stack, and off the head block it walks the chain to settle tenure
+exactly.
+
+Fail the third and the call went to `k_b_push_into_proven(lv, item, 1, 1)`.
+Read what that does with `mutate=1` and `proven=1`: the born line at its head
+is skipped for being proven, the frontier branch claims `l->items[l->len]`,
+bumps `buf->used`, bumps `l->len`, and returns the same `lv` the fast arm
+would have returned. Two paths, one behaviour, and the second one paid for a
+call, a beat-stack lookup, and sometimes the walk.
+
+So the born test was deciding which of two counters to increment.
+`k_stat_push_mut_fast` and `k_stat_push_mut_slow` are the only things
+downstream of it, and both are read only when `k_stats_on`. It sits inside
+that guard now, and the counters mean exactly what they meant: all nine cost
+goldens were byte-identical across this change taken alone, which is the
+evidence that nothing else moved.
+
+escapebench is where it shows. Its cost golden reads `push_mut_fast=3000`
+against `push_mut_slow=1200000`: 1.2 million frontier writes a run, every one
+of them going the long way round because the accumulator's header predates the
+beat. That is 32,097,000 instructions, 26.7 apiece.
+
+### the seed map
+
+`k_map_lit` gave an empty literal one pair of room — `k_buf(2 * (n ? n : 1))`
+— where the grow path it hands off to starts at four. Nothing writes `{}`
+except to put into it, so the second put always grew, and jsonbench's decoder
+writes a fresh `{}` per JSON object. A third of every map insert in the
+benchmark was a reallocation: `put_mut_grow` 419,850 against
+`put_mut_fast` 834,300.
+
+An empty literal starts at the grow path's own floor now. A literal with keys
+in it is a finished value and still gets exactly the room it needs.
+
+### what both did
+
+| benchmark   | before        | after         | delta        |          |
+|-------------|--------------:|--------------:|-------------:|---------:|
+| escapebench |   248,370,844 |   216,273,844 |  −32,097,000 | −12.923% |
+| basket      |    54,397,377 |    47,410,168 |   −6,987,209 | −12.848% |
+| digestbench |    98,969,254 |    89,615,426 |   −9,353,828 |  −9.451% |
+| pendbench   |   749,618,914 |   734,101,805 |  −15,517,109 |  −2.070% |
+| jsonbench   | 2,681,323,644 | 2,627,824,194 |  −53,499,450 |  −1.995% |
+| oneshot     |    35,833,746 |    35,476,818 |     −356,928 |  −0.996% |
+| widebench   |    62,577,957 |    62,243,248 |     −334,709 |  −0.535% |
+| encodebench | 6,059,516,727 | 6,058,924,662 |     −592,065 |  −0.010% |
+| scanbench   | 1,423,437,886 | 1,423,437,854 |          −32 |        — |
+| deepbench   |   677,481,898 |   677,481,898 |            0 |        — |
+| indexbench  |     5,242,731 |     5,242,731 |            0 |        — |
+
+Split between them: the born test is the whole of escapebench, digestbench,
+pendbench and widebench, and −18,096,450 of jsonbench. The seed map is the
+rest of jsonbench (−35,403,000), the whole of oneshot, and it cost basket
+28,669 instructions where it saved basket four allocations. deepbench and
+indexbench hold to the byte and their `.text` does not move: neither writes a
+proven in-place push nor an empty map literal, so neither function is in the
+binary.
+
+**Allocations.** jsonbench `allocs` 5,334,308 -> **4,999,958** (−6.27%),
+`alloc_bytes` 268,048,208 -> **259,660,208**, `sh_buf` 143,306,400 ->
+**134,918,400**, `put_mut_grow` 419,850 -> **85,500** with `put_mut_fast`
+834,300 -> **1,168,650**. oneshot and encodebench move the same way on the
+same counters (`put_mut_grow` 2,799 -> **570**), basket by four allocations.
+No counter in any of the nine goldens moves the wrong way.
+
+The lazy tier's vein sees it too. Six `.mem` goldens move, every one of them
+by exactly one grow: `fused_tally` allocs 96 -> 93, `growing_map` 1,615 ->
+1,614, `map_put` 102 -> 101, `readwrite_map` 310 -> 309,
+`repeated_key_shape` 7,389 -> 7,388, `tally_shape` 26 -> 25, and in each the
+`put_mut_grow` count falls by one while `put_mut_fast` rises by one. Those are
+programs of a few dozen puts, so a single reallocation is the whole of what
+the change can save them, and a single reallocation is what it saves.
+
+**What it cost.** `text` rises 1,010,694 -> **1,011,350**, +80 bytes on the
+four binaries that take both changes and +64 on the five that take one. An
+inlined frontier write is longer than a call to something that does it, and a
+literal that asks for eight slots writes a different immediate. That is the
+trade the objective cannot see, and §35 of the compiler page is about.
+
+**Welfare 75.27 -> 75.54**, ratcheted twice. The born test alone was 75.50,
+the seed map took it to 75.52 — 0.02 for six per cent of jsonbench's
+allocations, which is what a satiated term pays — and the map insert the last
+0.02.
+
+The pin is `bench/instructions_golden.txt`. A fixture cannot catch the born
+test: the old code and the new code write the same bytes into the same slot
+and return the same value, which is the whole finding. Restore it to the fast
+arm's condition and nine rows in that vein go red on the numbers above.
+
+### the map insert
+
+`k_b_put_mut` was the other 3.70% of jsonbench, and its cost is not in the
+work it does. `objdump` shows a 312-byte stack frame and six callee-saved
+pushes on entry, paid by every call, grow or not, because the growth arm and
+the sorted-view insert live in the same function. jsonbench makes 1,254,150 of
+those calls a run at 77.6 instructions apiece.
+
+A map with no sorted view built is the whole of what a fast arm needs.
+`k_map_replace` answers on one branch when `m->sorted` is NULL, the view
+insert is a no-op, and the write is two slots at the frontier. jsonbench's
+`view_allocs` reads zero, so every one of its inserts is that case.
+`k_b_put_mut_fast` in the DECLARES prelude does it: tag `K_MAP`, key an int or
+a string, value not a failure, counting off, no view, frontier and room, then
+two stores and a length. A built view, a full buffer, anything else at all:
+the call.
+
+Against the two changes above, that is jsonbench 2,627,824,194 ->
+**2,556,080,244**, −71,743,950 or **−2.730%**; oneshot −478,293 or −1.348%;
+encodebench −478,293 or −0.008%; basket +12,792, its whole cost. The other
+seven benchmarks are byte-identical, and so are all nine cost goldens.
+
+### all three, against b05ee1b2
+
+| benchmark   | before        | after         | delta         |          |
+|-------------|--------------:|--------------:|--------------:|---------:|
+| escapebench |   248,370,844 |   216,273,844 |   −32,097,000 | −12.923% |
+| basket      |    54,397,377 |    47,422,960 |    −6,974,417 | −12.821% |
+| digestbench |    98,969,254 |    89,615,426 |    −9,353,828 |  −9.451% |
+| jsonbench   | 2,681,323,644 | 2,556,080,244 | −125,243,400 |  −4.671% |
+| oneshot     |    35,833,746 |    34,998,525 |      −835,221 |  −2.331% |
+| pendbench   |   749,618,914 |   734,101,805 |   −15,517,109 |  −2.070% |
+| widebench   |    62,577,957 |    62,243,248 |      −334,709 |  −0.535% |
+| encodebench | 6,059,516,727 | 6,058,446,369 |    −1,070,358 |  −0.018% |
+| scanbench   | 1,423,437,886 | 1,423,437,854 |           −32 |        — |
+| deepbench   |   677,481,898 |   677,481,898 |             0 |        — |
+| indexbench  |     5,242,731 |     5,242,731 |             0 |        — |
+
+**Every counter that moved, and what it landed on.** The put twin's body sits
+in the prelude, so every program emits it: `emitted_defines` **168**,
+`emitted_calls` **1,806**, `emitted_branches` **1,207**, `emitted_lines`
+**12,000** for the decoder, and across the ten beside it
+`emitted_other_defines` **1,459**, `emitted_other_calls` **14,512**,
+`emitted_other_branches` **8,719**, `emitted_other_lines` **87,385**. The
+compile samples take the same prelude: `defines` **154**, `calls` **187**,
+`branches` **237**, `lines` **3,642**, and the module sample
+`module_defines` **90**, `module_calls` **771**, `module_branches` **408**,
+`module_lines` **4,897**. `text` lands on **1,012,534**.
+
+Every one of those is the price of a prelude that now carries five twins, and
+every one is paid by programs that never reach them — the trade #1217
+measured and the objective declines to weigh. `compile_instructions` lands on
+**41,498,385**, a rise of 8,032 on 41,490,353. CI read 41,497,526 for the
+first two changes alone, so the twin is 859 of it. Rounds, visits and
+allocations hold across all three: the front end was not touched, and what
+moved is the length of a string the compiler carries and never reads.
+
+**The page's decode attribution is re-sat on top of this.** §07 read
+1,783,922,550 emitted against 841,939,256 runtime and 47,808,090 libc, a
+sitting taken before kanso#1222's index twin landed and so already a day
+stale when it shipped. It now reads 1,791,588,501 / 792,404,497 / 43,795,809
+of 2,627,823,781, which is 68.2% / 30.2% / 1.7% and **92.8 instructions per
+input byte** against 94.5. The runtime's share is falling for two reasons at
+once: the twins move its one-liners into the emitted code, and a guard that
+did nothing came out. `decode.allocs` on compiler.html and index.html moves
+5,334,308 -> 4,999,958 with it.
+
+`k_b_put_mut` is 3.70% of jsonbench and the next thing to look at. It has no
+dead guard to remove — `k_map_replace` returns on one branch while the map has
+no view built, and jsonbench's `view_allocs` is zero — so what is left there
+is the insert itself.
+
+## 2026-09-02 — the in-place list push inlines
+
+`k_b_push_mut` was the largest runtime symbol left in the decode after
+kanso#1223, at 3.41% and 87,223,800 instructions over 1,459,800 calls. Its
+fast path is thirteen instructions. `objdump` shows what the other forty-seven
+are: six callee-saved pushes and `sub $0xa8,%rsp` on entry, paid whether the
+call grows the list or not, because the growth arm and the buffer bookkeeping
+share the function.
+
+Removing the born-this-beat test in #1223 left a guard small enough to write
+in the prelude: tag `K_LIST`, counting off, `buf->used == l->len`,
+`l->len < k_buf_cap(buf)`. Then one sixteen-byte store into the frontier slot
+and two lengths. `k_b_push_mut_fast` does that; a grow, a full buffer, a value
+that is not a list, all take the call.
+
+| benchmark   | before        | after         | delta        |          |
+|-------------|--------------:|--------------:|-------------:|---------:|
+| escapebench |   216,273,844 |   185,475,844 |  −30,798,000 | −14.240% |
+| digestbench |    89,615,426 |    81,237,955 |   −8,377,471 |  −9.349% |
+| basket      |    47,422,960 |    45,028,689 |   −2,394,271 |  −5.049% |
+| pendbench   |   734,101,805 |   715,729,140 |  −18,372,665 |  −2.503% |
+| jsonbench   | 2,556,080,244 | 2,533,005,144 |  −23,075,100 |  −0.903% |
+| widebench   |    62,243,248 |    61,843,521 |     −399,727 |  −0.642% |
+| oneshot     |    34,998,525 |    34,844,691 |     −153,834 |  −0.440% |
+| encodebench | 6,058,446,369 | 6,057,833,454 |     −612,915 |  −0.010% |
+| scanbench   | 1,423,437,854 | 1,423,437,774 |          −80 |        — |
+| deepbench   |   677,481,898 |   677,481,898 |            0 |        — |
+| indexbench  |     5,242,731 |     5,242,731 |            0 |        — |
+
+escapebench is the shape this suits: 1,203,000 in-place pushes a run and
+almost nothing else, so the frame it stopped paying is nearly the whole of
+what it does. All nine cost goldens are byte-identical — the twin claims the
+same slot the C claims, and the counters bail it to the C when anyone is
+counting.
+
+Four twins have now been added to the prelude in a day, and the trade is the
+same every time. **Every counter that moved, and what it landed on:**
+`emitted_defines` **169**, `emitted_calls` **1,808**, `emitted_branches`
+**1,210**, `emitted_lines` **12,044**; `emitted_other_defines` **1,469**,
+`emitted_other_calls` **14,532**, `emitted_other_branches` **8,749**,
+`emitted_other_lines` **87,826**; the compile sample's `defines` **159**,
+`calls` **197**, `branches` **252**, `lines` **3,862**, and the module
+sample's `module_defines` **91**, `module_calls` **773**, `module_branches`
+**411**, `module_lines` **4,940**. `text` lands on **1,016,742**.
+
+Six programs emit a twin they cannot reach and pay its bytes; five reach one
+and pay nothing for it. The objective weighs the first at zero, which §35 of
+the compiler page is about, and the second at the numbers in the table.
+
+`compile_instructions` lands on **41,495,096**, a FALL of 3,289 measured on
+CI. The prelude grew and the row went down — the fourth reading in a day from
+a change the front end never runs, and the fourth time the sign has not
+followed the direction of the edit.
+
+**Welfare 75.54 -> 75.73**, ratcheted. Four ratchets in a day: 75.27, 75.50,
+75.52, 75.54, 75.73.
+
+**The page's decode attribution moves again**, and this time the shape of it
+does. §07 now reads 1,849,923,051 emitted against 639,250,897 runtime and
+43,795,809 libc of 2,533,004,731 — **73.0% / 25.2% / 1.7%**, and **89.5
+instructions per input byte** against 92.8. The runtime's share was 31.5% two
+entries ago. `k_b_put_mut`, `k_b_push_mut` and `k_b_at` led its list at the
+start of the day and none of the three is in it now; what is left at the top
+is `k_b_find2` at 3.36%, `k_utf8_bad` at 3.28% and `k_b_to_float` at 2.51%,
+which are algorithms rather than call overhead.
+
+The pin is `bench/instructions_golden.txt`, and it is the right one: the twin
+writes the same bytes the C writes into the same slot and returns the same
+value, so no fixture can tell them apart. Route the site back to `push_mut`
+and nine rows in that vein go red on the numbers above.
+
+## 2026-09-02 — the sweep the page owed after four twins
+
+The number-bearing surfaces are a checklist rather than a memory, and this is
+what walking them found after #1221 through #1224.
+
+**§08 ranked dragonbox on a profile that no longer exists.** It read: ryū
+takes 3.8% of encode, and sits behind an append-and-copy pair at 19.5% and the
+encode walker at 13.5%, so dragonbox's margin would recover about one per cent
+and the idea is ranked rather than queued. Every figure in that sentence moved.
+encodebench fell 13.6% across the four twins, and it fell by removing the
+appends: `k_b_append_wide` is off the profile entirely now, under a tenth of a
+per cent, where it was 5.92%. The denominator shrank and ryū did not, so
+`render_ryu` is **7.71%** of 6,057,833,055 — the fifth largest entry, ahead of
+`k_beat_rewind` and the libc memcpy. What it sits behind is `encode_onto` at
+13.83%, and nothing else.
+
+The conclusion survives and its reasoning did not, which is the failure mode
+this checklist exists for. A reader checking the ranking would have found ryū
+twice the share the page gave it, behind one thing rather than two, and no way
+to tell whether the ordering had been re-thought or just left. The paragraph
+now says which sitting it belongs to and what moved it.
+
+**§07's follow-on paragraph had arithmetic that stopped connecting.** It
+explains #1221 by naming the sitting before it — 1,729,183,050 emitted against
+941,714,306 runtime — and the fall and rise that took it to the next one. §07
+above has since been re-sat twice, so the numbers a reader would add up landed
+on a sitting the page no longer showed. The paragraph now says so in its first
+clause. Nothing in it was wrong; it had quietly stopped being about the
+paragraph above it.
+
+Two surfaces checked and left alone. `docs/numbers.html`'s 2,545,249,871 and
+2,762,364,162 are a named historical episode about counters versus
+instructions, past tense and still true. The decode board's ms/decode column
+is a dated hand sitting on a quiet box, which is a release step.
+
+The mechanical gates cannot reach either defect. `golden_prose` reads
+`data-golden` tags and both figures were untagged prose; `page_drift` counts
+log headings against page commits and the page had just moved. A profile share
+is not a golden, so nothing in the tree can diff it — which is why the rule is
+to walk the list rather than remember it.
+
+## 2026-09-02 — the compile row moved 5,081 with nothing changed, and four entries above are wrong about why
+
+This pull request changes `docs/compiler.html` and `design/compiler-log.md`.
+CI read `compile_instructions=41,500,177` against a golden of 41,495,096.
+
+The compiler's inputs are byte-identical between the two commits. `git diff`
+is those two files; neither is compiled in, neither is reached by
+`include_str!`, and `measured_on` confirmed the same rustc and the same
+glibc. Every other vein in the same job matched to the digit: eleven work
+rows, fourteen emitted counters, eleven text rows, `compile_allocs`,
+`compile_memory`. One row moved, and nothing in the diff can have moved it.
+
+**So the row's floor on this runner pool is at least 5,081.** The gate already
+suspects this — it reads `scripts/gates/dispatch.sh` whenever the row moves
+and says to re-run until the job lands on the recorded silicon — and kq spent
+three pull requests in August learning the same thing about its own rows.
+`measured_on` pins the toolchain, and the toolchain was never the whole host.
+
+**This corrects four entries above, all filed today.** I recorded +6,087,
+−416, +8,032 and −3,289 on this row as layout effects and wrote a causal
+sentence around each: that the prelude's length moves where the bytes after it
+land, and that the sign does not follow the direction of the edit. Two of
+those readings are smaller than the 5,081 a no-op produced, and the other two
+are the same size. The layout mechanism is real — a longer string in the
+binary does move what follows it — but none of those four measurements
+separates it from the runner, and I wrote as though they did. The honest form
+of all four is "the row moved, inside a band the pool can produce on its own".
+
+The pattern to notice is that the prose got more confident as the readings
+piled up. By the fourth I was writing that four consecutive commits had moved
+the row in an unpredictable direction and that this was what a layout effect
+looks like — a story that explains the data and was never tested against the
+null. The test cost one docs-only pull request and it was available all day.
+
+**What would fix it.** Not a tolerance: a band is a guess that stays green
+through the change it was written to catch. Record the dispatch block beside
+the row the way `kq/bench/instructions_golden.txt` does, so a move gets asked
+which silicon counted it before anybody explains it. That is a real piece of
+work and it is not this pull request's; it is filed here so the next reading
+of this row has the question in front of it.
+
+**The re-run closed it.** The next job on this branch, with the golden
+unchanged at 41,495,096 and nothing in the compiler touched, read 41,495,096
+and went green. So the row is 41,495,096 / 41,500,177 / 41,495,096 across
+three consecutive CI runs of the same compiler — bracketed, not a one-off.
+The spread is 5,081 and it belongs to the pool rather than to any diff.
+
+Writing that down matters more than the finding. The entry above corrects
+four readings I took as evidence on a single measurement each; leaving this
+one at a single measurement would have repeated the error inside the
+correction.
+
+## 2026-09-03 — the rewind's empty test paid a frame, and it is a third of a beat loop
+
+Clay asked whether the fused chain operators had been swept in. They had not.
+The day's four twins were driven by the eleven benchmarks' profiles, and a
+fused adapter chain — `map`, `select`, `sum` deforested into one flat loop —
+is not well represented in those. So I built one: 200,000 elements through
+`list/map . list/select . list/sum`, and profiled it.
+
+`k_beat_rewind` was 32.92% of it. Not the loop body, not a builtin — the
+per-iteration rewind that reclaims the iteration's garbage.
+
+That was not a property of the fixture. On escapebench the same function is
+**43.66%** of the program: 80,970,118 of 185,475,445 instructions across
+1,206,001 rewinds, 67 instructions each. On basket, 16.21%. The one function
+was larger than any seam the four twins reached.
+
+**Where the 67 went.** The disassembly says it in the first ten instructions:
+six callee-saved pushes and a stack sub, before any work. The frame is there
+for four loops — the buffer shelf's flush, and the chunk, view and permanent
+registries — none of which runs on any of those 1,206,001 rewinds. Then
+`k_buf_flush` unconditionally memsets the twelve-pointer shelf, six `movaps`
+clearing a shelf that was already clear. What the common case actually needs
+is three stores: `k_arena`, `k_arena_left`, `k_seek_str`.
+
+**The change.** Two pieces, both idiomatic here. The shelf gets a dirty flag,
+so its memset becomes one test for a program that never donates a buffer. And
+`k_beat_rewind` splits: an inline empty test at the four call sites, with the
+frame and the four loops left behind in `k_beat_rewind_slow`. That is the same
+split `k_permreg_flush`/`_held` and `k_viewreg_migrate`/`_held` already make
+one level down; it is worth more here because a beat loop rewinds once per
+iteration where those run once per pop. `k_beat_iter` is now a leaf with no
+frame at all, ~39 instructions on the fast path against 74 before.
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 185,475,844 | 143,403,373 | −22.684% |
+| basket | 45,028,689 | 41,211,873 | −8.476% |
+| encodebench | 6,057,833,454 | 5,886,750,857 | −2.824% |
+| oneshot | 34,844,691 | 34,417,154 | −1.227% |
+| deepbench | 677,481,898 | 677,017,353 | −0.069% |
+| indexbench | 5,242,731 | 5,242,087 | −0.012% |
+| scanbench | 1,423,437,774 | 1,423,437,268 | −0.000% |
+| pendbench | 715,729,140 | 715,731,365 | +0.000% |
+| jsonbench | 2,533,005,144 | 2,533,091,327 | +0.003% |
+| digestbench | 81,237,955 | 81,252,347 | +0.018% |
+| widebench | 61,843,521 | 61,857,884 | +0.023% |
+| **all eleven** | **11,821,160,841** | **11,603,412,888** | **−1.842%** |
+
+The three small rises are programs with few beat iterations paying the inline
+test at their pops where the old code paid a call. 86,183 instructions on a
+2.5-billion-instruction decode is the largest of them. These are container
+readings; CI supplies the rows that land in the golden.
+
+`.text` rises on every row, 432 to 816 bytes — four copies of the test. The
+header of `bench/text_golden.txt` says which benchmark paid most and which
+gained most, and they are the same one.
+
+**No counter moves, and the corpus was asked how much of that it can see.**
+The three flush loops and the block retire are the only code in the rewind
+that touches a statistic, so the fast path being taken exactly when all four
+would do nothing means every cost golden stays byte-identical. All nine are.
+But "byte-identical counters prove equivalence" is a claim about what the
+corpus can observe, so I dropped each of the six conditions in turn and ran
+the nine counter gates and the golden suite against each.
+
+Three are pinned. Without the shelf's dirty test five counter gates
+**segfault** — a shelf entry outliving its arena region hands a freed pointer
+to the next grower, which is exactly the failure the flag exists to prevent.
+Without the chunk registry's test, encode's counters move. Without the block
+test, encode's and scan's move and four goldens fail.
+
+Three are not: `k_chunkreg_spill`, `k_viewreg_n`, and the permanent registry's.
+Dropping any of them leaves every gate and every golden green. The reason is
+one fact, and I found it by instrumenting the rewind rather than guessing:
+**on every program in the corpus, a rewind that finds a registry non-empty is
+also a rewind that has moved on from its mark's block**, so the block test
+reaches the slow path first and the registry tests never decide anything.
+Counted over the benchmarks: `chunkreg_spill` is non-zero at no rewind at all;
+escapebench has 3,000 rewinds with a non-empty permanent registry and the same
+3,000 have changed block; encodebench has 400 with a non-empty chunk registry.
+
+I wrote a fixture to isolate the view registry — a map born inside a beat and
+asked for its sorted view — and it registered 500 views at 500 rewinds and
+**still** did not catch the mutation, because those 500 rewinds had also taken
+a new block. A fixture that cannot fail is worse than none, so it is not in
+this pull request. The conditions stay: that the two travel together is a
+property of the programs in the corpus, not of the code, and the next program
+need not oblige.
+
+**What is left.** The naming is the finding. `k_beat_rewind` did not show up in
+any earlier profile sweep because the sweeps were reading the benchmarks whose
+profiles the twins were chasing, and the beat machinery is not a builtin. The
+question that found it was Clay's, about a construct the benchmark set does
+not cover well. That is an argument for the fused chain having a benchmark of
+its own, which it does not have and which the eleven do not substitute for.
+
+**The fixture that started it, measured after.** The 200,000-element
+`map`/`select`/`sum` chain goes 38,883,703 → 32,083,715, **−17.49%**, and
+`k_beat_rewind` is off its profile altogether. What is left of the rewind is
+`k_beat_iter` at 8,000,000 — 40 instructions an iteration where rewind and
+iter together were 74. It is still 24.93% of that program.
+
+So the seam is not finished, and the shape of what remains is visible: of
+those 40, about twenty are the six condition tests and three are the stores
+they guard. A single summary word per depth — maintained at the four
+registration sites, read once here — would collapse six loads and six
+branches into one. That is a second change and it waits for this one to land.
+It is written down here rather than built now because the branch rule is one
+open pull request at a time, and because the number above is what makes the
+case for it.
+
+**Two corrections to the paragraph above, both from building it rather than
+reasoning about it.** The summary word collapses *four* conditions into one,
+not six: the buffer shelf's flag is global rather than per depth, and the
+block test is about arena state that no registration site can summarise. So
+the fast path goes from six tests to three, not to one.
+
+And the prototype was built and measured rather than left as a plan. A single
+`k_beat_enc[depth]`, set at the four registration sites and cleared where the
+slow rewind empties all three registries together, with all nine counter gates
+green: escapebench 143,403,373 → 130,167,353, **−9.23%**; the fused chain
+32,083,715 → 30,483,715, **−4.99%**; basket 41,211,873 → 40,299,752, −2.21%.
+It is a second pull request, held behind this one by the branch rule, and it
+is worth having.
+
+**The ratchet caught the move, which is what it is for.** `k_seek_str = NULL`
+went from one site to two — the slow rewind and the inline fast path — at
+different indentations, and the cursor mutation's own guard reported that its
+target had moved rather than silently deleting one of the two. Deleting one
+would have left the running path resetting the cursor and the mutation would
+have gone green while proving nothing. It now removes both, and reddens the
+beat differential at 16 of 96 layout pairs, the figure its comment already
+records.
+
+**CI's rows, and they agree with the container.** The instruction vein is
+regenerated from the runner, where the container readings above were a
+direction rather than a pin. Every row lands within about four hundred
+instructions of what the container said, which is the offset those two hosts
+have carried all along.
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 185,475,844 | 143,403,772 | −22.6833% |
+| basket | 45,028,689 | 41,212,286 | −8.4755% |
+| encodebench | 6,057,833,454 | 5,886,751,256 | −2.8241% |
+| oneshot | 34,844,691 | 34,417,553 | −1.2258% |
+| deepbench | 677,481,898 | 677,021,033 | −0.0680% |
+| indexbench | 5,242,731 | 5,242,500 | −0.0044% |
+| scanbench | 1,423,437,774 | 1,423,437,681 | −0.0000% |
+| pendbench | 715,729,140 | 715,731,751 | +2,611 |
+| jsonbench | 2,533,005,144 | 2,533,091,740 | +86,596 |
+| digestbench | 81,237,955 | 81,252,746 | +14,791 |
+| widebench | 61,843,521 | 61,858,297 | +14,776 |
+| all eleven | 11,821,160,841 | 11,603,420,615 | −1.8420% |
+
+Four rows worsen and each is stated here as required: **jsonbench** rises
+**86,596**, **digestbench** rises **14,791**, **widebench** rises **14,776**,
+**pendbench** rises **2,611**. All four are programs with few beat iterations
+— 151, 56, 40 and 134 — that now pay the inline empty test at their pops
+where they used to pay a call, and none of the four is a tenth of a per cent.
+They are the price of escapebench's 42 million and encodebench's 171 million.
+
+**compile_instructions** reads **41,500,974** against a golden of 41,495,096,
+a rise of **5,878** with nothing in the front end touched by this change. The
+entry above it in this log established that this row moves 5,081 on a
+docs-only pull request with byte-identical compiler inputs, across three
+consecutive runs of the same compiler. 5,878 is that band. It is regenerated
+rather than explained, and the reason it is not explained is the finding
+recorded yesterday: nothing here separates a layout effect from the runner
+pool, and writing a causal sentence around a number this size is the error
+that entry corrects.
+
+**The five worsened counters, named as the gate spells them.**
+`work_jsonbench` lands on **2,533,091,740**, `work_digestbench` on
+**81,252,746**, `work_widebench` on **61,858,297**, `work_pendbench` on
+**715,731,751**. Those four are the programs with 151, 56, 40 and 134 beat
+iterations: too few for the fast path to repay, so they pay the inline empty
+test at their pops where the old code paid a call, and the largest of the four
+is 0.018% of its program. `compile_instructions` lands on **41,500,974**,
+inside the pool band the entry above measured.
+
+`text` lands on **1,023,750** against 1,016,742 — the eleven binaries together
+grow **7,008 bytes**, 432 to 816 each, which is four copies of a twenty-
+instruction test at the four rewind call sites. That is the trade this change
+is: seven kilobytes of machine code for 217,740,226 instructions.
+
+## 2026-09-03, LATER — the compile row's move is glibc's allocator, and that corrects the task filed for it
+
+The entry above pinned `compile_instructions` at 41,500,974 from CI. The next
+run of the **same commit's front end** read **41,495,850**. Five readings now
+exist for a compiler nothing has touched:
+
+    41,495,096   41,500,177   41,495,096   41,500,974   41,495,850
+
+Two clusters about 5,228 apart, each internally within 800. Yesterday's entry
+called this "the pool" and declined to explain it, and filed a task to record
+the dispatch block beside the row the way kq does, so a move could be asked
+which silicon counted it.
+
+**That task's premise is wrong, and this is the measurement that says so.**
+CI prints the profile on every run, so the two runs can be compared function
+by function:
+
+| symbol | 41,500,974 | 41,495,850 | delta |
+|---|---|---|---|
+| `kanso::infer::eval_expr'2` | 1,616,100 | 1,616,100 | 0 |
+| `kanso::check::check_merged` | 1,598,577 | 1,598,577 | 0 |
+| `_int_malloc` | 1,554,268 | 1,551,398 | **−2,870** |
+| `_int_free` | 1,516,161 | 1,516,378 | **+217** |
+| `__memcmp_avx2_movbe` | 1,346,853 | 1,345,486 | **−1,367** |
+| `HashMap::insert` | 1,302,885 | 1,302,885 | 0 |
+| `kanso::infer::infer` | 1,234,092 | 1,234,092 | 0 |
+| `malloc` | 1,113,407 | 1,113,407 | 0 |
+| `kanso::infer::eval_expr` | 876,900 | 876,900 | 0 |
+| `kanso::lexer::lex_line` | 857,892 | 857,892 | 0 |
+| `free` | 711,340 | 711,340 | 0 |
+| `kanso::parser::parse` | 591,666 | 591,666 | 0 |
+| `kanso::mentions_in_expr'2` | 533,848 | 533,848 | 0 |
+
+**Every symbol in the compiler is identical to the instruction. Three glibc
+symbols move and nothing else does.** And both runs took the same dispatch —
+`__memcmp_avx2_movbe` on each — so recording the dispatch block would have
+found the two runs indistinguishable and explained nothing. The silicon
+hypothesis is dead, and it is dead by the same test that killed the layout
+one: comparing against the null instead of fitting a story to a number.
+
+What is left is glibc's allocator. `_int_malloc`'s bin walks depend on the
+heap's starting layout, and the allocation *sizes* cannot be what differs
+because the compiler's own counts are byte-identical. The most likely
+remaining cause is that the two runs ran binaries whose data and bss differ
+slightly, moving the initial break — which changes malloc's work without
+changing a single instruction the compiler executes.
+
+**The row is red on main too.** `bench/compile_instructions_golden.txt` holds
+41,495,096 and this runner reads 41,495,850, so a pull request that changed
+nothing at all would fail this gate on this runner. It is not this change's
+regression, and this branch does not carry a bump for it: the golden is left
+at main's value.
+
+**What would actually fix it**, and it is a decision rather than a repair:
+the row should count the instructions attributed to the kanso binary rather
+than the process. That is what the gate's own header says it measures — "what
+the FRONT END costs to run" — and it is the part that is deterministic. On
+this container three consecutive runs of the box give 41,904,811 exactly, and
+the per-object split is 33,586,490 in the compiler against 7,982,541 in libc;
+it is the second number that moves on the runner. Changing what a published
+counter measures is Clay's call, not a session's, and it is filed as one
+rather than done here.
+
+**A sixth reading, and it repeats a previous one exactly.** The run after the
+entry above read **41,500,974** — the same value, to the instruction, that a
+run two heads earlier produced. Six readings of an untouched front end now
+give four distinct values, two of them seen twice:
+
+    41,495,096  ×2      41,495,850  ×1
+    41,500,177  ×1      41,500,974  ×2
+
+That is not continuous noise. Noise does not land on the same eight-digit
+number twice in six tries. It is a small set of discrete environments, each
+deterministic within itself — which is also what the container says, where
+three consecutive runs of the same box give 41,904,811 every time.
+
+So the row is deterministic per environment and the pool holds several. The
+comparison in the entry above rules out the obvious discriminator: the two
+runs it examined took the same `__memcmp_avx2_movbe` dispatch and differed
+only inside glibc's allocator. Whatever separates the environments, it is
+finer than the dispatch block and it does not touch a single instruction the
+compiler executes — every `kanso::` symbol was identical across the pair.
+
+This sharpens the question filed for Clay rather than changing it. A row that
+is deterministic per environment and varies across a pool of them can be
+pinned two ways: record the environment, or stop counting the part that
+varies. The first needs a discriminator nobody has found yet — the dispatch
+block is not it. The second is available now and is what the gate's header
+already claims to measure.
+
+**And it has already failed on main.** The claim above — that a pull request
+changing nothing would fail this gate on some runners — was an inference from
+the readings. It does not need to be: main's own `ci` run at **9541196f**, on
+2026-09-02, failed with `compile instructions disagrees with its golden` and
+every other row in that vein green. That commit is a merge that had just
+regenerated the row, so the golden it was checked against was its own.
+
+So the gate has already gone red on merged history, on a commit whose author
+had just pinned the number it was checked against. Whatever this row is
+measuring, it is not something a branch can be held responsible for, and the
+seventh reading on this branch — 41,500,974 again — is the fourth head in a
+row to say so.
+
+That is the whole of the case for leaving the golden at main's value and
+sending the question on rather than pinning a number that will be wrong on
+the next runner.
+
+## 2026-09-03, LATER STILL — the silicon hypothesis was right and I killed it on the wrong evidence
+
+The gate now prints the binary that counted the row. It answered a different
+question than it was aimed at, and the answer is that two entries above are
+wrong.
+
+The two CI runs compared earlier ran on **different CPUs**. The gate has been
+printing the dispatch block all along and both blocks were in the job logs;
+they differ:
+
+| field | run at 41,500,974 | run at 41,495,850 |
+|---|---|---|
+| `features[0x2].cpuid[0x0]` | 0xa10f11 | 0xa00f11 |
+| `features[0x5].cpuid[0x1]` | 0x30100015 | 0x30000015 |
+| `level2_cache_size` | 0x100000 | 0x80000 |
+| `rep_movsb_stop_threshold` | 0x100000 | 0x80000 |
+
+**What I did wrong.** I compared which `memcmp` implementation glibc had
+selected — `__memcmp_avx2_movbe` on both — and concluded the two runs were on
+indistinguishable silicon. That is the wrong field. The selected function is
+one output of the dispatch; the CPUID word and the cache-derived tunables are
+others, and those differ. I then wrote that "the silicon hypothesis is dead,
+killed by the same test that killed the layout one" — which is the same error
+the layout entry corrects, committed in the act of claiming not to.
+
+The pattern is now three for three: a number moved, I reached for a mechanism,
+and the mechanism was asserted from evidence that did not separate it from the
+alternative. Twice the mechanism was wrong. The one thing that has worked every
+time is comparing two runs field by field and reading what actually differs.
+
+**What follows.** Task #244 was right and its closure was not. Recording the
+dispatch block beside the row is the fix, exactly as `kq/bench/instructions_golden.txt`
+already does and for the reason kq#86 already gave. The row is deterministic
+per CPU and the pool holds at least two; pinning it per recorded silicon is
+the shape that works.
+
+That also means the two invasive options are off the table, and Clay's
+instinct to keep libc counted survives intact: libc's cost stays in the row
+because it is a real cost of how this compiler allocates, and the row stops
+lying because it says which chip counted it.
+
+**What is NOT claimed here.** How a different L2 size produces 2,870 fewer
+instructions inside `_int_malloc` is not established. `_int_malloc` does not
+call memcpy, and the mechanism could run through heap addresses, alignment,
+or something else entirely. What is observed is that the environments differ
+in a way the gate already records, and that is enough to attribute the row
+without inventing the chain. Inventing the chain is what went wrong twice.
+
+**A second cause is live and I had not checked it either.** Before pinning a
+row per chip, one thing had to be ruled out and was not: `src/runtime.c` is
+`include_str!`'d into the compiler. Every commit on this branch changed it, so
+every head built a different compiler binary — different bytes, different
+place for the heap to start — without altering one instruction the front end
+executes when it checks a library.
+
+So two candidate causes are live at once, the silicon and the binary, and the
+readings so far cannot separate them. Four values, two identified chips, and
+several different binaries across the heads that produced them. Pinning per
+chip would be building on the same kind of half-checked story that has now
+been wrong twice, so it waits.
+
+What is added instead is one greppable line per run — cpu, binary sha, row —
+so three runs settle it: same cpu and same sha with different rows means it is
+neither; same cpu with the sha tracking the row means it is the binary; the
+same sha on two cpus tracking the row means it is the silicon. That is the
+measurement the last two entries should have started from.

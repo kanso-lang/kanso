@@ -552,3 +552,32 @@ family0x19-model0x11 41831767 41832275
 # Not acted on: the key costs nothing while it is right about something else,
 # and one binary is not enough to retire it.
 family0x6-model0xad 41832275
+
+# 2026-09-03, THE THIRD CHIP SHOWS BOTH. CI on kanso#1235 counted 41,831,767 on
+# family0x19-model0x1, whose row pinned only 41,832,275, on binary sha
+# de5bfab22fbd — the same binary as every reading in this block. Its row becomes
+# a pair, and that is the machinery working rather than a value to argue with:
+# the gate refused a number the row did not admit, and the number was measured.
+#
+# The standing on this one binary is now:
+#
+#   family0x6-model0xcf     both        41,831,767 and 41,832,275
+#   family0x19-model0x1     both        41,831,767 and 41,832,275
+#   family0x19-model0x11    both        41,831,767 and 41,832,275
+#   family0x6-model0xad     one so far  41,832,275
+#
+# Three chips of four have produced BOTH values, and no chip has produced a
+# third. That is the strongest form yet of the argument this file has been
+# circling: the two values are a property of the run and not of the silicon, so
+# on this binary the per-chip key separates nothing. The fourth chip has one
+# reading, which is why the claim is not made as a finding here.
+#
+# WHAT WOULD SETTLE IT, so the next session does not have to invent an
+# experiment: the fourth chip reading 41,831,767. At that point every recorded
+# row holds the same pair, the key demonstrably distinguishes nothing on this
+# binary, and this file collapses to a single golden holding two values — which
+# is what its own header predicted would happen if pinning worked and the chips
+# stopped disagreeing. Until then the key costs nothing and is kept, because it
+# is still right about the CROSS-BINARY case the header decomposes, where two
+# chips read 5,124 apart on one binary.
+
