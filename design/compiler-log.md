@@ -5009,18 +5009,43 @@ in the direction that matters: run against the fixed book it is silent, and
 renaming `ws?` in the library reddens it in two lines. That rename is the
 ratchet mutation.
 
-**What it does not yet cover, and a claim I got wrong on the way.** Three
-panels remain unread: ch07's `teahouse/menu.kso`, ch09's `vse/methods.kso`,
-ch10's `samples/ch10/classify.kso`. The first version of this entry said each
-wants a different resolution rule. That is wrong and two rules reach all three:
-ch10's titles are written relative to `docs/book`, so the rule is
-`<chapters>/<title>`; ch07's and ch09's are written relative to a sample
-directory one level in — `samples/ch07/teahouse/` holds `main.kso` and a
-package dir `teahouse/`, and `samples/ch09/vse/` has the same shape — so the
-rule is `<samples>/<chapter>/<first segment>/<title>`. ch09's `vse/` is a
-sample package in this repository, not the vse repo, which the first version
-also had wrong. Both rules are a follow-up because ch09 has six such panels and
-drift found there would bury the ch08 fixes.
+**And then the gap closed, because the claim about it was wrong twice.** The
+first version of this entry said the three remaining panels each want a
+different resolution rule, and that ch09's `vse/methods.kso` names a file in
+the vse repository. Both are wrong. Two rules reach all three: ch10's titles
+are written relative to `docs/book`, and ch07's and ch09's relative to a
+sample directory one level in — `samples/ch07/teahouse/` holds `main.kso`
+beside a package dir `teahouse/`, and `samples/ch09/vse/` the same. ch09's
+`vse/` is a sample package in this repository.
+
+Both rules are in, and they found four more panels in two more chapters:
+
+- ch07's `teahouse/menu.kso` showed `fn describe (err reason)` — an arm naming
+  its own package's err. The language refuses that and the sample dropped it.
+  **The chapter contradicted itself on one page**: the panel three inches below
+  demonstrates the replacement, `testing/when_failed pocky (r -> ...)`, and
+  only that one was machine-checked, because book_panels owns it.
+- ch07's `teahouse/menu_test.kso` showed a hand-written `err?` predicate where
+  the file imports `std/testing` and calls `testing/failed?`.
+- ch10's `pingpong.kso` wrote `even`/`odd` for the file's `even?`/`odd?`, and
+  wrapped the statements in a `main =` the file does not have.
+- ch10's `classify.kso` had the same `main` wrapper.
+
+Fourteen panels across four chapters, on a page that says every one of them is
+executed against the real toolchain before it may appear.
+
+**ch09 is clean, and that was verified rather than assumed.** Six panels there
+quote `vse/`, and silence from a checker is worth nothing until you have seen
+it speak: inserting a declaration no file has into the ch09 panel reddens the
+gate in two lines. So the silence is coverage.
+
+**One false-positive class had to go first.** `true`, `false` and `none` are
+literals the grammar provides, and the reachable set is read off the package's
+own text, so a small file that happens never to write `false` was forbidding a
+panel from showing an arm that answers it. They are always reachable now. That
+is the only exception, and it is a list of spellings rather than of names —
+which is what keeps it from becoming the builtin table this deliberately does
+not have.
 
 A title that resolves to a FILE beside its chapter stays skipped for a
 different reason: book_panels owns it, and reading ch07's `shop.kso` panel

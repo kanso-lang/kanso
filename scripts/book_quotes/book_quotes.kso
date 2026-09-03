@@ -162,8 +162,14 @@ fn joining _ _ acc true
 fn joining bodies at acc false
   join_loop bodies (at + 1) "{acc}\n{bodies[at]!}"
 
+# The three literals the grammar provides. Every other name a panel may use
+# has to be one the package itself uses or declares, but these are spellings
+# rather than names, and a file that happens never to write `false` does not
+# thereby forbid a panel from showing an arm that answers it.
+literals = ["true" "false" "none"]
+
 fn reachable bodies
-  idents_in (code_only (joined bodies))
+  list/to_list (text/concat literals (idents_in (code_only (joined bodies))))
 
 fn shown panel
   list/to_list (list/map (heads_in panel decl_head) (n -> exported n))
@@ -277,13 +283,12 @@ fn checked qs at found after
 fn checking _ _ found after true
   after found
 
-# Two shapes resolve, and a title that resolves as neither is left alone for
-# now. Three panels sit in that gap and their titles are written against two
-# other roots: ch10's `samples/ch10/classify.kso` is relative to docs/book,
-# and ch07's `teahouse/menu.kso` and ch09's `vse/methods.kso` are relative to
-# a sample directory one level in. Two more rules reach all three, and they
-# are deliberately not here: ch09 has six such panels and finding drift there
-# would bury the ch08 fixes this shipped with.
+# Four shapes resolve, tried in order, and a title that resolves as none of
+# them is left alone. The order matters: a repository file first, then the
+# chapter's own sample directory, then the two roots a title may be written
+# against — `docs/book` (ch10 writes `samples/ch10/classify.kso`) and a
+# sample directory one level in (ch07 writes `teahouse/menu.kso` for
+# `samples/ch07/teahouse/teahouse/menu.kso`, ch09 the same shape for `vse`).
 fn checking qs at found after false
   q = qs[at]!
   on = (there -> as_file qs at found after q there)
@@ -318,6 +323,14 @@ fn not_a_sample qs at found after q false
   on = (kids -> as_module qs at found after q kids)
   walk_all (module_of q) on
 
+# The two roots a slashed title may be written against, after the chapter's
+# own directory has failed. Each names a real file or nothing.
+fn elsewhere q
+  ["{chapters}/{q.title}" "{q.samples}/{first_of q.title}/{q.title}"]
+
+fn first_of title
+  (text/split title "/")[1]!
+
 fn module_of q
   stem = (text/split q.title ".")[1]!
   "{q.samples}/{stem}"
@@ -326,8 +339,32 @@ fn as_module qs at found after q kids
   only = list/to_list (list/select kids (k -> kso? k))
   skipping qs at found after q only (length only == 0)
 
-fn skipping qs at found after _ _ true
+# A directory that holds no .kso is not a module: fall through to the two
+# other roots before giving up on the panel.
+fn skipping qs at found after q _ true
+  try_roots qs at found after q (elsewhere q) 1
+
+fn try_roots qs at found after q roots n
+  rooting qs at found after q roots n (n > length roots)
+
+fn rooting qs at found after _ _ _ true
   checked qs (at + 1) found after
+
+fn rooting qs at found after q roots n false
+  on = (there -> rooted qs at found after q roots n there)
+  os/exists roots[n]! . on
+
+fn rooted qs at found after q roots n false
+  try_roots qs at found after q roots (n + 1)
+
+fn rooted qs at found after q roots n true
+  path = roots[n]!
+  on = (names -> beside_root qs at found after q path names)
+  os/list_dir (dir_of path) . on
+
+fn beside_root qs at found after q path names
+  wanted = paths_in (dir_of path) names
+  with_package qs at found after q [path] wanted
 
 fn skipping qs at found after q only false
   with_package qs at found after q only only

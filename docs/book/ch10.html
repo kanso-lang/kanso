@@ -117,7 +117,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <span class="k">fn</span> <span class="f">kind</span> _
   <span class="s">"other"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">kind</span> <span class="n">46</span>)</code></pre>
+<span class="f">print</span> (<span class="f">kind</span> <span class="n">46</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run classify.kso</div>
     <pre><code>dot</code></pre>
@@ -167,21 +167,21 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 
 <div class="code-panel">
   <div class="code-panel-title">samples/ch10/pingpong.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">even</span> <span class="n">0</span>
+  <pre><code><span class="k">fn</span> <span class="f">even?</span> <span class="n">0</span>
   <span class="t">true</span>
 
-<span class="k">fn</span> <span class="f">even</span> n
-  <span class="f">odd</span> (n <span class="o">-</span> <span class="n">1</span>)
+<span class="k">fn</span> <span class="f">even?</span> n
+  <span class="f">odd?</span> (n <span class="o">-</span> <span class="n">1</span>)
 
-<span class="f">main</span> <span class="o">=</span>
-  verdict <span class="o">=</span> <span class="f">even</span> <span class="n">10000000</span>
-  <span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span>
-
-<span class="k">fn</span> <span class="f">odd</span> <span class="n">0</span>
+<span class="k">fn</span> <span class="f">odd?</span> <span class="n">0</span>
   <span class="t">false</span>
 
-<span class="k">fn</span> <span class="f">odd</span> n
-  <span class="f">even</span> (n <span class="o">-</span> <span class="n">1</span>)</code></pre>
+<span class="k">fn</span> <span class="f">odd?</span> n
+  <span class="f">even?</span> (n <span class="o">-</span> <span class="n">1</span>)
+
+verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10000000</span>
+
+<span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso build pingpong.kso --release &amp;&amp; time ./pingpong</div>
     <pre><code>10000000 even? true</code></pre>
