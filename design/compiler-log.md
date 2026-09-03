@@ -2403,3 +2403,65 @@ Diagnostics 309 to 310, none newly unpinned. All eight gate scripts and every
 std module still check. The compile counters could not be measured here — the
 container runs rustc 1.94.1 against the goldens' 1.98.1, which is the host pin
 doing its job — so CI reads them.
+
+## 2026-09-03 — CI read the compile row, and the fall is not the compiler
+
+Searched the live log and the archive before filing. The maps-parse term is
+recorded here twice already — the 2026-09-03 entries that found it and the
+by-cpu table's own note — and neither says what happens when an ordinary
+change moves it. Nothing in either file records a compile row falling while
+the front end rose, so that part is new.
+
+The entry above ended by saying CI would read the compile counters this
+container cannot. It did, and the row refused: the table pinned 41,831,767 /
+41,832,275 on family0x6-model0xcf and the run counted 41,829,232, a fall of
+2,535.
+
+**The front end got more expensive while the row fell.** A differential
+settles it without needing the host pin, because a difference between two
+builds on one machine does not care what rustc CI runs. Same source, with the
+check and without, everything else held:
+
+    without the check   42,235,790
+    with the check      42,240,325   +4,535
+
+The profile diff attributes all of it, and exactly one kanso symbol moves:
+
+    kanso::check::check_merged                          +848
+
+The rest is glibc's startup parse of /proc/self/maps:
+
+    __vfscanf_internal                                +2,360
+    ____strtoul_l_internal                            +1,158
+    __memcmp_avx2_movbe                                 -841
+    getdelim, _IO_sputbackc, _IO_setb, sscanf, the rest  ~860
+
+So CI's 2,535 fall is +848 of front-end work and roughly 7,070 of maps-parse
+and allocator movement going the other way on a differently laid-out binary.
+The container moves that term the other way on the same source change. That is
+what a term keyed to the host's memory map rather than to the code does, and
+it is the mechanism this vein measured a few entries ago: one more shared
+library in the process moves the row +32,090 with the compiler executing
+identical instructions.
+
+The gate asks a change to say whether its move is a regression to explain or a
+win to bank. This one is neither. The compiler costs 848 more instructions to
+run, for a refusal it did not have, and the row it is measured by went down.
+
+**Every row cleared; one survives because CI re-sat it.** The binary is new —
+sha 0804abe57190 against the de5bfab22fbd every recorded reading was taken on
+— so the file's own rule decides the rest: a value measured against the old
+binary is worse than no value. Three rows go. family0x6-model0xcf holds
+41,829,232 as a SINGLE, and the golden's bare line follows it.
+
+The single is expected to refuse. Three chips have produced both modes on one
+binary, so an exact pin on one reading goes red about half the time until a
+second makes it a pair. Writing 41,829,740 to pre-empt that would be recording
+a number nobody counted, which this file refuses on every page.
+
+**Welfare does not move.** 73.06 against a floor of 73.06. 2,535 out of 41.8
+million is 0.006%, and compile cost satiates at 0.5, so the term does not
+reach two decimal places. There is nothing to ratchet.
+
+`docs/compiler.html`'s tagged figure moves with the golden; golden_prose was
+what caught it.
