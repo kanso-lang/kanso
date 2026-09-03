@@ -39790,3 +39790,83 @@ row means a new vein, a welfare term, a weight and a saturation, and the case
 for spending those on a feature no shipped program uses is a case somebody has
 to make. Recorded here so the next session that reads a `k_check_rec` row does
 not repeat the trip.
+
+## 2026-09-02 (fourth) — six machine ops that were reached through a call
+
+`k_b_bit_and` and its five siblings each take two ints, do one instruction to
+them, and box the answer. Reaching one costs a call: arguments into the ABI
+registers, a jump, a tag test the caller already knew the answer to, a return.
+digestbench spent 10,619,517 instructions in the five it uses — 7.9% of the
+whole benchmark — at about twenty-two instructions a call for work worth one.
+
+The twin convention #1210 and #1211 built handles this without a new idea.
+Six `define internal ... alwaysinline` bodies in `DECLARES`, each testing both
+operand tags for `K_INT` and doing the op inline where they say yes. `shl` and
+`shr` test the shift for 0..63 as well, because the runtime refuses anything
+else and the twin has to refuse it the same way — which it does by handing the
+call to the C entry that owns the message. `shr` is `ashr`: the runtime spells
+an arithmetic shift by hand to avoid the implementation-defined `>>` on a
+negative operand, and `ashr` is what that spelling computes.
+
+**Two routes reach the same builtin, and taking only one leaves half the calls
+in place.** `&`, `|` and `^` are operators and lower through the operator
+table. `bits/xor`, `bits/complement`, `bits/shl` and `bits/shr` are kanso
+functions in `lib/bits` over `builtin_bit_*`, and those lower through the
+named-builtin path. Routing the operators alone left digestbench at
+124,515,585 with 33,024 xor calls and 8,256 complement calls still going out
+through `sha256/compress`, because sha256 spells complement and xor by name and
+`&` by symbol. Routing both, and adding the unary `bit_not` twin, empties the
+slow arm: no `k_b_bit_*` symbol is entered at all.
+
+```
+digestbench   134,729,014 -> 123,591,300   -8.267%
+```
+
+The other nine rows are byte-identical to the digit. No allocation counter
+moves on any of the nine gates.
+
+**What it costs.** Every emitted program gains six defines, seven calls, eight
+branches and 117 lines, because `DECLARES` is written whole and a program that
+does no bitwise work still carries the definitions. `.text` answers the
+question that count cannot: digestbench goes 95,586 to 97,554 bytes, +2.06%,
+and the other nine are byte-identical, because the linker drops what nothing
+calls. Compile rounds and expression visits do not move — the front end does
+no more work.
+
+**The `.text` vein could not see the binary this landed on.** scanbench and
+digestbench joined the corpus on 2026-08-31 and the list in
+`scripts/gates/machine_code.sh` was never extended, so the two newest
+benchmarks were the two with no `.text` row. Both are added here. The gap
+mattered immediately: digestbench is the only binary this change moves, and
+without the row the whole cost would have been invisible while the nine
+byte-identical rows reported success.
+
+**Four mutations, four caught, each by a fixture already in the corpus.**
+Complementing with 0 instead of -1 turns `bits_surface`'s `comp: -13` into 12
+and breaks all three sha256 vectors. `lshr` for `ashr` turns its `sign: -4`
+into 4,611,686,018,427,387,900. Or-ing where the twin should and takes the
+digest out of memory. Admitting a shift of 64 to the fast path replaces
+`a_shift_past_the_word`'s refusal with a garbage address. Nothing new had to
+be written: the pins were already there.
+
+**Every counter this branch moved, and where it landed.** The four count
+veins price the same six definitions four times over, once per corpus they
+watch. In `bench/compile_golden.txt`, summed over its five samples: `defines`
+104 -> 134, `calls` 112 -> 147, `branches` 87 -> 127, `lines` 1,787 -> 2,372.
+In `bench/compile_golden_modules.txt`: `module_defines` 80 -> 86,
+`module_calls` 756 -> 763, `module_branches` 378 -> 386, `module_lines`
+4,529 -> 4,646. In `bench/emitted_golden.txt`, the decoder alone:
+`emitted_defines` 158 -> 164, `emitted_calls` 1,792 -> 1,799,
+`emitted_branches` 1,177 -> 1,185, `emitted_lines` 11,629 -> 11,746. In
+`bench/emitted_golden_others.txt`, summed over its ten:
+`emitted_other_defines` 1,359 -> 1,419, `emitted_other_calls`
+14,372 -> 14,442, `emitted_other_branches` 8,419 -> 8,499,
+`emitted_other_lines` 83,669 -> 84,833. And `compile_instructions`
+41,495,470 -> 41,501,923, +6,453, which is what writing those definitions
+costs the front end; rounds and visits do not move.
+
+Every one of those rises is the same six definitions counted again, and the
+`.text` row is what says whether any of it reaches a binary: digestbench
+95,586 -> 97,554 and nine rows unchanged.
+
+Welfare 74.81 -> 74.89.

@@ -20,86 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (fourth) — six machine ops that were reached through a call
-
-`k_b_bit_and` and its five siblings each take two ints, do one instruction to
-them, and box the answer. Reaching one costs a call: arguments into the ABI
-registers, a jump, a tag test the caller already knew the answer to, a return.
-digestbench spent 10,619,517 instructions in the five it uses — 7.9% of the
-whole benchmark — at about twenty-two instructions a call for work worth one.
-
-The twin convention #1210 and #1211 built handles this without a new idea.
-Six `define internal ... alwaysinline` bodies in `DECLARES`, each testing both
-operand tags for `K_INT` and doing the op inline where they say yes. `shl` and
-`shr` test the shift for 0..63 as well, because the runtime refuses anything
-else and the twin has to refuse it the same way — which it does by handing the
-call to the C entry that owns the message. `shr` is `ashr`: the runtime spells
-an arithmetic shift by hand to avoid the implementation-defined `>>` on a
-negative operand, and `ashr` is what that spelling computes.
-
-**Two routes reach the same builtin, and taking only one leaves half the calls
-in place.** `&`, `|` and `^` are operators and lower through the operator
-table. `bits/xor`, `bits/complement`, `bits/shl` and `bits/shr` are kanso
-functions in `lib/bits` over `builtin_bit_*`, and those lower through the
-named-builtin path. Routing the operators alone left digestbench at
-124,515,585 with 33,024 xor calls and 8,256 complement calls still going out
-through `sha256/compress`, because sha256 spells complement and xor by name and
-`&` by symbol. Routing both, and adding the unary `bit_not` twin, empties the
-slow arm: no `k_b_bit_*` symbol is entered at all.
-
-```
-digestbench   134,729,014 -> 123,591,300   -8.267%
-```
-
-The other nine rows are byte-identical to the digit. No allocation counter
-moves on any of the nine gates.
-
-**What it costs.** Every emitted program gains six defines, seven calls, eight
-branches and 117 lines, because `DECLARES` is written whole and a program that
-does no bitwise work still carries the definitions. `.text` answers the
-question that count cannot: digestbench goes 95,586 to 97,554 bytes, +2.06%,
-and the other nine are byte-identical, because the linker drops what nothing
-calls. Compile rounds and expression visits do not move — the front end does
-no more work.
-
-**The `.text` vein could not see the binary this landed on.** scanbench and
-digestbench joined the corpus on 2026-08-31 and the list in
-`scripts/gates/machine_code.sh` was never extended, so the two newest
-benchmarks were the two with no `.text` row. Both are added here. The gap
-mattered immediately: digestbench is the only binary this change moves, and
-without the row the whole cost would have been invisible while the nine
-byte-identical rows reported success.
-
-**Four mutations, four caught, each by a fixture already in the corpus.**
-Complementing with 0 instead of -1 turns `bits_surface`'s `comp: -13` into 12
-and breaks all three sha256 vectors. `lshr` for `ashr` turns its `sign: -4`
-into 4,611,686,018,427,387,900. Or-ing where the twin should and takes the
-digest out of memory. Admitting a shift of 64 to the fast path replaces
-`a_shift_past_the_word`'s refusal with a garbage address. Nothing new had to
-be written: the pins were already there.
-
-**Every counter this branch moved, and where it landed.** The four count
-veins price the same six definitions four times over, once per corpus they
-watch. In `bench/compile_golden.txt`, summed over its five samples: `defines`
-104 -> 134, `calls` 112 -> 147, `branches` 87 -> 127, `lines` 1,787 -> 2,372.
-In `bench/compile_golden_modules.txt`: `module_defines` 80 -> 86,
-`module_calls` 756 -> 763, `module_branches` 378 -> 386, `module_lines`
-4,529 -> 4,646. In `bench/emitted_golden.txt`, the decoder alone:
-`emitted_defines` 158 -> 164, `emitted_calls` 1,792 -> 1,799,
-`emitted_branches` 1,177 -> 1,185, `emitted_lines` 11,629 -> 11,746. In
-`bench/emitted_golden_others.txt`, summed over its ten:
-`emitted_other_defines` 1,359 -> 1,419, `emitted_other_calls`
-14,372 -> 14,442, `emitted_other_branches` 8,419 -> 8,499,
-`emitted_other_lines` 83,669 -> 84,833. And `compile_instructions`
-41,495,470 -> 41,501,923, +6,453, which is what writing those definitions
-costs the front end; rounds and visits do not move.
-
-Every one of those rises is the same six definitions counted again, and the
-`.text` row is what says whether any of it reaches a binary: digestbench
-95,586 -> 97,554 and nine rows unchanged.
-
-Welfare 74.81 -> 74.89.
-
 ## 2026-09-02 (fifth) — a bounds check and a load, reached through a call
 
 `k_index` is what a demanded index compiles to — `l[i]!` — and it is
@@ -2976,3 +2896,60 @@ number.kso" when they are the shape the library left behind. Nothing checks
 prose against code and nothing here proposes to; what the gate buys is that
 the CODE beside the prose can no longer drift silently, which is what made the
 prose wrong.
+
+## 2026-09-03 — a recorded chip disagreeing with itself, and a row nobody reads
+
+Two findings on `bench/compile_instructions_by_cpu.txt`, both from one
+branch whose diff was `design/compiler-log.md` and its archive.
+
+**The third cause. OPEN.** `scripts/gates/compile_instructions.sh` prints a
+`compile_sample cpu= sha= row=` line on every run for one purpose, and its
+comment names it: *"same cpu and same sha with different rows would mean
+something is moving that neither the key nor the diff can see."*
+
+| when | key | binary sha | counted |
+| --- | --- | --- | ---: |
+| 12:33 | family0x6-model0xcf | 55fb850296d1 | 41,832,275 |
+| 13:05 | family0x6-model0xcf | 55fb850296d1 | 41,831,767 |
+
+508 apart, same key, same binary, and no front-end change in the diff. So the
+key does not determine the row, and the premise the per-chip table rests on is
+weaker than it claimed when #1226 built it.
+
+The row moved to 41,831,767, which three readings say — Zen 3, Zen 4, and this
+chip at 13:05 — against one that says 41,832,275. **That is a choice under
+uncertainty and not a measurement.** The honest state is two readings of one
+key on one binary, differing, and the golden's own note says so in those words
+rather than dressing the move up as a re-sitting.
+
+What it wants is a sitting: several runs on one Emerald Rapids runner, to see
+whether the value is bimodal there the way it was across the two AMD models
+before the tunables were pinned. If it is, the missing term is something the
+pinned tunables do not cover, and the first candidates are the ones the file's
+header already names as excluded from the key — cache sizes and derived
+thresholds — reaching the row by a path other than the malloc and string
+tunables the gate sets.
+
+**A second row for one chip. DONE.** Correcting that row, I edited it in place
+AND appended it, and every gate in the tree stayed green over a file holding
+two `family0x6-model0xcf` lines. The lookup is
+`awk '$1 == k { print $2; exit }'`: the first match answers and every later row
+is dead. So the file had one authority and one decoration, and the decoration
+sat at the bottom where the newest sitting goes, which is where a reader is
+most likely to trust it.
+
+`compile_ir_row.sh` refuses a doubled key now, before the lookup rather than
+after, so a reader is told about the duplicate instead of being sent to re-sit
+a front end that did not move — which would have written a third row into a
+file that already had one too many. Five refusals where there were four.
+
+Three specs, each watched red on the unfixed script: a duplicate that AGREES
+with itself is still refused, because the defect is the second line rather than
+its value; a duplicate whose second row is what the run counted is not reported
+as a moved front end; and a duplicate on a chip this run did not land on is
+refused too, since otherwise the file stays broken for every run but the
+unlucky one. New ratchet row `compile_ir_doubled` with a mutation that deletes
+the block and reddens exactly those three.
+
+The gap was cheap to find only because a mistake walked into it. Nothing else
+in the tree reads this file, so nothing else could have.
