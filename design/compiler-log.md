@@ -3526,3 +3526,66 @@ inside the pool band the entry above measured.
 grow **7,008 bytes**, 432 to 816 each, which is four copies of a twenty-
 instruction test at the four rewind call sites. That is the trade this change
 is: seven kilobytes of machine code for 217,740,226 instructions.
+
+## 2026-09-03, LATER — the compile row's move is glibc's allocator, and that corrects the task filed for it
+
+The entry above pinned `compile_instructions` at 41,500,974 from CI. The next
+run of the **same commit's front end** read **41,495,850**. Five readings now
+exist for a compiler nothing has touched:
+
+    41,495,096   41,500,177   41,495,096   41,500,974   41,495,850
+
+Two clusters about 5,228 apart, each internally within 800. Yesterday's entry
+called this "the pool" and declined to explain it, and filed a task to record
+the dispatch block beside the row the way kq does, so a move could be asked
+which silicon counted it.
+
+**That task's premise is wrong, and this is the measurement that says so.**
+CI prints the profile on every run, so the two runs can be compared function
+by function:
+
+| symbol | 41,500,974 | 41,495,850 | delta |
+|---|---|---|---|
+| `kanso::infer::eval_expr'2` | 1,616,100 | 1,616,100 | 0 |
+| `kanso::check::check_merged` | 1,598,577 | 1,598,577 | 0 |
+| `_int_malloc` | 1,554,268 | 1,551,398 | **−2,870** |
+| `_int_free` | 1,516,161 | 1,516,378 | **+217** |
+| `__memcmp_avx2_movbe` | 1,346,853 | 1,345,486 | **−1,367** |
+| `HashMap::insert` | 1,302,885 | 1,302,885 | 0 |
+| `kanso::infer::infer` | 1,234,092 | 1,234,092 | 0 |
+| `malloc` | 1,113,407 | 1,113,407 | 0 |
+| `kanso::infer::eval_expr` | 876,900 | 876,900 | 0 |
+| `kanso::lexer::lex_line` | 857,892 | 857,892 | 0 |
+| `free` | 711,340 | 711,340 | 0 |
+| `kanso::parser::parse` | 591,666 | 591,666 | 0 |
+| `kanso::mentions_in_expr'2` | 533,848 | 533,848 | 0 |
+
+**Every symbol in the compiler is identical to the instruction. Three glibc
+symbols move and nothing else does.** And both runs took the same dispatch —
+`__memcmp_avx2_movbe` on each — so recording the dispatch block would have
+found the two runs indistinguishable and explained nothing. The silicon
+hypothesis is dead, and it is dead by the same test that killed the layout
+one: comparing against the null instead of fitting a story to a number.
+
+What is left is glibc's allocator. `_int_malloc`'s bin walks depend on the
+heap's starting layout, and the allocation *sizes* cannot be what differs
+because the compiler's own counts are byte-identical. The most likely
+remaining cause is that the two runs ran binaries whose data and bss differ
+slightly, moving the initial break — which changes malloc's work without
+changing a single instruction the compiler executes.
+
+**The row is red on main too.** `bench/compile_instructions_golden.txt` holds
+41,495,096 and this runner reads 41,495,850, so a pull request that changed
+nothing at all would fail this gate on this runner. It is not this change's
+regression, and this branch does not carry a bump for it: the golden is left
+at main's value.
+
+**What would actually fix it**, and it is a decision rather than a repair:
+the row should count the instructions attributed to the kanso binary rather
+than the process. That is what the gate's own header says it measures — "what
+the FRONT END costs to run" — and it is the part that is deterministic. On
+this container three consecutive runs of the box give 41,904,811 exactly, and
+the per-object split is 33,586,490 in the compiler against 7,982,541 in libc;
+it is the second number that moves on the runner. Changing what a published
+counter measures is Clay's call, not a session's, and it is filed as one
+rather than done here.
