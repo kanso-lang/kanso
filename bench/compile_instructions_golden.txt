@@ -796,7 +796,7 @@
 # a larger codegen.rs. It fell here and rose 4,747 for the change before it,
 # on the same host, for the same reason. compile_allocs, compile_peak_bytes,
 # rounds and visits are byte-identical.
-compile_instructions=41495096
+compile_instructions=41500974
 # 2026-09-01 (last): -1,320, and none of it is the front end either. This
 # branch changed src/runtime.c twice and no .rs file, and main.rs holds that C
 # as an include_str! it hashes for the build cache key. The counters that

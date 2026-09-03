@@ -3474,3 +3474,55 @@ would have left the running path resetting the cursor and the mutation would
 have gone green while proving nothing. It now removes both, and reddens the
 beat differential at 16 of 96 layout pairs, the figure its comment already
 records.
+
+**CI's rows, and they agree with the container.** The instruction vein is
+regenerated from the runner, where the container readings above were a
+direction rather than a pin. Every row lands within about four hundred
+instructions of what the container said, which is the offset those two hosts
+have carried all along.
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 185,475,844 | 143,403,772 | −22.6833% |
+| basket | 45,028,689 | 41,212,286 | −8.4755% |
+| encodebench | 6,057,833,454 | 5,886,751,256 | −2.8241% |
+| oneshot | 34,844,691 | 34,417,553 | −1.2258% |
+| deepbench | 677,481,898 | 677,021,033 | −0.0680% |
+| indexbench | 5,242,731 | 5,242,500 | −0.0044% |
+| scanbench | 1,423,437,774 | 1,423,437,681 | −0.0000% |
+| pendbench | 715,729,140 | 715,731,751 | +2,611 |
+| jsonbench | 2,533,005,144 | 2,533,091,740 | +86,596 |
+| digestbench | 81,237,955 | 81,252,746 | +14,791 |
+| widebench | 61,843,521 | 61,858,297 | +14,776 |
+| all eleven | 11,821,160,841 | 11,603,420,615 | −1.8420% |
+
+Four rows worsen and each is stated here as required: **jsonbench** rises
+**86,596**, **digestbench** rises **14,791**, **widebench** rises **14,776**,
+**pendbench** rises **2,611**. All four are programs with few beat iterations
+— 151, 56, 40 and 134 — that now pay the inline empty test at their pops
+where they used to pay a call, and none of the four is a tenth of a per cent.
+They are the price of escapebench's 42 million and encodebench's 171 million.
+
+**compile_instructions** reads **41,500,974** against a golden of 41,495,096,
+a rise of **5,878** with nothing in the front end touched by this change. The
+entry above it in this log established that this row moves 5,081 on a
+docs-only pull request with byte-identical compiler inputs, across three
+consecutive runs of the same compiler. 5,878 is that band. It is regenerated
+rather than explained, and the reason it is not explained is the finding
+recorded yesterday: nothing here separates a layout effect from the runner
+pool, and writing a causal sentence around a number this size is the error
+that entry corrects.
+
+**The five worsened counters, named as the gate spells them.**
+`work_jsonbench` lands on **2,533,091,740**, `work_digestbench` on
+**81,252,746**, `work_widebench` on **61,858,297**, `work_pendbench` on
+**715,731,751**. Those four are the programs with 151, 56, 40 and 134 beat
+iterations: too few for the fast path to repay, so they pay the inline empty
+test at their pops where the old code paid a call, and the largest of the four
+is 0.018% of its program. `compile_instructions` lands on **41,500,974**,
+inside the pool band the entry above measured.
+
+`text` lands on **1,023,750** against 1,016,742 — the eleven binaries together
+grow **7,008 bytes**, 432 to 816 each, which is four copies of a twenty-
+instruction test at the four rewind call sites. That is the trade this change
+is: seven kilobytes of machine code for 217,740,226 instructions.
