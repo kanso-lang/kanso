@@ -20,38 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (fifteenth) — the one vein the objective leaves out, and why
-
-`bench/text_golden.txt` is the only deterministic vein `scripts/welfare` does
-not read. It reads eleven golden files; that is not one of them.
-
-It looks exactly like the gap kanso#1215 closed four hours ago — eleven
-benchmarks measured by a gate, pinned in a golden, watched by the trend gate,
-weighed at nothing by the objective — and the obvious repair is to give code
-size a term. That would be wrong, and kanso#1217 is the measurement that says
-so.
-
-The index twin took encodebench's `.text` DOWN 144 bytes and its instruction
-count UP 67,116,000 in the same change. Inside `d_list/fold_3` the effect is
-starker: 4,083 bytes to 3,682, four hundred and one bytes less code running
-fourteen per cent more instructions, because a four-way specialisation was
-lost. A term rewarding smaller `.text` would have scored that regression as a
-gain, twice over.
-
-So code size is a diagnostic here, not a cost. It says a kernel arrived or
-left, which is the job `scripts/gates/machine_code.sh` does and did when the
-bit twins landed on digestbench with every other row holding. What it does not
-do is stand in for what a program costs to run, and on this corpus it has been
-measured pointing the wrong way.
-
-**Written as a spec because kanso#1137 settled that prose is not a pin.** Four
-claims in this tree rested on comments and none of them held.
-`tests/the_objective_does_not_weigh_machine_code_size.rs` goes red if welfare
-starts reading the vein, with the measurement in the failure message, and red
-the other way if the gate stops diffing the golden — an exclusion from the
-objective is not permission to stop counting the thing. Both halves were
-watched failing.
-
 ## 2026-09-02 (sixteenth) — the log back to forty
 
 116 entries and 6,030 lines, against the rule at the top of this file that it
@@ -2999,3 +2967,75 @@ property of the host's memory map — is still the only mechanism that fits, and
 it is not established that two runners differ in their maps by the 508 this
 needs. The row would have to print the map's line count beside the count to
 say. Nothing rests on the answer now that the pair holds the gate green.
+
+## 2026-09-03 — the weights move to the developer's order of noticing
+
+**DONE for the weights and the floor, HELD for the replay.** Implements the
+gavel of 2026-09-02, which recorded the argument and left the build. Searched
+the live log and `design/log/compiler-log-archive.md` before filing: the
+archive carries the 2026-08-29 saturation ruling and the entries that priced
+0.30/0.30/0.28/0.12, and nothing there implements this split.
+
+    term                    was    now   satiation
+    run speed (advertised)         0.15  2.0    new half
+    run speed (guards)             0.15  2.0    new half
+    run speed               0.30    —    2.0    splits
+    run memory              0.30   0.26  2.0
+    compile speed           0.28   0.32  0.5
+    compile memory          0.12   0.12  0.5    (unchanged)
+
+**Two terms of 0.15, not one term averaging two halves.** They are the same
+arithmetic and the pair reports better: the breakdown says which half moved.
+The guard half is written as the REMAINDER — `guard_work` is `held_work` plus
+`paced_work` — so a benchmark added later lands there without this entry or
+that line needing an edit, which is what "advertised versus everything else"
+asks for.
+
+**What the split buys, in the numbers.** Nine guards against two advertised
+rows meant a guard carried nine elevenths of the run-speed term and the front
+page's own claims carried two elevenths. A shape win scored as if a real
+workload had got faster. On the parity fixture a thousandfold win now scores
+**52.99** on an advertised row against **49.11** on a guard; before the split
+both read **48.48**, because a counter was a counter.
+
+**The score falls 76.1743 to 73.0623 and nothing about the compiler changed.**
+Both halves of that are worth stating. The fall is real — under the developer's
+stated order of noticing the project is further from ideal than the old weights
+said, because compile cost is the weakest dimension (+36.3% instructions,
++143.7% allocations against baseline) and it just gained weight, while run
+memory, which is strong, lost some. And it is not a regression: no counter
+moved, and scores either side of this commit were taken with different rulers.
+That is the second such step in this line; the first is the 2026-08-29
+saturation ruling, 87.85 to 73.83.
+
+**The floor is edited by hand, and the tool asked for that.** `--set` refuses
+to lower the objective — "A fall means the change is worse by the project's
+stated preferences ... this is Clay's call to make, in conversation — not a
+flag's. (The floor file itself can be edited by hand, where a reviewer will see
+it.)" The gavel is that conversation, so the reason goes in the history entry
+and the number goes in the file, where the diff shows it. The refusal is right
+and stays; a flag that could lower the floor is a flag that could launder a
+regression.
+
+Three specs, and the two that existed were watched red at the numbers above
+before the pins moved. The new one —
+`a_win_on_an_advertised_row_outscores_the_same_win_on_a_guard` — was watched
+red against the unsplit formula, where it read 48.48 for both fixtures, which
+is exactly the property it exists to deny.
+
+**HELD, and sent to Clay: the chart replay.** The gavel ends "the chart replay
+re-run so the history reads under one definition." `docs/numbers.html` states
+the opposite rule and stated it before the gavel: "the welfare line is
+recorded, not recomputed. the score a commit shipped with is a fact about that
+commit, and replaying history against today's baseline would rewrite it." It
+already carries the 2026-08-29 step documented as a discontinuity rather than
+replayed.
+
+A replay is also under-determined, which is the part the gavel could not have
+known. The objective's counter set has grown — the digest in #1198, scan,
+escape and index in #1215 — so a commit whose goldens predate a counter has no
+value for it, and scoring it under today's formula means inventing one through
+the granted-baseline machinery. That machinery exists to admit a counter going
+forward at its dimension's standing, not to backfill a history it was never in.
+Not resolved here, because what the recorded line MEANS is his to say and not a
+matter of how to compute it.

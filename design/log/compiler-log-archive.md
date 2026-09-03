@@ -40336,3 +40336,35 @@ measurement behind it instead of one.
 The correction matters beyond this entry: a question filed to Clay that is not
 his costs him a sitting and costs the ledger its meaning, and the rule against
 it is written at the top of the file it would have gone in.
+
+## 2026-09-02 (fifteenth) — the one vein the objective leaves out, and why
+
+`bench/text_golden.txt` is the only deterministic vein `scripts/welfare` does
+not read. It reads eleven golden files; that is not one of them.
+
+It looks exactly like the gap kanso#1215 closed four hours ago — eleven
+benchmarks measured by a gate, pinned in a golden, watched by the trend gate,
+weighed at nothing by the objective — and the obvious repair is to give code
+size a term. That would be wrong, and kanso#1217 is the measurement that says
+so.
+
+The index twin took encodebench's `.text` DOWN 144 bytes and its instruction
+count UP 67,116,000 in the same change. Inside `d_list/fold_3` the effect is
+starker: 4,083 bytes to 3,682, four hundred and one bytes less code running
+fourteen per cent more instructions, because a four-way specialisation was
+lost. A term rewarding smaller `.text` would have scored that regression as a
+gain, twice over.
+
+So code size is a diagnostic here, not a cost. It says a kernel arrived or
+left, which is the job `scripts/gates/machine_code.sh` does and did when the
+bit twins landed on digestbench with every other row holding. What it does not
+do is stand in for what a program costs to run, and on this corpus it has been
+measured pointing the wrong way.
+
+**Written as a spec because kanso#1137 settled that prose is not a pin.** Four
+claims in this tree rested on comments and none of them held.
+`tests/the_objective_does_not_weigh_machine_code_size.rs` goes red if welfare
+starts reading the vein, with the measurement in the failure message, and red
+the other way if the gate stops diffing the golden — an exclusion from the
+objective is not permission to stop counting the thing. Both halves were
+watched failing.
