@@ -11,7 +11,17 @@ test_decode_escapes = decode "\"a\\n\\\"b\\\"\"" == "a\n\"b\""
 
 test_decode_float = decode "3.25" == 3.25
 
+test_decode_exponent = decode "1e3" == 1000.0
+
+test_decode_exponent_upper = decode "2E2" == 200.0
+
+# the mark is a `.` here and an `e` further on: a scan that forgot the first
+# one on reaching the second would hand these digits to the integer reader
+test_decode_exponent_signed = decode "1.5e2" == 150.0
+
 test_decode_int = decode "42" == 42
+
+test_decode_negative = decode "-7" == -7
 
 test_decode_nested =
   decoded = decode "\{\"a\": [1, \{\"b\": null}]}"

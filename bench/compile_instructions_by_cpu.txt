@@ -116,5 +116,41 @@
 # share a value, and this is the same pair doing it a second time on a third
 # binary. They stay keyed separately: the evidence is that they agree here, not
 # that they agree.
-family0x19-model0x1 41631998
-family0x19-model0x11 41631998
+
+# RE-SAT ON 2026-09-03: 41,631,998 -> 41,831,767 on the same family and model,
+# +199,769, or 0.48%. This IS front-end work, and it belongs to the json
+# library's extra arms rather than to the raw byte switch that shipped in the
+# same branch. `kanso check` never runs the backend, so a codegen change can
+# only reach this row through the binary's layout — the second cause named
+# above.
+#
+# Decomposed on the container, three builds, same tunables:
+#
+#   main                                 42,032,508
+#   the library change alone             42,238,115   +205,607
+#   the library change and the switch    42,235,790     -2,325
+#
+# So the library is the whole of it and the switch gives 2,325 back, which is
+# inside the layout band this file's header documents in thousands. The rise
+# buys 17.14% of the decoder's runtime, which is the trade the objective
+# weighs.
+#
+# The Zen 4 row is removed rather than carried forward, for the reason written
+# above: it was measured against the previous binary and a value measured
+# against the old binary is worse than no value. It is a re-sitting when it next
+# refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
+family0x19-model0x1 41831767
+
+# 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
+# Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
+# did not have it. The refusal is the machinery working: an unrecorded chip
+# goes red asking for a sitting rather than passing on somebody else's number.
+#
+# It read 41,832,275 against Zen 3's 41,831,767 on the SAME BINARY, sha
+# 55fb850296d1, printed on both runs. 508 apart, where the two chips the header
+# decomposes read 5,124 apart on one binary. So the size of the ifunc effect is
+# a property of the pair rather than a constant, which is the argument for a
+# row per chip and against any single tolerance: 508 would fit inside a band
+# that swallows 5,124, and so would every real front-end move this vein has
+# ever caught.
+family0x6-model0xcf 41832275

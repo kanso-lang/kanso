@@ -86,12 +86,26 @@
 # String built by to_string on a slice is allocated at the length it needs
 # where one grown a character at a time overshoots. The first fall in this row
 # since #1152. Both hosts read 728,030, as this row's two hosts always have.
+# 2026-09-03 (a number's bytes are read once): visits 16,806 -> 17,169, a RISE
+# of 363, or 2.2%, and rounds hold at 40. The json library's number scanner and
+# its float test were two walks over the same bytes and are one now; the one
+# that survives carries the mark as an argument and has more arms, so the front
+# end has more expressions to visit. Banked as the price of the runtime fall it
+# buys: jsonbench retires 4.14% fewer instructions.
 front_end_rounds=40
-front_end_visits=16806
+front_end_visits=17169
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
 # out, so the header and the rounding a small heap block costs are gone with
 # it. rounds and visits do not move at all, which is the check that this
 # changed how the front end holds names rather than what it decided.
-compile_peak_bytes=713606
+# 2026-09-03 (a number's bytes are read once): 713,606 -> 715,275, a RISE of
+# 1,669, or 0.23%, and it is the json library's extra arms rather than the raw
+# byte switch that shipped beside them. `kanso check` runs the lexer, the
+# parser, inference, provenance and the advisories and stops — the backend
+# never runs — so a codegen change cannot reach this row at all. Held rather
+# than reasoned: with the codegen change reverted and lib/json unchanged, the
+# container reads 715,275 and 25,485, the same two numbers as the branch head,
+# to the byte. Banked as the price of a 17.14% fall in the decoder's runtime.
+compile_peak_bytes=715275
