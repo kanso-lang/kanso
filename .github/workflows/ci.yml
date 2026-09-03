@@ -61,6 +61,7 @@ jobs:
       - run: cargo test
       - name: the shipped library's own tests
         run: |
+          cargo run -- test lib/expect
           cargo run -- test lib/json
           cargo run -- test lib/list
           cargo run -- test lib/path

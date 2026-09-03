@@ -20,60 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (eleventh) — the tenure residual is reached, and it is harmless
-
-runtime.c has said since kanso#1209 that one case was narrower rather than
-closed: a node below the beat's mark, repaired during the beat to hold a
-tenured pointer, outliving the rewind that frees the block. It ended "Nothing
-measured has reached it," and four attempts to write a program that did had
-failed.
-
-**Instrument the condition instead of guessing at programs.** A flag set for
-the duration of `k_repaired_settle` and a counter in `k_survives_x` that fires
-only when the yes came from `k_ten_holds` names the exact case. Across all
-eleven benchmarks, the full spec suite, the trend gate and the welfare script
-it fires zero times — and a second counter, incremented on every `k_survives_x`
-call during a settle, proves the detector is live rather than dead: it fires on
-encodebench and pendbench.
-
-**The two halves are disjoint, which is why the attempts failed.**
-
-```
-                ten_blocks   settles
-widebench            1          0
-indexbench           1          0
-scanbench            1          0
-encodebench          0          1
-pendbench            0          1
-the other six        0          0
-```
-
-Three benchmarks tenure and never repair; two repair and never tenure. No shape
-in the corpus does both, so no variation on a corpus shape was ever going to
-reach it. Naming the two conditions separately is what made the combination
-obvious.
-
-**The combination.** Tenuring needs the value copied into the carry buffer, so
-it must be built INSIDE the bind — above the mark, copied every lap, promoted
-from the second. Repair needs a container the walk finds below the mark, so the
-accumulator must be made BEFORE the first bind. Put an element of the first
-into the second and a node below the mark holds a pointer into tenure. First
-attempt with the list built outside the bind: repairs, `ten_blocks=0`. Moving
-one binding inside: `RESIDUAL REACHED`, `ten_blocks=1`, `ten_frees=1`.
-
-**And it is harmless, for the reason #1209 built.** The beat's result is a heap
-value, so `k_ten_hand_up` gives the block to the depth outside instead of
-freeing it at that pop, and it outlives every read of the repaired node. Native
-and the interpreter print the same bytes; valgrind reports nothing.
-
-`tests/golden/mem/a_repaired_node_below_the_mark_holds_tenure.kso` is the
-fixture, pinning `ten_blocks=1` beside `ten_frees=1` and `survive_slots=403`.
-It is the only program in the tree that reaches the case, so a change that
-stops handing tenure blocks up turns it red rather than turning some later
-program into the segfault in `k_copy_size` that started all of this. The
-comment in runtime.c is corrected: it said nothing had reached this, and
-something has.
-
 ## 2026-09-02 (twelfth) — a comment in runtime.c moves the compile row
 
 The correction above turned `compile_instructions` red: 41,495,720 ->
@@ -2886,3 +2832,48 @@ finding is the only thing here worth having. They stay as measured.
 
 Six readings is enough to decide on, so further ones go into the ledger's
 table rather than earning entries here.
+
+## 2026-09-03 (eighth) — what a failing test is allowed to tell you
+
+`design/pending-gavels.md` has carried the assert hako since 2026-08-17 with
+the gate lifted and a recommendation to build it. Built, and the measurement
+that motivates it was taken first rather than assumed.
+
+**What a failing `==` says.** A test is a constant and `==` is the assertion,
+which decides pass or fail and nothing else:
+
+    test_a_failure_on_purpose = decode "42" == 43
+    test_a_failure_on_purpose ... FAILED (returned false)
+
+The name, and no sign of what it got. The operands are gone by the time the
+runner holds the boolean, so the runner cannot recover them — whatever carries
+them has to be the assertion.
+
+**The concept was already there.** The runner prints the value a test
+returned, so a matcher answering a RECORD reports its own diff with no change
+to the runner at all. The same wrong assertion, both ways:
+
+    test_the_old_way ... FAILED (returned false)
+    test_the_new_way ... FAILED (returned expect/mismatch 43 42)
+
+That is the mushroom test passing rather than a feature being added. `lib/expect`
+is `expect`, `to`, `equal` and `be_true` — about twenty lines, no builtin, no
+runner change, and `expect` is the identity because the chain is the surface.
+
+**Kept out of `lib/testing` deliberately.** That hako's header says "nothing
+here adds a second way to write a test that can already be written", and a
+matcher IS a second spelling of `==`. The distinction that earns it a package
+of its own is that it is the only way to write a test that reports what it got;
+the stance in `lib/testing` stays intact and the addition is opt-in.
+
+**Watched red, and two of the four mutations the LANGUAGE refused.** Swapping
+the mismatch record's fields reddens the two specs that assert its shape;
+making the match arm answer a record instead of `true` reddens the two that
+assert a match. The other two — a mismatch answering `false`, and a generic
+first arm — do not compile: `error[unused]` on the now-dead bindings, and the
+most-specific-first ordering rule. A gate the compiler enforces needs no spec,
+and that is worth recording rather than counting as coverage.
+
+**The surface shape is still Clay's**, and the ledger entry stays until he
+rules on it. What has changed is that it is now a thing to read rather than a
+thing to imagine, and the evidence for wanting it is a measurement.

@@ -1,0 +1,54 @@
+# What a failing test is allowed to tell you.
+#
+# A test is a constant and `==` is the assertion, which is enough to decide
+# pass or fail and nothing else: `test_decode_int = decode "42" == 43` fails
+# with `FAILED (returned false)`. The name, and no sign of what it got. The
+# operands are gone by the time the runner has the boolean, so the runner
+# cannot recover them — whatever is going to carry them has to be the
+# assertion itself.
+#
+# The runner already prints the value a test returned. So a matcher that
+# answers a RECORD instead of `false` reports its own diff with no change to
+# the runner at all:
+#
+#     test_decode_int = expect (decode "42") . to (equal 43)
+#     test_decode_int ... FAILED (returned mismatch 43 42)
+#
+# That is why this is a package rather than a second spelling of `==`. It adds
+# no way to write a test that could not be written; it adds what a test says
+# when it fails.
+#
+#     expect x . to (equal y)
+#     expect x . to be_true
+#
+# `expect` is the identity. It reads as the subject of the sentence and costs
+# nothing, which is the point: the chain is the surface, not a wrapper type.
+type mismatch
+  wanted
+  got
+
+type not_true
+  got
+
+pub fn expect v
+  v
+
+pub fn to v m
+  m v
+
+pub fn equal want
+  (got -> equal_answer want got (want == got))
+
+be_true = (got -> true_answer got got)
+
+fn equal_answer _ _ true
+  true
+
+fn equal_answer want got false
+  mismatch want got
+
+fn true_answer _ true
+  true
+
+fn true_answer got false
+  not_true got
