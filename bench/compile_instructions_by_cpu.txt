@@ -52,8 +52,19 @@
 #
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
 #
-# Rows are `<dispatch.sh key> <retired instructions>`. None yet: the values
-# belong to CI's toolchain and CI is the only thing that may write them, one
-# chip per run, out of the job log.
+# WHAT THE ROWS SHOW SO FAR. The key is family and model, which is finer than
+# the effect turns out to be: two AMD models — Zen 3 (0x19/0x1) and Zen 4
+# (0x19/0x11) — agree to the instruction at 41,495,850, while the Intel
+# (0x6/0xcf) reads 41,500,974. That fits the mechanism, since what moves the
+# row is which memcpy and memcmp glibc's ifunc resolver picks, and it picks by
+# feature set rather than by model. Keying finer than the effect costs extra
+# rows and never lets a wrong value through, so it stays as it is; a key
+# coarse enough to merge the two AMDs would be a guess about which future chip
+# belongs in which bucket.
+#
+# Rows are `<dispatch.sh key> <retired instructions>`. CI's toolchain owns
+# these values and CI is the only thing that may write them, one chip per run,
+# out of the job log.
 family0x6-model0xcf 41500974
 family0x19-model0x1 41495850
+family0x19-model0x11 41495850
