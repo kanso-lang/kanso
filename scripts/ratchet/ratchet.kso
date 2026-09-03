@@ -1160,8 +1160,18 @@ fn unmutated picked pairs acc
 # A note is printed and then the run carries on; only a finding nobody excused
 # stops it. Both go to stderr, because a row that went unproven is news.
 fn settled_base picked pairs acc true
-  said = "ratchet: {length pairs} gates read before any mutation\n"
+  said = green_line pairs acc (length acc == 0)
   io/write_err (said_with acc said) . (_ -> proving (kept_provable picked) 1 [])
+
+# Two numbers when any gate went unproven, because "green" would be a claim
+# about gates this runner never answered. One number when none did, which is
+# the ordinary run and the wording the spec has pinned since kanso#1228.
+fn green_line pairs _ true
+  "ratchet: {length pairs} gates green before any mutation\n"
+
+fn green_line pairs acc false
+  read = length pairs
+  "ratchet: {read} gates read, {length acc} unproven on this runner\n"
 
 fn settled_base _ _ acc false
   said = "ratchet: the baseline is not green\n"
