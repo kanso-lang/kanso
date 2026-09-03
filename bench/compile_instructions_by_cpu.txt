@@ -153,7 +153,7 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
-family0x19-model0x1 41832275
+family0x6-model0xcf 41831767
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -167,7 +167,7 @@ family0x19-model0x1 41832275
 # row per chip and against any single tolerance: 508 would fit inside a band
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
-family0x6-model0xcf 41831767
+family0x19-model0x1 41832275
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
 # family0x19-model0x11 rather than carry a value measured against the previous
@@ -294,3 +294,31 @@ family0x6-model0xcf 41831767
 # a design question about this vein rather than a number to re-sit, and it is
 # filed for Clay in design/pending-gavels.md. Until it is ruled, the rows below
 # are CI's own most recent readings and nothing more.
+#
+# 2026-09-03, AND WHICH ROW IS FIRST IS NOT COSMETIC. The trend gate reads the
+# bare `compile_instructions=` in the golden, which must equal the FIRST row
+# here. With Zen 3 first the golden read 41,832,275 against main's 41,831,767
+# and the trend gate refused the branch:
+#
+#   worsened: compile_instructions 41,831,767 -> 41,832,275
+#   FAIL  a pure regression: something got worse and nothing got better.
+#
+# It is right by its own rules and the claim is false. No change in that branch
+# touches the front end; the number moved because the reference row moved from
+# one mode to the other. Recording a regression nothing caused is worse than
+# any ordering question, so the reference is the chip with three readings —
+# family0x6-model0xcf, which read 41,831,767 twice and 41,832,275 once — and
+# Zen 3 keeps its own measured row below.
+#
+# Say the uncomfortable half out loud: this ordering is also the one that makes
+# CI green, and picking a reference to quiet a gate would be exactly the kind
+# of move this file exists to catch. The reason it is not that move is that the
+# alternative asserts something untrue. The header already says the first row
+# is the reference "only because welfare needs one number; it carries no
+# authority over what a second chip should read".
+#
+# THE BIMODALITY IS WORSE THAN A FLAKY ROW, and this is how. It does not only
+# make the per-chip gate red about half the time; it makes the OBJECTIVE'S
+# REGRESSION DETECTOR fire on noise, because a mode flip in the reference row
+# reads to the trend gate as a counter that worsened with nothing traded. That
+# is in design/pending-gavels.md with the rest.

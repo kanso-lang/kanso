@@ -76,8 +76,20 @@ heap layout difference. Pinning the tunables took the spread from 5,064 to 508
 and did not close it. Five consecutive container runs on one binary read one
 value every time, so it is not run-to-run jitter within a host.
 
-**Why this blocks.** An exact row is red about half the time on a chip that
-produces both modes. The file's own header set out what these runs would test —
+**Why this blocks, and it is worse than a flaky row.** An exact row is red
+about half the time on a chip that produces both modes — but the reference row
+is also the bare `compile_instructions=` that welfare, golden_prose and the
+TREND GATE read. A mode flip there reads to the trend gate as a counter that
+worsened with nothing traded, and it refuses the branch in those words:
+
+    worsened: compile_instructions 41,831,767 -> 41,832,275
+    FAIL  a pure regression: something got worse and nothing got better.
+
+It is right by its own rules and the claim is false; nothing in that branch
+touches the front end. So the bimodality does not only make one gate flaky, it
+makes **the objective's own regression detector fire on noise**, and the only
+thing standing between it and a false regression today is which chip happens to
+be first in the file. That is not a property to leave load-bearing. The file's own header set out what these runs would test —
 "if the chips still disagree, pinning was the wrong explanation and the tunables
 come out again" — and this is that answer.
 

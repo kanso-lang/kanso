@@ -20,57 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (eighth) — two ways to stop the twin costing encodebench, both measured, both dead
-
-The entry above said routing the twin only where `infer` says a list can arrive
-was a measurement to take. It is taken, and so is a second one, and neither
-works. Both are recorded here so nobody builds them again.
-
-**Route the twin by the container's typeset.** `emit_at` already has
-`f.set_of(container)`; the change is four lines, sending a strict index to
-`k_index` directly where `set & LIST == 0` and to the twin otherwise. It
-reroutes real sites — encodebench moves two, kq moves seven of fifteen — and
-the corpus does not move at all:
-
-```
-jsonbench 2,718,705,486   encodebench 7,014,919,659   oneshot 38,048,160
-basket    54,722,493      widebench      63,601,599   deepbench 677,478,218
-escapebench 248,370,445   pendbench     749,618,528   indexbench 5,242,318
-digestbench  98,968,855
-```
-
-Every row identical to the digit with the twin routed everywhere. On kq it
-recovers 8,940 instructions of the 176,218 the twin costs print_small — five
-per cent — and shrinks `.text` by a further 112 bytes. Not worth four lines.
-
-**Drop `alwaysinline` and let LLVM decide.** encodebench and digestbench come
-back byte-identical again; basket rises 3,060 and pendbench 600. LLVM inlines
-the twin at these sites whether or not it is told to, so the attribute is not
-what puts the body there.
-
-**What the profile actually says, and it is not what the words said.** The
-+67,116,000 in encodebench sits entirely in `d_list/fold_3` — every other
-function in the binary is identical to the instruction across the two builds,
-`k_b_append_mut` at 1,204,501,600 and `w_klam17` at 488,086,400 either way. And
-`k_index` appears nowhere in the no-twin profile at all: encodebench never
-indexes a list at run time. `fold_flat` is the arm that writes `coll[i]!`, and
-encodebench folds the lazy shapes, so `fold_go` runs and `fold_flat`'s index is
-dead every lap.
-
-So the cost is not paid at the index. It is paid by whatever the larger
-`fold_3` does to register allocation and block layout in a loop that runs
-millions of times, which is why neither routing nor the inline attribute
-touches it — both change WHERE the body goes, and the body is not the problem
-where it goes. A fix would have to keep `fold_flat` out of the same function as
-`fold_go`, which is a question about how dispatch groups are emitted rather
-than about this twin.
-
-**And a note on measuring this.** The first attempt at the comparison above
-annotated `/tmp/cg.encodebench`, a profile file left over from an earlier
-session, and read a total of 8,396,592,003 against a benchmark that retires
-7,014,919,659. A stale profile answers confidently and wrongly. Build the
-binary, run it, annotate the file that run wrote, in one script.
-
 ## 2026-09-02 (ninth) — three benchmarks the objective could not see
 
 `scripts/gates/instructions.sh` swept ten of the eleven benchmarks
@@ -2920,3 +2869,33 @@ allocation and peak counters reproduced exactly across the toolchain bump, on
 every host that has run them, and the instruction count cannot be said to have
 moved or held, because it has two values and the bump is not separable from
 the bimodality. compiler.html §40 is corrected to match.
+
+## 2026-09-03 (fifth) — the bimodality reaches the trend gate
+
+Setting the bare `compile_instructions=` to the other mode made the trend gate
+refuse the branch, in its own words:
+
+    worsened: compile_instructions 41,831,767 -> 41,832,275
+    FAIL  a pure regression: something got worse and nothing got better.
+
+Right by its rules, and the claim is false — nothing in that branch touches the
+front end. The number moved because the reference row moved from one mode to
+the other.
+
+**So the bimodality is not only a flaky row.** The first row of
+`bench/compile_instructions_by_cpu.txt` is also the bare number welfare,
+golden_prose and the trend gate read, so a mode flip there presents as a
+counter that worsened with nothing traded. The objective's own regression
+detector fires on noise, and what stands between it and a false regression is
+which chip happens to be listed first.
+
+The reference is family0x6-model0xcf, which has three readings against Zen 3's
+one, and whose 41,831,767 is what main already carries. Zen 3 keeps its own
+measured row below it. **The uncomfortable half is stated in the file**: this
+ordering is also the one that makes CI green, and choosing a reference to quiet
+a gate is exactly what that file exists to catch. It is not that move, because
+the alternative asserts something untrue — but the reason has to be written
+down rather than assumed, since the two are indistinguishable from the diff.
+
+Added to the ledger entry as the strongest argument for ruling this rather than
+living with it.

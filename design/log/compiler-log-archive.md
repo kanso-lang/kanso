@@ -40055,3 +40055,54 @@ golden of 76,695,994, then reported the twin as costing kq nothing. kq's CI
 builds with `--release` and the deltas do not survive the difference: the
 unoptimised build hid the twin's cost entirely. A benchmark built differently
 from the way it is published measures a program nobody runs.
+
+## 2026-09-02 (eighth) — two ways to stop the twin costing encodebench, both measured, both dead
+
+The entry above said routing the twin only where `infer` says a list can arrive
+was a measurement to take. It is taken, and so is a second one, and neither
+works. Both are recorded here so nobody builds them again.
+
+**Route the twin by the container's typeset.** `emit_at` already has
+`f.set_of(container)`; the change is four lines, sending a strict index to
+`k_index` directly where `set & LIST == 0` and to the twin otherwise. It
+reroutes real sites — encodebench moves two, kq moves seven of fifteen — and
+the corpus does not move at all:
+
+```
+jsonbench 2,718,705,486   encodebench 7,014,919,659   oneshot 38,048,160
+basket    54,722,493      widebench      63,601,599   deepbench 677,478,218
+escapebench 248,370,445   pendbench     749,618,528   indexbench 5,242,318
+digestbench  98,968,855
+```
+
+Every row identical to the digit with the twin routed everywhere. On kq it
+recovers 8,940 instructions of the 176,218 the twin costs print_small — five
+per cent — and shrinks `.text` by a further 112 bytes. Not worth four lines.
+
+**Drop `alwaysinline` and let LLVM decide.** encodebench and digestbench come
+back byte-identical again; basket rises 3,060 and pendbench 600. LLVM inlines
+the twin at these sites whether or not it is told to, so the attribute is not
+what puts the body there.
+
+**What the profile actually says, and it is not what the words said.** The
++67,116,000 in encodebench sits entirely in `d_list/fold_3` — every other
+function in the binary is identical to the instruction across the two builds,
+`k_b_append_mut` at 1,204,501,600 and `w_klam17` at 488,086,400 either way. And
+`k_index` appears nowhere in the no-twin profile at all: encodebench never
+indexes a list at run time. `fold_flat` is the arm that writes `coll[i]!`, and
+encodebench folds the lazy shapes, so `fold_go` runs and `fold_flat`'s index is
+dead every lap.
+
+So the cost is not paid at the index. It is paid by whatever the larger
+`fold_3` does to register allocation and block layout in a loop that runs
+millions of times, which is why neither routing nor the inline attribute
+touches it — both change WHERE the body goes, and the body is not the problem
+where it goes. A fix would have to keep `fold_flat` out of the same function as
+`fold_go`, which is a question about how dispatch groups are emitted rather
+than about this twin.
+
+**And a note on measuring this.** The first attempt at the comparison above
+annotated `/tmp/cg.encodebench`, a profile file left over from an earlier
+session, and read a total of 8,396,592,003 against a benchmark that retires
+7,014,919,659. A stale profile answers confidently and wrongly. Build the
+binary, run it, annotate the file that run wrote, in one script.
