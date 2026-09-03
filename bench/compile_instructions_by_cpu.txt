@@ -85,6 +85,16 @@
 # Rows are `<dispatch.sh key> <retired instructions>`. CI's toolchain owns
 # these values and CI is the only thing that may write them, one chip per run,
 # out of the job log.
-family0x19-model0x11 41498829
-family0x19-model0x1 41503893
-family0x6-model0x6a 41498829
+
+# EVERY ROW WAS CLEARED ON 2026-09-03, and what refills them is a different
+# measurement. Emptying the environment left this row in two stable clusters
+# 5,064 apart and the SAME family and model produced both, so the key this file
+# is named for was never sufficient. compile_instructions.sh now pins the glibc
+# tunables; the comment there carries the profile evidence.
+#
+# WHAT THE NEXT RUNS TEST. If pinning worked, every chip lands on ONE value and
+# the per-chip key is vestigial — at which point this file collapses back to a
+# single golden and the ratchet row goes with it. If the chips still disagree,
+# pinning was the wrong explanation and the tunables come out again. Either
+# answer is worth the runs; a row nobody can compare measures nothing.
+#

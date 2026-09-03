@@ -4002,3 +4002,50 @@ I also guessed wrong about which chip this run landed on, reasoning from the
 arithmetic (41,503,893 - 41,500,974 = 2,919, close to the Zen 4's +2,979) that
 it must be the Intel. It was the Zen 3, whose old row happened to sit 5,124
 below. The gate prints the key; there was no reason to infer it.
+
+## 2026-09-03 — the per-chip key was never sufficient, and the tunables are pinned
+
+kanso#1226 shipped a compile_instructions row keyed by CPU family and model,
+on the reasoning that glibc's ifunc resolver picks memcpy and memcmp by feature
+set. kanso#1227 broke that. On ONE unchanged binary, CI produced exactly two
+values:
+
+  41,498,829   family0x19-model0x11 (Zen 4), family0x6-model0x6a (Ice Lake)
+  41,503,893   family0x19-model0x1  (Zen 3), family0x19-model0x11 (Zen 4 again)
+
+The same family and model counted both. The profiles fall into two clusters,
+identical within each and differing in three places:
+
+  _int_malloc          1,551,398   1,554,268
+  _int_free            1,516,378   1,516,161
+  __memcmp_avx2_movbe  1,346,206   1,347,513
+
+The memcmp IMPLEMENTATION is the same in both — the resolver picked identically
+— and its instruction count still moves, which is an alignment difference.
+malloc moves too. So the variable is heap layout, upstream of dispatch, and the
+feature-set story explained the wrong layer.
+
+The gap is 5,064. The 2026-09-02 entry recorded this row moving 5,081 on a
+docs-only PR with byte-identical inputs and read it as noise with a band. It was
+neither noise nor the chip. Two wrong readings of the same number, a day apart,
+and both times the mechanism was fitted to whatever data was in hand.
+
+WHAT IS PINNED NOW. glibc sizes its malloc and string thresholds from the cache
+sizes it reads out of the CPU, so two machines of one model with different
+caches lay the heap out differently. compile_instructions.sh sets the cache
+sizes, the three string thresholds, and four malloc knobs through
+GLIBC_TUNABLES, so every run takes the same path on every host. Every recorded
+row was cleared, because all of them predate the tunables.
+
+This measures a configuration no user runs under, and that is the price. The
+row exists to compare the compiler against itself across commits; a number that
+cannot be compared measures nothing, and a number that silently means two
+different things is worse than one that refuses.
+
+WHAT THE NEXT RUNS TEST, and it is falsifiable either way. If pinning was the
+right explanation, every chip lands on one value and the per-chip key becomes
+vestigial — at which point the file collapses to a single golden and the
+compile_ir_keyed ratchet row goes with it. If the chips still disagree, pinning
+was wrong too and the tunables come back out. Clay had no preference between
+this and keying by the full tunable block; this one is chosen because it removes
+the variable rather than describing it, and because one CI run falsifies it.
