@@ -340,6 +340,19 @@ compile_ir_keyed = row
   (breaking "an_unrecorded_chip_is_waved_through")
   no_setup
 
+# The same file, a different way to be wrong, and this one came from a mistake
+# rather than a design: a chip's row was corrected in place AND appended in one
+# edit. The lookup takes the first match and stops, so the appended line said
+# nothing while sitting where the newest sitting goes, and every gate in the
+# tree was green over it.
+compile_ir_doubled = row
+  "a second row for one chip, read by nobody and trusted by everybody"
+  false
+  "cargo test --test a_compile_row_is_read_against_its_own_chip"
+  "specs (unit, golden, differential)"
+  (breaking "a_second_row_for_one_chip_is_read_by_nobody")
+  no_setup
+
 inline_pin = row
   "an inline pin the inliner undoes, and a hot wrapper going out of line"
   false
@@ -657,7 +670,9 @@ rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
 
 rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host]
 
-rows_b1e = text/concat rows_b1d2 [compile_ir_keyed inline_pin]
+rows_b1e0 = text/concat rows_b1d2 [compile_ir_keyed compile_ir_doubled]
+
+rows_b1e = text/concat rows_b1e0 [inline_pin]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 

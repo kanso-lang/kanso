@@ -14,14 +14,14 @@
 set -e
 row=scripts/gates/compile_ir_row.sh
 before=$(grep -c '^  exit 1$' "$row")
-if [ "$before" -ne 4 ]; then
-  echo "expected four refusals in $row, found $before;" >&2
+if [ "$before" -ne 5 ]; then
+  echo "expected five refusals in $row, found $before;" >&2
   echo "the shape moved and this mutation needs rewriting" >&2
   exit 1
 fi
 sed -i '/one per CI run\./,/^  exit 1$/ s/^  exit 1$/  exit 0/' "$row"
 after=$(grep -c '^  exit 1$' "$row")
-if [ "$after" -ne 3 ]; then
+if [ "$after" -ne 4 ]; then
   echo "wanted exactly one refusal turned into a skip, $before became $after" >&2
   exit 1
 fi
