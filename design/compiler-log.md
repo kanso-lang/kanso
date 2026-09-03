@@ -3633,3 +3633,51 @@ row to say so.
 That is the whole of the case for leaving the golden at main's value and
 sending the question on rather than pinning a number that will be wrong on
 the next runner.
+
+## 2026-09-03, LATER STILL — the silicon hypothesis was right and I killed it on the wrong evidence
+
+The gate now prints the binary that counted the row. It answered a different
+question than it was aimed at, and the answer is that two entries above are
+wrong.
+
+The two CI runs compared earlier ran on **different CPUs**. The gate has been
+printing the dispatch block all along and both blocks were in the job logs;
+they differ:
+
+| field | run at 41,500,974 | run at 41,495,850 |
+|---|---|---|
+| `features[0x2].cpuid[0x0]` | 0xa10f11 | 0xa00f11 |
+| `features[0x5].cpuid[0x1]` | 0x30100015 | 0x30000015 |
+| `level2_cache_size` | 0x100000 | 0x80000 |
+| `rep_movsb_stop_threshold` | 0x100000 | 0x80000 |
+
+**What I did wrong.** I compared which `memcmp` implementation glibc had
+selected — `__memcmp_avx2_movbe` on both — and concluded the two runs were on
+indistinguishable silicon. That is the wrong field. The selected function is
+one output of the dispatch; the CPUID word and the cache-derived tunables are
+others, and those differ. I then wrote that "the silicon hypothesis is dead,
+killed by the same test that killed the layout one" — which is the same error
+the layout entry corrects, committed in the act of claiming not to.
+
+The pattern is now three for three: a number moved, I reached for a mechanism,
+and the mechanism was asserted from evidence that did not separate it from the
+alternative. Twice the mechanism was wrong. The one thing that has worked every
+time is comparing two runs field by field and reading what actually differs.
+
+**What follows.** Task #244 was right and its closure was not. Recording the
+dispatch block beside the row is the fix, exactly as `kq/bench/instructions_golden.txt`
+already does and for the reason kq#86 already gave. The row is deterministic
+per CPU and the pool holds at least two; pinning it per recorded silicon is
+the shape that works.
+
+That also means the two invasive options are off the table, and Clay's
+instinct to keep libc counted survives intact: libc's cost stays in the row
+because it is a real cost of how this compiler allocates, and the row stops
+lying because it says which chip counted it.
+
+**What is NOT claimed here.** How a different L2 size produces 2,870 fewer
+instructions inside `_int_malloc` is not established. `_int_malloc` does not
+call memcpy, and the mechanism could run through heap addresses, alignment,
+or something else entirely. What is observed is that the environments differ
+in a way the gate already records, and that is enough to attribute the row
+without inventing the chain. Inventing the chain is what went wrong twice.
