@@ -69,24 +69,40 @@ pub fn list_dir path
 pub fn make_dir path
   builtin_make_dir path
 
-# The builtin answers two things, so the wrapper reads its list: a builtin
-# cannot name a type that is declared here. Same shape `run` uses.
+# A builtin cannot name a type declared here, so it answers `none` for a file
+# that is not there and the wrapper names it — the shape `env` already uses
+# for a variable that is not set.
+#
+# The list `run` uses would have done, and it costs the caller the string's
+# type: inference gives a list index the top set, and the analyses that read
+# that set stop being able to prove things about the document. jsonbench's
+# decode loop stopped rewinding when the read briefly took that shape.
 pub fn read_file path
   builtin_read_file path . (r -> found path r)
 
 # The caller insisting the file is there. The bang is the choice of channel,
 # and the suffix contract holds it to it: a `!` name must be able to answer a
 # failure, which this one does by turning the anticipated arm back into one.
+#
+# It reads the builtin rather than calling `read_file` and dispatching on what
+# comes back, which is the same program written one call deeper. The extra
+# call costs the caller the string's type: inference reads the yield of a
+# chain whose head is a builtin, and a chain whose head is a kanso function
+# is the top set. jsonbench's decode loop stopped rewinding when this was
+# written the other way — arena blocks 2 to 248, peak 2 MB to 260 MB.
 pub fn read_file! path
-  read_file path . insisted
+  builtin_read_file path . (r -> insisted path r)
 
-fn found path r
-  if r[1]! r[2]! (file_not_found path)
+fn found path none
+  file_not_found path
 
-fn insisted (file_not_found f)
-  err "cannot read {f}: no such file"
+fn found _ text
+  text
 
-fn insisted text
+fn insisted path none
+  err "cannot read {path}: no such file"
+
+fn insisted _ text
   text
 
 # Starting a process is a description like any other effect. The answer is

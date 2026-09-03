@@ -4663,21 +4663,23 @@ static KValue k_exec(KDesc* d) {
             return out;
         }
         case 4: {
-            /* Two answers in a list, which os/read_file names: the file being
+            /* The text, or none, which os/read_file names: the file being
                absent is DATA, ruled 2026-09-03, and everything else about
                reading it is still a failure. errno separates them — ENOENT
                (and ENOTDIR, a path whose parent is a file, which is the same
-               "it is not there") answers [false, ""], and any other reason
-               the open failed is an err. The interpreter's read_file_text
-               makes the identical split on ErrorKind::NotFound. */
+               "it is not there") answers none, and any other reason the open
+               failed is an err. The interpreter's read_file_text makes the
+               identical split on ErrorKind::NotFound.
+
+               `none` and not a two-element list, which this was for a day:
+               the list cost the caller the string's type, because inference
+               gives a list index the top set, and the loop analyses read that
+               set. jsonbench's decode loop stopped rewinding. */
             KStr* p = k_as_str(d->x);
             FILE* fh = fopen(p->data, "rb");
             if (!fh) {
                 if (errno == ENOENT || errno == ENOTDIR) {
-                    KValue pair[2];
-                    pair[0] = k_bool(0);
-                    pair[1] = k_str("");
-                    return k_mklist(2, pair);
+                    return k_none();
                 }
                 return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
                                       k_str(": unreadable")), NULL);
@@ -4688,11 +4690,9 @@ static KValue k_exec(KDesc* d) {
             char* data = malloc(size + 1);
             size_t got = fread(data, 1, size, fh);
             fclose(fh);
-            KValue pair[2];
-            pair[0] = k_bool(1);
-            pair[1] = k_str_n(data, (long long)got);
+            KValue out = k_str_n(data, (long long)got);
             free(data);
-            return k_mklist(2, pair);
+            return out;
         }
         case 20: {
             int fd = socket(AF_INET, SOCK_STREAM, 0);

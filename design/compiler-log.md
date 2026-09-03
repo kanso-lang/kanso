@@ -2664,3 +2664,73 @@ benchmark does.
 
 Welfare 73.06, unmoved. The rewritten column reads 73.0625 for the newest
 row, which is the same number to welfare's precision.
+
+## 2026-09-03 — the read's answer had no type, and the decode lost its bracket
+
+Searched the live log and the archive before filing. The live log's io-half
+entry of this morning is the migration; the archive's `beat` entries are the
+tier work of August and the carry-tier decline of 2026-09-01. Neither has the
+read's shape or the yield hole, so this is a defect the io half introduced
+and the golden caught.
+
+**What broke.** `os/read_file` answers `text | file_not_found`, and a builtin
+cannot name a type declared in kanso, so the builtin handed back a
+two-element list `[there, text]` and the wrapper read it. The list costs the
+caller the string's type: inference gives a list index the top set, `beat.rs`
+reads that set to decide whether a slot may be carried across a rewind, and
+an untyped slot keeps the grow-only arena. jsonbench decoded the same bytes
+with 248 arena blocks instead of 2, a 260 MB peak instead of 2 MB, and
+`beat_iters` 1 instead of 151. Same decoder, same document, 124 times the
+peak.
+
+**The builtin answers `none`.** The shape `os/env` already uses for a
+variable that is not set, and inference already types it: `read_file` yields
+`STR | NONE`, the wrapper's `found` dispatches on the none arm, and the text
+arm keeps its type. All three engines make the same split — the interpreter
+on `ErrorKind::NotFound`, native on `ENOENT` or `ENOTDIR`, the playground
+refusing because it has no filesystem.
+
+**`none` is threadable.** It has no payload, so nothing in it can dangle
+across a rewind — the criterion `THREADED` already states for strings and
+records. Its absence cost jsonbench the plain beat: with `NONE` out of the
+set the loop is a *carry* beat, evacuating its document argument every
+iteration, and with it in the set the loop is a plain beat that rewinds.
+Measured both ways on the branch.
+
+**And a hole the fix walked into.** `os/read_file` is typed because
+`desc_yield` reads a chain's yield by the head's BARE NAME, and the wrapper's
+name collides with the builtin's. `os/read_file!` — same body, one character
+more — matches nothing and falls to the top set. Written out:
+
+    os/read_file  "large.json" . go   loop/3: beat: rewinds every iteration
+    os/read_file! "large.json" . go   loop/3: grow-only: argument 1 ...
+
+Same package, same loop, one character apart. Every std wrapper whose name
+does not happen to match its builtin's has the same hole, and a wrapper with
+no builtin under it at all has it always. Naming it here rather than fixing
+it: the fix is return-type inference for a kanso function's yield, which is a
+change to the fixpoint rather than a patch to a match arm.
+
+So jsonbench's generated main writes the arm out — `fed`, which is
+`os/read_file!` at the call site — with the reason in
+`bench/make_jsonbench`. Both spellings mean the same thing, and when a kanso
+function's yield is inferred it goes back to the bang.
+
+**The goldens moved, uniformly and once.** Five programs read a file at
+runtime and all five pay the same: allocs +9, alloc_bytes +288,
+`cohort_frees` 0 to 1, `evac_allocs` +12, `carry_dedup` +2. That is the read
+wrapper's dispatch, once per program rather than per iteration, and it is the
+price of naming absence in the type. The decode's own shape is unchanged —
+`arena_blocks` 2, `arena_peak_bytes` 2,097,152, `beat_iters` 151,
+`el_parses` 318,450, `find2_calls` 1,571,250 all byte-identical to main.
+
+Welfare 73.06, unmoved: the objective weighs instructions, peaks and blocks,
+and nine allocations move none of them.
+
+**The spec.** `tests/golden/read_beat` reads its own source and loops over it
+200 times and 800 times; `beat_iters` reads 201 and 801. Watched red with the
+list put back in `read_value` and `found` back to `if r[1]! r[2]!`: both
+report 0, the loop never bracketing. It asserts `beat_iters` rather than
+`arena_blocks` because these programs fit one block under either shape —
+measured — and a check that cannot fail is worse than none. The block count
+is pinned where it is sensitive, in `bench/cost_golden.txt`.

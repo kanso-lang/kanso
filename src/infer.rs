@@ -944,7 +944,11 @@ fn desc_yield(e: &Expr) -> Set {
             desc_yield(&args[1]) | desc_yield(&args[2])
         }
         Expr::App { head, piped: false, .. } => match head.as_ref() {
-            Expr::Ident(n, _) if matches!(base(n), "read_file" | "stdin") => STR,
+            // a file that is not there yields none, which os/read_file names
+            // `file_not_found`; the text arm keeps its type, which the loop
+            // analyses read
+            Expr::Ident(n, _) if base(n) == "read_file" => STR | NONE,
+            Expr::Ident(n, _) if base(n) == "stdin" => STR,
             // status, stdout, stderr — the std wrapper reads them into a record
             Expr::Ident(n, _) if base(n) == "run" => LIST,
             // the handle a later kill names

@@ -1,0 +1,23 @@
+# A document read from a file, threaded through a loop that allocates.
+#
+# The loop keeps its bracket only while the read's answer has a type: the
+# analysis reads the parameter's inferred set to decide whether the slot may
+# be carried across a rewind, and an untyped slot is carried on the grow-only
+# arena instead. `beat_iters` is where that shows — one per iteration and one
+# for the program, or zero when the loop never brackets at all.
+import "std/os"
+import "std/text"
+
+os/read_file "reading.kso" . fed
+
+fn fed (file_not_found f)
+  err "cannot read {f}"
+
+fn fed cs
+  print "tallied {tally cs 200 0}"
+
+fn tally _ 0 acc
+  acc
+
+fn tally cs n acc
+  tally cs (n - 1) (acc + length (text/split cs "\n"))

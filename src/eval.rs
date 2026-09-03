@@ -298,15 +298,23 @@ pub enum Desc {
     Nil,
 }
 
-/// What a finished process answers: its status and the two streams.
+/// A read that found nothing answers `none`, the shape `env` already uses for
+/// a variable that is not set: the std wrapper turns it into `file_not_found`.
+///
+/// It was a two-element list once, `[there, text]`, and the list cost the
+/// program the string's type. Inference gives a list index the top set, so a
+/// document read this way arrived at its consumer untyped — and `beat.rs`
+/// reads that set to decide whether a loop may rewind. jsonbench's decode
+/// loop stopped rewinding on the day the read changed shape: arena blocks 2
+/// to 248, peak 2 MB to 260 MB, on the same bytes.
 fn read_value(found: Option<String>) -> Value {
-    let (there, text) = match found {
-        Some(text) => (Value::True, text),
-        None => (Value::False, String::new()),
-    };
-    Value::List(Rc::new(vec![there, Value::Str(text)]))
+    match found {
+        Some(text) => Value::Str(text),
+        None => Value::NoneV,
+    }
 }
 
+/// What a finished process answers: its status and the two streams.
 fn ran_value(done: (i64, String, String)) -> Value {
     let (status, out, errs) = done;
     Value::List(Rc::new(vec![Value::Int(status.into()), Value::Str(out), Value::Str(errs)]))
@@ -4135,9 +4143,9 @@ impl<'a> Interp<'a> {
                 Ok(text) => Value::Str(text),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
-            // Two answers in a list, which the std wrapper turns into either
-            // the text or a `file_not_found` — a builtin cannot name a type
-            // declared in kanso, so it hands back the same shape `run` does.
+            // The text, or `none` for a file that is not there — the std
+            // wrapper names the second `file_not_found`, because a builtin
+            // cannot name a type declared in kanso.
             Desc::ReadFile(path) => Ok(match executor.read_file(path) {
                 Ok(found) => read_value(found),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
