@@ -551,11 +551,30 @@
 # peak_bytes were in the welfare model the whole time and its work was in
 # nothing, so a change that gave the arena back per position and spent ten
 # times the instructions doing it scored as a pure gain.
-jsonbench 2533092019
-encodebench 5848702451
-oneshot 34322446
+# 2026-09-03 (a number's bytes are read once, and a byte switch switches on
+# the byte). Four rows fall and seven do not move a single instruction:
+#
+#   jsonbench    2,533,092,019 -> 2,098,860,167   -17.1424%
+#   oneshot         34,322,446 ->     31,427,567    -8.4351%
+#   widebench       61,890,181 ->     59,506,462    -3.8515%
+#   encodebench  5,848,702,451 ->  5,846,994,767    -0.0292%
+#
+# Two changes. The json library walked every number twice — once to find where
+# it ended, once over the same bytes to decide float against int — and the mark
+# rides the single scan now. And a group dispatching on a byte had that byte
+# rebuilt into a tagged value for the dispatch tree to take apart again; the
+# tree switches on the raw value directly. The second is 13.56% of jsonbench on
+# its own, and widebench is where it is read alone: widebench vendors a frozen
+# copy of the library, so the number scan cannot reach it.
+#
+# The container read the same four rows 413 or 399 lower and read tiny falls on
+# the other seven; the runner says those seven do not move at all. The rows here
+# are the runner's, as this file's header requires.
+jsonbench 2098860167
+encodebench 5846994767
+oneshot 31427567
 basket 40300172
-widebench 61890181
+widebench 59506462
 deepbench 676465730
 escapebench 130170751
 pendbench 715732938

@@ -4876,6 +4876,25 @@ distinguishes them is `emitted_branches`, which falls by 24 in the decoder and
 from every byte-dispatching call. Revert the change and that counter goes straight back
 up, which is what the vein is for.
 
+**What CI's own sitting says, and what it cost the compiler.** The runner reads
+the four moved rows 413 or 399 above the container and reads the other seven
+EXACTLY where they were: jsonbench 2,098,860,167, oneshot 31,427,567, widebench
+59,506,462, encodebench 5,846,994,767, and no movement at all in basket,
+deepbench, escapebench, pendbench, indexbench, scanbench or digestbench. The
+container's few-hundred-instruction falls on those seven were the container.
+
+The compiler pays for it twice, and both are priced here. `compile_instructions`
+41,631,998 -> 41,831,767 on family0x19-model0x1, a rise of 199,769 or 0.48%,
+and this one is real front-end work rather than the embedded-source shift the
+by-cpu file's header describes: deciding a raw switch costs a range test per
+group and a wider case list than the tree it replaces. `compile_peak_bytes`
+713,606 -> 715,275, a rise of 1,669 or 0.23%, which is that case list being
+held while it is decided. Rounds hold at 40. The Zen 4 row is removed rather
+than carried forward, per that file's rule about values measured against an old
+binary. **Welfare 76.0100 -> 76.1800**: the objective takes the trade, and
+compile cost satiates at 0.5 against runtime's 2.0, which is exactly the
+asymmetry it was weighted for.
+
 **A comment claimed a property the machine code contradicted, and nothing in
 the tree could see it.** That is the same family as #1137's four pins that
 rested on prose — except that one was a spec reading a comment, and this was a
