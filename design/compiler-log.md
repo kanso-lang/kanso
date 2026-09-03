@@ -2978,6 +2978,21 @@ Six specs, all watched red first, and three ratchet mutations verified to redden
 this suite: the new `a_pinned_pair_grows_into_a_band`, plus the two existing
 mutations whose refusal-count guards had to move from five to seven.
 
+**A fourth chip, recorded the same afternoon.** CI landed on
+`family0x6-model0xad` — Granite Rapids, new to the pool — and the gate refused
+rather than passing on another chip's number, which is the unrecorded-chip
+design doing its job. It counted 41,832,275 on the same binary
+`de5bfab22fbd`, so three of the four recorded chips have now read the high
+value there and two of them have read both. It is recorded as a SINGLE,
+because one reading is one reading and a row may not claim a mode nobody has
+seen it take.
+
+That standing is an argument the per-chip key is separating nothing on this
+binary: the value looks like a property of the run rather than of the silicon.
+Not acted on. The key costs nothing while it is still right about the
+cross-binary case the file's header decomposes, and one binary is not enough
+to retire it.
+
 **OPEN, and stated as a measurement rather than a plan.** The ninth entry's
 term — glibc parsing `/proc/self/maps` before `main`, at a cost that is a
 property of the host's memory map — is still the only mechanism that fits, and

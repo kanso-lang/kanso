@@ -532,3 +532,23 @@ family0x19-model0x11 41831767 41832275
 # NOT established is that two runners differ in their maps by the amount the
 # 508 needs. A run that printed the map's line count beside the row would
 # settle it, and that is the next measurement this vein wants.
+
+# 2026-09-03: a FOURTH chip, and the machinery working as designed. CI landed on
+# family0x6-model0xad — Granite Rapids, which the pool had not shown before —
+# and the gate refused rather than passing on somebody else's number. This is
+# the sitting it asked for.
+#
+# It counted 41,832,275 on binary sha de5bfab22fbd, the same binary the pair
+# above was measured on, which makes it a third chip reading the high value
+# there. Recorded as a SINGLE because one reading is one reading: a row may not
+# claim a mode nobody has seen it take. If it later reads 41,831,767 the gate
+# will say so, and that reading is what would make it a pair.
+#
+# Standing on this binary, then: 0x6/0xcf has read both, 0x19/0x11 has read
+# both, 0x19/0x1 and 0x6/0xad have read only 41,832,275. Four chips and one
+# value between them except where a chip has been run twice, which is the
+# argument that the mode is a property of the run rather than of the silicon —
+# and the argument that the per-chip key is separating nothing on this binary.
+# Not acted on: the key costs nothing while it is right about something else,
+# and one binary is not enough to retire it.
+family0x6-model0xad 41832275
