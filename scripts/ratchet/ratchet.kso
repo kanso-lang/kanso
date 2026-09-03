@@ -424,6 +424,19 @@ perf_row = row
   (breaking "perf_row_loses_a_group")
   release
 
+# The row assembles and the row is COMPLETE are two properties, and perf_row
+# above only watches the first. The replay ruled on 2026-08-31 starts at the
+# first row carrying every counter the objective weighs, so a row that drops
+# the scored group is one the chart silently skips — which is what the newest
+# row was doing when it held 12 of 24.
+objective_row = row
+  "a history row without the counters the objective weighs"
+  false
+  "sh scripts/gates/row_carries_the_objective.sh /tmp/record.json"
+  "perf history (appended to the history branch)"
+  (breaking "a_row_loses_a_counter_the_objective_weighs")
+  release
+
 trend = row
   "a counter worsening with nothing traded and nothing attributed"
   true
@@ -713,7 +726,7 @@ rows_b1e0 = text/concat rows_b1d2 [compile_ir_keyed compile_ir_doubled]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 
-rows_b1e = text/concat rows_b1e1 [inline_pin chart_replay]
+rows_b1e = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 

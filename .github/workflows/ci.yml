@@ -620,6 +620,12 @@ jobs:
       # counter's key used to reach main before anything ran this.
       - name: the row assembles, with every counter it extracted
         run: ./target/release/kanso run scripts/perf_record > /tmp/record.json
+      # The replay starts at the first row carrying the whole counter set, so a
+      # row that loses one is a row it must skip. perf_record builds the group
+      # from the objective and cannot drift from it; what this reads is the row
+      # as written, in case the group is dropped where the row is assembled.
+      - name: the row carries every counter the objective weighs
+        run: sh scripts/gates/row_carries_the_objective.sh /tmp/record.json
       # The chart replays the current formula over the stored rows, so it needs
       # the formula's parameters as well as the rows. Publishing them beside
       # the history is what stops the weights being retyped into the page,
