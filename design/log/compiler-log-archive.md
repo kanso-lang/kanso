@@ -40424,3 +40424,152 @@ nothing. One section for the campaign is what the gate's own message asks for.
 ride together.** `git diff <last page commit>..HEAD -- design/compiler-log.md`
 reads empty when both land in one commit, which is why this entry does not put
 the branch back over the budget it just cleared.
+
+## 2026-09-02 (eighteenth) — the last append still paying a call
+
+`k_b_append_mut` was the largest single symbol anywhere in the eleven
+benchmarks: 1,204,501,600 instructions, 17.17% of encodebench, more than the
+next two entries together. It was also the only append reaching the runtime
+through a call.
+
+`append` has had an inline twin since the DECLARES prelude was written —
+`k_b_append_byte`, which claims a byte at the accumulator's frontier and
+builds a fresh header in the arena. The routing gives it to every append the
+linearity analysis has NOT proved unique. The proved-unique site, which is the
+whole of an encoder's hot path, went to the C. So the append with the smaller
+body — no header to allocate, the length written where it already sits — was
+the one paying a frame.
+
+`k_b_append_mut_byte` is `k_b_append_byte` with the header work removed. Same
+four guards in the same order: bytes accumulator, int argument, owned buffer at
+its frontier with room for one more. Anything else falls through to
+`k_b_append_mut` inside the twin.
+
+Measured in this container against `origin/main`, both arms built from the same
+sources with every benchmark binary deleted first:
+
+```
+encodebench  7,014,919,659 -> 6,611,648,059   -403,271,600  -5.749%
+oneshot         38,048,160 ->    36,606,462     -1,441,698  -3.789%
+jsonbench    2,718,705,486 -> 2,673,669,936    -45,035,550  -1.657%
+widebench       63,601,599 ->    63,809,599       +208,000  +0.327%
+```
+
+The other seven are byte-identical. `work_widebench` lands on **63,810,012** on
+the runner and is the one row that rises; widebench carries one long list for
+the whole run and appends to it out of an outer frame, which is the shape where
+the extra inline body sits in a loop that mostly does not take the fast arm.
+
+Every one of the nine allocation cost goldens is byte-identical, which is what a
+pure inlining change should do and is the check that it was one.
+
+**Where it costs, and every counter that moved.** The twin's body sits in the
+DECLARES prelude, so every program emits it whether or not it reaches it — one
+define, one call, five branches and 51 lines apiece, uniformly. That lands on
+`emitted_defines` 166, `emitted_calls` 1,802, `emitted_branches` 1,193 and
+`emitted_lines` 11,835 for the decoder, and on `emitted_other_defines` 1,439,
+`emitted_other_calls` 14,472, `emitted_other_branches` 8,579 and
+`emitted_other_lines` 85,732 across the ten beside it. The compile samples take
+the same prelude: `defines` 144, `calls` 162, `branches` 167, `lines` 2,827, and
+the module sample `module_defines` 88, `module_calls` 766, `module_branches`
+394, `module_lines` 4,736.
+
+`text` lands on **1,004,950**, and the four binaries that actually reach the
+twin are all of the rise: jsonbench +976 bytes, encodebench +1,504, oneshot
++4,080, widebench +1,712. §35 of the compiler page, written four hours ago, is
+the reason machine-code size is read here as a diagnostic rather than as a
+cost — and this change is a second instance of what that section argues, code
+growing while the work falls.
+
+**The fixture, and what it does not reach.**
+`tests/golden/micro/an_in_place_append_reaches_its_twin.kso` threads a byte
+accumulator through a tail recursion, which is what makes the site in-place,
+and sends a byte and a string through the same call site. It prints the length
+and the sum of the bytes, because a length alone is right even when the content
+is garbage — the first version of this fixture printed only the length and
+caught one mutation in five.
+
+Five mutations of the twin, each watched:
+
+- **the tag test** dropped: the string's payload is truncated to a byte and
+  stored, the sum reads 219,066 against 245,066. RED.
+- **the in-place length write** dropped: 2002 bytes and 90,066 against 4002 and
+  245,066. RED.
+- **the capacity test** dropped: output identical, and valgrind reports two
+  invalid accesses. The grow path never runs, so the writes go past the
+  nominal buffer into arena slack that nothing else is using yet. Caught by
+  memcheck, not by the program.
+- **the owned test** dropped: caught by neither. With `cap` zero the capacity
+  test fails anyway, so the fast arm is not entered; what the missing guard
+  costs is a read of `data[-8]` on a borrowed buffer, which lands inside the
+  string's own header and is in bounds. The C guards the same read the same
+  way.
+- **the frontier test** dropped: caught by neither, and the reason is
+  structural. A byte string sitting behind its buffer's frontier is one whose
+  storage another value has extended, which is what the linearity analysis
+  excludes from in-place sites in the first place.
+
+So the fixture pins two of the five arms, memcheck pins a third, and two are
+transcriptions of the C's guards with no shape in the corpus that separates
+them. That is written down rather than rounded up to "pinned".
+
+**The page's decode attribution was two merges stale, and is re-sat here.**
+§07's "where the decode cost actually sits" was measured 2026-09-01 on a tree
+whose jsonbench totalled 2,747,369,705; #1213 and #1214 landed after it and the
+paragraph never moved, so it named `k_b_append_mut` at 3.80% of a decode that
+no longer existed. Re-measured by the same method — the classifier reproduces
+that sitting's emitted figure of 1,729,183,050 to the instruction on
+`origin/main`, which is what says it is the same method:
+
+```
+                 2026-09-01 (main)      2026-09-02 (this branch)
+  emitted kanso  1,729,183,050  63.6%   1,783,922,550  66.7%
+  runtime.c        941,714,306  34.6%     841,939,256  31.5%
+  libc              47,808,090   1.8%      47,808,090   1.8%
+  total          2,718,705,486          2,673,669,936
+  per input byte          96.1                    94.5
+```
+
+The runtime half fell 99,775,050 and the emitted half rose 54,739,500, which is
+the twin's body crossing the line between them; the difference is the win.
+`k_b_append_mut` is off the list at any position. The largest runtime entries
+are now `k_b_put_mut` at 4.48%, `k_b_push_mut` at 3.94% and `k_b_find2` at
+3.18%.
+
+**And the next one is already named.** In encodebench after this change the
+largest runtime entries are `k_b_find2_below` at 7.28% (481,347,200),
+`render_ryu` at 7.07%, `k_b_append_wide` at 5.92% (391,134,400) and `k_b_at` at
+3.83%. `k_b_append_wide` is the string arm of the same builtin this change
+inlined the byte arm of, reached by every `"true"`, `"null"` and object key the
+encoder writes.
+
+**CI confirmed all eleven predicted rows exactly**, which is the seventh
+consecutive time the container-to-runner delta has transferred to the
+instruction. The one row that had to come from CI is the compile vein:
+`compile_instructions` lands on **41,501,391** against 41,495,304, a rise of
+6,087. The whole of it is the twin's body in the DECLARES string, which is data
+in the compiler's binary, so a longer prelude moves where everything after it
+lands — the same mechanism kanso#1216 recorded for a comment in `runtime.c`.
+`kanso check lib/json` never emits IR and never reads the prelude, so the front
+end does exactly the work it did before. 0.015% of a compile for 403 million
+instructions of encode.
+
+**One spec went red, and it is a real find rather than this change's.**
+`tests/welfare_saturates_each_counter.rs` asserts what a single runaway
+counter can contribute to the run-speed term, and its number is a property of
+how MANY run-speed counters there are. It read 49.16 over eight. This change's
+`--set` was the first ratchet since kanso#1215 minted `scan_instructions`,
+`escape_instructions` and `index_instructions` four hours earlier, so the
+floor's baseline gained three names and the fixture — which takes its names
+from that baseline — divides by eleven now: (10/3 + 1024/1026) / 11 * 0.30
+plus the other three terms is **48.48**, which is what both hosts read.
+
+**A minted counter enters the baseline at the next ratchet, not at the merge
+that mints it.** So kanso#1215 left this spec green and the next `--set`
+turned it red, whoever ran it. That latency is now written into the spec
+beside the number, with what to recompute when it happens. The number stays
+pinned rather than derived: a spec that recomputes what the tool computes is
+asserting its own copy of the tool, which is the objection its own harness
+comment already makes about re-reading the goldens.
+
+Welfare **75.09 -> 75.19** on the runner rows, ratcheted.
