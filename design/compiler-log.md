@@ -4098,3 +4098,26 @@ and the next collision answers it. Naming the falsifier in advance is the point
 — it is the same discipline as watching a mutation go red before it goes green,
 and it is what was missing when the per-chip key was declared to work on two
 agreeing chips.
+
+THIRD PINNED READING, and it is the first real evidence. family0x19-model0x11
+counts 41,631,006 — family0x19-model0x1's value to the instruction. Those two
+AMD models DISAGREED before pinning, at 41,498,829 and 41,503,893, and each of
+them had also produced the other's number on a different run. Under the pinned
+tunables they agree.
+
+  family0x19-model0x1    41,631,006   Zen 3
+  family0x19-model0x11   41,631,006   Zen 4
+  family0x6-model0xcf    41,635,958   Intel, 4,952 away
+
+So the tunables removed a source of variation that was real, and what is left
+is a stable Intel/AMD difference. That is the shape kanso#1226 originally
+claimed and could not support: dispatch differing by feature set, with the two
+AMDs together. The mechanism was not wrong so much as drowned — heap layout
+moved the number by 5,064 and dispatch by 4,952, the two were the same size,
+and with one reading per chip they were indistinguishable.
+
+What is still NOT established is the thing named as the falsifier last commit:
+no chip has yet been read twice under the tunables. Three chips with three
+readings and two values is consistent with per-chip determinism and also with a
+coin that has landed the same way twice. The next collision on a recorded chip
+is what settles it, and until then this is evidence rather than a result.
