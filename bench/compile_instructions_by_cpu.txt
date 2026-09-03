@@ -153,7 +153,7 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
-family0x6-model0xcf 41831767
+family0x6-model0xcf 41831767 41832275
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -340,7 +340,7 @@ family0x19-model0x1 41832275
 # chip does not select the mode, which is the whole premise this file is named
 # for. Every row below is CI's own most recent reading and nothing is
 # predicted from another chip.
-family0x19-model0x11 41831767
+family0x19-model0x11 41831767 41832275
 #
 # 2026-09-03, THE SIXTH READING, and it closes the question this file was
 # named to answer. A run against the fully-recorded table above — all three
@@ -362,3 +362,193 @@ family0x19-model0x11 41831767
 # this file's own history warns about most. They stay as CI measured them.
 # Further readings are appended to the table in design/pending-gavels.md
 # rather than earning a note here each time; six is enough to decide on.
+# 2026-09-03, THE TERM IS FOUND, and it belongs to neither the compiler nor
+# the chip. `kanso check` reads /proc/self/maps before it reads a line of
+# kanso. glibc's pthread_getattr_np does it on Rust's behalf, to find the main
+# thread's stack: it opens the file, reads it in 1024-byte chunks and sscanfs
+# each line until it finds the one holding the stack pointer. What that costs
+# is a property of the HOST'S memory map — how many mappings it has, and how
+# long their pathnames are — and this row has been counting it all along.
+#
+# Measured on the container, which reads the row deterministically: forty runs
+# of the gate's exact command on one binary returned one value forty times, so
+# none of what follows is jitter. What moves it is the map.
+#
+#   one more shared library in the process    +32,090
+#
+# That is an LD_PRELOAD of an empty .so — four more lines for the parse to
+# walk, and thirty-two thousand instructions the compiler never executed.
+# Smaller edits to the same text give smaller steps. Lengthening the
+# executable's own file name from nine characters to ten moves the row +2,193,
+# and the profile diff across that pair names the maps parse and nothing else:
+#
+#   __vfscanf_internal                              +1,180
+#   ____strtoul_l_internal                            +576
+#   _IO_sputbackc                                      +88
+#   getdelim, getline, _IO_setb, pthread_getattr_np   the rest
+#
+# ZERO kanso symbols move across it. That is the signature the six readings
+# above recorded — "every kanso symbol agrees to the instruction ... three rows
+# differ and all three are glibc" — and a startup term is global rather than
+# per-chip, which is why two of three chips produced both values.
+#
+# The 508 the readings differ by is the downstream half of the same thing.
+# What the parse allocates and frees before main sits under everything the
+# compiler allocates afterwards, so _int_malloc walks different bins and
+# memcmp compares at different alignments for an identical request sequence.
+# A second knob shows that half by itself: argv[0] at 39 characters rather
+# than 38 moves the row +480, all of it in __memcmp_avx2_movbe.
+#
+# IT CAN BE MEASURED OUT. Collect from the compiler's own entry point rather
+# than from exec:
+#
+#   valgrind --tool=callgrind --collect-atstart=no --toggle-collect=kanso::main
+#
+#                                 raw        toggled
+#   one more shared library    +32,090             -6
+#   name 9 -> 10 characters     +2,193             +5
+#   36 name lengths, spread      2,900             90
+#
+# Ten toggled runs on one binary returned one value ten times. The residual 90
+# is argv[0], which the box already holds fixed at ./kanso. Rewiring the gate
+# invalidates every row here and every number derived from it, so it is its own
+# change; this note is the evidence it rests on.
+
+# EVERY ROW CLEARED ON 2026-09-03, and this time under a ruling. Clay declined
+# both the pinned pair and any exclusion of glibc from the count: "if changes to
+# the compiler can interact with glibc in a way that means generally more/less
+# work, which the 'compiler's own instructions' measure would be blind to, then
+# we need a way to include glibc's instructions but make them consistent". So
+# the row is made deterministic with glibc inside it. No pair, no band.
+#
+# Two suspects came with the ruling, both fitting the measured signature — five
+# consecutive runs in one container agree exactly, two runners on the same
+# binary and chip disagree, so the randomness is fixed at container birth rather
+# than per exec. Both have now been tested and the answers differ from the
+# guess:
+#
+#   READDIR ORDER IS ALREADY SORTED, and cannot be the term. src/lib.rs sorts
+#   the files a compile actually reads before reading any of them, and
+#   src/eval.rs sorts what `list_dir` answers. The four remaining read_dir
+#   calls are all in src/main.rs on the `test` path and all order-independent
+#   by construction — three are `.any()` or `.count()`, and the fourth is a
+#   vector whose only order-sensitive use is a single-element match. One of
+#   them is sorted anyway in this commit, because "the compiler's work must
+#   never depend on an inode hash" is a rule and not a symptom.
+#
+#   ASLR IS NOT THE TERM EITHER, and the knob has come back out. It was
+#   applied because the two modes have only ever appeared on the runners and
+#   the container cannot rule out what it has never reproduced. On the
+#   container it changed nothing — `setarch -R` read 42,235,790 against
+#   42,235,790 without it, and forty unwrapped runs on one binary returned one
+#   value forty times — and on CI it changed nothing either: e47e412d printed
+#   `compile_aslr disabled=yes` and counted the HIGH value on a chip whose row
+#   held the low one. A knob measured twice to move nothing is not carried.
+#
+# WHAT THE NEXT RUNS TEST, stated before they run. If every chip lands on one
+# value, glibc stays counted under a single exact pin and the per-chip key has
+# nothing left to separate. If two values survive both fixes, neither suspect
+# was the term, and the note above this one already names what is left: glibc
+# parses /proc/self/maps before main to find the stack bounds, its cost is a
+# property of the host's memory map, and one more shared library in the process
+# moves this row 32,090 with the compiler doing identical work. That is the
+# thing "make them consistent" would then have to reach.
+#
+# THE FIRST READING UNDER BOTH FIXES, from CI at 18:05 on Zen 4
+# (family0x19-model0x11), binary sha b0e5a906c73d. The job log printed
+# `compile_aslr disabled=yes`, so setarch took on the runner. 41,834,008.
+#
+# It is NOT comparable to the 41,831,767 / 41,832,275 pair above: the binary
+# changed with the sorted read_dir, .text 2,514,718 -> 2,517,278, and this file
+# already records that the binary moves the row by thousands on its own. What
+# the pair tests is whether a SECOND reading on this binary agrees with this
+# one. One reading cannot answer a question about two values.
+#
+# THE CONTROL, and the tightest one this vein has produced. kanso#1235 is a
+# records-only branch running MAIN's gate — no setarch, no sorted read_dir — and
+# CI read it twice within eight minutes:
+#
+#   fc993f83   design/*.md only          41,831,767   passed
+#   5fd89840   + docs/compiler.html      41,832,275   refused
+#
+# One HTML file between them, the same binary, 508 apart, on a chip whose
+# recorded row holds the low value. So the pair is still live on the unfixed
+# gate as of 18:08, and nothing about it was an artifact of the emptied table or
+# of the rustc bump. It is the seventh reading of the pair and the first where
+# the intervening diff is a single file.
+#
+# 2026-09-03, THE SORTED read_dir IS WITHDRAWN and the rows above are restored
+# to what CI measured on the binary main carries. It was applied because the
+# ruling names readdir order as a determinism defect, and it is — but the sites
+# it would have fixed are the four in src/main.rs on the `test` path, all
+# order-independent by construction, and src/lib.rs already sorts what a compile
+# reads. So it changed no answer, and it changed the binary: .text 2,514,718 ->
+# 2,517,278, moving this row 41,831,767 -> 41,834,008 and invalidating every
+# recorded value.
+#
+# That cost is the reason it comes out. The ruling asks for the modes to be
+# measured away on several fresh runners, and a changed binary makes every
+# reading before it incomparable — the experiment would restart from nothing
+# with `setarch -R` and the new layout confounded. With the sort withdrawn the
+# binary is main's, the rows above stand, and setarch is the ONLY variable. The
+# two readings it did produce (41,834,008 twice on family0x19-model0x11, twelve
+# minutes apart, sha b0e5a906c73d) are kept in the log as what they are: an
+# agreement on a binary that no longer ships.
+#
+# The determinism fix is worth landing on its own, once this vein is settled and
+# the row it moves is not the row under test.
+
+# 2026-09-03, THE PAIR IS PINNED, and what makes it a pair rather than a guess
+# is two runs that agree on everything except the number.
+#
+#   commit     binary sha       cpu                        counted
+#   fc993f83   de5bfab22fbd     family 0x6 model 0xcf       41,831,767
+#   e47e412d   de5bfab22fbd     family 0x6 model 0xcf       41,832,275
+#
+# ONE BINARY, ONE CHIP, TWO VALUES. Both shas are printed by the gate itself on
+# every run, green or red, which is why this comparison can be made at all —
+# the line was added for exactly this and had never yet answered a question.
+# The second of the two ran with `setarch -R` and the first without, so that
+# pair is also the falsifier for the last suspect the ruling named.
+#
+# A third run on the same binary, main at 5b0f2eb1, counted 41,832,275 on
+# family0x19-model0x11 against a recorded 41,831,767. So the second chip has
+# now shown both values on this binary too, and its row is a pair as well.
+# family0x19-model0x1 has been seen at 41,832,275 only, and stays a single: a
+# row may not claim a reading nobody took.
+#
+# The ruling of 2026-09-03 allowed this and nothing wider — "only a residual
+# that survives both reopens the question, and then the fallback is the pinned
+# pair, never blindness". Both suspects are falsified above, so the residual
+# survived. scripts/gates/compile_ir_row.sh caps a row at two values and
+# refuses a third, and the golden's bare line stays the reference row's FIRST
+# value so that a mode flip cannot reach welfare or the trend gate as a
+# regression.
+#
+# WHAT IS STILL OPEN, stated as a question rather than parked. The note above
+# on /proc/self/maps remains the only measured mechanism that fits: its cost is
+# a property of the host's memory map, it moves this row by tens of thousands
+# under a deliberate perturbation, and it moves no kanso symbol at all. What is
+# NOT established is that two runners differ in their maps by the amount the
+# 508 needs. A run that printed the map's line count beside the row would
+# settle it, and that is the next measurement this vein wants.
+
+# 2026-09-03: a FOURTH chip, and the machinery working as designed. CI landed on
+# family0x6-model0xad — Granite Rapids, which the pool had not shown before —
+# and the gate refused rather than passing on somebody else's number. This is
+# the sitting it asked for.
+#
+# It counted 41,832,275 on binary sha de5bfab22fbd, the same binary the pair
+# above was measured on, which makes it a third chip reading the high value
+# there. Recorded as a SINGLE because one reading is one reading: a row may not
+# claim a mode nobody has seen it take. If it later reads 41,831,767 the gate
+# will say so, and that reading is what would make it a pair.
+#
+# Standing on this binary, then: 0x6/0xcf has read both, 0x19/0x11 has read
+# both, 0x19/0x1 and 0x6/0xad have read only 41,832,275. Four chips and one
+# value between them except where a chip has been run twice, which is the
+# argument that the mode is a property of the run rather than of the silicon —
+# and the argument that the per-chip key is separating nothing on this binary.
+# Not acted on: the key costs nothing while it is right about something else,
+# and one binary is not enough to retire it.
+family0x6-model0xad 41832275

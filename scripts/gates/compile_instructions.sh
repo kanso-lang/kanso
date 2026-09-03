@@ -88,6 +88,16 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
+# NO ASLR KNOB, and the reason is a measurement rather than an omission. The
+# row read two values 508 apart and `setarch -R` was tried against them on the
+# ruling of 2026-09-03. It changed nothing twice over: on the container it read
+# 42,235,790 against 42,235,790 without it, and on CI a runner counted the same
+# 41,832,275 with it as another counted without it. valgrind assigns the
+# client's address space itself, so host randomization does not reach the count.
+#
+# What the 508 actually was: two binaries. sha 55fb850296d1 counted 41,831,767
+# and sha de5bfab22fbd counts 41,832,275, and the comment below on compile_sample
+# already names the binary as a cause the cpu key cannot see.
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
