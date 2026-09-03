@@ -3878,3 +3878,275 @@ keying the row rather than widening it, now standing on a measurement instead
 of on two readings and a guess.
 
 Two of five chips have rows. The remaining three refuse until CI lands on them.
+
+## 2026-09-03 — the summary word, and an inline the caller's budget took away
+
+Searched the log, the archive and design/ for prior art on the rewind's
+condition tests and on inlining budgets before filing: the archive carries the
+`k_permreg_flush`/`_held` and `k_viewreg_migrate`/`_held` splits and #1217's
+noinline finding, and neither covers this.
+
+`k_beat_iter`'s fast path read four per-depth registries — `chunkreg_n`,
+`chunkreg_spill`, `viewreg_n`, `permreg_n` — to answer one question: is there
+anything at this depth. `k_reg_any[d]` answers it in one load, each registry
+owning a bit and clearing its own. A summary any of them could clear goes stale
+the first time a pop empties one and leaves another holding entries.
+
+**The first working version was a regression, and the reason was not the change
+itself.** encodebench rose 50,161,245 against a 13,079,983 fall on escapebench:
+net +37M, +0.32% across the eleven. The profile diffed by function:
+
+```
++50,719,623  k_viewreg_migrate      out of line
++41,898,819  k_permreg_migrate      out of line
+-40,255,992  k_beat_iter            the inlined cost leaving
+ -2,205,210  k_beat_pop
+```
+
+Both wrappers had been inlined into `k_beat_iter` and were now real calls.
+Shrinking `k_beat_rewind` changed the inliner's budget IN ITS CALLER, so
+removing work pushed two hot wrappers out of line and paid four times the gain.
+Moving the summary's clears out of the flush bodies did not bring them back —
+encodebench stayed at +50.2M. The trigger is the caller's budget, not the
+callee's size, which is why a smaller callee did not help.
+
+`always_inline` on the three wrappers states what the baseline was already
+doing. CI's rows, all eleven:
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 143,403,772 | 130,170,751 | −9.2278% |
+| basket | 41,212,286 | 40,300,172 | −2.2132% |
+| encodebench | 5,886,751,256 | 5,848,702,451 | −0.6463% |
+| oneshot | 34,417,553 | 34,322,446 | −0.2763% |
+| deepbench | 677,021,033 | 676,465,730 | −0.0820% |
+| indexbench | 5,242,500 | 5,242,363 | −0.0026% |
+| digestbench | 81,252,746 | 81,252,316 | −0.0005% |
+| scanbench | 1,423,437,681 | 1,423,437,576 | −0.0000% |
+| jsonbench | 2,533,091,740 | 2,533,092,019 | +279 |
+| pendbench | 715,731,751 | 715,732,938 | +1,187 |
+| widebench | 61,858,297 | 61,890,181 | +31,884 |
+| **all eleven** | **11,603,420,615** | **11,550,608,943** | **−0.4551%** |
+
+Welfare 75.95 → 76.01, ratcheted in the same commit. `text` falls
+1,023,750 → 1,018,166, five and a half kilobytes across eleven binaries: the
+code each call site gains by inlining is more than paid for by the three
+wrappers no longer standing as functions of their own.
+
+The pins are load-bearing and invisible to every vein but this one — the counter
+gates are byte-identical whether a call is inlined or not, and the emitted
+golden counts what the compiler wrote rather than what llvm did with it. So
+`an_inline_pin_the_inliner_undoes.sh` strips all three, watched red before
+green: encodebench 5,848,702,052 → 5,936,910,092 on the container.
+
+**And the compile row moved without the front end moving.** `compile_instructions`
+went 41,495,850 → 41,498,829 on the same chip, family0x19-model0x11, +2,979.
+`src/main.rs` embeds the runtime with `include_str!("runtime.c")`, so a runtime
+change changes the compiler binary while changing no compiler code: `.text`,
+`.data` and `.bss` are byte-identical at 2,513,746 / 2,648 / 304 across the two
+runs and only the sha differs. The embedded source grew, the rodata after it
+shifted, and the front end does the same work at different addresses.
+
+That is a second thing this row responds to, beside the silicon #1226 keyed it
+by, and the two are not separable by keying: any runtime edit invalidates every
+chip at once. The Intel and Zen 3 rows were removed rather than carried
+forward, because a value measured against the old binary is worse than none.
+They are re-sittings when they next refuse, not new chips, and the table's
+header now says so.
+
+Three counters worsened and are priced here. `work_jsonbench` lands on
+2,533,092,019, up 279 instructions on a 2.5-billion-instruction program.
+`work_pendbench` lands on 715,732,938, up 1,187. `work_widebench` lands on
+61,890,181, up 31,884 — the largest of the three at 0.0515% of its own row.
+
+All three are the same effect, and it is the one the fast path is for: a
+program that rewinds rarely never reaches the case the summary word makes
+cheap, so it pays the word's store at its registrations and collects nothing
+back. widebench registers the most of the three, which is why it pays the most.
+The eleven together fall 52,811,672 instructions, so the trade is 33,350 spent
+against 52,845,022 saved — a ratio of about 1,585 to one, and the same shape as
+kanso#1226's four risers.
+
+One more thing the gate caught, and it is worth stating because the trend gate
+cannot: `bench/compile_instructions_golden.txt` carries a bare line that
+welfare, the trend gate and golden_prose all read, while the by-cpu table is
+what the compile gate reads. Removing the Intel row left the bare line at
+41,500,974 — a number no remaining chip had counted — and the gate refused on
+exactly that, which is a coherence check worth having.
+
+The bare line is 41,498,829 now, the first row of the table. To the trend gate
+that reads as a fall of 2,145 and therefore an improvement, and it is not one:
+the reference row changed identity from the Intel chip to the Zen 4, and the
+two were never comparable. Nothing about the front end got faster. A gate that
+reads one number cannot see a change of what the number is OF, which is the
+same shape as the runner-versus-silicon confusion kanso#1226 fixed, one level
+up.
+
+The re-sitting falsified the claim this table's header had been carrying since
+kanso#1226, which is the best thing a re-sitting can do. That header said the
+family-and-model key was FINER than the effect, on the evidence that Zen 3
+(0x19/0x1) and Zen 4 (0x19/0x11) both read 41,495,850 while the Intel read
+41,500,974 — glibc's resolver picks memcpy and memcmp by feature set, so two
+models sharing a feature set should share a number.
+
+On this binary they read 41,503,893 and 41,498,829. They differ by 5,064.
+
+The agreement was a property of that binary's layout rather than of the
+silicon, and a key coarse enough to merge the two AMDs — which the header
+argued against on other grounds, and which I had half-talked myself into —
+would from this commit onward have carried one model's number for the other.
+Two models sharing a value once is not evidence that they share a value. The
+header now says that instead.
+
+I also guessed wrong about which chip this run landed on, reasoning from the
+arithmetic (41,503,893 - 41,500,974 = 2,919, close to the Zen 4's +2,979) that
+it must be the Intel. It was the Zen 3, whose old row happened to sit 5,124
+below. The gate prints the key; there was no reason to infer it.
+
+## 2026-09-03 — the per-chip key was never sufficient, and the tunables are pinned
+
+kanso#1226 shipped a compile_instructions row keyed by CPU family and model,
+on the reasoning that glibc's ifunc resolver picks memcpy and memcmp by feature
+set. kanso#1227 broke that. On ONE unchanged binary, CI produced exactly two
+values:
+
+  41,498,829   family0x19-model0x11 (Zen 4), family0x6-model0x6a (Ice Lake)
+  41,503,893   family0x19-model0x1  (Zen 3), family0x19-model0x11 (Zen 4 again)
+
+The same family and model counted both. The profiles fall into two clusters,
+identical within each and differing in three places:
+
+  _int_malloc          1,551,398   1,554,268
+  _int_free            1,516,378   1,516,161
+  __memcmp_avx2_movbe  1,346,206   1,347,513
+
+The memcmp IMPLEMENTATION is the same in both — the resolver picked identically
+— and its instruction count still moves, which is an alignment difference.
+malloc moves too. So the variable is heap layout, upstream of dispatch, and the
+feature-set story explained the wrong layer.
+
+The gap is 5,064. The 2026-09-02 entry recorded this row moving 5,081 on a
+docs-only PR with byte-identical inputs and read it as noise with a band. It was
+neither noise nor the chip. Two wrong readings of the same number, a day apart,
+and both times the mechanism was fitted to whatever data was in hand.
+
+WHAT IS PINNED NOW. glibc sizes its malloc and string thresholds from the cache
+sizes it reads out of the CPU, so two machines of one model with different
+caches lay the heap out differently. compile_instructions.sh sets the cache
+sizes, the three string thresholds, and four malloc knobs through
+GLIBC_TUNABLES, so every run takes the same path on every host. Every recorded
+row was cleared, because all of them predate the tunables.
+
+This measures a configuration no user runs under, and that is the price. The
+row exists to compare the compiler against itself across commits; a number that
+cannot be compared measures nothing, and a number that silently means two
+different things is worse than one that refuses.
+
+WHAT THE NEXT RUNS TEST, and it is falsifiable either way. If pinning was the
+right explanation, every chip lands on one value and the per-chip key becomes
+vestigial — at which point the file collapses to a single golden and the
+compile_ir_keyed ratchet row goes with it. If the chips still disagree, pinning
+was wrong too and the tunables come back out. Clay had no preference between
+this and keying by the full tunable block; this one is chosen because it removes
+the variable rather than describing it, and because one CI run falsifies it.
+
+FIRST READING UNDER THE PINNED TUNABLES, and it supports the diagnosis without
+settling it. family0x19-model0x1 counts 41,631,006. Its profile reads
+
+  _int_malloc          1,551,398
+  _int_free            1,516,378
+  __memcmp_avx2_movbe  1,346,206
+
+which is the LOW cluster's three numbers to the instruction. That chip sat in
+the high cluster before pinning, so the tunables moved it, and moved it onto
+the other cluster rather than somewhere new. That is what a controlling
+variable looks like. One chip is not convergence; the next distinct chip
+decides it.
+
+`compile_instructions` is priced here at 41,631,006, up 132,177 on the
+41,498,829 the same measurement gave unpinned. The compiler did no more work:
+the pinned thresholds are not any machine's native ones, so the run takes a
+memcpy path no host would have chosen and __memcpy_avx_unaligned_erms enters
+the profile's top fifteen at 619,555 where it was absent before.
+
+THE OBJECTIVE'S BASELINE WAS RESCALED RATHER THAN THE FLOOR LOWERED. welfare
+weighs baseline over current, so a changed instrument reads as a regression it
+is not. The baseline moves 56,848,763 -> 57,029,831, the ratio it stands for
+held to nine decimal places at 1.369888, and the number is 76.01 before and
+after. Landing day moves it by nothing, which is the rule this file already
+states for a counter entering at its dimension's standing.
+
+Re-granting was tried first and rejected: dropping the baseline so welfare
+re-grants at standing paid 1.37 points that no work earned. Granting at
+standing is neutral for a counter ENTERING the model and a gift to one already
+in it. The rescale is the honest form.
+
+SECOND PINNED READING, and it does not decide the experiment. family0x6-model0xcf
+counts 41,635,958 against family0x19-model0x1's 41,631,006 — 4,952 apart, where
+the unpinned clusters were 5,064 apart. Similar magnitude, shifted level.
+
+It is tempting to read that as the tunables having failed, and that reading
+would be wrong. The defect being chased is ONE CHIP giving TWO values. What is
+in hand now is two chips giving two values, which is what per-chip determinism
+looks like. A single reading per chip cannot tell "pinning fixed the flapping"
+from "pinning only moved the level", because both predict exactly this table.
+
+The deciding observation is a repeat on a chip that already has a row: matching
+its own recorded value is the success case, disagreeing with it is the failure
+case, and the gate reports either without being asked. So the rows accumulate
+and the next collision answers it. Naming the falsifier in advance is the point
+— it is the same discipline as watching a mutation go red before it goes green,
+and it is what was missing when the per-chip key was declared to work on two
+agreeing chips.
+
+THIRD PINNED READING, and it is the first real evidence. family0x19-model0x11
+counts 41,631,006 — family0x19-model0x1's value to the instruction. Those two
+AMD models DISAGREED before pinning, at 41,498,829 and 41,503,893, and each of
+them had also produced the other's number on a different run. Under the pinned
+tunables they agree.
+
+  family0x19-model0x1    41,631,006   Zen 3
+  family0x19-model0x11   41,631,006   Zen 4
+  family0x6-model0xcf    41,635,958   Intel, 4,952 away
+
+So the tunables removed a source of variation that was real, and what is left
+is a stable Intel/AMD difference. That is the shape kanso#1226 originally
+claimed and could not support: dispatch differing by feature set, with the two
+AMDs together. The mechanism was not wrong so much as drowned — heap layout
+moved the number by 5,064 and dispatch by 4,952, the two were the same size,
+and with one reading per chip they were indistinguishable.
+
+What is still NOT established is the thing named as the falsifier last commit:
+no chip has yet been read twice under the tunables. Three chips with three
+readings and two values is consistent with per-chip determinism and also with a
+coin that has landed the same way twice. The next collision on a recorded chip
+is what settles it, and until then this is evidence rather than a result.
+
+THE FALSIFIER FIRED, AND IT PASSED. A run landed on family0x19-model0x1, which
+already had a row, and counted 41,631,006 — its own recorded value. That chip
+had produced BOTH 41,495,850 and 41,503,893 under the unpinned measurement. The
+intra-chip flapping is gone, and the tunables are what removed it.
+
+The outcome is neither of the two this experiment predicted. It was set up as
+"all chips converge, so the per-chip key is vestigial" against "chips still
+disagree, so pinning was wrong". What happened is the third case:
+
+  pinning fixed the flapping, AND the per-chip key is still load-bearing.
+
+  family0x19-model0x1    41,631,006   Zen 3   ┐ agree, and each repeats itself
+  family0x19-model0x11   41,631,006   Zen 4   ┘
+  family0x6-model0xcf    41,635,958   Intel   ← 4,952, stable
+
+Two mechanisms of the same size were stacked on one number. Heap layout moved
+it 5,064 and varied within a chip; dispatch moves it 4,952 and does not. Pinning
+removes the first and leaves the second, which is a real property of the silicon
+and exactly what kanso#1226 keyed for. So both pieces stay: the tunables make a
+chip repeat itself, the key keeps two chips that genuinely differ from being
+compared.
+
+Neither piece is enough alone, and that is why this took five readings to see.
+The tunables without the key would compare an Intel against an AMD. The key
+without the tunables was kanso#1226, which passed on two agreeing chips and
+broke on the third. The prediction that framed this — converge or fail — was
+too coarse for the system it was about, which is its own lesson about naming a
+falsifier: name one that can come back with an answer you did not list.

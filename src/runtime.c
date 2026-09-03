@@ -615,6 +615,20 @@ static void k_buf_flush(void);
    beat and the excess silently went back to leaking, which is the behaviour
    this exists to remove. A cap that quietly stops working is worse than no
    cap, so this one has none. */
+/* One word per depth standing for the three per-depth registries, so a rewind
+   reads one array element where it read four. Each registry owns a bit and
+   clears its own: a summary that any of them could clear would go stale the
+   first time a pop emptied one and left another holding entries.
+
+   It says only whether a registry HAS entries, never how many, because that is
+   the whole of what the fast path asks. The counts stay where they were — the
+   flush loops need them, and a summary that tried to carry them would be a
+   second copy of state to keep honest. */
+#define K_REG_CHUNK 1
+#define K_REG_VIEW  2
+#define K_REG_PERM  4
+static int k_reg_any[K_BEAT_MAX];
+
 static KMap** k_viewreg[K_BEAT_MAX];
 static long long k_viewreg_n[K_BEAT_MAX];
 static long long k_viewreg_cap[K_BEAT_MAX];
@@ -629,6 +643,7 @@ static void k_viewreg_push(int d, KMap* m) {
         k_viewreg_cap[d] = grown;
     }
     k_viewreg[d][k_viewreg_n[d]++] = m;
+    k_reg_any[d] |= K_REG_VIEW;
 }
 
 static void k_viewreg_flush(int d) {
@@ -656,8 +671,9 @@ static void k_viewreg_migrate_held(int d) {
     k_viewreg_n[d] = 0;
 }
 
-static inline void k_viewreg_migrate(int d) {
+static inline __attribute__((always_inline)) void k_viewreg_migrate(int d) {
     if (d < 0 || d >= K_BEAT_MAX || k_viewreg_n[d] == 0) return;
+    k_reg_any[d] &= ~K_REG_VIEW;
     k_viewreg_migrate_held(d);
 }
 
@@ -701,15 +717,17 @@ static long long k_permreg_cap[K_BEAT_MAX];
 static int k_permreg_any = 0;
 static void k_permreg_flush_held(int d);
 
-static inline void k_permreg_flush(int d) {
+static inline __attribute__((always_inline)) void k_permreg_flush(int d) {
     if (!k_permreg_any || k_permreg_n[d] == 0) return;
+    k_reg_any[d] &= ~K_REG_PERM;
     k_permreg_flush_held(d);
 }
 
 static void k_permreg_migrate_held(int d);
 
-static inline void k_permreg_migrate(int d) {
+static inline __attribute__((always_inline)) void k_permreg_migrate(int d) {
     if (!k_permreg_any || d < 0 || d >= K_BEAT_MAX || k_permreg_n[d] == 0) return;
+    k_reg_any[d] &= ~K_REG_PERM;
     k_permreg_migrate_held(d);
 }
 
@@ -723,6 +741,7 @@ static void k_permreg_push(int d, KValue** slot) {
     }
     k_permreg_any = 1;
     k_permreg[d][k_permreg_n[d]++] = slot;
+    k_reg_any[d] |= K_REG_PERM;
 }
 
 static void k_permreg_migrate_held(int d) {
@@ -746,6 +765,7 @@ static void k_chunkreg_flush(int d) {
     }
     k_chunkreg_n[d] = 0;
     k_chunkreg_spill[d] = 0;
+    k_reg_any[d] &= ~K_REG_CHUNK;
 }
 
 /* A pop that keeps its region alive keeps the region's strings alive, so
@@ -761,10 +781,12 @@ static void k_chunkreg_migrate(int d) {
             } else {
                 k_chunkreg_spill[up]++;
             }
+            k_reg_any[up] |= K_REG_CHUNK;
         }
     }
     k_chunkreg_n[d] = 0;
     k_chunkreg_spill[d] = 0;
+    k_reg_any[d] &= ~K_REG_CHUNK;
 }
 
 static void k_beat_rewind_slow(KMark* m) {
@@ -774,6 +796,7 @@ static void k_beat_rewind_slow(KMark* m) {
         k_chunkreg_flush((int)d);
         k_viewreg_flush((int)d);
         k_permreg_flush((int)d);
+        k_reg_any[d] = 0;
     }
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
@@ -834,9 +857,7 @@ static inline void k_beat_rewind(KMark* m) {
     long long d = m - k_beat_stack;
     if (__builtin_expect(d >= 0 && d < K_BEAT_MAX
                          && !k_buf_dirty
-                         && k_chunkreg_n[d] == 0 && k_chunkreg_spill[d] == 0
-                         && k_viewreg_n[d] == 0
-                         && !(k_permreg_any && k_permreg_n[d] != 0)
+                         && !k_reg_any[d]
                          && k_blocks == m->block, 1)) {
         k_arena = m->ptr;
         k_arena_left = m->left;
@@ -6298,6 +6319,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
                 } else {
                     k_chunkreg_spill[d]++;
                 }
+                k_reg_any[d] |= K_REG_CHUNK;
             }
             KStr* s = k_alloc(sizeof(KStr));
             s->len = (long)b->len;

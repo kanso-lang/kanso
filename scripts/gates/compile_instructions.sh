@@ -50,9 +50,32 @@ printf 'compile_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
   | awk '/^\.(text|data|bss)[ \t]/ { printf "compile_binary %s=%s\n", $1, $2 }'
 
+# WHY THE TUNABLES ARE PINNED. Emptying the environment was not enough: on one
+# unchanged binary this row sat in two stable clusters 5,064 apart, and the same
+# family and model produced both. The two profiles differ in _int_malloc
+# (1,551,398 against 1,554,268) and in __memcmp_avx2_movbe (1,346,206 against
+# 1,347,513) — the same memcmp implementation counting differently, which is an
+# alignment difference, which is a heap-layout difference upstream of it.
+#
+# glibc sizes its malloc and string thresholds from the cache sizes it reads out
+# of the CPU, so two machines of one model with different caches lay the heap
+# out differently. Pinning the tunables makes every run take the same path on
+# every host. It measures a configuration no user runs under, which is the
+# price: this row is for comparing the compiler against itself, and a number
+# that cannot be compared measures nothing at all.
+tune=glibc.cpu.x86_data_cache_size=0x8000
+tune=$tune:glibc.cpu.x86_shared_cache_size=0x2000000
+tune=$tune:glibc.cpu.x86_non_temporal_threshold=0x1800000
+tune=$tune:glibc.cpu.x86_rep_movsb_threshold=0x840
+tune=$tune:glibc.cpu.x86_rep_stosb_threshold=0x800
+tune=$tune:glibc.malloc.arena_max=1
+tune=$tune:glibc.malloc.mmap_threshold=131072
+tune=$tune:glibc.malloc.trim_threshold=131072
+tune=$tune:glibc.malloc.top_pad=131072
+tune=$tune:glibc.malloc.tcache_count=7
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.compile ./kanso check lib/json \
     >/dev/null 2>/dev/null
 )

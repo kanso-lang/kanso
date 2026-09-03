@@ -52,19 +52,52 @@
 #
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
 #
-# WHAT THE ROWS SHOW SO FAR. The key is family and model, which is finer than
-# the effect turns out to be: two AMD models — Zen 3 (0x19/0x1) and Zen 4
-# (0x19/0x11) — agree to the instruction at 41,495,850, while the Intel
-# (0x6/0xcf) reads 41,500,974. That fits the mechanism, since what moves the
-# row is which memcpy and memcmp glibc's ifunc resolver picks, and it picks by
-# feature set rather than by model. Keying finer than the effect costs extra
-# rows and never lets a wrong value through, so it stays as it is; a key
-# coarse enough to merge the two AMDs would be a guess about which future chip
-# belongs in which bucket.
+# WHY TWO ROWS LEFT ON 2026-09-03. src/main.rs embeds the runtime with
+# `include_str!("runtime.c")`, so a change to the runtime changes the compiler
+# binary even when it changes no compiler code: this branch left .text, .data
+# and .bss byte-identical at 2,513,746 / 2,648 / 304 and still moved the Zen 4
+# row 41,495,850 -> 41,498,829, because the embedded source grew and the
+# rodata after it shifted. The front end does the same work at different
+# addresses.
+#
+# That invalidates every chip at once, and a value measured against the old
+# binary is worse than no value, so the Intel and Zen 3 rows were removed
+# rather than carried forward. They are not new chips when they next refuse —
+# they are re-sittings, and the number to paste comes from that run's log the
+# same way.
+#
+# THE FAMILY-AND-MODEL KEY IS NOT OVER-KEYING, and the evidence arrived by
+# falsifying the opposite claim. On the binary before this one, Zen 3
+# (0x19/0x1) and Zen 4 (0x19/0x11) agreed to the instruction at 41,495,850,
+# against the Intel's (0x6/0xcf) 41,500,974 — which read as the key being finer
+# than the effect, since glibc's ifunc resolver picks memcpy and memcmp by
+# feature set rather than by model. On this binary the same two models read
+# 41,503,893 and 41,498,829: they differ by 5,064.
+#
+# So the agreement was a property of that binary's layout, not of the silicon,
+# and a key coarse enough to merge the two AMDs would have carried one model's
+# number for the other from this commit onward. Two models sharing a value once
+# is not evidence they share a value.
+#
+# Two things move this row and only one of them is the chip. The other is the
+# binary, and a row is only ever comparable within one of those.
 #
 # Rows are `<dispatch.sh key> <retired instructions>`. CI's toolchain owns
 # these values and CI is the only thing that may write them, one chip per run,
 # out of the job log.
-family0x6-model0xcf 41500974
-family0x19-model0x1 41495850
-family0x19-model0x11 41495850
+
+# EVERY ROW WAS CLEARED ON 2026-09-03, and what refills them is a different
+# measurement. Emptying the environment left this row in two stable clusters
+# 5,064 apart and the SAME family and model produced both, so the key this file
+# is named for was never sufficient. compile_instructions.sh now pins the glibc
+# tunables; the comment there carries the profile evidence.
+#
+# WHAT THE NEXT RUNS TEST. If pinning worked, every chip lands on ONE value and
+# the per-chip key is vestigial — at which point this file collapses back to a
+# single golden and the ratchet row goes with it. If the chips still disagree,
+# pinning was the wrong explanation and the tunables come out again. Either
+# answer is worth the runs; a row nobody can compare measures nothing.
+#
+family0x19-model0x1 41631006
+family0x6-model0xcf 41635958
+family0x19-model0x11 41631006
