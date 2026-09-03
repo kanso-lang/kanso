@@ -3700,3 +3700,49 @@ so three runs settle it: same cpu and same sha with different rows means it is
 neither; same cpu with the sha tracking the row means it is the binary; the
 same sha on two cpus tracking the row means it is the silicon. That is the
 measurement the last two entries should have started from.
+
+## 2026-09-03 — RETRACTION: the compile row IS this change's, by 5,621, and it falls
+
+Three entries above say this row's movement is not this branch's, and one of
+them says main's own history settles it. That was wrong, and the experiment
+that shows it took four minutes and should have been the first thing run.
+
+Same container, same toolchain, same chip, same library box, only `src/`
+differing between the two arms, two runs each:
+
+    my src/     sha 52b28b027c23    41,904,811    41,904,811
+    main's src/ sha 1780ba089b7f    41,910,432    41,910,432
+
+**−5,621, and it repeats to the instruction.** `src/runtime.c` is
+`include_str!`'d into the compiler; this branch grew it by fifty lines; the
+compiler's bytes moved and the front end's counted work fell. That is a real
+movement of this row caused by this diff, and a fall is a win to bank — which
+is exactly what the gate has been asking for since the first red.
+
+**The first attempt at this experiment was also wrong and nearly got
+announced.** It restored `src/` without rebuilding, so both arms measured the
+same binary and agreed; the agreement looked like a null result. The fix was
+to print the binary's sha on every measurement rather than trust that a
+checkout implies a build. Every measurement above carries its sha for that
+reason.
+
+**What stands and what does not.** The chip variance is real: every head on
+this branch from f8fd75cb onward carries identical `src/`, and CI read both
+41,500,974 and 41,495,850 across them, twice each. So the row moves about
+5,124 with the silicon and about 5,621 with this diff, the two are the same
+size, and that is why they were confused. What does not stand is "not this
+PR's": it is this PR's, and separately it is also the pool's.
+
+**What that costs.** The golden was regenerated to 41,500,974 and then
+reverted on the strength of the claim now retracted. The revert was the wrong
+move. The row still cannot be pinned to a single value while the pool holds
+two chips — #247 is unaffected — but this branch owed a regeneration and a
+sentence saying the front end got cheaper, and it said the opposite instead.
+
+**The pattern, stated once more because this is the fourth.** Four times today
+a number moved, a mechanism was reached for, and the mechanism was asserted
+before the experiment that separates it from the alternative. Layout, then
+silicon-is-dead, then silicon-is-back, now this. The experiment has been cheap
+every single time. The rule that would have caught all four: when a number
+moves, change exactly one thing and measure both arms, before writing a word
+about why.
