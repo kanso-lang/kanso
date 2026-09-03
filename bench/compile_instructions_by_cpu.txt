@@ -98,6 +98,15 @@
 # pinning was the wrong explanation and the tunables come out again. Either
 # answer is worth the runs; a row nobody can compare measures nothing.
 #
-family0x19-model0x1 41631006
-family0x6-model0xcf 41635958
-family0x19-model0x11 41631006
+# RE-SAT ON 2026-09-03 for the wrong-arity reorder. src/main.rs embeds the
+# runtime with `include_str!("runtime.c")`, so the k_call1..k_call4 change moved
+# this row 41,631,006 -> 41,631,998 on the SAME family and model: +992, from the
+# embedded source growing and the rodata after it shifting, not from front-end
+# work. The paragraph above predicted exactly this and it is the second time
+# this file has been emptied for it in one day.
+#
+# The Intel (0x6/0xcf) and Zen 4 (0x19/0x11) rows measured against the previous
+# binary are removed rather than carried forward, for the reason already written
+# above: a value measured against the old binary is worse than no value. They
+# are re-sittings when they next refuse, not new chips.
+family0x19-model0x1 41631998
