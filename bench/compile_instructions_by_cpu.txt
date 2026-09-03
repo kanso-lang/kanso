@@ -153,7 +153,6 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
-family0x6-model0xcf 41831767
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -167,7 +166,6 @@ family0x6-model0xcf 41831767
 # row per chip and against any single tolerance: 508 would fit inside a band
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
-family0x19-model0x1 41832275
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
 # family0x19-model0x11 rather than carry a value measured against the previous
@@ -340,7 +338,6 @@ family0x19-model0x1 41832275
 # chip does not select the mode, which is the whole premise this file is named
 # for. Every row below is CI's own most recent reading and nothing is
 # predicted from another chip.
-family0x19-model0x11 41831767
 #
 # 2026-09-03, THE SIXTH READING, and it closes the question this file was
 # named to answer. A run against the fully-recorded table above — all three
@@ -414,3 +411,40 @@ family0x19-model0x11 41831767
 # is argv[0], which the box already holds fixed at ./kanso. Rewiring the gate
 # invalidates every row here and every number derived from it, so it is its own
 # change; this note is the evidence it rests on.
+
+# EVERY ROW CLEARED ON 2026-09-03, and this time under a ruling. Clay declined
+# both the pinned pair and any exclusion of glibc from the count: "if changes to
+# the compiler can interact with glibc in a way that means generally more/less
+# work, which the 'compiler's own instructions' measure would be blind to, then
+# we need a way to include glibc's instructions but make them consistent". So
+# the row is made deterministic with glibc inside it. No pair, no band.
+#
+# Two suspects came with the ruling, both fitting the measured signature — five
+# consecutive runs in one container agree exactly, two runners on the same
+# binary and chip disagree, so the randomness is fixed at container birth rather
+# than per exec. Both have now been tested and the answers differ from the
+# guess:
+#
+#   READDIR ORDER IS ALREADY SORTED, and cannot be the term. src/lib.rs sorts
+#   the files a compile actually reads before reading any of them, and
+#   src/eval.rs sorts what `list_dir` answers. The four remaining read_dir
+#   calls are all in src/main.rs on the `test` path and all order-independent
+#   by construction — three are `.any()` or `.count()`, and the fourth is a
+#   vector whose only order-sensitive use is a single-element match. One of
+#   them is sorted anyway in this commit, because "the compiler's work must
+#   never depend on an inode hash" is a rule and not a symptom.
+#
+#   ASLR IS DISABLED NOW, and on the container it changes nothing. `setarch -R`
+#   reads 42,235,790 against 42,235,790 without it, and forty unwrapped runs on
+#   one binary returned one value forty times. It is applied because the two
+#   modes have only ever appeared on the runners, and the container cannot rule
+#   out what it has never reproduced.
+#
+# WHAT THE NEXT RUNS TEST, stated before they run. If every chip lands on one
+# value, glibc stays counted under a single exact pin and the per-chip key has
+# nothing left to separate. If two values survive both fixes, neither suspect
+# was the term, and the note above this one already names what is left: glibc
+# parses /proc/self/maps before main to find the stack bounds, its cost is a
+# property of the host's memory map, and one more shared library in the process
+# moves this row 32,090 with the compiler doing identical work. That is the
+# thing "make them consistent" would then have to reach.

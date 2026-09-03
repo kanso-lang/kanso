@@ -180,7 +180,14 @@ fn driven() -> ExitCode {
                     e.path().extension().is_some_and(|x| x == "kso") && e.file_name() != "main.kso"
                 })
                 .count();
-            let subdirs: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+            // Sorted because readdir order is a per-filesystem hash order, so
+            // two machines holding the same files hand them over differently.
+            // Nothing downstream reads more than the single-element case, so
+            // this changes no answer today; it is here so that the compiler's
+            // work never depends on an inode hash, which is the rule rather
+            // than the symptom. src/lib.rs sorts the files a compile actually
+            // reads, and eval.rs sorts what `list_dir` answers.
+            let mut subdirs: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
                 .into_iter()
                 .flatten()
                 .flatten()
@@ -194,6 +201,7 @@ fn driven() -> ExitCode {
                             .any(|e| e.path().extension().is_some_and(|x| x == "kso"))
                 })
                 .collect();
+            subdirs.sort();
             match (root_libs, subdirs.as_slice()) {
                 (0, [only]) => only.to_string_lossy().into_owned(),
                 _ => file,

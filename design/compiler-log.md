@@ -2862,13 +2862,20 @@ thing to imagine, and the evidence for wanting it is a measurement.
 
 ## 2026-09-03 (ninth) — the compile row was counting the host's memory map
 
-**DONE (the finding). The blocking question in design/pending-gavels.md is
-withdrawn: it rested on a premise that is now measured and false.**
+**DONE (the finding). Clay ruled on the entry the same day, and the ruling is
+option 1 with the term named: make the row deterministic with glibc still
+counted — no pinned pair, no band, no exclusion.** His words: "if changes to the
+compiler can interact with glibc in a way that means generally more/less work,
+which the 'compiler's own instructions' measure would be blind to, then we need
+a way to include glibc's instructions but make them consistent."
 
-That entry asked how to live with a `compile_instructions` row that reads two
-values 508 apart, and offered four ways — find the term, record both modes,
-band it, retire the vein. The first of those is a measurement rather than a
-decision, so it was taken. The term is found.
+That is right, and it kills the fix this session had built. Collecting from
+`kanso::main` and leaving startup out would have made the vein blind to exactly
+the case he names: a compiler change that causes glibc to do more work. The
+toggle is dropped.
+
+What survives is the measurement, because the ruling asks for the term and this
+is the term.
 
 `kanso check` reads `/proc/self/maps` before it reads a line of kanso. glibc's
 `pthread_getattr_np` does it on Rust's behalf, to find the main thread's stack:
