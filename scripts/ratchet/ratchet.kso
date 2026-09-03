@@ -274,6 +274,21 @@ compile_ir_host = row
   (breaking "compile_ir_host_unpinned")
   no_setup
 
+# The compile row is keyed by silicon now, and the answer that keying exists to
+# forbid is the cheap one: an unrecorded chip waved through. That cannot be
+# watched on the gate itself — the gate's own answer costs a callgrind run over
+# the whole front end, and it refuses on any host whose toolchain is not the
+# recorded one, so on a container it is red before it reads a row at all. The
+# refusals live in scripts/gates/compile_ir_row.sh, which is two files and four
+# strings, and this row watches them there.
+compile_ir_keyed = row
+  "a chip nobody counted this row on, waved through instead of refused"
+  false
+  "cargo test --test a_compile_row_is_read_against_its_own_chip"
+  "specs (unit, golden, differential)"
+  (breaking "an_unrecorded_chip_is_waved_through")
+  no_setup
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -558,7 +573,7 @@ rows_b1c = text/concat rows_b1b [instructions_host text_host]
 
 rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
 
-rows_b1e = text/concat rows_b1d [compile_ir compile_ir_host]
+rows_b1e = text/concat rows_b1d [compile_ir compile_ir_host compile_ir_keyed]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 

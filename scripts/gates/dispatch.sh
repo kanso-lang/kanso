@@ -27,6 +27,12 @@
 #   differs   0 when this host matches the recorded block, 1 when it does not,
 #             2 when there is nothing to compare — no block recorded, or a
 #             loader that reports no features
+#   key       a short stable name for this host's silicon, for a vein that
+#             keeps one row per chip rather than one row full stop. `name` is
+#             for a human reading a job log; `key` is for a file to be keyed
+#             by, so it is family and model and nothing else — no cache sizes,
+#             no derived thresholds, nothing that a firmware revision could
+#             move under a row that is otherwise right.
 #
 # A row that landed on its recorded value is right whatever counted it, so the
 # question is worth asking only about a row that moved. "Other silicon" is
@@ -81,6 +87,19 @@ case "$verb" in
       cat "$scratch/now.txt"
     fi
     ;;
+  key)
+    if [ ! -s "$scratch/now.txt" ]; then
+      echo "unnamed"
+      exit 0
+    fi
+    fam=$(sed -n 's/^x86.cpu_features.basic.family=//p' "$scratch/now.txt")
+    mod=$(sed -n 's/^x86.cpu_features.basic.model=//p' "$scratch/now.txt")
+    if [ -z "$fam" ] || [ -z "$mod" ]; then
+      echo "unnamed"
+    else
+      echo "family$fam-model$mod"
+    fi
+    ;;
   differs)
     if [ ! -s "$scratch/now.txt" ] || [ ! -f "$block" ]; then
       exit 2
@@ -111,7 +130,7 @@ case "$verb" in
     exit 1
     ;;
   *)
-    echo "::error::dispatch.sh takes 'name' or 'differs', not '$verb'" >&2
+    echo "::error::dispatch.sh takes 'name', 'key' or 'differs', not '$verb'" >&2
     exit 2
     ;;
 esac

@@ -1,0 +1,57 @@
+# What `kanso check lib/json` retires, ONE ROW PER CHIP.
+#
+# bench/compile_instructions_golden.txt holds the same quantity as a single
+# number, and that single number is a fiction the runner pool does not
+# support. The pool is at least four CPUs — an AMD EPYC Zen 3 (family 0x19
+# model 0x1), an Intel Ice Lake-SP (0x6/0x6a), the Cascade Lake this was
+# written on (0x6/0x55), and whatever else Azure has that week — and glibc
+# resolves memcpy, memcmp and strlen by ifunc at load time. One libc runs
+# different code on different silicon, and the compiler runs that code.
+#
+# HOW BIG THE EFFECT IS, MEASURED. A pull request that changed
+# docs/compiler.html and design/compiler-log.md and nothing else read
+# 41,500,177 against a golden of 41,495,096: 5,081 instructions from an
+# edit the compiler cannot see. Four earlier readings on this vein — +6,087,
+# -416, +8,032, -3,289 — were written up as layout effects, and two of them
+# are smaller than that 5,081. Nothing in them separated the change from the
+# chip, so the change could not be read off the row at all.
+#
+# AND THE ROW STILL CARRIES REAL SIGNAL, WHICH IS WHY THE FIX IS NOT A
+# TOLERANCE. Held on one chip, with the binary's sha printed on both reads,
+# the beat-rewind split in kanso#1226 moves this row -5,621: reproducible,
+# exact on repeat, and the same size as the chip effect it was being confused
+# with. A band wide enough to swallow the noise swallows the signal too. So
+# the noise gets a key instead.
+#
+# WHAT A KEY IS. scripts/gates/dispatch.sh `key` prints family and model and
+# nothing else — no cache sizes, no derived thresholds, nothing a firmware
+# revision could move under a row that is otherwise right. A host with no x86
+# loader reports `unnamed` and is pinned under that name like any other.
+#
+# HOW THIS FAILS. An unrecorded chip does not pass and does not warn: it goes
+# red asking for a sitting, and prints the line to add. A recorded chip whose
+# row moved goes red the way it always did. There is no answer that lets an
+# unknown number through, which was the whole objection to recording one
+# block and skipping when it differs — three runs in four land on a cpu that
+# is not the recorded one, so most regressions would have been waved through
+# and the ratchet's mutations would have gone blind on those runs.
+#
+# WHAT IT COSTS. A change that moves the front end invalidates every chip's
+# row at once, and only CI can re-sit them, one chip per run. So such a change
+# takes several pushes to re-pin, each one red with a paste-ready line. That
+# is the price of a row that means something; the alternative priced at zero
+# is a row that reads the runner.
+#
+# THE FIRST ROW IS THE REFERENCE, and its value is the one
+# bench/compile_instructions_golden.txt carries as a bare
+# `compile_instructions`, because welfare, the trend gate and golden_prose all
+# read that file for a single number and a per-chip series is only comparable
+# to itself. The gate checks the two agree on every run, on any chip, so the
+# golden cannot drift from the table it summarises. Which chip is first is
+# arbitrary and means nothing beyond "this is the series welfare tracks".
+#
+# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
+#
+# Rows are `<dispatch.sh key> <retired instructions>`. None yet: the values
+# belong to CI's toolchain and CI is the only thing that may write them, one
+# chip per run, out of the job log.
