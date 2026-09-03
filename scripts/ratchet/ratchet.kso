@@ -52,6 +52,10 @@ no_setup = "true"
 
 release = "cargo build --release"
 
+# The work vein reads the eleven binaries, so they have to exist and be
+# rebuilt from the mutated runtime before the gate can see anything.
+benches = "cargo build --release && sh scripts/gates/build_benchmarks.sh"
+
 # One line because a gate is a shell string. `$PWD` is read before the `cd`,
 # so KANSO names the worktree's own binary rather than anything on the host.
 kq_clone = "rm -rf /tmp/kq && sh .github/clone-sibling.sh kq /tmp/kq"
@@ -288,6 +292,14 @@ compile_ir_keyed = row
   "specs (unit, golden, differential)"
   (breaking "an_unrecorded_chip_is_waved_through")
   no_setup
+
+inline_pin = row
+  "an inline pin the inliner undoes, and a hot wrapper going out of line"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_inline_pin_the_inliner_undoes")
+  benches
 
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
@@ -573,7 +585,9 @@ rows_b1c = text/concat rows_b1b [instructions_host text_host]
 
 rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
 
-rows_b1e = text/concat rows_b1d [compile_ir compile_ir_host compile_ir_keyed]
+rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host]
+
+rows_b1e = text/concat rows_b1d2 [compile_ir_keyed inline_pin]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
