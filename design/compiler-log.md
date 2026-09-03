@@ -2734,3 +2734,48 @@ report 0, the loop never bracketing. It asserts `beat_iters` rather than
 `arena_blocks` because these programs fit one block under either shape —
 measured — and a check that cannot fail is worse than none. The block count
 is pinned where it is sensitive, in `bench/cost_golden.txt`.
+
+**Every vein the read's shape moved, named.** The trend gate reads this
+paragraph, and each counter below moved for the one reason above — the read
+wrapper's arms are code the compiler now writes and each program now runs.
+
+The decoder's own emitted code: `emitted_defines` 168 → 175,
+`emitted_calls` 1,820 → 1,863, `emitted_branches` 1,186 → 1,199,
+`emitted_lines` 12,053 → 12,263. The eight programs beside it:
+`emitted_other_defines` 1,468 → 1,492, `emitted_other_calls` 14,526 →
+14,653, `emitted_other_branches` 8,673 → 8,713, `emitted_other_lines`
+87,659 → 88,322. The machine code follows: `text` 1,010,214 → 1,021,094
+across the eleven, jsonbench alone 83,938 → 86,418.
+
+The runtime counters, the same +9 allocations and +288 bytes on each program
+that reads a file, with the evacuation and dedup that come with the extra
+dispatch: `allocs`, `alloc_bytes`, `evac_allocs`, `evac_bytes`,
+`cohort_frees`, `carry_dedup` on the decode vein; `encode_allocs`,
+`encode_alloc_bytes`, `encode_evac_allocs`, `encode_evac_bytes`,
+`encode_cohort_frees`, `encode_carry_dedup` on encode; `oneshot_allocs`,
+`oneshot_alloc_bytes`, `oneshot_evac_allocs`, `oneshot_evac_bytes`,
+`oneshot_cohort_frees`, `oneshot_carry_dedup`; `wide_allocs`,
+`wide_alloc_bytes`, `wide_evac_allocs`, `wide_evac_bytes`,
+`wide_cohort_frees`, `wide_carry_dedup`; `digest_allocs`,
+`digest_alloc_bytes`, `digest_evac_allocs`, `digest_evac_bytes`,
+`digest_cohort_frees`, `digest_carry_dedup`.
+
+The published figure moved with them: the landing panel and §04's golden
+paragraph both quote the decode's allocation count, 4,999,958 → 4,999,967.
+
+Three veins refuse from the container and say so in their own words —
+`bench/instructions_golden.txt` (measured on glibc 2.39-0ubuntu8.8, here
+8.7), `bench/compile_allocs_golden.txt` and
+`bench/compile_memory_golden.txt` (rustc 1.98.1, here 1.94.1). Their rows
+are copied out of the CI job log, which is what those refusals instruct.
+
+Each of those, with the value it landed on, because the trend gate reads the
+number and not only the name: `alloc_bytes` 259,660,208 to 259,660,496,
+`evac_bytes` 112 to 496, `encode_alloc_bytes` 853,081,504 to 853,081,792,
+`encode_allocs` 16,249,018 to 16,249,027, `encode_evac_bytes` 576 to 960,
+`oneshot_alloc_bytes` 4,434,348 to 4,434,636, `oneshot_allocs` 79,361 to
+79,370, `oneshot_evac_bytes` 96 to 480, `wide_alloc_bytes` 6,452,160 to
+6,452,432, `wide_allocs` 144,020 to 144,029, `wide_evac_allocs` 244 to 256,
+`wide_evac_bytes` 519,728 to 520,080, `digest_alloc_bytes` 54,149,841 to
+54,150,129, `digest_allocs` 230,214 to 230,223, `digest_evac_bytes` 1,520 to
+1,904.
