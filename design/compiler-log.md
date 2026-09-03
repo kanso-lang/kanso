@@ -3966,3 +3966,18 @@ back. widebench registers the most of the three, which is why it pays the most.
 The eleven together fall 52,811,672 instructions, so the trade is 33,350 spent
 against 52,845,022 saved — a ratio of about 1,585 to one, and the same shape as
 kanso#1226's four risers.
+
+One more thing the gate caught, and it is worth stating because the trend gate
+cannot: `bench/compile_instructions_golden.txt` carries a bare line that
+welfare, the trend gate and golden_prose all read, while the by-cpu table is
+what the compile gate reads. Removing the Intel row left the bare line at
+41,500,974 — a number no remaining chip had counted — and the gate refused on
+exactly that, which is a coherence check worth having.
+
+The bare line is 41,498,829 now, the first row of the table. To the trend gate
+that reads as a fall of 2,145 and therefore an improvement, and it is not one:
+the reference row changed identity from the Intel chip to the Zen 4, and the
+two were never comparable. Nothing about the front end got faster. A gate that
+reads one number cannot see a change of what the number is OF, which is the
+same shape as the runner-versus-silicon confusion kanso#1226 fixed, one level
+up.
