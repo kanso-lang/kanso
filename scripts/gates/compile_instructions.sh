@@ -51,6 +51,24 @@ size --format=sysv "$box/kanso" \
 printf 'compile_instructions=%s\n' \
   "$(grep -o '^summary: [0-9]*' /tmp/cg.compile | tr -dc 0-9)" > compile_ir_got.txt
 
+# ONE GREPPABLE LINE PER RUN, so the three things that could be moving this row
+# can be told apart without reading a job log by hand. The row has taken four
+# values on a front end nothing touched; two candidate causes are live and
+# nothing yet separates them. The cpu is one — two runs differ in cpuid word
+# and L2 size. The binary is the other, and it is not idle: src/runtime.c is
+# include_str!'d into the compiler, so a change to the RUNTIME moves the
+# compiler's bytes and with them where its heap starts, without altering a
+# single instruction the front end executes.
+#
+# Neither can be ruled in from one sample. Three runs with this line in them
+# can: same cpu and same sha with different rows means it is neither, same cpu
+# and different sha tracking the row means it is the binary, and same sha on
+# different cpus tracking the row means it is the silicon.
+printf 'compile_sample cpu="%s" sha=%.12s row=%s\n' \
+  "$(sh scripts/gates/dispatch.sh name | sed -n 's/^silicon: //p')" \
+  "$(sha256sum "$box/kanso" | cut -d' ' -f1)" \
+  "$(sed -n 's/^compile_instructions=//p' compile_ir_got.txt)"
+
 # The profile is on disk either way, and where the front end's work sits is the
 # question every one of these moves turns on. Printed rather than summarised,
 # because a step summary cannot be read back from the job log.

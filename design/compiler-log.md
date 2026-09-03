@@ -3681,3 +3681,22 @@ call memcpy, and the mechanism could run through heap addresses, alignment,
 or something else entirely. What is observed is that the environments differ
 in a way the gate already records, and that is enough to attribute the row
 without inventing the chain. Inventing the chain is what went wrong twice.
+
+**A second cause is live and I had not checked it either.** Before pinning a
+row per chip, one thing had to be ruled out and was not: `src/runtime.c` is
+`include_str!`'d into the compiler. Every commit on this branch changed it, so
+every head built a different compiler binary — different bytes, different
+place for the heap to start — without altering one instruction the front end
+executes when it checks a library.
+
+So two candidate causes are live at once, the silicon and the binary, and the
+readings so far cannot separate them. Four values, two identified chips, and
+several different binaries across the heads that produced them. Pinning per
+chip would be building on the same kind of half-checked story that has now
+been wrong twice, so it waits.
+
+What is added instead is one greppable line per run — cpu, binary sha, row —
+so three runs settle it: same cpu and same sha with different rows means it is
+neither; same cpu with the sha tracking the row means it is the binary; the
+same sha on two cpus tracking the row means it is the silicon. That is the
+measurement the last two entries should have started from.
