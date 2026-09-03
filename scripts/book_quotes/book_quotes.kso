@@ -1,0 +1,435 @@
+import "std/io"
+import "std/list"
+import "std/os"
+import "std/regexp"
+import "std/text"
+
+# A book panel titled with a PATH — `lib/json/number.kso` — quotes a file
+# the repository owns, where a panel titled with a bare name renders a sample
+# under
+# the chapter's own directory. scripts/book_panels regenerates the second kind
+# and cannot see the first: a title resolves as `<samples>/<title>` or as a
+# bare filename one directory deeper, and the deeper branch compares a path's
+# LAST SEGMENT to the whole title, so a title carrying a slash matches nothing
+# and is left alone. Eight such panels sat in ch08, four of them quoting a
+# library that had moved on — one showed `at cs p` for an index the language
+# no longer spells that way, one named `_is_ws` for a function since renamed to
+# `ws?`, and two named byte-array constants the library had replaced.
+#
+# A panel of this kind is an excerpt carrying editorial changes: a private
+# declaration gains a leading `_`, a module qualifier is dropped, a field gains
+# a `:type` the file leaves bare. So its text cannot be compared to the file's
+# and cannot be regenerated from it. What can be checked is structural, and
+# survives every one of those changes:
+#
+#   every declaration the panel shows is declared in the file it names, and
+#   every name the panel uses is a name that file can reach.
+#
+# The reachable set is read off the package rather than listed here: the
+# package's own declarations and bindings, the tail of every qualified name it
+# calls, and every bare name its own code uses. A panel may name what the file
+# could name, so no table of builtins sits here going stale in its turn.
+type quote
+  chapter
+  samples
+  title
+  body
+
+type finding
+  chapter
+  title
+  lead
+  kind
+  name
+
+chapters = "docs/book"
+
+# A title that carries a slash: the mark of a panel quoting the repository.
+title_path = "[a-z_0-9]+(?:/[a-z_0-9]+)*\\.kso"
+
+quote_head = "<div class=\"code-panel-title\">({title_path})</div>"
+
+# `ch08.html` samples live in `docs/book/samples/ch08`.
+fn samples_of name
+  "{chapters}/samples/{(text/split name ".")[1]!}"
+
+quote_pattern = "(?s){quote_head}\\s*<pre><code>(.*?)</code></pre>"
+
+decl_head = "^(?:pub +)?(?:fn|type) +([a-z_][a-zA-Z0-9_]*[?!]?)"
+
+bind_head = "^([a-z_][a-zA-Z0-9_]*) *="
+
+ident_pattern = "[a-z_][a-zA-Z0-9_]*[?!]?"
+
+qualified = "[a-z_][a-zA-Z0-9_]*/"
+
+map_ann = ":map\\[{ident_pattern} {ident_pattern}\\]"
+
+qual_ann = ":{ident_pattern}/{ident_pattern}"
+
+list_ann = ":\\[\\]{ident_pattern}"
+
+# What a panel's own presentation adds, undone before any name is read: the
+# highlighter's tags, the entities it escaped, the module qualifiers a panel
+# drops, the `:type` annotations a panel adds, and the comments and strings
+# whose prose is not code at all.
+fn plain body
+  unescaped (regexp/replace_all "<[^>]+>" body "")
+
+fn unescaped s
+  lt = regexp/replace_all "&lt;" s "<"
+  gt = regexp/replace_all "&gt;" lt ">"
+  regexp/replace_all "&amp;" gt "&"
+
+fn code_only s
+  bare = regexp/replace_all "#[^\n]*" s ""
+  quoted = regexp/replace_all "\"(?:\\\\.|[^\"\\\\])*\"" bare "\"\""
+  regexp/replace_all qualified (unannotated quoted) ""
+
+# The three shapes an annotation takes, longest first so `:[]json` does not
+# leave its element type behind. A panel writes these where the file it quotes
+# leaves the field bare, so they are presentation and not names to check.
+fn unannotated s
+  mapped = regexp/replace_all map_ann s ""
+  listed = regexp/replace_all list_ann mapped ""
+  named = regexp/replace_all qual_ann listed ""
+  regexp/replace_all ":{ident_pattern}" named ""
+
+fn lines_of s
+  text/split s "\n"
+
+# A name the panel writes with a leading underscore is the book's mark for a
+# declaration the file does not export. The file spells it without.
+fn exported name
+  regexp/replace_all "^_" name ""
+
+fn heads_in body pattern
+  head_loop (lines_of body) 1 [] pattern
+
+fn head_loop ls at acc pattern
+  heading ls at acc pattern (at > length ls)
+
+fn heading _ _ acc _ true
+  acc
+
+fn heading ls at acc pattern false
+  head_loop ls (at + 1) (with_head acc ls[at]! pattern) pattern
+
+fn with_head acc line pattern
+  first_group acc (regexp/matches pattern line)
+
+fn first_group acc hits
+  taken acc hits (length hits == 0)
+
+fn taken acc _ true
+  acc
+
+fn taken acc hits false
+  push acc hits[1]!.groups[1]!
+
+# The identifier pattern captures nothing, so each hit is read back off the
+# body by the span it matched.
+fn idents_in body
+  ident_loop body (regexp/matches ident_pattern body) 1 []
+
+fn ident_loop body hits at acc
+  identing body hits at acc (at > length hits)
+
+fn identing _ _ _ acc true
+  acc
+
+fn identing body hits at acc false
+  h = hits[at]!
+  word = text/slice body h.from (h.to - 1)
+  ident_loop body hits (at + 1) (push acc word)
+
+fn holds? names name
+  length (list/to_list (list/select names (n -> n == name))) > 0
+
+fn missing names got
+  list/to_list (list/select got (n -> not holds? names n))
+
+# The whole package is what a file may name, so every .kso beside it is read.
+fn joined bodies
+  join_loop bodies 1 ""
+
+fn join_loop bodies at acc
+  joining bodies at acc (at > length bodies)
+
+fn joining _ _ acc true
+  acc
+
+fn joining bodies at acc false
+  join_loop bodies (at + 1) "{acc}\n{bodies[at]!}"
+
+fn reachable bodies
+  idents_in (code_only (joined bodies))
+
+fn shown panel
+  list/to_list (list/map (heads_in panel decl_head) (n -> exported n))
+
+fn named_in panel
+  wanted = list/map (idents_in (code_only panel)) (n -> exported n)
+  list/to_list (list/select wanted (n -> length n > 0))
+
+fn dir_of path
+  parts = text/split path "/"
+  last = parts[length parts]!
+  text/slice path 1 (length path - length last - 1)
+
+fn kso? n
+  regexp/match? "\\.kso$" n
+
+fn paths_in dir names
+  found = list/select names (n -> kso? n)
+  list/to_list (list/map found (n -> "{dir}/{n}"))
+
+fn read_each wanted at acc after
+  reading wanted at acc after (at > length wanted)
+
+fn reading _ _ acc after true
+  after acc
+
+fn reading wanted at acc after false
+  on = (body -> read_next wanted at acc after body)
+  os/read_file wanted[at]! . on
+
+fn read_next wanted at acc after body
+  read_each wanted (at + 1) (push acc body) after
+
+# `wanted` and `bodies` run in step, so the file a panel names is found by
+# walking the one and reading the other at the same index.
+fn body_for wanted bodies title
+  pick wanted bodies title 1
+
+fn pick wanted bodies title at
+  picking wanted bodies title at (wanted[at]! == title)
+
+fn picking _ bodies _ at true
+  bodies[at]!
+
+fn picking wanted bodies title at false
+  pick wanted bodies title (at + 1)
+
+# A chapter may quote one file from several panels, so a finding carries the
+# first declaration its panel shows: that is what a reader scrolls to.
+fn found_for q file bodies
+  panel = plain q.body
+  lead = leading (shown panel)
+  gone = missing (heads_in file decl_head) (shown panel)
+  loose = missing (reachable bodies) (named_in panel)
+  as_findings q lead "declares" gone (as_findings q lead "names" loose [])
+
+fn leading names
+  first names (length names == 0)
+
+fn first _ true
+  "its first line"
+
+fn first names false
+  "`{names[1]!}`"
+
+fn as_findings q lead kind names acc
+  finding_loop q lead kind names 1 acc
+
+fn finding_loop q lead kind names at acc
+  finding_step q lead kind names at acc (at > length names)
+
+fn finding_step _ _ _ _ _ acc true
+  acc
+
+fn finding_step q lead kind names at acc false
+  one = finding q.chapter q.title lead kind names[at]!
+  finding_loop q lead kind names (at + 1) (once acc one)
+
+# One line per name: a panel naming `at` five times has one thing wrong with
+# it, and five copies of that line would bury the next panel's.
+fn once acc one
+  adding acc one (said? acc one)
+
+fn adding acc _ true
+  acc
+
+fn adding acc one false
+  push acc one
+
+fn said? acc one
+  seen = list/select acc (f -> f.lead == one.lead and f.name == one.name)
+  length (list/to_list (list/select seen (f -> f.kind == one.kind))) > 0
+
+fn quotes_in name raw
+  quote_loop_of name (regexp/matches quote_pattern raw) 1 []
+
+fn quote_loop_of name hits at acc
+  quoting_at name hits at acc (at > length hits)
+
+fn quoting_at _ _ _ acc true
+  acc
+
+fn quoting_at name hits at acc false
+  m = hits[at]!
+  one = quote name (samples_of name) m.groups[1]! m.groups[2]!
+  quote_loop_of name hits (at + 1) (push acc one)
+
+fn checked qs at found after
+  checking qs at found after (at > length qs)
+
+fn checking _ _ found after true
+  after found
+
+# Two shapes resolve, and a title that resolves as neither is left alone — the
+# same allowance book_panels makes. ch07 titles a panel `teahouse/menu.kso`
+# for a directory that is not there, ch09 names a file in another repository
+# entirely; this checks the panels that quote THIS tree and says nothing about
+# the rest.
+fn checking qs at found after false
+  q = qs[at]!
+  on = (there -> as_file qs at found after q there)
+  os/exists q.title . on
+
+# A path this repository holds: the panel excerpts one file, and the package
+# beside it is what that file may name.
+fn as_file qs at found after q true
+  on = (names -> beside qs at found after q names)
+  os/list_dir (dir_of q.title) . on
+
+fn beside qs at found after q names
+  wanted = paths_in (dir_of q.title) names
+  with_package qs at found after q [q.title] wanted
+
+# Otherwise a directory module under the chapter's own samples — `literal.kso`
+# for `samples/ch08/literal/`, whose panel merges the module's files into one
+# excerpt. Every .kso under it is both what the panel may declare and what it
+# may name.
+fn as_file qs at found after q false
+  on = (owned -> not_a_sample qs at found after q owned)
+  os/exists "{q.samples}/{q.title}" . on
+
+# A title that resolves to a FILE beside its chapter is book_panels' panel:
+# that harness regenerates the body from the sample and this must not second-
+# guess it. ch07 has both `shop.kso` and a `shop/` directory, and reading the
+# panel for one against the other is how this first went wrong.
+fn not_a_sample qs at found after _ true
+  checked qs (at + 1) found after
+
+fn not_a_sample qs at found after q false
+  on = (kids -> as_module qs at found after q kids)
+  walk_all (module_of q) on
+
+fn module_of q
+  stem = (text/split q.title ".")[1]!
+  "{q.samples}/{stem}"
+
+fn as_module qs at found after q kids
+  only = list/to_list (list/select kids (k -> kso? k))
+  skipping qs at found after q only (length only == 0)
+
+fn skipping qs at found after _ _ true
+  checked qs (at + 1) found after
+
+fn skipping qs at found after q only false
+  with_package qs at found after q only only
+
+fn with_package qs at found after q mine wanted
+  on = (bodies -> with_bodies qs at found after q mine wanted bodies)
+  read_each wanted 1 [] on
+
+fn with_bodies qs at found after q mine wanted bodies
+  declared = joined_of mine wanted bodies
+  more = found_for q declared bodies
+  checked qs (at + 1) (concat found more) after
+
+# What the panel may DECLARE: one file when the title named one, the whole
+# module when it named a directory.
+fn joined_of mine wanted bodies
+  pick_loop mine wanted bodies 1 ""
+
+fn pick_loop mine wanted bodies at acc
+  picking_each mine wanted bodies at acc (at > length mine)
+
+fn picking_each _ _ _ _ acc true
+  acc
+
+fn picking_each mine wanted bodies at acc false
+  one = body_for wanted bodies mine[at]!
+  pick_loop mine wanted bodies (at + 1) "{acc}\n{one}"
+
+fn chapter? n
+  regexp/match? "^(ch[0-9]+|app[a-z])\\.html$" n
+
+fn only_chapters names
+  list/sort (list/to_list (list/select names (n -> chapter? n)))
+
+over_chapters = os/list_dir chapters . (names -> from_root names)
+
+fn from_root names
+  chapter_loop (only_chapters names) 1 []
+
+fn chapter_loop names at found
+  walking names at found (at > length names)
+
+fn walking _ _ found true
+  reported found
+
+fn walking names at found false
+  on = (raw -> one_chapter names at found names[at]! raw)
+  os/read_file "{chapters}/{names[at]!}" . on
+
+fn one_chapter names at found name raw
+  after = (more -> chapter_loop names (at + 1) more)
+  checked (quotes_in name raw) 1 found after
+
+fn reported found
+  telling found (length found == 0)
+
+fn telling _ true
+  io/write "book quotes: every quoting panel matches the file it names\n"
+
+fn telling found false
+  say_each found 1 . (_ -> os/exit 1)
+
+fn say_each found at
+  saying found at (at > length found)
+
+fn saying _ _ true
+  io/write "the panels above quote a file that has moved on\n"
+
+fn saying found at false
+  f = found[at]!
+  where = "{f.chapter}, the panel for {f.title} at {f.lead}"
+  line = "{where}: {f.kind} `{f.name}`\n"
+  io/write line . (_ -> say_each found (at + 1))
+
+pub play = over_chapters
+
+# Every .kso under a directory, which a module title needs and a file title
+# does not. Borrowed in shape from scripts/book_panels, which walks the same
+# tree for the panels it does own.
+fn walk_all path after
+  os/is_dir path . (there -> walk_there path there after)
+
+fn walk_there _ false after
+  after []
+
+fn walk_there path true after
+  os/list_dir path . (names -> walk_names path names 1 [] after)
+
+fn walk_names path names at acc after
+  walking_names path names at acc after (at > length names)
+
+fn walking_names _ _ _ acc after true
+  after acc
+
+fn walking_names path names at acc after false
+  kid = "{path}/{names[at]!}"
+  os/is_dir kid . (d -> walk_kid path names at acc after kid d)
+
+fn walk_kid path names at acc after kid true
+  on = (deep -> walk_names path names (at + 1) (merged acc deep) after)
+  walk_all kid on
+
+fn walk_kid path names at acc after kid false
+  walk_names path names (at + 1) (push acc kid) after
+
+fn merged a b
+  list/to_list (text/concat a b)

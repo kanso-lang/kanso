@@ -90,13 +90,16 @@ parse failed at byte 10: invalid literal</code></pre>
   <span class="f">_parse_array</span> cs (p <span class="o">+</span> <span class="n">1</span>)
 
 <span class="k">fn</span> <span class="f">_value_for</span> <span class="n">102</span> cs p
-  <span class="f">_word</span> cs p _bytes_false <span class="t">false</span>
+  matched <span class="o">=</span> <span class="f">_alse?</span> cs p
+  <span class="f">_word</span> matched p <span class="n">5</span> <span class="t">false</span>
 
 <span class="k">fn</span> <span class="f">_value_for</span> <span class="n">110</span> cs p
-  <span class="f">_word</span> cs p _bytes_null <span class="t">json_null</span>
+  matched <span class="o">=</span> <span class="f">_ull?</span> cs p
+  <span class="f">_word</span> matched p <span class="n">4</span> <span class="t">json_null</span>
 
 <span class="k">fn</span> <span class="f">_value_for</span> <span class="n">116</span> cs p
-  <span class="f">_word</span> cs p _bytes_true <span class="t">true</span>
+  matched <span class="o">=</span> <span class="f">_rue?</span> cs p
+  <span class="f">_word</span> matched p <span class="n">4</span> <span class="t">true</span>
 
 <span class="k">fn</span> <span class="f">_value_for</span> <span class="n">123</span> cs p
   <span class="f">_parse_object</span> cs (p <span class="o">+</span> <span class="n">1</span>)
@@ -105,26 +108,25 @@ parse failed at byte 10: invalid literal</code></pre>
   <span class="f">_fail</span> p <span class="s">"unexpected end of input"</span>
 
 <span class="k">fn</span> <span class="f">_value_for</span> c cs p
-  numeric <span class="o">=</span> <span class="f">_is_number_start</span> c
-  <span class="f">if</span> numeric (<span class="f">_parse_number</span> cs p) (<span class="f">_fail</span> p <span class="s">"unexpected character `<span class="i">{utf8 [c]}</span>`"</span>)</code></pre>
+  numeric <span class="o">=</span> <span class="f">_number_start?</span> c
+  <span class="f">if</span> numeric (<span class="f">_parse_number</span> cs p) (<span class="f">_bad_value_char</span> c p)</code></pre>
 </div>
 
-<p>eight arms, one per way a json value can begin—including the <code>none</code> arm, because <code>at</code> past the end of the byte array returns <code>none</code>, and running off the end of input is just an absent byte, dispatched like everything else. the three keyword literals share one checker: <code>_word</code> slices the next few bytes and compares them against the expected spelling as a plain value equality. here is that whole path, small enough to re-run on its own:</p>
+<p>eight arms, one per way a json value can begin—including the <code>none</code> arm, because reading past the end of the byte array answers <code>none</code>, and running off the end of input is just an absent byte, dispatched like everything else. the three keyword literals each get a checker for their own tail: the first byte already chose the arm, so <code>_rue?</code> compares the three bytes after it where they sit, and <code>_word</code> turns that verdict into a result or a failure. reading past the end answers <code>none</code>, which equals no byte, so a truncated literal needs no length test of its own. here is that whole path, small enough to re-run on its own:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">literal.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/testing"</span>
-<span class="k">import</span> <span class="s">"std/text"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">type</span> parse_failure
   <span class="f">position</span>
   <span class="f">reason</span>
 
-bytes_false <span class="o">=</span> [<span class="n">102</span> <span class="n">97</span> <span class="n">108</span> <span class="n">115</span> <span class="n">101</span>]
-
-bytes_null <span class="o">=</span> [<span class="n">110</span> <span class="n">117</span> <span class="n">108</span> <span class="n">108</span>]
-
-bytes_true <span class="o">=</span> [<span class="n">116</span> <span class="n">114</span> <span class="n">117</span> <span class="n">101</span>]
+<span class="c"># The first byte chose the arm, so what is left to check is the tail of one</span>
+<span class="c"># known keyword, compared where it sits. Reading past the end answers `none`,</span>
+<span class="c"># which equals no byte, so a truncated literal needs no length test.</span>
+<span class="k">fn</span> <span class="f">alse?</span> cs p
+  cs[p <span class="o">+</span> <span class="n">1</span>] <span class="o">==</span> <span class="n">97</span> and cs[p <span class="o">+</span> <span class="n">2</span>] <span class="o">==</span> <span class="n">108</span> and cs[p <span class="o">+</span> <span class="n">3</span>] <span class="o">==</span> <span class="n">115</span> and cs[p <span class="o">+</span> <span class="n">4</span>] <span class="o">==</span> <span class="n">101</span>
 
 <span class="k">fn</span> <span class="f">decode_literal</span> s
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
@@ -133,35 +135,23 @@ bytes_true <span class="o">=</span> [<span class="n">116</span> <span class="n">
 <span class="k">fn</span> <span class="f">fail</span> p reason
   <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"true"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"null"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>))
+<span class="k">fn</span> <span class="f">rue?</span> cs p
+  cs[p <span class="o">+</span> <span class="n">1</span>] <span class="o">==</span> <span class="n">114</span> and cs[p <span class="o">+</span> <span class="n">2</span>] <span class="o">==</span> <span class="n">117</span> and cs[p <span class="o">+</span> <span class="n">3</span>] <span class="o">==</span> <span class="n">101</span>
 
-<span class="c"># The reason reaches `told` through `std/testing`'s `when_failed`, which is</span>
-<span class="c"># foreign to this module and so may separate it from the failure. An arm here</span>
-<span class="c"># naming this module's own err would simply never match.</span>
-<span class="k">fn</span> <span class="f">told</span> (<span class="f">parse_failure</span> p reason)
-  <span class="s">"err at <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
-
-<span class="k">fn</span> <span class="f">show</span> v
-  <span class="f">chosen</span> v (<span class="f">testing/when_failed</span> v told)
-
-<span class="k">fn</span> <span class="f">chosen</span> v false
-  <span class="s">"ok: <span class="i">{v}</span>"</span>
-
-<span class="k">fn</span> <span class="f">chosen</span> _ text
-  <span class="f">text</span>
+<span class="k">fn</span> <span class="f">ull?</span> cs p
+  cs[p <span class="o">+</span> <span class="n">1</span>] <span class="o">==</span> <span class="n">117</span> and cs[p <span class="o">+</span> <span class="n">2</span>] <span class="o">==</span> <span class="n">108</span> and cs[p <span class="o">+</span> <span class="n">3</span>] <span class="o">==</span> <span class="n">108</span>
 
 <span class="k">fn</span> <span class="f">value_for</span> <span class="n">102</span> cs p
-  <span class="f">word</span> cs p bytes_false false
+  matched <span class="o">=</span> <span class="f">alse?</span> cs p
+  <span class="f">word</span> matched p false
 
 <span class="k">fn</span> <span class="f">value_for</span> <span class="n">110</span> cs p
-  <span class="f">word</span> cs p bytes_null <span class="s">"null"</span>
+  matched <span class="o">=</span> <span class="f">ull?</span> cs p
+  <span class="f">word</span> matched p <span class="s">"null"</span>
 
 <span class="k">fn</span> <span class="f">value_for</span> <span class="n">116</span> cs p
-  <span class="f">word</span> cs p bytes_true true
+  matched <span class="o">=</span> <span class="f">rue?</span> cs p
+  <span class="f">word</span> matched p true
 
 <span class="k">fn</span> <span class="f">value_for</span> none _ p
   <span class="f">fail</span> p <span class="s">"unexpected end of input"</span>
@@ -169,10 +159,25 @@ bytes_true <span class="o">=</span> [<span class="n">116</span> <span class="n">
 <span class="k">fn</span> <span class="f">value_for</span> c _ p
   <span class="f">fail</span> p <span class="s">"unexpected character `<span class="i">{text/utf8 [c]}</span>`"</span>
 
-<span class="k">fn</span> <span class="f">word</span> cs p expected v
-  n <span class="o">=</span> <span class="f">length</span> expected
-  seg <span class="o">=</span> <span class="f">text/slice</span> cs p (p <span class="o">+</span> n <span class="o">-</span> <span class="n">1</span>)
-  <span class="f">if</span> (seg <span class="o">==</span> expected) v (<span class="f">fail</span> p <span class="s">"invalid literal"</span>)</code></pre>
+<span class="k">fn</span> <span class="f">word</span> true _ v
+  v
+
+<span class="k">fn</span> <span class="f">word</span> false p _
+  <span class="f">fail</span> p <span class="s">"invalid literal"</span>
+
+<span class="c"># `show` sits one package over from the raising: an arm cannot see an err its</span>
+<span class="c"># own hako raised, so the reporting lives beside the decoder rather than in</span>
+<span class="c"># it. A foreign reason is named, never destructured.</span>
+<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> r:parse_failure)
+  <span class="s">"err at <span class="i">{r.position}</span>: <span class="i">{r.reason}</span>"</span>
+
+<span class="k">fn</span> <span class="f">show</span> v
+  <span class="s">"ok: <span class="i">{v}</span>"</span>
+
+<span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"true"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"null"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run literal.kso</div>
     <pre><code>ok: true
@@ -182,7 +187,7 @@ err at 1: unexpected character `?`</code></pre>
   </div>
 </div>
 
-<p>the constants are the spellings—<code>[116 114 117 101]</code> is <code>true</code> in utf-8—and comparing byte arrays is just <code>==</code>, because arrays are values. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>_word</code> reports the mismatch; <code>?</code> starts nothing, so the catch-all arm names the offending byte. and notice what the parser never writes: not one line of "check if the last step failed." a bad literal becomes an <code>err</code> deep inside, and the railway from chapter 04 carries it out through every caller with its position intact.</p>
+<p>the tail predicates read the spellings a byte at a time—<code>114</code>, <code>117</code>, <code>101</code> is <code>rue</code> in utf-8—and each comparison is an <code>==</code> against a byte the input already holds. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>_word</code> reports the mismatch; <code>?</code> starts nothing, so the catch-all arm names the offending byte. and notice what the parser never writes: not one line of "check if the last step failed." a bad literal becomes an <code>err</code> deep inside, and the railway from chapter 04 carries it out through every caller with its position intact.</p>
 
 <p>arrays and objects follow the same discipline one level up. <code>_array_delim</code> dispatches on the byte after an element—comma means more items, <code>93</code> (a closing bracket) means done, <code>none</code> means the input ended mid-array—and the object path adds only a key: <code>_obj_key_start</code> insists on a quote, <code>_expect_char</code> demands the colon, and <code>_obj_value</code> folds each pair into a map with <code>put</code>. there is no recursion <em>limit</em> to manage and no parser state to restore, because every step passes its whole world—the bytes and a position—forward as arguments.</p>
 
@@ -196,7 +201,7 @@ err at 1: unexpected character `?`</code></pre>
   <span class="t">_parsed</span> (p <span class="o">+</span> <span class="n">1</span>) (<span class="f">_string_ok</span> p (<span class="f">utf8</span> (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
 
 <span class="k">fn</span> <span class="f">_string_at</span> cs <span class="n">92</span> start p
-  <span class="f">_str_chars</span> cs p (<span class="f">concat</span> [] (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>)))
+  <span class="f">_str_chars</span> cs p (<span class="f">append</span> (<span class="f">bytes</span> <span class="s">""</span>) (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>)))
 
 <span class="k">fn</span> <span class="f">_string_at</span> <span class="o">_</span> <span class="t">none</span> <span class="o">_</span> p
   <span class="f">_fail</span> p <span class="s">"unterminated string"</span>
@@ -206,7 +211,7 @@ err at 1: unexpected character `?`</code></pre>
 
 <span class="k">fn</span> <span class="f">_string_scan</span> cs start p
   n <span class="o">=</span> <span class="f">find2</span> cs p <span class="n">34</span> <span class="n">92</span>
-  <span class="f">_string_at</span> cs (<span class="f">at</span> cs n) start n</code></pre>
+  <span class="f">_string_at</span> cs cs[n] start n</code></pre>
 </div>
 
 <p>read from the bottom. a quote (<code>34</code>) ends the string, and the value is one slice of the original input—no copying, no character loop. a backslash (<code>92</code>) abandons the bet: the bytes so far are moved into an accumulator and the slow path takes over, appending decoded bytes one escape at a time. <code>none</code> means the input ended inside the string. the slow path is another dispatch table—one arm per legal escape character, each pushing the byte it names:</p>
@@ -214,7 +219,7 @@ err at 1: unexpected character `?`</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">lib/json/text.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">_str_escape</span> cs <span class="n">110</span> p acc
-  <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">2</span>) (<span class="f">push</span> acc <span class="n">10</span>)
+  <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">2</span>) (<span class="f">append</span> acc <span class="n">10</span>)
 
 <span class="k">fn</span> <span class="f">_str_escape</span> cs <span class="n">117</span> p acc
   <span class="f">_str_unicode</span> cs p acc
@@ -222,16 +227,21 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">_str_escape</span> <span class="o">_</span> c p <span class="o">_</span>
   <span class="f">_fail</span> p <span class="s">"invalid escape `\\<span class="i">{utf8 [c]}</span>`"</span>
 
+<span class="k">fn</span> <span class="f">_str_hex4</span> cs p
+  h1 <span class="o">=</span> <span class="f">_hex_digit</span> cs[p]
+  h2 <span class="o">=</span> <span class="f">_hex_digit</span> (cs[p <span class="o">+</span> <span class="n">1</span>])
+  h3 <span class="o">=</span> <span class="f">_hex_digit</span> (cs[p <span class="o">+</span> <span class="n">2</span>])
+  h4 <span class="o">=</span> <span class="f">_hex_digit</span> (cs[p <span class="o">+</span> <span class="n">3</span>])
+  h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4
+
 <span class="k">fn</span> <span class="f">_str_unicode</span> cs p acc
-  h1 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">2</span>))
-  h2 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">3</span>))
-  h3 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">4</span>))
-  h4 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">5</span>))
-  code <span class="o">=</span> h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4
-  <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">6</span>) (<span class="f">concat</span> acc (<span class="f">bytes</span> (<span class="f">from_code</span> code)))</code></pre>
+  code <span class="o">=</span> <span class="f">_str_hex4</span> cs (p <span class="o">+</span> <span class="n">2</span>)
+  <span class="f">if</span> (code <span class="o">&lt;</span> <span class="n">55296</span> or <span class="n">57343</span> <span class="o">&lt;</span> code)
+    <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">6</span>) (<span class="f">append</span> acc (<span class="f">from_code</span> code))
+    <span class="f">_str_surrogate</span> cs p acc code</code></pre>
 </div>
 
-<p>the file has eight arms for the named escapes—<code>110</code> is <code>\n</code>, and its siblings for <code>\"</code>, <code>\\</code>, <code>\/</code>, <code>\b</code>, <code>\f</code>, <code>\r</code>, <code>\t</code> read identically—plus an end-of-input arm and the two shown here. <code>\uXXXX</code> is the interesting one: four hex digits become a code point, <code>from_code</code> turns the code point into a character, and its utf-8 bytes join the accumulator. the digit math is worth running with your own eyes:</p>
+<p>the file has eight arms for the named escapes—<code>110</code> is <code>\n</code>, and its siblings for <code>\"</code>, <code>\\</code>, <code>\/</code>, <code>\b</code>, <code>\f</code>, <code>\r</code>, <code>\t</code> read identically—plus an end-of-input arm and the two shown here. <code>\uXXXX</code> is the interesting one: <code>_str_hex4</code> reads four hex digits into a code point, <code>from_code</code> turns the code point into a character, and its utf-8 bytes join the accumulator. a code point in the surrogate range is half a character, and <code>_str_surrogate</code> goes looking for the other half. the digit math is worth running with your own eyes:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">unicode.kso</div>
@@ -293,7 +303,7 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>) <span class="t">true</span>
 
 <span class="k">fn</span> <span class="f">_scan_at</span> cs c start p marked
-  <span class="f">_digit_step</span> cs start p marked (<span class="n">47</span> <span class="o">&lt;</span> c <span class="k">and</span> c <span class="o">&lt;</span> <span class="n">58</span>)
+  <span class="f">_digit_step</span> cs start p marked (<span class="n">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">58</span>)
 
 <span class="k">fn</span> <span class="f">_number_done</span> cs start p <span class="t">true</span>
   <span class="f">parsed</span> p (<span class="f">_number_ok</span> start (<span class="f">to_float</span> (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
@@ -375,7 +385,7 @@ err at 1: unexpected character `?`</code></pre>
   </div>
 </div>
 
-<p>(the panel shows <code>classify</code> and <code>main</code>; the sample file also carries <code>_both</code>, <code>_is_number_char</code>, <code>_mark_from</code>, <code>_mark_step</code>, and <code>_number_end</code> verbatim from <code>number.kso</code>.) an integer stays an integer—<code>42</code> decodes to <code>int 42</code>, not <code>42.0</code>—and anything marked with a dot or an exponent becomes a <code>float64</code>, so <code>6e3</code> is <code>6000.0</code>. the greedy scan is deliberately looser than the json grammar: <code>_is_number_char</code> accepts any plausible number byte, and <code>to_int</code> or <code>to_float</code> is the real judge. if the conversion fails, <code>_number_ok</code> converts that refusal into a <code>parse_failure</code> pinned to where the number began. let the builtin own the hard part; the parser only needs to know where the number stops and whether a float mark appeared.</p>
+<p>the sample's helpers are the library's older shape, kept on purpose: <code>is_number_char</code> and <code>number_end</code> find where the number stops, and <code>mark_from</code> walks the same bytes again asking whether a float mark went past. the library carries the mark along with the scan now and reads each number's bytes once. an integer stays an integer&#8212;<code>42</code> decodes to <code>int 42</code>, not <code>42.0</code>&#8212;and anything marked with a dot or an exponent becomes a <code>float64</code>, so <code>6e3</code> is <code>6000.0</code>. the greedy scan is deliberately looser than the json grammar in either shape: any plausible number byte is accepted, and <code>to_int</code> or <code>to_float</code> is the real judge. if the conversion fails, <code>_number_ok</code> converts that refusal into a <code>parse_failure</code> pinned to where the number began. let the builtin own the hard part; the parser only needs to know where the number stops and whether a float mark appeared.</p>
 
 <h2>failure carries its position</h2>
 
@@ -387,34 +397,33 @@ err at 1: unexpected character `?`</code></pre>
   <span class="t">err</span> (<span class="t">parse_failure</span> p reason)
 
 <span class="c"># json whitespace bytes: tab, newline, carriage return, space</span>
-<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">9</span>
+<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">9</span>
   <span class="t">true</span>
 
-<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">10</span>
+<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">10</span>
   <span class="t">true</span>
 
-<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">13</span>
+<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">13</span>
   <span class="t">true</span>
 
-<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">32</span>
+<span class="k">fn</span> <span class="f">_ws?</span> <span class="n">32</span>
   <span class="t">true</span>
 
-<span class="k">fn</span> <span class="f">_is_ws</span> <span class="t">none</span>
+<span class="k">fn</span> <span class="f">_ws?</span> <span class="t">none</span>
   <span class="t">false</span>
 
-<span class="k">fn</span> <span class="f">_is_ws</span> <span class="o">_</span>
+<span class="k">fn</span> <span class="f">_ws?</span> <span class="o">_</span>
   <span class="t">false</span>
 
 <span class="k">fn</span> <span class="f">_skip_ws</span> cs p
-  <span class="f">if</span> (<span class="f">_is_ws</span> (<span class="f">at</span> cs p)) (<span class="f">_skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p</code></pre>
+  <span class="f">if</span> (<span class="f">_ws?</span> cs[p]) (<span class="f">_skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p</code></pre>
 </div>
 
-<p>a <code>parse_failure</code> is an <code>err</code> wrapping a record: the byte position and a human reason. because the cursor is always an argument, the position is always at hand when something goes wrong—there is no "current location" to reconstruct from a lexer's state. the mini-decoder below is <code>_finish</code>'s trailing-characters check in miniature: skip whitespace, read a value, skip whitespace again, and demand the input be over. the sample keeps the library's <code>_is_ws</code> and <code>_skip_ws</code> byte for byte:</p>
+<p>a <code>parse_failure</code> is an <code>err</code> wrapping a record: the byte position and a human reason. because the cursor is always an argument, the position is always at hand when something goes wrong—there is no "current location" to reconstruct from a lexer's state. the mini-decoder below is <code>_finish</code>'s trailing-characters check in miniature: skip whitespace, read a value, skip whitespace again, and demand the input be over. the sample keeps the library's <code>_ws?</code> and <code>_skip_ws</code> byte for byte:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">positions.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/testing"</span>
-<span class="k">import</span> <span class="s">"std/text"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">type</span> parse_failure
   <span class="f">position</span>
@@ -439,49 +448,42 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">digit?</span> c
   <span class="n">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">58</span>
 
-<span class="k">fn</span> <span class="f">is_ws?</span> <span class="n">9</span>
+<span class="k">fn</span> <span class="f">ws?</span> <span class="n">9</span>
   <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">is_ws?</span> <span class="n">10</span>
+<span class="k">fn</span> <span class="f">ws?</span> <span class="n">10</span>
   <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">is_ws?</span> <span class="n">13</span>
+<span class="k">fn</span> <span class="f">ws?</span> <span class="n">13</span>
   <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">is_ws?</span> <span class="n">32</span>
+<span class="k">fn</span> <span class="f">ws?</span> <span class="n">32</span>
   <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">is_ws?</span> none
+<span class="k">fn</span> <span class="f">ws?</span> none
   <span class="f">false</span>
 
-<span class="k">fn</span> <span class="f">is_ws?</span> _
+<span class="k">fn</span> <span class="f">ws?</span> _
   <span class="f">false</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  42  "</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>))
-
-<span class="c"># The reason reaches `told` through `std/testing`'s `when_failed`, which is</span>
-<span class="c"># foreign to this module and so may separate it from the failure. An arm here</span>
-<span class="c"># naming this module's own err would simply never match.</span>
-<span class="k">fn</span> <span class="f">told</span> (<span class="f">parse_failure</span> p reason)
-  <span class="s">"err at <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
+<span class="c"># `show` sits one package over from the raising: an arm cannot see an err its</span>
+<span class="c"># own hako raised, so the reporting lives beside the decoder rather than in</span>
+<span class="c"># it. A foreign reason is named, never destructured.</span>
+<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> r:parse_failure)
+  <span class="s">"err at <span class="i">{r.position}</span>: <span class="i">{r.reason}</span>"</span>
 
 <span class="k">fn</span> <span class="f">show</span> v
-  <span class="f">chosen</span> v (<span class="f">testing/when_failed</span> v told)
-
-<span class="k">fn</span> <span class="f">chosen</span> v false
   <span class="s">"ok: <span class="i">{v}</span>"</span>
 
-<span class="k">fn</span> <span class="f">chosen</span> _ text
-  <span class="f">text</span>
-
 <span class="k">fn</span> <span class="f">skip_ws</span> cs p
-  <span class="f">if</span> (<span class="f">is_ws?</span> cs[p]) (<span class="f">skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+  <span class="f">if</span> (<span class="f">ws?</span> cs[p]) (<span class="f">skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
 <span class="k">fn</span> <span class="f">trailing</span> cs p v
-  <span class="f">if</span> (p <span class="o">&gt;</span> length cs) v (<span class="f">fail</span> p <span class="s">"unexpected trailing characters"</span>)</code></pre>
+  <span class="f">if</span> (p <span class="o">&gt;</span> length cs) v (<span class="f">fail</span> p <span class="s">"unexpected trailing characters"</span>)
+
+<span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  42  "</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run positions.kso</div>
     <pre><code>ok: 42

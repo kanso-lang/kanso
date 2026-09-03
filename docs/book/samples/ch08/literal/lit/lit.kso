@@ -4,11 +4,11 @@ pub type parse_failure
   position
   reason
 
-bytes_false = [102 97 108 115 101]
-
-bytes_null = [110 117 108 108]
-
-bytes_true = [116 114 117 101]
+# The first byte chose the arm, so what is left to check is the tail of one
+# known keyword, compared where it sits. Reading past the end answers `none`,
+# which equals no byte, so a truncated literal needs no length test.
+fn alse? cs p
+  cs[p + 1] == 97 and cs[p + 2] == 108 and cs[p + 3] == 115 and cs[p + 4] == 101
 
 pub fn decode_literal s
   cs = text/bytes s
@@ -17,14 +17,23 @@ pub fn decode_literal s
 fn fail p reason
   err (parse_failure p reason)
 
+fn rue? cs p
+  cs[p + 1] == 114 and cs[p + 2] == 117 and cs[p + 3] == 101
+
+fn ull? cs p
+  cs[p + 1] == 117 and cs[p + 2] == 108 and cs[p + 3] == 108
+
 fn value_for 102 cs p
-  word cs p bytes_false false
+  matched = alse? cs p
+  word matched p false
 
 fn value_for 110 cs p
-  word cs p bytes_null "null"
+  matched = ull? cs p
+  word matched p "null"
 
 fn value_for 116 cs p
-  word cs p bytes_true true
+  matched = rue? cs p
+  word matched p true
 
 fn value_for none _ p
   fail p "unexpected end of input"
@@ -32,7 +41,8 @@ fn value_for none _ p
 fn value_for c _ p
   fail p "unexpected character `{text/utf8 [c]}`"
 
-fn word cs p expected v
-  n = length expected
-  seg = text/slice cs p (p + n - 1)
-  if (seg == expected) v (fail p "invalid literal")
+fn word true _ v
+  v
+
+fn word false p _
+  fail p "invalid literal"

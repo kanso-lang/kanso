@@ -13,6 +13,9 @@
 set -e
 # panels render their samples; drift fails the build
 ./target/release/kanso run scripts/book_panels
+# and the panels book_panels cannot resolve — the ones quoting a file this
+# repository owns, or a directory module — are checked structurally instead
+./target/release/kanso run scripts/book_quotes
 # the sample .outs pin the dice; a bare run seeds from entropy
 export KANSO_SEED=2685821657736338717
 KANSO=$(pwd)/target/release/kanso
