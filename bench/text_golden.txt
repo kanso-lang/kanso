@@ -420,14 +420,23 @@
 # +2,272, scanbench +1,824, pendbench +640, basket +144. jsonbench, escapebench
 # and indexbench are unchanged; they index bytes and strings, which already had
 # an inline path.
-jsonbench text=85682
-encodebench text=107026
-oneshot text=108770
-basket text=100050
-widebench text=110338
-deepbench text=69362
-escapebench text=52722
-pendbench text=83362
-indexbench text=54258
-scanbench text=144850
-digestbench text=100322
+#
+# 2026-09-03: every row rises, 432 to 816 bytes, and one change did it.
+# k_beat_rewind's empty test moved out of the function and inline to its
+# four call sites, leaving the frame and the four flush loops behind in
+# k_beat_rewind_slow. Four copies of a twenty-instruction test is the
+# rise. What it bought is on the instructions vein: escapebench -22.684%,
+# basket -8.476%, encodebench -2.824%, and the eleven together -1.842%.
+# escapebench pays the largest share here, +816, and takes the largest
+# fall there, which is the trade stated in one benchmark.
+jsonbench text=86354
+encodebench text=107714
+oneshot text=109442
+basket text=100738
+widebench text=111010
+deepbench text=69794
+escapebench text=53538
+pendbench text=83842
+indexbench text=54770
+scanbench text=145538
+digestbench text=101010

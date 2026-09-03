@@ -3340,3 +3340,541 @@ Writing that down matters more than the finding. The entry above corrects
 four readings I took as evidence on a single measurement each; leaving this
 one at a single measurement would have repeated the error inside the
 correction.
+
+## 2026-09-03 — the rewind's empty test paid a frame, and it is a third of a beat loop
+
+Clay asked whether the fused chain operators had been swept in. They had not.
+The day's four twins were driven by the eleven benchmarks' profiles, and a
+fused adapter chain — `map`, `select`, `sum` deforested into one flat loop —
+is not well represented in those. So I built one: 200,000 elements through
+`list/map . list/select . list/sum`, and profiled it.
+
+`k_beat_rewind` was 32.92% of it. Not the loop body, not a builtin — the
+per-iteration rewind that reclaims the iteration's garbage.
+
+That was not a property of the fixture. On escapebench the same function is
+**43.66%** of the program: 80,970,118 of 185,475,445 instructions across
+1,206,001 rewinds, 67 instructions each. On basket, 16.21%. The one function
+was larger than any seam the four twins reached.
+
+**Where the 67 went.** The disassembly says it in the first ten instructions:
+six callee-saved pushes and a stack sub, before any work. The frame is there
+for four loops — the buffer shelf's flush, and the chunk, view and permanent
+registries — none of which runs on any of those 1,206,001 rewinds. Then
+`k_buf_flush` unconditionally memsets the twelve-pointer shelf, six `movaps`
+clearing a shelf that was already clear. What the common case actually needs
+is three stores: `k_arena`, `k_arena_left`, `k_seek_str`.
+
+**The change.** Two pieces, both idiomatic here. The shelf gets a dirty flag,
+so its memset becomes one test for a program that never donates a buffer. And
+`k_beat_rewind` splits: an inline empty test at the four call sites, with the
+frame and the four loops left behind in `k_beat_rewind_slow`. That is the same
+split `k_permreg_flush`/`_held` and `k_viewreg_migrate`/`_held` already make
+one level down; it is worth more here because a beat loop rewinds once per
+iteration where those run once per pop. `k_beat_iter` is now a leaf with no
+frame at all, ~39 instructions on the fast path against 74 before.
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 185,475,844 | 143,403,373 | −22.684% |
+| basket | 45,028,689 | 41,211,873 | −8.476% |
+| encodebench | 6,057,833,454 | 5,886,750,857 | −2.824% |
+| oneshot | 34,844,691 | 34,417,154 | −1.227% |
+| deepbench | 677,481,898 | 677,017,353 | −0.069% |
+| indexbench | 5,242,731 | 5,242,087 | −0.012% |
+| scanbench | 1,423,437,774 | 1,423,437,268 | −0.000% |
+| pendbench | 715,729,140 | 715,731,365 | +0.000% |
+| jsonbench | 2,533,005,144 | 2,533,091,327 | +0.003% |
+| digestbench | 81,237,955 | 81,252,347 | +0.018% |
+| widebench | 61,843,521 | 61,857,884 | +0.023% |
+| **all eleven** | **11,821,160,841** | **11,603,412,888** | **−1.842%** |
+
+The three small rises are programs with few beat iterations paying the inline
+test at their pops where the old code paid a call. 86,183 instructions on a
+2.5-billion-instruction decode is the largest of them. These are container
+readings; CI supplies the rows that land in the golden.
+
+`.text` rises on every row, 432 to 816 bytes — four copies of the test. The
+header of `bench/text_golden.txt` says which benchmark paid most and which
+gained most, and they are the same one.
+
+**No counter moves, and the corpus was asked how much of that it can see.**
+The three flush loops and the block retire are the only code in the rewind
+that touches a statistic, so the fast path being taken exactly when all four
+would do nothing means every cost golden stays byte-identical. All nine are.
+But "byte-identical counters prove equivalence" is a claim about what the
+corpus can observe, so I dropped each of the six conditions in turn and ran
+the nine counter gates and the golden suite against each.
+
+Three are pinned. Without the shelf's dirty test five counter gates
+**segfault** — a shelf entry outliving its arena region hands a freed pointer
+to the next grower, which is exactly the failure the flag exists to prevent.
+Without the chunk registry's test, encode's counters move. Without the block
+test, encode's and scan's move and four goldens fail.
+
+Three are not: `k_chunkreg_spill`, `k_viewreg_n`, and the permanent registry's.
+Dropping any of them leaves every gate and every golden green. The reason is
+one fact, and I found it by instrumenting the rewind rather than guessing:
+**on every program in the corpus, a rewind that finds a registry non-empty is
+also a rewind that has moved on from its mark's block**, so the block test
+reaches the slow path first and the registry tests never decide anything.
+Counted over the benchmarks: `chunkreg_spill` is non-zero at no rewind at all;
+escapebench has 3,000 rewinds with a non-empty permanent registry and the same
+3,000 have changed block; encodebench has 400 with a non-empty chunk registry.
+
+I wrote a fixture to isolate the view registry — a map born inside a beat and
+asked for its sorted view — and it registered 500 views at 500 rewinds and
+**still** did not catch the mutation, because those 500 rewinds had also taken
+a new block. A fixture that cannot fail is worse than none, so it is not in
+this pull request. The conditions stay: that the two travel together is a
+property of the programs in the corpus, not of the code, and the next program
+need not oblige.
+
+**What is left.** The naming is the finding. `k_beat_rewind` did not show up in
+any earlier profile sweep because the sweeps were reading the benchmarks whose
+profiles the twins were chasing, and the beat machinery is not a builtin. The
+question that found it was Clay's, about a construct the benchmark set does
+not cover well. That is an argument for the fused chain having a benchmark of
+its own, which it does not have and which the eleven do not substitute for.
+
+**The fixture that started it, measured after.** The 200,000-element
+`map`/`select`/`sum` chain goes 38,883,703 → 32,083,715, **−17.49%**, and
+`k_beat_rewind` is off its profile altogether. What is left of the rewind is
+`k_beat_iter` at 8,000,000 — 40 instructions an iteration where rewind and
+iter together were 74. It is still 24.93% of that program.
+
+So the seam is not finished, and the shape of what remains is visible: of
+those 40, about twenty are the six condition tests and three are the stores
+they guard. A single summary word per depth — maintained at the four
+registration sites, read once here — would collapse six loads and six
+branches into one. That is a second change and it waits for this one to land.
+It is written down here rather than built now because the branch rule is one
+open pull request at a time, and because the number above is what makes the
+case for it.
+
+**Two corrections to the paragraph above, both from building it rather than
+reasoning about it.** The summary word collapses *four* conditions into one,
+not six: the buffer shelf's flag is global rather than per depth, and the
+block test is about arena state that no registration site can summarise. So
+the fast path goes from six tests to three, not to one.
+
+And the prototype was built and measured rather than left as a plan. A single
+`k_beat_enc[depth]`, set at the four registration sites and cleared where the
+slow rewind empties all three registries together, with all nine counter gates
+green: escapebench 143,403,373 → 130,167,353, **−9.23%**; the fused chain
+32,083,715 → 30,483,715, **−4.99%**; basket 41,211,873 → 40,299,752, −2.21%.
+It is a second pull request, held behind this one by the branch rule, and it
+is worth having.
+
+**The ratchet caught the move, which is what it is for.** `k_seek_str = NULL`
+went from one site to two — the slow rewind and the inline fast path — at
+different indentations, and the cursor mutation's own guard reported that its
+target had moved rather than silently deleting one of the two. Deleting one
+would have left the running path resetting the cursor and the mutation would
+have gone green while proving nothing. It now removes both, and reddens the
+beat differential at 16 of 96 layout pairs, the figure its comment already
+records.
+
+**CI's rows, and they agree with the container.** The instruction vein is
+regenerated from the runner, where the container readings above were a
+direction rather than a pin. Every row lands within about four hundred
+instructions of what the container said, which is the offset those two hosts
+have carried all along.
+
+| benchmark | before | after | |
+|---|---|---|---|
+| escapebench | 185,475,844 | 143,403,772 | −22.6833% |
+| basket | 45,028,689 | 41,212,286 | −8.4755% |
+| encodebench | 6,057,833,454 | 5,886,751,256 | −2.8241% |
+| oneshot | 34,844,691 | 34,417,553 | −1.2258% |
+| deepbench | 677,481,898 | 677,021,033 | −0.0680% |
+| indexbench | 5,242,731 | 5,242,500 | −0.0044% |
+| scanbench | 1,423,437,774 | 1,423,437,681 | −0.0000% |
+| pendbench | 715,729,140 | 715,731,751 | +2,611 |
+| jsonbench | 2,533,005,144 | 2,533,091,740 | +86,596 |
+| digestbench | 81,237,955 | 81,252,746 | +14,791 |
+| widebench | 61,843,521 | 61,858,297 | +14,776 |
+| all eleven | 11,821,160,841 | 11,603,420,615 | −1.8420% |
+
+Four rows worsen and each is stated here as required: **jsonbench** rises
+**86,596**, **digestbench** rises **14,791**, **widebench** rises **14,776**,
+**pendbench** rises **2,611**. All four are programs with few beat iterations
+— 151, 56, 40 and 134 — that now pay the inline empty test at their pops
+where they used to pay a call, and none of the four is a tenth of a per cent.
+They are the price of escapebench's 42 million and encodebench's 171 million.
+
+**compile_instructions** reads **41,500,974** against a golden of 41,495,096,
+a rise of **5,878** with nothing in the front end touched by this change. The
+entry above it in this log established that this row moves 5,081 on a
+docs-only pull request with byte-identical compiler inputs, across three
+consecutive runs of the same compiler. 5,878 is that band. It is regenerated
+rather than explained, and the reason it is not explained is the finding
+recorded yesterday: nothing here separates a layout effect from the runner
+pool, and writing a causal sentence around a number this size is the error
+that entry corrects.
+
+**The five worsened counters, named as the gate spells them.**
+`work_jsonbench` lands on **2,533,091,740**, `work_digestbench` on
+**81,252,746**, `work_widebench` on **61,858,297**, `work_pendbench` on
+**715,731,751**. Those four are the programs with 151, 56, 40 and 134 beat
+iterations: too few for the fast path to repay, so they pay the inline empty
+test at their pops where the old code paid a call, and the largest of the four
+is 0.018% of its program. `compile_instructions` lands on **41,500,974**,
+inside the pool band the entry above measured.
+
+`text` lands on **1,023,750** against 1,016,742 — the eleven binaries together
+grow **7,008 bytes**, 432 to 816 each, which is four copies of a twenty-
+instruction test at the four rewind call sites. That is the trade this change
+is: seven kilobytes of machine code for 217,740,226 instructions.
+
+## 2026-09-03, LATER — the compile row's move is glibc's allocator, and that corrects the task filed for it
+
+The entry above pinned `compile_instructions` at 41,500,974 from CI. The next
+run of the **same commit's front end** read **41,495,850**. Five readings now
+exist for a compiler nothing has touched:
+
+    41,495,096   41,500,177   41,495,096   41,500,974   41,495,850
+
+Two clusters about 5,228 apart, each internally within 800. Yesterday's entry
+called this "the pool" and declined to explain it, and filed a task to record
+the dispatch block beside the row the way kq does, so a move could be asked
+which silicon counted it.
+
+**That task's premise is wrong, and this is the measurement that says so.**
+CI prints the profile on every run, so the two runs can be compared function
+by function:
+
+| symbol | 41,500,974 | 41,495,850 | delta |
+|---|---|---|---|
+| `kanso::infer::eval_expr'2` | 1,616,100 | 1,616,100 | 0 |
+| `kanso::check::check_merged` | 1,598,577 | 1,598,577 | 0 |
+| `_int_malloc` | 1,554,268 | 1,551,398 | **−2,870** |
+| `_int_free` | 1,516,161 | 1,516,378 | **+217** |
+| `__memcmp_avx2_movbe` | 1,346,853 | 1,345,486 | **−1,367** |
+| `HashMap::insert` | 1,302,885 | 1,302,885 | 0 |
+| `kanso::infer::infer` | 1,234,092 | 1,234,092 | 0 |
+| `malloc` | 1,113,407 | 1,113,407 | 0 |
+| `kanso::infer::eval_expr` | 876,900 | 876,900 | 0 |
+| `kanso::lexer::lex_line` | 857,892 | 857,892 | 0 |
+| `free` | 711,340 | 711,340 | 0 |
+| `kanso::parser::parse` | 591,666 | 591,666 | 0 |
+| `kanso::mentions_in_expr'2` | 533,848 | 533,848 | 0 |
+
+**Every symbol in the compiler is identical to the instruction. Three glibc
+symbols move and nothing else does.** And both runs took the same dispatch —
+`__memcmp_avx2_movbe` on each — so recording the dispatch block would have
+found the two runs indistinguishable and explained nothing. The silicon
+hypothesis is dead, and it is dead by the same test that killed the layout
+one: comparing against the null instead of fitting a story to a number.
+
+What is left is glibc's allocator. `_int_malloc`'s bin walks depend on the
+heap's starting layout, and the allocation *sizes* cannot be what differs
+because the compiler's own counts are byte-identical. The most likely
+remaining cause is that the two runs ran binaries whose data and bss differ
+slightly, moving the initial break — which changes malloc's work without
+changing a single instruction the compiler executes.
+
+**The row is red on main too.** `bench/compile_instructions_golden.txt` holds
+41,495,096 and this runner reads 41,495,850, so a pull request that changed
+nothing at all would fail this gate on this runner. It is not this change's
+regression, and this branch does not carry a bump for it: the golden is left
+at main's value.
+
+**What would actually fix it**, and it is a decision rather than a repair:
+the row should count the instructions attributed to the kanso binary rather
+than the process. That is what the gate's own header says it measures — "what
+the FRONT END costs to run" — and it is the part that is deterministic. On
+this container three consecutive runs of the box give 41,904,811 exactly, and
+the per-object split is 33,586,490 in the compiler against 7,982,541 in libc;
+it is the second number that moves on the runner. Changing what a published
+counter measures is Clay's call, not a session's, and it is filed as one
+rather than done here.
+
+**A sixth reading, and it repeats a previous one exactly.** The run after the
+entry above read **41,500,974** — the same value, to the instruction, that a
+run two heads earlier produced. Six readings of an untouched front end now
+give four distinct values, two of them seen twice:
+
+    41,495,096  ×2      41,495,850  ×1
+    41,500,177  ×1      41,500,974  ×2
+
+That is not continuous noise. Noise does not land on the same eight-digit
+number twice in six tries. It is a small set of discrete environments, each
+deterministic within itself — which is also what the container says, where
+three consecutive runs of the same box give 41,904,811 every time.
+
+So the row is deterministic per environment and the pool holds several. The
+comparison in the entry above rules out the obvious discriminator: the two
+runs it examined took the same `__memcmp_avx2_movbe` dispatch and differed
+only inside glibc's allocator. Whatever separates the environments, it is
+finer than the dispatch block and it does not touch a single instruction the
+compiler executes — every `kanso::` symbol was identical across the pair.
+
+This sharpens the question filed for Clay rather than changing it. A row that
+is deterministic per environment and varies across a pool of them can be
+pinned two ways: record the environment, or stop counting the part that
+varies. The first needs a discriminator nobody has found yet — the dispatch
+block is not it. The second is available now and is what the gate's header
+already claims to measure.
+
+**And it has already failed on main.** The claim above — that a pull request
+changing nothing would fail this gate on some runners — was an inference from
+the readings. It does not need to be: main's own `ci` run at **9541196f**, on
+2026-09-02, failed with `compile instructions disagrees with its golden` and
+every other row in that vein green. That commit is a merge that had just
+regenerated the row, so the golden it was checked against was its own.
+
+So the gate has already gone red on merged history, on a commit whose author
+had just pinned the number it was checked against. Whatever this row is
+measuring, it is not something a branch can be held responsible for, and the
+seventh reading on this branch — 41,500,974 again — is the fourth head in a
+row to say so.
+
+That is the whole of the case for leaving the golden at main's value and
+sending the question on rather than pinning a number that will be wrong on
+the next runner.
+
+## 2026-09-03, LATER STILL — the silicon hypothesis was right and I killed it on the wrong evidence
+
+The gate now prints the binary that counted the row. It answered a different
+question than it was aimed at, and the answer is that two entries above are
+wrong.
+
+The two CI runs compared earlier ran on **different CPUs**. The gate has been
+printing the dispatch block all along and both blocks were in the job logs;
+they differ:
+
+| field | run at 41,500,974 | run at 41,495,850 |
+|---|---|---|
+| `features[0x2].cpuid[0x0]` | 0xa10f11 | 0xa00f11 |
+| `features[0x5].cpuid[0x1]` | 0x30100015 | 0x30000015 |
+| `level2_cache_size` | 0x100000 | 0x80000 |
+| `rep_movsb_stop_threshold` | 0x100000 | 0x80000 |
+
+**What I did wrong.** I compared which `memcmp` implementation glibc had
+selected — `__memcmp_avx2_movbe` on both — and concluded the two runs were on
+indistinguishable silicon. That is the wrong field. The selected function is
+one output of the dispatch; the CPUID word and the cache-derived tunables are
+others, and those differ. I then wrote that "the silicon hypothesis is dead,
+killed by the same test that killed the layout one" — which is the same error
+the layout entry corrects, committed in the act of claiming not to.
+
+The pattern is now three for three: a number moved, I reached for a mechanism,
+and the mechanism was asserted from evidence that did not separate it from the
+alternative. Twice the mechanism was wrong. The one thing that has worked every
+time is comparing two runs field by field and reading what actually differs.
+
+**What follows.** Task #244 was right and its closure was not. Recording the
+dispatch block beside the row is the fix, exactly as `kq/bench/instructions_golden.txt`
+already does and for the reason kq#86 already gave. The row is deterministic
+per CPU and the pool holds at least two; pinning it per recorded silicon is
+the shape that works.
+
+That also means the two invasive options are off the table, and Clay's
+instinct to keep libc counted survives intact: libc's cost stays in the row
+because it is a real cost of how this compiler allocates, and the row stops
+lying because it says which chip counted it.
+
+**What is NOT claimed here.** How a different L2 size produces 2,870 fewer
+instructions inside `_int_malloc` is not established. `_int_malloc` does not
+call memcpy, and the mechanism could run through heap addresses, alignment,
+or something else entirely. What is observed is that the environments differ
+in a way the gate already records, and that is enough to attribute the row
+without inventing the chain. Inventing the chain is what went wrong twice.
+
+**A second cause is live and I had not checked it either.** Before pinning a
+row per chip, one thing had to be ruled out and was not: `src/runtime.c` is
+`include_str!`'d into the compiler. Every commit on this branch changed it, so
+every head built a different compiler binary — different bytes, different
+place for the heap to start — without altering one instruction the front end
+executes when it checks a library.
+
+So two candidate causes are live at once, the silicon and the binary, and the
+readings so far cannot separate them. Four values, two identified chips, and
+several different binaries across the heads that produced them. Pinning per
+chip would be building on the same kind of half-checked story that has now
+been wrong twice, so it waits.
+
+What is added instead is one greppable line per run — cpu, binary sha, row —
+so three runs settle it: same cpu and same sha with different rows means it is
+neither; same cpu with the sha tracking the row means it is the binary; the
+same sha on two cpus tracking the row means it is the silicon. That is the
+measurement the last two entries should have started from.
+
+## 2026-09-03 — RETRACTION: the compile row IS this change's, by 5,621, and it falls
+
+Three entries above say this row's movement is not this branch's, and one of
+them says main's own history settles it. That was wrong, and the experiment
+that shows it took four minutes and should have been the first thing run.
+
+Same container, same toolchain, same chip, same library box, only `src/`
+differing between the two arms, two runs each:
+
+    my src/     sha 52b28b027c23    41,904,811    41,904,811
+    main's src/ sha 1780ba089b7f    41,910,432    41,910,432
+
+**−5,621, and it repeats to the instruction.** `src/runtime.c` is
+`include_str!`'d into the compiler; this branch grew it by fifty lines; the
+compiler's bytes moved and the front end's counted work fell. That is a real
+movement of this row caused by this diff, and a fall is a win to bank — which
+is exactly what the gate has been asking for since the first red.
+
+**The first attempt at this experiment was also wrong and nearly got
+announced.** It restored `src/` without rebuilding, so both arms measured the
+same binary and agreed; the agreement looked like a null result. The fix was
+to print the binary's sha on every measurement rather than trust that a
+checkout implies a build. Every measurement above carries its sha for that
+reason.
+
+**What stands and what does not.** The chip variance is real: every head on
+this branch from f8fd75cb onward carries identical `src/`, and CI read both
+41,500,974 and 41,495,850 across them, twice each. So the row moves about
+5,124 with the silicon and about 5,621 with this diff, the two are the same
+size, and that is why they were confused. What does not stand is "not this
+PR's": it is this PR's, and separately it is also the pool's.
+
+**What that costs.** The golden was regenerated to 41,500,974 and then
+reverted on the strength of the claim now retracted. The revert was the wrong
+move. The row still cannot be pinned to a single value while the pool holds
+two chips — #247 is unaffected — but this branch owed a regeneration and a
+sentence saying the front end got cheaper, and it said the opposite instead.
+
+**The pattern, stated once more because this is the fourth.** Four times today
+a number moved, a mechanism was reached for, and the mechanism was asserted
+before the experiment that separates it from the alternative. Layout, then
+silicon-is-dead, then silicon-is-back, now this. The experiment has been cheap
+every single time. The rule that would have caught all four: when a number
+moves, change exactly one thing and measure both arms, before writing a word
+about why.
+
+## 2026-09-03 — the compile row gets a key, and a refusal you can watch
+
+Searched the log tail and `design/log/compiler-log-archive.md` for prior
+attempts at per-host instruction rows: kq#85 and kq#86 (the rows say which
+silicon counted them), and the `dispatch.sh` header's record of a
+"record one block, refuse elsewhere" design that CI killed in two runs. This
+is the third shape and the first that neither refuses everywhere nor skips.
+
+**What the row now is.** `bench/compile_instructions_by_cpu.txt` holds one
+value per chip, keyed by `scripts/gates/dispatch.sh key` — family and model
+and nothing else, so a firmware revision cannot move a row that is otherwise
+right. The gate reads the row for the silicon it landed on.
+`bench/compile_instructions_golden.txt` keeps its bare
+`compile_instructions=`, because welfare, the trend gate and `golden_prose`
+all read that file for one number, and the gate checks on every run that the
+bare line equals the table's first row. That check costs two file reads and
+catches the drift nothing else in the tree can see: welfare reads only the
+golden, the gate reads only the table, and a re-sitting that updated one of
+them would leave the objective tracking a number no chip counted.
+
+**Four ways to be wrong, one way to be right, and none of the four is a
+warning.** No rows at all; the golden drifted from the reference row; this
+chip has no row; the row moved on the chip that counted it. The third is the
+one the design turns on. Skipping there is the cheap answer and it is the
+answer CI already rejected: three runs in four land on a cpu that is not any
+given recorded one, so most regressions would go through, and this harness's
+own mutations redden these same gates, so on those runs its rows would go
+blind.
+
+**Why not a band.** The chip moves this row about 5,124 and the beat-rewind
+split moves it −5,621. A tolerance wide enough to swallow the first swallows
+the second, which is the whole signal. Pin the number, key the noise.
+
+**Watched failing.** The four refusals live in
+`scripts/gates/compile_ir_row.sh` rather than inside the gate, because the
+gate's own answer costs a callgrind run over the whole front end and refuses
+outright on any host whose toolchain is not the recorded one — on a container
+it is red before it reads a row at all, which is a gate no spec can drive.
+Split out, it is two files and four strings.
+`tests/a_compile_row_is_read_against_its_own_chip.rs` drives all five outcomes
+in forty milliseconds. Three breaks, each reddening exactly the specs it
+should and no others: waving an unrecorded chip through (1 red), dropping the
+golden/table drift check (2 red), and turning the row comparison into a
+±10,000 band (2 red). The first is now a ratchet row, `compile_ir_keyed`, on
+the specs job.
+
+**The front end got 5,621 instructions cheaper on this branch**, and this is
+where that is stated rather than only inside the retraction above. The
+same-chip experiment is in the previous entry. It is a fall and it is banked;
+the golden and the table land on the value CI reads, one chip per run.
+
+**What this costs, said plainly.** A change that moves the front end
+invalidates every chip's row at once, and only CI may write them — the values
+belong to its glibc and its rustc, which `measured_on.sh` pins on the table as
+well as the golden. So such a change takes several red pushes to re-pin, each
+printing the exact line to paste. The table therefore ships with no rows: the
+first runs say what to add. The alternative that costs nothing is a row that
+reads the runner.
+
+## 2026-09-03, LATER — the first chip's row, and it is a fifth cpu
+
+Searched the log tail and the archive for the pool's known cpus before calling
+this one new: `dispatch.sh`'s header and §34 of the page name four — an AMD
+EPYC Zen 3 (family 0x19 model 0x1), an Intel Ice Lake-SP (0x6/0x6a), an AMD
+Genoa, and the Cascade Lake (0x6/0x55) this container is. The run that counted
+today's row is **family 0x6 model 0xcf**, which is none of them. Five cpus in
+the pool, not four, and the gate found the fifth by refusing rather than by
+anybody going looking.
+
+    family0x6-model0xcf 41500974
+
+That is the first row of `bench/compile_instructions_by_cpu.txt`, and by the
+rule in its header it is the reference series, so
+`bench/compile_instructions_golden.txt` moves with it:
+
+    compile_instructions 41,495,096 -> 41,500,974
+
+**This is a re-basing and not a regression, and the difference matters.** The
+old value was counted on a chip nobody recorded, on main. The new one is
+counted on 0x6/0xcf, on this branch. Subtracting them is exactly the operation
+the keying exists to forbid — 5,878 is the size of the chip effect and the size
+of this branch's real move, which is why the two were confused for a day. What
+this branch does to the front end was measured the only way that answers it:
+same container, same toolchain, same chip, only `src/` differing, binary sha
+printed on both reads, **-5,621 repeating to the instruction**. That
+measurement stands and this row does not bear on it.
+
+**What is now pinned and what is not.** One chip of five has a row. The other
+four refuse until CI lands on them, printing the line to paste. Until then this
+gate is red on four runs in five, which is the bootstrap cost the table's header
+states rather than hides. `compile_binary sha256=74abf73ef677` and
+`.text=2513746` are printed beside the row, so a later disagreement on this same
+chip can be asked whether the binary moved.
+
+**One thing to watch.** While the table lacks a chip's row the gate is red for a
+reason no mutation caused, and the ratchet's `prove` reports BLIND only when a
+gate stays GREEN — it never checks the gate was green before. So `compile_ir`
+proves nothing on a nightly that lands on an unrecorded chip. That hole is older
+than this change (`compile_ir_host_unpinned` has always had it, since
+`measured_on` can refuse on its own) and it is filed rather than fixed here,
+because a green-before run roughly doubles the nightly's setup-and-gate work and
+wants that cost measured in its own pull request.
+
+## 2026-09-03, LATER STILL — two chips, one commit, 5,124 instructions apart
+
+Searched the log tail and the archive before writing this down as a
+measurement rather than an inference: the 5,124 figure appears above as
+"the row moves about 5,124 with the silicon", derived from CI reading
+41,500,974 and 41,495,850 across heads that carried identical `src/`. That was
+an inference from two unlabelled readings. This is the same quantity with the
+labels attached.
+
+Two runs, one commit — `22840458`, whose diff is a table, a golden and a log
+entry, none of which the compiler reads:
+
+    family0x6-model0xcf    41,500,974
+    family0x19-model0x1    41,495,850
+
+**5,124, and the chips are named this time.** An Intel Emerald Rapids against
+an AMD EPYC Zen 3, one libc, one binary's worth of source, and glibc choosing
+different code at load time on each. Nothing about the compiler differs
+between those two numbers.
+
+Set that beside what this branch does to the front end, measured on one chip
+with the binary's sha printed on both reads: **-5,621**. The noise and the
+signal are within ten per cent of each other in size. A band that covered the
+first would have hidden the second entirely, which is the whole argument for
+keying the row rather than widening it, now standing on a measurement instead
+of on two readings and a guess.
+
+Two of five chips have rows. The remaining three refuse until CI lands on them.

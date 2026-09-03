@@ -17,13 +17,23 @@
 # disagreeing. It is caught by the micro corpus too — one golden pins one
 # shape — which is what a mutation should be: proof this gate runs and
 # reddens, not a claim that only it can see the defect.
+#
+# There are two resets now, not one. The rewind's empty test moved inline to
+# its call sites and took the three stores with it, so the reset appears once
+# in `k_beat_rewind_slow` and once in the inline fast path — at a different
+# indentation, which is how this mutation caught the move and said so rather
+# than quietly deleting half of it. Both have to go: leaving either standing
+# means the path that runs still resets the cursor and the defect never
+# appears.
 set -e
-grep -qF '    k_seek_str = NULL;' src/runtime.c || {
-  echo "the rewind's cursor reset moved; this mutation needs rewriting" >&2
+before=$(grep -cE '^ +k_seek_str = NULL;$' src/runtime.c)
+if [ "$before" -lt 2 ]; then
+  echo "expected two cursor resets in the rewind, found $before;" >&2
+  echo "the reset moved again and this mutation needs rewriting" >&2
   exit 1
-}
-sed -i '/^    k_seek_str = NULL;$/d' src/runtime.c
-if grep -qF '    k_seek_str = NULL;' src/runtime.c; then
-  echo "the cursor reset is still there; the mutation did nothing" >&2
+fi
+sed -i '/^ *k_seek_str = NULL;$/d' src/runtime.c
+if grep -qE '^ +k_seek_str = NULL;$' src/runtime.c; then
+  echo "a cursor reset is still there; the mutation did nothing" >&2
   exit 1
 fi
