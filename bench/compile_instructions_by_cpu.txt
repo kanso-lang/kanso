@@ -459,3 +459,16 @@ family0x19-model0x11 41834008
 # already records that the binary moves the row by thousands on its own. What
 # the pair tests is whether a SECOND reading on this binary agrees with this
 # one. One reading cannot answer a question about two values.
+#
+# THE CONTROL, and the tightest one this vein has produced. kanso#1235 is a
+# records-only branch running MAIN's gate — no setarch, no sorted read_dir — and
+# CI read it twice within eight minutes:
+#
+#   fc993f83   design/*.md only          41,831,767   passed
+#   5fd89840   + docs/compiler.html      41,832,275   refused
+#
+# One HTML file between them, the same binary, 508 apart, on a chip whose
+# recorded row holds the low value. So the pair is still live on the unfixed
+# gate as of 18:08, and nothing about it was an artifact of the emptied table or
+# of the rustc bump. It is the seventh reading of the pair and the first where
+# the intervening diff is a single file.
