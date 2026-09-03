@@ -362,3 +362,55 @@ family0x19-model0x11 41831767
 # this file's own history warns about most. They stay as CI measured them.
 # Further readings are appended to the table in design/pending-gavels.md
 # rather than earning a note here each time; six is enough to decide on.
+
+# 2026-09-03, THE TERM IS FOUND, and it belongs to neither the compiler nor
+# the chip. `kanso check` reads /proc/self/maps before it reads a line of
+# kanso. glibc's pthread_getattr_np does it on Rust's behalf, to find the main
+# thread's stack: it opens the file, reads it in 1024-byte chunks and sscanfs
+# each line until it finds the one holding the stack pointer. What that costs
+# is a property of the HOST'S memory map — how many mappings it has, and how
+# long their pathnames are — and this row has been counting it all along.
+#
+# Measured on the container, which reads the row deterministically: forty runs
+# of the gate's exact command on one binary returned one value forty times, so
+# none of what follows is jitter. What moves it is the map.
+#
+#   one more shared library in the process    +32,090
+#
+# That is an LD_PRELOAD of an empty .so — four more lines for the parse to
+# walk, and thirty-two thousand instructions the compiler never executed.
+# Smaller edits to the same text give smaller steps. Lengthening the
+# executable's own file name from nine characters to ten moves the row +2,193,
+# and the profile diff across that pair names the maps parse and nothing else:
+#
+#   __vfscanf_internal                              +1,180
+#   ____strtoul_l_internal                            +576
+#   _IO_sputbackc                                      +88
+#   getdelim, getline, _IO_setb, pthread_getattr_np   the rest
+#
+# ZERO kanso symbols move across it. That is the signature the six readings
+# above recorded — "every kanso symbol agrees to the instruction ... three rows
+# differ and all three are glibc" — and a startup term is global rather than
+# per-chip, which is why two of three chips produced both values.
+#
+# The 508 the readings differ by is the downstream half of the same thing.
+# What the parse allocates and frees before main sits under everything the
+# compiler allocates afterwards, so _int_malloc walks different bins and
+# memcmp compares at different alignments for an identical request sequence.
+# A second knob shows that half by itself: argv[0] at 39 characters rather
+# than 38 moves the row +480, all of it in __memcmp_avx2_movbe.
+#
+# IT CAN BE MEASURED OUT. Collect from the compiler's own entry point rather
+# than from exec:
+#
+#   valgrind --tool=callgrind --collect-atstart=no --toggle-collect=kanso::main
+#
+#                                 raw        toggled
+#   one more shared library    +32,090             -6
+#   name 9 -> 10 characters     +2,193             +5
+#   36 name lengths, spread      2,900             90
+#
+# Ten toggled runs on one binary returned one value ten times. The residual 90
+# is argv[0], which the box already holds fixed at ./kanso. Rewiring the gate
+# invalidates every row here and every number derived from it, so it is its own
+# change; this note is the evidence it rests on.
