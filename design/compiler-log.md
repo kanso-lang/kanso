@@ -4932,6 +4932,28 @@ changes shipped together, one large and one small, and every unexplained number
 attached itself to the large one. What separated them was not an argument about
 mechanisms but two rebuilds and four counters.
 
+**And the landing page was quoting a sitting nobody had re-read.** The
+number-bearing surfaces are a checklist rather than a memory, so walking it
+found `docs/index.html`'s receipts panel carrying `reasonably-written rust 1.02`
+and `go encoding/json 1.95` where §08 reads 1.04 and 2.05. They are the
+2026-07-27 figures. #756 replaced that panel's kanso and serde rows with a
+pointer to the live board and left the two rows underneath alone, so the site has
+disagreed with itself about two of its four lanes for five weeks with every gate
+green. Both rows now read the 2026-08-07 sitting and the caption names its date,
+the way §08's does. Nothing checks this: the two pages hold the numbers as prose
+and `golden_prose` only reads what carries a `data-golden` attribute, which these
+cannot, because a hand-sat wall clock has no golden to read.
+
+**A chip the pool had never shown.** CI's compile-instructions gate went red
+on `family0x6-model0xcf` — Emerald Rapids, absent from the four the by-cpu
+file's header lists — with the refusal that an unrecorded chip is an unsat row.
+It read 41,832,275 where Zen 3 read 41,831,767 on the same binary, sha
+55fb850296d1 printed on both. 508 apart, against the 5,124 the header
+decomposes between two other chips on one binary. The ifunc effect is a
+property of the pair, not a constant, which is a second argument for the key
+over a band: a band wide enough for 5,124 hides every front-end move this vein
+has caught, and one narrow enough for 508 would still have refused this run.
+
 **A comment claimed a property the machine code contradicted, and nothing in
 the tree could see it.** That is the same family as #1137's four pins that
 rested on prose — except that one was a spec reading a comment, and this was a

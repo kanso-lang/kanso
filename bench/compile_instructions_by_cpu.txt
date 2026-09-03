@@ -140,3 +140,17 @@
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
 family0x19-model0x1 41831767
+
+# 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
+# Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
+# did not have it. The refusal is the machinery working: an unrecorded chip
+# goes red asking for a sitting rather than passing on somebody else's number.
+#
+# It read 41,832,275 against Zen 3's 41,831,767 on the SAME BINARY, sha
+# 55fb850296d1, printed on both runs. 508 apart, where the two chips the header
+# decomposes read 5,124 apart on one binary. So the size of the ifunc effect is
+# a property of the pair rather than a constant, which is the argument for a
+# row per chip and against any single tolerance: 508 would fit inside a band
+# that swallows 5,124, and so would every real front-end move this vein has
+# ever caught.
+family0x6-model0xcf 41832275
