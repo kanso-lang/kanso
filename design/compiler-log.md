@@ -20,110 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (twelfth) — a comment in runtime.c moves the compile row
-
-The correction above turned `compile_instructions` red: 41,495,720 ->
-41,495,304, a fall of 416, from a change that is entirely a comment.
-
-`src/main.rs` reaches the runtime through `include_str!("runtime.c")`, so the
-file's bytes are part of the compiler's data section. `kanso check lib/json`
-never emits the runtime and never reads that string; the front end does exactly
-the work it did before, at slightly different addresses, and the count comes
-out 416 lower for it.
-
-Worth writing down because the obvious reading of a move in this row is that
-the front end changed, and here nothing in the front end was touched. A comment
-in runtime.c is not free in this vein, the direction is not predictable from
-the edit, and the number that fell is a layout artefact rather than a win to
-bank. It is recorded as an improvement because that is what the row says, and
-this paragraph is what stops the next reader crediting it to a pass.
-
-## 2026-09-02 (thirteenth) — the 67 million is a lost specialisation, and the fix is declined
-
-kanso#1214 left one thing unexplained: encodebench pays +67,116,000 for the
-index twin, all of it inside `d_list/fold_3`, in a program that never indexes a
-list. Routing by typeset and dropping `alwaysinline` were both measured as
-no-ops, so the answer was not where the body goes.
-
-**The compiler emits the same function either way.** `d_list/fold_3`'s IR is
-byte-identical across the two builds, and so are `fold_flat_4` and
-`fold_go_3`. Nothing the front end writes changed.
-
-**The machine code got smaller and slower.** `fold_3` is 4,083 bytes without
-the twin and 3,682 with it — 401 bytes less code running fourteen per cent more
-instructions. Its call sites collapse with it: `k_call2` four to one, `k_index`
-four to one, `k_b_length` two to one, `k_truthy_bad` two to one. LLVM had been
-specialising the dispatcher into four copies; the twin's `alwaysinline` body,
-inlined into `fold_flat_4`, pushed its inline cost past the point where that
-paid, and one shared body with more branching replaced four specialised ones.
-
-**Forcing the twin out of line restores it exactly.** With `noinline` on
-`k_index_fast`, `fold_3` is 4,083 bytes again — the same number, not a similar
-one — the four `k_call2` sites are back, and encodebench reads 6,947,803,659,
-its pre-twin count to the instruction. That is not a plausible story about
-inlining; it is the same object file's worth of decisions coming back.
-
-**And the objective declines the fix.** `noinline` is a trade, not a win:
-
-```
-encodebench  -67,116,000   -0.957%
-oneshot          -30,113   -0.079%
-pendbench         +9,392
-basket          +283,126   +0.517%
-deepbench     +4,856,000   +0.717%
-scanbench     +5,516,906   +0.388%
-digestbench   +8,244,421   +8.330%
-```
-
-digestbench keeps only two thirds of what #1214 bought it, and welfare goes
-75.09 -> 75.03. The sum of the raw counts falls by 48 million and the objective
-still says no, which is the weights doing exactly what they are for: the
-benchmark that pays is the one the change was built for.
-
-**scanbench is on that list because kanso#1215 put it there**, four hours
-earlier. Without it this trade would have scored 5,516,906 instructions
-cheaper than it is, and the answer might have come out the other way. A
-benchmark weighed at zero does not make a change look good; it makes the
-NEXT change look good, which is worse, because nobody is looking at the
-benchmark when they read the score.
-
-The twin stays `alwaysinline`. What is now known and was not: the 67 million is
-LLVM's specialisation threshold, the lever that reaches it is `fold_flat_4`'s
-inline cost, and both are properties of a dispatch group emitted as one
-function. Whether dispatch groups should be emitted so a cold arm cannot price
-a hot one out of specialisation is a design question, and it is Clay's.
-
-## 2026-09-02 (fourteenth) — that last question was mine, not Clay's
-
-The entry above ended by calling the dispatch-group question a design question
-and Clay's. design/pending-gavels.md says otherwise, in its second paragraph:
-an entry goes to him because it is about the language a user meets — surface,
-semantics, observable behavior — and "implementation details do not come here;
-whoever holds the file decides them and answers for the decision in the log."
-
-How a dispatch group is emitted is not something a user meets. Nothing about
-`fold`'s meaning changes either way. So the question is mine, and this is the
-answer.
-
-**Not now.** The one lever measured — `noinline` on the twin — is declined by
-the objective at 75.09 -> 75.03. The larger change, emitting a dispatch group
-as a function per arm rather than one body, is unmeasured and would undo part
-of what kanso#1140 built when it made a dispatch group a range; a change of
-that size on a hypothesis this thin is exactly the design note the log keeps
-telling sessions not to write.
-
-**What would reopen it.** The instructions vein now covers all eleven
-benchmarks, so the shape shows up on its own: a benchmark that does not use a
-feature rising when that feature's twin lands, with its `.text` FALLING at the
-same time. Down and slower together is the signature — it is what encodebench
-did here, 401 bytes smaller and 14% dearer — and it does not look like anything
-else. Two more sightings with the same signature and the change has a
-measurement behind it instead of one.
-
-The correction matters beyond this entry: a question filed to Clay that is not
-his costs him a sitting and costs the ledger its meaning, and the rule against
-it is written at the top of the file it would have gone in.
-
 ## 2026-09-02 (fifteenth) — the one vein the objective leaves out, and why
 
 `bench/text_golden.txt` is the only deterministic vein `scripts/welfare` does
@@ -2877,3 +2773,229 @@ and that is worth recording rather than counting as coverage.
 **The surface shape is still Clay's**, and the ledger entry stays until he
 rules on it. What has changed is that it is now a thing to read rather than a
 thing to imagine, and the evidence for wanting it is a measurement.
+
+## 2026-09-03 (ninth) — the compile row was counting the host's memory map
+
+**DONE (the finding). Clay ruled on the entry the same day, and the ruling is
+option 1 with the term named: make the row deterministic with glibc still
+counted — no pinned pair, no band, no exclusion.** His words: "if changes to the
+compiler can interact with glibc in a way that means generally more/less work,
+which the 'compiler's own instructions' measure would be blind to, then we need
+a way to include glibc's instructions but make them consistent."
+
+That is right, and it kills the fix this session had built. Collecting from
+`kanso::main` and leaving startup out would have made the vein blind to exactly
+the case he names: a compiler change that causes glibc to do more work. The
+toggle is dropped.
+
+What survives is the measurement, because the ruling asks for the term and this
+is the term.
+
+`kanso check` reads `/proc/self/maps` before it reads a line of kanso. glibc's
+`pthread_getattr_np` does it on Rust's behalf, to find the main thread's stack:
+open the file, read it in 1024-byte chunks, `sscanf` each line until the one
+holding the stack pointer turns up. What that costs is a property of the host's
+memory map — how many mappings it has, how long their pathnames are — and this
+vein has been counting it since it was minted.
+
+The container reads the row deterministically, which is what made this
+findable: forty runs of the gate's exact command on one binary returned one
+value forty times. So the knobs below move a number that does not otherwise
+move.
+
+    one more shared library in the process     +32,090
+
+That is an `LD_PRELOAD` of an empty `.so`: four more lines for the parse to
+walk, and thirty-two thousand instructions the compiler never executed.
+Smaller edits to the same text give smaller steps. Lengthening the executable's
+own file name from nine characters to ten moves the row +2,193, and the profile
+diff across that pair names the maps parse and nothing else — `__vfscanf_internal`
++1,180, `____strtoul_l_internal` +576, `_IO_sputbackc` +88, then `getdelim`,
+`getline`, `_IO_setb` and `pthread_getattr_np` itself. Zero kanso symbols move.
+
+That is the signature the six CI readings recorded: "every kanso symbol agrees
+to the instruction ... three rows differ and all three are glibc". A startup
+term is global rather than per-chip, which is why two of three chips produced
+both values, and why pinning the glibc tunables took the spread from 5,064 to
+508 without closing it.
+
+The 508 itself is the downstream half. What the parse allocates and frees
+before `main` sits under everything the compiler allocates afterwards, so
+`_int_malloc` walks different bins and `memcmp` compares at different
+alignments for an identical request sequence. A second knob isolates that half:
+`argv[0]` at 39 characters rather than 38 moves the row +480, all of it in
+`__memcmp_avx2_movbe`.
+
+**It can be measured out**, which is why this is an instrument repair and not a
+question for Clay. Collecting from the compiler's own entry point rather than
+from `exec`:
+
+    valgrind --tool=callgrind --collect-atstart=no --toggle-collect=kanso::main
+
+                                  raw        toggled
+    one more shared library    +32,090             -6
+    name 9 -> 10 characters     +2,193             +5
+    36 name lengths, spread      2,900             90
+
+Ten toggled runs on one binary returned one value ten times. The residual 90 is
+`argv[0]`, which the box already holds fixed at `./kanso`.
+
+**OPEN — the rewiring itself.** Changing what the gate collects invalidates
+every row in `bench/compile_instructions_by_cpu.txt`, the bare golden the trend
+gate and `golden_prose` read, welfare's baseline for the counter, and the pinned
+figure in the compiler page. Only CI may write those values, one chip per run,
+so it is its own change and lands red until it is re-sat. Two things it owes:
+a guard, because a `--toggle-collect` whose function is missing yields
+`summary: 0` and exit 0 — a silent zero that would be reported as the front end
+moving; and a welfare re-baseline in the same commit, because the number falls
+by about 1% without a single instruction of work being removed, and banking that
+as a win would be recording an instrument change as an improvement.
+
+## 2026-09-03 (tenth) — the bimodal row is made deterministic, not excused
+
+**DONE for the two suspects, OPEN for the answer.** Supersedes the OPEN
+paragraph closing the entry above, which planned to exclude process startup from
+the count. Clay ruled against that the same afternoon: "if changes to the
+compiler can interact with glibc in a way that means generally more/less work,
+which the 'compiler's own instructions' measure would be blind to, then we need
+a way to include glibc's instructions but make them consistent." He is right,
+and the toggle is dropped — it would have made the vein blind to exactly the
+case he names. No pair, no band, no exclusion.
+
+The ruling named two suspects, both fitting the measured signature: five
+consecutive runs in one container agree exactly while two runners on one binary
+and chip disagree, so the randomness is fixed at container birth rather than per
+exec. Both are now tested and both answers differ from the guess.
+
+**Readdir order was already sorted, and cannot be the term.** `src/lib.rs`
+sorts the files a compile reads before reading any of them; `src/eval.rs` sorts
+what `list_dir` answers. The four remaining `read_dir` calls are in
+`src/main.rs` on the `test` path and order-independent by construction — three
+are `.any()` or `.count()`, and the fourth is a vector whose only order-sensitive
+use is a single-element match.
+
+One was sorted anyway on the rule rather than the symptom, and then WITHDRAWN,
+which is the more useful finding. It changed no answer and it changed the
+binary: `.text` 2,514,718 -> 2,517,278, moving this row 41,831,767 -> 41,834,008
+and invalidating every recorded value. That is the wrong price for a defensive
+sort, and worse than its cost is what it did to the experiment — the ruling asks
+for the modes to be measured away on several fresh runners, and a changed binary
+makes every earlier reading incomparable, so `setarch -R` and a new layout would
+have been confounded from the first run. With the sort out, the binary is
+main's, the recorded rows stand, and setarch is the only variable. The
+determinism fix is worth landing on its own once this vein is settled and the
+row it moves is not the row under test.
+
+**ASLR is disabled now, and on the container it changes nothing.** `setarch -R`
+reads 42,235,790 against 42,235,790 without it, and forty unwrapped runs on one
+binary returned one value forty times. Applied regardless: the modes have only
+ever appeared on the runners, and a container cannot rule out what it has never
+reproduced. The gate prints `compile_aslr disabled=` so the job log says whether
+the wrapper took; CI reads `yes`.
+
+**Nothing is priced, because nothing moved.** With the sort withdrawn this
+branch changes `scripts/gates/compile_instructions.sh` and no compiler source,
+so the binary is byte-identical to main's and every counter reads what main
+records. The trend gate has nothing to say and welfare holds at 76.1742943805134
+against its own floor. An earlier revision of this branch did move
+`compile_instructions` +2,241 and spent 0.00015 of the score declaring it; that
+is reverted, and the declaration with it.
+
+**The evidence so far, and it is not yet an answer.** Two CI readings on binary
+sha b0e5a906c73d, twelve minutes apart, both on family0x19-model0x11, both
+41,834,008 — the first agreement on one binary since the pair appeared. That
+binary is the withdrawn one, so the agreement is kept as history rather than as
+a result: it says the value repeats, on a tree that no longer exists. Against
+that, a control taken at the same time on kanso#1235, which runs the UNFIXED
+gate: 41,831,767 on a design-only diff, then 41,832,275 with one HTML file
+added, same binary, 508 apart. So the modes were live on the old gate minutes
+before the new gate read the same value twice.
+
+**OPEN.** Two agreeing readings on one chip is not enough. What settles it is
+the other chips landing on their own values and holding them. If they do, glibc
+stays counted under a single exact pin and the per-chip key separates nothing —
+the file collapses back to one golden. If a second value appears on a recorded
+chip, neither suspect was the term, and the entry above already names what is
+left: glibc parses `/proc/self/maps` before `main` to find the stack bounds, one
+more shared library in the process moves the row 32,090, and that cost belongs
+to the host's memory map rather than to the compiler. That is what "make them
+consistent" would then have to reach.
+
+## 2026-09-03 (eleventh) — one binary, one chip, two values: the pair is pinned
+
+**DONE.** Closes the OPEN half of the entry above, which had the two suspects
+tested and the answer outstanding. Searched the live log and
+`design/log/compiler-log-archive.md` for prior treatments of the compile row's
+spread before filing: the archive carries the 5,064-apart clusters that the
+glibc tunables closed, and the live log carries the ninth and tenth entries.
+Nothing there proposes a pinned pair, so this is new.
+
+**Both suspects are falsified, and `setarch -R` comes back out.** The ruling
+applied it on the argument that the modes only ever appear on the runners and a
+container cannot rule out what it has never reproduced. That was the right
+reason to try it and CI has now answered: `e47e412d` printed
+`compile_aslr disabled=yes` and counted 41,832,275 on a chip whose row held
+41,831,767. It moved nothing on the container either — 42,235,790 against
+42,235,790, and forty unwrapped runs returning one value forty times. A knob
+measured twice to move nothing is not carried, so the gate loses it and keeps
+the finding.
+
+**What settles it is the sha the gate prints.** `compile_binary sha256=` was
+added to pair a reading with the binary that produced it and had never yet
+answered a question. It answers this one:
+
+| commit | binary sha | cpu | counted |
+|---|---|---|---|
+| `fc993f83` | `de5bfab22fbd` | family 0x6 model 0xcf | 41,831,767 |
+| `e47e412d` | `de5bfab22fbd` | family 0x6 model 0xcf | 41,832,275 |
+
+One binary, one chip, two values, eight minutes apart. The second ran with
+`setarch -R` and the first without, so the same pair is the falsifier for the
+last suspect. A third run — main at `5b0f2eb1` — counted 41,832,275 on
+`family0x19-model0x11` against a recorded 41,831,767, so the second chip has
+shown both values on this binary too.
+
+I got this wrong once in the middle of the investigation and it is worth
+recording how. Two runs agreeing at 41,832,275 on one sha, against rows recorded
+on an older sha, read as "the binary moved and the rows are stale" — a tidier
+answer than bimodality, and I had reverted the pair machinery on it before
+fetching the third log. `fc993f83` killed it: same sha, same chip, the low
+value. Two points that agree are consistent with almost anything.
+
+**So the row pins a pair, which the ruling pre-authorised**: "only a residual
+that survives both reopens the question, and then the fallback is the pinned
+pair, never blindness." `scripts/gates/compile_ir_row.sh` grows three refusals
+— a row that pins neither one value nor two, a row that pins three, and a pair
+whose halves are the same number — and the lookup takes every value on the row
+and asks whether the count is among them. Two is a cap and not a convention: a
+band wide enough to hold 508 also holds kanso#1226's -5,621, which was a real
+change to the compiler. The golden's bare line stays the reference row's FIRST
+value, so a mode flip cannot reach welfare or the trend gate as a regression;
+`bench/compile_instructions_golden.txt` is byte-identical to main's on this
+branch, which is the check that it cannot.
+
+Six specs, all watched red first, and three ratchet mutations verified to redden
+this suite: the new `a_pinned_pair_grows_into_a_band`, plus the two existing
+mutations whose refusal-count guards had to move from five to seven.
+
+**A fourth chip, recorded the same afternoon.** CI landed on
+`family0x6-model0xad` — Granite Rapids, new to the pool — and the gate refused
+rather than passing on another chip's number, which is the unrecorded-chip
+design doing its job. It counted 41,832,275 on the same binary
+`de5bfab22fbd`, so three of the four recorded chips have now read the high
+value there and two of them have read both. It is recorded as a SINGLE,
+because one reading is one reading and a row may not claim a mode nobody has
+seen it take.
+
+That standing is an argument the per-chip key is separating nothing on this
+binary: the value looks like a property of the run rather than of the silicon.
+Not acted on. The key costs nothing while it is still right about the
+cross-binary case the file's header decomposes, and one binary is not enough
+to retire it.
+
+**OPEN, and stated as a measurement rather than a plan.** The ninth entry's
+term — glibc parsing `/proc/self/maps` before `main`, at a cost that is a
+property of the host's memory map — is still the only mechanism that fits, and
+it is not established that two runners differ in their maps by the 508 this
+needs. The row would have to print the map's line count beside the count to
+say. Nothing rests on the answer now that the pair holds the gate green.

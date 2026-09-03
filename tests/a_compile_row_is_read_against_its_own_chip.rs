@@ -306,3 +306,126 @@ fn a_duplicate_on_another_chip_refuses_too() {
     );
     assert!(answer.refused(), "the file is wrong whoever is reading it: {}", answer.said);
 }
+
+/// THE PINNED PAIR. Two suspects were named for the 508 this row moves, and
+/// both were falsified: the loader already sorts what a compile reads, and
+/// `setarch -R` did not close the modes. What settles it is a pair of CI runs
+/// whose gate printed the SAME binary sha256 de5bfab22fbd and the SAME cpu
+/// family 0x6 model 0xcf — fc993f83 counted 41,831,767 and e47e412d counted
+/// 41,832,275. One binary, one chip, two values.
+///
+/// So a row may carry a second value, and both are exact. This is not a band:
+/// a band admits everything between two numbers and would have swallowed
+/// kanso#1226's -5,621 without a word. A pair admits two numbers that were
+/// each measured, and refuses a third.
+#[test]
+fn a_row_may_pin_two_values_and_both_land() {
+    let table = table_of(&[("family0x6-model0xcf", "41831767 41832275")]);
+    let low = asked("pair-low", &table, &golden_of("41831767"), "family0x6-model0xcf", "41831767");
+    assert_eq!(low.code, 0, "the first mode lands: {}", low.said);
+    let high =
+        asked("pair-high", &table, &golden_of("41831767"), "family0x6-model0xcf", "41832275");
+    assert_eq!(high.code, 0, "and so does the second: {}", high.said);
+    assert!(
+        high.said.contains("41832275"),
+        "and the job log carries which of the two it was: {}",
+        high.said
+    );
+}
+
+/// A third value is the whole point of pinning a pair rather than widening to
+/// a band. 41,834,008 sits between the two modes and is refused.
+#[test]
+fn a_third_value_between_the_two_modes_still_refuses() {
+    let answer = asked(
+        "pair-third",
+        &table_of(&[("family0x6-model0xcf", "41831767 41832275")]),
+        &golden_of("41831767"),
+        "family0x6-model0xcf",
+        "41834008",
+    );
+    assert!(answer.refused(), "a value inside the pair is not inside anything: {}", answer.said);
+    assert!(
+        answer.said.contains("41831767") && answer.said.contains("41832275"),
+        "and the refusal names both pinned values, so a reader can see it is a \
+         pair and not a moved single: {}",
+        answer.said
+    );
+}
+
+/// The golden's bare line is the reference row's FIRST value. welfare and the
+/// trend gate read one number, and a mode flip must not read as a regression
+/// to them — so the second value never reaches the objective.
+#[test]
+fn the_golden_tracks_the_first_of_a_paired_reference_row() {
+    let answer = asked(
+        "pair-golden-second",
+        &table_of(&[("family0x6-model0xcf", "41831767 41832275")]),
+        &golden_of("41832275"),
+        "family0x6-model0xcf",
+        "41832275",
+    );
+    assert!(answer.refused(), "the golden may not hold the second mode: {}", answer.said);
+    assert!(answer.said.contains("welfare"), "and it is named as the drift: {}", answer.said);
+}
+
+/// Two is the cap. A row that grows a third pinned value is a band being
+/// assembled one reading at a time, and every reading added to it is a mode
+/// nobody explained. The refusal is over the whole table, not this run's chip,
+/// for the reason the duplicate check is: otherwise the file stays wrong for
+/// every run but the unlucky one.
+#[test]
+fn a_row_pinning_three_values_refuses_wherever_it_sits() {
+    let answer = asked(
+        "triple",
+        &table_of(&[
+            ("family0x6-model0xcf", "41831767"),
+            ("family0x19-model0x1", "41832275 41831767 41834008"),
+        ]),
+        &golden_of("41831767"),
+        "family0x6-model0xcf",
+        "41831767",
+    );
+    assert!(answer.refused(), "three pinned values is a band by enumeration: {}", answer.said);
+    assert!(
+        answer.said.contains("family0x19-model0x1"),
+        "and it names the row, not the one this run landed on: {}",
+        answer.said
+    );
+}
+
+/// A pair whose two values are the same number is a reading pasted twice. It
+/// admits exactly what a single would and claims a second mode was measured,
+/// which is the shape of a golden that says something it did not check.
+#[test]
+fn a_pair_of_one_value_repeated_refuses() {
+    let answer = asked(
+        "pair-same",
+        &table_of(&[("family0x6-model0xcf", "41831767 41831767")]),
+        &golden_of("41831767"),
+        "family0x6-model0xcf",
+        "41831767",
+    );
+    assert!(answer.refused(), "a doubled value is not a pair: {}", answer.said);
+}
+
+/// A row with a key and no value at all. The lookup would return empty and the
+/// run would be reported as an unrecorded chip, sending a reader to add a row
+/// that is already there.
+#[test]
+fn a_row_with_no_value_is_not_reported_as_an_unrecorded_chip() {
+    let answer = asked(
+        "valueless",
+        &table_of(&[("family0x6-model0xcf", "")]),
+        &golden_of("41831767"),
+        "family0x6-model0xcf",
+        "41831767",
+    );
+    assert!(answer.refused(), "a keyed row with nothing in it refuses: {}", answer.said);
+    assert!(
+        !answer.said.contains("nothing in"),
+        "and not as a missing chip, which would send a reader to add a second \
+         row for a key that already has one: {}",
+        answer.said
+    );
+}
