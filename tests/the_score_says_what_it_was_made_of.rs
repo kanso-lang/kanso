@@ -234,3 +234,150 @@ fn the_weights_divide_one_whole() {
         .sum();
     assert!((sum - 1.0).abs() < 1e-9, "the weights sum to one, not {sum}");
 }
+
+/// The page replays the score in javascript, because it is static and the
+/// 2026-08-31 directive says the chart shows the current formula over the
+/// stored rows. That is a second statement of the rule, and a second statement
+/// drifts from the first silently — the chart would go on drawing a line, just
+/// the wrong one.
+///
+/// So run the page's own two functions, lifted out of the html rather than
+/// copied here, over the model and counters welfare emits, and require the
+/// answer welfare gives. A copy would agree with itself forever.
+#[test]
+fn the_page_replays_the_score_the_tool_computes() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let page = std::fs::read_to_string(root.join("docs/numbers.html")).expect("the page");
+
+    // From `function <name>` to the brace that closes it. Counting braces is
+    // enough here because neither function holds a brace in a string or a
+    // comment, and the extraction failing loudly beats it silently taking the
+    // wrong text.
+    let lift = |name: &str| -> String {
+        let head = format!("function {name}(");
+        let at = page.find(&head).unwrap_or_else(|| panic!("the page defines {name}"));
+        let open = page[at..].find('{').expect("a body") + at;
+        let mut depth = 0;
+        for (i, c) in page[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return page[at..open + i + 1].to_string();
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("{name} is never closed");
+    };
+
+    let ask = |flag: &str| {
+        let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(root.join("scripts/welfare"))
+            .args(if flag.is_empty() { vec![] } else { vec!["--", flag] })
+            .current_dir(root)
+            .output()
+            .expect("welfare runs");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    // The row the page would read: perf_record writes the welfare counter set
+    // into the history row under welfare's own names, so `--counters` is that
+    // half of a row exactly.
+    let row: String = ask("--counters")
+        .lines()
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| format!("{k:?}:{v},"))
+        .collect();
+
+    let dir = root.join("target/page-replay");
+    std::fs::create_dir_all(&dir).expect("a scratch directory");
+    let model_at = dir.join("model.txt");
+    std::fs::write(&model_at, ask("--model")).expect("the model");
+    let script_at = dir.join("replay.js");
+    std::fs::write(
+        &script_at,
+        format!(
+            "{}\n{}\nconst m = parseModel(require('fs').readFileSync({:?}, 'utf8'));\n\
+             if (!m) throw new Error('the model did not parse');\n\
+             console.log(replayScore({{{row}}}, m));\n",
+            lift("parseModel"),
+            lift("replayScore"),
+            model_at.to_str().expect("a path"),
+        ),
+    )
+    .expect("the script");
+
+    let out = Command::new("node").arg(&script_at).output().expect("node runs");
+    assert!(out.status.success(), "node: {}", String::from_utf8_lossy(&out.stderr));
+    let theirs: f64 = String::from_utf8_lossy(&out.stdout).trim().parse().expect("a score");
+
+    let said = ask("");
+    let banner: f64 =
+        said.split_whitespace().nth(1).expect("welfare says a score").parse().expect("a number");
+
+    assert!(
+        (theirs - banner).abs() < 0.005,
+        "the page's replay gives {theirs:.4}, welfare says {banner:.2}"
+    );
+}
+
+/// A row from before a counter joined the model cannot be scored, and the
+/// chart must leave it out rather than invent a reading. Clay, 2026-09-03:
+/// "No backfill: start the replayed line at the first commit with the full
+/// current counter set."
+#[test]
+fn a_row_missing_a_counter_is_not_scored() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let page = std::fs::read_to_string(root.join("docs/numbers.html")).expect("the page");
+    let lift = |name: &str| -> String {
+        let head = format!("function {name}(");
+        let at = page.find(&head).unwrap_or_else(|| panic!("the page defines {name}"));
+        let open = page[at..].find('{').expect("a body") + at;
+        let mut depth = 0;
+        for (i, c) in page[open..].char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return page[at..open + i + 1].to_string();
+                    }
+                }
+                _ => {}
+            }
+        }
+        panic!("{name} is never closed");
+    };
+
+    let script = format!(
+        "{}\n{}\n\
+         const m = parseModel('term t|1.0|2.0|a,b\\nbase a=10\\nbase b=20\\n');\n\
+         console.log(JSON.stringify([\n\
+         replayScore({{a: 10, b: 20}}, m),\n\
+         replayScore({{a: 10}}, m),\n\
+         replayScore({{}}, m),\n\
+         ]));\n",
+        lift("parseModel"),
+        lift("replayScore"),
+    );
+    let dir = root.join("target/page-replay");
+    std::fs::create_dir_all(&dir).expect("a scratch directory");
+    let at = dir.join("partial.js");
+    std::fs::write(&at, script).expect("the script");
+
+    let out = Command::new("node").arg(&at).output().expect("node runs");
+    assert!(out.status.success(), "node: {}", String::from_utf8_lossy(&out.stderr));
+    let said = String::from_utf8_lossy(&out.stdout);
+
+    // At parity every ratio is 1, so each counter scores 1/(1+2) and the term
+    // scores a third of its whole weight: 100 * 1/3.
+    assert_eq!(
+        said.trim(),
+        "[33.33333333333333,null,null]",
+        "a complete row scores and a partial one does not: {said}"
+    );
+}

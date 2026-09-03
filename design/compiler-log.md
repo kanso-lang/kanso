@@ -3088,3 +3088,47 @@ rewritten to match. That needs a real row, which CI writes on the commit after
 the counter-set change lands. The sentence and the chart move together: a page
 claiming a replay it does not perform is the one outcome worse than the stale
 sentence.
+
+## 2026-09-03 (second) — the chart replays, and the sentence that denied it is gone
+
+**DONE.** Searched the live log and the archive before filing: the entry above
+built `welfare --model` and left the drawing undone, and the 2026-08-31
+directive "the welfare chart replays the current formula" is the ruling this
+answers. Nothing in either file draws it.
+
+**Two lines where there was one.** The solid one is the replay: every row
+scored by the model and baseline in force today, so its points can be read
+against each other. The dashed one is what each commit shipped with, kept
+because it is the record and it is where the 2026-08-29 definition step lives.
+They share a scale. Drawn to their own ranges each would fill the plot and the
+reader would compare two shapes with no axis between them, when the gap where
+they overlap is the thing worth seeing.
+
+**No backfill, and it is a spec rather than an intention.** `replayScore`
+answers null for a row missing any counter the model reads, so the solid line
+starts at the first row carrying the whole set — today that is the commit after
+the counter-set change, and before it the rows genuinely do not hold the
+numbers. `a_row_missing_a_counter_is_not_scored` pins it at three rows: whole,
+partial, empty. Watched red by making a missing counter skip rather than
+refuse, which scored a half-row 16.67 and drew it beside real points.
+
+**The page's own functions are what the spec runs.** `parseModel` and
+`replayScore` are lifted out of the html by brace matching and run under node
+against `welfare --model` and `welfare --counters`; the answer has to be
+welfare's own. A copy pasted into a test would agree with itself forever.
+Watched red by replacing the saturation term with a constant: 72.2758 against
+73.06, which is exactly the size of drift that looks like a real move.
+
+**`model.txt` sits beside `history.jsonl`,** written by the same job, replaced
+rather than appended — it describes the model as it stands and its history is
+welfare_floor.json. If it cannot be fetched the recorded line still draws and
+the replayed one is absent, which is the right failure: a page with no numbers
+beats a page with stale ones.
+
+**The sentence is gone.** "the welfare line is recorded, not recomputed" was
+true when written and stopped being true on 2026-08-31. The page now says the
+score is computed in the browser from each commit's counters against today's
+baseline, and says where the baseline comes from.
+
+The ratchet gained `chart_replay`, anchored on the saturation term rather than
+a number, because the number moves whenever the compiler does.
