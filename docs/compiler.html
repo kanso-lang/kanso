@@ -1477,6 +1477,18 @@ rescue when_failed</code></pre>
 
 <p>the wider lesson is about the comment rather than the dispatch. an optimiser is entitled to change its mind between releases, so a claim about what it will do is not a claim a comment can hold. §31 made the same point about specs that read prose; this one was prose asserting an outcome, and the thing that could see it was a counter nobody had thought to look at.</p>
 
+<h2 id="toolchainpin"><span class="sec-num">40</span>the refusal that could not be acted on</h2>
+
+<p>three compile veins carry a <code>measured-on</code> line naming the toolchain that counted them, and a host the line does not name is refused rather than compared. the refusal is right: a compiler&#39;s own allocation counts are partly the standard library&#39;s, so they belong to the rustc that built it. what the refusal then said was <em>let ci measure it and copy the rows out of the job log</em>. that instruction could not be followed. every compile gate asked the question under <code>set -e</code>, so a host that did not match stopped the gate before it measured anything, and the job log held no rows to copy.</p>
+
+<p>the runner&#39;s rustc moved 1.98.0 to 1.98.1 and all three refused at once, each pointing a reader at numbers that did not exist. the only host allowed to produce them is ci, and ci had just stopped. a branch in that state could not be brought to green by anybody.</p>
+
+<p>there are two questions where the gate asked one. may this host be <strong>compared</strong> against the golden, and may it be <strong>measured</strong>? a container answers no to both: a container&#39;s numbers going into a golden over the runner&#39;s is the accident the whole mechanism exists after, so it stops and prints nothing. ci answers no to the first and yes to the second, because ci&#39;s sitting is the only one that may ever be recorded &#8212; it measures, prints its rows, and still fails. §34&#39;s cpu block already drew that line the same way.</p>
+
+<p>then the sitting itself: <strong>the point release moved nothing</strong>. under 1.98.1 the front end allocated 25,485 blocks, held 715,275 peak bytes and retired 41,831,767 instructions, which are the three numbers 1.98.0 recorded, to the digit. only the measured-on lines changed.</p>
+
+<p>that is one datum about how tightly these lines should pin. glibc carries its ubuntu revision because two revisions of one upstream release were shown to move about four hundred instructions; rustc carries only the upstream version for the opposite reason, and a patch bump that reddens three gates while moving no counter is the shape the rule was written against. one observation is not enough to loosen a pin, and it is not loosened. the next point release is the second.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

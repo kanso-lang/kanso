@@ -50,7 +50,21 @@
 # golden cannot drift from the table it summarises. Which chip is first is
 # arbitrary and means nothing beyond "this is the series welfare tracks".
 #
-# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.0
+# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
+#
+# 2026-09-03: the runner's rustc moved 1.98.0 -> 1.98.1 and this line moves
+# with it. THE POINT RELEASE MOVED NOTHING. CI re-sat all three compile veins
+# under 1.98.1 on family0x6-model0xcf, binary sha de5bfab22fbd, and every
+# number came back identical to the one recorded under 1.98.0:
+# compile_allocs 25,485, compile_peak_bytes 715,275, compile_instructions
+# 41,831,767. Only the measured-on line changes.
+#
+# That is one datum against the granularity this file pins. measured_on.sh's
+# own header says of rustc: "the upstream version only ... nothing here shows
+# a point release moving a count, and pinning tighter than the evidence reds
+# the gate on changes that are not changes." A patch bump reddening three
+# gates while moving no number is exactly that shape. It is ONE observation
+# and the pin is not loosened on it; the next point release is the second.
 #
 # WHY TWO ROWS LEFT ON 2026-09-03. src/main.rs embeds the runtime with
 # `include_str!("runtime.c")`, so a change to the runtime changes the compiler
@@ -206,6 +220,22 @@ family0x19-model0x11 41831767
 # the reader takes the FIRST row matching a key and stops. A second
 # family0x6-model0xcf line at the bottom of this file would be read by nobody
 # and would look authoritative to everybody, which is how a golden goes quiet.
+#
+# 2026-09-03, the rustc bump and the two rows nobody re-sat. CI landed on
+# family0x6-model0xcf under 1.98.1 and read 41,831,767, the same number 1.98.0
+# read. The Zen 3 and Zen 4 rows above were measured under 1.98.0 and are
+# CARRIED ACROSS rather than removed.
+#
+# That is an assumption and it is stated rather than hidden: the toolchain
+# changes the binary identically for every chip, and the one chip that was
+# re-sat moved by nothing, so the other two are expected to hold. kanso#1230
+# removed a row rather than carry one across a toolchain move, and the
+# difference is that this time there IS a measurement — deleting two correct
+# values to force sittings that would reproduce them buys nothing.
+#
+# The assumption is self-correcting and costs nothing to be wrong about: a
+# carried row that is wrong goes red the first time CI lands on that chip,
+# which is the same signal a missing row would have given, one run later.
 #
 # 2026-09-03, LATER, and the guess above is WRONG. Both runs printed their
 # full 123-line cpu feature block, because no bench/dispatch.txt is recorded

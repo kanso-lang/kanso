@@ -20,46 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (sixth) — the index twin's rows, as the runner counted them
-
-The entry above priced the index twin from container measurements, because
-`measured_on` refuses a local regeneration of the instruction rows and says so.
-The runner has now counted them, and this is what went into
-`bench/instructions_golden.txt`:
-
-```
-jsonbench   2,718,705,899   unchanged
-encodebench 6,947,804,058 -> 7,014,920,058   +0.966%
-oneshot        38,669,794 ->    38,048,559   -1.607%
-basket         55,762,500 ->    54,722,906   -1.864%
-widebench      63,602,012   unchanged
-deepbench     692,273,898 ->   677,481,898   -2.137%
-escapebench   248,370,844   unchanged
-pendbench     749,658,206 ->   749,618,914   -0.005%
-indexbench      5,242,731   unchanged
-digestbench   123,591,699 ->    98,969,254  -19.922%
-```
-
-Every delta matches the container's to within the constant offset the two hosts
-have always carried, which is the fourth time they have agreed. The container
-read encodebench's rise at +67,116,000 and the runner reads it at +67,116,000 —
-the same number, not the same percentage, because the bases differ by 399
-instructions of process startup.
-
-**`work_encodebench` pays and `work_digestbench` is paid.** The rise is the dead inline body
-again, the third recorded instance: `d_list`'s `fold_3` indexes nothing, reaches
-the twin's slow arm never, and still carries its bounds check and its two loads
-in the loop body. digestbench indexes a list on every lap and falls by a fifth.
-The trade is worth taking on the sum — welfare goes 74.89 to 75.09 — but the
-term that paid is named here rather than argued away.
-
-**What is still unpinned.** The twin defers a thunk and a stored `none` to
-`k_index`, and `tests/golden/runtime/index_holds_a_none.kso` pins the second.
-The first is unreachable by any program I could write: no fixture in the tree
-builds a list holding an unforced thunk and then indexes it. That gap belongs to
-the lazy tier's coverage rather than to this change, and it is recorded so the
-next session working the lazy tier finds it.
-
 ## 2026-09-02 (seventh) — what the index twin costs kq, which indexes no lists
 
 kq is the corpus's one real program and it is not in the objective, so it gets
@@ -2922,3 +2882,40 @@ measures. Ratchet row `host_measures`.
 
 The three goldens are NOT re-sat here. This makes CI able to report the sitting
 they need, which was the missing step; the numbers follow from the next run.
+
+## 2026-09-03 (later still) — the rustc bump moved nothing, and it cost three gates
+
+CI re-sat all three compile veins under rustc 1.98.1 on family0x6-model0xcf,
+binary sha de5bfab22fbd, using the measure-and-refuse path built in the entry
+above. Every number came back identical to the one recorded under 1.98.0:
+
+| | 1.98.0 | 1.98.1 |
+| --- | ---: | ---: |
+| compile_allocs | 25,485 | 25,485 |
+| compile_peak_bytes | 715,275 | 715,275 |
+| compile_instructions | 41,831,767 | 41,831,767 |
+
+So the four measured-on lines move and nothing else does. Welfare is unmoved
+and is not re-set.
+
+**One datum against the granularity these files pin.** `measured_on.sh`'s own
+header says of rustc: *"the upstream version only, for the same reason clang
+carries no package revision: nothing here shows a point release moving a count,
+and pinning tighter than the evidence reds the gate on changes that are not
+changes."* A patch bump that reddened three gates and moved no number is
+exactly that shape, and glibc is the contrast the same header draws — its
+Ubuntu revision is pinned because 2.39-0ubuntu8.7 against 8.8 was SHOWN to move
+about four hundred instructions.
+
+The pin is not loosened on one observation. Recorded so the next point release
+is a second datum rather than a fresh surprise, and if it also moves nothing
+the argument for reading rustc as major.minor is made on two.
+
+**The two rows nobody re-sat are carried, and the file says so.** Zen 3 and Zen
+4 hold 41,831,767 from 1.98.0. kanso#1230 removed a row rather than carry one
+across a toolchain move; the difference here is that a measurement exists. The
+toolchain changes the binary identically for every chip and the one chip re-sat
+moved by nothing, so deleting two correct values to force sittings that would
+reproduce them buys nothing. The assumption is written into the file and is
+self-correcting: a carried row that is wrong goes red the first time CI lands
+on that chip, which is the signal a missing row would have given one run later.
