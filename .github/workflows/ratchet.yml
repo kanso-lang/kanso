@@ -14,7 +14,10 @@ name: ratchet
 #
 # Successful runs have taken 24 to 29 minutes against the 90-minute timeout,
 # measured over the six that finished between 2026-08-26 and 2026-09-02. The
-# baseline adds gate runs and no builds.
+# baseline adds gate runs and no builds. Those runs were also the ones where
+# the two callgrind gates could not run at all; with valgrind on the box they
+# cost a callgrind pass each on the baseline and each again under their
+# mutation, so the figure above is a floor until a run lands beside it.
 on:
   schedule:
     - cron: '0 9 * * *'
@@ -32,11 +35,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      # The browser rows' gates rebuild docs/kanso.wasm, and a prove job that
-      # cannot reach the wasm target would fail them on the build rather than
-      # on the defect — which the ratchet would read as proof. ci.yml installs
-      # the target in each job that needs it; this job needs it too.
-      - run: rustup target add wasm32-unknown-unknown
+      # The ratchet runs other jobs' gates, so it needs what those jobs
+      # install: the wasm target the browser rows' gates rebuild the blob
+      # with, and the valgrind the two callgrind gates run under. A gate that
+      # fails on a missing tool fails on the build rather than on the defect,
+      # which the ratchet reads as proof. The script's header has the case
+      # that found it; tests/the_ratchet_carries_what_its_gates_need.rs keeps
+      # the list a superset of ci.yml's.
+      - run: sh scripts/ratchet/toolchain.sh
       - run: cargo build --release
       - name: apply each mutation and read the gate
         run: ./target/release/kanso run scripts/ratchet -- prove

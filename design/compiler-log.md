@@ -4336,3 +4336,73 @@ opportunity, which is the argument for it made concretely rather than
 hypothetically. And it found it by being red on MY pull request — the check
 cost its author a cycle before it cost anyone else one, which is the right way
 round for a check like this to arrive.
+
+---
+
+## 2026-09-03 — THE RATCHET RAN OTHER JOBS' GATES ON A BOX THAT HELD NONE OF THEIR TOOLS
+
+**DONE.** The gate-naming line added in the previous commit answered on its
+first CI run, and the answer was a second blind row:
+
+```
+ALREADY RED cost goldens (deterministic ratchet, no clocks)
+  gate: sh scripts/gates/instructions.sh
+  red before any mutation, so no row sharing it is proof
+```
+
+`scripts/gates/instructions.sh` runs callgrind over the eleven benchmarks.
+valgrind is installed at exactly one place in `.github/workflows/ci.yml` —
+inside the cost goldens job, four steps before that gate. Neither the nightly
+`prove` job nor the per-pull-request `touched` step installed it. Both run that
+gate. `set -e` plus a missing binary is a non-zero exit, the gate was red before
+any mutation was applied, and the ratchet reads a red gate as proof.
+
+Two rows, not one. `scripts/gates/compile_instructions.sh` runs callgrind over
+the front end and belongs to the same job, so `compile_ir` — "front-end work
+that costs instructions and moves no other counter" — was blind by the same
+mechanism. It was never selected on this branch because its mutation patches
+front-end files, which is why the report named only the first.
+
+A third, conditional on what a branch touches: `in_the_page`'s gate is
+`bash scripts/browser_differential.sh`, which rebuilds `docs/kanso.wasm`.
+`ratchet.yml` added `rustup target add wasm32-unknown-unknown` deliberately and
+said why; the `touched` step in `ci.yml` was written later (#1201) and never got
+it. A branch touching `src/wasm.rs` would have failed that row's gate on the
+build.
+
+**The shape is one thing, and it is not "somebody forgot valgrind".** Every
+other job in ci.yml installs what its own gates need and nothing else, which is
+right for that job. The ratchet runs ALL of their gates and had a base image.
+Nothing related the two, so the ratchet's environment could fall behind any job
+that grew a dependency, silently, one row at a time.
+
+So the ratchet's setup is now `scripts/ratchet/toolchain.sh`, run by both
+workflows, and `tests/the_ratchet_carries_what_its_gates_need.rs` keeps it a
+superset: every package `ci.yml` apt-installs and every rust target it adds must
+be installed there too. A package added to any job and not to the script turns
+the specs job red.
+
+**The first draft of that spec could not have failed.** It asked whether
+`toolchain.sh` *contained the string* `valgrind` anywhere — and the script's
+own header, which explains why valgrind is there, names it four times. With the
+install commented out the check stayed green. That is the family kanso#1137
+found four of: a comment is not a pin. The check reads install LINES on both
+sides now, skipping comments, and a third test pins that a commented-out
+install counts as installing nothing. Watched red both ways before it was
+believed: `ci.yml installs ["jq", "valgrind"] ... and
+scripts/ratchet/toolchain.sh does not`.
+
+**Cost.** Two callgrind passes on the baseline and two more under mutation for
+a runtime-touching branch, on top of the 11m51s/12m05s two runs of this branch
+took — figures which undercounted because those gates could not run at all.
+Both workflow comments now say so rather than carrying a number that was
+measured with the gates absent.
+
+**OPEN.** `bench/instructions_golden.txt` is not keyed per silicon the way
+`compile_instructions` was in #1226, and the ratchet job lands on whatever CPU
+the pool gives it. The eleven rows have held across the cost goldens job's own
+runs, so the working assumption is that they are dispatch-insensitive in a way
+kq's `print_small` is not — but the ratchet baseline is now a second, independent
+sitting of those rows on a second, unrelated runner, and if that assumption is
+wrong this is where it will say so. The first baseline that reports the rows
+moved rather than the gate missing is the evidence to read.
