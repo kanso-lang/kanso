@@ -6,4 +6,4 @@ import "std/os"
 fn saw text
   print "bind saw: {text}"
 
-pub play = bind (os/read_file "no-such-file.txt") saw
+pub play = bind (os/read_file! "no-such-file.txt") saw

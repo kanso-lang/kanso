@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the entry: os/exit_status exit_needs_a_status/wrong 1 2
-  born in os/exit at std/os/os.kso:39
+  born in os/exit at std/os/os.kso:51
