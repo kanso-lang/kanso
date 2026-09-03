@@ -40250,3 +40250,59 @@ the edit, and the number that fell is a layout artefact rather than a win to
 bank. It is recorded as an improvement because that is what the row says, and
 this paragraph is what stops the next reader crediting it to a pass.
 
+
+## 2026-09-02 (thirteenth) — the 67 million is a lost specialisation, and the fix is declined
+
+kanso#1214 left one thing unexplained: encodebench pays +67,116,000 for the
+index twin, all of it inside `d_list/fold_3`, in a program that never indexes a
+list. Routing by typeset and dropping `alwaysinline` were both measured as
+no-ops, so the answer was not where the body goes.
+
+**The compiler emits the same function either way.** `d_list/fold_3`'s IR is
+byte-identical across the two builds, and so are `fold_flat_4` and
+`fold_go_3`. Nothing the front end writes changed.
+
+**The machine code got smaller and slower.** `fold_3` is 4,083 bytes without
+the twin and 3,682 with it — 401 bytes less code running fourteen per cent more
+instructions. Its call sites collapse with it: `k_call2` four to one, `k_index`
+four to one, `k_b_length` two to one, `k_truthy_bad` two to one. LLVM had been
+specialising the dispatcher into four copies; the twin's `alwaysinline` body,
+inlined into `fold_flat_4`, pushed its inline cost past the point where that
+paid, and one shared body with more branching replaced four specialised ones.
+
+**Forcing the twin out of line restores it exactly.** With `noinline` on
+`k_index_fast`, `fold_3` is 4,083 bytes again — the same number, not a similar
+one — the four `k_call2` sites are back, and encodebench reads 6,947,803,659,
+its pre-twin count to the instruction. That is not a plausible story about
+inlining; it is the same object file's worth of decisions coming back.
+
+**And the objective declines the fix.** `noinline` is a trade, not a win:
+
+```
+encodebench  -67,116,000   -0.957%
+oneshot          -30,113   -0.079%
+pendbench         +9,392
+basket          +283,126   +0.517%
+deepbench     +4,856,000   +0.717%
+scanbench     +5,516,906   +0.388%
+digestbench   +8,244,421   +8.330%
+```
+
+digestbench keeps only two thirds of what #1214 bought it, and welfare goes
+75.09 -> 75.03. The sum of the raw counts falls by 48 million and the objective
+still says no, which is the weights doing exactly what they are for: the
+benchmark that pays is the one the change was built for.
+
+**scanbench is on that list because kanso#1215 put it there**, four hours
+earlier. Without it this trade would have scored 5,516,906 instructions
+cheaper than it is, and the answer might have come out the other way. A
+benchmark weighed at zero does not make a change look good; it makes the
+NEXT change look good, which is worse, because nobody is looking at the
+benchmark when they read the score.
+
+The twin stays `alwaysinline`. What is now known and was not: the 67 million is
+LLVM's specialisation threshold, the lever that reaches it is `fold_flat_4`'s
+inline cost, and both are properties of a dispatch group emitted as one
+function. Whether dispatch groups should be emitted so a cold arm cannot price
+a hot one out of specialisation is a design question, and it is Clay's.
+

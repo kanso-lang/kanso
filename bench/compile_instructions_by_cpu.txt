@@ -153,6 +153,7 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
+family0x6-model0xcf 41831767
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -166,6 +167,7 @@
 # row per chip and against any single tolerance: 508 would fit inside a band
 # that swallows 5,124, and so would every real front-end move this vein has
 # ever caught.
+family0x19-model0x1 41832275
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
 # family0x19-model0x11 rather than carry a value measured against the previous
@@ -338,6 +340,7 @@
 # chip does not select the mode, which is the whole premise this file is named
 # for. Every row below is CI's own most recent reading and nothing is
 # predicted from another chip.
+family0x19-model0x11 41831767
 #
 # 2026-09-03, THE SIXTH READING, and it closes the question this file was
 # named to answer. A run against the fully-recorded table above — all three
@@ -359,7 +362,6 @@
 # this file's own history warns about most. They stay as CI measured them.
 # Further readings are appended to the table in design/pending-gavels.md
 # rather than earning a note here each time; six is enough to decide on.
-
 # 2026-09-03, THE TERM IS FOUND, and it belongs to neither the compiler nor
 # the chip. `kanso check` reads /proc/self/maps before it reads a line of
 # kanso. glibc's pthread_getattr_np does it on Rust's behalf, to find the main
@@ -448,7 +450,6 @@
 # property of the host's memory map, and one more shared library in the process
 # moves this row 32,090 with the compiler doing identical work. That is the
 # thing "make them consistent" would then have to reach.
-family0x19-model0x11 41834008
 #
 # THE FIRST READING UNDER BOTH FIXES, from CI at 18:05 on Zen 4
 # (family0x19-model0x11), binary sha b0e5a906c73d. The job log printed
@@ -472,3 +473,24 @@ family0x19-model0x11 41834008
 # gate as of 18:08, and nothing about it was an artifact of the emptied table or
 # of the rustc bump. It is the seventh reading of the pair and the first where
 # the intervening diff is a single file.
+#
+# 2026-09-03, THE SORTED read_dir IS WITHDRAWN and the rows above are restored
+# to what CI measured on the binary main carries. It was applied because the
+# ruling names readdir order as a determinism defect, and it is — but the sites
+# it would have fixed are the four in src/main.rs on the `test` path, all
+# order-independent by construction, and src/lib.rs already sorts what a compile
+# reads. So it changed no answer, and it changed the binary: .text 2,514,718 ->
+# 2,517,278, moving this row 41,831,767 -> 41,834,008 and invalidating every
+# recorded value.
+#
+# That cost is the reason it comes out. The ruling asks for the modes to be
+# measured away on several fresh runners, and a changed binary makes every
+# reading before it incomparable — the experiment would restart from nothing
+# with `setarch -R` and the new layout confounded. With the sort withdrawn the
+# binary is main's, the rows above stand, and setarch is the ONLY variable. The
+# two readings it did produce (41,834,008 twice on family0x19-model0x11, twelve
+# minutes apart, sha b0e5a906c73d) are kept in the log as what they are: an
+# agreement on a binary that no longer ships.
+#
+# The determinism fix is worth landing on its own, once this vein is settled and
+# the row it moves is not the row under test.
