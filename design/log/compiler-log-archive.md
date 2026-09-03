@@ -40400,3 +40400,27 @@ build to compute and the mtime comparison catches the case it exists for. This
 entry records the false positive it does produce, so the next session that
 meets it after reverting an experiment recognises it in one line instead of
 hunting a compiler change that is not there.
+
+## 2026-09-02 (seventeenth) — the page owes §35, and the drift gate said so
+
+The log-trim branch went red on `scripts/page_drift`: four entries since
+docs/compiler.html last moved, against a budget of three. The gate is right.
+Three of those four are one argument — what the objective weighs, what it
+refuses to weigh, and the measurement behind the refusal — and none of it had
+reached the page.
+
+§35 is that argument. `bench/text_golden.txt` is measured on every run, pinned
+in a golden, diffed by CI and weighed at nothing; the index twin took
+encodebench's `.text` down 144 bytes and its instruction count up 67,116,000 in
+the same change, so a term rewarding smaller code would have scored that
+regression as a gain twice over. The section carries the `d_list/fold_3`
+numbers, the `noinline` restoration to the byte, the spec that pins the
+exclusion, and the decline at 75.09 -> 75.03.
+
+The fourth entry is the trim itself, which is housekeeping and owes the page
+nothing. One section for the campaign is what the gate's own message asks for.
+
+**The gate counts from the page's last commit, so the entry and the page edit
+ride together.** `git diff <last page commit>..HEAD -- design/compiler-log.md`
+reads empty when both land in one commit, which is why this entry does not put
+the branch back over the budget it just cleared.

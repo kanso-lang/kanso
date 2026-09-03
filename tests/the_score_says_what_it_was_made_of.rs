@@ -127,3 +127,110 @@ fn the_history_row_carries_the_whole_counter_set() {
         );
     }
 }
+
+/// The emitted model plus the fixed arithmetic reproduces the score.
+///
+/// This is the spec the chart rests on. numbers.html has to replay the current
+/// formula over the stored rows, a static page computes in javascript, and two
+/// things could therefore be copied onto the page and go stale: the numbers and
+/// the arithmetic.
+///
+/// `welfare --model` removes the first hazard — weights, satiations and the
+/// baseline come from the tool, so a gavel that moves a weight moves the chart
+/// with it. This spec removes the second. It restates the arithmetic exactly as
+/// a reader of the ruling would (saturate each counter, mean within a term,
+/// weight, sum) and asserts the result against welfare's own banner, so the
+/// restatement cannot drift from the tool without a red test.
+///
+/// It is deliberately NOT a copy of welfare's implementation. It is written
+/// from the rule as stated — `r / (r + s)`, ruled 2026-08-29 to apply per
+/// counter before the mean — which is what makes agreement evidence rather
+/// than tautology.
+#[test]
+fn the_model_and_the_rule_reproduce_the_score() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ask = |flag: Option<&str>| {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_kanso"));
+        cmd.arg("run").arg(root.join("scripts/welfare"));
+        if let Some(f) = flag {
+            cmd.arg("--").arg(f);
+        }
+        let out = cmd.current_dir(root).output().expect("welfare runs");
+        String::from_utf8_lossy(&out.stdout).into_owned()
+    };
+
+    let model = ask(Some("--model"));
+    let now: std::collections::HashMap<String, f64> = ask(Some("--counters"))
+        .lines()
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.to_string(), v.parse::<f64>().expect("a number")))
+        .collect();
+
+    // `base <counter>=<value>`
+    let base: std::collections::HashMap<String, f64> = model
+        .lines()
+        .filter_map(|l| l.strip_prefix("base "))
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.to_string(), v.parse::<f64>().expect("a number")))
+        .collect();
+    assert!(!base.is_empty(), "the model carries a baseline: {model}");
+
+    // A counter that reached zero is better than any baseline; welfare's own
+    // note says dividing by it would say infinity rather than "as good as this
+    // gets", so both sides read zero as a half.
+    let live = |n: f64| if n == 0.0 { 0.5 } else { n };
+
+    // `term <name>|<weight>|<satiation>|<counter,counter,...>`
+    let mut total = 0.0;
+    let mut seen = 0;
+    for line in model.lines().filter_map(|l| l.strip_prefix("term ")) {
+        let parts: Vec<&str> = line.split('|').collect();
+        assert_eq!(parts.len(), 4, "a term is name, weight, satiation, counters: {line}");
+        let weight: f64 = parts[1].parse().expect("a weight");
+        let sat: f64 = parts[2].parse().expect("a satiation");
+        let counters: Vec<&str> = parts[3].split(',').collect();
+        let mut sum = 0.0;
+        for c in &counters {
+            let b = live(*base.get(*c).unwrap_or_else(|| panic!("a baseline for {c}")));
+            let n = live(*now.get(*c).unwrap_or_else(|| panic!("a reading for {c}")));
+            let ratio = b / n;
+            sum += ratio / (ratio + sat);
+        }
+        total += sum / counters.len() as f64 * weight;
+        seen += 1;
+    }
+    assert!(seen >= 2, "the model carries its terms: {model}");
+    let mine = 100.0 * total;
+
+    let said = ask(None);
+    let banner: f64 =
+        said.split_whitespace().nth(1).expect("welfare says a score").parse().expect("a number");
+
+    assert!(
+        (mine - banner).abs() < 0.005,
+        "the rule applied to the emitted model gives {mine:.4}, welfare says {banner:.2}"
+    );
+}
+
+/// The weights are a division of one whole. A term added without taking weight
+/// from another silently reweighs every other term, which is a change to what
+/// the project wants made by arithmetic rather than by a gavel.
+#[test]
+fn the_weights_divide_one_whole() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg(root.join("scripts/welfare"))
+        .arg("--")
+        .arg("--model")
+        .current_dir(root)
+        .output()
+        .expect("welfare runs");
+    let model = String::from_utf8_lossy(&out.stdout);
+    let sum: f64 = model
+        .lines()
+        .filter_map(|l| l.strip_prefix("term "))
+        .map(|l| l.split('|').nth(1).expect("a weight").parse::<f64>().expect("a number"))
+        .sum();
+    assert!((sum - 1.0).abs() < 1e-9, "the weights sum to one, not {sum}");
+}

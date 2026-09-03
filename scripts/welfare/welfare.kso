@@ -620,13 +620,52 @@ fn against now held
 fn either now base held value args
   asked_to_set = length args > 0 and args[1]! == "--set"
   asked_counters = length args > 0 and args[1]! == "--counters"
-  routed now base held value args asked_to_set asked_counters
+  asked_model = length args > 0 and args[1]! == "--model"
+  picked now base held value args asked_to_set asked_counters asked_model
+
+fn picked _ base _ _ _ _ _ true
+  model_of base
+
+fn picked now base held value args setting counting _
+  routed now base held value args setting counting
 
 fn routed now _ _ _ _ _ true
   counters_of now
 
 fn routed now base held value args setting _
   chosen now base held value args setting
+
+# THE MODEL ITSELF: every term with its weight, satiation and counters, and the
+# baseline each counter is measured against.
+#
+# The chart has to replay the current formula over the stored rows — ruled
+# 2026-08-31, restated 2026-09-03 against the page's older sentence — and a
+# static page computes in javascript. That leaves two things that could be
+# copied onto the page and go stale: the arithmetic, and the numbers it uses.
+#
+# The numbers are the dangerous half and they come from here. A weight retyped
+# into a chart is a weight that keeps its old value through the next gavel, and
+# the line would then show a formula nobody ruled while looking exactly as
+# authoritative. The arithmetic is four lines and fixed by ruling — saturate
+# each counter, mean within a term, weight, sum — so the page restates that and
+# a spec holds it against this tool's own answer.
+#
+# One line a term and one a baseline, the shape every other vein in this tree
+# uses. json was the first attempt and it was the wrong reach: a reader then
+# needs a parser, and the two readers that matter — a spec here and the chart's
+# javascript — would each grow their own.
+#
+#   term <name>|<weight>|<satiation>|<counter,counter,...>
+#   base <counter>=<value>
+fn term_line t
+  listed_counters = text/join t.counters ","
+  "term {t.name}|{t.weight}|{t.satiation}|{listed_counters}\n"
+
+fn model_of base
+  shaped = list/to_list (list/map terms term_line)
+  kept = list/select counter_names (c -> base[c] != none)
+  held = list/to_list (list/map kept (c -> "base {c}={base[c]!}\n"))
+  io/write "{text/join shaped ""}{text/join held ""}"
 
 fn counters_of now
   kept = list/to_list (list/select counter_names (c -> now[c] != none))
