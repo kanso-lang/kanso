@@ -3849,3 +3849,32 @@ than this change (`compile_ir_host_unpinned` has always had it, since
 `measured_on` can refuse on its own) and it is filed rather than fixed here,
 because a green-before run roughly doubles the nightly's setup-and-gate work and
 wants that cost measured in its own pull request.
+
+## 2026-09-03, LATER STILL — two chips, one commit, 5,124 instructions apart
+
+Searched the log tail and the archive before writing this down as a
+measurement rather than an inference: the 5,124 figure appears above as
+"the row moves about 5,124 with the silicon", derived from CI reading
+41,500,974 and 41,495,850 across heads that carried identical `src/`. That was
+an inference from two unlabelled readings. This is the same quantity with the
+labels attached.
+
+Two runs, one commit — `22840458`, whose diff is a table, a golden and a log
+entry, none of which the compiler reads:
+
+    family0x6-model0xcf    41,500,974
+    family0x19-model0x1    41,495,850
+
+**5,124, and the chips are named this time.** An Intel Emerald Rapids against
+an AMD EPYC Zen 3, one libc, one binary's worth of source, and glibc choosing
+different code at load time on each. Nothing about the compiler differs
+between those two numbers.
+
+Set that beside what this branch does to the front end, measured on one chip
+with the binary's sha printed on both reads: **-5,621**. The noise and the
+signal are within ten per cent of each other in size. A band that covered the
+first would have hidden the second entirely, which is the whole argument for
+keying the row rather than widening it, now standing on a measurement instead
+of on two readings and a guess.
+
+Two of five chips have rows. The remaining three refuse until CI lands on them.
