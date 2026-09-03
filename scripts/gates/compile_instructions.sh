@@ -88,32 +88,19 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
-# ASLR IS DISABLED FOR THE RUN. The row has read two values 508 apart on one
-# binary and one chip, and the ruling of 2026-09-03 is that it is made
-# deterministic with glibc still counted, rather than pinned as a pair or
-# measured around. Heap base and mmap addresses randomize per exec, and an
-# address difference reaches this count through alignment: the two modes differ
-# in _int_malloc and __memcmp_avx2_movbe and in no kanso symbol at all.
+# NO ASLR KNOB, and the reason is a measurement rather than an omission. The
+# row read two values 508 apart and `setarch -R` was tried against them on the
+# ruling of 2026-09-03. It changed nothing twice over: on the container it read
+# 42,235,790 against 42,235,790 without it, and on CI a runner counted the same
+# 41,832,275 with it as another counted without it. valgrind assigns the
+# client's address space itself, so host randomization does not reach the count.
 #
-# Stated honestly, because it was measured before it was applied: on the
-# container this changes NOTHING. `setarch -R` reads 42,235,790 against
-# 42,235,790 without it, and forty runs of the unwrapped command returned one
-# value forty times. valgrind assigns the client's address space itself, so
-# host ASLR does not obviously reach the count. It is here because the runners
-# are where the two modes appear and the container has never shown them, so the
-# container cannot rule it out — only CI can. If the modes survive it, this
-# comes out again and the note above the by-cpu table names what is left.
-run_deterministic=""
-if command -v setarch >/dev/null && setarch -R true 2>/dev/null; then
-  run_deterministic="setarch -R"
-else
-  echo "compile_aslr setarch unavailable, addresses randomize"
-fi
-printf 'compile_aslr disabled=%s\n' "$([ -n "$run_deterministic" ] && echo yes || echo no)"
+# What the 508 actually was: two binaries. sha 55fb850296d1 counted 41,831,767
+# and sha de5bfab22fbd counts 41,832,275, and the comment below on compile_sample
+# already names the binary as a cause the cpu key cannot see.
 (
   cd "$box"
-  $run_deterministic \
-    env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.compile ./kanso check lib/json \
     >/dev/null 2>/dev/null
 )

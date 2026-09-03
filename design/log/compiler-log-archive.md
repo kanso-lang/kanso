@@ -40306,3 +40306,33 @@ inline cost, and both are properties of a dispatch group emitted as one
 function. Whether dispatch groups should be emitted so a cold arm cannot price
 a hot one out of specialisation is a design question, and it is Clay's.
 
+## 2026-09-02 (fourteenth) — that last question was mine, not Clay's
+
+The entry above ended by calling the dispatch-group question a design question
+and Clay's. design/pending-gavels.md says otherwise, in its second paragraph:
+an entry goes to him because it is about the language a user meets — surface,
+semantics, observable behavior — and "implementation details do not come here;
+whoever holds the file decides them and answers for the decision in the log."
+
+How a dispatch group is emitted is not something a user meets. Nothing about
+`fold`'s meaning changes either way. So the question is mine, and this is the
+answer.
+
+**Not now.** The one lever measured — `noinline` on the twin — is declined by
+the objective at 75.09 -> 75.03. The larger change, emitting a dispatch group
+as a function per arm rather than one body, is unmeasured and would undo part
+of what kanso#1140 built when it made a dispatch group a range; a change of
+that size on a hypothesis this thin is exactly the design note the log keeps
+telling sessions not to write.
+
+**What would reopen it.** The instructions vein now covers all eleven
+benchmarks, so the shape shows up on its own: a benchmark that does not use a
+feature rising when that feature's twin lands, with its `.text` FALLING at the
+same time. Down and slower together is the signature — it is what encodebench
+did here, 401 bytes smaller and 14% dearer — and it does not look like anything
+else. Two more sightings with the same signature and the change has a
+measurement behind it instead of one.
+
+The correction matters beyond this entry: a question filed to Clay that is not
+his costs him a sitting and costs the ledger its meaning, and the rule against
+it is written at the top of the file it would have gone in.

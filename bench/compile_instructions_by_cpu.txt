@@ -153,7 +153,7 @@
 # above: it was measured against the previous binary and a value measured
 # against the old binary is worse than no value. It is a re-sitting when it next
 # refuses, not a new chip. The binary this row belongs to is sha 55fb850296d1.
-family0x6-model0xcf 41831767
+family0x6-model0xcf 41831767 41832275
 
 # 2026-09-03: a chip the pool had not shown before. family0x6-model0xcf is
 # Emerald Rapids, and the header's list — Zen 3, Ice Lake-SP, Cascade Lake —
@@ -340,7 +340,7 @@ family0x19-model0x1 41832275
 # chip does not select the mode, which is the whole premise this file is named
 # for. Every row below is CI's own most recent reading and nothing is
 # predicted from another chip.
-family0x19-model0x11 41831767
+family0x19-model0x11 41831767 41832275
 #
 # 2026-09-03, THE SIXTH READING, and it closes the question this file was
 # named to answer. A run against the fully-recorded table above — all three
@@ -436,11 +436,14 @@ family0x19-model0x11 41831767
 #   them is sorted anyway in this commit, because "the compiler's work must
 #   never depend on an inode hash" is a rule and not a symptom.
 #
-#   ASLR IS DISABLED NOW, and on the container it changes nothing. `setarch -R`
-#   reads 42,235,790 against 42,235,790 without it, and forty unwrapped runs on
-#   one binary returned one value forty times. It is applied because the two
-#   modes have only ever appeared on the runners, and the container cannot rule
-#   out what it has never reproduced.
+#   ASLR IS NOT THE TERM EITHER, and the knob has come back out. It was
+#   applied because the two modes have only ever appeared on the runners and
+#   the container cannot rule out what it has never reproduced. On the
+#   container it changed nothing — `setarch -R` read 42,235,790 against
+#   42,235,790 without it, and forty unwrapped runs on one binary returned one
+#   value forty times — and on CI it changed nothing either: e47e412d printed
+#   `compile_aslr disabled=yes` and counted the HIGH value on a chip whose row
+#   held the low one. A knob measured twice to move nothing is not carried.
 #
 # WHAT THE NEXT RUNS TEST, stated before they run. If every chip lands on one
 # value, glibc stays counted under a single exact pin and the per-chip key has
@@ -494,3 +497,38 @@ family0x19-model0x11 41831767
 #
 # The determinism fix is worth landing on its own, once this vein is settled and
 # the row it moves is not the row under test.
+
+# 2026-09-03, THE PAIR IS PINNED, and what makes it a pair rather than a guess
+# is two runs that agree on everything except the number.
+#
+#   commit     binary sha       cpu                        counted
+#   fc993f83   de5bfab22fbd     family 0x6 model 0xcf       41,831,767
+#   e47e412d   de5bfab22fbd     family 0x6 model 0xcf       41,832,275
+#
+# ONE BINARY, ONE CHIP, TWO VALUES. Both shas are printed by the gate itself on
+# every run, green or red, which is why this comparison can be made at all —
+# the line was added for exactly this and had never yet answered a question.
+# The second of the two ran with `setarch -R` and the first without, so that
+# pair is also the falsifier for the last suspect the ruling named.
+#
+# A third run on the same binary, main at 5b0f2eb1, counted 41,832,275 on
+# family0x19-model0x11 against a recorded 41,831,767. So the second chip has
+# now shown both values on this binary too, and its row is a pair as well.
+# family0x19-model0x1 has been seen at 41,832,275 only, and stays a single: a
+# row may not claim a reading nobody took.
+#
+# The ruling of 2026-09-03 allowed this and nothing wider — "only a residual
+# that survives both reopens the question, and then the fallback is the pinned
+# pair, never blindness". Both suspects are falsified above, so the residual
+# survived. scripts/gates/compile_ir_row.sh caps a row at two values and
+# refuses a third, and the golden's bare line stays the reference row's FIRST
+# value so that a mode flip cannot reach welfare or the trend gate as a
+# regression.
+#
+# WHAT IS STILL OPEN, stated as a question rather than parked. The note above
+# on /proc/self/maps remains the only measured mechanism that fits: its cost is
+# a property of the host's memory map, it moves this row by tens of thousands
+# under a deliberate perturbation, and it moves no kanso symbol at all. What is
+# NOT established is that two runners differ in their maps by the amount the
+# 508 needs. A run that printed the map's line count beside the row would
+# settle it, and that is the next measurement this vein wants.

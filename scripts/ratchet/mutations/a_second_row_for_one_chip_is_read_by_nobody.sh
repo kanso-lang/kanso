@@ -16,14 +16,14 @@
 set -e
 row=scripts/gates/compile_ir_row.sh
 before=$(grep -c '^  exit 1$' "$row")
-if [ "$before" -ne 5 ]; then
-  echo "expected five refusals in $row, found $before;" >&2
+if [ "$before" -ne 7 ]; then
+  echo "expected seven refusals in $row, found $before;" >&2
   echo "the shape moved and this mutation needs rewriting" >&2
   exit 1
 fi
 sed -i '/^dupes=/,/^fi$/d' "$row"
 after=$(grep -c '^  exit 1$' "$row")
-if [ "$after" -ne 4 ]; then
+if [ "$after" -ne 6 ]; then
   echo "wanted exactly the duplicate refusal removed, $before became $after" >&2
   exit 1
 fi

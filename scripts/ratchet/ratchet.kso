@@ -353,6 +353,20 @@ compile_ir_doubled = row
   (breaking "a_second_row_for_one_chip_is_read_by_nobody")
   no_setup
 
+# The same file again, and the newest way to be wrong. A row may pin two values
+# now — two CI runs printed one binary sha and one cpu key and counted
+# 41,831,767 and 41,832,275, and neither the loader's directory order nor
+# address randomization was the term. Two is a ruled fallback; three is a band
+# being built a reading at a time, and a band that wide swallows changes the
+# size of kanso#1226's -5,621.
+compile_ir_pair = row
+  "a third value appended beside a pinned pair, until the row admits anything"
+  false
+  "cargo test --test a_compile_row_is_read_against_its_own_chip"
+  "specs (unit, golden, differential)"
+  (breaking "a_pinned_pair_grows_into_a_band")
+  no_setup
+
 # A refusal is only as good as what it leaves a reader able to do. This one
 # told CI to copy rows out of a job log that could not contain them, because
 # the gate stopped before it measured. The row watches the two answers stay

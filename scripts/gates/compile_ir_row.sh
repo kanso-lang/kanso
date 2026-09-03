@@ -15,8 +15,24 @@
 # bare `compile_instructions=` for welfare, the trend gate and golden_prose.
 # <key> is scripts/gates/dispatch.sh `key`. <counted> is what this run read.
 #
-# Five ways to be wrong and one way to be right. None of the five is a warning:
-# an unknown number never passes.
+# A ROW MAY PIN ONE VALUE OR TWO, and both are exact:
+#
+#     family0x6-model0xcf 41831767 41832275
+#
+# One chip and ONE BINARY read those two numbers, 508 apart. The evidence is
+# two CI runs whose gate printed the same binary sha256 de5bfab22fbd and the
+# same cpu family 0x6 model 0xcf: fc993f83 counted 41,831,767 and e47e412d
+# counted 41,832,275. Neither named suspect explains it — the loader already
+# sorts what a compile reads, and the second of those runs had `setarch -R`
+# applied while the first did not.
+#
+# Two is the cap, and the cap is the whole difference between this and the
+# tolerance the vein refused. A band wide enough to hold 508 also holds
+# kanso#1226's -5,621, which was a real change to the compiler. A pair admits
+# two numbers that were each measured, and refuses a third.
+#
+# Eight ways to be wrong and one way to be right. None of the eight is a
+# warning: an unknown number never passes.
 set -e
 table=$1
 golden=$2
@@ -64,6 +80,50 @@ if [ -n "$dupes" ]; then
   exit 1
 fi
 
+# How many values a row pins, checked over the WHOLE table for the reason the
+# duplicate check is: a malformed row that only this run's chip is spared makes
+# the file wrong for three runs in four and read by nobody on the fourth.
+#
+# A row with no value would fall through the lookup below and be reported as a
+# chip the table has never seen, sending a reader to add a row for a key that
+# already has one. A row with three is a band being assembled a reading at a
+# time, and every value added to it is a mode nobody explained.
+malformed=$(echo "$rows" | awk 'NF < 2 || NF > 3 { print }')
+
+if [ -n "$malformed" ]; then
+  echo "::error::$table has a row that does not pin one value or two:"
+  echo "::error::"
+  echo "$malformed" | while IFS= read -r bad; do
+    echo "::error::    $bad"
+  done
+  echo "::error::"
+  echo "::error::A row is a key and then its counted value, or a key and the"
+  echo "::error::TWO values one chip has been seen to read on one binary. Two"
+  echo "::error::is the cap: the pair is the ruled fallback for a residual"
+  echo "::error::nobody could explain away, and a third value would make it a"
+  echo "::error::band by enumeration — which admits the size of change this"
+  echo "::error::vein exists to catch."
+  exit 1
+fi
+
+# And a pair whose halves are the same number, which admits exactly what a
+# single admits while claiming a second mode was measured.
+doubled=$(echo "$rows" | awk 'NF == 3 && $2 == $3 { print }')
+
+if [ -n "$doubled" ]; then
+  echo "::error::$table pins a value twice on one row:"
+  echo "::error::"
+  echo "$doubled" | while IFS= read -r bad; do
+    echo "::error::    $bad"
+  done
+  echo "::error::"
+  echo "::error::That is a reading pasted twice, not a pair. It says the chip"
+  echo "::error::was seen to read two values when it was seen to read one."
+  echo "::error::Drop the repeat, or write the value the second sitting"
+  echo "::error::actually counted."
+  exit 1
+fi
+
 # The golden's bare line is the first row, checked on every run whatever chip
 # this is, so a per-chip re-sitting cannot leave the number welfare reads
 # behind. Two files and no measurement, so it costs nothing to always ask.
@@ -81,7 +141,8 @@ if [ "$ref_val" != "$gold_val" ]; then
   exit 1
 fi
 
-want=$(echo "$rows" | awk -v k="$key" '$1 == k { print $2; exit }')
+want=$(echo "$rows" | awk -v k="$key" \
+  '$1 == k { $1 = ""; sub(/^[ \t]+/, ""); print; exit }')
 
 if [ -z "$want" ]; then
   echo "::error::nothing in $table was counted on $key, so this run's $got"
@@ -101,8 +162,15 @@ if [ -z "$want" ]; then
   exit 1
 fi
 
-if [ "$want" != "$got" ]; then
-  echo "::error::the work the FRONT END does changed on $key: $table says"
+landed=no
+for one in $want; do
+  if [ "$one" = "$got" ]; then
+    landed=yes
+  fi
+done
+
+if [ "$landed" = no ]; then
+  echo "::error::the work the FRONT END does changed on $key: $table pins"
   echo "::error::$want and this run counted $got. A rise is a regression to"
   echo "::error::explain and a fall is a win to bank — say which in"
   echo "::error::design/compiler-log.md and update the row."
@@ -116,4 +184,4 @@ if [ "$want" != "$got" ]; then
   exit 1
 fi
 
-echo "compile_instructions $got, matching $table on $key"
+echo "compile_instructions $got, matching $table on $key (pinned: $want)"

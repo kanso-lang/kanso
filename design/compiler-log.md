@@ -20,37 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 (fourteenth) — that last question was mine, not Clay's
-
-The entry above ended by calling the dispatch-group question a design question
-and Clay's. design/pending-gavels.md says otherwise, in its second paragraph:
-an entry goes to him because it is about the language a user meets — surface,
-semantics, observable behavior — and "implementation details do not come here;
-whoever holds the file decides them and answers for the decision in the log."
-
-How a dispatch group is emitted is not something a user meets. Nothing about
-`fold`'s meaning changes either way. So the question is mine, and this is the
-answer.
-
-**Not now.** The one lever measured — `noinline` on the twin — is declined by
-the objective at 75.09 -> 75.03. The larger change, emitting a dispatch group
-as a function per arm rather than one body, is unmeasured and would undo part
-of what kanso#1140 built when it made a dispatch group a range; a change of
-that size on a hypothesis this thin is exactly the design note the log keeps
-telling sessions not to write.
-
-**What would reopen it.** The instructions vein now covers all eleven
-benchmarks, so the shape shows up on its own: a benchmark that does not use a
-feature rising when that feature's twin lands, with its `.text` FALLING at the
-same time. Down and slower together is the signature — it is what encodebench
-did here, 401 bytes smaller and 14% dearer — and it does not look like anything
-else. Two more sightings with the same signature and the change has a
-measurement behind it instead of one.
-
-The correction matters beyond this entry: a question filed to Clay that is not
-his costs him a sitting and costs the ledger its meaning, and the rule against
-it is written at the top of the file it would have gone in.
-
 ## 2026-09-02 (fifteenth) — the one vein the objective leaves out, and why
 
 `bench/text_golden.txt` is the only deterministic vein `scripts/welfare` does
@@ -2951,3 +2920,67 @@ left: glibc parses `/proc/self/maps` before `main` to find the stack bounds, one
 more shared library in the process moves the row 32,090, and that cost belongs
 to the host's memory map rather than to the compiler. That is what "make them
 consistent" would then have to reach.
+
+## 2026-09-03 (eleventh) — one binary, one chip, two values: the pair is pinned
+
+**DONE.** Closes the OPEN half of the entry above, which had the two suspects
+tested and the answer outstanding. Searched the live log and
+`design/log/compiler-log-archive.md` for prior treatments of the compile row's
+spread before filing: the archive carries the 5,064-apart clusters that the
+glibc tunables closed, and the live log carries the ninth and tenth entries.
+Nothing there proposes a pinned pair, so this is new.
+
+**Both suspects are falsified, and `setarch -R` comes back out.** The ruling
+applied it on the argument that the modes only ever appear on the runners and a
+container cannot rule out what it has never reproduced. That was the right
+reason to try it and CI has now answered: `e47e412d` printed
+`compile_aslr disabled=yes` and counted 41,832,275 on a chip whose row held
+41,831,767. It moved nothing on the container either — 42,235,790 against
+42,235,790, and forty unwrapped runs returning one value forty times. A knob
+measured twice to move nothing is not carried, so the gate loses it and keeps
+the finding.
+
+**What settles it is the sha the gate prints.** `compile_binary sha256=` was
+added to pair a reading with the binary that produced it and had never yet
+answered a question. It answers this one:
+
+| commit | binary sha | cpu | counted |
+|---|---|---|---|
+| `fc993f83` | `de5bfab22fbd` | family 0x6 model 0xcf | 41,831,767 |
+| `e47e412d` | `de5bfab22fbd` | family 0x6 model 0xcf | 41,832,275 |
+
+One binary, one chip, two values, eight minutes apart. The second ran with
+`setarch -R` and the first without, so the same pair is the falsifier for the
+last suspect. A third run — main at `5b0f2eb1` — counted 41,832,275 on
+`family0x19-model0x11` against a recorded 41,831,767, so the second chip has
+shown both values on this binary too.
+
+I got this wrong once in the middle of the investigation and it is worth
+recording how. Two runs agreeing at 41,832,275 on one sha, against rows recorded
+on an older sha, read as "the binary moved and the rows are stale" — a tidier
+answer than bimodality, and I had reverted the pair machinery on it before
+fetching the third log. `fc993f83` killed it: same sha, same chip, the low
+value. Two points that agree are consistent with almost anything.
+
+**So the row pins a pair, which the ruling pre-authorised**: "only a residual
+that survives both reopens the question, and then the fallback is the pinned
+pair, never blindness." `scripts/gates/compile_ir_row.sh` grows three refusals
+— a row that pins neither one value nor two, a row that pins three, and a pair
+whose halves are the same number — and the lookup takes every value on the row
+and asks whether the count is among them. Two is a cap and not a convention: a
+band wide enough to hold 508 also holds kanso#1226's -5,621, which was a real
+change to the compiler. The golden's bare line stays the reference row's FIRST
+value, so a mode flip cannot reach welfare or the trend gate as a regression;
+`bench/compile_instructions_golden.txt` is byte-identical to main's on this
+branch, which is the check that it cannot.
+
+Six specs, all watched red first, and three ratchet mutations verified to redden
+this suite: the new `a_pinned_pair_grows_into_a_band`, plus the two existing
+mutations whose refusal-count guards had to move from five to seven.
+
+**OPEN, and stated as a measurement rather than a plan.** The ninth entry's
+term — glibc parsing `/proc/self/maps` before `main`, at a cost that is a
+property of the host's memory map — is still the only mechanism that fits, and
+it is not established that two runners differ in their maps by the 508 this
+needs. The row would have to print the map's line count beside the count to
+say. Nothing rests on the answer now that the pair holds the gate green.
