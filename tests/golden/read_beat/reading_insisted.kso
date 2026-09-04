@@ -1,0 +1,19 @@
+# The same document, the same loop, read with the bang instead.
+#
+# `os/read_file!` is the caller insisting the file is there, and it answers
+# the text or a failure where `os/read_file` answers the text or
+# `file_not_found`. Either way the loop's slot holds a string, so the bracket
+# is the same one `reading.kso` gets.
+import "std/os"
+import "std/text"
+
+os/read_file! "reading_insisted.kso" . fed
+
+fn fed cs
+  print "tallied {tally cs 200 0}"
+
+fn tally _ 0 acc
+  acc
+
+fn tally cs n acc
+  tally cs (n - 1) (acc + length (text/split cs "\n"))

@@ -78,7 +78,7 @@ basket defines=133 calls=1347 branches=768 lines=7699
 widebench defines=190 calls=1929 branches=1142 lines=12101
 deepbench defines=107 calls=863 branches=562 lines=5564
 escapebench defines=42 calls=116 branches=84 lines=1178
-pendbench defines=121 calls=1273 branches=653 lines=6687
+pendbench defines=121 calls=1272 branches=653 lines=6686
 scanbench defines=322 calls=3766 branches=2256 lines=20537
 indexbench defines=48 calls=178 branches=112 lines=1574
-digestbench defines=181 calls=1628 branches=909 lines=9762
+digestbench defines=181 calls=1627 branches=909 lines=9761

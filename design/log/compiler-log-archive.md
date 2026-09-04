@@ -42090,3 +42090,56 @@ wrong this is where it will say so. The first baseline that reports the rows
 moved rather than the gate missing is the evidence to read.
 
 ---
+
+## 2026-09-03 — THE SIXTH CHECK RESTING ON A MENTION, AND IT WAS THE ONE THAT CITED THE OTHER FIVE
+
+**DONE.** Writing `tests/the_ratchet_carries_what_its_gates_need.rs` earlier today
+produced a first draft that could not fail: it asked whether
+`scripts/ratchet/toolchain.sh` *contained the string* `valgrind`, and the
+script's own header, which explains why valgrind is there, names it four times.
+That is the kanso#1137 family. Having walked into it, the obvious next question
+was whether anything already in the tree had the same shape.
+
+One did, and its header cites kanso#1137 by name:
+
+```rust
+// tests/the_objective_does_not_weigh_machine_code_size.rs
+assert!(gate.contains("bench/text_golden.txt"), "…no longer diffs …, so nothing
+        counts what the compiler emits…");
+```
+
+`scripts/gates/machine_code.sh` names the golden three times: the host check at
+line 12, the diff at line 32, and one line of its `::error::` message at 37.
+Replace the first two with nothing and the gate reads no golden at all — and the
+spec passes, certifying the exact state its own failure text describes.
+Measured, not reasoned:
+
+```
+--- remaining mentions:
+37:  echo "::error::bench/text_golden.txt. Allocation counters cannot"
+test the_machine_code_vein_is_still_gated ... ok
+```
+
+Both halves read operative lines now — comments dropped, and lines whose whole
+job is to print a diagnostic dropped with them — and a third test holds the
+counterexample so the file cannot drift back. Watched red on the gutted gate and
+green on the restored one.
+
+**Reading lines is still not running the gate**, and the entry says so where a
+reader will find it: the behavioural proof is the ratchet's `machine_code` row,
+which applies a defect nightly and refuses a gate that stayed green. The spec is
+the cheap per-pull-request half of the same split the ratchet itself documents.
+
+**The sweep found no seventh.** Every test that reads a repository file was
+checked for a positive `contains` against prose-bearing text. Three others take
+that shape and all three read data rather than source: `bench/welfare_floor.json`
+(no comments), emitted LLVM IR, and a hako lock file. The rest assert on a
+tool's output, which is where a spec should be entering anyway.
+
+**The pattern worth carrying.** Both instances today were written by somebody
+who knew the rule — this file's own header argues it, and the toolchain spec was
+drafted an hour after reading it. Knowing the rule does not catch the case;
+trying to make the check fail does. The cost of that attempt is one `sed` and
+one `cargo test`.
+
+---

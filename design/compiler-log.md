@@ -20,59 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — THE SIXTH CHECK RESTING ON A MENTION, AND IT WAS THE ONE THAT CITED THE OTHER FIVE
-
-**DONE.** Writing `tests/the_ratchet_carries_what_its_gates_need.rs` earlier today
-produced a first draft that could not fail: it asked whether
-`scripts/ratchet/toolchain.sh` *contained the string* `valgrind`, and the
-script's own header, which explains why valgrind is there, names it four times.
-That is the kanso#1137 family. Having walked into it, the obvious next question
-was whether anything already in the tree had the same shape.
-
-One did, and its header cites kanso#1137 by name:
-
-```rust
-// tests/the_objective_does_not_weigh_machine_code_size.rs
-assert!(gate.contains("bench/text_golden.txt"), "…no longer diffs …, so nothing
-        counts what the compiler emits…");
-```
-
-`scripts/gates/machine_code.sh` names the golden three times: the host check at
-line 12, the diff at line 32, and one line of its `::error::` message at 37.
-Replace the first two with nothing and the gate reads no golden at all — and the
-spec passes, certifying the exact state its own failure text describes.
-Measured, not reasoned:
-
-```
---- remaining mentions:
-37:  echo "::error::bench/text_golden.txt. Allocation counters cannot"
-test the_machine_code_vein_is_still_gated ... ok
-```
-
-Both halves read operative lines now — comments dropped, and lines whose whole
-job is to print a diagnostic dropped with them — and a third test holds the
-counterexample so the file cannot drift back. Watched red on the gutted gate and
-green on the restored one.
-
-**Reading lines is still not running the gate**, and the entry says so where a
-reader will find it: the behavioural proof is the ratchet's `machine_code` row,
-which applies a defect nightly and refuses a gate that stayed green. The spec is
-the cheap per-pull-request half of the same split the ratchet itself documents.
-
-**The sweep found no seventh.** Every test that reads a repository file was
-checked for a positive `contains` against prose-bearing text. Three others take
-that shape and all three read data rather than source: `bench/welfare_floor.json`
-(no comments), emitted LLVM IR, and a hako lock file. The rest assert on a
-tool's output, which is where a spec should be entering anyway.
-
-**The pattern worth carrying.** Both instances today were written by somebody
-who knew the rule — this file's own header argues it, and the toolchain spec was
-drafted an hour after reading it. Knowing the rule does not catch the case;
-trying to make the check fail does. The cost of that attempt is one `sed` and
-one `cargo test`.
-
----
-
 ## 2026-09-03 — THE COMPILE ROW MOVED 992 AND THE FRONT END DID NOT
 
 **DONE.** CI refused the branch on the vein that is keyed by silicon:
@@ -2299,3 +2246,80 @@ refuses to quietly absorb the first if it comes.
 
 Welfare 73.06, unmoved: 1,372 instructions on a term whose baseline is
 57,029,831 is below the gate's own resolution.
+
+## 2026-09-04 — the yield is carried per declaration, and the corpus was measuring its own workaround
+
+**Searched first**, as the filing gate requires: design/compiler-log.md (the
+2026-09-03 entry names this fix, counts the eight absent wrappers and defers
+it), design/log/compiler-log-archive.md (2026-07-28 on `desc_yield`'s missing
+arms, 2026-07-29 on closing that gap with an error-corpus program) and every
+design/*.md. The fix below is the one the 2026-09-03 entry named and declined
+to make in place.
+
+**`desc_yield` answered from a table keyed on a chain head's bare name.**
+`os/read_file` hit it because the wrapper's name collides with the builtin's;
+`os/read_file!` — same body, one character more — missed and fell to the top
+set, and so did seven other std effect wrappers. A loop past any of them kept
+the grow-only arena. The yield is now a second per-declaration answer beside
+`ctx.returns`: the fixpoint asks the body's tail what running the description
+hands over, grows it monotonically, and wakes the same readers `returns` does.
+A call in yield position consults it. The table remains, reached only by names
+the program did not declare — true builtins.
+
+**Watched red first.** `tests/golden/read_beat/reading_insisted.kso` is the
+`os/read_file!` twin of `reading.kso`, same document and same loop:
+
+    reading.kso           beat_iters=201
+    reading_long.kso      beat_iters=801
+    reading_insisted.kso  beat_iters=1      <- before
+    reading_insisted.kso  beat_iters=201    <- after
+
+**`bench/make_jsonbench` gets its main back.** Its comment said the `fed` pair
+was written out because of this hole and would come out when the yield was
+inferred, so it does: `os/read_file! "bench/large.json" . go`. jsonbench reads
+`arena_blocks=2`, `arena_peak_bytes=2097152`, `beat_iters=151` — the same
+numbers the workaround produced. **Every counter in every cost golden is
+byte-identical.** That is the finding, not an aside: the corpus was measuring
+the workaround, so it could not have scored the fix.
+
+**The cohort fixture's comment was wrong about which cohort it pinned.**
+`a_bound_branch_chosen_pipe_still_fires_the_cohort` asserted `cohort_frees=1`
+and said the 1 was the decode proving its argument a string. It was the
+*read*: `os/read_file!` is a qualified call crossing down into `os` with a
+string argument, which is the license, and the decode was not licensed at all
+because the bound `source` answered top. The two are told apart by what they
+evacuate — the read's cohort copied 432 bytes, and a program whose source is
+`io/stdin` on both arms reads `cohort_frees=1` with `evac_bytes=400144`, which
+is the decode's alone. The count is 2 now and `evac_bytes` is pinned beside it
+so the next reader cannot make the same mistake.
+
+**Emitted code falls on three programs.** The decoder: defines 175 to 174,
+calls 1,863 to 1,851, branches 1,199 to 1,196, lines 12,263 to 12,218.
+pendbench and digestbench each lose one call and one line, and those two are
+the inference change alone — they never touched jsonbench's `fed`.
+
+**What it costs, measured rather than assumed.** compile_instructions
+42,239,175 to 42,348,436 on this container, +0.2587%, same command as the
+gate. Three shapes were tried:
+
+    naive                              42,544,586   +0.723%
+    one hash lookup, not two           42,483,163   +0.578%
+    stop at the top of the lattice     42,389,340   +0.356%
+    one wake per visit, inlined        42,348,436   +0.259%
+
+By callgrind the residual is `desc_yield` +49,409 and the group lookup about
++18,000; `demand::analyze` +27,661 and the parser +15,773 are binary layout,
+and this change touches neither of those files.
+
+**A fourth shape was tried and is worse, which is the interesting one.**
+Computing the yield only for declarations some yield position has actually
+asked about — marking and waking on first ask — reads 43,390,986, a full
+percent above the baseline and worse than doing it for everything. The wake
+storm costs more than the walks it saves.
+
+**Welfare falls about 0.008 and the reason is the corpus, not the weights.**
+Filed as a pending gavel — "The welfare model cannot see the yield hole,
+because the corpus was written around it" — with the recommendation to ship
+and move the floor, and with the honest open question stated: whether "the
+corpus is blind here" may move a floor at all, or whether the corpus change
+has to come first.

@@ -5,6 +5,21 @@ use std::process::Command;
 /// at the pop. Watched red (cohort_frees=0) with the yield tracking
 /// stashed.
 ///
+/// Two cohorts, and until the yield was carried per declaration this read
+/// one. The single was the READ — `os/read_file!` is a qualified call
+/// crossing down into `os` with a string argument, which is the license — and
+/// the decode this test is named for was not licensed at all: `desc_yield`
+/// answered the bound `source` with the top set, so `text` was heapish and
+/// the license refused. The comment above claimed the decode and the
+/// measurement was the read.
+///
+/// The two are told apart by what they evacuate, which is why `evac_bytes` is
+/// pinned beside the count. The read's cohort copied 432 bytes; the decode's
+/// copies the decoded string twice, into the side buffer and back. A program
+/// whose source is a plain `io/stdin` on both arms — always a string, so
+/// always licensed — reads `cohort_frees=1` with `evac_bytes=400144`, which
+/// is the decode's alone.
+///
 /// The input is written here rather than committed, because what this needs
 /// is a large text with a small tree and that runs to a megabyte — six times
 /// the largest data file in the repo. Escapes give the ratio: six bytes of
@@ -31,7 +46,8 @@ fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(stdout, "held 200000\n", "stdout mismatch: {stderr}");
-    assert!(stderr.contains("cohort_frees=1"), "the cohort never fired: {stderr}");
+    assert!(stderr.contains("cohort_frees=2"), "a cohort never fired: {stderr}");
+    assert!(stderr.contains("evac_bytes=400496"), "the decode's cohort kept its region: {stderr}");
     assert!(output.status.success());
 }
 
