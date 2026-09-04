@@ -794,4 +794,24 @@
 # NOTE FOR THE NEXT RE-SIT: the 508 lattice is a property of the row, not of
 # Zen 3. If Zen 4's single becomes a pair 508 or 1,524 apart, that is the same
 # finding one chip over, and the cap of two still refuses a third.
+#
+# 2026-09-04, SECOND SITTING ON THIS BINARY, AND IT CORRECTS THE ENTRY ABOVE.
+# The next run landed on Zen 3 (0x19/0x1), binary sha 0e081d4c2c96, and counted
+# 41,845,704 — the SAME value Zen 4 counted. Two chips, one binary, one value,
+# so this binary is one where the two AMD models agree to the instruction, as
+# the binary before last did and the one between them did not.
+#
+# WHAT THAT CORRECTS. The note above reads the 41,930,035 -> 41,845,704 move as
+# a chip change, because the run that refused was Zen 4 where the previous
+# sitting was Zen 3. It is not. Zen 3 counted 41,930,035 on sha 42283602b2c8
+# and counts 41,845,704 on sha 0e081d4c2c96: the same chip, -84,331, for a
+# source change the container measures at +34. The remaining -84,365 is binary
+# layout, which is the term this file's header already names — a docs-only pull
+# request once moved this row 5,081 — at sixteen times the size anything here
+# had recorded.
+#
+# So the row moves by layout far more than by the front-end work it is meant to
+# count, and it is the layout that the welfare floor then ratchets against.
+# That is in design/pending-gavels.md.
 family0x19-model0x11 41845704
+family0x19-model0x1 41845704

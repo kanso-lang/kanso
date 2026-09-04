@@ -172,28 +172,37 @@ sentence being used loosely. If it is not, the answer is a corpus change first
 and this fix second, and that ordering is the ruling to make.
 
 **ADDED 2026-09-04, and it may change what the fall means.** The compile row
-was re-sat during this branch and CI's run landed on a different chip than the
-previous sitting. `compile_instructions` is keyed per silicon, and welfare
-reads the FIRST row of `bench/compile_instructions_by_cpu.txt` as a bare
-number. Measured, with nothing else changed:
+was re-sat during this branch. `compile_instructions` is keyed per silicon and
+welfare reads the FIRST row of `bench/compile_instructions_by_cpu.txt` as a
+bare number. Measured, with nothing else changed:
 
-    41930035 (Zen 3)   welfare 73.05
-    41845704 (Zen 4)   welfare 73.06
+    41930035   welfare 73.05
+    41845704   welfare 73.06
 
-An arbitrary choice of reference chip is worth 0.01 — the same size as the
-fall this entry is about. That file says its own ordering "is arbitrary and
-means nothing beyond 'this is the series welfare tracks'", which was true while
-welfare only reported the number and stopped being true when the floor became a
-ratchet.
+**What moves between those two numbers is BINARY LAYOUT, not silicon.** The
+first draft of this entry said it was a chip change, because the run that
+refused sat on Zen 4 where the previous sitting was Zen 3. The next run
+corrected it: Zen 3 counted 41,845,704 as well. Same chip, different binary —
+sha 42283602b2c8 against sha 0e081d4c2c96 — and **-84,331 for a source change
+the container measures at +34**. The two AMD models happen to agree to the
+instruction on this binary, which is what hid it for one run.
 
-So there is a second question beside the first, and it is not about this
-branch: **should a term whose absolute value depends on which runner CI drew
-be allowed to set a ratcheted floor at all?** Two shapes, both yours. Welfare
-could read each chip's row against that chip's own first recorded value, so the
-term measures movement rather than magnitude. Or the compile term could stay in
-the report and leave the ratchet — which is close to the exclusion argument
-ruled against on 2026-09-03, so it is not free.
+So a relink bought 0.01 of welfare, the same size as the fall this entry is
+about, for 34 instructions of real front-end work. The by-cpu file's header
+already names layout as a term — a docs-only pull request once moved this row
+5,081 — and this is sixteen times that, against a floor that ratchets.
 
-Nothing has been changed on either question. The row was re-sat because CI
-refused and the refusal named the line to paste; that is the documented path
-and it is all that was done.
+The question, and it is not about this branch: **should a term whose movement
+is dominated by binary layout set a ratcheted floor at all?** The per-chip key
+was built to separate the chip from the change and it does that. It does not
+separate the LINK from the change, and nothing in the tree does. Shapes I can
+see, none of them chosen here: welfare reads each row against that row's own
+first recorded value, so the term measures movement rather than magnitude; or
+the compile term stays in the report and leaves the ratchet, which is close to
+the exclusion argument ruled against on 2026-09-03 and therefore not free; or
+the row is measured against a binary pinned some other way, which is a larger
+change than either.
+
+Nothing has been changed on any of it. The row was re-sat because CI refused
+and the refusal named the line to paste; that is the documented path and it is
+all that was done.

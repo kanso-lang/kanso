@@ -2554,41 +2554,30 @@ contradicted it.
 by running `scripts/welfare` against each value the row has carried today, with
 nothing else changed:
 
-    compile_instructions=41930035   welfare 73.05    (Zen 3, previous head)
-    compile_instructions=41931559   welfare 73.05    (Zen 3, the other mode)
-    compile_instructions=41845704   welfare 73.06    (Zen 4, this head)
+    compile_instructions=41930035   welfare 73.05
+    compile_instructions=41931559   welfare 73.05
+    compile_instructions=41845704   welfare 73.06
 
-So swapping which chip the reference row was measured on is worth about 0.01
-welfare — the same size as the entire fall this branch is blocked on. It did
-not unblock anything (the gate still refuses, at 0.00 below rather than 0.01),
-and that is luck rather than design.
+**WHAT MOVED IT, CORRECTED.** This was first written up as a chip change,
+because the run that refused sat on Zen 4 where the previous sitting was Zen 3,
+and the correction is the next run: it sat on **Zen 3** and counted 41,845,704
+as well. Same chip as the 41,930,035 sitting, different binary — sha
+42283602b2c8 then, sha 0e081d4c2c96 now — and **-84,331 for a source change
+the container measures at +34**. The two AMD models agreeing to the instruction
+on this binary is what hid it for one run.
 
-`bench/compile_instructions_by_cpu.txt` says of its own ordering: "Which chip
-is first is arbitrary and means nothing beyond 'this is the series welfare
-tracks'." That was true when welfare only reported the number. It stopped being
-true when the floor became a ratchet: an arbitrary choice now sets a bound that
-every later change has to clear, and a re-sit that lands on a faster chip
-hands the next change a gift it did not earn — or, landing the other way,
-charges it for something it did not do.
+So the term that moved is binary layout, not silicon, and it moved the row by
+2,480 times the front-end work the change actually did. This file's header
+already names layout — a docs-only pull request once moved this row 5,081 —
+and this is sixteen times that.
 
-Nothing here proposes a fix. Two shapes are visible and both are Clay's:
-welfare could read a chip-relative quantity (each row against its own first
-recorded value) rather than an absolute one, or the compile term could be
-excluded from the ratchet while staying in the report. The second is close to
-the 2026-09-03 exclusion argument that was ruled against, so it is not a free
-choice. Filed beside the corpus question in design/pending-gavels.md, because
-the two together decide what this branch's 0.01 actually means.
-
-**kq's pin is one merge behind and that is correct, checked rather than
-assumed.** kq pins 3b9df304 and main is 159f6b2b (kanso#1239). The standing
-rule is that a kanso merge warrants a pin bump because a change moving no
-allocation counter still moves the instructions vein — but #1239 touched
-`bench/compile_instructions_by_cpu.txt` and `design/compiler-log.md` and
-nothing else. `git diff 3b9df304 159f6b2b -- src/ lib/ Cargo.toml Cargo.lock
-build.rs` is empty, and the only `include_str!`s reach `src/` and `lib/`, so
-the toolchain kq builds is the same binary at both revisions. No vein of kq's
-five can move, and a bump would spend a CI round to prove it. The next bump is
-whenever a merge touches the toolchain, and this branch will be one.
+**That makes the second gavel question sharper rather than weaker, and it is
+still not one I answer.** The original framing (which chip CI drew) was wrong.
+The real one: `compile_instructions` moves by layout far more than by
+front-end work, and the welfare floor ratchets against the number that
+contains both. 0.01 of welfare — the same size as the fall this branch is
+blocked on — was bought here by a relink. Filed in design/pending-gavels.md
+with the corrected evidence; nothing changed on it.
 
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
