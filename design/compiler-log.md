@@ -2849,3 +2849,42 @@ The question the entry raised — whether a benchmark that vendors a library
 should track it — is answered there too, and against tracking: kanso#1230
 shipped a library change and a codegen change together, and the frozen
 benchmark is what separated them.
+
+**THREE MORE OPEN THREADS, TWO OF THEM CLOSED, AND ONE CREDIT TO CORRECT.**
+Walking the rest of the live log's `OPEN` markers:
+
+**The ninth entry named `/proc/self/maps` before I did.** It reads: "glibc
+parses `/proc/self/maps` before `main` to find the stack bounds, one more
+shared library in the process moves the row 32,090, and that cost belongs to
+the host's memory map rather than to the compiler." Today's work established
+that; it did not find it. The entries above are written as though the mechanism
+were new, and it was the leading candidate on the record, un-established. What
+is added is the establishment and the size — the profile split, `program`
+holding at 41,878,959 to the instruction across a 2,130 move — and the caller,
+which is Rust's `lang_start_internal` placing its stack guard rather than glibc
+before `main`.
+
+**The eleventh entry's test is answered, in its second branch.** It asked
+whether the other chips land on their own values and hold them, or whether a
+second value appears on a recorded chip. Both were seen: three silicon keys
+counted 41,845,704 on sha 0e081d4c2c96, and Zen 4 read 41,845,704 and
+41,844,180 on that same sha. By the entry's own reading, a second value on a
+recorded chip means neither earlier suspect was the term and the maps parse is
+what remains, which is what the split measures. Its first branch does NOT
+follow — chips agreeing on one binary is a different observation from chips
+holding their own stable values, and the file's history has a state where two
+disagreed on binaries nobody recorded.
+
+**The twelfth entry's question is still open as asked.** It wants two RUNNERS
+shown to differ in their maps by the 508 the row needed, and proposes printing
+the map's line count. Today's evidence is binary-to-binary on ONE host, so it
+answers the same question one level down and leaves that one standing.
+
+**The rewiring thread is closed by a ruling, not by work.** The `--toggle-collect`
+entry owed a guard and a welfare re-baseline; the ruling of 2026-09-03 was no
+exclusion and the toggle was dropped. `grep` finds no trace of it in `scripts/`
+or `.github/`, so nothing is owed and the marker should not send another reader
+after it.
+
+**Still genuinely open:** `bench/instructions_golden.txt` is not keyed per
+silicon the way the compile row is, and there is no `by_cpu` file beside it.
