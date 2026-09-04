@@ -2712,11 +2712,35 @@ more — matches nothing and falls to the top set. Written out:
     os/read_file  "large.json" . go   loop/3: beat: rewinds every iteration
     os/read_file! "large.json" . go   loop/3: grow-only: argument 1 ...
 
-Same package, same loop, one character apart. Every std wrapper whose name
-does not happen to match its builtin's has the same hole, and a wrapper with
-no builtin under it at all has it always. Naming it here rather than fixing
-it: the fix is return-type inference for a kanso function's yield, which is a
-change to the fixpoint rather than a patch to a match arm.
+Same package, same loop, one character apart.
+
+**Counted, because the bang is the small end of it.** Cross the table's
+entries against every std wrapper that sits over an effect builtin and EIGHT
+wrapper names are absent: `net/listen`, `net/port`, `net/accept`, `net/read`,
+`net/close_conn`, `net/close_listener`, `os/read_file!` and `os/kill`. The
+names that do hit are hitting by coincidence — `os/write_file` because the
+wrapper and the builtin happen to share a name, `net/write` because it lands
+on the `write` entry meant for `io/write` — and the table's own `net_write`
+and `net_close` rows are reachable only from inside lib/net, since the
+wrappers are called `write`, `close_conn` and `close_listener`.
+
+`net/read` is the one that matters. A socket server looping over the bytes it
+read is the ordinary shape, and it pays what jsonbench paid. On a twelve-line
+probe whose loop allocates once per iteration:
+
+    os/read_file  "x" . go    beat: rewinds every iteration
+    os/read_file! "x" . go    grow-only: argument 1 may carry heap
+    net/listen ":0" . (l -> net/accept l . (c -> net/read c . go))
+                              grow-only: argument 1 may carry heap
+
+The cause is proven rather than inferred: adding one arm reading
+`base(n) == "read" | "net_read" => STR` and rebuilding flips the net/read
+probe to `beat: rewinds every iteration`. That arm was reverted and is not in
+this branch, because more table rows are the bug. The fix is to infer a kanso
+function's yield in the fixpoint beside `ctx.returns` and have `desc_yield_of`
+consult it, leaving the table to cover true builtins only — a change to the
+fixpoint rather than a patch to a match arm, which is why it is named here and
+not made here.
 
 So jsonbench's generated main writes the arm out — `fed`, which is
 `os/read_file!` at the call site — with the reason in
