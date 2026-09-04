@@ -2710,20 +2710,30 @@ first of the five holds *the third cause*: `family0x6-model0xcf` counted
 no front-end change in the diff — so the key did not determine the row, and the
 per-chip table rested on a weaker premise than kanso#1226 claimed for it.
 
-**AND THE THREAD IS CHEAPER THAN IT LOOKS, BECAUSE THE DEFINITION MOVED UNDER
-IT.** Both those readings are ~41.8M, which is the WHOLE-PROCESS row. kanso#1241
-redefined the row to `kanso::main` inclusive and dropped 465,864 instructions of
-loader and stack guard, and the fifth of the archived entries names the only
-mechanism that ever fit the 508: glibc parsing `/proc/self/maps` before `main`,
-at a cost that is a property of the host's memory map. That parse is now outside
-the count.
+**THE MECHANISM IS ALREADY MEASURED, AND THE REDEFINITION DOES NOT REMOVE IT.**
+I first wrote that the 508 was glibc parsing `/proc/self/maps`, which #1241 now
+drops, and that the thread had therefore got cheaper. The archive says
+otherwise, in an entry that corrects the very guess I was repeating. The two
+profiles differ in three rows and all three are glibc's allocator:
 
-So the sitting the thread asks for is no longer several deliberate runs. It is
-the next time CI lands on `family0x6-model0xcf` at all: a row recorded there
-under the new definition, and then a second reading on the same binary, settles
-it either way for free. If the disagreement is gone, the maps parse was the
-mechanism and #1241 removed it. If it survives, the mechanism was never the
-loader and the per-chip premise is weak in a way nothing here has explained.
+    _int_malloc        1,551,384   1,551,964   +580
+    _int_free          1,522,333   1,522,352    +19
+    memcmp-avx2-movbe  1,353,408   1,353,342    −66
+
+Every kanso symbol agrees to the instruction across the pair. `_int_malloc` and
+`_int_free` are calls the compiler makes, so they sit INSIDE `kanso::main` and
+the new definition counts them exactly as the old one did. The thread is as open
+as it was.
+
+**What #1241 did give it is a name for the mechanism.** Its seven-binary table
+found the same signature — `__memcmp_avx2_movbe` moving 402 while every other
+in-frame symbol held — and traced it: growing `.text` moves the end of `.bss`,
+the kernel starts the break after it, and every allocation lands at a different
+alignment. The 508 is that phenomenon between two runs rather than between two
+binaries, which sharpens the open question to a single one: what moves the heap
+base when the binary sha, the 123-line cpu feature block, glibc, valgrind and
+the environment all agree? Pinning the malloc tunables took the cluster from
+5,064 to 508 and did not remove it, and no tunable pins where the break starts.
 
 A third chip was recorded on kanso#1242 — `family0x1a-model0x2`, reading
 41,379,840, the same to the instruction as both AMD models. That says the keys
