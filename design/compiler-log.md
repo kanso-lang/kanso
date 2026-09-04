@@ -2482,6 +2482,29 @@ rather than nothing — which is a wrong answer whether or not anything currentl
 reads it. That is the whole of the case for those four; it is not a measured
 win and is not written as one.
 
+**What the bracket is worth, measured but NOT pinned.** A server reading a
+400 KB POST and threading it through sixty iterations, on `48ac2f93` against
+`40aec705`:
+
+    arena_blocks         182  ->    4
+    arena_peak_bytes     190,840,832  ->  4,194,304
+    beat_iters             0  ->   60
+
+45x the peak, which is the socket twin of the file read's 260 MB against 2 MB.
+Three runs of each shape agreed to the byte in the scratch directory, and a
+golden pinning those numbers was written and then **taken out again**: the same
+program inside the test harness read `tallied 120` rather than `tallied
+3923160`. One `net/read` is one `recv`, so how much of a 400 KB body has
+arrived when the server reads decides what the loop sees, and it differs
+between a shell and a spawned child on a loaded machine. Three agreeing runs
+were not evidence of determinism, they were evidence of one machine state.
+
+So the corpus keeps the small-request `beat_iters` assertion, which is
+timing-independent because the whole request fits one `recv`, and the 45x above
+stays a measurement in this entry rather than a number CI diffs. Pinning it
+would need `net/read` to read to a length or to EOF, and that is a change to
+what the verb means rather than a change to a test.
+
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
 benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
