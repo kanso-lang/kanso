@@ -2252,5 +2252,15 @@ which has no reading on the binary those two were counted against, so the
 work. The other two chips are re-sittings when they next refuse, one per CI
 run, which is the price this file's header already names for a keyed row.
 
+CI then landed on Zen 3 and refused, which is the deletion working: no row,
+no comparison. It counted 41,830,604 on sha d89bda86538a — `family0x19-
+model0x11`'s value to the instruction, on the same binary — so the row is
+added and the two AMD models agree for the second consecutive binary. The one
+before read 41,829,232 on both; the one before that read 41,503,893 and
+41,498,829, 5,064 apart. Two binaries of agreement does not merge the keys,
+because the earlier split was on the same two models; what it says is that the
+split has not come back. The Intel row is still absent and still wants its own
+sitting, one per CI run, as the header priced it.
+
 Welfare 73.06, unmoved: 1,372 instructions on a term whose baseline is
 57,029,831 is below the gate's own resolution.

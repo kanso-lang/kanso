@@ -666,3 +666,22 @@
 # and not a reason to widen it: the second reading is a measurement, and
 # writing a pair now would be predicting a number nobody counted.
 family0x19-model0x11 41830604
+
+# 2026-09-04, THE RE-SITTING THE DELETION ASKED FOR, and the two AMD models
+# agree again. CI landed on Zen 3 next, found no row — the block above had
+# just removed its stale one — and refused rather than passing on somebody
+# else's number. It counted 41,830,604 on sha d89bda86538a: family0x19-
+# model0x11's value TO THE INSTRUCTION, on the same binary.
+#
+#   00:26  family0x19-model0x11  3ae016f0      41,830,604
+#   00:37  family0x19-model0x1   d89bda86538a  41,830,604
+#
+# That is the second consecutive binary on which these two models agree. The
+# one before this read 41,829,232 on both, and the one before THAT read
+# 41,503,893 and 41,498,829 — 5,064 apart. So the agreement is a property of
+# a binary's layout rather than of the silicon, which is what the header
+# already says, and two binaries agreeing does not merge the keys. What it
+# does say is that the 5,064 split has not come back on either.
+#
+# The Intel row (0x6/0xcf) is still absent and still wants its own sitting.
+family0x19-model0x1 41830604
