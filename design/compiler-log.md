@@ -2328,6 +2328,23 @@ asked about — marking and waking on first ask — reads 43,390,986, a full
 percent above the baseline and worse than doing it for everything. The wake
 storm costs more than the walks it saves.
 
+**`lib/os/os.kso` carried a claim this change falsifies, and correcting it
+turned up a second thing.** `read_file!` is written as a chain off the builtin
+rather than a call to `read_file`, and its comment gave the reason: a chain
+whose head is a kanso function answered the top set. That is no longer true,
+and measured — `read_file path . (r -> insisted path r)` reads
+`arena_blocks=2` and `beat_iters=151` on jsonbench, the same as the shipped
+spelling. So the shorter form is available now.
+
+It is still not a one-line swap, and the benchmark could not have shown why.
+`read_file` answers `file_not_found` where the builtin answers `none`, so
+`insisted`'s first arm has to move with it; leaving that arm alone, a missing
+file reaches the caller as a record rather than a failure, and the program
+answers `length takes a list, string, or map, not os/file_not_found "…"` with
+the err gone. jsonbench reads a file that is there, so it passed both ways.
+The comment now says the constraint is retired and what moving the spelling
+would take; the code is unchanged.
+
 **Welfare falls about 0.008 and the reason is the corpus, not the weights.**
 Filed as a pending gavel — "The welfare model cannot see the yield hole,
 because the corpus was written around it" — with the recommendation to ship
