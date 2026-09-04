@@ -912,3 +912,8 @@
 family0x19-model0x11 41379840
 family0x19-model0x1 41379840
 family0x1a-model0x2 41379840
+# A fourth, and the pool's second Intel family: family0x6-model0x6a refused on
+# kanso#1244 with the diff confined to design/, and printed 41,379,840 — the
+# same to the instruction as the two AMD models and the other Intel one. Four
+# keys, one number, on every binary any two of them have shared.
+family0x6-model0x6a 41379840

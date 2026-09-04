@@ -2757,10 +2757,12 @@ the instrument change could not be banked.
 allow.** It said other chips holding their own values would mean the key
 separates nothing, and a second value on a recorded chip would mean neither
 suspect was the term. Since then: Zen 4 and Zen 3 read 41,379,840 on sha
-4dc725bdb40d, Intel `family0x1a-model0x2` read 41,379,840 today, and
-`family0x6-model0xcf` produced two values 508 apart on one binary. Three keys
-agree wherever they have shared a binary AND one key disagrees with itself. Both
-branches fired, so the disjunction was wrong rather than either answer being.
+4dc725bdb40d; Intel `family0x1a-model0x2` read 41,379,840 this afternoon;
+`family0x6-model0x6a` read 41,379,840 on this branch, whose diff is `design/`
+alone; and `family0x6-model0xcf` produced two values 508 apart on one binary.
+Four keys agree wherever they have shared a binary AND one key disagrees with
+itself. Both branches fired, so the disjunction was wrong rather than either
+answer being.
 What survives is the narrower question the entry above already carries: what
 moves the heap base when everything else agrees.
 
