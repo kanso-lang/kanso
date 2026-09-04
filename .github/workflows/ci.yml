@@ -58,7 +58,18 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
-      - run: cargo test
+      # --no-fail-fast because cargo stops at the first failing test
+      # BINARY, not the first failing test, and the binaries run in
+      # alphabetical order. With welfare red in
+      # a_granted_baseline_says_it_is_one, both this job and the macos
+      # one were running the nine binaries that sort before it and
+      # reporting that as the suite. A socket spec added on 2026-09-04
+      # had never executed on arm at all, and nothing said so: the job
+      # was red for the reason everyone expected and silent about the
+      # coverage it had stopped providing. A red suite that hides the
+      # rest of itself is the same fault as a green one that proves
+      # nothing.
+      - run: cargo test --no-fail-fast
       - name: the shipped library's own tests
         run: |
           cargo run -- test lib/expect
@@ -88,7 +99,18 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
-      - run: cargo test
+      # --no-fail-fast because cargo stops at the first failing test
+      # BINARY, not the first failing test, and the binaries run in
+      # alphabetical order. With welfare red in
+      # a_granted_baseline_says_it_is_one, both this job and the macos
+      # one were running the nine binaries that sort before it and
+      # reporting that as the suite. A socket spec added on 2026-09-04
+      # had never executed on arm at all, and nothing said so: the job
+      # was red for the reason everyone expected and silent about the
+      # coverage it had stopped providing. A red suite that hides the
+      # rest of itself is the same fault as a green one that proves
+      # nothing.
+      - run: cargo test --no-fail-fast
       - name: integer arithmetic, on the architecture linux is not
         run: |
           cargo build --release

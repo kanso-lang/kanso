@@ -2579,6 +2579,26 @@ contains both. 0.01 of welfare — the same size as the fall this branch is
 blocked on — was bought here by a relink. Filed in design/pending-gavels.md
 with the corrected evidence; nothing changed on it.
 
+**AND CI HAS BEEN RUNNING A NINE-BINARY PREFIX OF THE SUITE, on both hosts,
+for every run of this branch.** `cargo test` stops at the first failing test
+BINARY rather than the first failing test, and the binaries run in alphabetical
+order. `a_granted_baseline_says_it_is_one` is red for the welfare fall, and it
+sorts ninth. So `specs` and `the other host (macos, arm)` were both running
+`a_bare_list…` through `a_gate_red_before…` and stopping — and reporting that
+as the suite.
+
+Found by reading the arm job's log to check whether the new socket spec passed
+there. It had never run. `tests/sockets_serve.rs` sorts long after the letter
+a, so the fixture this entry is built on has not executed on arm once, and
+nothing anywhere said so: the job was red for the reason everybody expected and
+silent about the coverage it had stopped providing.
+
+Both jobs take `--no-fail-fast` now. A red suite that hides the rest of itself
+is the same fault as a green one that proves nothing, and this one hid about
+ninety binaries behind one expected failure. The exit code is unchanged — a
+failure anywhere still fails the job — so the only difference is what a reader
+of the log can see.
+
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
 benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
