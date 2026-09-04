@@ -2301,15 +2301,25 @@ jsonbench's `fed`. `.text` falls on the same three and in the same
 proportions: jsonbench 86,418 to 86,002, pendbench 83,538 to 83,474,
 digestbench 102,802 to 102,738.
 
-**Two of those veins were found by CI rather than here, and that is the
-process failing rather than the gate working.** The local sweep ran nine
-runtime counter gates and three compile ones and stopped, on the belief that
-was the set. The cost-goldens job runs `machine_code.sh` and
-`instructions.sh` as well, and named four red veins where two were expected.
-The one lesson is the one CLAUDE.md already states about kq's five veins and
-which this entry is the kanso instance of: the vein list is a file to read,
-never a set to recall. `.github/workflows/ci.yml`'s cost-goldens job is where
-kanso's is written down.
+**Three things were found by CI rather than here, all one mistake.** The local
+sweep ran nine runtime counter gates and three compile ones and stopped, on
+the belief that was the set. The cost-goldens job also runs `machine_code.sh`
+and `instructions.sh`, and named four red veins where two were expected; then
+`book_check.sh` failed on two panels, `ch04/missing.out` and
+`ch05/missing.out`, which print the same err whose birth line the comment
+above shifted. Three goldens under `tests/` had already needed the same edit,
+so the number of places that pin `os.kso:103` was four more than the three I
+found by grepping `tests/`.
+
+`.github/workflows/ci.yml` names FORTY-FIVE entry points. Twelve were being
+run. All of them that can run in this container have now been run and are
+green — every differential, the coverage and drift scans, the trend gate,
+`utf8_differential`, `row_carries_the_objective`, `native_checksum` — and the
+ones that cannot are the three host-gated compile veins and the ratchet.
+
+The lesson is the one CLAUDE.md already states about kq's five veins, and this
+is the kanso instance: the vein list is a file to read, never a set to recall.
+Reading it is one grep and it would have saved three rounds.
 
 **A second hole of the same shape, one level down.** `desc_yield_of` looks
 through a binding to what the bound description yields, and it did that only
