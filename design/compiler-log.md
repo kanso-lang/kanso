@@ -2752,3 +2752,43 @@ forty times this probe's step, between two binaries whose `.text` differed by a
 real source change, and nothing here shows a shift that large. One chip, one
 glibc, one container — CI's hosts are not this host, and the numbers above are a
 demonstration of sensitivity rather than a calibration of it.
+
+**TEN BINARIES, AND THE TWO CLAIMS ABOVE ARE BOTH WRONG.** Growing `.text`
+alone was never tested — every probe above left it at 2,550,854, because the
+linker dropped each dead function. Reaching one through an environment variable
+the gate never sets (it runs `env -i`) keeps it, and the picture changes:
+
+    sha           .text     .data  .bss    instructions
+    9fcc6686dc47  2550854   2640   312     42,344,081   baseline, three runs
+    82ec0846958a  2550854   2640   312     42,344,081   dead pub fn, dropped
+    5d50f9d9721d  2550854   2640   312     42,344,081   no_mangle fn, dropped
+    8663815286be  2550854   2640   1336    42,344,081   +1 KiB .bss
+    09a6c2fab6b8  2550854   2640   312     42,344,093   +64 KiB .rodata
+    5e73453bcc7b  2550950   2640   312     42,343,660   200 unreached fns
+    2152c689dc78  2566982   2640   312     42,345,628   400 unreached fns
+    2a4e10fb2116  2550950   2640   312     42,345,904   100 unreached fns
+    7fc53be7987e  2550854   2640   4408    42,346,211   +4 KiB .bss
+    3c1e1cff9e3b  2550854   2640   65848   42,346,211   +64 KiB .bss
+
+**The measurement is deterministic per binary** — the baseline read 42,344,081
+three times over — so every difference here is a property of the binary and
+nothing else.
+
+Retracted with it: "a relink alone is not the term, three shas with unmoved
+sections read one value to the instruction." Four binaries agreeing was luck.
+`2a4e10fb2116` and `5e73453bcc7b` have the same `.text`, `.data` and `.bss` to
+the byte and read **2,244 apart**, so the triple the gate prints does not
+determine the value. Retracted too: "bimodal by construction." Ten binaries gave
+six values across a span of 2,551.
+
+**WHAT STANDS, AND IT IS THE STRONGER STATEMENT.** The row is a deterministic
+function of the binary and of nothing the gate can see about the binary, and a
+source change that does no new work moves it by up to 2,551 — the size of
+kanso#1226's -5,621, which is a real change this vein exists to catch. It moves
+in both directions: `5e73453bcc7b` reads 421 BELOW the baseline for nothing but
+two hundred functions no execution reaches. A ratchet would bank that as a win.
+
+The mechanism is not chased here. Callgrind counts instructions rather than
+cycles, so layout cannot move the count directly; something upstream — the heap
+break, glibc's allocator paths, what the loader maps — has to be doing it, and
+naming which would want a separate sitting.

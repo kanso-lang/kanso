@@ -194,6 +194,34 @@ this row 5,081 ran on an identical binary, and that 5,081 is the chip or the
 mode flip below. The per-silicon key keeps the evidence it was built on, and the
 second question in the note above is withdrawn rather than left standing.
 
+**CORRECTED SAME DAY, and the correction strengthens the entry.** The `.text`
+term was never tested above — every probe there left `.text` unmoved because the
+linker dropped each dead function. Keeping one (reached through an environment
+variable the gate never sets) gives ten binaries and six values:
+
+    sha           .text     .data  .bss    instructions
+    9fcc6686dc47  2550854   2640   312     42,344,081   baseline, three runs
+    82ec0846958a  2550854   2640   312     42,344,081   dead pub fn, dropped
+    5d50f9d9721d  2550854   2640   312     42,344,081   no_mangle fn, dropped
+    8663815286be  2550854   2640   1336    42,344,081   +1 KiB .bss
+    09a6c2fab6b8  2550854   2640   312     42,344,093   +64 KiB .rodata
+    5e73453bcc7b  2550950   2640   312     42,343,660   200 unreached fns
+    2152c689dc78  2566982   2640   312     42,345,628   400 unreached fns
+    2a4e10fb2116  2550950   2640   312     42,345,904   100 unreached fns
+    7fc53be7987e  2550854   2640   4408    42,346,211   +4 KiB .bss
+    3c1e1cff9e3b  2550854   2640   65848   42,346,211   +64 KiB .bss
+
+The baseline read 42,344,081 on three separate runs, so each value is a property
+of its binary. Two of these binaries share `.text`, `.data` and `.bss` to the
+byte and read 2,244 apart, which retracts "a relink alone is not the term" from
+the note above; six values retract "bimodal" with it.
+
+**The span is 2,551 instructions for source changes that do no work, and it goes
+both ways** — `5e73453bcc7b` reads 421 BELOW the baseline for two hundred
+functions no execution reaches. A ratchet reading this row would bank that as a
+win and then refuse the next change that gave it back. That is the entry's
+question with a number on it.
+
 **THE MODE FLIP IS THE THING TO NOTICE.** Seven binaries gave two values, and
 which one a binary lands on is decided by whether `.bss` crosses a boundary
 between one page and four. It matches what this vein has been reporting from the
