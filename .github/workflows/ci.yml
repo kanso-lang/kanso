@@ -341,6 +341,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/pend_counters.sh
+      # scripts/gates/scan_counters.sh has existed since 2026-09-02 and no step
+      # ran it, so bench/cost_golden_scan.txt was a golden nothing compared
+      # against while both its counters sat in the welfare model. Found on
+      # 2026-09-04 while adding the step below it, which is the same edit.
+      - name: scan counters
+        id: scan
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/scan_counters.sh
       # The only vein whose headline row is a PEAK rather than a total:
       # sha256 holds the whole message live at once, so arena_peak_bytes here
       # is the number a memory change moves. Every other benchmark's peak is
@@ -398,7 +407,8 @@ jobs:
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \
                       "digest counters:${{ steps.digest.outcome }}" \
-                      "read counters:${{ steps.read.outcome }}"; do
+                      "read counters:${{ steps.read.outcome }}" \
+                      "scan counters:${{ steps.scan.outcome }}"; do
             case "$vein" in
               *:failure)
                 echo "::error::${vein%:*} disagrees with its golden"
