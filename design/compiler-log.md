@@ -2829,3 +2829,23 @@ What is new is the size: the parse is 0.27% of the row and 100% of its
 binary-to-binary drift, and `lang_start::{{closure}}` is a counter that sat
 still through a change that moved the published row 2,130. That is a fact the
 ruling was made without, so it goes to the gavel rather than into a gate.
+
+**AN OPEN THREAD THAT IS ALREADY CLOSED.** The 2026-09-01 entry leaves open that
+`bench/widebench/widebench/` and `bench/encodebench/encodebench/` vendor the
+json library, differ from `lib/json`, and that "nothing in the tree says so."
+The second half stopped being true in kanso#1231: both directories have a
+README saying the copy is frozen deliberately, naming the sha it was taken at
+(919d2ef3 and 20ab931d), what the freeze buys, and what it therefore cannot
+see. Walking the log's open threads found this one and re-derived it from
+scratch before reaching the READMEs, which is the cost of a thread that closed
+without being marked.
+
+Their figure holds too. Both say the copies "differ from lib/json by 216
+lines", and diffing the five shared files today gives 113 lines only in
+lib/json and 103 only in the bench copies. `lib/json` has not moved since
+c8442597, so the number the READMEs quote is still the number.
+
+The question the entry raised — whether a benchmark that vendors a library
+should track it — is answered there too, and against tracking: kanso#1230
+shipped a library change and a codegen change together, and the frozen
+benchmark is what separated them.
