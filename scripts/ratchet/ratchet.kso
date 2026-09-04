@@ -509,6 +509,20 @@ trend_adrift = row
   (breaking "a_worsening_paid_for_by_an_unclassified_counter")
   release
 
+# The half of the refusal a DEFINITION CHANGE could pay for. A counter whose
+# golden and whose welfare baseline move together is not a win — the two
+# readings are of different quantities — and the gate counted it as one and
+# let it stand in for the trade a worsening needs. kanso#1241 is the fixture:
+# `improved: compile_instructions 41,845,704 -> 41,379,840` is in the record
+# of that merge and nothing in the compiler got faster.
+trend_rebased = row
+  "a definition change standing in for the win a regression needs"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_re_basing_that_pays_for_a_regression")
+  release
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -763,7 +777,7 @@ rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
 rows_c1a = text/concat rows_c1 [perf_row trend_runtime trend_joined]
 
-rows_c1t = text/concat rows_c1a [trend_adrift]
+rows_c1t = text/concat rows_c1a [trend_adrift trend_rebased]
 
 rows_c1p = text/concat rows_c1t [published_numbers]
 

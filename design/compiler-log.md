@@ -2770,3 +2770,52 @@ before the comparison, which is what makes it usable. The two AMD models agree
 on this binary, the fourth on which they have, and the keys stay separate for
 the reason the header already gives.
 
+
+## 2026-09-04 — THE GATE CALLED A DEFINITION CHANGE A WIN, AND THE SENTENCE IS IN THE MERGE
+
+**DONE.** The entry above this one moved `compile_instructions` from 41,845,704
+to 41,379,840 by counting the compiler's own frame instead of the whole process,
+and subtracted the same 465,864 from welfare's baseline so the ratio stayed
+comparable. Nothing in the compiler got faster. What the trend gate printed on
+that merge, verbatim:
+
+    improved: compile_instructions 41,845,704 -> 41,379,840  (bench/compile_instructions_golden.txt)
+    every changed counter is priced (or improved).
+
+The entry noted the sensitivity and left the question of machinery open. It is
+answered by the run: the gate misreports today, and the misreport is permanent
+record.
+
+**The signal is welfare's baseline, and it is exact.** `welfare --set` moves the
+FLOOR and never the baseline, so a baseline value moves only when somebody
+decides the old reading and the new one are not of the same quantity. A counter
+whose golden moved and whose baseline moved in the same diff is therefore
+neither better nor worse — it takes the third state kanso#1200 built for minted
+counters, prints as `re-based`, and counts toward neither side of the
+pure-regression rule. It still owes a sentence: the same naming check a
+worsening gets, because the value it landed on is what a write-up of a re-basing
+states.
+
+**WHAT THE MATCH REACHES, and what it does not.** Welfare renames the runtime
+counters on the way into the objective — `jsonbench` is `decode_instructions` in
+the baseline — so matching a golden row to a baseline key by name covers the
+compile vein and misses the runtime one. Rather than copy welfare's rename table
+into a second place to go stale, a baseline that moved and matched no golden row
+is listed by its welfare name under RE-BASED, unclaimed, and refused unless the
+log delta names it. A runtime re-basing is then visible and priced even though
+the gate cannot say which row it belongs to. Reaching the rest means asking
+welfare for the mapping rather than restating it; that is the open end.
+
+**Watched, both directions.** The gate at f3047edd against 1a0cb51e reproduces
+the `improved:` line above; the same pair under the new gate reads `re-based:`
+and lists the counter. The mutation
+`a_re_basing_that_pays_for_a_regression` moves the compile golden and the
+baseline together beside a plain `work_jsonbench` worsening, with both moves
+written up: green under the old gate at exit 0 — a real regression paid for by a
+definition change — and refused under the new one by the pure-regression rule.
+Deleting the mutation's log paragraph turns that refusal into UNPRICED, which is
+red for the wrong reason, so `tests/a_re_basing_row_stays_a_pure_regression.rs`
+holds the paragraph to the values the `sed` lines write. Both of its assertions
+were watched red. The orphan path was watched too: moving
+`decode_instructions` alone is refused as UNSTATED and passes once a sentence
+names it.
