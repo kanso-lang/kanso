@@ -2631,6 +2631,26 @@ and the fourth is downstream of the first three rather than beside them.
 Written down because the ratchet's red looks like a new failure every time and
 is not one.
 
+**THE SOCKET SPEC PASSES ON ARM, and that is the first time it has run
+there.** The arm job on `d11470a3` — the first head carrying `--no-fail-fast`
+— ran the whole suite and ended with
+
+    error: 2 targets failed:
+        `--test a_granted_baseline_says_it_is_one`
+        `--test the_digest_is_priced_on_both_sides`
+
+which is the two welfare tests and nothing else. `beat_iters=200` holds on
+aarch64 as it does on x86_64, and so does the rest of `tests/sockets_serve.rs`
+— the port handshake, the serialising lock, the curl client. The counter is a
+property of the bracket rather than of the architecture, which is what it was
+supposed to be and was not evidence for until now.
+
+It also says the flag was worth its cost. The arm suite took about eight
+minutes where the nine-binary prefix took under one, and what the extra seven
+bought is the knowledge that exactly two targets fail — the same two the local
+`--no-fail-fast` run found. Before, that agreement was untested on one of the
+two hosts.
+
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
 benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
