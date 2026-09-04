@@ -2785,7 +2785,38 @@ before any Rust was written.
 
 These are the container's numbers and its glibc is not the runner's, so
 `bench/instructions_golden.txt` is regenerated from CI's own sitting rather
-than from here. Ten rows fall and two rise. The two that rise are the two whose
+than from here. CI counted, on the same commit:
+
+```
+    jsonbench     2,098,864,471 -> 1,914,624,416   -8.778%   (runner)
+    encodebench   5,847,000,948 -> 5,808,062,274   -0.666%
+    oneshot          31,431,613 ->    30,109,409   -4.207%
+    basket           40,300,171 ->    39,934,096   -0.908%
+    widebench        59,384,053 ->    58,447,401   -1.578%
+    deepbench       675,925,724 ->   678,049,713   +0.314%
+    escapebench     130,170,750 ->   130,170,743   -0.000%
+    pendbench       715,732,721 ->   702,115,580   -1.903%
+    indexbench        5,242,362 ->     5,242,116   -0.005%
+    scanbench     1,423,437,575 -> 1,425,334,005   +0.133%
+    digestbench      81,256,592 ->    80,996,418   -0.320%
+    readbench     2,000,657,821 -> 2,000,657,813   -0.000%
+```
+
+**work_deepbench rises to 678,049,713 and work_scanbench to 1,425,334,005.**
+Those are the two the container also had rising, to the same third decimal
+place, and they are the two whose `.text` grows most — scanbench by 3,424
+bytes and deepbench by 128. Neither is a change to what those programs do:
+every allocation counter in both is byte-identical, the emitted line count is
+byte-identical, and the source they run is untouched. What moved is the layout
+LLVM had to schedule against. They are bought by the ten that fall, which the
+welfare number prices at 73.53 -> 73.73.
+
+**compile_instructions 41,379,840 -> 41,377,711**, a fall of 2,129: the emitter
+holds a `Vec` of slot lines per function and splices it, and that is cheaper
+than what it replaced. The per-chip table is re-sat down to the one row CI
+measured, Zen 3. The other three keys were all reading 41,379,840, and they
+measure a compiler that no longer exists — removed rather than carried with the
+delta applied, the same call the Zen 4 row got on 2026-09-03. Ten rows fall and two rise. The two that rise are the two whose
 `.text` grows most, which is the shape to expect: a fixed frame gives LLVM a
 different layout to schedule against and it inlines differently in both
 directions.
@@ -2800,6 +2831,8 @@ reporting two of three slots adrift in `d_slot/pick_1`.
 **text 1,070,072 -> 1,074,552.** Six rows fall, six rise, none by more than
 2.4%, and the largest single move is scanbench 145,106 -> 148,530. jsonbench
 spends 672 bytes here for 184 million instructions.
+
+**welfare 73.53 -> 73.73**, floor set in the same commit.
 
 **OPEN — what the callee-saved registers cost.** Removing the frame pointer
 leaves 201 million instructions of `push`/`pop` on jsonbench, 9.6% of the
