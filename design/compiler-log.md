@@ -2298,17 +2298,28 @@ calls 1,863 to 1,851, branches 1,199 to 1,196, lines 12,263 to 12,218.
 pendbench and digestbench each lose one call and one line, and those two are
 the inference change alone — they never touched jsonbench's `fed`.
 
+**A second hole of the same shape, one level down.** `desc_yield_of` looks
+through a binding to what the bound description yields, and it did that only
+at the top of the expression: the `if` arm recursed into `desc_yield`, which
+sees an identifier and gives up. So a chain head that was a bound local
+answered and the same local inside a branch did not.
+`tests/golden/read_beat/reading_branch.kso` binds two reads, branches over
+them and pipes the result; it read `beat_iters=1` and reads 201 with the
+recursion routed through the lookthrough. That routing measured 381
+instructions CHEAPER than not doing it, which is below this row's own
+resolution — so it is free, and the four recursive positions all take it.
+
 **What it costs, measured rather than assumed.** compile_instructions
-42,239,175 to 42,348,436 on this container, +0.2587%, same command as the
+42,239,175 to 42,348,055 on this container, +0.2578%, same command as the
 gate. Three shapes were tried:
 
     naive                              42,544,586   +0.723%
     one hash lookup, not two           42,483,163   +0.578%
     stop at the top of the lattice     42,389,340   +0.356%
-    one wake per visit, inlined        42,348,436   +0.259%
+    one wake per visit, inlined        42,348,055   +0.258%
 
 By callgrind the residual is `desc_yield` +49,409 and the group lookup about
-+18,000; `demand::analyze` +27,661 and the parser +15,773 are binary layout,
++18,000 (measured on the 42,348,436 reading, before the free lookthrough); `demand::analyze` +27,661 and the parser +15,773 are binary layout,
 and this change touches neither of those files.
 
 **A fourth shape was tried and is worse, which is the interesting one.**

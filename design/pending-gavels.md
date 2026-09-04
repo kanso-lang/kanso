@@ -137,7 +137,7 @@ them ran on the grow-only arena. The fix carries the yield per declaration in
 the inference fixpoint. It works: the `os/read_file!` twin of
 `tests/golden/read_beat/reading.kso` goes from `beat_iters=1` to 201.
 
-It costs the front end **+0.2587%** — 42,239,175 to 42,348,436 retired, same
+It costs the front end **+0.2578%** — 42,239,175 to 42,348,055 retired, same
 host, same binary layout question as ever, of which about 66,000 is
 attributable work and the rest is layout (`demand::analyze` and the parser
 move, and this change touches neither). Every runtime counter is

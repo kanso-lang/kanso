@@ -1003,14 +1003,14 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
         Expr::App { head, args, piped: false, .. }
             if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
         {
-            desc_yield(ctx, &args[1]) | desc_yield(ctx, &args[2])
+            desc_yield_of(ctx, &args[1]) | desc_yield_of(ctx, &args[2])
         }
         // A chain step through a lambda: the executor hands the yield to the
         // lambda, so what the whole chain yields is what the lambda's body
         // does. This is the shape `os/read_file` is written in.
         Expr::App { head: h, piped: true, .. } if matches!(h.as_ref(), Expr::Lambda { .. }) => {
             let Expr::Lambda { body, .. } = h.as_ref() else { unreachable!() };
-            desc_yield(ctx, body)
+            desc_yield_of(ctx, body)
         }
         // A name the program declared: the fixpoint has walked its body and
         // knows what running its answer hands over. Asked before the builtin
@@ -1066,15 +1066,15 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
             }
         }
         // `a >> b` yields what its right side yields
-        Expr::Seq(_, b, _) => desc_yield(ctx, b),
+        Expr::Seq(_, b, _) => desc_yield_of(ctx, b),
         // a join yields nothing a continuation would see
         Expr::Join { .. } => 0,
         Expr::Guard { early, rest, .. } => {
             let rest_yield = match rest.last() {
-                Some(Stmt::Expr(e)) => desc_yield(ctx, e),
+                Some(Stmt::Expr(e)) => desc_yield_of(ctx, e),
                 _ => TOP & !FAIL,
             };
-            desc_yield(ctx, early) | rest_yield
+            desc_yield_of(ctx, early) | rest_yield
         }
         _ => TOP & !FAIL,
     }
