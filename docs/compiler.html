@@ -1525,6 +1525,28 @@ rescue when_failed</code></pre>
 <p>the score falls 76.17 to 73.06 and nothing about the compiler changed. compile cost is the weakest dimension and it just gained weight; run memory is strong and lost some. the fall is the objective being re-based, and it is the second such step in the recorded line &#8212; the first is the 2026-08-29 saturation ruling, 87.85 to 73.83. scores either side of a step were taken with different rulers and do not compare.</p>
 
 
+<h2 id="blindcorpus"><span class="sec-num">43</span>the corpus was written around the defect, so the objective priced its repair at zero</h2>
+
+<p>inference read a chain&#39;s yield off the head&#39;s bare name. <code>os/read_file</code> hit the builtin table because the wrapper&#39;s name collides with the builtin&#39;s; <code>os/read_file!</code> &#8212; same body, one character more &#8212; missed it and fell to the top set, and so did seven other effect wrappers. a document read with the bang then had no type where the loop analysis reads one, and a loop past it ran on a grow-only arena.</p>
+
+<p>the benchmark that reads a file at runtime had been hand-written around that, with a comment saying so. its main spelled the bang out into a pair of arms to get the type back. so when the yield was fixed, jsonbench read the same arena blocks, the same peak and the same beat count it had read the day before, every counter in every cost golden held to the byte, and the welfare index moved by nothing. the corpus had been measuring the workaround.</p>
+
+<p>eleven benchmarks and not one of them read a file the way the repair fixes. the fix was for real programs and the corpus was not made of them.</p>
+
+<p>the fix is a benchmark, not a weight. <code>bench/readbench</code> is the fixture at benchmark size: <code>os/read_file! "bench/large.json" . go</code>, threaded through a loop that allocates, two hundred rounds because the fixture already did two hundred. same program, same bytes, on the two compilers that bracket the repair:</p>
+
+<pre><code>                   arena_blocks   arena_peak_bytes   beat_iters
+before the repair            41         42,991,616            1
+after                         1          1,048,576          201</code></pre>
+
+<p>its two memory rows enter the objective on a measurement rather than on the entering rule. a counter with no history is granted its dimension&#39;s standing, so landing day never moves the score &#8212; but this one has history, read off the commit before the repair, and granting it would have priced the repair at zero a second time. the work row is granted, because its history says nothing: 2,000,668,271 against 2,000,657,408, a fall of five ten-thousandths of a per cent. it is in the objective as a tripwire, so nobody can buy the arena back with instructions.</p>
+
+<p>both trees under the same model read 70.83 and 73.52. the repair is worth 2.69 where it was worth nothing.</p>
+
+<p>the round count is a free parameter and it decides the size of that number: the defective side is linear in rounds and the fixed side is flat. it was chosen by matching the fixture, before the score was computed, and not adjusted afterwards. a benchmark whose ratio is a dial is a benchmark somebody can tune to the answer they want, and saying so is the only guard that exists.</p>
+
+<p>the general shape is the one this page keeps finding: a dimension a model leaves out it weights at zero. scanbench, escapebench and indexbench ran for weeks with their work weighed at nothing. this is the same failure one layer out. the corpus had been written to avoid the defect, so there was no counter to forget to read.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
