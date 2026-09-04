@@ -2293,10 +2293,23 @@ evacuate — the read's cohort copied 432 bytes, and a program whose source is
 is the decode's alone. The count is 2 now and `evac_bytes` is pinned beside it
 so the next reader cannot make the same mistake.
 
-**Emitted code falls on three programs.** The decoder: defines 175 to 174,
-calls 1,863 to 1,851, branches 1,199 to 1,196, lines 12,263 to 12,218.
-pendbench and digestbench each lose one call and one line, and those two are
-the inference change alone — they never touched jsonbench's `fed`.
+**Emitted code falls on three programs, and so does the machine code.** The
+decoder: defines 175 to 174, calls 1,863 to 1,851, branches 1,199 to 1,196,
+lines 12,263 to 12,218. pendbench and digestbench each lose one call and one
+line, and those two are the inference change alone — they never touched
+jsonbench's `fed`. `.text` falls on the same three and in the same
+proportions: jsonbench 86,418 to 86,002, pendbench 83,538 to 83,474,
+digestbench 102,802 to 102,738.
+
+**Two of those veins were found by CI rather than here, and that is the
+process failing rather than the gate working.** The local sweep ran nine
+runtime counter gates and three compile ones and stopped, on the belief that
+was the set. The cost-goldens job runs `machine_code.sh` and
+`instructions.sh` as well, and named four red veins where two were expected.
+The one lesson is the one CLAUDE.md already states about kq's five veins and
+which this entry is the kanso instance of: the vein list is a file to read,
+never a set to recall. `.github/workflows/ci.yml`'s cost-goldens job is where
+kanso's is written down.
 
 **A second hole of the same shape, one level down.** `desc_yield_of` looks
 through a binding to what the bound description yields, and it did that only
