@@ -2792,3 +2792,40 @@ The mechanism is not chased here. Callgrind counts instructions rather than
 cycles, so layout cannot move the count directly; something upstream — the heap
 break, glibc's allocator paths, what the loader maps — has to be doing it, and
 naming which would want a separate sitting.
+
+**THE MECHANISM, NAMED AND ACCOUNTED TO THE INSTRUCTION.** callgrind's call
+graph answers it: `std::rt::lang_start_internal` calls `pthread_getattr_np`,
+which parses `/proc/self/maps` with `getline` and `sscanf` to find the stack
+bounds for Rust's guard page. That parse is inside the row.
+
+Splitting each profile into the parse and the program — `pthread_getattr_np`
+inclusive, and `std::rt::lang_start::{{closure}}` inclusive, which is everything
+the compiler actually does:
+
+    binary                      row          maps parse   the program
+    9fcc6686dc47 baseline       42,344,081      112,580    41,878,959
+    45c6dbed10bb +64 KiB .bss   42,346,211      114,710    41,878,959
+    2a4e10fb2116 100 fns        42,345,904      112,586    41,880,776
+    5e73453bcc7b 200 fns        42,343,660      110,317    41,880,801
+
+**The `.bss` probe adds no code, and the compiler's work is identical to the
+instruction — 41,878,959 both times. All 2,130 of the row's move is the parse.**
+The two function probes differ from each other by 2,269 in the parse and 25 in
+the program, which is the 2,244 above. They sit 1,817 over the baseline's
+program because the probe branch calls `std::env::var_os` on every start, so
+those two were never work-free and the earlier entry should not have called
+them that; the `.bss` and `.rodata` probes are the clean ones.
+
+**WHAT THAT MAKES OF THE PREVIOUS ENTRY.** "A source change that does no work
+moves the row by up to 2,551" stands, and now has its cause: a different binary
+gets a different `/proc/self/maps`, and glibc's parse of it costs a different
+number of instructions. Nothing about the front end changed in any of it.
+
+**THIS IS A TERM THE RECORD ALREADY KNOWS.** kanso#1234 found the compile row
+counting glibc's startup parse of `/proc/self/maps`, and the ruling of
+2026-09-03 was NO EXCLUSION — the toggle was dropped and sorts plus `setarch`
+shipped instead. So nothing here proposes excluding it, and nothing is changed.
+What is new is the size: the parse is 0.27% of the row and 100% of its
+binary-to-binary drift, and `lang_start::{{closure}}` is a counter that sat
+still through a change that moved the published row 2,130. That is a fact the
+ruling was made without, so it goes to the gavel rather than into a gate.

@@ -299,3 +299,24 @@ header so a reader looking for the campaign finds where it went.
 - Survivor cap 4× block threshold: the multiplier is a judgment call;
   the principle (the dance's transient stays at threshold scale) is in
   the log.
+
+**THE MECHANISM IS NAMED NOW, AND IT IS A TERM ALREADY RULED ON.** callgrind's
+call graph: `std::rt::lang_start_internal` calls `pthread_getattr_np`, which
+parses `/proc/self/maps` with `getline` and `sscanf` to place Rust's stack
+guard. Splitting each profile into that parse and the program:
+
+    binary                      row          maps parse   the program
+    9fcc6686dc47 baseline       42,344,081      112,580    41,878,959
+    45c6dbed10bb +64 KiB .bss   42,346,211      114,710    41,878,959
+    2a4e10fb2116 100 fns        42,345,904      112,586    41,880,776
+    5e73453bcc7b 200 fns        42,343,660      110,317    41,880,801
+
+The `.bss` probe adds no code and the compiler's work is **identical to the
+instruction**. All 2,130 of the row's move is the parse.
+
+kanso#1234 found this term and the ruling of 2026-09-03 was NO EXCLUSION, so
+**nothing here asks to exclude it and nothing has been changed.** The new fact
+is its size: 0.27% of the row and 100% of its binary-to-binary drift, with
+`std::rt::lang_start::{{closure}}` sitting still through a change that moved the
+published row by 2,130. The ruling was made when the term was known to exist and
+not known to be the whole of the drift, and this entry is where that goes.
