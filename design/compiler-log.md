@@ -1943,8 +1943,12 @@ that cite an `os.kso` line number, because the new type sits above `exit`
 and moved it 39 to 51. That last is a cost the call-site survey could not
 see and the suite found in one run.
 
-Three plain reads remain, each deliberately: the fixture testing the
-argument check, hako's lock, and the book's showcase.
+Three plain reads remain in the migrated code, each deliberately: the fixture
+testing the argument check, hako's lock, and the book's showcase. Four more
+arrived later on this branch and are the point rather than a remainder — the
+`tests/golden/read_beat` fixtures, which exist to exercise the plain read's
+type. Counted here because the sentence above was written before them and a
+reader grepping for `os/read_file` finds seven.
 
 **hako lost a race.** `locked_at` called `os/exists` and then read the file
 it had just asked about. One read now, answering both cases, and the window
