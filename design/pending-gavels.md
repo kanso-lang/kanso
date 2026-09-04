@@ -206,3 +206,32 @@ change than either.
 Nothing has been changed on any of it. The row was re-sat because CI refused
 and the refusal named the line to paste; that is the documented path and it is
 all that was done.
+
+**ADDED 2026-09-04, second sitting on the same question — a third chip landed
+on this binary and counted the same number.** CI refused again, this time on
+Intel Emerald Rapids (0x6/0xcf), and it counted 41,845,704: what Zen 4 and Zen
+3 both counted on sha 0e081d4c2c96. Three silicon keys, one binary, one value
+to the instruction. The row is added, which is the documented path, and again
+that is all that was done.
+
+It bears on the shape above, so it is filed under the same heading. Walking
+every recorded state of `bench/compile_instructions_by_cpu.txt`, one state has
+two chips carrying different values — `f6e24e91`, the commit that introduced
+the key. `compile_sample`'s binary sha landed in that same commit, so the
+readings that argued for keying by silicon are the readings whose binaries
+nobody wrote down, and the file's header describes their SOURCES as identical
+rather than their binaries. The layout term measured above is -84,365 against
+the roughly 5,124 that the key was built on.
+
+**This does not say the key is wrong, and it must not be read as saying so.**
+The row is no more a function of the binary than of the chip: Zen 4 read
+41,844,180 on this same sha, so something moves the count within one chip and
+one binary. Three agreeing chips say the chip term is small on this binary and
+cannot speak for another. Removing a measured guard on that would be trading
+evidence for an inference.
+
+So the question the shapes above are already waiting on gains a second half:
+if welfare is to stop reading a layout-dominated magnitude, is the per-chip key
+still buying anything, or is the thing that actually wants keying the BINARY?
+Answering the second without the first would be re-keying a term that may not
+belong in the ratchet at all. Nothing here proposes either.

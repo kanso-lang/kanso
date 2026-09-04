@@ -836,5 +836,29 @@
 # write down rather than a reason to widen. Zen 4 stays FIRST and 41,845,704
 # stays its first value, because the golden's bare line and compiler.html read
 # the first row's first value.
+#
+# 2026-09-04, A THIRD CHIP ON THIS BINARY, COUNTING THE SAME NUMBER. CI landed
+# on Intel Emerald Rapids (0x6/0xcf), binary sha 0e081d4c2c96, and counted
+# 41,845,704 — what Zen 4 and Zen 3 both counted on it. Three silicon keys,
+# one binary, one value to the instruction. The key has held a row here before
+# and lost it when the binary changed: on sha de5bfab22fbd it was the pair
+# 41,831,767 / 41,832,275 that scripts/gates/compile_ir_row.sh still quotes as
+# its worked example.
+#
+# WHAT THAT PUTS A QUESTION AGAINST. This file is keyed by silicon because two
+# readings differed by about 5,124 across chips. Those readings are from
+# f6e24e91, and the header calls their SOURCES identical rather than their
+# binaries — cargo does not build the same bytes twice, and the -84,365 of
+# layout measured two notes above is sixteen times the gap the key was built
+# on. Every table state since has shown its recorded chips carrying one value
+# or one pair.
+#
+# WHAT IT DOES NOT ESTABLISH. The row is not a function of the binary either:
+# Zen 4 read 41,844,180 on this same sha 0e081d4c2c96, so something moves the
+# count within one chip and one binary. Three agreeing chips say the chip term
+# is small here, and no reading before this session's paired a chip with a
+# binary at all. The key stays until two chips sit on one sha and disagree.
+# design/pending-gavels.md carries the question.
 family0x19-model0x11 41845704 41844180
 family0x19-model0x1 41845704
+family0x6-model0xcf 41845704

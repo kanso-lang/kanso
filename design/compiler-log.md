@@ -2657,3 +2657,46 @@ benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
 scores exactly zero and pays 34 instructions. The socket golden pins the
 behaviour, which is what the goldens rule asks for; it does not put the
 dimension in front of welfare, and nothing here proposes that it should.
+
+**A THIRD CHIP LANDED ON THIS BINARY AND COUNTED THE SAME NUMBER.** The `cost
+goldens` job on `132a0c3a` refused, and the refusal names a key the table did
+not hold:
+
+    silicon: cpu family 0x6 model 0xcf
+    compile_sample cpu="cpu family 0x6 model 0xcf" sha=0e081d4c2c96 row=41845704
+    nothing in bench/compile_instructions_by_cpu.txt was counted on family0x6-model0xcf
+
+41,845,704 is what Zen 4 counted on that binary and what Zen 3 counted on it.
+Three silicon keys, one binary sha, one value to the instruction. The row is
+added and the note beside it says so.
+
+Emerald Rapids is not new to the pool — it held `41,831,767 41,832,275` on sha
+de5bfab22fbd, the pair `scripts/gates/compile_ir_row.sh` still uses as its
+worked example, and lost the row when the binary moved.
+
+**IT SHARPENS THE CORRECTION THIS ENTRY ALREADY CARRIES.** The file is keyed by
+silicon on the strength of two readings about 5,124 apart. Those are from
+`f6e24e91`, and what the header claims identical across them is the SOURCES:
+`compile_sample`'s sha landed in that same commit, so no reading from before it
+pairs a chip with a binary at all. Meanwhile the layout term measured here is
+-84,365, sixteen times the gap the key was built on. Walking every recorded
+state of the rows, each one carries a single value or a single pair across all
+its chips:
+
+    f6e24e91  0x6/0xcf 41500974  |  0x19/0x1 41495850  0x19/0x11 41495850
+    bbbcdc90  three chips at 41831767 41832275, a fourth at 41832275
+    7110a2e6  0x6/0xcf 41829232  |  0x19/0x1 41829232
+    3b9df304  0x19/0x11 41830604 |  0x19/0x1 41830604 41831112
+    now       0x19/0x11 41845704 41844180 | 0x19/0x1 41845704 | 0x6/0xcf 41845704
+
+The first row is the only state where two chips disagree, and it is the state
+whose binaries nobody recorded.
+
+**WHAT IS NOT ESTABLISHED, AND WHY THE KEY STAYS.** The row is no more a
+function of the binary than of the chip: Zen 4 read 41,844,180 on this same
+sha, so something moves the count inside one chip and one binary. Three
+agreeing chips say the chip term is small on this binary; they cannot say it is
+zero on another, because the readings that would settle it were taken before
+anything wrote the sha down. Removing the key on this evidence would be trading
+a measured guard for an inference. It goes to the gavel already open on this
+row instead, as a second question under the same heading.
