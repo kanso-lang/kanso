@@ -2700,3 +2700,55 @@ zero on another, because the readings that would settle it were taken before
 anything wrote the sha down. Removing the key on this evidence would be trading
 a measured guard for an inference. It goes to the gavel already open on this
 row instead, as a second question under the same heading.
+
+**THE LAYOUT TERM, MEASURED ON PURPOSE INSTEAD OF INFERRED — AND IT CORRECTS
+THE NOTE ABOVE.** The claim that the row's founding readings are confounded by
+binary layout rested on the header's sentence that cargo does not build the
+same bytes twice. On this host it does. Two from-scratch builds of an unchanged
+tree into different target directories:
+
+    9fcc6686dc47  .text=2550854 .data=2640 .bss=312
+    9fcc6686dc47  .text=2550854 .data=2640 .bss=312
+
+Byte-identical. So a pull request touching only `docs/` and `design/` — neither
+of which any `include_str!` reaches; only `lib/**`, `hako/**` and
+`src/runtime.c` are baked in — produces the same binary, and the 5,081 the
+header attributes to "an edit the compiler cannot see" is NOT layout. It is the
+chip, or the mode below. That reading supports the per-silicon key rather than
+questioning it, and the note above is wrong to have leaned the other way.
+
+**WHAT DOES MOVE IT.** Same procedure as the gate minus the host stop, which
+hard-refuses on a container, so these are within-container comparisons of seven
+binaries on one chip:
+
+    sha           .text     .data  .bss    instructions
+    9fcc6686dc47  2550854   2640   312     42,344,081   baseline
+    82ec0846958a  2550854   2640   312     42,344,081   dead pub fn, linker dropped it
+    5d50f9d9721d  2550854   2640   312     42,344,081   no_mangle fn, dropped too
+    8663815286be  2550854   2640   1336    42,344,081   +1 KiB .bss
+    09a6c2fab6b8  2550854   2640   312     42,344,093   +64 KiB .rodata
+    7fc53be7987e  2550854   2640   4408    42,346,211   +4 KiB .bss
+    3c1e1cff9e3b  2550854   2640   65848   42,346,211   +64 KiB .bss
+
+Three different shas with unmoved sections read one value to the instruction, so
+a relink alone is not the term — the sections have to move. 64 KiB of read-only
+data costs 12. Growing `.bss`, which is the mechanism the gate's own comment
+names, costs 2,130 — and costs the SAME 2,130 at 4 KiB as at 64 KiB, while 1 KiB
+costs nothing.
+
+**SO THE ROW IS BIMODAL BY CONSTRUCTION.** Seven binaries produced two values,
+42,344,081 and 42,346,211, and where a binary lands is decided by whether its
+`.bss` crosses a boundary between one page and four. That is the shape this vein
+has been reporting for a fortnight from the other end — the two clusters 5,064
+apart on one unchanged binary, the 508 lattice, Zen 4's pair on one sha. This is
+the first time the flip has been produced deliberately, with the compiler's work
+held fixed.
+
+**WHAT IT SETTLES FOR THE GAVEL, AND WHAT IT DOES NOT.** Welfare reads this row
+as a ratcheted magnitude, and 2,130 of it can be bought or lost by moving a
+static nobody executes. That half of the open entry is measured now rather than
+argued. It does not explain the -84,331 recorded earlier in this entry: that is
+forty times this probe's step, between two binaries whose `.text` differed by a
+real source change, and nothing here shows a shift that large. One chip, one
+glibc, one container — CI's hosts are not this host, and the numbers above are a
+demonstration of sensitivity rather than a calibration of it.

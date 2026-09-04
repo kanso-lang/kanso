@@ -235,3 +235,40 @@ if welfare is to stop reading a layout-dominated magnitude, is the per-chip key
 still buying anything, or is the thing that actually wants keying the BINARY?
 Answering the second without the first would be re-keying a term that may not
 belong in the ratchet at all. Nothing here proposes either.
+
+**ADDED 2026-09-04, and it corrects the note above while strengthening the one
+before it.** The layout term is measured now. Seven binaries on one chip, same
+procedure as the gate minus its container stop:
+
+    sha           .text     .data  .bss    instructions
+    9fcc6686dc47  2550854   2640   312     42,344,081   baseline
+    82ec0846958a  2550854   2640   312     42,344,081   dead pub fn, linker dropped it
+    5d50f9d9721d  2550854   2640   312     42,344,081   no_mangle fn, dropped too
+    8663815286be  2550854   2640   1336    42,344,081   +1 KiB .bss
+    09a6c2fab6b8  2550854   2640   312     42,344,093   +64 KiB .rodata
+    7fc53be7987e  2550854   2640   4408    42,346,211   +4 KiB .bss
+    3c1e1cff9e3b  2550854   2640   65848   42,346,211   +64 KiB .bss
+
+**2,130 instructions bought by moving a static nobody executes.** That is the
+half of this entry that was argued rather than shown, and it is shown now: the
+objective ratchets a number that a link can move by the size of the changes the
+vein exists to catch.
+
+**AND IT WITHDRAWS THE SUGGESTION THAT THE KEY MIGHT BE UNNECESSARY.** That
+rested on the header's claim that cargo does not build the same bytes twice. On
+this host it does — two from-scratch builds of an unchanged tree into different
+target directories both read sha `9fcc6686dc47`. Nothing under `docs/` or
+`design/` reaches an `include_str!`, so the docs-only pull request that moved
+this row 5,081 ran on an identical binary, and that 5,081 is the chip or the
+mode flip below. The per-silicon key keeps the evidence it was built on, and the
+second question in the note above is withdrawn rather than left standing.
+
+**THE MODE FLIP IS THE THING TO NOTICE.** Seven binaries gave two values, and
+which one a binary lands on is decided by whether `.bss` crosses a boundary
+between one page and four. It matches what this vein has been reporting from the
+other end for a fortnight — two clusters 5,064 apart on one unchanged binary,
+the 508 lattice, Zen 4's pair on one sha. A ratchet reading a bimodal quantity
+banks the low mode and then refuses the high one, which is a gate that fires on
+the linker's luck. Whether that is worth a shape of its own, or is the same
+question as the first half, is part of what is being asked here. Nothing has
+been changed on any of it.
