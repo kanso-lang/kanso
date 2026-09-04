@@ -2410,6 +2410,31 @@ this change at +108,880 on its own binary — two hosts, two absolute values,
 one direction and the same order of magnitude, which is as much agreement as
 this row admits.
 
+**The second mode arrived on the next run, and the gap is not 508.** Same
+chip, same binary sha 42283602b2c8: 41,930,035 then 41,931,559. That is
+**1,524, which is 3 x 508 exactly**. Every reading this file had recorded put
+the residual at one 508 — twice on Zen 3, and the header's Intel pair from a
+different binary — so this is the first that puts it at three, and it says the
+508 is a QUANTUM rather than a two-valued toggle. The row holds a pair of
+measured points on a lattice, not two modes.
+
+The profiles support that and nothing else. Across the two runs every kanso
+frame is identical to the instruction — `eval_expr'2` 1,652,497, `check_merged`
+1,586,580, `infer` 1,251,874, `lex_line` 866,486, `parse` 589,004 — and the
+only visible move is `__memcmp_avx2_movbe` 1,356,959 to 1,357,025, +66. The
+remaining 1,458 sits below callgrind's 90% cut. The front end does identical
+work; glibc walks a different heap.
+
+**What the cap of two now means here, and it is a question rather than a
+settled thing.** If the residual is a lattice, a third point is likely rather
+than surprising, and the cap will refuse it. That refusal is the finding to
+record and not a licence to widen: a row admitting every multiple of 508 pins
+nothing. What a third reading would actually raise is whether this term can be
+pinned per-chip at all, or whether the quantum has to be subtracted before
+comparison — and that is for the log and for Clay, not for the file's shape.
+Proven on the branch: the gate accepts both measured values and refuses
+41,932,067, which is one more 508.
+
 **Both per-cpu rows went stale and only one was re-sat, so the other is gone
 rather than carried.** Zen 4 has not been counted on this binary, and keeping
 its old pair would pin two numbers nobody measured for a compiler that no

@@ -747,7 +747,30 @@
 # print the sitting, which is what it already does for the Intel key and is
 # the designed path for a chip with no reading.
 #
-# Zen 3 is therefore a SINGLE again, on one reading. If the 508 belongs to the
-# run rather than the binary, the second mode will appear here within a few
-# runs and the pair comes back — measured, as before, never predicted.
-family0x19-model0x1 41930035
+# Zen 3 was a SINGLE for one run, and the second mode arrived on the very next
+# one. Same chip, same binary sha 42283602b2c8: 41,930,035 then 41,931,559.
+# So the row is a pair again, both values measured, and the single stood for
+# exactly as long as one reading justified it.
+#
+# THE GAP IS NOT 508. It is 1,524, which is 3 x 508 exactly. Every reading this
+# file records had put the residual at one 508; this is the first that puts it
+# at three, and it says the 508 is a QUANTUM rather than a two-valued toggle.
+# That reframes what the pair is holding: not "the row has two modes" but "the
+# row lands on a lattice of 508s and two of its points have been seen".
+#
+# The profiles agree with that reading. Across the two runs every kanso frame
+# is identical to the instruction — eval_expr'2 1,652,497, check_merged
+# 1,586,580, infer 1,251,874, lex_line 866,486, parse 589,004, and the rest —
+# and the only visible move is __memcmp_avx2_movbe 1,356,959 to 1,357,025,
+# +66. The remaining 1,458 sits below callgrind's 90% cut. The front end does
+# identical work and glibc walks a different heap, which is what this file has
+# attributed the term to since the header was written.
+#
+# WHAT THE CAP NOW MEANS HERE. If the residual is a lattice, a third point is
+# likely rather than surprising, and the cap of two will refuse it. That
+# refusal is the finding to write down and NOT a reason to widen: a row that
+# admits every multiple of 508 pins nothing. The question a third reading
+# raises is whether this term can be pinned per-chip at all, or whether it
+# needs the quantum subtracted out — and that is a question for the log and
+# for Clay, not for this file's shape.
+family0x19-model0x1 41930035 41931559
