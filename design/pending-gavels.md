@@ -89,6 +89,15 @@ calls moves the frame 402, and not monotonically. An earlier reading of four
 binaries saw only the data cases and read invariance into them, which the
 `.text` probe corrects.
 
+**The residual is attributed, and it is one function.** Diffing the baseline
+against the two-hundred-function binary by self cost puts +1,624 and +1,015 in
+`_dl_relocate_object`, which the split already drops, +6 in `strtoul`, and
+**+402 — the whole in-frame residual — in `__memcmp_avx2_movbe`**. Growing
+`.text` moves the end of `.bss`, the kernel starts the heap after it, and every
+allocation lands at a different alignment; the same comparisons take a different
+number of vector steps. The tunables pin malloc's thresholds and cache sizes but
+nothing pins where the break starts, so no fix is available from here.
+
 **So the question shrank; it did not close.** A ratchet on this row can still
 bank about a thousand instructions of link luck. The smallest front-end move
 this log records is kanso#1161's -0.07%, about 29,000 instructions, so the

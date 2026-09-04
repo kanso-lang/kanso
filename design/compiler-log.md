@@ -19,73 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-
-## 2026-09-03 — A NUMBER'S BYTES WERE WALKED TWICE
-
-**SHIPPED.** `lib/json` read every number twice. `number_end` walked the bytes
-asking where the number stopped, and `mark_from?` walked the same bytes again
-asking whether a `.`, `e` or `E` had gone past, because the answer decides
-`to_int` against `to_float`. The scan carries the mark as a boolean argument
-now, so one walk answers both questions.
-
-```
-jsonbench   2,533,092,019 -> 2,428,220,306    -104,871,713, or 4.14%
-```
-
-Measured in the container, three runs, same digits. The runner's own rows are
-what land in `bench/instructions_golden.txt`; this is the size of the move, not
-the number to paste.
-
-**The profile says exactly where it went.** `value_for` was the largest symbol
-in the decode at 648,032,400, and it was a merged one — clang had inlined the
-whole value-parsing path into it, the number scanner included. It reads
-239,779,050 now, and the surviving scanner stands as its own symbol at
-272,697,300. 648.0 - 239.8 - 272.7 leaves 135.5M, and the total fell 104.9M:
-the difference is the arms the merged function no longer carries.
-
-**What it cost.** The front end visits 17,169 expressions on `lib/json` where it
-visited 16,806, a rise of 2.2%, and the emitted decoder gains 89 lines and 20
-calls while losing one define. Two small walkers became one larger one with an
-extra argument. `.text` FALLS 48 bytes on jsonbench and on oneshot, which is the
-second scanner leaving. No allocation counter moves at all — the same slice, the
-same `to_int` or `to_float`, per number — which is why this is a change the cost
-goldens could not have seen and the instructions vein could.
-
-**The counters, by name, and where they landed.** `front_end_visits` 16,806 ->
-17,169. `emitted_calls` 1,808 -> 1,828 and `emitted_lines` 12,044 -> 12,133 for
-the decoder; `emitted_other_calls` 14,532 -> 14,552 and `emitted_other_lines`
-87,826 -> 87,915 for the eight beside it, all of that move being oneshot, which
-imports the same library. `emitted_defines` and `emitted_other_defines` each
-fall by one, and `text` falls 96 bytes over the eleven programs. Every one of
-those five rises is the same fact: one scanner with an extra argument and more
-arms, where there used to be two with none.
-
-**The mark rides as an argument rather than in a record beside the end
-position.** A record would have been an allocation per number: 4,217 of them per
-decode, 632,550 over the benchmark, and that is a term welfare weighs where
-instructions on this path are one it weighs more lightly. The boolean costs
-nothing and the arms read the same.
-
-**Two new arms had no coverage at all.** `e` and `E` never appeared in
-`lib/json/json_test.kso` before today — the float tests were all `3.25` and
-`2.5`, so the exponent forms went through a scanner nobody had exercised.
-`test_decode_exponent`, `test_decode_exponent_upper`,
-`test_decode_exponent_signed` and `test_decode_negative` are new, and each was
-watched red first: dropping the `101` arm's `true` reds `test_decode_exponent`
-with `invalid number` at position 1, and deleting the `69` arm reds
-`test_decode_exponent_upper` with `unexpected trailing characters` at 2. The
-third falsifier — a `digit_step` that drops the mark — the LANGUAGE refuses:
-`marked` becomes an unused binding and the compiler will not build it.
-
-**OPEN.** `bench/widebench/widebench/` and `bench/encodebench/encodebench/`
-carry their own copies of the json library, and they differ from `lib/json`
-already — widebench's has a `pretty.kso` the shipped library does not. They are
-frozen fixtures rather than stale copies, and nothing in the tree says so. They
-are left alone here; whether a benchmark that vendors a library should track it
-is a question worth asking once rather than per change.
-
----
-
 ## 2026-09-03 — DECLINED: THE ESCAPED-STRING TAIL DOES NOT WANT A RUN SCAN
 
 **DECLINED by measurement, +1.16%.** A clean json string is found with one
@@ -3004,4 +2937,43 @@ without reporting what it saw.
 
 **`compiler libraries` was green on that same CI run**, which is the half of
 this change that was not being re-sat.
+
+
+## 2026-09-04 — THE 1,028 IS ONE MEMCMP, AND IT IS ALIGNMENT
+
+**DONE.** The entry above left a residual: the compiler's own frame still moves
+about a thousand instructions between binaries that do no different work, and
+said the movement comes from `.text`. Diffing the two profiles by self cost
+says exactly where, and the whole 3,047 of the two-hundred-function binary
+accounts for itself:
+
+    +1,624  _dl_relocate_object  (dl-machine.h)
+    +1,015  _dl_relocate_object  (do-rel.h)
+      +402  __memcmp_avx2_movbe
+        +6  ____strtoul_l_internal
+
+The first two are the loader, above `main`, and the split already drops them.
+**The 402 is the entire in-frame residual and it is one function** — glibc's
+AVX2 memcmp, counting differently on identical comparisons.
+
+That is an alignment difference, and this vein has reported it from the other
+end before: the comment on the pinned tunables in
+`scripts/gates/compile_instructions.sh` names two profiles that differed in
+`_int_malloc` and in `__memcmp_avx2_movbe` on one unchanged binary. Growing
+`.text` moves the end of `.bss`, the kernel starts the heap after it, and every
+allocation the front end makes lands at a different alignment. The comparisons
+are the same comparisons; the vector loop takes a different number of steps to
+reach them.
+
+**No fix is available from here.** The tunables pin malloc's thresholds and
+cache sizes, which is what made the row comparable in the first place, but none
+of them pins where the break starts — that is the kernel's, computed from the
+binary's own size. So the residual stands at about a thousand, attributed, with
+the mechanism named and the remedy out of reach. It is a twenty-eighth of the
+smallest front-end change on record, which is what makes it liveable.
+
+**Why this is worth having written down:** the residual was the last live half
+of the ledger entry, and "about a thousand instructions of link luck" is the
+kind of sentence that stays vague for months. It is one glibc function and a
+heap base. Anyone who later finds a way to pin that base can close it.
 
