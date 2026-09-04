@@ -2501,9 +2501,17 @@ were not evidence of determinism, they were evidence of one machine state.
 
 So the corpus keeps the small-request `beat_iters` assertion, which is
 timing-independent because the whole request fits one `recv`, and the 45x above
-stays a measurement in this entry rather than a number CI diffs. Pinning it
-would need `net/read` to read to a length or to EOF, and that is a change to
-what the verb means rather than a change to a test.
+stays a measurement in this entry rather than a number CI diffs.
+
+**This is not a gap in the library, and the fixture's shape is why it looked
+like one.** `lib/net/http` already reads until the request is whole:
+`heard`/`joined`/`gathering` call `net/read` again on a short segment and stop
+when the head has landed and as many body bytes as content-length promised,
+measured by subtraction so a body containing a blank line survives. Its own
+comment says it — "a read is a segment, not a request". The probe called
+`net/read` directly, one layer under that, which is the right layer for asking
+what a bound read yields and the wrong one for reading a request. A program
+that wants a whole request has a verb for it.
 
 **The compile row lands at 41,845,704, and the number is not comparable to
 the one it replaces.** CI refused, as expected, and the run that refused sat
