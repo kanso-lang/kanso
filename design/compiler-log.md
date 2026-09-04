@@ -2911,3 +2911,30 @@ strength of today's finding.
 
 Recorded and left there. Saying what DOES move them wants two runners, which is
 CI's to give.
+
+**ZEN 3 IS A PAIR TOO, AND IT IS THE SAME PAIR — WHICH CORRECTS WHAT I TOLD
+THE PULL REQUEST.** I reported `cost goldens` green on `c1422f27` and
+`0119f95a`. The second is wrong: the success I read was run 33839339418, whose
+head is `4d34057e`. The job actually went green on `c1422f27` and `4d34057e`
+and RED on `37138246` and `0119f95a`, and the two reds are one finding.
+
+Both refused on `family0x19-model0x1`, binary sha `0e081d4c2c96`, counting
+41,844,180 against the 41,845,704 the row pinned. Different runner machines,
+one chip key, one binary, gap 1,524 — the same 1,524 Zen 4 shows on this
+binary and the same multiple of 508 the lattice has produced every time. Zen
+3's row gains its second value, which the cap of two allows, and both AMD keys
+now hold the identical pair on the identical binary.
+
+The profiles agree. Every kanso frame is the same to the instruction across the
+two modes, and `__memcmp_avx2_movbe` reads 1,356,776 on the runs that counted
+low against 1,356,842 on the Intel run that counted high, which is 66 — the
+same 66 recorded when Zen 4's pair appeared.
+
+**AND IT REACHES THE TWELFTH ENTRY'S QUESTION FROM THE OTHER SIDE.** That entry
+wants two RUNNERS shown to differ, and said today's binary-to-binary evidence
+left it standing. Two runners of one chip key, on one binary, have now produced
+the two modes. Combined with the split that puts the whole mode difference in
+`pthread_getattr_np`, the reading is that their maps differ. It is an inference
+and stays one: nothing has printed a map's line count on two runners and
+compared them, which is still what would settle it, and
+`scripts/compile_row_probe.sh` now prints the term a runner would have to show.

@@ -859,6 +859,31 @@
 # is small here, and no reading before this session's paired a chip with a
 # binary at all. The key stays until two chips sit on one sha and disagree.
 # design/pending-gavels.md carries the question.
+#
+# 2026-09-04, ZEN 3 IS A PAIR TOO, AND IT IS THE SAME PAIR. Two CI runs refused
+# on 0x19/0x1, binary sha 0e081d4c2c96, both counting 41,844,180 against the
+# 41,845,704 the row pinned. Different runner machines, one chip key, one
+# binary, and the gap is 1,524 — the same 1,524 Zen 4 shows on this binary, and
+# the same multiple of 508 the lattice has produced every time.
+#
+# So both AMD keys now hold the identical pair on the identical binary. The
+# profiles agree with that reading: every kanso frame is the same to the
+# instruction across the modes, and __memcmp_avx2_movbe reads 1,356,776 on the
+# runs that counted the low value against 1,356,842 on the one that counted the
+# high, which is 66.
+#
+# WHAT IT MEANS FOR THE KEY. A pair that appears on two chips and not on the
+# third, on one binary, is a property of the run rather than of the silicon.
+# The mode was measured on 2026-09-04 to live entirely in glibc's parse of
+# /proc/self/maps, which Rust's stack guard triggers before the compiler starts
+# — see design/compiler-log.md, and scripts/compile_row_probe.sh, which prints
+# that term beside the row. That is what "two runners differ in their maps"
+# would look like from this end, and it remains an inference: nothing here has
+# printed a map's line count on two runners and compared them.
+#
+# THE CAP IS NOW BINDING ON TWO KEYS. Both AMD rows hold their two measured
+# values and may hold no more. A third distinct value on either is refused, and
+# that refusal is the finding to write down.
 family0x19-model0x11 41845704 41844180
-family0x19-model0x1 41845704
+family0x19-model0x1 41845704 41844180
 family0x6-model0xcf 41845704
