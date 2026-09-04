@@ -253,9 +253,29 @@ fn scored_counters text
   list/to_list (list/map lines (l -> kept "" l))
 
 # `welfare 65.56   floor 65.56  (...)` — the second field is the score.
-fn score_in text
-  parts = text/split (text/split text "\n")[1]! " "
-  parts[2]!
+#
+# IT ASKS WHETHER THERE IS A SCORE AT ALL, because welfare can fail and the
+# failure used to arrive here as `missing index 2`. On 2026-09-04 the objective
+# died reading a counter whose golden row had not landed yet, and three CI
+# heads reported that index against this line: a message naming the reader
+# instead of the tool it read, pointing at a file nothing was wrong with.
+#
+# THE SHAPE IS THE QUESTION AND THE STATUS IS NOT. welfare exits 1 on a fall
+# and on a rise nobody ratcheted, and it prints a score in both — those are the
+# commits this row exists to record. A refusal keyed to the status would go
+# silent on exactly them. What a crash leaves behind is a first line with no
+# second field, so that is what is asked, and the status goes in the message
+# rather than into the decision.
+fn score_in r
+  head = (text/split r.stdout "\n")[1]!
+  score_of head r (length (text/split head " ") < 2)
+
+fn score_of _ r true
+  told = "it exited {r.status} saying: {r.stderr}"
+  err "welfare printed no score, so this row has none to carry. {told}"
+
+fn score_of head _ false
+  (text/split head " ")[2]!
 
 fn stamped r
   os/read_file! "bench/cost_golden.txt" . (d -> with_decode (head_line r) d)
@@ -290,7 +310,7 @@ fn assembled line d e o bk c cc w wc
   basket = counters bk basket_all "basket_"
   veins = text/concat decode encode
   own = counters cc.stderr compiler_watched ""
-  banner = [["welfare" (score_in w.stdout)]]
+  banner = [["welfare" (score_in w)]]
   scored = text/concat banner (scored_counters wc.stdout)
   rest = text/concat (text/concat oneshot basket) (compile_work c)
   measured = text/concat own scored

@@ -7,12 +7,13 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one.** "The compile row moves 2,551
-between binaries that do no different work", filed 2026-09-04. The mechanism is
-established to the instruction — Rust's stack guard parsing `/proc/self/maps`
-at startup, and `lang_start::{{closure}}` holds flat across the whole span —
-and what is open is what the vein should do about a quantity that moves with
-the linker's luck. Nothing has been changed on it.
+only indexes it. **Blocking right now: none.** The compile row's drift was the
+last blocking entry, and it is answered: Clay said on 2026-09-04 to force the
+measurement to be consistent rather than rule on the shapes the entry listed,
+so the row counts the compiler's own frame and a golden of five sonames
+watches what it links. The residual — about a thousand instructions of link
+luck, against 29,000 for the smallest front-end change on record — moved to
+"Open, not blocking" with its measurement.
 
 That entry was filed carrying a second question, about a 0.008 welfare fall,
 and Clay ruled that half on 2026-09-04: the objective should incorporate the
@@ -271,8 +272,8 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Nineteen questions wait in `design/pending-gavels.md`** — one blocking,
-eighteen open — each with a recommendation, counted from the ledger rather
+**Nineteen questions wait in `design/pending-gavels.md`** — none blocking,
+nineteen open — each with a recommendation, counted from the ledger rather
 than carried forward. Five are new today: the chain-line grammar, whether
 an err gains readers a callback can use, whether the backends should
 build a partial whose callee is a value, whether an identifier's name

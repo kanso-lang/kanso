@@ -104,8 +104,78 @@ tune=$tune:glibc.malloc.tcache_count=7
     --callgrind-out-file=/tmp/cg.compile ./kanso check lib/json \
     >/dev/null 2>/dev/null
 )
-printf 'compile_instructions=%s\n' \
-  "$(grep -o '^summary: [0-9]*' /tmp/cg.compile | tr -dc 0-9)" > compile_ir_got.txt
+# THE COMPILER'S OWN WORK, not the whole process. `kanso::main` inclusive is
+# everything the compiler does, and that INCLUDES every
+# libc call the compiler makes — so this is not the "stop counting glibc" that
+# 2026-09-03 ruled out, and the difference is the whole point. What it drops is
+# the 465,122 instructions ABOVE that frame: the loader mapping five shared
+# objects, and Rust placing its stack guard, which parses /proc/self/maps and
+# therefore moves with where the linker happened to put things.
+#
+# HOW MUCH IT BUYS, and it is not everything. Measured 2026-09-04 on seven
+# binaries whose sources differ only in code or data nothing reaches. The
+# `program` column is `std::rt::lang_start::{{closure}}` inclusive, which is
+# what these seven were read with; `kanso::main` sat exactly 10 below it on
+# every profile retained, and reads 41,878,949 on the baseline built with the
+# anchor pinned. The spans are the same either way.
+#
+#   variant           .text     row         maps     program
+#   baseline          2550854   42,344,081  112,580  41,878,959
+#   +50 dead fns      2552534   42,348,024  114,845  41,879,987
+#   +200 dead fns     2558486   42,347,128  112,586  41,879,361
+#   +400 dead fns     2565174   42,348,044  110,341  41,879,922
+#   +3 KiB .bss       2550854   42,346,221  114,720  41,878,959
+#   +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
+#   +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959
+#
+# The row spans 3,963 across those seven and the program frame spans 1,028, so
+# the split takes about three quarters of the layout term. The residue is real
+# and it comes from .text: 7,632 bytes of code no execution reaches moves the
+# program frame 402, and the movement is not monotone in .text. Data-only
+# changes leave the frame identical to the instruction, which is what the
+# earlier four-binary reading saw — .bss and .rodata are the cases where the
+# drop is total, and .text is not one of them.
+#
+# So a difference near a thousand on this row is not evidence on its own.
+# Build the pair and read them.
+#
+# Startup work scales with what is loaded, so the one compiler change that can
+# move the dropped half is growing a dependency — one more shared object was
+# measured at 32,090. bench/compile_libraries_golden.txt watches that by name,
+# which is a better answer than a number moving inside the layout noise.
+#
+# WHY THE ANCHOR IS OURS. This read `std::rt::lang_start::{{closure}}` for one
+# round and CI refused: that frame is the standard library's, the runners'
+# toolchain does not emit it, and a name std owns can move under a version bump
+# without anybody here touching a line. `kanso::main` is this crate's, carries
+# an `inline(never)` in src/main.rs that says so, and differed from the closure
+# by exactly 10 instructions on all four profiles measured on 2026-09-04 — so
+# the spans below are the same either way.
+#
+# A REFUSAL rather than an empty value when the frame is missing, and the
+# profile PRINTED FIRST so one job log says what it does contain. The round
+# that made this necessary refused with nothing to read: `scripts/perf_record`
+# had already spent a day reporting `missing index 2` against its own reader,
+# and a refusal that cannot be diagnosed from its own output repeats it.
+if ! command -v callgrind_annotate >/dev/null; then
+  echo "::error::callgrind_annotate is not installed, and the row is read out"
+  echo "::error::of its inclusive profile rather than the summary line."
+  exit 1
+fi
+echo "=== the profile's top frames, inclusive"
+callgrind_annotate --inclusive=yes --threshold=99 /tmp/cg.compile 2>&1 | head -30
+own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.compile 2>/dev/null \
+      | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+case "$own" in
+  '' | *[!0-9]*)
+    echo "::error::the profile carries no kanso::main frame, so the compiler's"
+    echo "::error::own work cannot be read out of it. The listing above is what"
+    echo "::error::it does carry. A toolchain that folded that frame away stops"
+    echo "::error::this gate rather than pinning whatever the pipe returned."
+    exit 1
+    ;;
+esac
+printf 'compile_instructions=%s\n' "$own" > compile_ir_got.txt
 
 # ONE GREPPABLE LINE PER RUN, pairing the value with the two things that move
 # it. Both are now established rather than suspected. The cpu moves it about

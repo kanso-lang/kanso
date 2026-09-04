@@ -1,0 +1,20 @@
+# The shared objects `./target/release/kanso` loads, by soname, sorted.
+#
+# Sonames rather than paths: the loader's own path differs between
+# distributions (/lib64/ld-linux-x86-64.so.2 here) and the name does not.
+#
+# This is the guard on the half of startup that compile_instructions.sh stops
+# counting. That gate reads the compiler's own work from
+# `std::rt::lang_start::{{closure}}` down, because everything above it is the
+# loader and the stack guard and moves with binary layout rather than with the
+# compiler — 3,963 instructions of movement across seven binaries that do no
+# different work, against 1,028 inside the frame. Startup work scales with what is loaded, so a new dependency is the
+# one compiler change that moves it, and this file is what turns red then.
+#
+# libm is glibc's; libgcc_s comes in with Rust's unwinder. linux-vdso is the
+# kernel's and is not a file on disk. None of the four were chosen.
+ld-linux-x86-64.so.2
+libc.so.6
+libgcc_s.so.1
+libm.so.6
+linux-vdso.so.1

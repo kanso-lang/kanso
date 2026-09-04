@@ -20,525 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — TWO SITTINGS OF THE SAME ELEVEN ROWS IN ONE COMMIT, AND THEY DISAGREE
-
-**MEASURED.** Printing the gate's own words paid on its first run. The
-baseline's refusal now reads:
-
-```
-ALREADY RED cost goldens (deterministic ratchet, no clocks)
-  gate: sh scripts/gates/instructions.sh
-  red before any mutation, so no row sharing it is proof
-    digestbench 81252330
-    the work the benchmarks do changed. A rise is a regression to explain…
-```
-
-`digestbench 81252330`. The cost-goldens job, **on the same commit**, measured
-`81252316`. Fourteen instructions apart, two jobs, two runners
-(1000054847 and 1000054838), one image and one glibc.
-
-**This is the first time the eleven rows have been sat twice in one commit.**
-Every earlier reading came from one job on one runner per run, so the vein has
-only ever been compared against itself across commits — where a chip change and
-a code change are the same event. The log has carried the question since
-2026-09-01: *"These rows claim to be exact and the pool is not… nothing here
-measures that fraction."* This measures it, at n=1: two runners, one row, +14.
-
-**Two hypotheses are dead.** The benchmark binary is byte-identical between the
-repo root and a worktree built against a shared target symlink
-(`7779456c957c6cff…` both), and running the same binary from those two
-directories gives the same count to the instruction (81,251,917 twice, in this
-container). So neither the build directory nor the run directory moves it.
-
-**What is NOT decided, and deliberately.** One row on one pair of runners is a
-data point, not a design. The options are a golden per chip (the treatment
-kanso#1226 gave the compile row, at eleven rows times the pool instead of one),
-declaring the two callgrind gates unprovable by the ratchet (two rows blind by
-declaration, which is what the ratchet exists to prevent), or something that
-compares the mutated measurement against the baseline's own rather than against
-a golden. Choosing between them on one number is the shape of reasoning this log
-keeps catching, and the pending-gavels ledger is explicitly not for
-implementation questions — this one is the file-holder's, answered here.
-
-So the evidence gathers instead: the captured tail goes from eight lines to
-twenty-four, which is enough for the cpu line `dispatch.sh name` prints and the
-whole eleven-row diff. Every runtime-touching pull request from here is another
-paired sitting, attributable to its silicon, at no extra cost. The decision gets
-made on a table rather than on a pair.
-
----
-
-## 2026-09-03 — A FOURTH SHAPE: REPORTED AND NOT CREDITED
-
-**DONE, and it corrects the entry above.** That entry listed three ways out of
-the paired-sitting problem — a golden per chip, declaring the two callgrind
-gates unprovable, or comparing the mutation against the baseline's own
-measurement — and said choosing between them on one data point was premature.
-It was, and it still is. What the entry missed is that none of them has to be
-chosen, because the question it was answering was the wrong one.
-
-The ratchet's baseline asks *is this gate red for a reason other than the
-mutation*. For `sh scripts/gates/instructions.sh` on a foreign runner the answer
-is yes, and that is a fact about the ROW rather than about the branch. So the
-row is **reported and not credited**: the baseline prints `UNPROVEN THIS RUN`
-with the gate's own words and does not fail, and the proving pass drops every
-row sharing that gate instead of applying a mutation to a gate already red.
-
-**That is the opposite of the blindness kanso#1228 was built to catch, and the
-difference is one word.** Before, a red gate was silently counted as PROOF. Now
-it is silently counted as nothing, and says so out loud. On a run that lands on
-the golden's silicon the row is proved normally, so this costs coverage only on
-the runs where coverage was never available.
-
-**The danger is the list, not the mechanism** — an entry excusing a gate that is
-not silicon-bound turns a real failure into a note. So the list is pinned to a
-property of the gates rather than to anyone's judgement:
-`tests/a_host_bound_gate_is_reported_not_credited.rs` requires `host_bound` to
-be exactly the set of gate scripts that invoke callgrind on an operative line. A
-new callgrind gate left undeclared turns it red; a declared gate that runs none
-turns it red too.
-
-**That spec's own first draft could not fail, which makes three today.** It read
-the `bound` BINDINGS rather than the `host_bound` LIST, so removing an entry
-from the list left it green — the binding was still there and the list it was
-absent from was never opened. Watched red the second time, and the failure names
-both sides:
-
-```
-  left: ["sh scripts/gates/instructions.sh"]
- right: ["sh scripts/gates/compile_instructions.sh", "sh scripts/gates/instructions.sh"]
-```
-
-Three checks in one day whose first draft was satisfiable without the property
-holding. The common thread is that each read something ADJACENT to the thing it
-meant to assert — a comment beside an install, an error message beside a diff, a
-binding beside a list. Trying to make the check fail is what found all three, and
-it cost one `sed` each.
-
----
-
-## 2026-09-03 — THE SKIP I ADDED AN HOUR AGO HAD A FALSE GREEN IN IT
-
-**DONE.** `kept_provable` drops every row sharing a host-bound gate, and the
-proving pass then runs the rest. When the rest is empty — a branch whose whole
-selection is host-bound — the loop had nothing to do and the closing line said
-
-```
-ratchet: 0 rows
-ratchet: every row turned its gate red
-```
-
-which congratulates a run that proved nothing. That is the exact shape the pass
-exists to refuse, reintroduced by the fix for it, and it survived because the
-`told` arms dispatch on whether any row FAILED and no arm asked whether any row
-RAN.
-
-The empty case says so now and does not fail, because no diff could have proved
-those rows on this runner:
-
-```
-ratchet: no row on this runner could be proved; none was claimed
-```
-
-**Found by reading the summary path rather than by a spec**, and the reason
-there is no fixture is worth stating: constructing one needs a scope whose every
-selected row is host-bound, and `asked?` selects by job name, so the cheapest
-such scope drags in seventeen rows and their builds. The behavioural proof is
-the nightly. What is pinned per-pull-request is the list
-(`tests/a_host_bound_gate_is_reported_not_credited.rs`), which is where a
-mistake is actually likely.
-
-**Four in one day now**, and the pattern has stopped being a coincidence: the
-toolchain spec read a comment beside an install, the machine-code spec read an
-error message beside a diff, the host-bound spec read a binding beside a list,
-and this one read a failure count beside a run count. Every one of them was
-adjacent to the property and satisfiable without it.
-
----
-
-## 2026-09-03 — A NUMBER'S BYTES WERE WALKED TWICE
-
-**SHIPPED.** `lib/json` read every number twice. `number_end` walked the bytes
-asking where the number stopped, and `mark_from?` walked the same bytes again
-asking whether a `.`, `e` or `E` had gone past, because the answer decides
-`to_int` against `to_float`. The scan carries the mark as a boolean argument
-now, so one walk answers both questions.
-
-```
-jsonbench   2,533,092,019 -> 2,428,220,306    -104,871,713, or 4.14%
-```
-
-Measured in the container, three runs, same digits. The runner's own rows are
-what land in `bench/instructions_golden.txt`; this is the size of the move, not
-the number to paste.
-
-**The profile says exactly where it went.** `value_for` was the largest symbol
-in the decode at 648,032,400, and it was a merged one — clang had inlined the
-whole value-parsing path into it, the number scanner included. It reads
-239,779,050 now, and the surviving scanner stands as its own symbol at
-272,697,300. 648.0 - 239.8 - 272.7 leaves 135.5M, and the total fell 104.9M:
-the difference is the arms the merged function no longer carries.
-
-**What it cost.** The front end visits 17,169 expressions on `lib/json` where it
-visited 16,806, a rise of 2.2%, and the emitted decoder gains 89 lines and 20
-calls while losing one define. Two small walkers became one larger one with an
-extra argument. `.text` FALLS 48 bytes on jsonbench and on oneshot, which is the
-second scanner leaving. No allocation counter moves at all — the same slice, the
-same `to_int` or `to_float`, per number — which is why this is a change the cost
-goldens could not have seen and the instructions vein could.
-
-**The counters, by name, and where they landed.** `front_end_visits` 16,806 ->
-17,169. `emitted_calls` 1,808 -> 1,828 and `emitted_lines` 12,044 -> 12,133 for
-the decoder; `emitted_other_calls` 14,532 -> 14,552 and `emitted_other_lines`
-87,826 -> 87,915 for the eight beside it, all of that move being oneshot, which
-imports the same library. `emitted_defines` and `emitted_other_defines` each
-fall by one, and `text` falls 96 bytes over the eleven programs. Every one of
-those five rises is the same fact: one scanner with an extra argument and more
-arms, where there used to be two with none.
-
-**The mark rides as an argument rather than in a record beside the end
-position.** A record would have been an allocation per number: 4,217 of them per
-decode, 632,550 over the benchmark, and that is a term welfare weighs where
-instructions on this path are one it weighs more lightly. The boolean costs
-nothing and the arms read the same.
-
-**Two new arms had no coverage at all.** `e` and `E` never appeared in
-`lib/json/json_test.kso` before today — the float tests were all `3.25` and
-`2.5`, so the exponent forms went through a scanner nobody had exercised.
-`test_decode_exponent`, `test_decode_exponent_upper`,
-`test_decode_exponent_signed` and `test_decode_negative` are new, and each was
-watched red first: dropping the `101` arm's `true` reds `test_decode_exponent`
-with `invalid number` at position 1, and deleting the `69` arm reds
-`test_decode_exponent_upper` with `unexpected trailing characters` at 2. The
-third falsifier — a `digit_step` that drops the mark — the LANGUAGE refuses:
-`marked` becomes an unused binding and the compiler will not build it.
-
-**OPEN.** `bench/widebench/widebench/` and `bench/encodebench/encodebench/`
-carry their own copies of the json library, and they differ from `lib/json`
-already — widebench's has a `pretty.kso` the shipped library does not. They are
-frozen fixtures rather than stale copies, and nothing in the tree says so. They
-are left alone here; whether a benchmark that vendors a library should track it
-is a question worth asking once rather than per change.
-
----
-
-## 2026-09-03 — DECLINED: THE ESCAPED-STRING TAIL DOES NOT WANT A RUN SCAN
-
-**DECLINED by measurement, +1.16%.** A clean json string is found with one
-`find2` and copied with one slice. A string with an escape in it is not: past
-the first backslash, `str_chars` walks the rest one byte at a time, through a
-dispatch and a one-byte append each. Making the tail scan runs the way the head
-does — `find2` to the next quote or backslash, then append the run in one
-copy — reads like the obvious fix.
-
-```
-jsonbench   2,533,092,019 -> 2,562,563,906    +29,472,300, or 1.16%
-```
-
-**The distribution is why.** In `bench/large.json`, 1,773 of 11,057 strings
-carry an escape, and they hold 4,562 runs between them totalling 16,895 bytes:
-a mean run of **3.7 bytes**, with 1,029 of the runs empty because escapes come
-back to back. The per-run fixed cost measured about 300 instructions — 113 in
-the scanner's own glue, 75 in `find2`, 46 in `k_b_slice`, 49 in the wide append
-— against the 50 instructions a byte the walk costs. The run has to be six bytes
-before it breaks even and it is under four.
-
-**A fused `append(acc, slice(cs, a, b))` does not rescue it.** `k_b_utf8_slice`
-already exists for the same shape one line above, so the pattern is available;
-it would take back the 46 instructions the slice allocation costs, which leaves
-the change roughly 60M worse than doing nothing.
-
-**What the probe found instead is worth keeping.** Two programs, a clean string
-and one with a single leading escape, at 2,000 / 4,000 / 8,000 bytes:
-
-```
-clean    213,329   264,566   366,562     25.6 instructions a byte
-escaped  316,640   469,253   773,152     76.0 instructions a byte
-```
-
-Linear in both, so there is no quadratic hiding here. But a byte in an escaped
-string's tail costs about **50 instructions more** than the same byte in a clean
-one, and that is the language's per-byte dispatch-and-append, not anything
-`lib/json` chose. The disassembly of `str_char` is 41 instructions round the
-loop: six to index, ten to box the byte and unbox it again for the dispatch,
-eight to dispatch, thirteen for the in-place append including two loads of
-`k_stats_on`, four for bookkeeping. Whoever wants this path faster should go
-after those ten, not after the number of walks.
-
----
-
-## 2026-09-03 — A BYTE SWITCH THAT REBUILT THE BYTE BEFORE IT LOOKED AT IT
-
-**SHIPPED, and it is the largest single runtime move this log holds.** A group
-whose arms discriminate on a byte read out of a byte string crosses the call
-boundary as a raw `i64` — the byte, or 256 for the `none` a read past the end
-answers. `rebox_params` then rebuilt a `KValue` from that raw value, and the
-dispatch tree pulled the rebuilt struct apart again: tag out, compare to 0,
-payload out, switch. The comment above the reconstruction said the round trip
-"folds back into a raw switch". **It does not.** `str_char`'s loop:
-
-```
-5132:  cmp    $0x4,%rax
-5136:  cmove  %rbp,%rcx        ; 256 for none, on the caller's side
-513c:  cmp    $0x100,%rcx
-5143:  sete   %dl
-5146:  cmove  %r13,%rcx
-514a:  shl    $0x2,%edx
-514d:  test   %edx,%edx        ; the tag test the tree wrote
-```
-
-Seven instructions a byte to take apart a value that was never assembled, and
-every byte-dispatching function in the decoder paid it. The tree switches on
-`%xNr` directly now, with 256 as the `none` case.
-
-```
-jsonbench    2,533,092,019 -> 2,098,859,754   -17.1424%
-oneshot         34,322,446 ->     31,427,168    -8.4355%
-widebench       61,890,181 ->     59,506,049    -3.8522%
-encodebench  5,848,702,451 ->  5,846,994,368    -0.0292%
-indexbench       5,242,363 ->      5,241,950    -0.0079%
-basket          40,300,172 ->     40,299,759    -0.0010%
-deepbench      676,465,730 ->    676,462,050    -0.0005%
-digestbench     81,252,316 ->     81,251,917    -0.0005%
-escapebench    130,170,751 ->    130,170,352    -0.0003%
-pendbench      715,732,938 ->    715,732,552    -0.0001%
-scanbench    1,423,437,576 ->  1,423,437,163    -0.0000%
-```
-
-Those are the CONTAINER's, which is where the ratios in this entry come from
-because a ratio needs both ends measured on one box. The runner's rows are the
-ones the golden takes, and it reads the seven small ones as not moving at all;
-the paragraph below has them.
-
-**Nothing rises.** The jsonbench figure carries the single-pass number scan
-above it as well; this change is 13.56% of it on its own, 2,428,220,306 to
-2,098,859,754. **widebench is the clean attribution**: it vendors its own copy
-of the json library, frozen, so the 3.85% there is the dispatch and nothing
-else. The seven programs that do not dispatch on bytes move by four hundred
-instructions or fewer, which is the compiler emitting a slightly different
-module and the linker laying it out differently.
-
-**The counters, against the branch point rather than against the entry above
-it, because that is what the trend gate reads:** `emitted_calls` 1,808 ->
-1,820, `emitted_branches` 1,210 -> 1,186, `emitted_lines` 12,044 -> 12,053,
-`emitted_other_calls` 14,532 -> 14,526, `emitted_other_branches` 8,749 ->
-8,673, `emitted_other_lines` 87,826 -> 87,659, `emitted_defines` 169 -> 168 and
-`emitted_other_defines` 1,469 -> 1,468. Calls and lines rise because the number
-scan above bought them; the two changes pull those two counters in opposite
-directions and the scan pulls harder. **Branches only fall**, in the decoder
-and in the eight beside it, and that is this change alone: nothing about the
-number scan removes a branch. `text` falls 8,080 bytes over the eleven
-programs — 1,936 on jsonbench, 2,080 on encodebench, 1,888 on oneshot and 2,080
-on widebench, and not a byte on the other seven. Rounds and
-visits on `lib/json` do not move at all, which is the check that this changed
-what the backend writes rather than what the front end decides. No allocation
-counter moves.
-
-**One literal had to be guarded, and the fixture found it before CI did.** 256
-is the sentinel, so a program that writes `fn kind 256` — an arm no byte can
-ever reach — would send every read past the end of a byte string to that arm.
-The boxed tree is immune because it tests the tag before it looks at the
-payload. The divergence was real and I watched it:
-
-```
---- native      --- interpreter
-bracket         bracket
-quote           quote
-a byte that cannot be    some other byte
-```
-
-A group with any int literal outside 0..255 stays on the boxed path, where the
-arm stays as dead as the oracle says it is.
-`tests/a_byte_arm_no_byte_can_reach.rs` pins both halves — the impossible
-literal and an ordinary byte group beside it, so a change that disabled the
-fast path everywhere would not read as a pass. Watched red against the
-unguarded draft, with the two engines' answers printed side by side.
-
-**Why the emitted-line count is the presence counter here.** There is no
-observable output that distinguishes a raw switch from a boxed one; what
-distinguishes them is `emitted_branches`, which falls by 24 in the decoder and
-76 across the eight beside it because the tag test and the none test are gone
-from every byte-dispatching call. Revert the change and that counter goes straight back
-up, which is what the vein is for.
-
-**What CI's own sitting says, and what it cost the compiler.** The runner reads
-the four moved rows 413 or 399 above the container and reads the other seven
-EXACTLY where they were: jsonbench 2,098,860,167, oneshot 31,427,567, widebench
-59,506,462, encodebench 5,846,994,767, and no movement at all in basket,
-deepbench, escapebench, pendbench, indexbench, scanbench or digestbench. The
-container's few-hundred-instruction falls on those seven were the container.
-
-**The compiler pays, and the first attribution I wrote for it was wrong.**
-Three compile counters rise — `compile_instructions` 41,631,998 -> 41,831,767
-(+0.48%), `compile_peak_bytes` 713,606 -> 715,275 (+0.23%), `compile_allocs`
-25,394 -> 25,485 (+0.36%) — and I priced all three against the raw byte switch,
-because it was the larger change and the rises arrived with it. **`kanso check`
-never runs the backend.** It lexes, parses, infers, runs provenance and the
-advisories, and stops; a codegen change cannot reach those rows except through
-the binary's layout. Every one of them belongs to the json library's extra arms.
-
-Held rather than reasoned, because a reason that sounds right is what produced
-the wrong version. With the codegen change reverted and lib/json untouched, the
-container reads `compile_allocs=25485` and `compile_peak_bytes=715275` — the
-same two numbers as the branch head, to the byte. And the instruction row,
-three builds under the same tunables:
-
-```
-main                                 42,032,508
-the library change alone             42,238,115   +205,607
-the library change and the switch    42,235,790     -2,325
-```
-
-The switch gives 2,325 BACK, inside the layout band the by-cpu file documents in
-thousands. Rounds hold at 40. The Zen 4 row is removed rather than carried
-forward, per that file's rule about values measured against an old binary.
-**Welfare 76.0100 -> 76.1700**: the objective takes the trade, and compile cost
-satiates at 0.5 against runtime's 2.0, which is exactly the asymmetry it was
-weighted for.
-
-**The published scoreboard is dated now, and says which way it is stale.** The
-per-decode floors in §08 — kanso 0.87 ms against serde_json's 0.90, naive rust's
-1.04 and go's 2.05 — come from seven interleaved rounds on 2026-08-07, by the
-slope method, and nothing on the page said so. They are re-sat at a release and
-not on demand, because randomised-layout timing puts the spread within one tree
-at about three per cent and this box is not idle. So the caption carries the
-date, and a paragraph under the block says the decoder has moved a long way
-since and names these two changes as 17.14% of it. Publishing a number I cannot
-honestly re-measure would be worse than publishing a stale one that says it is
-stale.
-
-The lesson is the one this log keeps relearning from a different direction. Two
-changes shipped together, one large and one small, and every unexplained number
-attached itself to the large one. What separated them was not an argument about
-mechanisms but two rebuilds and four counters.
-
-**And the landing page was quoting a sitting nobody had re-read.** The
-number-bearing surfaces are a checklist rather than a memory, so walking it
-found `docs/index.html`'s receipts panel carrying `reasonably-written rust 1.02`
-and `go encoding/json 1.95` where §08 reads 1.04 and 2.05. They are the
-2026-07-27 figures. #756 replaced that panel's kanso and serde rows with a
-pointer to the live board and left the two rows underneath alone, so the site has
-disagreed with itself about two of its four lanes for five weeks with every gate
-green. Both rows now read the 2026-08-07 sitting and the caption names its date,
-the way §08's does. Nothing checks this: the two pages hold the numbers as prose
-and `golden_prose` only reads what carries a `data-golden` attribute, which these
-cannot, because a hand-sat wall clock has no golden to read.
-
-**A chip the pool had never shown.** CI's compile-instructions gate went red
-on `family0x6-model0xcf` — Emerald Rapids, absent from the four the by-cpu
-file's header lists — with the refusal that an unrecorded chip is an unsat row.
-It read 41,832,275 where Zen 3 read 41,831,767 on the same binary, sha
-55fb850296d1 printed on both. 508 apart, against the 5,124 the header
-decomposes between two other chips on one binary. The ifunc effect is a
-property of the pair, not a constant, which is a second argument for the key
-over a band: a band wide enough for 5,124 hides every front-end move this vein
-has caught, and one narrow enough for 508 would still have refused this run.
-
-**A comment claimed a property the machine code contradicted, and nothing in
-the tree could see it.** That is the same family as #1137's four pins that
-rested on prose — except that one was a spec reading a comment, and this was a
-comment asserting an optimiser outcome. The optimiser is entitled to change its
-mind between releases; a claim about what it will do belongs in a counter.
-
-## 2026-09-03 — EIGHT BOOK PANELS QUOTED A LIBRARY NOBODY WAS CHECKING THEM AGAINST
-
-The landing page says every code panel in the book is executed against the real
-toolchain before it may appear. Ten were not, and four of those had drifted so
-far they printed code the language cannot compile.
-
-**How the gap is shaped.** `scripts/book_panels` regenerates a panel by
-resolving its title to a sample it owns: `<samples>/<title>`, or a bare
-filename one directory deeper. The deeper branch compares a path's LAST SEGMENT
-to the whole title, so a title carrying a slash — `lib/json/number.kso` — can
-never match, and the harness leaves it alone by design: "a name that is nowhere
-is left alone: the panel may be quoting something this does not own." A
-directory-module title falls in the same hole from the other side, because
-`literal.kso` names `samples/ch08/literal/` rather than a file. Eight ch08
-panels quote `lib/json`, two quote directory modules, and nothing read any of
-them.
-
-**What was in them.** The `lib/json/text.kso` panels wrote `at cs n` for the
-index; there is no `at` under any spelling, so that panel has been printing a
-name error for as long as `cs[n]` has been the syntax. They also wrote
-`concat [] (slice ...)` where the library writes `append (bytes "")`. The
-`scan.kso` panel named `_is_ws` for a function renamed `ws?`. The `value.kso`
-panel named three byte-array constants and a `_word` that sliced the tail out
-and compared arrays — the library replaced all of it with `rue?`, `alse?` and
-`ull?` comparing bytes where they sit. The two directory-module panels still
-showed a `pub play` and a `told`/`chosen` reporting pair from before those
-samples were split into `main`/`lit`/`report`.
-
-**Why the check is structural.** These panels are excerpts with editorial
-changes: a private declaration gains a leading `_`, a module qualifier is
-dropped, a field gains a `:type` the file leaves bare. So the text cannot be
-compared and the panel cannot be regenerated. Two properties survive every one
-of those changes:
-
-  every declaration the panel shows is declared in the file it names, and
-  every name the panel uses is a name that file can reach.
-
-`scripts/book_quotes` checks both. The reachable set is read off the package
-rather than listed: its own declarations and bindings, the tail of every
-qualified name it calls, and every bare name its own code uses. So a panel may
-name what the file could name, and there is no table of builtins here to go
-stale in its turn — which is the failure mode a hand-written list would have
-reproduced one level up.
-
-It found eleven things across four panels and nothing else, and it is precise
-in the direction that matters: run against the fixed book it is silent, and
-renaming `ws?` in the library reddens it in two lines. That rename is the
-ratchet mutation.
-
-**And then the gap closed, because the claim about it was wrong twice.** The
-first version of this entry said the three remaining panels each want a
-different resolution rule, and that ch09's `vse/methods.kso` names a file in
-the vse repository. Both are wrong. Two rules reach all three: ch10's titles
-are written relative to `docs/book`, and ch07's and ch09's relative to a
-sample directory one level in — `samples/ch07/teahouse/` holds `main.kso`
-beside a package dir `teahouse/`, and `samples/ch09/vse/` the same. ch09's
-`vse/` is a sample package in this repository.
-
-Both rules are in, and they found four more panels in two more chapters:
-
-- ch07's `teahouse/menu.kso` showed `fn describe (err reason)` — an arm naming
-  its own package's err. The language refuses that and the sample dropped it.
-  **The chapter contradicted itself on one page**: the panel three inches below
-  demonstrates the replacement, `testing/when_failed pocky (r -> ...)`, and
-  only that one was machine-checked, because book_panels owns it.
-- ch07's `teahouse/menu_test.kso` showed a hand-written `err?` predicate where
-  the file imports `std/testing` and calls `testing/failed?`.
-- ch10's `pingpong.kso` wrote `even`/`odd` for the file's `even?`/`odd?`, and
-  wrapped the statements in a `main =` the file does not have.
-- ch10's `classify.kso` had the same `main` wrapper.
-
-Fourteen panels across four chapters, on a page that says every one of them is
-executed against the real toolchain before it may appear.
-
-**ch09 is clean, and that was verified rather than assumed.** Six panels there
-quote `vse/`, and silence from a checker is worth nothing until you have seen
-it speak: inserting a declaration no file has into the ch09 panel reddens the
-gate in two lines. So the silence is coverage.
-
-**One false-positive class had to go first.** `true`, `false` and `none` are
-literals the grammar provides, and the reachable set is read off the package's
-own text, so a small file that happens never to write `false` was forbidding a
-panel from showing an arm that answers it. They are always reachable now. That
-is the only exception, and it is a list of spellings rather than of names —
-which is what keeps it from becoming the builtin table this deliberately does
-not have.
-
-A title that resolves to a FILE beside its chapter stays skipped for a
-different reason: book_panels owns it, and reading ch07's `shop.kso` panel
-against its `shop/` directory is how this first went wrong.
-
-**And the prose went with them.** Four paragraphs described the old
-implementations — the byte-array constants, the four hex digits read inline
-before `_str_hex4` existed, the sample's helpers as "verbatim from
-number.kso" when they are the shape the library left behind. Nothing checks
-prose against code and nothing here proposes to; what the gate buys is that
-the CODE beside the prose can no longer drift silently, which is what made the
-prose wrong.
-
 ## 2026-09-03 — a recorded chip disagreeing with itself, and a row nobody reads
 
 Two findings on `bench/compile_instructions_by_cpu.txt`, both from one
@@ -2995,3 +2476,297 @@ different halves: `os/read_file!` returns something that already carries its
 type and is answered by its own declaration, where `net/read c` is a bare
 builtin call with nothing to ask and needs the table. The socket fixture is
 still the only thing pinning the second half, and this does not change that.
+
+## 2026-09-04 — THE ROW NAMED THE INDEX IT WAS READING, NOT THE TOOL THAT FAILED
+
+**DONE.** `perf_record` asks welfare for the score and takes the second field of
+its first line. When welfare itself died it printed no such line, and the row
+builder reported `missing index 2` born in `score_in` — a message naming the
+reader instead of the tool it read, pointing at a file nothing was wrong with.
+Three CI heads failed that way during kanso#1240 while readbench's instruction
+row was being harvested, and each one sent a reader to `perf_record.kso:258`
+when the fault was two processes away.
+
+Reproduced before it was touched, in a staged tree with the readbench row cut
+out of the instructions golden:
+
+    error[endpoint]: unhandled err reached the executor: "missing index 2"
+      born in perf_record/score_in at scripts/perf_record/perf_record.kso:258
+
+and after:
+
+    welfare printed no score, so this row has none to carry. it exited 1
+    saying: ... "missing index "readbench"" born in welfare/worked at
+    scripts/welfare/welfare.kso:375
+
+The reader now points at welfare, and welfare names the counter.
+
+**THE OBVIOUS FIX IS WRONG AND WOULD HAVE BEEN WORSE THAN NONE.** `os/run`
+hands back a status, and refusing on a non-zero one is the shorter edit. But
+welfare exits 1 on a fall AND on a rise nobody ratcheted — `os/exit 1` at three
+sites — and it prints a score in every one of them. Those are the commits the
+perf history most needs: a refusal keyed to the status would go silent on
+exactly the rows a reader would later want. Checked in welfare.kso before
+writing anything, which is the only reason the shape is what gets asked and the
+status only rides along in the message.
+
+**The spec enters where a user enters**: a staged tree with the goldens copied,
+the compiler and scripts and library borrowed from the checkout, a git
+repository because the row carries its commit, and one counter's instruction
+row removed — the state a branch is in between minting a benchmark and
+harvesting its row from CI. Watched red on the old body, for `missing index 2`.
+
+**Only half of it discriminates, and the entry says so.** The second test —
+that a healthy run still reads its score — passes on the OLD code too. It is
+there to catch a refusal that fires on a good run, which would cost the history
+every row it has, and it is not evidence for the fix.
+
+## 2026-09-04 — THE ROW COUNTS THE PROGRAM NOW, AND THREE QUARTERS OF THE LINKER'S LUCK GOES WITH IT
+
+**DONE, and it closes the last blocking entry in the ledger.** The entry asked
+whether a term whose movement is dominated by binary layout should set a
+ratcheted floor. Clay answered by redirecting the question — "can you not force
+that to be consistent with some initial setup that's specific to specs?" — and
+he was right that I had conflated two things. The 2026-09-03 ruling was NO
+EXCLUSION of glibc. Excluding the process's own startup is a different act and
+nobody had ruled on it.
+
+`scripts/gates/compile_instructions.sh` now reads `std::rt::lang_start::
+{{closure}}` inclusive out of the callgrind profile instead of the summary
+line. That frame is everything `main` does, so every libc call the compiler
+makes is still counted; what it drops is the 465,122 instructions above it —
+the loader mapping five shared objects, and Rust placing its stack guard, which
+parses `/proc/self/maps` with `getline` and `sscanf` and therefore moves with
+where the linker happened to put things.
+
+**How much it buys, on seven binaries whose sources differ only in code or data
+nothing reaches:**
+
+    variant           .text     row         maps     program
+    baseline          2550854   42,344,081  112,580  41,878,959
+    +50 dead fns      2552534   42,348,024  114,845  41,879,987
+    +200 dead fns     2558486   42,347,128  112,586  41,879,361
+    +400 dead fns     2565174   42,348,044  110,341  41,879,922
+    +3 KiB .bss       2550854   42,346,221  114,720  41,878,959
+    +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
+    +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959
+
+Whole process spans 3,963; the frame spans 1,028.
+
+**THE FIRST READING WAS WRONG AND THE CORRECTION IS THE INTERESTING PART.** Four
+binaries measured earlier — baseline, +3 KiB .bss, +64 KiB .bss, +64 KiB
+.rodata — gave 41,878,959 four times, and I wrote invariance into three files
+on the strength of it. Those are all DATA changes. The `.text` case had never
+been probed with the frame read out, and it does not hold: 7,632 bytes of code
+no execution reaches moves the frame 402, and the movement is not monotone in
+`.text` — fifty dead functions move it more than four hundred do. The first
+`.text` probe I ran was contaminated too, because it reached the functions
+through an environment variable, which is executed work; the honest version
+keeps them with a `#[used]` array of function pointers and calls nothing.
+`scripts/compile_row_probe.sh` said "ALL of that movement is in `maps`" and now
+says what the seven binaries show.
+
+**WHAT THE SPLIT GOES BLIND TO, and the guard for it.** Startup work scales
+with what gets loaded, so the one compiler change that moves the dropped half is
+growing a dependency — one more shared object measured at about 32,090.
+`bench/compile_libraries_golden.txt` pins the five sonames `ldd` reports and
+`scripts/gates/compile_libraries.sh` diffs them. A new dependency now turns red
+saying `libfoo.so.1 appeared` rather than showing 32,090 mixed into a term that
+moves 3,963 for nothing. Watched red both ways before it shipped: dropping
+`libm.so.6` from the golden, and adding a name that is not there.
+
+**The ratchet row's mutation is `a_library_the_row_cannot_see.sh`**, and it
+links Rust's standard library dynamically with `-C prefer-dynamic` rather than
+editing the golden — an edit to the golden would prove nothing about the thing
+being guarded. Watched red on the real gate: `> libstd-46d936097e8c5b85.so`.
+Its anchor is the absence of `.cargo/config.toml`, so a repo that grows one
+stops the mutation instead of silently appending into it.
+
+**OPEN.** The goldens still hold whole-process values and CI has to re-sit them
+under the new definition, which is a deliberate red round. When it does, the
+welfare baseline `compile_instructions: 57029831` owes a correction of the same
+size as the drop on that host — the startup half is an additive constant the
+old baseline also paid, so leaving it alone would read a measurement change as
+a free win. That correction and the re-sitting land together.
+
+
+## 2026-09-04 — THE ANCHOR WAS THE STANDARD LIBRARY'S, AND CI REFUSED IT
+
+**DONE, and it corrects the entry above.** That entry said the row reads
+`std::rt::lang_start::{{closure}}` inclusive. CI refused on the first run:
+
+    ::error::the profile carries no std::rt::lang_start::{{closure}} frame
+
+The frame is real on this container under rustc 1.94.1 and absent from the
+runners' profiles under 1.98.1. So the anchor was a name the standard library
+owns, which a version bump can move with nobody here touching a line — and the
+gate's own refusal path is the only reason that showed up as a stop rather than
+as a number.
+
+**The anchor is `kanso::main` now**, this crate's own symbol, with an
+`inline(never)` in src/main.rs whose doc comment says the measurement is why it
+is there. It sat exactly 10 instructions below the closure on all four profiles
+retained from the seven-binary sitting, and the baseline rebuilt with the
+annotation reads `row 42,344,081` — identical to the instruction — and
+`program 41,878,949`. So the annotation costs nothing and the published spans,
+3,963 whole-process against 1,028 in the frame, hold under either anchor.
+
+**The refusal now prints the profile before it refuses.** The round that made
+this necessary said "cannot be read out of it" and printed nothing that could
+be read instead, so finding out what the profile did contain took a second
+round. `callgrind_annotate --inclusive=yes --threshold=99 | head -30` goes to
+the job log first, and the refusal points at it. This is the same defect
+`scripts/perf_record` had for a day — a reader that reports its own failure
+without reporting what it saw.
+
+**`compiler libraries` was green on that same CI run**, which is the half of
+this change that was not being re-sat.
+
+
+## 2026-09-04 — THE 1,028 IS ONE MEMCMP, AND IT IS ALIGNMENT
+
+**DONE.** The entry above left a residual: the compiler's own frame still moves
+about a thousand instructions between binaries that do no different work, and
+said the movement comes from `.text`. Diffing the two profiles by self cost
+says exactly where, and the whole 3,047 of the two-hundred-function binary
+accounts for itself:
+
+    +1,624  _dl_relocate_object  (dl-machine.h)
+    +1,015  _dl_relocate_object  (do-rel.h)
+      +402  __memcmp_avx2_movbe
+        +6  ____strtoul_l_internal
+
+The first two are the loader, above `main`, and the split already drops them.
+**The 402 is the entire in-frame residual and it is one function** — glibc's
+AVX2 memcmp, counting differently on identical comparisons.
+
+That is an alignment difference, and this vein has reported it from the other
+end before: the comment on the pinned tunables in
+`scripts/gates/compile_instructions.sh` names two profiles that differed in
+`_int_malloc` and in `__memcmp_avx2_movbe` on one unchanged binary. Growing
+`.text` moves the end of `.bss`, the kernel starts the heap after it, and every
+allocation the front end makes lands at a different alignment. The comparisons
+are the same comparisons; the vector loop takes a different number of steps to
+reach them.
+
+**No fix is available from here.** The tunables pin malloc's thresholds and
+cache sizes, which is what made the row comparable in the first place, but none
+of them pins where the break starts — that is the kernel's, computed from the
+binary's own size. So the residual stands at about a thousand, attributed, with
+the mechanism named and the remedy out of reach. It is a twenty-eighth of the
+smallest front-end change on record, which is what makes it liveable.
+
+**Why this is worth having written down:** the residual was the last live half
+of the ledger entry, and "about a thousand instructions of link luck" is the
+kind of sentence that stays vague for months. It is one glibc function and a
+heap base. Anyone who later finds a way to pin that base can close it.
+
+
+## 2026-09-04 — A SPEC THAT REPORTED ON THE STATE OF SOMEBODY'S TARGET DIRECTORY
+
+**DONE.** `tests/a_row_names_the_tool_that_failed` passed here and failed on CI,
+both cases, with the same line:
+
+    cannot start ./target/release/kanso
+
+`perf_record` runs `./target/release/kanso`, and the spec staged its scenario by
+symlinking the checkout's whole `target` into it. `cargo test` builds debug, so
+on a clean machine that path does not exist. The spec passed for anyone who had
+run `cargo build --release` first and failed for everyone else, which means what
+it was reporting on was the state of a directory rather than the state of the
+program.
+
+The healthy case is the one that shows it clearly. It asserts a healthy run says
+nothing on stderr; on CI it said `cannot start`, so the assertion fired for a
+reason that has nothing to do with what the spec is about. A spec whose green
+depends on an artifact it does not create is a spec that can go quiet at any
+time.
+
+**The stage brings its own compiler now**, symlinked from `CARGO_BIN_EXE_kanso`
+to `target/release/kanso` inside the stage. Reproduced first by moving the
+release binary aside — same message, same two cases — then green with the fix in
+place and the binary still absent. It costs 30 seconds against 7, because the
+inner calls run the debug build, and that is the price of a spec that carries
+its own subject.
+
+
+## 2026-09-04 — THE ROW IS RE-SAT, AND THE BASELINE MOVES WITH IT SO NOBODY BANKS A DEFINITION
+
+**DONE.** CI counted the compiler's own frame on Zen 4 (family0x19-model0x11),
+sha 4dc725bdb40d:
+
+    whole process   41,845,704   what the row used to read, to the instruction
+    kanso::main     41,379,840   what it reads now
+    dropped            465,864   loader and stack guard
+
+That is 742 from the container's 465,122 on a different toolchain and binary,
+which is the agreement worth having: the quantity being dropped is process
+startup, and it is the same size in both places.
+
+**The other two chips' rows are removed rather than carried.** The definition
+changed for all of them and CI can only re-sit one chip per run, so Zen 3 and
+Intel are re-sittings when they next refuse. This file has done exactly that
+twice before, for the same reason: a value measured under the old definition is
+worse than no value. The pair the AMD rows carried is not re-sat either —
+whether it survives is for CI to say, and the layout term it came from is most
+of what this change removes.
+
+**The welfare baseline moves by the same 465,864**, 57,029,831 -> 56,563,967.
+The startup half is an additive constant the old compiler paid too, so
+subtracting it is what the baseline would have read under the new definition.
+
+**And that raises the score by 0.01, which is not a win and is recorded as
+not one.** 73.5162 -> 73.5256. Removing a constant from both sides of a ratio
+raises it: 1.362866 becomes 1.366938, because the constant was diluting a
+measured improvement. The compiler did not get faster. The measurement got more
+sensitive by about a third of a per cent of its own term, and the `--set`
+reason says so in those words. A reader who finds this rise in the history and
+looks for the commit that earned it will find this entry instead.
+
+**What the trend gate will report on the next run is a fall of 465,864 in
+`compile_instructions`, listed as better.** It is not better. It is the same
+compiler measured from a different frame. The gate has no way to tell a
+definitional re-basing from a win — it can tell a MINTED counter, which has no
+baseline at all, and this one has a baseline that moved underneath it. Whether
+that deserves machinery is a real question and not one this change answers.
+
+
+## 2026-09-04 — A COMMENT LINE SPLIT IN HALF BECAME A ROW, AND THE DUPLICATE CHECK CAUGHT IT
+
+**DONE, and the defect was mine.** The re-sitting entry above put its note into
+`bench/compile_instructions_by_cpu.txt` by inserting at the first occurrence of
+`family0x19-model0x11` in the file. That occurrence is inside a comment
+PARAGRAPH written months ago, not at the row, and the insertion cut the line
+after its `# ` — leaving
+
+    family0x19-model0x11 rather than carry a value measured against the previous
+
+as a bare line with no `#`. The file's parser reads a key and a value off any
+non-comment line, so the chip acquired a second row whose value is the word
+`rather`.
+
+CI refused, precisely and by name:
+
+    bench/compile_instructions_by_cpu.txt has more than one row for a chip:
+        family0x19-model0x11
+    Only the first is ever read, so the rest say nothing while looking like a
+    sitting.
+
+That check went in on 2026-09-03 for a different reason — a re-sitting that
+appended instead of editing — and it caught a case nobody had in mind: a
+comment turning into a row by accident. **The first row is the one welfare
+reads, so had the check not existed, `compile_instructions` would have been the
+string `rather` and the failure would have surfaced somewhere much further from
+its cause.**
+
+The note is above the row now, the comment line is whole, and `compile_ir_row.sh`
+reads 41,379,840 on the key.
+
+**The refused run had already taken its sitting, and it was a different chip.**
+`compile_sample cpu="cpu family 0x19 model 0x1" sha=4dc725bdb40d row=41379840`
+— Zen 3, same binary as the Zen 4 sitting, same value to the instruction. So
+the file gains a second row from a run that failed: the measurement is printed
+before the comparison, which is what makes it usable. The two AMD models agree
+on this binary, the fourth on which they have, and the keys stay separate for
+the reason the header already gives.
+
