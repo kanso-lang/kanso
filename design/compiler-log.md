@@ -2770,3 +2770,168 @@ before the comparison, which is what makes it usable. The two AMD models agree
 on this binary, the fourth on which they have, and the keys stay separate for
 the reason the header already gives.
 
+
+## 2026-09-04 — THE GATE CALLED A DEFINITION CHANGE A WIN, AND THE SENTENCE IS IN THE MERGE
+
+**DONE.** The entry above this one moved `compile_instructions` from 41,845,704
+to 41,379,840 by counting the compiler's own frame instead of the whole process,
+and subtracted the same 465,864 from welfare's baseline so the ratio stayed
+comparable. Nothing in the compiler got faster. What the trend gate printed on
+that merge, verbatim:
+
+    improved: compile_instructions 41,845,704 -> 41,379,840  (bench/compile_instructions_golden.txt)
+    every changed counter is priced (or improved).
+
+The entry noted the sensitivity and left the question of machinery open. It is
+answered by the run: the gate misreports today, and the misreport is permanent
+record.
+
+**The signal is welfare's baseline, and it is exact.** `welfare --set` moves the
+FLOOR and never the baseline, so a baseline value moves only when somebody
+decides the old reading and the new one are not of the same quantity. A counter
+whose golden moved and whose baseline moved in the same diff is therefore
+neither better nor worse — it takes the third state kanso#1200 built for minted
+counters, prints as `re-based`, and counts toward neither side of the
+pure-regression rule. It still owes a sentence: the same naming check a
+worsening gets, because the value it landed on is what a write-up of a re-basing
+states.
+
+**WHAT THE MATCH REACHES, and what it does not.** Welfare renames the runtime
+counters on the way into the objective — `jsonbench` is `decode_instructions` in
+the baseline — so matching a golden row to a baseline key by name covers the
+compile vein and misses the runtime one. Rather than copy welfare's rename table
+into a second place to go stale, a baseline that moved and matched no golden row
+is listed by its welfare name under RE-BASED, unclaimed, and refused unless the
+log delta names it. A runtime re-basing is then visible and priced even though
+the gate cannot say which row it belongs to.
+
+**Reaching the rest is not "ask welfare for the mapping", and the measurement
+says why. OPEN.** Written that way in this entry's first draft, then checked:
+`welfare --counters` prints 27 counters, and matching each one's value against
+every row of every golden the trend gate walks leaves 8 unmatched. Two are
+ambiguous — `decode_peak_bytes` reads 2,097,152, which is also
+`arena_peak_bytes` in the oneshot, basket and wide goldens — and six have no row
+carrying that value anywhere, because `peak_of` SUMS three pools:
+`arena_peak_bytes + held_peak_bytes + perm_peak_bytes`. A `*_peak_bytes` term is
+a derived quantity, not a row.
+
+So the link is not a rename table and cannot be a bijection: it is many-to-one
+for every memory term, and welfare does not know the trend gate's prefixes
+(`work_jsonbench` is the gate's spelling of the row welfare calls
+`decode_instructions`). What would close it is an explicit table naming, for
+each objective counter, the gate keys it is derived from and how — identity or
+sum — in one place, with a spec that replays the derivation and asserts it
+reproduces welfare's own reading. That is a real piece of design rather than a
+plumbing change, and this entry records the measurement that rules out the
+cheap version.
+
+**Watched, both directions.** The gate at f3047edd against 1a0cb51e reproduces
+the `improved:` line above; the same pair under the new gate reads `re-based:`
+and lists the counter. The mutation
+`a_re_basing_that_pays_for_a_regression` moves the compile golden and the
+baseline together beside a plain `work_jsonbench` worsening, with both moves
+written up: green under the old gate at exit 0 — a real regression paid for by a
+definition change — and refused under the new one by the pure-regression rule.
+Deleting the mutation's log paragraph turns that refusal into UNPRICED, which is
+red for the wrong reason, so `tests/a_re_basing_row_stays_a_pure_regression.rs`
+holds the paragraph to the values the `sed` lines write. Both of its assertions
+were watched red. The orphan path was watched too: moving
+`decode_instructions` alone is refused as UNSTATED and passes once a sentence
+names it.
+
+## 2026-09-04 — A BENCHMARK JOINED THE OBJECTIVE AND THE GATE THAT WATCHES THE OBJECTIVE COULD NOT SEE IT
+
+**DONE.** Found while mapping welfare's counters onto the trend gate's keys for
+the entry above: `bench/cost_golden_read.txt` is not in the gate's golden list.
+readbench joined the objective the day before (kanso#1240) with
+`read_arena_blocks` and `read_peak_bytes` as welfare terms, the golden was
+written, and the one program whose job is to watch the objective's inputs was
+never told about the file. Either row could have moved by any amount in
+silence.
+
+This is kanso#1046's finding one benchmark later — *"half the score's inputs
+were invisible to the gate that exists to watch the score's inputs"* — and it
+was found the same way both times, by asking which files in `bench/` the gate
+names. That is now the only method that has ever found one of these, and the
+list is short by one every time a benchmark lands.
+
+Setting `arena_peak_bytes` in the read golden to 9,999,999,999 produces NO
+OUTPUT WHATEVER from the gate at f3047edd, exit 0. With the file listed:
+
+    worsened: read_arena_peak_bytes 1,048,576 -> 9,999,999,999  (bench/cost_golden_read.txt)
+
+and a refusal. `a_read_counter_worsens_for_nothing` is that mutation, rowed.
+
+`bench/compile_libraries_golden.txt` is the only other file in `bench/` the
+gate does not walk, and it belongs there: it holds five sonames rather than
+counters, and its own gate diffs it byte for byte.
+
+## 2026-09-04 — THE LINK IS WRITTEN DOWN, AND THE RUNTIME HALF OF THE RE-BASING CHECK WORKS
+
+**DONE, and it closes the OPEN in the entry two above.** That entry said the
+many-to-one link between welfare's counters and the trend gate's keys "is a real
+piece of design rather than a plumbing change". Built and it is a table:
+`bench/objective_sources.txt`, 41 rows for 27 counters, `<objective counter>
+<gate key>` a line, several lines for a counter that is a sum.
+
+Twelve counters are one row each (`decode_instructions work_jsonbench`), eight
+more are identities on the compile goldens and the arena blocks, and seven
+`*_peak_bytes` are three rows apiece because `peak_of` adds the arena, held and
+perm pools. Written and then replayed against `welfare --counters`: 27 counters,
+0 unreproduced.
+
+**A prefix, not a name.** The first cut classified nothing in the runtime vein
+and I nearly recorded that as a limit again. `unchanged` was handing `shifted?`
+the counter with its golden's prefix STRIPPED — `jsonbench`, where the link file
+names `work_jsonbench` — so the check worked only for the four goldens whose
+prefix is empty, which is exactly the compile vein it was first written for. The
+probe that caught it was moving `jsonbench` and `decode_instructions` together
+and watching the gate still say `improved`. It says `re-based` now.
+
+**The spec is the whole of it, because a written link is one a rename breaks
+silently.** `tests/the_objective_reads_what_the_gate_watches.rs` reads the
+gate's own golden-and-prefix bindings, sums each counter's rows out of those
+files, and asserts the total is what welfare prints — for every counter welfare
+scores and no counter it does not. Watched red four ways: a counter dropping out
+of the file, a row renamed on the golden side, a name the file invents, and a
+nonzero pool removed from a sum.
+
+**What it cannot see, said rather than left to be found.** The check is on
+totals, so a pool reading nought contributes nothing and dropping its row costs
+the sum nothing. Every `held_peak_bytes` and `perm_peak_bytes` in the goldens is
+nought today, which makes twelve of the 41 rows unfalsifiable right now. The
+direction that matters is covered: a pool added to `peak_of` and not to the file
+is nonzero by the time anyone cares, and a dropped zero row starts failing the
+day its pool carries a byte. The spec's own header says so.
+
+The `RE-BASED, unclaimed` listing survives with a narrower meaning: a baseline
+that moved while not one of the golden rows it is made of did — a ratio moving
+with no measurement behind it — and it still owes a sentence.
+
+## 2026-09-04 — A THIRD CHIP, AND IT READS WHAT THE OTHER TWO READ
+
+**DONE.** CI refused kanso#1242 on `family0x1a-model0x2`, a key
+`bench/compile_instructions_by_cpu.txt` did not carry:
+
+    nothing in bench/compile_instructions_by_cpu.txt was counted on
+    family0x1a-model0x2, so this run's 41379840 cannot be compared to anything.
+
+The branch's diff is scripts, tests, bench data and this log — `git diff
+origin/main -- src/ lib/ Cargo.toml Cargo.lock` is empty — so the front end is
+untouched and this is a chip new to the pool rather than a row gone stale. Its
+sitting is **41,379,840**, the same figure to the instruction as Zen 4 and
+Zen 3 on the same binary. Three keys, one number.
+
+The row goes LAST. The first row is what welfare and
+`compile_instructions_golden.txt` read, and moving that authority to a chip
+because it happened to be today's runner is how a value ends up published for a
+reason nobody chose. Checked after adding it: all three keys resolve to
+41,379,840 and an invented key still refuses.
+
+That the keys agree is not an argument for merging them — the file's header
+gives the reason, and this is the fifth binary on which two or more have agreed
+while the noise the key exists for stays real.
+
+**A clippy warning in the same round.** `manual_is_multiple_of` on the
+comma-grouping helper in `a_re_basing_row_stays_a_pure_regression.rs`. Fixed;
+`cargo clippy --all-targets --all-features` is at zero warnings.
