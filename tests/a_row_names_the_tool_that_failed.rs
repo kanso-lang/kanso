@@ -35,10 +35,23 @@ fn staged(key: &str) -> std::path::PathBuf {
             std::fs::copy(&path, &landing).expect("the golden copies");
         }
     }
-    for borrowed in ["target", "scripts", "lib"] {
+    for borrowed in ["scripts", "lib"] {
         std::os::unix::fs::symlink(root.join(borrowed), stage.join(borrowed))
             .expect("the checkout lends its directory");
     }
+    // The stage brings its own compiler, at the path perf_record spells.
+    //
+    // It used to borrow the checkout's whole `target`, and `perf_record` runs
+    // `./target/release/kanso` — so the spec passed for anyone who had built
+    // release and failed on CI, where `cargo test` builds debug and there is no
+    // release binary to find. Both cases died with `cannot start
+    // ./target/release/kanso`, including the healthy one, which is a spec
+    // reporting on the state of somebody's target directory rather than on the
+    // program. This binary is the one cargo built for the test, so the spec
+    // carries its own subject.
+    std::fs::create_dir_all(stage.join("target/release")).expect("a release directory");
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_kanso"), stage.join("target/release/kanso"))
+        .expect("the stage gets a compiler where perf_record looks for one");
     for argv in [
         vec!["init", "--quiet", "."],
         vec![

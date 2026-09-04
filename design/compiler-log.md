@@ -19,50 +19,6 @@
 > The last forty entries. Everything older is in `log/compiler-log-archive.md`,
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
-## 2026-09-03 — DECLINED: THE ESCAPED-STRING TAIL DOES NOT WANT A RUN SCAN
-
-**DECLINED by measurement, +1.16%.** A clean json string is found with one
-`find2` and copied with one slice. A string with an escape in it is not: past
-the first backslash, `str_chars` walks the rest one byte at a time, through a
-dispatch and a one-byte append each. Making the tail scan runs the way the head
-does — `find2` to the next quote or backslash, then append the run in one
-copy — reads like the obvious fix.
-
-```
-jsonbench   2,533,092,019 -> 2,562,563,906    +29,472,300, or 1.16%
-```
-
-**The distribution is why.** In `bench/large.json`, 1,773 of 11,057 strings
-carry an escape, and they hold 4,562 runs between them totalling 16,895 bytes:
-a mean run of **3.7 bytes**, with 1,029 of the runs empty because escapes come
-back to back. The per-run fixed cost measured about 300 instructions — 113 in
-the scanner's own glue, 75 in `find2`, 46 in `k_b_slice`, 49 in the wide append
-— against the 50 instructions a byte the walk costs. The run has to be six bytes
-before it breaks even and it is under four.
-
-**A fused `append(acc, slice(cs, a, b))` does not rescue it.** `k_b_utf8_slice`
-already exists for the same shape one line above, so the pattern is available;
-it would take back the 46 instructions the slice allocation costs, which leaves
-the change roughly 60M worse than doing nothing.
-
-**What the probe found instead is worth keeping.** Two programs, a clean string
-and one with a single leading escape, at 2,000 / 4,000 / 8,000 bytes:
-
-```
-clean    213,329   264,566   366,562     25.6 instructions a byte
-escaped  316,640   469,253   773,152     76.0 instructions a byte
-```
-
-Linear in both, so there is no quadratic hiding here. But a byte in an escaped
-string's tail costs about **50 instructions more** than the same byte in a clean
-one, and that is the language's per-byte dispatch-and-append, not anything
-`lib/json` chose. The disassembly of `str_char` is 41 instructions round the
-loop: six to index, ten to box the byte and unbox it again for the dispatch,
-eight to dispatch, thirteen for the in-place append including two loads of
-`k_stats_on`, four for bookkeeping. Whoever wants this path faster should go
-after those ten, not after the number of walks.
-
----
 
 ## 2026-09-03 — A BYTE SWITCH THAT REBUILT THE BYTE BEFORE IT LOOKED AT IT
 
@@ -2976,4 +2932,32 @@ smallest front-end change on record, which is what makes it liveable.
 of the ledger entry, and "about a thousand instructions of link luck" is the
 kind of sentence that stays vague for months. It is one glibc function and a
 heap base. Anyone who later finds a way to pin that base can close it.
+
+
+## 2026-09-04 — A SPEC THAT REPORTED ON THE STATE OF SOMEBODY'S TARGET DIRECTORY
+
+**DONE.** `tests/a_row_names_the_tool_that_failed` passed here and failed on CI,
+both cases, with the same line:
+
+    cannot start ./target/release/kanso
+
+`perf_record` runs `./target/release/kanso`, and the spec staged its scenario by
+symlinking the checkout's whole `target` into it. `cargo test` builds debug, so
+on a clean machine that path does not exist. The spec passed for anyone who had
+run `cargo build --release` first and failed for everyone else, which means what
+it was reporting on was the state of a directory rather than the state of the
+program.
+
+The healthy case is the one that shows it clearly. It asserts a healthy run says
+nothing on stderr; on CI it said `cannot start`, so the assertion fired for a
+reason that has nothing to do with what the spec is about. A spec whose green
+depends on an artifact it does not create is a spec that can go quiet at any
+time.
+
+**The stage brings its own compiler now**, symlinked from `CARGO_BIN_EXE_kanso`
+to `target/release/kanso` inside the stage. Reproduced first by moving the
+release binary aside — same message, same two cases — then green with the fix in
+place and the binary still absent. It costs 30 seconds against 7, because the
+inner calls run the debug build, and that is the price of a spec that carries
+its own subject.
 
