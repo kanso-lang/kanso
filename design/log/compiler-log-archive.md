@@ -42740,3 +42740,242 @@ number.kso" when they are the shape the library left behind. Nothing checks
 prose against code and nothing here proposes to; what the gate buys is that
 the CODE beside the prose can no longer drift silently, which is what made the
 prose wrong.
+
+## 2026-09-03 — a recorded chip disagreeing with itself, and a row nobody reads
+
+Two findings on `bench/compile_instructions_by_cpu.txt`, both from one
+branch whose diff was `design/compiler-log.md` and its archive.
+
+**The third cause. OPEN.** `scripts/gates/compile_instructions.sh` prints a
+`compile_sample cpu= sha= row=` line on every run for one purpose, and its
+comment names it: *"same cpu and same sha with different rows would mean
+something is moving that neither the key nor the diff can see."*
+
+| when | key | binary sha | counted |
+| --- | --- | --- | ---: |
+| 12:33 | family0x6-model0xcf | 55fb850296d1 | 41,832,275 |
+| 13:05 | family0x6-model0xcf | 55fb850296d1 | 41,831,767 |
+
+508 apart, same key, same binary, and no front-end change in the diff. So the
+key does not determine the row, and the premise the per-chip table rests on is
+weaker than it claimed when #1226 built it.
+
+The row moved to 41,831,767, which three readings say — Zen 3, Zen 4, and this
+chip at 13:05 — against one that says 41,832,275. **That is a choice under
+uncertainty and not a measurement.** The honest state is two readings of one
+key on one binary, differing, and the golden's own note says so in those words
+rather than dressing the move up as a re-sitting.
+
+What it wants is a sitting: several runs on one Emerald Rapids runner, to see
+whether the value is bimodal there the way it was across the two AMD models
+before the tunables were pinned. If it is, the missing term is something the
+pinned tunables do not cover, and the first candidates are the ones the file's
+header already names as excluded from the key — cache sizes and derived
+thresholds — reaching the row by a path other than the malloc and string
+tunables the gate sets.
+
+**A second row for one chip. DONE.** Correcting that row, I edited it in place
+AND appended it, and every gate in the tree stayed green over a file holding
+two `family0x6-model0xcf` lines. The lookup is
+`awk '$1 == k { print $2; exit }'`: the first match answers and every later row
+is dead. So the file had one authority and one decoration, and the decoration
+sat at the bottom where the newest sitting goes, which is where a reader is
+most likely to trust it.
+
+`compile_ir_row.sh` refuses a doubled key now, before the lookup rather than
+after, so a reader is told about the duplicate instead of being sent to re-sit
+a front end that did not move — which would have written a third row into a
+file that already had one too many. Five refusals where there were four.
+
+Three specs, each watched red on the unfixed script: a duplicate that AGREES
+with itself is still refused, because the defect is the second line rather than
+its value; a duplicate whose second row is what the run counted is not reported
+as a moved front end; and a duplicate on a chip this run did not land on is
+refused too, since otherwise the file stays broken for every run but the
+unlucky one. New ratchet row `compile_ir_doubled` with a mutation that deletes
+the block and reddens exactly those three.
+
+The gap was cheap to find only because a mistake walked into it. Nothing else
+in the tree reads this file, so nothing else could have.
+
+## 2026-09-03 (later) — the chip was not the answer, and a refusal nobody could act on
+
+Two corrections to the entry above it, one of them to a claim it made.
+
+**The 508 is glibc's allocator, and the cpu is ruled out. CORRECTS the entry
+above.** That entry left the thread OPEN and proposed cache sizes and derived
+thresholds as the candidates. That guess is wrong and the measurement was
+available the whole time.
+
+Both runs printed their full 123-line cpu feature block — no `bench/dispatch.txt`
+is recorded, and `dispatch.sh name` dumps the block in CI while none is. The two
+blocks are byte-identical: every feature word, the stepping, and
+`data_cache_size` among them. Both ran glibc 2.39-0ubuntu8.8, callgrind 3.22.0
+and rustc 1.98.0, on binary sha 55fb850296d1.
+
+The same two job logs carry the profiles. Every kanso symbol agrees to the
+instruction across the pair — `eval_expr'2` 1,633,593 both times, `check_merged`
+1,589,240, `lex_line` 866,486, `parse` 589,004. Three rows differ:
+
+| | 12:33 | 13:05 | |
+| --- | ---: | ---: | ---: |
+| `_int_malloc` | 1,551,384 | 1,551,964 | +580 |
+| `_int_free` | 1,522,333 | 1,522,352 | +19 |
+| `memcmp-avx2-movbe` | 1,353,408 | 1,353,342 | −66 |
+
+All three are glibc. The front end executed the identical instruction sequence
+and the allocator did not, which is the same shape the by-cpu file's header
+records for the 5,064 cluster the tunables were pinned to remove: `_int_malloc`
+and `memcmp` moving together, an alignment difference downstream of a heap
+layout difference. Pinning the tunables shrank it from 5,064 to 508 and did not
+remove it.
+
+Five consecutive runs in a container on one binary read 42,235,790 every time,
+so the count is deterministic per host and the 508 is not run-to-run jitter.
+
+**Still OPEN**, with a narrower question: what moves the heap layout when the
+binary, the cpu features, glibc, valgrind and the environment all agree? "Is it
+the cpu" is answered, and the answer is no.
+
+**A refusal nobody could act on. DONE.** The runner's rustc moved 1.98.0 ->
+1.98.1 and all three compile veins refused at once. The refusal is right — the
+rows belong to the toolchain that measured them. What follows it was not.
+
+Every compile gate called `measured_on.sh` under `set -e`, so the mismatch
+stopped the gate before it measured anything, and each then printed that
+refusal's standing advice: *let CI measure it and copy the rows out of the job
+log.* There were no rows in the job log. The only host allowed to produce them
+is the one that just stopped, so a branch in this state could not be brought to
+green by anybody — not by CI, which stopped, and not from a container, which
+may never record its own numbers.
+
+`scripts/gates/host_gate.sh` answers two questions where `measured_on` answered
+one. A container may neither compare nor measure: its numbers going into a
+golden over the runner's is the accident `measured_on` exists after, so it stops
+and prints nothing. CI may not compare and MUST measure, because CI's sitting is
+the only one that may ever be recorded — it measures, prints the rows under
+`::error::`, and still fails. `dispatch.sh` already draws this line the same way
+and for the same reason.
+
+`compile_instructions` additionally does not read its row against any recorded
+chip on such a host, since a row from an unnamed host has no chip to be read
+against.
+
+Four specs, both directions watched red: with the CI arm removed the run that
+must measure stops, and with it always taken the container that must stop
+measures. Ratchet row `host_measures`.
+
+The three goldens are NOT re-sat here. This makes CI able to report the sitting
+they need, which was the missing step; the numbers follow from the next run.
+
+## 2026-09-03 (later still) — the rustc bump moved nothing, and it cost three gates
+
+CI re-sat all three compile veins under rustc 1.98.1 on family0x6-model0xcf,
+binary sha de5bfab22fbd, using the measure-and-refuse path built in the entry
+above. Every number came back identical to the one recorded under 1.98.0:
+
+| | 1.98.0 | 1.98.1 |
+| --- | ---: | ---: |
+| compile_allocs | 25,485 | 25,485 |
+| compile_peak_bytes | 715,275 | 715,275 |
+| compile_instructions | 41,831,767 | 41,831,767 |
+
+So the four measured-on lines move and nothing else does. Welfare is unmoved
+and is not re-set.
+
+**One datum against the granularity these files pin.** `measured_on.sh`'s own
+header says of rustc: *"the upstream version only, for the same reason clang
+carries no package revision: nothing here shows a point release moving a count,
+and pinning tighter than the evidence reds the gate on changes that are not
+changes."* A patch bump that reddened three gates and moved no number is
+exactly that shape, and glibc is the contrast the same header draws — its
+Ubuntu revision is pinned because 2.39-0ubuntu8.7 against 8.8 was SHOWN to move
+about four hundred instructions.
+
+The pin is not loosened on one observation. Recorded so the next point release
+is a second datum rather than a fresh surprise, and if it also moves nothing
+the argument for reading rustc as major.minor is made on two.
+
+**The two rows nobody re-sat are carried, and the file says so.** Zen 3 and Zen
+4 hold 41,831,767 from 1.98.0. kanso#1230 removed a row rather than carry one
+across a toolchain move; the difference here is that a measurement exists. The
+toolchain changes the binary identically for every chip and the one chip re-sat
+moved by nothing, so deleting two correct values to force sittings that would
+reproduce them buys nothing. The assumption is written into the file and is
+self-correcting: a carried row that is wrong goes red the first time CI lands
+on that chip, which is the signal a missing row would have given one run later.
+
+## 2026-09-03 (fourth) — the carry was wrong one run later, and the row is bimodal
+
+**CORRECTS the entry above on two counts.** That entry said the rustc point
+release "moved nothing" and defended carrying two chip rows across it. CI
+answered both within ten minutes.
+
+**The carry. DONE, the other way.** `bench/compile_instructions_by_cpu.txt`
+already carried the rule — *a value measured against the old binary is worse
+than no value* — and the entry above overrode it with an argument: a
+measurement existed, the toolchain changes the binary identically for every
+chip, and deleting correct values to force sittings that would reproduce them
+buys nothing. CI landed on Zen 3 one run later and read 41,832,275 against the
+carried 41,831,767. The rule was right and the argument was wrong. Zen 3 is
+recorded from CI's own reading; **Zen 4 is removed**, because it has still
+never been measured on this binary and carrying it a second time would be the
+same mistake with the same argument.
+
+**The row is bimodal, and it is CLAY'S CALL.** Four readings, tunables pinned:
+
+| when | key | binary sha | rustc | counted |
+| --- | --- | --- | --- | ---: |
+| 12:33 | family0x6-model0xcf | 55fb850296d1 | 1.98.0 | 41,832,275 |
+| 13:05 | family0x6-model0xcf | 55fb850296d1 | 1.98.0 | 41,831,767 |
+| 16:25 | family0x6-model0xcf | de5bfab22fbd | 1.98.1 | 41,831,767 |
+| 16:35 | family0x19-model0x1 | de5bfab22fbd | 1.98.1 | 41,832,275 |
+
+Two values 508 apart. One chip produced both on one binary; two chips produced
+different values on one binary. Neither the key nor the binary picks a mode,
+so the 2026-09-02 ruling this file was built on — *the row moves with the CPU,
+so record it* — rests on a premise that does not hold. The file's own header
+had set out what these runs would test, and this is the branch it named: the
+chips still disagree, so pinning was not the whole explanation.
+
+An exact row is red about half the time on a chip that produces both modes.
+That is a design question rather than a number to re-sit, and it is filed in
+design/pending-gavels.md with four options and a recommendation. **It blocks
+kanso#1232 and every branch after it**, because no value in that file makes CI
+reliably green until it is ruled.
+
+So the sitting's honest reading is narrower than the entry above claimed: the
+allocation and peak counters reproduced exactly across the toolchain bump, on
+every host that has run them, and the instruction count cannot be said to have
+moved or held, because it has two values and the bump is not separable from
+the bimodality. compiler.html §40 is corrected to match.
+
+## 2026-09-03 (fifth) — the bimodality reaches the trend gate
+
+Setting the bare `compile_instructions=` to the other mode made the trend gate
+refuse the branch, in its own words:
+
+    worsened: compile_instructions 41,831,767 -> 41,832,275
+    FAIL  a pure regression: something got worse and nothing got better.
+
+Right by its rules, and the claim is false — nothing in that branch touches the
+front end. The number moved because the reference row moved from one mode to
+the other.
+
+**So the bimodality is not only a flaky row.** The first row of
+`bench/compile_instructions_by_cpu.txt` is also the bare number welfare,
+golden_prose and the trend gate read, so a mode flip there presents as a
+counter that worsened with nothing traded. The objective's own regression
+detector fires on noise, and what stands between it and a false regression is
+which chip happens to be listed first.
+
+The reference is family0x6-model0xcf, which has three readings against Zen 3's
+one, and whose 41,831,767 is what main already carries. Zen 3 keeps its own
+measured row below it. **The uncomfortable half is stated in the file**: this
+ordering is also the one that makes CI green, and choosing a reference to quiet
+a gate is exactly what that file exists to catch. It is not that move, because
+the alternative asserts something untrue — but the reason has to be written
+down rather than assumed, since the two are indistinguishable from the diff.
+
+Added to the ledger entry as the strongest argument for ruling this rather than
+living with it.
