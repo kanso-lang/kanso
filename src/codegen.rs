@@ -1131,6 +1131,8 @@ struct FnEmit {
     /// Registers of releasable lazy cells born in this body; every return
     /// path releases each unless the result aliases it.
     lazy_cells: Vec<String>,
+    /// Stack slots the body asked for, held back for the entry block.
+    entry_allocas: Vec<String>,
 }
 
 impl FnEmit {
@@ -1151,6 +1153,7 @@ impl FnEmit {
             synthetic: false,
             arity: 0,
             lazy_cells: Vec::new(),
+            entry_allocas: Vec::new(),
         }
     }
 
@@ -1172,7 +1175,52 @@ impl FnEmit {
     /// and the sixth would have shipped the same way.
     fn line(&mut self, text: &str) {
         let text = self.boxing_any_parsed_operand(text);
+        self.write(&text);
+    }
+
+    /// Every stack slot the body asks for is held back and written at the top
+    /// of the entry block, whichever block asked for it. An alloca standing in
+    /// a later block is a dynamic stack object to LLVM: the function keeps a
+    /// frame pointer and restores `rsp` through it on every return, and the
+    /// slot is claimed again on each pass. Sixty-eight of the decoder's
+    /// seventy-three slots stood that way and the decode paid 8.78% for them.
+    /// Diverting here rather than at each emitter is what makes the rule hold
+    /// for a site nobody has written yet.
+    ///
+    /// A slot hoisted out of a loop body is shared between passes rather than
+    /// claimed afresh. Every consumer of one copies out of it before it
+    /// returns — `k_rec` and `k_closure` memcpy, `k_list_lit` and `k_map_lit`
+    /// build their own storage — so nothing survives a pass to read the next
+    /// pass's bytes.
+    fn write(&mut self, text: &str) {
+        if text.contains(" = alloca ") {
+            self.entry_allocas.push(text.to_string());
+            return;
+        }
         let _ = writeln!(self.out, "  {text}");
+    }
+
+    /// The function's body: what the emitters wrote, with the stack slots at
+    /// the head of the entry block so each one dominates its uses.
+    fn body(&self) -> String {
+        if self.entry_allocas.is_empty() {
+            return self.out.clone();
+        }
+        let mut head = String::new();
+        let mut rest = self.out.as_str();
+        if let Some(end) = self.out.find('\n') {
+            let first = &self.out[..end];
+            if first.ends_with(':') && !first.starts_with(' ') {
+                head.push_str(first);
+                head.push('\n');
+                rest = &self.out[end + 1..];
+            }
+        }
+        for slot in &self.entry_allocas {
+            let _ = writeln!(head, "  {slot}");
+        }
+        head.push_str(rest);
+        head
     }
 
     fn boxing_any_parsed_operand(&mut self, text: &str) -> String {
@@ -1236,7 +1284,7 @@ impl FnEmit {
     /// A line whose operands are already values: the boxing rewrite emits
     /// through here, so a fresh temp is never scanned against itself.
     fn raw(&mut self, text: &str) {
-        let _ = writeln!(self.out, "  {text}");
+        self.write(text);
     }
 
     fn start_block(&mut self, label: &str) {
@@ -1866,7 +1914,7 @@ impl<'a> Backend<'a> {
             self.body,
             "define tailcc %KValue @{sym}({}) {{\n{}}}\n",
             sig.join(", "),
-            f.out
+            f.body()
         );
         Ok(())
     }
@@ -2523,7 +2571,7 @@ impl<'a> Backend<'a> {
             "{header}
 {}}}
 ",
-            f.out
+            f.body()
         );
         Ok(())
     }
@@ -2773,7 +2821,7 @@ impl<'a> Backend<'a> {
             }
         }
         f.line("unreachable");
-        let _ = writeln!(self.body, "{header}\n{}}}\n", f.out);
+        let _ = writeln!(self.body, "{header}\n{}}}\n", f.body());
         Ok(())
     }
 
@@ -5123,8 +5171,11 @@ impl<'a> Backend<'a> {
         }
         self.emit_tail(&mut f, body)?;
         let sig: String = (0..params.len()).map(|i| format!(", %KValue %a{i}")).collect();
-        let _ =
-            writeln!(self.body, "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{}}}\n", f.out);
+        let _ = writeln!(
+            self.body,
+            "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{}}}\n",
+            f.body()
+        );
         let _ = writeln!(
             self.body,
             "define %KValue @w_{lifted}(ptr %env{sig}) {{\nentry:\n  %r = call \
