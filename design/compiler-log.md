@@ -2786,3 +2786,46 @@ number and not only the name: `alloc_bytes` 259,660,208 to 259,660,496,
 `wide_evac_bytes` 519,728 to 520,080, `digest_alloc_bytes` 54,149,841 to
 54,150,129, `digest_allocs` 230,214 to 230,223, `digest_evac_bytes` 1,520 to
 1,904.
+
+**The eleven work rows, and why two of them fell.** CI counted the
+instruction vein on this branch. Four rows rose: `work_jsonbench`
+2,098,860,167 to 2,098,864,932, `work_encodebench` 5,846,994,767 to
+5,847,000,948, `work_oneshot` 31,427,567 to 31,431,613, `work_digestbench`
+81,252,316 to 81,256,613. Four to six thousand instructions each, on the
+programs that read a file, once at startup — the same dispatch that shows as
++9 allocations in their cost goldens.
+
+Two fell, and by more: `widebench` 59,506,462 to 59,384,053 and `deepbench`
+676,465,730 to 675,925,724. deepbench imports no `std/os` and reads nothing,
+so nothing in the io half can reach it. What reaches it is `src/runtime.c`,
+which grew seventeen lines and is compiled into every program. Replacing
+runtime.c with main's and rebuilding deepbench in the container reproduces
+the fall to the instruction: 676,462,050 against 675,922,044, −540,006, the
+same figure CI measured on a host whose absolute counts differ by 3,680.
+
+widebench's −122,409 lands in the same code and will not decompose the same
+way. Its beat tiers are identical on both trees, and callgrind names the
+movers:
+`k_copy_size'2` −47,468, `k_exec` −36,594, `k_copy_size` −31,665, `k_exec'2`
+−15,942. All four are runtime.c functions this branch does not edit; the hot
+kanso code — `d_widebench/value_for_3'2`, `render_ryu`, `k_ten_holds` — is
+byte-identical. But swapping runtime.c alone accounts for only −16,007 of it,
+because the runtime is compiled together with the program, and the emitted
+wrappers the io half adds change what clang inlines from the runtime into
+widebench. The two halves interact and are not separable by subtraction.
+
+Four of the remaining five moved by a single instruction — `basket`,
+`escapebench`, `indexbench`, `scanbench` — and `pendbench` fell 209.
+
+**`compile_instructions` 41,829,232 to 41,830,604**, and the row it lands in
+is a fresh one. The front end genuinely changed — `os/read_file` yields
+`STR | NONE`, lib/os gained two arms, `THREADED` gained a set — so every
+chip's row in `bench/compile_instructions_by_cpu.txt` went stale at once and
+the two that were there are deleted rather than carried. CI landed on Zen 4,
+which has no reading on the binary those two were counted against, so the
+1,372 is a chip and a binary moved together and cannot be read as front-end
+work. The other two chips are re-sittings when they next refuse, one per CI
+run, which is the price this file's header already names for a keyed row.
+
+Welfare 73.06, unmoved: 1,372 instructions on a term whose baseline is
+57,029,831 is below the gate's own resolution.

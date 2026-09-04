@@ -621,7 +621,6 @@
 # 41,829,740 here to pre-empt that would be predicting a number nobody has
 # counted, which this file refuses on every page. It goes red, CI counts, and
 # the second reading is a measurement.
-family0x6-model0xcf 41829232
 
 # 2026-09-03, THE SITTING THE REFUSAL ASKED FOR, and the two chips agree. CI
 # landed on Zen 3 next, found no row for it — the block above had just removed
@@ -640,4 +639,30 @@ family0x6-model0xcf 41829232
 # the last disagreement — but it is the first binary on which the vein has
 # seen cross-chip agreement rather than the pair, and the next reading on
 # either chip is the one that says whether the modes came back.
-family0x19-model0x1 41829232
+
+# 2026-09-04, THE FRONT END MOVED AND TOOK BOTH ROWS WITH IT. This branch
+# changes what `kanso check` does: os/read_file yields STR|NONE where it used
+# to yield STR, lib/os gained the two arms that turn the none into
+# `file_not_found`, and beat.rs widened THREADED to carry the sets that shape
+# through a rewind. All three are front-end work, so the Intel and Zen 3 rows
+# above were counted on a binary this branch no longer builds and neither can
+# be compared to anything now. They are deleted for the reason this file has
+# already given twice: a value measured against the old binary is worse than
+# no value. The prose above stays, because it is the evidence for what those
+# chips read then; only the numbers go. They are re-sittings when they next
+# refuse, not new chips.
+#
+# CI landed on Zen 4 and counted 41,830,604 on sha 3ae016f0. That key is not
+# new here — family0x19-model0x11 has had a row on three earlier binaries, and
+# it is the chip that produced BOTH modes of the 508-apart pair. What it has
+# not got is a reading on the binary immediately before this one, whose rows
+# were Intel and Zen 3. So the 1,372 against their 41,829,232 is a chip and a
+# binary moved together and says nothing on its own; there is no Zen 4 datum
+# to difference this against.
+#
+# A SINGLE ON THE CHIP MOST LIKELY TO REFUSE IT. Zen 4 is the one key this
+# file has watched read two values on one binary, so an exact pin on one
+# reading may well go red on the next run here. That is the designed answer
+# and not a reason to widen it: the second reading is a measurement, and
+# writing a pair now would be predicting a number nobody counted.
+family0x19-model0x11 41830604

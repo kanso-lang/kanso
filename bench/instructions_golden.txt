@@ -570,14 +570,14 @@
 # The container read the same four rows 413 or 399 lower and read tiny falls on
 # the other seven; the runner says those seven do not move at all. The rows here
 # are the runner's, as this file's header requires.
-jsonbench 2098860167
-encodebench 5846994767
-oneshot 31427567
-basket 40300172
-widebench 59506462
-deepbench 676465730
-escapebench 130170751
-pendbench 715732938
-indexbench 5242363
-scanbench 1423437576
-digestbench 81252316
+jsonbench 2098864932
+encodebench 5847000948
+oneshot 31431613
+basket 40300171
+widebench 59384053
+deepbench 675925724
+escapebench 130170750
+pendbench 715732729
+indexbench 5242362
+scanbench 1423437575
+digestbench 81256613
