@@ -1,0 +1,234 @@
+# Rewrite history.jsonl's welfare column, in place, under the current formula.
+#
+# Directive of 2026-09-03. Clay, looking at the chart: "i don't need anything
+# 'replayed' vs 'recorded', i'm just talking about re-doing it for those
+# historical commits based on the numbers we already have, one time."
+#
+# The reason he gave for the chart drawing no replayed line was that model.txt
+# had never reached the perf-history branch. That was true when he first
+# looked and had already been fixed: the file landed with row 499. The actual
+# reason is worse and is why the two-line design could not be rescued. The
+# replay refused any row missing a counter, and eighteen of the objective's
+# twenty-four counters exist in the last two rows of five hundred — so the
+# line it could draw was two points long.
+#
+# ONE COLUMN, ONE LINE. Every row is scored by the formula in scripts/welfare,
+# on the counters that row already carries. Nothing is invented, and nothing is
+# fetched at view time.
+#
+# WHAT A ROW THAT PREDATES A COUNTER GETS. A term averages over the counters
+# present in the row; a term with none present is dropped and the remaining
+# weights renormalized, so a row scoring perfectly on what it has reads the
+# same as a full row scoring perfectly. Two fields say what scored the row:
+# `scored_by` names the formula, and `scored_weight` says how much of that
+# formula's weight the row carried counters for.
+#
+# scored_weight is what a reader needs to not be fooled. Eighteen of the
+# objective's twenty-four counters were first recorded on 2026-09-02, so the
+# older rows are scored on six or fewer, and the score steps where the
+# RECORDING changed rather than where the compiler did. The three such steps
+# in the file as it stands are 2026-08-10 (-11.25, three instruction counters
+# arrive at ratios near one while the mature counters sit far above), the
+# same day plus three (-25.59, the compile counters leave the row entirely
+# and 0.44 of weight renormalizes onto the run terms) and 2026-09-02 (-0.88,
+# the other eighteen arrive). Every other fall in the file is a counter that
+# genuinely got worse.
+#
+# THE WEIGHTS ARE NOT RETYPED HERE. They arrive on stdin from
+# `kanso run scripts/welfare -- --model`, which is the one place they live:
+#
+#   kanso run scripts/welfare -- --model \
+#     | kanso run scripts/welfare_rescore -- history.jsonl > rescored.jsonl
+#
+# A weight copied into a second file is a weight that keeps its old value
+# through the next gavel, which is what the model emitter exists to prevent.
+#
+# Run it again whenever the formula or the baseline moves, in the same PR.
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/math"
+import "std/os"
+import "std/text"
+
+pub type term
+  name
+  weight
+  satiation
+  counters
+
+pub type scoring
+  terms
+  base
+  formula
+
+pub play = io/stdin . (model -> with_model model)
+
+fn with_model model
+  os/args . (given -> over_rows (read model) given)
+
+# The model in one value, so the walk below takes an argument rather than
+# three that have to stay in step.
+fn read model
+  scoring (parsed_terms model) (parsed_base model) (parsed_formula model)
+
+# --- the model, as `scripts/welfare -- --model` writes it -------------------
+fn model_lines model
+  list/select (text/split model "\n") (l -> length l > 0)
+
+fn parsed_terms model
+  rows = list/select (model_lines model) (l -> text/slice l 1 5 == "term ")
+  list/to_list (list/map rows one_term)
+
+fn one_term line
+  parts = text/split (text/slice line 6 (length line)) "|"
+  term parts[1]! (text/to_float parts[2]!) (text/to_float parts[3]!)
+    (text/split parts[4]! ",")
+
+# Which definition scored these rows, as the model states it. Holding a copy
+# here would keep its old value through the gavel that moved the formula, and
+# every row would then claim to have been scored by a definition that no
+# longer exists.
+fn parsed_formula model
+  rows = list/to_list (list/select (model_lines model) formula_line?)
+  named rows (length rows == 0)
+
+fn formula_line? l
+  text/slice l 1 8 == "formula "
+
+# Refused rather than defaulted. A model with no formula line is an older
+# welfare than this tool, and guessing a date would tag five hundred rows with
+# a definition nobody can check them against.
+fn named _ true
+  err "the model has no formula line; it wants welfare -- --model"
+
+fn named rows false
+  text/slice rows[1]! 9 (length rows[1]!)
+
+fn parsed_base model
+  rows = list/select (model_lines model) (l -> text/slice l 1 5 == "base ")
+  list/to_h (list/to_list (list/map rows one_base))
+
+fn one_base line
+  halves = text/split (text/slice line 6 (length line)) "="
+  [halves[1]! (text/to_int halves[2]!)]
+
+# --- the rewrite ------------------------------------------------------------
+fn over_rows m given
+  path = where given
+  os/read_file! path . (raw -> written m raw)
+
+fn where given
+  chosen given (length given == 0)
+
+fn chosen _ true
+  "history.jsonl"
+
+fn chosen given false
+  given[1]!
+
+fn written m raw
+  lines = list/select (text/split raw "\n") (l -> length l > 0)
+  rows = list/to_list (list/map lines (l -> rescored m l))
+  io/write "{text/join rows "\n"}\n"
+
+fn rescored m line
+  row = json/decode line
+  told = put row "welfare" (fixed (score row m.terms m.base) 4)
+  by = put told "scored_by" m.formula
+  weight = fixed (covered row m.terms m.base) 2
+  json/encode (put by "scored_weight" weight)
+
+# --- the formula, on the counters a row carries -----------------------------
+# The counters a term can be scored on here: present in the row AND known to
+# the baseline. A term with none is dropped, and its weight leaves with it.
+fn present row base t
+  list/select t.counters (c -> row[c] != none and base[c] != none)
+
+fn score row ts base
+  shares = list/to_list (list/map ts (t -> share row base t))
+  weights = list/to_list (list/map ts (t -> carried_weight row base t))
+  100.0 * list/sum shares / list/sum weights
+
+# How much of the formula this row's counters cover: each term's weight times
+# the share of its counters the row carries. One means the row was scored on
+# everything the objective weighs.
+#
+# This is not the renormalizing weight below, and the difference is the whole
+# reason it is worth a field. Renormalization asks whether a term can be
+# scored at all, so a term keeps its full weight on one counter of ten and a
+# row scored on six counters of twenty-four still reads 1.00. Coverage asks
+# how much of the term that one counter is, and answers 0.41 for the same
+# row. A reader watching the line needs the second question answered.
+fn covered row ts base
+  list/sum (list/to_list (list/map ts (t -> coverage row base t)))
+
+fn coverage row base t
+  here = length (list/to_list (present row base t))
+  t.weight * here / length t.counters
+
+fn carried_weight row base t
+  weighed t (length (list/to_list (present row base t)) == 0)
+
+fn weighed _ true
+  0.0
+
+fn weighed t false
+  t.weight
+
+fn share row base t
+  here = list/to_list (present row base t)
+  shared row base t here (length here == 0)
+
+fn shared _ _ _ _ true
+  0.0
+
+fn shared row base t here false
+  sat = t.satiation
+  each = list/map here (c -> satisfaction (ratio_of row base c) sat)
+  sats = list/to_list each
+  list/sum sats / (1.0 * length sats) * t.weight
+
+fn ratio_of row base c
+  as_ratio (live base[c]!) (live row[c]!)
+
+fn as_ratio a b
+  1.0 * a / b
+
+fn satisfaction ratio satiation
+  ratio / (ratio + satiation)
+
+fn live n
+  nonzero n (n == 0)
+
+fn nonzero _ true
+  0.5
+
+fn nonzero n false
+  n
+
+# --- a fixed column, as the report renders one ------------------------------
+fn pow10 0
+  1
+
+fn pow10 n
+  10 * pow10 (n - 1)
+
+fn zeroed s width
+  wider s width (length s >= width)
+
+fn wider s _ true
+  s
+
+fn wider s width false
+  zeroed "0{s}" width
+
+fn fixed_of units scale places
+  whole = units / scale
+  frac = units - whole * scale
+  "{whole}.{zeroed "{frac}" places}"
+
+fn fixed x places
+  scale = pow10 places
+  units = math/round (x * scale)
+  fixed_of units scale places

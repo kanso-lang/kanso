@@ -11,4 +11,4 @@ fn orders (err _)
 fn orders text
   "yesterday: {text}"
 
-pub play = rescue (os/read_file "no-such-file.txt") orders . print
+pub play = rescue (os/read_file! "no-such-file.txt") orders . print

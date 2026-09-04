@@ -1,4 +1,4 @@
 import "./widebench"
 import "std/os"
 
-os/read_file "bench/wide.json" . (s -> stream_list (decode s))
+os/read_file! "bench/wide.json" . (s -> stream_list (decode s))

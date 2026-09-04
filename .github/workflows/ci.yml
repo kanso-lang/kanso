@@ -626,34 +626,53 @@ jobs:
       # as written, in case the group is dropped where the row is assembled.
       - name: the row carries every counter the objective weighs
         run: sh scripts/gates/row_carries_the_objective.sh /tmp/record.json
-      # The chart replays the current formula over the stored rows, so it needs
-      # the formula's parameters as well as the rows. Publishing them beside
-      # the history is what stops the weights being retyped into the page,
-      # where they would survive the next gavel and draw a formula nobody
-      # ruled. Unlike the history this file is replaced, not appended: it
-      # describes the model as it stands, and its history is welfare_floor.json.
-      - name: the model the chart replays
+      # The formula, as the one place it lives writes it: every term with its
+      # weight, its satiation and the counters it reads, the baseline each is
+      # measured against, and the date of the gavel that last moved any of it.
+      # It is the input to the rewrite below and is not published anywhere.
+      - name: the formula the column is written under
         run: ./target/release/kanso run scripts/welfare -- --model > /tmp/model.txt
+      # THE WHOLE COLUMN, EVERY PUSH. Ruled 2026-09-03: one welfare line,
+      # written under one formula, so two points on it answer one question.
+      # Rewriting every row here rather than only when the formula moves takes
+      # 1.3 seconds and removes the step somebody has to remember.
+      #
+      # It runs before the branch is checked out because perf-history holds
+      # history.jsonl and nothing else: after the checkout there is no
+      # scripts/welfare_rescore in the tree to run.
+      - name: rewrite the welfare column under the current formula
+        if: github.ref == 'refs/heads/main'
+        run: |
+          : > /tmp/history.jsonl
+          if git fetch origin perf-history 2>/dev/null; then
+            git show origin/perf-history:history.jsonl > /tmp/history.jsonl
+          fi
+          cat /tmp/record.json >> /tmp/history.jsonl
+          # keep the file bounded; the chart shows a trend, not an archive
+          tail -n 500 /tmp/history.jsonl > /tmp/bounded.jsonl
+          ./target/release/kanso run scripts/welfare_rescore \
+            -- /tmp/bounded.jsonl < /tmp/model.txt > /tmp/written.jsonl
       - name: append to the history branch
         if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "kanso-ci"
           git config user.email "cshentrup@gmail.com"
-          if git fetch origin perf-history 2>/dev/null; then
+          if git rev-parse --verify origin/perf-history >/dev/null 2>&1; then
             git checkout -B perf-history origin/perf-history
           else
             # first run: an orphan has no commit yet, so it cannot be checked
             # out again — unstage the tree it inherits and start the file here
             git checkout --orphan perf-history
             git rm -rq --cached . 2>/dev/null || true
-            rm -f history.jsonl
           fi
-          [ -f history.jsonl ] || : > history.jsonl
-          cat /tmp/record.json >> history.jsonl
-          # keep the file bounded; the chart shows a trend, not an archive
-          tail -n 500 history.jsonl > history.tmp && mv history.tmp history.jsonl
-          cp /tmp/model.txt model.txt
-          git add -f history.jsonl model.txt
+          cp /tmp/written.jsonl history.jsonl
+          # model.txt was published here for a chart that replayed the formula
+          # in the browser. Nothing reads it now that the column is written in
+          # the file, and a copy of the weights nobody reads is a copy that
+          # goes stale without anyone noticing.
+          rm -f model.txt
+          git add -f history.jsonl
+          git rm -q --cached --ignore-unmatch model.txt
           git commit -m "perf: $(git rev-parse --short "$GITHUB_SHA")" || exit 0
           git push origin perf-history
 

@@ -54,7 +54,7 @@ fn one_asset _ _ _ asset _ false
   io/write_err "missing asset: {asset}\n" . (_ -> os/exit 1)
 
 fn one_asset site at names asset source true
-  os/read_file source . (raw -> rewritten site at names asset source raw)
+  os/read_file! source . (raw -> rewritten site at names asset source raw)
 
 # A javascript asset names the ones digested before it, so its own text is
 # rewritten and written back before the digest is taken.
@@ -102,7 +102,7 @@ fn paging _ _ names _ true
 fn paging pages at names site false
   page = pages[at]!
   on = (raw -> one_page pages at names site page raw)
-  os/read_file page . on
+  os/read_file! page . on
 
 fn one_page pages at names site page raw
   fixed = references raw names 1

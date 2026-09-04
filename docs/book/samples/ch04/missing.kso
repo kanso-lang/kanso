@@ -7,4 +7,4 @@ fn announce text
 fn major_of text
   text/to_int text
 
-pub play = os/read_file "no-such-file.txt" . announce
+pub play = os/read_file! "no-such-file.txt" . announce

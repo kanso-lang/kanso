@@ -5,6 +5,14 @@
 # The arm discards the reason, which is what lets all three engines read one
 # golden: a page has no filesystem and says so in its own words, native says
 # the file is not there, and `rescued` is the answer either way.
+#
+# THE BANG IS LOAD-BEARING. Since the exceptional-vs-data gavel, a plain
+# `read_file` answers `file_not_found` as DATA when the file is absent, and
+# a rescue never sees it — but only on the engines that have a filesystem.
+# A page has none, so every read there is unplanned and stays a failure, and
+# the three engines would answer this one golden differently. `read_file!`
+# is the caller insisting, which puts absence back in the failure channel on
+# every engine and restores the agreement this fixture is here to check.
 import "std/os"
 
 fn told (err _)
@@ -16,5 +24,5 @@ fn told v
 pub play =
   print "start"
   >>
-  rescue (os/read_file "no-such-file.txt") told . print
+  rescue (os/read_file! "no-such-file.txt") told . print
   print "beside it"

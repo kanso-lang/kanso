@@ -452,7 +452,7 @@ fn recorded text
 
 fn attributed? base
   from_git base floor_file
-    . (theirs -> os/read_file floor_file . (ours -> grew? theirs ours))
+    . (theirs -> os/read_file! floor_file . (ours -> grew? theirs ours))
 
 fn grew? theirs ours
   recorded ours > recorded theirs
@@ -471,7 +471,7 @@ fn against _ "" found
   io/write "" . (_ -> found)
 
 fn against golden base_text found
-  os/read_file golden[1]!
+  os/read_file! golden[1]!
     . (ours -> weighed golden golden[2]! base_text ours found)
 
 # The sums run over the samples BOTH sides have.

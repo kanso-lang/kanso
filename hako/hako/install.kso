@@ -56,7 +56,7 @@ fn read_all files names
 fn reading files names
   rest = list/to_list (list/drop files 1)
   onward = (text -> read_all rest (merged names (imported text)))
-  os/read_file files[1]! . onward
+  os/read_file! files[1]! . onward
 
 fn merged names found
   list/fold found names one_of
@@ -102,14 +102,19 @@ fn unimported unknown
   why = "so pinning it would pin nothing — imports are the manifest"
   refused "nothing imports `{unknown[1]!}`, {why}"
 
+# No lock yet is the ordinary case on a fresh checkout, so the read answers
+# it rather than raising: one read where there were an `exists` and a read,
+# and the race between them is gone with the second call. This is what the
+# exceptional-vs-data gavel buys — the alternative was already part of the
+# operation's vocabulary and is now written that way.
 fn locked_at dir wanted names
-  os/exists "{dir}/hako.lock" . (there -> held_by dir wanted names there)
+  os/read_file "{dir}/hako.lock" . (t -> held_by dir wanted names t)
 
-fn held_by dir wanted names there
-  if there (reading_lock dir wanted names) (settled_for dir wanted names [])
+fn held_by dir wanted names (file_not_found _)
+  settled_for dir wanted names []
 
-fn reading_lock dir wanted names
-  os/read_file "{dir}/hako.lock" . (t -> settled_for dir wanted names (parse t))
+fn held_by dir wanted names t
+  settled_for dir wanted names (parse t)
 
 fn settled_for dir wanted names held
   os/env "KANSO_HAKO" . (set -> at_home dir wanted names held set)

@@ -449,14 +449,14 @@
 # 110,594 -> 108,514 — 1,936 to 2,080 bytes each, and the seven programs that
 # do not dispatch on bytes do not move at all. The dispatch tree stopped
 # rebuilding a KValue from a raw byte only to pull it apart again.
-jsonbench text=83938
-encodebench text=105186
-oneshot text=107090
-basket text=100290
-widebench text=108514
-deepbench text=69570
-escapebench text=52290
-pendbench text=83506
-indexbench text=54146
-scanbench text=145090
-digestbench text=100594
+jsonbench text=86418
+encodebench text=107122
+oneshot text=109154
+basket text=100306
+widebench text=110578
+deepbench text=69602
+escapebench text=52306
+pendbench text=83538
+indexbench text=54162
+scanbench text=145106
+digestbench text=102802

@@ -1,4 +1,4 @@
 import "./digestbench"
 import "std/os"
 
-os/read_file "bench/digest_input.txt" . go
+os/read_file! "bench/digest_input.txt" . go

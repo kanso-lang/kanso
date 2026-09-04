@@ -64,6 +64,7 @@ extra_css: /book/book.css
 <a href="#b-put"><code>put</code></a>
 <a href="#b-random"><code>math/random</code></a>
 <a href="#b-read_file"><code>os/read_file</code></a>
+<a href="#b-read_file-bang"><code>os/read_file!</code></a>
 <a href="#b-round"><code>math/round</code></a>
 <a href="#b-slice"><code>text/slice</code></a>
 <a href="#b-sleep"><code>time/sleep</code></a>
@@ -471,8 +472,12 @@ third</code></pre>
 <p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." that is the visible seam between <code>&gt;&gt;</code>, which lists every step, and <code>.</code>, which threads a not-yet-known value forward.</p>
 
 <h3 id="b-read_file"><code>os/read_file</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>os/read_file string → io (yields string)</code></p>
-<p>a description that yields the contents of a file as a string. a missing or unreadable path fails at execution time—at the executor, when the read is actually attempted—rather than when the description is built. pipe the contents into a function with <code>.</code>.</p>
+<p class="builtin-sig"><code>os/read_file string → io (yields string | file_not_found)</code></p>
+<p>a description that yields the contents of a file. a path that is not there yields <code>file_not_found</code>, which carries the path and dispatches like any other value — an absent file is an outcome a program can anticipate, so it is data. anything else that stops the read — a permission, a device, bytes that are not text — fails at execution time, at the executor, when the read is actually attempted rather than when the description is built. pipe the contents into a function with <code>.</code>.</p>
+
+<h3 id="b-read_file-bang"><code>os/read_file!</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>os/read_file! string → io (yields string)</code></p>
+<p>the caller insisting the file is there. same read, and a path that is not there bubbles as a failure instead of arriving as data — the choice <code>foo[k]</code> and <code>foo[k]!</code> make over a missing key, made over a missing file.</p>
 
 <h3 id="b-write"><code>io/write</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>io/write string → io</code></p>
@@ -500,7 +505,7 @@ third</code></pre>
   <div class="code-panel-title">files.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
-<span class="f">os/write_file</span> <span class="s">"note.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">&gt;&gt;</span> <span class="f">os/read_file</span> <span class="s">"note.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/write_file</span> <span class="s">"note.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">&gt;&gt;</span> <span class="f">os/read_file!</span> <span class="s">"note.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run files.kso</div>
     <pre><code>one taiyaki</code></pre>

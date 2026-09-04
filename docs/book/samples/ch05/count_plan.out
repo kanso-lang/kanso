@@ -2,3 +2,4 @@ plan:
   read_file "flavors.txt"
   . <continuation>
   . <continuation>
+  . <continuation>

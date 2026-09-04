@@ -113,7 +113,7 @@ fn onward_file _ _ found true
 fn onward_file module names found false
   rest = list/to_list (list/drop names 1)
   name = names[1]!
-  os/read_file "lib/{module}/{name}" . (src -> gathered module rest found src)
+  os/read_file! "lib/{module}/{name}" . (src -> gathered module rest found src)
 
 fn gathered module rest found src
   walked_files module rest (text/concat found (entries_in module src))

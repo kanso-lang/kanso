@@ -145,19 +145,22 @@ fn asks_write? given
   list/any? given (a -> a == "--write")
 
 fn loaded write
-  os/read_file decode_golden . (d -> with_decode write (counters d))
+  os/read_file! decode_golden . (d -> with_decode write (counters d))
 
 fn with_decode write decode
-  os/read_file encode_golden . (e -> with_encode write decode (counters e))
+  os/read_file! encode_golden . (e -> with_encode write decode (counters e))
 
 fn with_encode write decode encode
-  os/read_file memory_golden . (m -> with_memory write decode encode m)
+  os/read_file! memory_golden . (m -> with_memory write decode encode m)
 
 fn with_memory write decode encode m
-  os/read_file allocs_golden . (a -> with_allocs write decode encode "{m}\n{a}")
+  os/read_file! allocs_golden . (a -> both write decode encode m a)
+
+fn both write decode encode m a
+  with_allocs write decode encode "{m}\n{a}"
 
 fn with_allocs write decode encode so_far
-  os/read_file ir_golden . (i -> whole write decode encode "{so_far}\n{i}")
+  os/read_file! ir_golden . (i -> whole write decode encode "{so_far}\n{i}")
 
 fn whole write decode encode compile
   started (job (counters compile) decode encode write)
@@ -204,7 +207,7 @@ fn read_or_skip j _ false dir rest drift
   walked j dir rest drift
 
 fn read_or_skip j here true dir rest drift
-  os/read_file here . (src -> visited j here src dir rest drift)
+  os/read_file! here . (src -> visited j here src dir rest drift)
 
 fn visited j here src dir rest drift
   found = scanned j here src

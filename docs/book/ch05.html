@@ -153,7 +153,7 @@ hojicha</code></pre>
   newlines <span class="o">=</span> <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
   <span class="s">"flavors.txt has <span class="i">{newlines}</span> lines"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run count.kso</div>
     <pre><code>flavors.txt has 3 lines</code></pre>
@@ -223,7 +223,7 @@ called: 270</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</span>
-<span class="f">os/write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">os/read_file</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">os/read_file!</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso --plan</div>
     <pre><code>one taiyaki, extra custard</code></pre>
@@ -302,10 +302,11 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   <div class="code-panel-title">missing.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
-<span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file"
+  born in os/insisted at std/os/os.kso:103</code></pre>
   </div>
 </div>
 
@@ -315,7 +316,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   <div class="code-panel-title">fallback.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
-<span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
+<span class="k">fn</span> <span class="f">orders</span> (<span class="f">file_not_found</span> _)
   <span class="s">"no orders yet"</span>
 
 <span class="k">fn</span> <span class="f">orders</span> text
@@ -324,13 +325,17 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run fallback.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
+    <pre><code>no orders yet</code></pre>
   </div>
 </div>
 
-<p>the <code>err</code> arm on <code>orders</code> is real, and it would fire on any err that flowed to it as a value during evaluation—chapter 04's pattern, unchanged. but the read's failure is the executor reporting that the world refused the program's contract, and the executor does not resume your pipeline to ask how you feel about it. the failure goes straight to the endpoint, message addressed to whoever ran the program—the one party who can actually put the file back. an execution failure is operational, not logical, and kanso declines to blur the two.</p>
+<p>that arm fires, and no rescue was needed. a file that is not there is an outcome the program can anticipate, so <code>os/read_file</code> answers <code>text | file_not_found</code> and dispatch picks the arm the way it picks any other. the alternative is part of reading's vocabulary, so it is written in the vocabulary.</p>
 
-<p>the default, then, is that a chain carries a failure past every step to the endpoint. one step is written to read it instead. <code>rescue</code> takes the effect and a callback, and the callback runs only when the effect failed:</p>
+<p>the failure channel is for what the program did not plan for—a permission it does not have, a device that went away, bytes that are not text. those still go straight to the endpoint, with a message addressed to whoever ran the program, the one party who can do anything about it.</p>
+
+<p>a caller who knows the file is there says so with a bang. <code>os/read_file! path</code> is insisting, and absence bubbles from it as a failure like any other—the same choice <code>foo[k]</code> and <code>foo[k]!</code> make over a missing key. that is the whole rule: the bang chooses the channel.</p>
+
+<p>a chain carries a failure past every step to the endpoint. one step is written to read it instead. <code>rescue</code> takes the effect and a callback, and the callback runs only when the effect failed—so the sample below insists, to have a failure for it to catch:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">rescued.kso</div>
@@ -342,7 +347,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">fn</span> <span class="f">orders</span> text
   <span class="s">"yesterday: <span class="i">{text}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">rescue</span> (<span class="f">os/read_file</span> <span class="s">"yesterday.txt"</span>) <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">rescue</span> (<span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span>) orders <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run rescued.kso</div>
     <pre><code>no orders yet</code></pre>

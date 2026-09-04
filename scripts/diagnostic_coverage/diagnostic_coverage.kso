@@ -524,7 +524,7 @@ fn read_src _ false rest found
   over_sources rest found
 
 fn read_src name true rest found
-  os/read_file "src/{name}" . (src -> more_sources rest found src)
+  os/read_file! "src/{name}" . (src -> more_sources rest found src)
 
 fn more_sources rest found src
   plain = text/concat (driver_in src) (kinded_in src)
@@ -570,7 +570,7 @@ fn with_tests every parts
 
 fn with_module every stderrs rs
   wide = "{stderrs}{rs}"
-  os/read_file module_pins . (m -> with_corpus every wide "{stderrs}{m}")
+  os/read_file! module_pins . (m -> with_corpus every wide "{stderrs}{m}")
 
 fn test_sources names parts
   onward_test names parts (length names == 0)
@@ -587,7 +587,7 @@ fn read_test _ false rest parts
   test_sources rest parts
 
 fn read_test name true rest parts
-  os/read_file "tests/{name}" . (t -> kept_source rest parts t)
+  os/read_file! "tests/{name}" . (t -> kept_source rest parts t)
 
 fn kept_source rest parts t
   test_sources rest (push parts (uncommented t))
@@ -643,10 +643,10 @@ fn take_stderr _ false dir rest parts
   in_dir dir rest parts
 
 fn take_stderr here true dir rest parts
-  os/read_file here . (t -> in_dir dir rest (push parts t))
+  os/read_file! here . (t -> in_dir dir rest (push parts t))
 
 fn with_corpus every corpus driver_corpus
-  os/read_file listed_path
+  os/read_file! listed_path
     . (t -> judged every corpus driver_corpus (allowances t))
 
 fn allowances t

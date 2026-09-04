@@ -151,4 +151,4 @@ fn verdict _
   io/write_err "FAIL  a function and its reference disagree\n"
     . (_ -> os/exit 1)
 
-pub play = os/read_file "src/runtime.c" . (src -> written (as_harness src))
+pub play = os/read_file! "src/runtime.c" . (src -> written (as_harness src))

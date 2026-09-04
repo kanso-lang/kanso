@@ -198,7 +198,7 @@ fn reading _ _ acc after true
 
 fn reading wanted at acc after false
   on = (body -> read_next wanted at acc after body)
-  os/read_file wanted[at]! . on
+  os/read_file! wanted[at]! . on
 
 fn read_next wanted at acc after body
   read_each wanted (at + 1) (push acc body) after
@@ -412,7 +412,7 @@ fn walking _ _ found true
 
 fn walking names at found false
   on = (raw -> one_chapter names at found names[at]! raw)
-  os/read_file "{chapters}/{names[at]!}" . on
+  os/read_file! "{chapters}/{names[at]!}" . on
 
 fn one_chapter names at found name raw
   after = (more -> chapter_loop names (at + 1) more)

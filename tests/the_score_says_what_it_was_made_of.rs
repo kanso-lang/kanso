@@ -1,28 +1,29 @@
 //! The objective can name the counter set it scored.
 //!
-//! The chart replay ruled on 2026-08-31 could not be computed, and the reason
-//! was data rather than design. `perf_record` writes one history row per merged
-//! commit from a hand-picked list of counters, and on 2026-09-03 the newest row
-//! — commit a100f4f — held 12 of the 24 counters the formula reads.
-//! `compile_instructions` was among the twelve missing. So "the replayed series
-//! begins at the first commit for which every counter in the current formula
-//! exists" named no commit at all, and the replayed line would have been empty.
+//! The welfare column is written over the stored rows under one formula —
+//! ruled 2026-08-31, restated 2026-09-03 as one line rewritten in place — and
+//! a row can only be scored on the counters it carries. `perf_record` used to
+//! write one history row per merged commit from a hand-picked list, and on
+//! 2026-09-03 the newest row — commit a100f4f — held 12 of the 24 counters the
+//! formula reads, `compile_instructions` among them.
 //!
 //! `welfare --counters` prints the set `score` was given, so a row can carry
 //! exactly what the formula reads. Printing it here rather than assembling it
 //! again in perf_record is the whole point: two lists drift the first time a
-//! counter joins the model, and a chart replaying today's formula over
-//! yesterday's counter set is wrong without saying so.
+//! counter joins the model, and a row scored on yesterday's counter set is
+//! wrong without saying so.
 
 use std::process::Command;
 
 fn counters() -> String {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    ask(std::path::Path::new(env!("CARGO_MANIFEST_DIR")), &["--", "--counters"])
+}
+
+fn ask(root: &std::path::Path, args: &[&str]) -> String {
     let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
         .arg(root.join("scripts/welfare"))
-        .arg("--")
-        .arg("--counters")
+        .args(args)
         .current_dir(root)
         .output()
         .expect("welfare runs");
@@ -31,8 +32,8 @@ fn counters() -> String {
 
 /// Every counter the model weighs, and nothing else. The list is written out
 /// rather than derived, because a spec that recomputes what the tool computes
-/// is asserting its own copy of the tool — and this list IS the thing the
-/// replay depends on, so it is pinned where a reader can see it move.
+/// is asserting its own copy of the tool — and this list IS what a row has to
+/// carry to be scored, so it is pinned where a reader can see it move.
 #[test]
 fn the_counter_set_is_the_one_the_formula_reads() {
     let said = counters();
@@ -72,7 +73,7 @@ fn the_counter_set_is_the_one_the_formula_reads() {
 
 /// Every line is `name=value` with a value that parses, because a row assembled
 /// from this is read back as numbers. A counter printed with no value would
-/// reach the history as a null and take the replayed line out silently.
+/// reach the history as a null and drop its term out of the row's score.
 #[test]
 fn every_counter_carries_a_number() {
     for line in counters().lines() {
@@ -95,149 +96,81 @@ fn asking_what_was_scored_does_not_move_the_floor() {
     assert_eq!(before, after, "--counters is a report, not a ratchet");
 }
 
-/// The page replays the score in javascript, because it is static and the
-/// 2026-08-31 directive says the chart shows the current formula over the
-/// stored rows. That is a second statement of the rule, and a second statement
-/// drifts from the first silently — the chart would go on drawing a line, just
-/// the wrong one.
+/// TWO IMPLEMENTATIONS OF ONE FORMULA, on one set of readings. `welfare`
+/// scores the goldens directly; `welfare_rescore` scores a history row, and
+/// the column it writes is what the chart draws. They are separate code and
+/// they must not drift, so this builds the row the objective would record
+/// today — `--counters` is that half of a row exactly — and requires the
+/// rescorer's column to be the number welfare reports.
 ///
-/// So run the page's own two functions, lifted out of the html rather than
-/// copied here, over the model and counters welfare emits, and require the
-/// answer welfare gives. A copy would agree with itself forever.
+/// The column carries four places and welfare's banner two, so the column is
+/// rounded to the banner rather than compared inside a tolerance. A tolerance
+/// is a guess that stays green through exactly the drift this is here for.
 #[test]
-fn the_page_replays_the_score_the_tool_computes() {
+fn the_rescored_column_is_the_score_the_tool_reports() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let page = std::fs::read_to_string(root.join("docs/numbers.html")).expect("the page");
-
-    // From `function <name>` to the brace that closes it. Counting braces is
-    // enough here because neither function holds a brace in a string or a
-    // comment, and the extraction failing loudly beats it silently taking the
-    // wrong text.
-    let lift = |name: &str| -> String {
-        let head = format!("function {name}(");
-        let at = page.find(&head).unwrap_or_else(|| panic!("the page defines {name}"));
-        let open = page[at..].find('{').expect("a body") + at;
-        let mut depth = 0;
-        for (i, c) in page[open..].char_indices() {
-            match c {
-                '{' => depth += 1,
-                '}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return page[at..open + i + 1].to_string();
-                    }
-                }
-                _ => {}
-            }
-        }
-        panic!("{name} is never closed");
-    };
-
-    let ask = |flag: &str| {
-        let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
-            .arg("run")
-            .arg(root.join("scripts/welfare"))
-            .args(if flag.is_empty() { vec![] } else { vec!["--", flag] })
-            .current_dir(root)
-            .output()
-            .expect("welfare runs");
-        String::from_utf8_lossy(&out.stdout).into_owned()
-    };
-
-    // The row the page would read: perf_record writes the welfare counter set
-    // into the history row under welfare's own names, so `--counters` is that
-    // half of a row exactly.
-    let row: String = ask("--counters")
+    let row: String = counters()
         .lines()
         .filter_map(|l| l.split_once('='))
         .map(|(k, v)| format!("{k:?}:{v},"))
         .collect();
 
-    let dir = root.join("target/page-replay");
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    let model_at = dir.join("model.txt");
-    std::fs::write(&model_at, ask("--model")).expect("the model");
-    let script_at = dir.join("replay.js");
-    std::fs::write(
-        &script_at,
-        format!(
-            "{}\n{}\nconst m = parseModel(require('fs').readFileSync({:?}, 'utf8'));\n\
-             if (!m) throw new Error('the model did not parse');\n\
-             console.log(replayScore({{{row}}}, m));\n",
-            lift("parseModel"),
-            lift("replayScore"),
-            model_at.to_str().expect("a path"),
-        ),
-    )
-    .expect("the script");
+    let stage = std::env::temp_dir().join("kanso-rescore-agrees");
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage).expect("a staging directory");
+    let history = stage.join("history.jsonl");
+    std::fs::write(&history, format!("{{{row}\"commit\":\"staged\"}}\n")).expect("the row writes");
 
-    let out = Command::new("node").arg(&script_at).output().expect("node runs");
-    assert!(out.status.success(), "node: {}", String::from_utf8_lossy(&out.stderr));
-    let theirs: f64 = String::from_utf8_lossy(&out.stdout).trim().parse().expect("a score");
-
-    let said = ask("");
-    let banner: f64 =
-        said.split_whitespace().nth(1).expect("welfare says a score").parse().expect("a number");
-
+    let model = ask(root, &["--", "--model"]);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg(root.join("scripts/welfare_rescore"))
+        .arg("--")
+        .arg(&history)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("the rescorer starts");
+    {
+        use std::io::Write;
+        child
+            .stdin
+            .take()
+            .expect("a pipe to write the model down")
+            .write_all(model.as_bytes())
+            .expect("the model writes");
+    }
+    let done = child.wait_with_output().expect("the rescorer finishes");
+    let _ = std::fs::remove_dir_all(&stage);
     assert!(
-        (theirs - banner).abs() < 0.005,
-        "the page's replay gives {theirs:.4}, welfare says {banner:.2}"
+        done.status.success(),
+        "the rescorer refused: {}",
+        String::from_utf8_lossy(&done.stderr)
     );
+    let said = String::from_utf8_lossy(&done.stdout);
+    let at = said.find("\"welfare\":\"").expect("a welfare column") + 11;
+    let rest = &said[at..];
+    let column = &rest[..rest.find('"').expect("the column ends")];
+    let theirs: f64 = column.parse().expect("a score");
+
+    let banner = ask(root, &[]);
+    let ours = banner.split_whitespace().nth(1).expect("welfare says a score").to_string();
+
+    assert_eq!(format!("{theirs:.2}"), ours, "the rescorer writes {column}");
 }
 
-/// A row from before a counter joined the model cannot be scored, and the
-/// chart must leave it out rather than invent a reading. Clay, 2026-09-03:
-/// "No backfill: start the replayed line at the first commit with the full
-/// current counter set."
+/// The model dates the formula, because that date is what the rescorer stamps
+/// on every row as `scored_by`. Without it the rescorer refuses rather than
+/// guessing, and five hundred rows would go untagged.
 #[test]
-fn a_row_missing_a_counter_is_not_scored() {
+fn the_model_dates_the_formula_it_describes() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let page = std::fs::read_to_string(root.join("docs/numbers.html")).expect("the page");
-    let lift = |name: &str| -> String {
-        let head = format!("function {name}(");
-        let at = page.find(&head).unwrap_or_else(|| panic!("the page defines {name}"));
-        let open = page[at..].find('{').expect("a body") + at;
-        let mut depth = 0;
-        for (i, c) in page[open..].char_indices() {
-            match c {
-                '{' => depth += 1,
-                '}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        return page[at..open + i + 1].to_string();
-                    }
-                }
-                _ => {}
-            }
-        }
-        panic!("{name} is never closed");
-    };
-
-    let script = format!(
-        "{}\n{}\n\
-         const m = parseModel('term t|1.0|2.0|a,b\\nbase a=10\\nbase b=20\\n');\n\
-         console.log(JSON.stringify([\n\
-         replayScore({{a: 10, b: 20}}, m),\n\
-         replayScore({{a: 10}}, m),\n\
-         replayScore({{}}, m),\n\
-         ]));\n",
-        lift("parseModel"),
-        lift("replayScore"),
-    );
-    let dir = root.join("target/page-replay");
-    std::fs::create_dir_all(&dir).expect("a scratch directory");
-    let at = dir.join("partial.js");
-    std::fs::write(&at, script).expect("the script");
-
-    let out = Command::new("node").arg(&at).output().expect("node runs");
-    assert!(out.status.success(), "node: {}", String::from_utf8_lossy(&out.stderr));
-    let said = String::from_utf8_lossy(&out.stdout);
-
-    // At parity every ratio is 1, so each counter scores 1/(1+2) and the term
-    // scores a third of its whole weight: 100 * 1/3.
-    assert_eq!(
-        said.trim(),
-        "[33.33333333333333,null,null]",
-        "a complete row scores and a partial one does not: {said}"
-    );
+    let model = ask(root, &["--", "--model"]);
+    let dated = model
+        .lines()
+        .find_map(|l| l.strip_prefix("formula "))
+        .expect("the model dates the formula")
+        .to_string();
+    assert!(dated.len() == 10 && dated.starts_with("20"), "a date: {dated}");
 }

@@ -1,10 +1,12 @@
 #!/bin/sh
 # Every counter the objective weighs appears in the history row.
 #
-# The chart replays the current formula over the stored rows and starts at the
-# first row carrying the whole counter set, so a row that loses a counter is a
-# row the replay must skip — and on 2026-09-03 the newest row held 12 of the
-# 24, which is why the replay named no commit to start from.
+# The welfare column is written under one formula over the counters each row
+# carries, so a row that loses a counter is a row scored on less of the
+# objective than the rest of the line. It is not fatal — the terms renormalize
+# and the row records its own `scored_weight` — and that is exactly why it
+# wants a gate: a row quietly scored on half the formula reads like every
+# other point on the chart. On 2026-09-03 the newest row held 12 of the 24.
 #
 # perf_record builds the group FROM `welfare --counters`, so the names cannot
 # drift apart. What can still go wrong is the group being dropped where the row
@@ -41,7 +43,8 @@ done
 
 [ -z "$missing" ] || {
   echo "the row is missing counters the objective weighs:$missing" >&2
-  echo "the replayed welfare line cannot start while that is true" >&2
+  echo "the row would be scored on less of the objective than the" >&2
+  echo "rest of the line while looking like every point on it" >&2
   exit 1
 }
 

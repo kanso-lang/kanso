@@ -226,6 +226,13 @@ compile_terms = [d_compile_speed d_compile_memory]
 
 terms = text/concat run_terms compile_terms
 
+# WHICH DEFINITION SCORED A ROW. It moves in the same commit as anything that
+# changes what the number means — a weight, a satiation, a term's counters,
+# the saturation rule — and it is emitted with the model so the one thing that
+# rewrites history.jsonl's welfare column does not keep its own copy to go
+# stale. The date is the day of the gavel that last moved the formula.
+formula = "2026-09-02"
+
 # The baseline and the per-counter breakdown are keyed by counter, because a
 # counter is what is measured; a dimension is what it is measured FOR.
 run_counters = text/concat run_speed_counters run_memory_counters
@@ -478,7 +485,7 @@ fn filled s width false
   left "{s} " width
 
 fn asked path
-  os/read_file path
+  os/read_file! path
 
 fn gauge d e o b c held w s ir ca g
   comp = compile_totals c
@@ -491,7 +498,7 @@ fn gauge d e o b c held w s ir ca g
   tr = counters ca
   dig = counters g
   now = measured dc ec (counters o) (counters b) comp cm work scan built tr dig
-  os/read_file floor_path . (held -> against now (json/decode held))
+  os/read_file! floor_path . (held -> against now (json/decode held))
 
 # The digest bench's peak is the row it exists for; its block count comes
 # along because a peak alone cannot say whether the arena grew once or often.
@@ -607,16 +614,15 @@ fn against now held
 # THE COUNTER SET THE SCORE WAS MADE OF, one `name=value` a line.
 #
 # perf_record writes a history row per merged commit and the chart reads those
-# rows. Until now the row carried a hand-picked dozen counters and the score as
-# a recorded number, which is why the replay ruled on 2026-08-31 could not be
-# computed: on 2026-09-03 the newest row held 12 of the 24 counters the formula
-# reads, `compile_instructions` among the missing, so "the first commit for
-# which every counter exists" named no commit at all.
+# rows. Until 2026-09-03 the row carried a hand-picked dozen counters and the
+# score as a recorded number: on that day the newest row held 12 of the 24 the
+# formula reads, `compile_instructions` among the missing, so most of the
+# objective was unrecoverable from the row.
 #
 # Printing the set HERE rather than assembling it again in perf_record is the
 # point. The two would drift the first time a counter joined the model, and a
-# chart replaying a formula over a counter set that no longer matches it is a
-# chart that lies quietly. This prints exactly what `score` was given.
+# row scored on a counter set that no longer matches the formula is a chart
+# that lies quietly. This prints exactly what `score` was given.
 fn either now base held value args
   asked_to_set = length args > 0 and args[1]! == "--set"
   asked_counters = length args > 0 and args[1]! == "--counters"
@@ -638,23 +644,25 @@ fn routed now base held value args setting _
 # THE MODEL ITSELF: every term with its weight, satiation and counters, and the
 # baseline each counter is measured against.
 #
-# The chart has to replay the current formula over the stored rows — ruled
-# 2026-08-31, restated 2026-09-03 against the page's older sentence — and a
-# static page computes in javascript. That leaves two things that could be
-# copied onto the page and go stale: the arithmetic, and the numbers it uses.
+# The stored rows are scored under the current formula — ruled 2026-08-31,
+# restated 2026-09-03 as one column rewritten in place — by a second tool,
+# scripts/welfare_rescore, which reads a row where this one reads the goldens.
+# That leaves two things that could be copied into it and go stale: the
+# arithmetic, and the numbers it uses.
 #
 # The numbers are the dangerous half and they come from here. A weight retyped
-# into a chart is a weight that keeps its old value through the next gavel, and
-# the line would then show a formula nobody ruled while looking exactly as
-# authoritative. The arithmetic is four lines and fixed by ruling — saturate
-# each counter, mean within a term, weight, sum — so the page restates that and
-# a spec holds it against this tool's own answer.
+# into the rescorer is a weight that keeps its old value through the next
+# gavel, and the column would then show a formula nobody ruled while looking
+# exactly as authoritative. The arithmetic is four lines and fixed by ruling —
+# saturate each counter, mean within a term, weight, sum — so the rescorer
+# restates that and a spec runs both tools on one set of readings.
 #
 # One line a term and one a baseline, the shape every other vein in this tree
 # uses. json was the first attempt and it was the wrong reach: a reader then
 # needs a parser, and the two readers that matter — a spec here and the chart's
 # javascript — would each grow their own.
 #
+#   formula <date>
 #   term <name>|<weight>|<satiation>|<counter,counter,...>
 #   base <counter>=<value>
 fn term_line t
@@ -665,7 +673,7 @@ fn model_of base
   shaped = list/to_list (list/map terms term_line)
   kept = list/select counter_names (c -> base[c] != none)
   held = list/to_list (list/map kept (c -> "base {c}={base[c]!}\n"))
-  io/write "{text/join shaped ""}{text/join held ""}"
+  io/write "formula {formula}\n{text/join shaped ""}{text/join held ""}"
 
 fn counters_of now
   kept = list/to_list (list/select counter_names (c -> now[c] != none))

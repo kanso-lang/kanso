@@ -109,7 +109,7 @@ fn reading _ _ acc after true
 
 fn reading pages at acc after false
   page = pages[at]!
-  os/read_file page . (raw -> scanned_page pages at acc after page raw)
+  os/read_file! page . (raw -> scanned_page pages at acc after page raw)
 
 fn scanned_page pages at acc after page raw
   text = prose raw

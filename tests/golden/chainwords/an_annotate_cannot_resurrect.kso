@@ -8,4 +8,4 @@ import "std/os"
 fn said (err reason)
   "config: {reason}"
 
-pub play = annotate (os/read_file "no-such-file.txt") said
+pub play = annotate (os/read_file! "no-such-file.txt") said

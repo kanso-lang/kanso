@@ -17,6 +17,17 @@ module_dir = "bench/jsonbench/jsonbench"
 # only decodes has no use for it.
 dropped = "fn failure_position"
 
+# `fed` is `os/read_file!` written at the call site, and it is written out
+# because the bang costs the loop its beat. Inference reads a chain's yield
+# by the head's bare name: `os/read_file` is typed because its name collides
+# with the builtin's, and `os/read_file!` — same body, one character more —
+# falls to the top set. The document then has no type where the loop analysis
+# reads one, and jsonbench decodes with a grow-only arena: blocks 2 to 248,
+# peak 2 MB to 260 MB, on the same bytes and the same decoder.
+#
+# Both spellings mean the same thing: the file must be there, and a missing
+# one is a failure. When the yield of a kanso function is inferred, this
+# becomes `os/read_file! "bench/large.json" . go` again.
 bench_text = """
   pub fn go cs
     print "decoded 150 times, checksum \{loop cs 150 0}"
@@ -26,13 +37,19 @@ bench_text = """
 
   fn loop cs n acc
     loop cs (n - 1) (acc + length (decode cs))
+
+  pub fn fed (file_not_found f)
+    err "cannot read \{f}: no such file"
+
+  pub fn fed cs
+    go cs
 """
 
 main_text = """
   import "./jsonbench"
   import "std/os"
 
-  os/read_file "bench/large.json" . go
+  os/read_file "bench/large.json" . fed
 """
 
 ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
@@ -45,10 +62,10 @@ copied = plain "number" . (_ -> plain "scan") . (_ -> plain "text")
   . (_ -> plain "value") . (_ -> trimmed) . (_ -> written)
 
 fn plain name
-  os/read_file "lib/json/{name}.kso"
+  os/read_file! "lib/json/{name}.kso"
     . (s -> os/write_file "{module_dir}/{name}.kso" s)
 
-trimmed = os/read_file "lib/json/json.kso" . stripped
+trimmed = os/read_file! "lib/json/json.kso" . stripped
 
 fn stripped source
   os/write_file "{module_dir}/json.kso" (kept source)

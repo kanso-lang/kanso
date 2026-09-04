@@ -30,7 +30,7 @@
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
 use crate::hash::{Map as HashMap, Set as HashSet};
-use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, MAP, REC, STR};
+use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, MAP, NONE, REC, STR};
 
 /// A function group: its name and arity.
 pub type Group = (String, usize);
@@ -70,7 +70,7 @@ const SCALAR: Set = INT | FLOAT | BOOL;
 ///
 /// Maps stay out: the first read caches a freshly allocated sorted view —
 /// an above-the-mark pointer — into the below-mark header. Instant dangle.
-const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC | LIST;
+const THREADED: Set = SCALAR | NONE | STR | BYTES | FN | REC | DESC | LIST;
 
 /// One self-recursive group's fate under the analysis. `Beat` is the only
 /// verdict codegen acts on; the others exist so `report` can say why a loop

@@ -96,7 +96,7 @@ impl Executor for CollectExecutor {
         Err("the oracle supplies no stdin".to_string())
     }
 
-    fn read_file(&mut self, path: &str) -> Result<String, String> {
+    fn read_file(&mut self, path: &str) -> Result<Option<String>, String> {
         kanso::eval::read_file_text(path)
     }
 

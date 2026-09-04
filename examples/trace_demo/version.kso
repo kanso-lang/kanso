@@ -34,4 +34,4 @@ fn major_of text
   text/to_int digits
 
 pub fn announce argv
-  os/read_file (chosen argv) . check
+  os/read_file! (chosen argv) . check

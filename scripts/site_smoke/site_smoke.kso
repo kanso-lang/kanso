@@ -598,7 +598,7 @@ fn gathered _ _ acc true
 
 fn gathered paths at acc false
   on = (body -> read_each paths (at + 1) (text/concat acc [body]))
-  os/read_file paths[at]! . on
+  os/read_file! paths[at]! . on
 
 fn with_all bodies
   header = bodies[5]!

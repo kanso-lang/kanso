@@ -298,6 +298,22 @@ pub enum Desc {
     Nil,
 }
 
+/// A read that found nothing answers `none`, the shape `env` already uses for
+/// a variable that is not set: the std wrapper turns it into `file_not_found`.
+///
+/// It was a two-element list once, `[there, text]`, and the list cost the
+/// program the string's type. Inference gives a list index the top set, so a
+/// document read this way arrived at its consumer untyped — and `beat.rs`
+/// reads that set to decide whether a loop may rewind. jsonbench's decode
+/// loop stopped rewinding on the day the read changed shape: arena blocks 2
+/// to 248, peak 2 MB to 260 MB, on the same bytes.
+fn read_value(found: Option<String>) -> Value {
+    match found {
+        Some(text) => Value::Str(text),
+        None => Value::NoneV,
+    }
+}
+
 /// What a finished process answers: its status and the two streams.
 fn ran_value(done: (i64, String, String)) -> Value {
     let (status, out, errs) = done;
@@ -474,7 +490,12 @@ pub trait Executor {
     fn print(&mut self, text: &str);
     fn args(&mut self) -> Vec<String>;
     fn stdin(&mut self) -> Result<String, String>;
-    fn read_file(&mut self, path: &str) -> Result<String, String>;
+    /// Three answers, because absence is not a failure. `Ok(Some(text))` read
+    /// it; `Ok(None)` is the file not being there, which the gavel of
+    /// 2026-09-03 rules is an anticipated outcome and therefore data; `Err` is
+    /// what the program did not plan for — a permission, a device, bytes that
+    /// are not text.
+    fn read_file(&mut self, path: &str) -> Result<Option<String>, String>;
     /// Start a process and wait for it. The answer is what it wrote and the
     /// status it ended with; a non-zero status is an outcome, not a failure,
     /// because a caller usually wants to read it rather than be stopped by
@@ -812,7 +833,7 @@ impl Executor for RealExecutor {
         Ok(buffer)
     }
 
-    fn read_file(&mut self, path: &str) -> Result<String, String> {
+    fn read_file(&mut self, path: &str) -> Result<Option<String>, String> {
         read_file_text(path)
     }
 
@@ -848,8 +869,16 @@ impl Executor for RealExecutor {
 /// `no such file or unreadable`. The fixed wording is also the only one that
 /// does not change with the host's libc or this compiler's version, which a
 /// reproducible diagnostic cannot afford.
-pub fn read_file_text(path: &str) -> Result<String, String> {
-    std::fs::read_to_string(path).map_err(|why| match why.kind() {
+pub fn read_file_text(path: &str) -> Result<Option<String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        // ABSENCE IS DATA, ruled 2026-09-03: "if you know it's possible for
+        // them to not be there, you wouldn't use an exception". A file that is
+        // not there is the one outcome a caller can anticipate, so it answers
+        // `None` here and `file_not_found` in the language. Every other kind
+        // stays a failure, because none of them is part of reading's ordinary
+        // vocabulary.
+        Err(why) if why.kind() == std::io::ErrorKind::NotFound => Ok(None),
         // A file that is THERE and READABLE and simply is not text was being
         // reported as absent, because the reason was thrown away. `kanso.wasm`
         // is the example that found it: the interpreter said the file did not
@@ -863,13 +892,15 @@ pub fn read_file_text(path: &str) -> Result<String, String> {
         // byte-transparent on every engine is a design question, filed.
         //
         // The wording stays fixed rather than interpolating the OS's own
-        // message, for the reason the comment above gives: `ErrorKind` is
-        // Rust's classification and does not move with the host's libc.
-        std::io::ErrorKind::InvalidData => {
-            format!("cannot read {path}: the bytes are not text")
-        }
-        _ => format!("cannot read {path}: no such file or unreadable"),
-    })
+        // message: `ErrorKind` is Rust's classification and does not move with
+        // the host's libc, where the OS's own text does.
+        Err(why) => Err(match why.kind() {
+            std::io::ErrorKind::InvalidData => {
+                format!("cannot read {path}: the bytes are not text")
+            }
+            _ => format!("cannot read {path}: unreadable"),
+        }),
+    }
 }
 
 #[derive(Default)]
@@ -931,9 +962,9 @@ impl Executor for ScriptedExecutor {
         Ok(self.script_stdin.clone())
     }
 
-    fn read_file(&mut self, path: &str) -> Result<String, String> {
+    fn read_file(&mut self, path: &str) -> Result<Option<String>, String> {
         self.transcript.push(format!("read_file {path:?}"));
-        self.files.get(path).cloned().ok_or_else(|| format!("cannot read {path}"))
+        Ok(self.files.get(path).cloned())
     }
 
     fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
@@ -4112,8 +4143,11 @@ impl<'a> Interp<'a> {
                 Ok(text) => Value::Str(text),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
+            // The text, or `none` for a file that is not there — the std
+            // wrapper names the second `file_not_found`, because a builtin
+            // cannot name a type declared in kanso.
             Desc::ReadFile(path) => Ok(match executor.read_file(path) {
-                Ok(text) => Value::Str(text),
+                Ok(found) => read_value(found),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             // three answers in a list, which the std wrapper turns into a

@@ -1,4 +1,4 @@
 import "std/os"
 
 order = "one taiyaki, extra custard"
-os/write_file "order.txt" order >> os/read_file "order.txt" . print
+os/write_file "order.txt" order >> os/read_file! "order.txt" . print
