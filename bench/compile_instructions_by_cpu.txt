@@ -168,7 +168,24 @@
 # ever caught.
 
 # 2026-09-03: the Zen 4 re-sitting this file asked for. kanso#1230 removed
-# family0x19-model0x11 rather than carry a value measured against the previous
+# 
+
+# RE-SAT 2026-09-04, AND TWO ROWS REMOVED RATHER THAN CARRIED. The row counts
+# `kanso::main` inclusive now instead of the whole process — the compiler's own
+# work, with every libc call it makes still in it, and without the loader and
+# the stack guard above it. scripts/gates/compile_instructions.sh says why at
+# length. That is a change of DEFINITION, so every recorded value moved with
+# it, and the two that CI has not re-sat under it are gone rather than left
+# looking like readings.
+#
+# Zen 4 (family0x19-model0x11) counted 41,379,840 against 41,845,704 whole-
+# process on the same run, sha 4dc725bdb40d: 465,864 of loader and stack guard
+# dropped. The pair the AMD rows used to carry is not re-sat either; whether it
+# survives the new definition is a thing to find out from CI rather than to
+# assume, and the layout term the pair came from is most of what the change
+# removes.
+
+family0x19-model0x11 rather than carry a value measured against the previous
 # binary, and said the row comes back "when it next refuses, not a new chip".
 # It refused here, and this is the sitting.
 #
@@ -884,6 +901,4 @@
 # THE CAP IS NOW BINDING ON TWO KEYS. Both AMD rows hold their two measured
 # values and may hold no more. A third distinct value on either is refused, and
 # that refusal is the finding to write down.
-family0x19-model0x11 41845704 41844180
-family0x19-model0x1 41845704 41844180
-family0x6-model0xcf 41845704
+family0x19-model0x11 41379840
