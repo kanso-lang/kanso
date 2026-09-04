@@ -2974,3 +2974,24 @@ oneshot, basket, wide, pend, escape, digest and decode all have steps.
 scanbench's `arena_blocks` and `arena_peak_bytes` are both in the model, so
 `bench/cost_golden_scan.txt` is a golden nothing compares against. Not widened
 into this change; recorded here and queued.
+
+**ADDED LATER THE SAME DAY — the obvious mutation proves nothing.** The gate
+shipped with a hand-run refusal behind it and no ratchet row, which is the
+scan_counters hole in mirror image: that one had a row from the first and no CI
+step ran the gate. Both are closed now, and writing the mutation turned up
+something the entry above got wrong by implication.
+
+Dropping `| ctx.decl_yields[i]` from `call_yield` — the per-declaration yield
+join, the thing 62879e23 was about — leaves readbench reading arena_blocks 1,
+arena_peak_bytes 1,048,576 and beat_iters 201. Unchanged. Built and measured
+rather than assumed, which is the only reason it was caught: the edit looked
+like the mutation and would have shipped as one.
+
+What readbench pins is the GROUP CONSULT — a chain head naming a declaration
+the program made, asked what that declaration yields. Short-circuit it and the
+benchmark reads 41, 42,991,616 and 1, the defect's numbers to the byte on a
+compiler that has the repair. So the benchmark and the yield table cover
+different halves: `os/read_file!` returns something that already carries its
+type and is answered by its own declaration, where `net/read c` is a bare
+builtin call with nothing to ask and needs the table. The socket fixture is
+still the only thing pinning the second half, and this does not change that.
