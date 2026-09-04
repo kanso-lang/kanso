@@ -25,7 +25,7 @@
 fn commas(n: &str) -> String {
     let mut out = String::new();
     for (i, c) in n.chars().enumerate() {
-        if i > 0 && (n.len() - i) % 3 == 0 {
+        if i > 0 && (n.len() - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(c);

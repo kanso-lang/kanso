@@ -903,5 +903,12 @@
 # and it reads 41,379,840 as well. The two AMD models agree to the instruction
 # on this binary, which is the fourth binary they have agreed on and still not
 # a reason to merge the keys — the header says why.
+# A third chip, and the first Intel row under the new definition:
+# family0x1a-model0x2 refused on kanso#1242 with the front end untouched — the
+# diff is scripts, tests, bench data and the log — and printed 41,379,840, the
+# same figure to the instruction as both AMD models on the same binary. Three
+# keys, one number. It goes last, because the FIRST row is what welfare and
+# compile_instructions_golden.txt read and that authority stays where it was.
 family0x19-model0x11 41379840
 family0x19-model0x1 41379840
+family0x1a-model0x2 41379840

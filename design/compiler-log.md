@@ -2907,3 +2907,31 @@ day its pool carries a byte. The spec's own header says so.
 The `RE-BASED, unclaimed` listing survives with a narrower meaning: a baseline
 that moved while not one of the golden rows it is made of did — a ratio moving
 with no measurement behind it — and it still owes a sentence.
+
+## 2026-09-04 — A THIRD CHIP, AND IT READS WHAT THE OTHER TWO READ
+
+**DONE.** CI refused kanso#1242 on `family0x1a-model0x2`, a key
+`bench/compile_instructions_by_cpu.txt` did not carry:
+
+    nothing in bench/compile_instructions_by_cpu.txt was counted on
+    family0x1a-model0x2, so this run's 41379840 cannot be compared to anything.
+
+The branch's diff is scripts, tests, bench data and this log — `git diff
+origin/main -- src/ lib/ Cargo.toml Cargo.lock` is empty — so the front end is
+untouched and this is a chip new to the pool rather than a row gone stale. Its
+sitting is **41,379,840**, the same figure to the instruction as Zen 4 and
+Zen 3 on the same binary. Three keys, one number.
+
+The row goes LAST. The first row is what welfare and
+`compile_instructions_golden.txt` read, and moving that authority to a chip
+because it happened to be today's runner is how a value ends up published for a
+reason nobody chose. Checked after adding it: all three keys resolve to
+41,379,840 and an invented key still refuses.
+
+That the keys agree is not an argument for merging them — the file's header
+gives the reason, and this is the fifth binary on which two or more have agreed
+while the noise the key exists for stays real.
+
+**A clippy warning in the same round.** `manual_is_multiple_of` on the
+comma-grouping helper in `a_re_basing_row_stays_a_pure_regression.rs`. Fixed;
+`cargo clippy --all-targets --all-features` is at zero warnings.
