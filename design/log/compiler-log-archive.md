@@ -42143,3 +42143,42 @@ trying to make the check fail does. The cost of that attempt is one `sed` and
 one `cargo test`.
 
 ---
+
+## 2026-09-03 — THE COMPILE ROW MOVED 992 AND THE FRONT END DID NOT
+
+**DONE.** CI refused the branch on the vein that is keyed by silicon:
+
+```
+the work the FRONT END does changed on family0x19-model0x1:
+bench/compile_instructions_by_cpu.txt says 41631006 and this run counted 41631998.
+The row is keyed by silicon, so the runner is not the answer here:
+the same family and model counted both numbers.
+```
+
+`compile_instructions` **41,631,006 -> 41,631,998, +992 (+0.0024%)**, and the
+cause is written in that file's own header from earlier the same day:
+`src/main.rs` embeds the runtime with `include_str!("runtime.c")`, so a change
+to the runtime changes the compiler binary even when it changes no compiler
+code. The wrong-arity reorder added a few lines of C; the embedded source grew,
+the rodata after it shifted, and the front end does the same work at different
+addresses. `compile_allocs`, `compile_peak_bytes` and every fixpoint counter are
+byte-identical, which is what says the work did not change.
+
+The Zen 3 row (0x19/0x1) this run landed on is re-sat. The Intel (0x6/0xcf) and
+Zen 4 (0x19/0x11) rows are removed rather than carried forward, on the rule
+already recorded there: a value measured against the old binary is worse than no
+value. They are re-sittings when they next refuse, and each costs one red run.
+
+**This is the second time in one day this file has been emptied for the same
+mechanism**, and the price is now visible rather than argued: a runtime change
+of any size costs one red CI run per chip in the pool before the vein reads
+clean again. Whether the vein should measure the front end against a binary
+that embeds the runtime is a real question and it is not this change's to
+answer; what is clear is that `include_str!` makes "the front end moved" and
+"the runtime moved" indistinguishable to this row, and only the other three
+compile counters can tell them apart.
+
+Welfare is 76.01 before and after — 992 parts in 41.6 million is below the
+hundredth the score is rounded to.
+
+---

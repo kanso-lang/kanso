@@ -25,9 +25,15 @@
 //! read `beat_iters=1` against the other two's 201 and 801: `desc_yield` was
 //! a table keyed on a chain head's BARE name, `os/read_file` hit it because
 //! the name collides with the builtin's, and `os/read_file!` — same body, one
-//! character more — missed and fell to the top set. Eight std wrappers missed
-//! the same way. The yield is carried per declaration now, so the table is not
-//! what answers and there is no list to keep up to date.
+//! character more — missed and fell to the top set. The yield is carried per
+//! declaration now, so a wrapper answers from its own body.
+//!
+//! That reaches a wrapper whose body pipes through a declaration and no
+//! further. `net/read c` is `builtin_net_read c.handle` with nothing after
+//! it, so there is no declaration to ask and the builtin table still answers
+//! — and it was missing five effect builtins. That half is pinned in
+//! tests/sockets_serve.rs, over a real socket, and the table is checked for
+//! completeness in tests/every_effect_builtin_says_what_it_yields.rs.
 //!
 //! `reading_branch.kso` is the fourth, and a second hole of the same shape one
 //! level down. `desc_yield_of` looks through a binding to what the bound

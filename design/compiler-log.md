@@ -20,45 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — THE COMPILE ROW MOVED 992 AND THE FRONT END DID NOT
-
-**DONE.** CI refused the branch on the vein that is keyed by silicon:
-
-```
-the work the FRONT END does changed on family0x19-model0x1:
-bench/compile_instructions_by_cpu.txt says 41631006 and this run counted 41631998.
-The row is keyed by silicon, so the runner is not the answer here:
-the same family and model counted both numbers.
-```
-
-`compile_instructions` **41,631,006 -> 41,631,998, +992 (+0.0024%)**, and the
-cause is written in that file's own header from earlier the same day:
-`src/main.rs` embeds the runtime with `include_str!("runtime.c")`, so a change
-to the runtime changes the compiler binary even when it changes no compiler
-code. The wrong-arity reorder added a few lines of C; the embedded source grew,
-the rodata after it shifted, and the front end does the same work at different
-addresses. `compile_allocs`, `compile_peak_bytes` and every fixpoint counter are
-byte-identical, which is what says the work did not change.
-
-The Zen 3 row (0x19/0x1) this run landed on is re-sat. The Intel (0x6/0xcf) and
-Zen 4 (0x19/0x11) rows are removed rather than carried forward, on the rule
-already recorded there: a value measured against the old binary is worse than no
-value. They are re-sittings when they next refuse, and each costs one red run.
-
-**This is the second time in one day this file has been emptied for the same
-mechanism**, and the price is now visible rather than argued: a runtime change
-of any size costs one red CI run per chip in the pool before the vein reads
-clean again. Whether the vein should measure the front end against a binary
-that embeds the runtime is a real question and it is not this change's to
-answer; what is clear is that `include_str!` makes "the front end moved" and
-"the runtime moved" indistinguishable to this row, and only the other three
-compile counters can tell them apart.
-
-Welfare is 76.01 before and after — 992 parts in 41.6 million is below the
-hundredth the score is rounded to.
-
----
-
 ## 2026-09-03 — THE REPORT NAMED THE GATE AND NOT ITS REASON
 
 **DONE.** Naming the gate in `ALREADY RED` answered the question it was built
@@ -2449,3 +2410,70 @@ because the corpus was written around it" — with the recommendation to ship
 and move the floor, and with the honest open question stated: whether "the
 corpus is blind here" may move a floor at all, or whether the corpus change
 has to come first.
+
+## 2026-09-04 — the per-declaration yield reaches as far as the declarations, and five builtins were past the end of it
+
+**Searched first**, as the filing gate requires: design/compiler-log.md (the
+entry above, which is the one being corrected, plus the 2026-09-03 entry it
+answers), design/log/compiler-log-archive.md (2026-07-28 on `desc_yield`'s
+missing arms and 2026-07-29 on the error-corpus program written to close that
+gap — neither reaches the builtin table's completeness) and every design/*.md.
+Nothing rules on what follows.
+
+**CORRECTS the entry above.** It says eight std effect wrappers fell to the top
+set and that carrying the yield per declaration fixes them. Five of the eight
+it does not fix, and the reason is structural rather than an oversight in the
+list: the per-declaration answer reaches a wrapper written *over a declaration*.
+`net/listen at` is `builtin_listen at . held`, and `held` is a group the
+fixpoint has walked, so the wrapper answers from its own body. `net/read c` is
+`builtin_net_read c.handle` with nothing after it. There is no declaration to
+ask, so the builtin table is still what answers — and the table did not name
+`net_read`, `net_port`, `accept`, `listen` or `kill`.
+
+The entry above also says "the table remains, reached only by names the program
+did not declare — true builtins", which is exactly right and is the sentence
+that should have prompted the check below. It did not.
+
+**Watched red first**, over a real socket rather than a hand-built handle: a
+server that reads a request and threads it through a loop that allocates.
+
+    beat_iters=0      <- before, on branch head 48ac2f93
+    beat_iters=200    <- after
+
+200 and not 201: the loop runs inside a fiber the scheduler resumed, so the
+outermost bracket a whole-program loop gets is not there to count. The fixture
+is `A_REQUEST_THROUGH_A_LOOP` in tests/sockets_serve.rs, which already owns the
+port-file handshake and the serialising lock every socket test needs.
+
+**The yields, read off what the executor actually answers** (`src/eval.rs`,
+the `Desc` arms): `Receive` answers `Value::Str`, so `net_read` is STR;
+`SocketPort`, `Accept` and `Listen` answer `Value::Int`, so those three are
+INT; `Kill` answers `Value::NoneV`, which is the same nothing `Send`,
+`CloseSocket`, `Write` and `WriteFile` answer, so `kill` joins the group the
+table already scores 0.
+
+**And the table is checked now, so this cannot recur quietly.**
+tests/every_effect_builtin_says_what_it_yields.rs reads BOTH lists out of
+src/infer.rs — the arm of `builtin_returns` that answers `DESC | fails`, plus
+`print`, which is typed on its own beside `err` — and asserts every one of the
+twenty-two is named somewhere in `desc_yield`. Watched red by deleting
+`net_read`'s arm: *these builtins answer a description and desc_yield does not
+say what they yield: ["net_read"]*. A second spec pins the twenty-two by name,
+so a reading that silently finds nothing is a failure rather than a pass.
+
+**What it costs.** `compile_allocs` is 25,490 before and after — identical, to
+the block. Retired instructions on the container, same box and same tunables as
+the gate: 42,344,047 to 42,344,081, **+34**, and attributable rather than
+layout: `desc_yield_of` falls 42 as the `start` arm collapses into a `matches!`,
+and `desc_yield::base` rises 69 as two new arms call it. +34 is one fifteenth
+of the 508 quantum the entry above recorded, so CI's own pair will move by
+whatever it moves by and has to be re-sat from the job log. Every runtime
+counter is untouched — no benchmark in the corpus opens a socket or kills a
+process.
+
+**OPEN — the corpus still cannot see this class of fix.** Same shape as the
+gavel this branch is waiting on. The five builtins are absent from every
+benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
+scores exactly zero and pays 34 instructions. The socket golden pins the
+behaviour, which is what the goldens rule asks for; it does not put the
+dimension in front of welfare, and nothing here proposes that it should.

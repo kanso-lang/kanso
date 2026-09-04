@@ -1014,10 +1014,15 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
         }
         // A name the program declared: the fixpoint has walked its body and
         // knows what running its answer hands over. Asked before the builtin
-        // table below, and it is the whole of what an effect wrapper needs —
-        // `net/read c` and `os/read_file! p` are ordinary declarations, and a
-        // table keyed on their bare names could only ever list the ones
-        // somebody remembered.
+        // table below, so `os/read_file! p` answers from its own body rather
+        // than from whatever a table happened to list.
+        //
+        // It reaches as far as the declarations a wrapper is written over. A
+        // body that is a bare builtin call — `net/read c` is
+        // `builtin_net_read c.handle`, and nothing follows it — has no
+        // declaration to ask, and the table below is what answers. Which is
+        // why the table is checked against the set of builtins that answer a
+        // description, in tests/every_effect_builtin_says_what_it_yields.rs.
         Expr::App { head, args, piped, .. } => {
             if let Expr::Ident(n, _) = head.as_ref() {
                 if let Some(y) = group_yield(ctx, n.as_str(), args.len()) {
@@ -1035,10 +1040,17 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 Expr::Ident(n, _) if base(n) == "stdin" => STR,
                 // status, stdout, stderr — the std wrapper reads them into a record
                 Expr::Ident(n, _) if base(n) == "run" => LIST,
-                // the handle a later kill names
-                Expr::Ident(n, _) if base(n) == "start" => INT,
+                // the handle a later kill names, and the three socket
+                // handles the net wrappers read into their records
+                Expr::Ident(n, _)
+                    if matches!(base(n), "start" | "listen" | "accept" | "net_port") =>
+                {
+                    INT
+                }
                 Expr::Ident(n, _) if base(n) == "args" => LIST,
                 Expr::Ident(n, _) if base(n) == "random" => INT,
+                // the bytes a connection had waiting, as text
+                Expr::Ident(n, _) if base(n) == "net_read" => STR,
                 // an unset variable yields none, which is a value the consumer
                 // dispatches on rather than a failure it has to trap
                 Expr::Ident(n, _) if base(n) == "env" => STR | NONE,
@@ -1056,6 +1068,7 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                             | "write_file"
                             | "make_dir"
                             | "sleep"
+                            | "kill"
                             | "net_write"
                             | "net_close"
                     ) =>
