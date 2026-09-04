@@ -2254,13 +2254,33 @@ run, which is the price this file's header already names for a keyed row.
 
 CI then landed on Zen 3 and refused, which is the deletion working: no row,
 no comparison. It counted 41,830,604 on sha d89bda86538a — `family0x19-
-model0x11`'s value to the instruction, on the same binary — so the row is
-added and the two AMD models agree for the second consecutive binary. The one
-before read 41,829,232 on both; the one before that read 41,503,893 and
-41,498,829, 5,064 apart. Two binaries of agreement does not merge the keys,
-because the earlier split was on the same two models; what it says is that the
-split has not come back. The Intel row is still absent and still wants its own
-sitting, one per CI run, as the header priced it.
+model0x11`'s value to the instruction — and I wrote the row and said the two
+AMD models agree for the second consecutive binary.
+
+**That was one reading, and the next one corrected it.** Nine minutes later
+the same chip on the same binary counted 41,831,112:
+
+    00:37:38  family0x19-model0x1  d89bda86538a  41,830,604
+    00:46:23  family0x19-model0x1  d89bda86538a  41,831,112
+
+508 apart, which is the residual this file's header records on the INTEL from
+an entirely different binary — 41,831,767 and 41,832,275. Two vendors, two
+binaries, the same gap. That is the strongest evidence the vein has that the
+split is one mechanism rather than a coincidence of layouts, and it arrived
+because a single pin refused a second reading instead of averaging it.
+
+Where it lives, off the two profiles: every kanso frame is identical to the
+instruction — `eval_expr'2` 1,633,593, `check_merged` 1,586,580, `infer`
+1,238,613, `lex_line` 866,486, `parse` 589,004 — and the whole difference is
+glibc, `_int_malloc` −580, `_int_free` −19, `__memcmp_avx2_movbe` +66. The
+front end does the same work; the allocator walks a different heap. That is
+what the header attributes this term to and what pinning the tunables did not
+remove.
+
+So Zen 3's row takes the pair and Zen 4's stays a single, because Zen 4 has
+shown one mode on this binary and a pair there would be a prediction. The
+Intel row is still absent and still wants its own sitting, one per CI run, as
+the header priced it.
 
 Welfare 73.06, unmoved: 1,372 instructions on a term whose baseline is
 57,029,831 is below the gate's own resolution.
