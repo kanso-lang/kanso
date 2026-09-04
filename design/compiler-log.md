@@ -2282,5 +2282,20 @@ shown one mode on this binary and a pair there would be a prediction. The
 Intel row is still absent and still wants its own sitting, one per CI run, as
 the header priced it.
 
+**And the prediction resolved itself within the hour.** Main's first run after
+the merge landed on Zen 4 and counted 41,831,112 against its single — the
+second mode, the same 508. So the pair was not a prediction there either; it
+was one reading away, and the single refusing is what produced the second.
+
+    family0x19-model0x11   41,830,604   and   41,831,112
+    family0x19-model0x1    41,830,604   and   41,831,112
+
+Four readings, two chips, one binary, and every one lands on one of two
+values. Neither model has produced a third. The mode belongs to the run and
+not to the silicon: the same silicon produces both, and different silicon
+produces the same pair. What would settle it is a third value on any chip, or
+one chip producing the same value twenty times running. The cap of two is what
+refuses to quietly absorb the first if it comes.
+
 Welfare 73.06, unmoved: 1,372 instructions on a term whose baseline is
 57,029,831 is below the gate's own resolution.

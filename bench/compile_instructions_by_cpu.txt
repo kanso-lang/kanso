@@ -665,7 +665,26 @@
 # reading may well go red on the next run here. That is the designed answer
 # and not a reason to widen it: the second reading is a measurement, and
 # writing a pair now would be predicting a number nobody counted.
-family0x19-model0x11 41830604
+# 2026-09-04, AND ZEN 4 SHOWED THE SAME TWO VALUES. Main's first run after the
+# merge landed on family0x19-model0x11 and counted 41,831,112 against its
+# single of 41,830,604 — the second mode, the same 508, on the same binary.
+#
+#   family0x19-model0x11   41,830,604   and   41,831,112
+#   family0x19-model0x1    41,830,604   and   41,831,112
+#
+# Four readings, two chips, one binary, and every one of them lands on one of
+# TWO values. Neither model has produced a third. That is the strongest form
+# the argument has taken: the mode belongs to the run and not to the silicon,
+# because the same silicon produces both and different silicon produces the
+# same pair. The pair per chip stays the shape rather than becoming one shared
+# row, because a merged row would carry one model's readings for the other and
+# this file has already been burned by exactly that (the 5,064 split of an
+# earlier binary, on these same two models).
+#
+# What would settle it is a chip that produces a THIRD value, or a run that
+# produces the same value twenty times. Neither has happened, and the cap of
+# two is what refuses to accommodate the first if it does.
+family0x19-model0x11 41830604 41831112
 
 # 2026-09-04, THE RE-SITTING THE DELETION ASKED FOR, and the two AMD models
 # agree again. CI landed on Zen 3 next, found no row — the block above had
