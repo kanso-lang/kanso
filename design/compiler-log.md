@@ -2579,6 +2579,17 @@ the 2026-09-03 exclusion argument that was ruled against, so it is not a free
 choice. Filed beside the corpus question in design/pending-gavels.md, because
 the two together decide what this branch's 0.01 actually means.
 
+**kq's pin is one merge behind and that is correct, checked rather than
+assumed.** kq pins 3b9df304 and main is 159f6b2b (kanso#1239). The standing
+rule is that a kanso merge warrants a pin bump because a change moving no
+allocation counter still moves the instructions vein — but #1239 touched
+`bench/compile_instructions_by_cpu.txt` and `design/compiler-log.md` and
+nothing else. `git diff 3b9df304 159f6b2b -- src/ lib/ Cargo.toml Cargo.lock
+build.rs` is empty, and the only `include_str!`s reach `src/` and `lib/`, so
+the toolchain kq builds is the same binary at both revisions. No vein of kq's
+five can move, and a bump would spend a CI round to prove it. The next bump is
+whenever a merge touches the toolchain, and this branch will be one.
+
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
 benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
