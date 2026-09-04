@@ -1,0 +1,73 @@
+# THE OBJECTIVE'S COUNTERS, EACH AGAINST THE TREND GATE'S KEYS FOR IT.
+#
+# `<objective counter> <gate key>`, one pair a line, several lines for a
+# counter that is a sum. The gate's key carries its golden's prefix, so
+# `work_jsonbench` is the row welfare calls `decode_instructions`.
+#
+# WHY THE LINK IS WRITTEN DOWN RATHER THAN DERIVED. welfare renames on the
+# way in and, for the memory terms, also sums: `peak_of` adds the arena,
+# held and perm peaks, so a `*_peak_bytes` term is a derived quantity and no
+# row anywhere carries its value. A join on values was measured before this
+# file was written and cannot work — of the 27 counters, six have no row
+# holding their number at all and two match several at once (2,097,152 is
+# `arena_peak_bytes` in four goldens).
+#
+# tests/the_objective_reads_what_the_gate_watches.rs replays this file: it
+# sums each counter's keys out of the goldens the trend gate walks and
+# asserts the total is what `welfare --counters` prints, for all 27 and no
+# others. A rename on either side, a pool added to `peak_of`, or a counter
+# joining the objective turns that spec red rather than quietly unlinking a
+# term.
+#
+# What reads it is the trend gate's `shifted?`: a golden row whose objective
+# counter's welfare baseline moved in the same diff is a re-basing, and a
+# re-basing is neither better nor worse.
+
+# runtime work, one benchmark a row
+decode_instructions work_jsonbench
+encode_instructions work_encodebench
+oneshot_instructions work_oneshot
+basket_instructions work_basket
+wide_instructions work_widebench
+deep_instructions work_deepbench
+pending_instructions work_pendbench
+digest_instructions work_digestbench
+scan_instructions work_scanbench
+escape_instructions work_escapebench
+index_instructions work_indexbench
+read_instructions work_readbench
+
+# peak memory: three pools summed, which is why no single row holds it
+decode_peak_bytes arena_peak_bytes
+decode_peak_bytes held_peak_bytes
+decode_peak_bytes perm_peak_bytes
+encode_peak_bytes encode_arena_peak_bytes
+encode_peak_bytes encode_held_peak_bytes
+encode_peak_bytes encode_perm_peak_bytes
+oneshot_peak_bytes oneshot_arena_peak_bytes
+oneshot_peak_bytes oneshot_held_peak_bytes
+oneshot_peak_bytes oneshot_perm_peak_bytes
+basket_peak_bytes basket_arena_peak_bytes
+basket_peak_bytes basket_held_peak_bytes
+basket_peak_bytes basket_perm_peak_bytes
+scan_peak_bytes scan_arena_peak_bytes
+scan_peak_bytes scan_held_peak_bytes
+scan_peak_bytes scan_perm_peak_bytes
+digest_peak_bytes digest_arena_peak_bytes
+digest_peak_bytes digest_held_peak_bytes
+digest_peak_bytes digest_perm_peak_bytes
+read_peak_bytes read_arena_peak_bytes
+read_peak_bytes read_held_peak_bytes
+read_peak_bytes read_perm_peak_bytes
+
+# arena blocks claimed
+decode_arena_blocks arena_blocks
+encode_arena_blocks encode_arena_blocks
+scan_arena_blocks scan_arena_blocks
+digest_arena_blocks digest_arena_blocks
+read_arena_blocks read_arena_blocks
+
+# what compiling costs
+compile_instructions compile_instructions
+compile_allocs compile_allocs
+compile_peak_bytes compile_peak_bytes

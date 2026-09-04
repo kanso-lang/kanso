@@ -2865,3 +2865,45 @@ and a refusal. `a_read_counter_worsens_for_nothing` is that mutation, rowed.
 `bench/compile_libraries_golden.txt` is the only other file in `bench/` the
 gate does not walk, and it belongs there: it holds five sonames rather than
 counters, and its own gate diffs it byte for byte.
+
+## 2026-09-04 — THE LINK IS WRITTEN DOWN, AND THE RUNTIME HALF OF THE RE-BASING CHECK WORKS
+
+**DONE, and it closes the OPEN in the entry two above.** That entry said the
+many-to-one link between welfare's counters and the trend gate's keys "is a real
+piece of design rather than a plumbing change". Built and it is a table:
+`bench/objective_sources.txt`, 41 rows for 27 counters, `<objective counter>
+<gate key>` a line, several lines for a counter that is a sum.
+
+Twelve counters are one row each (`decode_instructions work_jsonbench`), eight
+more are identities on the compile goldens and the arena blocks, and seven
+`*_peak_bytes` are three rows apiece because `peak_of` adds the arena, held and
+perm pools. Written and then replayed against `welfare --counters`: 27 counters,
+0 unreproduced.
+
+**A prefix, not a name.** The first cut classified nothing in the runtime vein
+and I nearly recorded that as a limit again. `unchanged` was handing `shifted?`
+the counter with its golden's prefix STRIPPED — `jsonbench`, where the link file
+names `work_jsonbench` — so the check worked only for the four goldens whose
+prefix is empty, which is exactly the compile vein it was first written for. The
+probe that caught it was moving `jsonbench` and `decode_instructions` together
+and watching the gate still say `improved`. It says `re-based` now.
+
+**The spec is the whole of it, because a written link is one a rename breaks
+silently.** `tests/the_objective_reads_what_the_gate_watches.rs` reads the
+gate's own golden-and-prefix bindings, sums each counter's rows out of those
+files, and asserts the total is what welfare prints — for every counter welfare
+scores and no counter it does not. Watched red four ways: a counter dropping out
+of the file, a row renamed on the golden side, a name the file invents, and a
+nonzero pool removed from a sum.
+
+**What it cannot see, said rather than left to be found.** The check is on
+totals, so a pool reading nought contributes nothing and dropping its row costs
+the sum nothing. Every `held_peak_bytes` and `perm_peak_bytes` in the goldens is
+nought today, which makes twelve of the 41 rows unfalsifiable right now. The
+direction that matters is covered: a pool added to `peak_of` and not to the file
+is nonzero by the time anyone cares, and a dropped zero row starts failing the
+day its pool carries a byte. The spec's own header says so.
+
+The `RE-BASED, unclaimed` listing survives with a narrower meaning: a baseline
+that moved while not one of the golden rows it is made of did — a ratio moving
+with no measurement behind it — and it still owes a sentence.

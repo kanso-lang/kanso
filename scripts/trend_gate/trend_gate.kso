@@ -277,6 +277,8 @@ mem_dir = "tests/golden/mem"
 
 floor_file = "bench/welfare_floor.json"
 
+sources_file = "bench/objective_sources.txt"
+
 # One history entry per `{"floor":` — the key opens each record and appears
 # nowhere else in the file, the top-level floor being reached through a comma.
 marker = "\{\"floor\":"
@@ -493,13 +495,17 @@ fn grew? theirs ours
 # moved in the same diff is therefore neither better nor worse, and the third
 # state kanso#1200 built for minted counters is the shape this one takes too.
 #
-# WHAT IT REACHES: welfare renames the runtime counters — `jsonbench` is
-# `decode_instructions` in the baseline — so the name match below covers the
-# compile vein, where every re-basing so far has happened, and misses the
-# runtime one. `orphans` is the backstop: a baseline value that moved and
-# matched no counter is listed by its welfare name and owes a sentence, so a
-# runtime re-basing is visible rather than silent even though the gate cannot
-# say which golden row it belongs to.
+# WHICH GOLDEN ROW BELONGS TO WHICH BASELINE is written down in
+# bench/objective_sources.txt rather than guessed. welfare renames on the way
+# in — `work_jsonbench` here is `decode_instructions` there — and for the
+# memory terms it also sums three pools, so a `*_peak_bytes` baseline has no
+# single row at all and a join on values cannot work. That file's own header
+# carries the measurement, and a spec replays it against `welfare --counters`
+# so a rename on either side turns CI red instead of unlinking a term.
+#
+# `orphans` is what is left over: a baseline that moved while none of its rows
+# did. That is a ratio moving with no measurement behind it, which is worth a
+# sentence of its own.
 fn baselines text
   opened (text/split text "\"baseline\":\{")
 
@@ -531,10 +537,10 @@ fn taken parts false
 
 # A name the baseline carries on one side and not the other is a term joining
 # or leaving the objective, which is its own kind of news and not this one.
-fn shifted? pins name
-  theirs = pinned pins[1]! name
-  ours = pinned pins[2]! name
-  present? theirs and present? ours and theirs != ours
+fn moved? theirs ours name
+  was = pinned theirs name
+  is = pinned ours name
+  present? was and present? is and was != is
 
 fn present? ""
   false
@@ -542,18 +548,40 @@ fn present? ""
 fn present? _
   true
 
-fn keys_of block
-  list/to_list (list/map (text/split block ",") key_of)
+# `pins` is three lists of strings: the gate keys this branch re-based, the
+# objective counters whose baseline moved, and the link file's own rows. The
+# walk carries it whole rather than the two baselines, so the diffing happens
+# once at the start instead of per counter per golden.
+fn linkage theirs ours src
+  rows = list/to_list (list/select (text/split src "\n") body?)
+  gone = list/to_list (list/select rows (r -> moved? theirs ours (name_of r)))
+  keys = list/to_list (list/map gone key_of)
+  [keys (deduped (list/to_list (list/map gone name_of))) rows]
 
-fn key_of pair
-  parts = text/split pair ":"
-  unquoted parts[1]!
+fn name_of row
+  parts = text/split row " "
+  parts[1]!
 
-fn unquoted q
-  text/slice q 2 (length q - 1)
+fn key_of row
+  parts = text/split row " "
+  parts[2]!
 
-fn re_based_keys pins
-  list/to_list (list/select (keys_of pins[2]!) (k -> shifted? pins k))
+# A counter that is a sum has a row per pool, so its name comes back once a
+# pool and the listing would say it three times.
+fn deduped names
+  list/fold names [] seen_once
+
+fn seen_once seen n
+  added_once seen n (found? n seen)
+
+fn added_once seen _ true
+  seen
+
+fn added_once seen n false
+  text/concat seen [n]
+
+fn shifted? pins key
+  found? key pins[1]!
 
 fn log_delta base
   argv = ["diff" base "--" "design/compiler-log.md"]
@@ -659,7 +687,11 @@ fn unchanged _ _ _ _ true _
 fn unchanged golden name before after false pins
   bare = bare_name name golden[2]!
   worse = worsened? bare before after
-  told golden name before after worse (named? bare) (shifted? pins bare)
+  # `name` and not `bare`: the link file names the gate's key, prefix and
+  # all, where `bare` is what the direction tables look up. They differ for
+  # every golden but the four with an empty prefix — which is why the compile
+  # vein classified correctly under `bare` and the runtime vein did not.
+  told golden name before after worse (named? bare) (shifted? pins name)
 
 # Does a direction table name this counter at all? A counter neither table
 # knows has no direction, and answering `improved` for it is how a change with
@@ -751,7 +783,8 @@ fn started base
     . (theirs -> os/read_file! floor_file . (ours -> both base theirs ours))
 
 fn both base theirs ours
-  reading base [(baselines theirs) (baselines ours)]
+  os/read_file! sources_file
+    . (src -> reading base (linkage (baselines theirs) (baselines ours) src))
 
 fn reading base pins
   os/list_dir mem_dir . (names -> gathered base names pins)
@@ -772,7 +805,7 @@ fn verdict moves added att pins
   worse = list/to_list (list/select known (m -> m.worse))
   better = list/to_list (list/reject known (m -> m.worse))
   adrift = list/to_list (list/reject held (m -> m.ruled))
-  orphans = unclaimed (re_based_keys pins) shifted
+  orphans = unclaimed pins[2]! pins[3]! shifted
   reb = [shifted orphans]
   seen = [worse better adrift]
   said moves . (_ -> weighed_up moves seen new_ones reb added att)
@@ -780,11 +813,11 @@ fn verdict moves added att pins
 # A baseline value that moved and no golden row claimed. See `baselines`: the
 # runtime counters are renamed on the way into the objective, so this is where
 # a runtime re-basing lands.
-fn unclaimed keys shifted
-  list/to_list (list/reject keys (k -> claimed? shifted k))
+fn unclaimed names rows shifted
+  list/to_list (list/reject names (n -> claimed? rows shifted n))
 
-fn claimed? shifted k
-  list/any? shifted (m -> m.key == k)
+fn claimed? rows shifted n
+  list/any? shifted (m -> found? "{n} {m.key}" rows)
 
 # `adrift` counts toward neither side of the pure-regression rule. A counter
 # no table classifies cannot say whether a change came out ahead, and letting
@@ -833,10 +866,9 @@ fn unattributed _ true
   io/write ""
 
 fn unattributed orphans false
-  io/write "\nRE-BASED, unclaimed — these welfare baselines moved and no\n"
-  >> io/write "golden row is named for them (welfare renames the runtime\n"
-  >> io/write "counters), so read the moves above knowing one of them is a\n"
-  >> io/write "definition change:\n"
+  io/write "\nRE-BASED, unclaimed — these welfare baselines moved and not\n"
+  >> io/write "one of the golden rows they are made of did, so a ratio\n"
+  >> io/write "moved with no measurement behind it. That wants a sentence:\n"
   >> io/write (text/join (list/to_list (list/map orphans name_line)) "")
 
 fn name_line k
