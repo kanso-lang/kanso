@@ -2368,6 +2368,40 @@ the err gone. jsonbench reads a file that is there, so it passed both ways.
 The comment now says the constraint is retired and what moving the spelling
 would take; the code is unchanged.
 
+**CI's four sittings, and the three host-gated veins are pinned to them.**
+The work vein falls on the same three programs the emitted count did, and by
+amounts the size of the calls that went away:
+
+    jsonbench   2,098,864,932 -> 2,098,864,471    -461
+    pendbench     715,732,729 ->   715,732,721      -8
+    digestbench    81,256,613 ->    81,256,592     -21
+
+The other eight rows are byte-identical, which is the check that the fall is
+these three programs and not the runner.
+
+**compile_allocs rises by exactly five blocks, and the five are named.** 25,485
+to 25,490, with 1,712 more bytes. `compile_rounds` holds at 40 and
+`compile_passes` at 5, so the fixpoint does not iterate more — the five blocks
+are the `decl_yields` vector, one per whole-program inference, and the front
+end runs five. Measured in a worktree at `origin/main` against this branch on
+the same host, and the baseline read 25,485 there, matching CI's golden to the
+block: this counter is reproducible in the container even though its gate is
+keyed to the runner's rustc.
+
+**compile_instructions: 41,930,035 on family0x19-model0x1, sha 42283602b2c8.**
+Against the pair that row held, +99,431, or +0.2377%. The container measured
+this change at +108,880 on its own binary — two hosts, two absolute values,
+one direction and the same order of magnitude, which is as much agreement as
+this row admits.
+
+**Both per-cpu rows went stale and only one was re-sat, so the other is gone
+rather than carried.** Zen 4 has not been counted on this binary, and keeping
+its old pair would pin two numbers nobody measured for a compiler that no
+longer exists. Removing the row makes the gate refuse on that chip and print
+the sitting, which is what it already does for the Intel key. Proven on the
+branch: the gate accepts 41,930,035 on Zen 3, refuses a fabricated second
+value, and refuses the now-unkeyed Zen 4.
+
 **Welfare falls about 0.008 and the reason is the corpus, not the weights.**
 Filed as a pending gavel — "The welfare model cannot see the yield hole,
 because the corpus was written around it" — with the recommendation to ship

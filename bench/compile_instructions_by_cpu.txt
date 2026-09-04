@@ -684,7 +684,9 @@
 # What would settle it is a chip that produces a THIRD value, or a run that
 # produces the same value twenty times. Neither has happened, and the cap of
 # two is what refuses to accommodate the first if it does.
-family0x19-model0x11 41830604 41831112
+# (the family0x19-model0x11 row stood here with 41830604 41831112. It was
+#  measured on d89bda86538a and the front end has moved since; see the
+#  2026-09-04 block at the end for why it was removed rather than carried.)
 
 # 2026-09-04, THE RE-SITTING THE DELETION ASKED FOR, and the two AMD models
 # agree again. CI landed on Zen 3 next, found no row — the block above had
@@ -728,4 +730,24 @@ family0x19-model0x11 41830604 41831112
 # was SEEN to read on one binary, each measured, and a third refused. Zen 4
 # stays a single because it has shown one mode here; writing a pair there
 # would be predicting a number nobody counted.
-family0x19-model0x1 41830604 41831112
+#
+# 2026-09-04, and EVERY ROW IN THIS FILE WENT STALE AT ONCE. The front end
+# gained a per-declaration yield table, which moves the row itself rather than
+# the heap under it: Zen 3 on sha 42283602b2c8 counts 41,930,035 against the
+# 41,830,604 and 41,831,112 the pair recorded on d89bda86538a. That is
+# +99,431, and the container measured the same change at +108,880 on its own
+# binary — two hosts, two absolute values, one direction and one order of
+# magnitude.
+#
+# BOTH ROWS WERE STALE AND ONLY ONE WAS RE-SAT, so the other is gone rather
+# than carried. Zen 4 has not been counted on this binary at all, and keeping
+# its old pair would pin two numbers nobody measured, for a compiler that no
+# longer exists — the fault the pair rule was written against, spelled the
+# other way round. Removing the row makes the gate refuse on that chip and
+# print the sitting, which is what it already does for the Intel key and is
+# the designed path for a chip with no reading.
+#
+# Zen 3 is therefore a SINGLE again, on one reading. If the 508 belongs to the
+# run rather than the binary, the second mode will appear here within a few
+# runs and the pair comes back — measured, as before, never predicted.
+family0x19-model0x1 41930035

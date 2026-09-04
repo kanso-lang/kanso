@@ -253,4 +253,4 @@
 # inference, provenance and the advisories and stops, so the backend never
 # runs. Held: with the codegen change reverted and lib/json unchanged, the
 # container reads 25,485 and 715,275 — the same two numbers, to the byte.
-compile_allocs=25485
+compile_allocs=25490
