@@ -2471,6 +2471,17 @@ whatever it moves by and has to be re-sat from the job log. Every runtime
 counter is untouched — no benchmark in the corpus opens a socket or kills a
 process.
 
+**What is measured and what is not.** The fixture measures `net/read`, and
+that is the one of the five with a heapish yield: a string is what `beat.rs`
+has to prove before it will carry a slot across a rewind. `net_port`, `accept`
+and `listen` yield an int and `kill` yields nothing, so none of the four has a
+carry decision to change and no fixture here claims one. They are in the table
+because the completeness spec requires every builtin that answers a description
+to have an answer, and because a name absent from the table answers the top set
+rather than nothing — which is a wrong answer whether or not anything currently
+reads it. That is the whole of the case for those four; it is not a measured
+win and is not written as one.
+
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
 benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
