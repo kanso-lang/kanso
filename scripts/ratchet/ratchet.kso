@@ -256,6 +256,18 @@ read_counters = row
   (breaking "a_bang_read_loses_its_beat")
   benchmarks
 
+# The compile row stopped counting process startup on 2026-09-04, because that
+# half moves with binary layout and not with the compiler. What it can still
+# hide is a new dependency, whose startup cost was measured at 32,090, so this
+# row watches the list that would catch one.
+compile_libraries = row
+  "a shared object the compiler grew and the instruction row cannot see"
+  true
+  (gating "compile_libraries")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_library_the_row_cannot_see")
+  no_setup
+
 mem_shapes = row
   "a memory shape the fixture's counters no longer describe"
   true
@@ -727,7 +739,8 @@ rows_a = [formatting linting python_free goldens mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
-rows_b1 = text/concat rows_b1a [thunk_walk scan_counters read_counters]
+rows_b1 =
+  text/concat rows_b1a [thunk_walk scan_counters read_counters compile_libraries]
 
 rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
 

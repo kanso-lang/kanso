@@ -104,8 +104,63 @@ tune=$tune:glibc.malloc.tcache_count=7
     --callgrind-out-file=/tmp/cg.compile ./kanso check lib/json \
     >/dev/null 2>/dev/null
 )
-printf 'compile_instructions=%s\n' \
-  "$(grep -o '^summary: [0-9]*' /tmp/cg.compile | tr -dc 0-9)" > compile_ir_got.txt
+# THE COMPILER'S OWN WORK, not the whole process. `std::rt::lang_start::
+# {{closure}}` inclusive is everything `main` does, and that INCLUDES every
+# libc call the compiler makes — so this is not the "stop counting glibc" that
+# 2026-09-03 ruled out, and the difference is the whole point. What it drops is
+# the 465,122 instructions ABOVE that frame: the loader mapping five shared
+# objects, and Rust placing its stack guard, which parses /proc/self/maps and
+# therefore moves with where the linker happened to put things.
+#
+# HOW MUCH IT BUYS, and it is not everything. Measured 2026-09-04 on seven
+# binaries whose sources differ only in code or data nothing reaches:
+#
+#   variant           .text     row         maps     program
+#   baseline          2550854   42,344,081  112,580  41,878,959
+#   +50 dead fns      2552534   42,348,024  114,845  41,879,987
+#   +200 dead fns     2558486   42,347,128  112,586  41,879,361
+#   +400 dead fns     2565174   42,348,044  110,341  41,879,922
+#   +3 KiB .bss       2550854   42,346,221  114,720  41,878,959
+#   +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
+#   +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959
+#
+# The row spans 3,963 across those seven and the program frame spans 1,028, so
+# the split takes about three quarters of the layout term. The residue is real
+# and it comes from .text: 7,632 bytes of code no execution reaches moves the
+# program frame 402, and the movement is not monotone in .text. Data-only
+# changes leave the frame identical to the instruction, which is what the
+# earlier four-binary reading saw — .bss and .rodata are the cases where the
+# drop is total, and .text is not one of them.
+#
+# So a difference near a thousand on this row is not evidence on its own.
+# Build the pair and read them.
+#
+# Startup work scales with what is loaded, so the one compiler change that can
+# move the dropped half is growing a dependency — one more shared object was
+# measured at 32,090. bench/compile_libraries_golden.txt watches that by name,
+# which is a better answer than a number moving inside the layout noise.
+#
+# A REFUSAL rather than an empty value when the frame is missing. A toolchain
+# that renames it must stop this gate, not pin whatever the pipe returned:
+# scripts/perf_record read welfare's score as a field of a line it never
+# checked, and reported `missing index 2` against its own reader for a day.
+if ! command -v callgrind_annotate >/dev/null; then
+  echo "::error::callgrind_annotate is not installed, and the row is read out"
+  echo "::error::of its inclusive profile rather than the summary line."
+  exit 1
+fi
+own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.compile 2>/dev/null \
+      | awk '/lang_start::\{\{closure\}\}/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+case "$own" in
+  '' | *[!0-9]*)
+    echo "::error::the profile carries no std::rt::lang_start::{{closure}} frame,"
+    echo "::error::so the compiler's own work cannot be read out of it. A"
+    echo "::error::toolchain that renamed that frame stops this gate rather than"
+    echo "::error::pinning whatever the pipe returned."
+    exit 1
+    ;;
+esac
+printf 'compile_instructions=%s\n' "$own" > compile_ir_got.txt
 
 # ONE GREPPABLE LINE PER RUN, pairing the value with the two things that move
 # it. Both are now established rather than suspected. The cpu moves it about

@@ -350,6 +350,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/scan_counters.sh
+      # The guard on the half of startup compile_instructions.sh stops
+      # counting. That gate reads the compiler's own work and is deterministic;
+      # a new shared object is the one compiler change that moves what it drops,
+      # and this catches it by name rather than as a number inside layout noise.
+      - name: compiler libraries
+        id: libraries
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/compile_libraries.sh
       # The only vein whose headline row is a PEAK rather than a total:
       # sha256 holds the whole message live at once, so arena_peak_bytes here
       # is the number a memory change moves. Every other benchmark's peak is
@@ -408,7 +417,8 @@ jobs:
                       "pending-cell counters:${{ steps.pend.outcome }}" \
                       "digest counters:${{ steps.digest.outcome }}" \
                       "read counters:${{ steps.read.outcome }}" \
-                      "scan counters:${{ steps.scan.outcome }}"; do
+                      "scan counters:${{ steps.scan.outcome }}" \
+                      "compiler libraries:${{ steps.libraries.outcome }}"; do
             case "$vein" in
               *:failure)
                 echo "::error::${vein%:*} disagrees with its golden"
