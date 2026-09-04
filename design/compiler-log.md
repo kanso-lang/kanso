@@ -2707,13 +2707,25 @@ live file was at 44 against a budget of forty.
 **One of them is still OPEN and this entry is where it stays findable.** The
 first of the five holds *the third cause*: `family0x6-model0xcf` counted
 41,832,275 at 12:33 and 41,831,767 at 13:05 — 508 apart, same key, same binary,
-no front-end change in the diff — so the key does not determine the row, and
-the per-chip table rests on a weaker premise than kanso#1226 claimed for it. It
-wants a sitting: several runs on one Emerald Rapids runner, to see whether the
-value is bimodal there the way it was across the two AMD models before the
-tunables were pinned. That cannot be forced from here; CI lands where it lands.
+no front-end change in the diff — so the key did not determine the row, and the
+per-chip table rested on a weaker premise than kanso#1226 claimed for it.
 
-Nothing on the compile row moved on that account today. A third chip was
-recorded on kanso#1242 — `family0x1a-model0x2`, reading 41,379,840, the same to
-the instruction as both AMD models — which says the keys agree on this binary
-and says nothing about whether one of them disagrees with itself.
+**AND THE THREAD IS CHEAPER THAN IT LOOKS, BECAUSE THE DEFINITION MOVED UNDER
+IT.** Both those readings are ~41.8M, which is the WHOLE-PROCESS row. kanso#1241
+redefined the row to `kanso::main` inclusive and dropped 465,864 instructions of
+loader and stack guard, and the fifth of the archived entries names the only
+mechanism that ever fit the 508: glibc parsing `/proc/self/maps` before `main`,
+at a cost that is a property of the host's memory map. That parse is now outside
+the count.
+
+So the sitting the thread asks for is no longer several deliberate runs. It is
+the next time CI lands on `family0x6-model0xcf` at all: a row recorded there
+under the new definition, and then a second reading on the same binary, settles
+it either way for free. If the disagreement is gone, the maps parse was the
+mechanism and #1241 removed it. If it survives, the mechanism was never the
+loader and the per-chip premise is weak in a way nothing here has explained.
+
+A third chip was recorded on kanso#1242 — `family0x1a-model0x2`, reading
+41,379,840, the same to the instruction as both AMD models. That says the keys
+agree on this binary and says nothing about whether one of them disagrees with
+itself.
