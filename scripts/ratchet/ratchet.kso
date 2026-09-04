@@ -515,6 +515,18 @@ trend_adrift = row
 # let it stand in for the trade a worsening needs. kanso#1241 is the fixture:
 # `improved: compile_instructions 41,845,704 -> 41,379,840` is in the record
 # of that merge and nothing in the compiler got faster.
+# The vein the list was short by. readbench joined the objective on the day
+# before this row and `bench/cost_golden_read.txt` was never listed, so two
+# welfare terms had no watcher at all — the same failure kanso#1046 fixed for
+# three other cost goldens, one benchmark later.
+trend_read = row
+  "the read vein's peak rising with nothing traded for it"
+  true
+  "./target/release/kanso run scripts/trend_gate -- origin/main"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_read_counter_worsens_for_nothing")
+  release
+
 trend_rebased = row
   "a definition change standing in for the win a regression needs"
   true
@@ -777,7 +789,7 @@ rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
 rows_c1a = text/concat rows_c1 [perf_row trend_runtime trend_joined]
 
-rows_c1t = text/concat rows_c1a [trend_adrift trend_rebased]
+rows_c1t = text/concat rows_c1a [trend_adrift trend_rebased trend_read]
 
 rows_c1p = text/concat rows_c1t [published_numbers]
 

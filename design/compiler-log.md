@@ -2838,3 +2838,30 @@ holds the paragraph to the values the `sed` lines write. Both of its assertions
 were watched red. The orphan path was watched too: moving
 `decode_instructions` alone is refused as UNSTATED and passes once a sentence
 names it.
+
+## 2026-09-04 — A BENCHMARK JOINED THE OBJECTIVE AND THE GATE THAT WATCHES THE OBJECTIVE COULD NOT SEE IT
+
+**DONE.** Found while mapping welfare's counters onto the trend gate's keys for
+the entry above: `bench/cost_golden_read.txt` is not in the gate's golden list.
+readbench joined the objective the day before (kanso#1240) with
+`read_arena_blocks` and `read_peak_bytes` as welfare terms, the golden was
+written, and the one program whose job is to watch the objective's inputs was
+never told about the file. Either row could have moved by any amount in
+silence.
+
+This is kanso#1046's finding one benchmark later — *"half the score's inputs
+were invisible to the gate that exists to watch the score's inputs"* — and it
+was found the same way both times, by asking which files in `bench/` the gate
+names. That is now the only method that has ever found one of these, and the
+list is short by one every time a benchmark lands.
+
+Setting `arena_peak_bytes` in the read golden to 9,999,999,999 produces NO
+OUTPUT WHATEVER from the gate at f3047edd, exit 0. With the file listed:
+
+    worsened: read_arena_peak_bytes 1,048,576 -> 9,999,999,999  (bench/cost_golden_read.txt)
+
+and a refusal. `a_read_counter_worsens_for_nothing` is that mutation, rowed.
+
+`bench/compile_libraries_golden.txt` is the only other file in `bench/` the
+gate does not walk, and it belongs there: it holds five sonames rather than
+counters, and its own gate diffs it byte for byte.

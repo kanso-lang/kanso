@@ -238,6 +238,19 @@ bench_wide = [["bench/cost_golden_wide.txt" "wide_"]]
 # holds, and it is linear in the message rather than constant.
 bench_digest = [["bench/cost_golden_digest.txt" "digest_"]]
 
+# The read vein, added with readbench on 2026-09-04 (kanso#1240) and listed
+# here on the same day it was found missing. Two of its rows are welfare terms
+# — `read_arena_blocks` and `read_peak_bytes` — so a benchmark joined the
+# OBJECTIVE while the gate that watches the objective's inputs could not see
+# its golden at all, and either row could have moved by any amount in silence.
+#
+# Found by asking which files in bench/ this program names, the same way the
+# three siblings above were, which is now the only method that has ever found
+# one of these. `bench/compile_libraries_golden.txt` is the other file the list
+# omits and it belongs omitted: it holds five sonames rather than counters, and
+# its own gate diffs it byte for byte.
+bench_read = [["bench/cost_golden_read.txt" "read_"]]
+
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
@@ -250,7 +263,7 @@ bench_emits = text/concat bench_emitted bench_emitted_others
 
 bench_run = text/concat bench_work (text/concat bench_emits bench_text)
 
-bench_wd = text/concat bench_wide bench_digest
+bench_wd = text/concat bench_wide (text/concat bench_digest bench_read)
 
 bench_rest = text/concat bench_escape (text/concat bench_scan bench_wd)
 
