@@ -41,11 +41,19 @@ fn staged(key: &str) -> std::path::PathBuf {
     }
     for argv in [
         vec!["init", "--quiet", "."],
-        vec!["-c", "user.email=spec@kanso.invalid", "-c", "user.name=spec", "commit",
-             "--quiet", "--allow-empty", "-m", "the stage"],
+        vec![
+            "-c",
+            "user.email=spec@kanso.invalid",
+            "-c",
+            "user.name=spec",
+            "commit",
+            "--quiet",
+            "--allow-empty",
+            "-m",
+            "the stage",
+        ],
     ] {
-        let done =
-            Command::new("git").args(argv).current_dir(&stage).output().expect("git runs");
+        let done = Command::new("git").args(argv).current_dir(&stage).output().expect("git runs");
         assert!(done.status.success(), "the stage wants a repository");
     }
     stage
@@ -101,8 +109,5 @@ fn a_welfare_that_prints_no_score_is_named_rather_than_indexed() {
 fn a_welfare_that_prints_a_score_is_read_as_before() {
     let (row, said) = recorded(&staged("healthy"));
     assert!(said.is_empty(), "a healthy run says nothing on stderr:\n{said}");
-    assert!(
-        row.contains("\"welfare\":"),
-        "the row carries the score it read:\n{row}"
-    );
+    assert!(row.contains("\"welfare\":"), "the row carries the score it read:\n{row}");
 }
