@@ -1570,6 +1570,23 @@ baseline          2550854   42,344,081  112,580  41,878,959
 
 <p>what the split goes blind to is the one thing a compiler change can do to move the dropped half: grow a dependency. one more shared object costs about 32,090 instructions of loading. so a golden holds the sonames <code>ldd</code> reports &#8212; five of them &#8212; and a new one turns that red by name. a number that moved 32,090 inside a thousand of linker luck is a puzzle; <code>libfoo.so.1 appeared</code> is an answer.</p>
 
+<h2 id="rebased"><span class="sec-num">45</span>a counter whose definition changed</h2>
+
+<p>&#167;44 redefined the compile row and subtracted the same 465,864 from welfare&#39;s baseline, so the ratio stayed comparable. the trend gate read the pair and printed this into the record of that merge:</p>
+
+<pre><code>improved: compile_instructions 41,845,704 -&gt; 41,379,840
+every changed counter is priced (or improved).</code></pre>
+
+<p>nothing in the compiler got faster. the two readings are of different quantities, and a ratio between different quantities cannot say which way anything went.</p>
+
+<p>the signal turns out to be exact. <code>welfare --set</code> moves the floor and never the baseline, so a baseline value moves only when somebody has decided the old reading and the new one are not the same measurement. a counter whose golden and whose baseline move in the same diff is therefore neither better nor worse: it prints as <code>re-based</code>, counts toward neither side of the pure-regression rule, and still owes a sentence naming it and the value it landed on. that is the third state &#167;30 built for a counter the baseline does not carry at all, reached from the other direction.</p>
+
+<p>matching a golden row to a baseline by name covered one vein and looked like it covered all of them. welfare renames on the way in &#8212; <code>work_jsonbench</code> in the gate is <code>decode_instructions</code> in the baseline &#8212; and for the memory terms it also sums the arena, held and perm peaks, so a <code>*_peak_bytes</code> counter has no row anywhere holding its value. joining on values was measured before anything was built: of 27 counters, six match no row at all and two match four goldens each.</p>
+
+<p>so the link is written down. <code>bench/objective_sources.txt</code> carries 41 rows for 27 counters, one <code>&lt;objective counter&gt; &lt;gate key&gt;</code> a line and several lines for a sum, and a spec replays it &#8212; summing each counter&#39;s rows out of the goldens and asserting the total is what <code>welfare --counters</code> prints, for every counter welfare scores and no counter it does not. a rename on either side, a pool added to the sum, or a benchmark joining the objective turns that red instead of quietly unlinking a term.</p>
+
+<p>two things the work found on its way, both of the same shape. the first cut of the check classified nothing in the runtime vein, because it was handed the counter with its golden&#39;s prefix stripped &#8212; so it worked for exactly the four goldens whose prefix is empty, which is the vein it was written for. and <code>bench/cost_golden_read.txt</code>, holding two of welfare&#39;s terms since readbench joined the objective, was in the trend gate&#39;s list of goldens not at all: setting a row in it to 9,999,999,999 produced no output whatever, exit 0. both were found by probing rather than reading &#8212; move the number, watch what the gate says.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
