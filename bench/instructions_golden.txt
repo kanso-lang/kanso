@@ -581,3 +581,4 @@ pendbench 715732721
 indexbench 5242362
 scanbench 1423437575
 digestbench 81256592
+readbench 2000657821
