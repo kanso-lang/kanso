@@ -773,4 +773,25 @@
 # raises is whether this term can be pinned per-chip at all, or whether it
 # needs the quantum subtracted out — and that is a question for the log and
 # for Clay, not for this file's shape.
-family0x19-model0x1 41930035 41931559
+#
+# 2026-09-04, THE FRONT END MOVED AGAIN AND ZEN 4 IS THE CHIP THAT ANSWERED.
+# desc_yield gained five builtin arms, worth +34 retired instructions measured
+# on the container against the previous head — desc_yield_of falling 42 as an
+# arm collapsed into a matches!, desc_yield::base rising 69 for the two new
+# ones. That invalidates every chip at once, as the header says it must.
+#
+# The run that refused landed on Zen 4 (0x19/0x11), which had no row at all
+# since it was removed for having no reading on the previous binary. So this
+# is its first sitting on this one, and it is the reference row now.
+#
+# ZEN 3'S PAIR IS REMOVED RATHER THAN CARRIED. 41,930,035 and 41,931,559 were
+# both measured, and both on a binary that is 34 instructions away from this
+# one. Two measured numbers for a compiler that no longer exists are still two
+# numbers nobody measured for this one — the same reason Zen 4's pair went on
+# 2026-09-03, applied to the other chip. It is a re-sitting when it next
+# refuses, not a new chip.
+#
+# NOTE FOR THE NEXT RE-SIT: the 508 lattice is a property of the row, not of
+# Zen 3. If Zen 4's single becomes a pair 508 or 1,524 apart, that is the same
+# finding one chip over, and the cap of two still refuses a third.
+family0x19-model0x11 41845704

@@ -2505,6 +2505,50 @@ stays a measurement in this entry rather than a number CI diffs. Pinning it
 would need `net/read` to read to a length or to EOF, and that is a change to
 what the verb means rather than a change to a test.
 
+**The compile row lands at 41,845,704, and the number is not comparable to
+the one it replaces.** CI refused, as expected, and the run that refused sat
+on Zen 4 (family 0x19 model 0x11) where the previous sitting was Zen 3
+(0x19/0x1). So `compile_instructions` goes 41,930,035 to 41,845,704 in
+`bench/compile_instructions_by_cpu.txt`, and the −84,331 is a chip change with
+this branch's +34 somewhere inside it, not a fall the compiler earned. Zen 4
+had no row since it was cleared on 2026-09-03 for having no reading on the
+previous binary; this is its first on this one, which makes it the reference
+row and moves the golden's bare line and compiler.html's figure with it.
+
+Zen 3's pair is removed rather than carried. Both its values were measured and
+both were measured on a binary 34 instructions away from this one, which is the
+same reason Zen 4's pair went yesterday. It is a re-sitting when it next
+refuses.
+
+**AND THE RE-SIT MOVED WELFARE, WHICH IT SHOULD NOT BE ABLE TO DO.** Measured
+by running `scripts/welfare` against each value the row has carried today, with
+nothing else changed:
+
+    compile_instructions=41930035   welfare 73.05    (Zen 3, previous head)
+    compile_instructions=41931559   welfare 73.05    (Zen 3, the other mode)
+    compile_instructions=41845704   welfare 73.06    (Zen 4, this head)
+
+So swapping which chip the reference row was measured on is worth about 0.01
+welfare — the same size as the entire fall this branch is blocked on. It did
+not unblock anything (the gate still refuses, at 0.00 below rather than 0.01),
+and that is luck rather than design.
+
+`bench/compile_instructions_by_cpu.txt` says of its own ordering: "Which chip
+is first is arbitrary and means nothing beyond 'this is the series welfare
+tracks'." That was true when welfare only reported the number. It stopped being
+true when the floor became a ratchet: an arbitrary choice now sets a bound that
+every later change has to clear, and a re-sit that lands on a faster chip
+hands the next change a gift it did not earn — or, landing the other way,
+charges it for something it did not do.
+
+Nothing here proposes a fix. Two shapes are visible and both are Clay's:
+welfare could read a chip-relative quantity (each row against its own first
+recorded value) rather than an absolute one, or the compile term could be
+excluded from the ratchet while staying in the report. The second is close to
+the 2026-09-03 exclusion argument that was ruled against, so it is not a free
+choice. Filed beside the corpus question in design/pending-gavels.md, because
+the two together decide what this branch's 0.01 actually means.
+
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
 benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB

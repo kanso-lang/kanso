@@ -170,3 +170,30 @@ What is genuinely open is whether "the corpus is blind here" is an admissible
 reason to move a floor at all, given the rule was written to stop exactly that
 sentence being used loosely. If it is not, the answer is a corpus change first
 and this fix second, and that ordering is the ruling to make.
+
+**ADDED 2026-09-04, and it may change what the fall means.** The compile row
+was re-sat during this branch and CI's run landed on a different chip than the
+previous sitting. `compile_instructions` is keyed per silicon, and welfare
+reads the FIRST row of `bench/compile_instructions_by_cpu.txt` as a bare
+number. Measured, with nothing else changed:
+
+    41930035 (Zen 3)   welfare 73.05
+    41845704 (Zen 4)   welfare 73.06
+
+An arbitrary choice of reference chip is worth 0.01 — the same size as the
+fall this entry is about. That file says its own ordering "is arbitrary and
+means nothing beyond 'this is the series welfare tracks'", which was true while
+welfare only reported the number and stopped being true when the floor became a
+ratchet.
+
+So there is a second question beside the first, and it is not about this
+branch: **should a term whose absolute value depends on which runner CI drew
+be allowed to set a ratcheted floor at all?** Two shapes, both yours. Welfare
+could read each chip's row against that chip's own first recorded value, so the
+term measures movement rather than magnitude. Or the compile term could stay in
+the report and leave the ratchet — which is close to the exclusion argument
+ruled against on 2026-09-03, so it is not free.
+
+Nothing has been changed on either question. The row was re-sat because CI
+refused and the refusal named the line to paste; that is the documented path
+and it is all that was done.
