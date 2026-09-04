@@ -50,81 +50,12 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-Nothing. The section stays so the next entry has somewhere to land.
 (The sha256 digest question sat here briefly and was bounced on
 2026-08-29: performance questions with no surface area are the
 implementer's, per this file's own charter. The log carries the
 research mandate it left with.)
 
-
-## Open, not blocking
-
-
-### The book teaches the boundary language (queued P1, Clay 2026-08-26)
-
-**RE-PREMISED AGAIN 2026-08-29 by the effects-are-types gavel, which
-supersedes the three-chain-words form.** The call-site story the book
-owes is now: `<t>effect` as a first-class passable outcome type;
-`bind`, `annotate`, `rescue` as ordinary effect-first functions and the
-sole eliminators; no automatic bind — a box where the unwrapped type is
-expected is refused, and propagation is bind's contract. Half one (ch04
-"nothing is asked of the signature") DOES NOT survive as written: its
-short-circuit-at-the-call story describes the retired railway and needs
-rewriting on explicit elimination. Half two lands when the typed-effect
-surface is implemented, present tense as always. compiler.html entry 23
-owes a rewrite or retirement in the same campaign.
-
-
-### An assert hako
-
-**Cited: the licence half is ruled — archive 2026-08-17, assertions are
-ordinary foreign rescue. What is open is the surface shape only.**
-
-A real assertion library in the rspec direction Clay sketched —
-`(expect 1) . to (equal x)` — as its own small surface design, never
-improvised inside a test fix. Its arms are foreign to every tested hako,
-so the err license needs nothing special. Queued 2026-08-17.
-
-**RECOMMENDATION: build it as its own design pass. The gate is lifted.**
-The matcher surface reads failures, so its shape depended on how a
-failure is spelled — that is ruled (three-forms gavel, 2026-08-26) and
-built on all three engines (kanso#1116), so designing it now cannot mean
-designing it twice. `rescue` is the word a matcher's own failure door
-would use.
-
-
-## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
-
-EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,
-`done` minted for D, G struck on the July provenance measurement, Z
-confirmed declined, AA explicit-cast only. Every letter A1–X, BB, C, D, G,
-Z and AA now has a ruling in the log or the archive; the section stays as a
-header so a reader looking for the campaign finds where it went.
-
-## Parked — on the record, no action
-
-- `<<` labels: walls cover staircases; revive on real DAG demand.
-- Labeled nameless patterns: parked 2026-08-19 — needs a fresh look
-  against the post-24 language, not pending. Group headers stay behind
-  it.
-- dot-absorbs-`>>`: argued no — erases the visible then/bind split.
-- Postfix index on `)`: `(sort xs)[1]` stays illegal; bind-then-index.
-- `;` inline separator: the borrow if inline groups are ever demanded.
-- `&` as bitwise: orthogonal, someday.
-- `serve` / processes: the executor-loop primitive; next design
-  campaign — three investigations already terminate there. The July
-  reification form (an err becoming an inert Failure record at the
-  supervisory boundary) died with gavel 1; the campaign starts from
-  the three combinators.
-- Hako tag-signing and checksum policy: parked in design/hako.md until
-  something is worth attacking. The lock already carries a sha.
-- Monorepo hakos (several modules per repo): the path shape allows it;
-  the lock-granularity decision waits for a real case.
-- Survivor cap 4× block threshold: the multiplier is a judgment call;
-  the principle (the dance's transient stays at threshold scale) is in
-  the log.
-
-## The welfare model cannot see the yield hole, because the corpus was written around it
+### The welfare model cannot see the yield hole, because the corpus was written around it
 
 **Searched** design/compiler-log.md (the 2026-09-03 entry names this exact
 fix and defers it), design/log/compiler-log-archive.md (2026-07-28 and
@@ -272,3 +203,71 @@ banks the low mode and then refuses the high one, which is a gate that fires on
 the linker's luck. Whether that is worth a shape of its own, or is the same
 question as the first half, is part of what is being asked here. Nothing has
 been changed on any of it.
+
+
+## Open, not blocking
+
+
+### The book teaches the boundary language (queued P1, Clay 2026-08-26)
+
+**RE-PREMISED AGAIN 2026-08-29 by the effects-are-types gavel, which
+supersedes the three-chain-words form.** The call-site story the book
+owes is now: `<t>effect` as a first-class passable outcome type;
+`bind`, `annotate`, `rescue` as ordinary effect-first functions and the
+sole eliminators; no automatic bind — a box where the unwrapped type is
+expected is refused, and propagation is bind's contract. Half one (ch04
+"nothing is asked of the signature") DOES NOT survive as written: its
+short-circuit-at-the-call story describes the retired railway and needs
+rewriting on explicit elimination. Half two lands when the typed-effect
+surface is implemented, present tense as always. compiler.html entry 23
+owes a rewrite or retirement in the same campaign.
+
+
+### An assert hako
+
+**Cited: the licence half is ruled — archive 2026-08-17, assertions are
+ordinary foreign rescue. What is open is the surface shape only.**
+
+A real assertion library in the rspec direction Clay sketched —
+`(expect 1) . to (equal x)` — as its own small surface design, never
+improvised inside a test fix. Its arms are foreign to every tested hako,
+so the err license needs nothing special. Queued 2026-08-17.
+
+**RECOMMENDATION: build it as its own design pass. The gate is lifted.**
+The matcher surface reads failures, so its shape depended on how a
+failure is spelled — that is ruled (three-forms gavel, 2026-08-26) and
+built on all three engines (kanso#1116), so designing it now cannot mean
+designing it twice. `rescue` is the word a matcher's own failure door
+would use.
+
+
+## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
+
+EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,
+`done` minted for D, G struck on the July provenance measurement, Z
+confirmed declined, AA explicit-cast only. Every letter A1–X, BB, C, D, G,
+Z and AA now has a ruling in the log or the archive; the section stays as a
+header so a reader looking for the campaign finds where it went.
+
+## Parked — on the record, no action
+
+- `<<` labels: walls cover staircases; revive on real DAG demand.
+- Labeled nameless patterns: parked 2026-08-19 — needs a fresh look
+  against the post-24 language, not pending. Group headers stay behind
+  it.
+- dot-absorbs-`>>`: argued no — erases the visible then/bind split.
+- Postfix index on `)`: `(sort xs)[1]` stays illegal; bind-then-index.
+- `;` inline separator: the borrow if inline groups are ever demanded.
+- `&` as bitwise: orthogonal, someday.
+- `serve` / processes: the executor-loop primitive; next design
+  campaign — three investigations already terminate there. The July
+  reification form (an err becoming an inert Failure record at the
+  supervisory boundary) died with gavel 1; the campaign starts from
+  the three combinators.
+- Hako tag-signing and checksum policy: parked in design/hako.md until
+  something is worth attacking. The lock already carries a sha.
+- Monorepo hakos (several modules per repo): the path shape allows it;
+  the lock-granularity decision waits for a real case.
+- Survivor cap 4× block threshold: the multiplier is a judgment call;
+  the principle (the dance's transient stays at threshold scale) is in
+  the log.
