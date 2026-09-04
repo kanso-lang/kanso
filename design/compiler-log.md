@@ -2834,6 +2834,18 @@ spends 672 bytes here for 184 million instructions.
 
 **welfare 73.53 -> 73.73**, floor set in the same commit.
 
+**A ratchet row went blind on this branch, and the row was right.**
+`a_re_basing_that_pays_for_a_regression` writes a re-basing beside a plain
+worsening and requires the trend gate to refuse under the pure-regression rule.
+Here it stayed green: the branch's own eleven falling work rows sat on the other
+side of the mutation's rise, so the gate read a trade. The rule is about the
+whole branch and the mutation was only about its own three files, which is a
+hole any improving branch would have opened. It now resets `bench` and
+`tests/golden/mem` to the base before it edits, so the three values it writes
+are the only moves the gate can see. Watched red afterwards, and for the row's
+own reason: `RE-BASED ... compile_instructions` followed by the pure-regression
+refusal.
+
 **OPEN — what the callee-saved registers cost.** Removing the frame pointer
 leaves 201 million instructions of `push`/`pop` on jsonbench, 9.6% of the
 decode. The decoder is a chain of mutually tail-calling functions, and a tail
