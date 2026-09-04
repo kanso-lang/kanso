@@ -7,11 +7,21 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: nothing.** The digest question — what a
-digest costs, and whether it stays written in kanso — sat here and was bounced
-on 2026-08-29: a performance question with no surface area is the
-implementer's, per the ledger's own charter, and the log carries the research
-mandate it left with.
+only indexes it. **Blocking right now: one.** "The compile row moves 2,551
+between binaries that do no different work", filed 2026-09-04. The mechanism is
+established to the instruction — Rust's stack guard parsing `/proc/self/maps`
+at startup, and `lang_start::{{closure}}` holds flat across the whole span —
+and what is open is what the vein should do about a quantity that moves with
+the linker's luck. Nothing has been changed on it.
+
+That entry was filed carrying a second question, about a 0.008 welfare fall,
+and Clay ruled that half on 2026-09-04: the objective should incorporate the
+win the corpus could not see, so the corpus is what gets fixed. bench/readbench
+does it and the repair scores +2.69, so the fall is gone rather than allowed.
+The digest question — what a digest costs, and whether it stays written in
+kanso — sat here and was bounced on 2026-08-29: a performance question with no
+surface area is the implementer's, per the ledger's own charter, and the log
+carries the research mandate it left with.
 
 **Two questions are waiting, and both carry a recommendation** — neither
 blocking. Counted from the ledger, which is the only place that count is true;

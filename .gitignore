@@ -71,3 +71,5 @@ indexbench.ll
 .claude/settings.local.json
 /digestbench
 /counters_digest.txt
+/readbench
+/counters_read.txt

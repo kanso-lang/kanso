@@ -17,17 +17,14 @@ module_dir = "bench/jsonbench/jsonbench"
 # only decodes has no use for it.
 dropped = "fn failure_position"
 
-# `fed` is `os/read_file!` written at the call site, and it is written out
-# because the bang costs the loop its beat. Inference reads a chain's yield
-# by the head's bare name: `os/read_file` is typed because its name collides
-# with the builtin's, and `os/read_file!` — same body, one character more —
-# falls to the top set. The document then has no type where the loop analysis
-# reads one, and jsonbench decodes with a grow-only arena: blocks 2 to 248,
-# peak 2 MB to 260 MB, on the same bytes and the same decoder.
-#
-# Both spellings mean the same thing: the file must be there, and a missing
-# one is a failure. When the yield of a kanso function is inferred, this
-# becomes `os/read_file! "bench/large.json" . go` again.
+# The read insists, because a benchmark whose input is missing has nothing to
+# measure. It used to be written out into a `fed` pair here — `os/read_file`
+# and a `file_not_found` arm — because inference read a chain's yield off the
+# head's bare name and `os/read_file!` fell to the top set. The document then
+# had no type where the loop analysis reads one, and jsonbench decoded with a
+# grow-only arena: blocks 2 to 248, peak 2 MB to 260 MB, on the same bytes and
+# the same decoder. The yield is now carried per declaration, so the bang
+# costs the loop nothing and the pair is gone.
 bench_text = """
   pub fn go cs
     print "decoded 150 times, checksum \{loop cs 150 0}"
@@ -37,19 +34,13 @@ bench_text = """
 
   fn loop cs n acc
     loop cs (n - 1) (acc + length (decode cs))
-
-  pub fn fed (file_not_found f)
-    err "cannot read \{f}: no such file"
-
-  pub fn fed cs
-    go cs
 """
 
 main_text = """
   import "./jsonbench"
   import "std/os"
 
-  os/read_file "bench/large.json" . fed
+  os/read_file! "bench/large.json" . go
 """
 
 ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"

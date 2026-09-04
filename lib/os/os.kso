@@ -85,11 +85,21 @@ pub fn read_file path
 # failure, which this one does by turning the anticipated arm back into one.
 #
 # It reads the builtin rather than calling `read_file` and dispatching on what
-# comes back, which is the same program written one call deeper. The extra
-# call costs the caller the string's type: inference reads the yield of a
-# chain whose head is a builtin, and a chain whose head is a kanso function
-# is the top set. jsonbench's decode loop stopped rewinding when this was
-# written the other way — arena blocks 2 to 248, peak 2 MB to 260 MB.
+# comes back, which is the same program written one call deeper. That used to
+# be forced: inference read the yield of a chain by its head's bare name, and
+# `os/read_file!` matched nothing, so the document reached the loop with no
+# type and jsonbench decoded with 248 arena blocks instead of 2 and a 260 MB
+# peak instead of 2 MB.
+#
+# The yield is carried per declaration now, so the shorter spelling keeps the
+# beat — measured, `read_file path . (r -> insisted path r)` reads
+# arena_blocks=2 and beat_iters=151, the same as this. It is still not a
+# one-line swap: `read_file` answers `file_not_found` where the builtin
+# answers `none`, so `insisted`'s first arm would have to move with it, and
+# leaving that arm alone makes a missing file reach the caller as a record
+# instead of a failure. Measured that way too — the program answers `length
+# takes a list, string, or map, not os/file_not_found "…"` and the err is
+# gone. The spelling below stays until somebody moves both together.
 pub fn read_file! path
   builtin_read_file path . (r -> insisted path r)
 

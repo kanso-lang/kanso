@@ -162,7 +162,20 @@ digest_work = ["digest_instructions"]
 # here they pay and charge like the rest.
 edge_work = ["scan_instructions" "escape_instructions" "index_instructions"]
 
-paced_work = text/concat digest_work edge_work
+# readbench is the corpus's answer to a repair it could not see. Every other
+# benchmark here feeds itself from a literal or from a generator, so none of
+# them exercised what a program gets back from `os/read_file!` — and
+# bench/make_jsonbench was written AROUND that hole, with the bang spelled out
+# into a pair so its decode would keep its beat. The corpus was measuring the
+# workaround: when the yield was carried per declaration, every counter in
+# every golden held to the byte and the objective priced the repair at zero.
+#
+# Its work row is here for the reason the digest paragraph above gives. The
+# memory rows are the point of the benchmark, and a term counted on one axis
+# and not the other is a trade the index cannot see.
+read_work = ["read_instructions"]
+
+paced_work = text/concat (text/concat digest_work edge_work) read_work
 
 run_speed_counters = text/concat (text/concat decode_work held_work) paced_work
 
@@ -191,13 +204,20 @@ scan_memory = ["scan_arena_blocks" "scan_peak_bytes"]
 
 digest_memory = ["digest_peak_bytes" "digest_arena_blocks"]
 
+# The rows readbench exists for. Both, because a peak alone cannot say whether
+# the arena grew once or once per round, and this benchmark's whole subject is
+# which of those two a loop past a bang-read does.
+read_memory = ["read_peak_bytes" "read_arena_blocks"]
+
 codec_memory = text/concat decode_memory encode_memory
 
 held_and_scan = text/concat held_memory scan_memory
 
 run_memory_rows = text/concat codec_memory held_and_scan
 
-run_memory_counters = text/concat run_memory_rows digest_memory
+pooled_memory = text/concat digest_memory read_memory
+
+run_memory_counters = text/concat run_memory_rows pooled_memory
 
 # What compiling COSTS, not what it counts. Rounds, visits and emitted lines
 # are the compiler's own bookkeeping — how many times a fixpoint went round,
@@ -314,7 +334,7 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"]! + m["held_peak_bytes"]! + m["perm_peak_bytes"]!
 
-fn measured decode encode oneshot basket comp held work scan ir traffic dig
+fn measured decode encode oneshot basket comp held work scan ir traffic dig red
   d = [["decode_allocs" decode["allocs"]!]]
   db = [["decode_arena_blocks" decode["arena_blocks"]!]]
   dp = [["decode_peak_bytes" (peak_of decode)]]
@@ -335,7 +355,9 @@ fn measured decode encode oneshot basket comp held work scan ir traffic dig
   ca = [["compile_allocs" traffic["compile_allocs"]!]]
   rows = text/concat (text/concat l cm) (text/concat sb sp)
   dg = digest_rows dig
-  built = text/concat rows (text/concat ci (text/concat ca dg))
+  rd = read_rows red
+  pooled = text/concat dg rd
+  built = text/concat rows (text/concat ci (text/concat ca pooled))
   gathered d db dp e eb ep o b bp c v (text/concat built ins)
 
 fn worked work
@@ -350,7 +372,8 @@ fn worked work
   si = [["scan_instructions" work["scanbench"]!]]
   xi = [["escape_instructions" work["escapebench"]!]]
   ii = [["index_instructions" work["indexbench"]!]]
-  edge = text/concat si (text/concat xi ii)
+  ri = [["read_instructions" work["readbench"]!]]
+  edge = text/concat si (text/concat xi (text/concat ii ri))
   more = text/concat (text/concat wi pi) (text/concat ni gi)
   rest = text/concat oi (text/concat bi (text/concat more edge))
   text/concat (text/concat di ei) rest
@@ -487,7 +510,7 @@ fn filled s width false
 fn asked path
   os/read_file! path
 
-fn gauge d e o b c held w s ir ca g
+fn gauge d e o b c held w s ir ca g rd
   comp = compile_totals c
   cm = counters held
   work = work_of w
@@ -497,7 +520,9 @@ fn gauge d e o b c held w s ir ca g
   built = counters ir
   tr = counters ca
   dig = counters g
-  now = measured dc ec (counters o) (counters b) comp cm work scan built tr dig
+  red = counters rd
+  pools = [(counters o) (counters b)]
+  now = measured dc ec pools[1]! pools[2]! comp cm work scan built tr dig red
   os/read_file! floor_path . (held -> against now (json/decode held))
 
 # The digest bench's peak is the row it exists for; its block count comes
@@ -505,6 +530,13 @@ fn gauge d e o b c held w s ir ca g
 fn digest_rows dig
   blocks = [["digest_arena_blocks" dig["arena_blocks"]!]]
   peak = [["digest_peak_bytes" (peak_of dig)]]
+  text/concat blocks peak
+
+# One block and a megabyte when the loop brackets, one block a round and a
+# megabyte a round when it does not.
+fn read_rows red
+  blocks = [["read_arena_blocks" red["arena_blocks"]!]]
+  peak = [["read_peak_bytes" (peak_of red)]]
   text/concat blocks peak
 
 # A term new to the model enters where its dimension already stands, so its
@@ -895,7 +927,12 @@ fn with_ir d e o b c held w s ir
     . (ca -> with_traffic d e o b c held w s ir ca)
 
 fn with_traffic d e o b c held w s ir ca
-  asked "bench/cost_golden_digest.txt" . (g -> gauge d e o b c held w s ir ca g)
+  asked "bench/cost_golden_digest.txt"
+    . (g -> with_digest d e o b c held w s ir ca g)
+
+fn with_digest d e o b c held w s ir ca g
+  asked "bench/cost_golden_read.txt"
+    . (rd -> gauge d e o b c held w s ir ca g rd)
 
 fn with_held d e o b c held
   asked "bench/instructions_golden.txt" . (w -> with_work d e o b c held w)

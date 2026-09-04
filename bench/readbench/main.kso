@@ -1,0 +1,4 @@
+import "./readbench"
+import "std/os"
+
+os/read_file! "bench/large.json" . go

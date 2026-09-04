@@ -684,7 +684,9 @@
 # What would settle it is a chip that produces a THIRD value, or a run that
 # produces the same value twenty times. Neither has happened, and the cap of
 # two is what refuses to accommodate the first if it does.
-family0x19-model0x11 41830604 41831112
+# (the family0x19-model0x11 row stood here with 41830604 41831112. It was
+#  measured on d89bda86538a and the front end has moved since; see the
+#  2026-09-04 block at the end for why it was removed rather than carried.)
 
 # 2026-09-04, THE RE-SITTING THE DELETION ASKED FOR, and the two AMD models
 # agree again. CI landed on Zen 3 next, found no row — the block above had
@@ -728,4 +730,160 @@ family0x19-model0x11 41830604 41831112
 # was SEEN to read on one binary, each measured, and a third refused. Zen 4
 # stays a single because it has shown one mode here; writing a pair there
 # would be predicting a number nobody counted.
-family0x19-model0x1 41830604 41831112
+#
+# 2026-09-04, and EVERY ROW IN THIS FILE WENT STALE AT ONCE. The front end
+# gained a per-declaration yield table, which moves the row itself rather than
+# the heap under it: Zen 3 on sha 42283602b2c8 counts 41,930,035 against the
+# 41,830,604 and 41,831,112 the pair recorded on d89bda86538a. That is
+# +99,431, and the container measured the same change at +108,880 on its own
+# binary — two hosts, two absolute values, one direction and one order of
+# magnitude.
+#
+# BOTH ROWS WERE STALE AND ONLY ONE WAS RE-SAT, so the other is gone rather
+# than carried. Zen 4 has not been counted on this binary at all, and keeping
+# its old pair would pin two numbers nobody measured, for a compiler that no
+# longer exists — the fault the pair rule was written against, spelled the
+# other way round. Removing the row makes the gate refuse on that chip and
+# print the sitting, which is what it already does for the Intel key and is
+# the designed path for a chip with no reading.
+#
+# Zen 3 was a SINGLE for one run, and the second mode arrived on the very next
+# one. Same chip, same binary sha 42283602b2c8: 41,930,035 then 41,931,559.
+# So the row is a pair again, both values measured, and the single stood for
+# exactly as long as one reading justified it.
+#
+# THE GAP IS NOT 508. It is 1,524, which is 3 x 508 exactly. Every reading this
+# file records had put the residual at one 508; this is the first that puts it
+# at three, and it says the 508 is a QUANTUM rather than a two-valued toggle.
+# That reframes what the pair is holding: not "the row has two modes" but "the
+# row lands on a lattice of 508s and two of its points have been seen".
+#
+# The profiles agree with that reading. Across the two runs every kanso frame
+# is identical to the instruction — eval_expr'2 1,652,497, check_merged
+# 1,586,580, infer 1,251,874, lex_line 866,486, parse 589,004, and the rest —
+# and the only visible move is __memcmp_avx2_movbe 1,356,959 to 1,357,025,
+# +66. The remaining 1,458 sits below callgrind's 90% cut. The front end does
+# identical work and glibc walks a different heap, which is what this file has
+# attributed the term to since the header was written.
+#
+# WHAT THE CAP NOW MEANS HERE. If the residual is a lattice, a third point is
+# likely rather than surprising, and the cap of two will refuse it. That
+# refusal is the finding to write down and NOT a reason to widen: a row that
+# admits every multiple of 508 pins nothing. The question a third reading
+# raises is whether this term can be pinned per-chip at all, or whether it
+# needs the quantum subtracted out — and that is a question for the log and
+# for Clay, not for this file's shape.
+#
+# 2026-09-04, THE FRONT END MOVED AGAIN AND ZEN 4 IS THE CHIP THAT ANSWERED.
+# desc_yield gained five builtin arms, worth +34 retired instructions measured
+# on the container against the previous head — desc_yield_of falling 42 as an
+# arm collapsed into a matches!, desc_yield::base rising 69 for the two new
+# ones. That invalidates every chip at once, as the header says it must.
+#
+# The run that refused landed on Zen 4 (0x19/0x11), which had no row at all
+# since it was removed for having no reading on the previous binary. So this
+# is its first sitting on this one, and it is the reference row now.
+#
+# ZEN 3'S PAIR IS REMOVED RATHER THAN CARRIED. 41,930,035 and 41,931,559 were
+# both measured, and both on a binary that is 34 instructions away from this
+# one. Two measured numbers for a compiler that no longer exists are still two
+# numbers nobody measured for this one — the same reason Zen 4's pair went on
+# 2026-09-03, applied to the other chip. It is a re-sitting when it next
+# refuses, not a new chip.
+#
+# NOTE FOR THE NEXT RE-SIT: the 508 lattice is a property of the row, not of
+# Zen 3. If Zen 4's single becomes a pair 508 or 1,524 apart, that is the same
+# finding one chip over, and the cap of two still refuses a third.
+#
+# 2026-09-04, SECOND SITTING ON THIS BINARY, AND IT CORRECTS THE ENTRY ABOVE.
+# The next run landed on Zen 3 (0x19/0x1), binary sha 0e081d4c2c96, and counted
+# 41,845,704 — the SAME value Zen 4 counted. Two chips, one binary, one value,
+# so this binary is one where the two AMD models agree to the instruction, as
+# the binary before last did and the one between them did not.
+#
+# WHAT THAT CORRECTS. The note above reads the 41,930,035 -> 41,845,704 move as
+# a chip change, because the run that refused was Zen 4 where the previous
+# sitting was Zen 3. It is not. Zen 3 counted 41,930,035 on sha 42283602b2c8
+# and counts 41,845,704 on sha 0e081d4c2c96: the same chip, -84,331, for a
+# source change the container measures at +34. The remaining -84,365 is binary
+# layout, which is the term this file's header already names — a docs-only pull
+# request once moved this row 5,081 — at sixteen times the size anything here
+# had recorded.
+#
+# So the row moves by layout far more than by the front-end work it is meant to
+# count, and it is the layout that the welfare floor then ratchets against.
+# That is in design/pending-gavels.md.
+#
+# 2026-09-04, THE 508 LATTICE REAPPEARS ON THIS BINARY, and Zen 4's row is a
+# pair again. Same chip 0x19/0x11, same binary sha 0e081d4c2c96: 41,845,704
+# then 41,844,180. The gap is 1,524, which is 3 x 508, the same multiple the
+# previous binary produced on Zen 3.
+#
+# The profiles say the same thing they said last time. Every kanso frame is
+# identical to the instruction across the two runs — eval_expr'2 1,652,497,
+# check_merged 1,586,580, infer 1,251,996, lex_line 866,486, parse 589,004 —
+# and the only visible move is __memcmp_avx2_movbe, 1,356,842 against
+# 1,356,776, which is 66. The rest sits below callgrind's 90% cut.
+#
+# WHAT IS AND IS NOT ESTABLISHED. Gaps of 508 (twice, historically) and 1,524
+# (twice now) have been read. Every one is a multiple of 508, which is the
+# lattice reading. Two 1,524s in a row is NOT evidence of a fixed 1,524
+# separation — the 508 pairs are in this file's own history — and nothing here
+# claims one.
+#
+# THE CAP STILL BINDS. Zen 4 has two measured values and may hold both. A THIRD
+# distinct value on this key is refused, and that refusal is the finding to
+# write down rather than a reason to widen. Zen 4 stays FIRST and 41,845,704
+# stays its first value, because the golden's bare line and compiler.html read
+# the first row's first value.
+#
+# 2026-09-04, A THIRD CHIP ON THIS BINARY, COUNTING THE SAME NUMBER. CI landed
+# on Intel Emerald Rapids (0x6/0xcf), binary sha 0e081d4c2c96, and counted
+# 41,845,704 — what Zen 4 and Zen 3 both counted on it. Three silicon keys,
+# one binary, one value to the instruction. The key has held a row here before
+# and lost it when the binary changed: on sha de5bfab22fbd it was the pair
+# 41,831,767 / 41,832,275 that scripts/gates/compile_ir_row.sh still quotes as
+# its worked example.
+#
+# WHAT THAT PUTS A QUESTION AGAINST. This file is keyed by silicon because two
+# readings differed by about 5,124 across chips. Those readings are from
+# f6e24e91, and the header calls their SOURCES identical rather than their
+# binaries — cargo does not build the same bytes twice, and the -84,365 of
+# layout measured two notes above is sixteen times the gap the key was built
+# on. Every table state since has shown its recorded chips carrying one value
+# or one pair.
+#
+# WHAT IT DOES NOT ESTABLISH. The row is not a function of the binary either:
+# Zen 4 read 41,844,180 on this same sha 0e081d4c2c96, so something moves the
+# count within one chip and one binary. Three agreeing chips say the chip term
+# is small here, and no reading before this session's paired a chip with a
+# binary at all. The key stays until two chips sit on one sha and disagree.
+# design/pending-gavels.md carries the question.
+#
+# 2026-09-04, ZEN 3 IS A PAIR TOO, AND IT IS THE SAME PAIR. Two CI runs refused
+# on 0x19/0x1, binary sha 0e081d4c2c96, both counting 41,844,180 against the
+# 41,845,704 the row pinned. Different runner machines, one chip key, one
+# binary, and the gap is 1,524 — the same 1,524 Zen 4 shows on this binary, and
+# the same multiple of 508 the lattice has produced every time.
+#
+# So both AMD keys now hold the identical pair on the identical binary. The
+# profiles agree with that reading: every kanso frame is the same to the
+# instruction across the modes, and __memcmp_avx2_movbe reads 1,356,776 on the
+# runs that counted the low value against 1,356,842 on the one that counted the
+# high, which is 66.
+#
+# WHAT IT MEANS FOR THE KEY. A pair that appears on two chips and not on the
+# third, on one binary, is a property of the run rather than of the silicon.
+# The mode was measured on 2026-09-04 to live entirely in glibc's parse of
+# /proc/self/maps, which Rust's stack guard triggers before the compiler starts
+# — see design/compiler-log.md, and scripts/compile_row_probe.sh, which prints
+# that term beside the row. That is what "two runners differ in their maps"
+# would look like from this end, and it remains an inference: nothing here has
+# printed a map's line count on two runners and compared them.
+#
+# THE CAP IS NOW BINDING ON TWO KEYS. Both AMD rows hold their two measured
+# values and may hold no more. A third distinct value on either is refused, and
+# that refusal is the finding to write down.
+family0x19-model0x11 41845704 41844180
+family0x19-model0x1 41845704 41844180
+family0x6-model0xcf 41845704

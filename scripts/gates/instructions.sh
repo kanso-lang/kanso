@@ -39,8 +39,13 @@ sh scripts/gates/dispatch.sh name
 # about: a change that gives the arena back per position and spends ten times
 # the instructions doing it scored zero everywhere. Twelve seconds under
 # callgrind.
+# readbench joined on 2026-09-04. Its work row is nearly flat between the two
+# compilers that bracket its reason for existing — 2,000,668,271 against
+# 2,000,657,408, a fall of 10,863 or 0.0005% — and that is the point of
+# counting it: the benchmark is in the objective for its MEMORY, and this row
+# is what stops a future change buying that memory back with instructions.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench; do
+         indexbench scanbench digestbench readbench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
     >/dev/null 2>/tmp/ir.$b

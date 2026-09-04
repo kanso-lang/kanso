@@ -33,7 +33,7 @@ size --format=sysv ./jsonbench >/dev/null 2>&1 || {
 # 1,968 bytes with every row here byte-identical, which is the shape of move
 # this file exists to catch.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench; do
+         indexbench scanbench digestbench readbench; do
   printf '%s text=%s\n' "$b" "$(size --format=sysv ./$b | awk '/^\.text/{print $2}')"
 done > text.txt
 # Measured, and on a host the golden does not name that is as far as this goes.

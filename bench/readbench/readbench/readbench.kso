@@ -1,0 +1,16 @@
+import "std/io"
+import "std/text"
+
+# 200 rounds, because that is what tests/golden/read_beat/reading.kso does.
+# The count is not tuned: the defective side of this benchmark is linear in
+# rounds and the fixed side is flat, so any number at all produces a ratio and
+# picking one to suit the objective would be picking the objective's answer.
+# The fixture already chose, and this is the fixture at benchmark size.
+pub fn go cs
+  io/write "tallied {tally cs 200 0}\n"
+
+fn tally _ 0 acc
+  acc
+
+fn tally cs n acc
+  tally cs (n - 1) (acc + length (text/split cs "\n"))

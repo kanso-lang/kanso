@@ -243,6 +243,19 @@ scan_counters = row
   (breaking "lazy_verdict_leaks_between_arms")
   benchmarks
 
+# readbench joined on 2026-09-04 and this row with it, in the same pull request,
+# because a gate CI runs and the ratchet cannot break is a gate nobody has
+# proved can fail. scan_counters above is the other half of the same lesson from
+# the same day: it had this row from the first and no CI step ran the gate at
+# all, so the ratchet could break something the normal path never checked.
+read_counters = row
+  "a chain head that names a declaration, answered by the top set"
+  true
+  (gating "read_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_bang_read_loses_its_beat")
+  benchmarks
+
 mem_shapes = row
   "a memory shape the fixture's counters no longer describe"
   true
@@ -714,7 +727,7 @@ rows_a = [formatting linting python_free goldens mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
-rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
+rows_b1 = text/concat rows_b1a [thunk_walk scan_counters read_counters]
 
 rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
 

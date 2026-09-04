@@ -58,7 +58,18 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
-      - run: cargo test
+      # --no-fail-fast because cargo stops at the first failing test
+      # BINARY, not the first failing test, and the binaries run in
+      # alphabetical order. With welfare red in
+      # a_granted_baseline_says_it_is_one, both this job and the macos
+      # one were running the nine binaries that sort before it and
+      # reporting that as the suite. A socket spec added on 2026-09-04
+      # had never executed on arm at all, and nothing said so: the job
+      # was red for the reason everyone expected and silent about the
+      # coverage it had stopped providing. A red suite that hides the
+      # rest of itself is the same fault as a green one that proves
+      # nothing.
+      - run: cargo test --no-fail-fast
       - name: the shipped library's own tests
         run: |
           cargo run -- test lib/expect
@@ -88,7 +99,18 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
-      - run: cargo test
+      # --no-fail-fast because cargo stops at the first failing test
+      # BINARY, not the first failing test, and the binaries run in
+      # alphabetical order. With welfare red in
+      # a_granted_baseline_says_it_is_one, both this job and the macos
+      # one were running the nine binaries that sort before it and
+      # reporting that as the suite. A socket spec added on 2026-09-04
+      # had never executed on arm at all, and nothing said so: the job
+      # was red for the reason everyone expected and silent about the
+      # coverage it had stopped providing. A red suite that hides the
+      # rest of itself is the same fault as a green one that proves
+      # nothing.
+      - run: cargo test --no-fail-fast
       - name: integer arithmetic, on the architecture linux is not
         run: |
           cargo build --release
@@ -319,6 +341,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/pend_counters.sh
+      # scripts/gates/scan_counters.sh has existed since 2026-09-02 and no step
+      # ran it, so bench/cost_golden_scan.txt was a golden nothing compared
+      # against while both its counters sat in the welfare model. Found on
+      # 2026-09-04 while adding the step below it, which is the same edit.
+      - name: scan counters
+        id: scan
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/scan_counters.sh
       # The only vein whose headline row is a PEAK rather than a total:
       # sha256 holds the whole message live at once, so arena_peak_bytes here
       # is the number a memory change moves. Every other benchmark's peak is
@@ -328,6 +359,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/digest_counters.sh
+      # The only benchmark that reads its input through `os/read_file!`, and
+      # the only one whose arena grows a block a round when the read's yield is
+      # unknown. bench/make_jsonbench was hand-written around that hole, so the
+      # corpus was measuring the workaround and priced the repair at zero.
+      - name: read counters
+        id: read
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/read_counters.sh
       # The rows a failing vein wants copied into its golden are printed by
       # the gate that measured them, which is fourteen gates and two callgrind
       # dumps from the end of this job. The log API hands back a tail, so a
@@ -366,7 +406,9 @@ jobs:
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \
-                      "digest counters:${{ steps.digest.outcome }}"; do
+                      "digest counters:${{ steps.digest.outcome }}" \
+                      "read counters:${{ steps.read.outcome }}" \
+                      "scan counters:${{ steps.scan.outcome }}"; do
             case "$vein" in
               *:failure)
                 echo "::error::${vein%:*} disagrees with its golden"

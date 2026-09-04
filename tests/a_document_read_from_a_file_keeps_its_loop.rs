@@ -20,6 +20,29 @@
 //! either way — measured, both shapes report 1 — so asserting the block count
 //! here would be a check that cannot fail. The block count is pinned where it
 //! is sensitive, in bench/cost_golden.txt.
+//!
+//! `reading_insisted.kso` is the third program and the bang's own case. It
+//! read `beat_iters=1` against the other two's 201 and 801: `desc_yield` was
+//! a table keyed on a chain head's BARE name, `os/read_file` hit it because
+//! the name collides with the builtin's, and `os/read_file!` — same body, one
+//! character more — missed and fell to the top set. The yield is carried per
+//! declaration now, so a wrapper answers from its own body.
+//!
+//! That reaches a wrapper whose body pipes through a declaration and no
+//! further. `net/read c` is `builtin_net_read c.handle` with nothing after
+//! it, so there is no declaration to ask and the builtin table still answers
+//! — and it was missing five effect builtins. That half is pinned in
+//! tests/sockets_serve.rs, over a real socket, and the table is checked for
+//! completeness in tests/every_effect_builtin_says_what_it_yields.rs.
+//!
+//! `reading_branch.kso` is the fourth, and a second hole of the same shape one
+//! level down. `desc_yield_of` looks through a binding to what the bound
+//! description yields, and it did that only at the top of the expression: the
+//! `if` arm recursed into `desc_yield`, which sees an identifier and gives up.
+//! A chain head that was a bound local answered; the same local inside a
+//! branch did not, and read `beat_iters=1`. The recursion goes through the
+//! lookthrough now, which measured 381 instructions CHEAPER on the front end
+//! than not doing it — below that row's own resolution, so: free.
 
 use std::process::Command;
 
@@ -29,8 +52,12 @@ use std::process::Command;
 #[test]
 fn the_loop_brackets_every_iteration() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/read_beat");
-    for (file, want) in [("reading.kso", "beat_iters=201"), ("reading_long.kso", "beat_iters=801")]
-    {
+    for (file, want) in [
+        ("reading.kso", "beat_iters=201"),
+        ("reading_long.kso", "beat_iters=801"),
+        ("reading_insisted.kso", "beat_iters=201"),
+        ("reading_branch.kso", "beat_iters=201"),
+    ] {
         let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
             .arg("play")
             .arg(file)

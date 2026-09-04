@@ -42090,3 +42090,134 @@ wrong this is where it will say so. The first baseline that reports the rows
 moved rather than the gate missing is the evidence to read.
 
 ---
+
+## 2026-09-03 — THE SIXTH CHECK RESTING ON A MENTION, AND IT WAS THE ONE THAT CITED THE OTHER FIVE
+
+**DONE.** Writing `tests/the_ratchet_carries_what_its_gates_need.rs` earlier today
+produced a first draft that could not fail: it asked whether
+`scripts/ratchet/toolchain.sh` *contained the string* `valgrind`, and the
+script's own header, which explains why valgrind is there, names it four times.
+That is the kanso#1137 family. Having walked into it, the obvious next question
+was whether anything already in the tree had the same shape.
+
+One did, and its header cites kanso#1137 by name:
+
+```rust
+// tests/the_objective_does_not_weigh_machine_code_size.rs
+assert!(gate.contains("bench/text_golden.txt"), "…no longer diffs …, so nothing
+        counts what the compiler emits…");
+```
+
+`scripts/gates/machine_code.sh` names the golden three times: the host check at
+line 12, the diff at line 32, and one line of its `::error::` message at 37.
+Replace the first two with nothing and the gate reads no golden at all — and the
+spec passes, certifying the exact state its own failure text describes.
+Measured, not reasoned:
+
+```
+--- remaining mentions:
+37:  echo "::error::bench/text_golden.txt. Allocation counters cannot"
+test the_machine_code_vein_is_still_gated ... ok
+```
+
+Both halves read operative lines now — comments dropped, and lines whose whole
+job is to print a diagnostic dropped with them — and a third test holds the
+counterexample so the file cannot drift back. Watched red on the gutted gate and
+green on the restored one.
+
+**Reading lines is still not running the gate**, and the entry says so where a
+reader will find it: the behavioural proof is the ratchet's `machine_code` row,
+which applies a defect nightly and refuses a gate that stayed green. The spec is
+the cheap per-pull-request half of the same split the ratchet itself documents.
+
+**The sweep found no seventh.** Every test that reads a repository file was
+checked for a positive `contains` against prose-bearing text. Three others take
+that shape and all three read data rather than source: `bench/welfare_floor.json`
+(no comments), emitted LLVM IR, and a hako lock file. The rest assert on a
+tool's output, which is where a spec should be entering anyway.
+
+**The pattern worth carrying.** Both instances today were written by somebody
+who knew the rule — this file's own header argues it, and the toolchain spec was
+drafted an hour after reading it. Knowing the rule does not catch the case;
+trying to make the check fail does. The cost of that attempt is one `sed` and
+one `cargo test`.
+
+---
+
+## 2026-09-03 — THE COMPILE ROW MOVED 992 AND THE FRONT END DID NOT
+
+**DONE.** CI refused the branch on the vein that is keyed by silicon:
+
+```
+the work the FRONT END does changed on family0x19-model0x1:
+bench/compile_instructions_by_cpu.txt says 41631006 and this run counted 41631998.
+The row is keyed by silicon, so the runner is not the answer here:
+the same family and model counted both numbers.
+```
+
+`compile_instructions` **41,631,006 -> 41,631,998, +992 (+0.0024%)**, and the
+cause is written in that file's own header from earlier the same day:
+`src/main.rs` embeds the runtime with `include_str!("runtime.c")`, so a change
+to the runtime changes the compiler binary even when it changes no compiler
+code. The wrong-arity reorder added a few lines of C; the embedded source grew,
+the rodata after it shifted, and the front end does the same work at different
+addresses. `compile_allocs`, `compile_peak_bytes` and every fixpoint counter are
+byte-identical, which is what says the work did not change.
+
+The Zen 3 row (0x19/0x1) this run landed on is re-sat. The Intel (0x6/0xcf) and
+Zen 4 (0x19/0x11) rows are removed rather than carried forward, on the rule
+already recorded there: a value measured against the old binary is worse than no
+value. They are re-sittings when they next refuse, and each costs one red run.
+
+**This is the second time in one day this file has been emptied for the same
+mechanism**, and the price is now visible rather than argued: a runtime change
+of any size costs one red CI run per chip in the pool before the vein reads
+clean again. Whether the vein should measure the front end against a binary
+that embeds the runtime is a real question and it is not this change's to
+answer; what is clear is that `include_str!` makes "the front end moved" and
+"the runtime moved" indistinguishable to this row, and only the other three
+compile counters can tell them apart.
+
+Welfare is 76.01 before and after — 992 parts in 41.6 million is below the
+hundredth the score is rounded to.
+
+---
+
+## 2026-09-03 — THE REPORT NAMED THE GATE AND NOT ITS REASON
+
+**DONE.** Naming the gate in `ALREADY RED` answered the question it was built
+for on its first CI run — `sh scripts/gates/instructions.sh`, red because
+valgrind was not on the ratchet's box — and could not answer the second. With
+valgrind installed by `scripts/ratchet/toolchain.sh` the same gate is **still
+red on the baseline**, and a line that says only which gate leaves a reader
+holding hypotheses with no way to choose between them. The gate wrote down why
+it failed; the ratchet was throwing that away.
+
+`ALREADY RED` and `UNBUILT` now carry the last eight lines the gate printed,
+indented under the finding. Watched red on the fixture that commits a tracked
+python file: without the gate's words the refusal does not contain
+`crept_in.py`, and the spec says so.
+
+**One hypothesis is already dead.** The obvious candidate was the worktree: the
+baseline builds in `/tmp/kanso-ratchet-base` against a shared target symlink,
+and paths baked into a binary would move an instruction count the way a run id
+that gained a digit does. Built both ways and compared:
+
+```
+8a406faa2e27030c41bc8dd12ab9750fe5ddb408afe54cedd52ce66f5cd475d3  ./jsonbench
+8a406faa2e27030c41bc8dd12ab9750fe5ddb408afe54cedd52ce66f5cd475d3  /tmp/kanso-pathtest/jsonbench
+```
+
+Byte-identical. The benchmark does not depend on the directory it was built in,
+so whatever reddens that gate on the ratchet's runner is something else.
+
+**OPEN, and the next run answers it.** The live candidate is the one recorded
+two entries ago: `bench/instructions_golden.txt` is not keyed per silicon the
+way `compile_instructions` is, and the ratchet job lands on whatever CPU the
+pool gives it — a second, independent sitting of those eleven rows on a runner
+unrelated to the cost-goldens job's. If the gate's own words turn out to be a
+row diff, that settles it and the vein needs the treatment kanso#1226 gave the
+compile row. If they are something else entirely, they will say so, which is
+the whole point of printing them.
+
+---

@@ -98,6 +98,12 @@ struct Ctx<'a> {
     params: Vec<Set>,
     param_starts: Vec<u32>,
     returns: Vec<Set>,
+    /// Per declaration: what a description this one answers hands the
+    /// continuation bound to it. `returns` says what calling it produces;
+    /// this says what running that produces, and the two are different
+    /// questions for every effect wrapper in `lib`. Grows monotonically
+    /// beside `returns` and wakes the same readers.
+    decl_yields: Vec<Set>,
     type_fields: Vec<Vec<Set>>,
     changed: bool,
 }
@@ -272,6 +278,7 @@ pub fn infer(program: &Program) -> Inference {
         params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
         param_starts,
         returns: vec![0; program.fns.len()],
+        decl_yields: vec![0; program.fns.len()],
         type_fields: program.types.iter().map(|t| vec![0; t.fields.len()]).collect(),
         changed: true,
     };
@@ -325,28 +332,37 @@ pub fn infer(program: &Program) -> Inference {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
             }
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
+            let mut widened = false;
             if ret | ctx.returns[i] != ctx.returns[i] {
                 ctx.returns[i] |= ret;
                 ctx.changed = true;
-                moved += 1;
-                let w = ctx.reader_words;
-                let mut scratch = std::mem::take(&mut ctx.reader_scratch);
-                scratch.clear();
-                scratch.extend_from_slice(&ctx.readers[i * w..(i + 1) * w]);
-                for (word, &row) in scratch.iter().enumerate() {
-                    let mut bits = row;
-                    while bits != 0 {
-                        let r = word * 64 + bits.trailing_zeros() as usize;
-                        bits &= bits - 1;
-                        // This round as well as the next. A reader the sweep
-                        // has not reached yet takes the new answer now instead
-                        // of costing a whole round to hear about it, and one
-                        // already behind the cursor is simply not walked again.
-                        ctx.dirty[r] = true;
-                        ctx.dirty_next[r] = true;
+                widened = true;
+            }
+            // A description's yield is a second answer, and it is asked of
+            // the body's tail rather than of the body: `net/read c` returns a
+            // description whichever bytes it hands over, so `returns` cannot
+            // carry it. `ctx.yields` still holds this walk's locals, so the
+            // tail reads them.
+            //
+            // Asked only of a description whose yield can still move: the walk
+            // is not free, and a yield that has reached the top of its lattice
+            // cannot grow again.
+            if ret & DESC != 0 && ctx.decl_yields[i] != (TOP & !FAIL) {
+                if let Some(Stmt::Expr(tail)) = decl.body.last() {
+                    let y = desc_yield_of(&mut ctx, tail) & !FAIL;
+                    if y | ctx.decl_yields[i] != ctx.decl_yields[i] {
+                        ctx.decl_yields[i] |= y;
+                        ctx.changed = true;
+                        widened = true;
                     }
                 }
-                ctx.reader_scratch = scratch;
+            }
+            // One wake for both answers. They travel the same edges, and a
+            // visit that widened each of them would otherwise walk the reader
+            // bitset twice to reach the same declarations.
+            if widened {
+                moved += 1;
+                wake_readers(&mut ctx, i);
             }
         }
         if std::env::var_os("KANSO_PHASES").is_some() {
@@ -776,6 +792,28 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
     }
 }
 
+/// A declaration's answer has widened, so everyone who read it is walked
+/// again — this round as well as the next. A reader the sweep has not reached
+/// yet takes the new answer now instead of costing a whole round to hear about
+/// it, and one already behind the cursor is simply not walked again.
+#[inline]
+fn wake_readers(ctx: &mut Ctx<'_>, decl: usize) {
+    let w = ctx.reader_words;
+    let mut scratch = std::mem::take(&mut ctx.reader_scratch);
+    scratch.clear();
+    scratch.extend_from_slice(&ctx.readers[decl * w..(decl + 1) * w]);
+    for (word, &row) in scratch.iter().enumerate() {
+        let mut bits = row;
+        while bits != 0 {
+            let r = word * 64 + bits.trailing_zeros() as usize;
+            bits &= bits - 1;
+            ctx.dirty[r] = true;
+            ctx.dirty_next[r] = true;
+        }
+    }
+    ctx.reader_scratch = scratch;
+}
+
 /// `decl`'s answer feeds the declaration being walked, so a change to it must
 /// wake that one.
 fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
@@ -917,16 +955,40 @@ fn eval_call<'a>(
 /// conservatively any-non-failure.
 /// desc_yield with one level of binding lookthrough: an ident that names a
 /// tracked desc-valued local answers with that local's recorded yield.
-fn desc_yield_of(ctx: &Ctx, e: &Expr) -> Set {
+fn desc_yield_of<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
     if let Expr::Ident(name, _) = e {
         if let Some(y) = ctx.yields.get(name.as_str()) {
             return *y;
         }
     }
-    desc_yield(e)
+    desc_yield(ctx, e)
 }
 
-fn desc_yield(e: &Expr) -> Set {
+/// What calling declaration `i` hands a bound continuation. A plain answer is
+/// the yield itself; an answer that is another description is run by the
+/// executor in turn, so what arrives is that description's own yield.
+fn call_yield(ctx: &Ctx<'_>, i: usize) -> Set {
+    let r = ctx.returns[i];
+    match r & DESC != 0 {
+        true => (r & !DESC & !FAIL) | ctx.decl_yields[i],
+        false => r & !FAIL,
+    }
+}
+
+/// The declarations `name` dispatches over at this arity, joined. `None` when
+/// the name is a builtin or anything else the program did not declare.
+fn group_yield<'a>(ctx: &mut Ctx<'a>, name: &'a str, arity: usize) -> Option<Set> {
+    let (start, end) = *ctx.groups.get(&(name, arity))?;
+    let mut out: Set = 0;
+    for k in start as usize..end as usize {
+        let i = ctx.group_members[k];
+        mark_reader(ctx, i);
+        out |= call_yield(ctx, i);
+    }
+    Some(out)
+}
+
+fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
     fn base(n: &str) -> &str {
         let n = n.strip_prefix("builtin_").unwrap_or(n);
         crate::ast::bare_name(n)
@@ -941,55 +1003,91 @@ fn desc_yield(e: &Expr) -> Set {
         Expr::App { head, args, piped: false, .. }
             if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
         {
-            desc_yield(&args[1]) | desc_yield(&args[2])
+            desc_yield_of(ctx, &args[1]) | desc_yield_of(ctx, &args[2])
         }
-        Expr::App { head, piped: false, .. } => match head.as_ref() {
-            // a file that is not there yields none, which os/read_file names
-            // `file_not_found`; the text arm keeps its type, which the loop
-            // analyses read
-            Expr::Ident(n, _) if base(n) == "read_file" => STR | NONE,
-            Expr::Ident(n, _) if base(n) == "stdin" => STR,
-            // status, stdout, stderr — the std wrapper reads them into a record
-            Expr::Ident(n, _) if base(n) == "run" => LIST,
-            // the handle a later kill names
-            Expr::Ident(n, _) if base(n) == "start" => INT,
-            Expr::Ident(n, _) if base(n) == "args" => LIST,
-            Expr::Ident(n, _) if base(n) == "random" => INT,
-            // an unset variable yields none, which is a value the consumer
-            // dispatches on rather than a failure it has to trap
-            Expr::Ident(n, _) if base(n) == "env" => STR | NONE,
-            Expr::Ident(n, _) if matches!(base(n), "exists" | "is_dir") => TRUE | FALSE,
-            Expr::Ident(n, _) if base(n) == "list_dir" => LIST,
-            Expr::Ident(n, _) if base(n) == "now" => INT,
-            // an unset variable yields none, which is a value the consumer
-            // dispatches on rather than a failure it has to trap
-            Expr::Ident(n, _)
-                if matches!(
-                    base(n),
-                    "print"
-                        | "write"
-                        | "write_err"
-                        | "write_file"
-                        | "make_dir"
-                        | "sleep"
-                        | "net_write"
-                        | "net_close"
-                ) =>
-            {
-                0
+        // A chain step through a lambda: the executor hands the yield to the
+        // lambda, so what the whole chain yields is what the lambda's body
+        // does. This is the shape `os/read_file` is written in.
+        Expr::App { head: h, piped: true, .. } if matches!(h.as_ref(), Expr::Lambda { .. }) => {
+            let Expr::Lambda { body, .. } = h.as_ref() else { unreachable!() };
+            desc_yield_of(ctx, body)
+        }
+        // A name the program declared: the fixpoint has walked its body and
+        // knows what running its answer hands over. Asked before the builtin
+        // table below, so `os/read_file! p` answers from its own body rather
+        // than from whatever a table happened to list.
+        //
+        // It reaches as far as the declarations a wrapper is written over. A
+        // body that is a bare builtin call — `net/read c` is
+        // `builtin_net_read c.handle`, and nothing follows it — has no
+        // declaration to ask, and the table below is what answers. Which is
+        // why the table is checked against the set of builtins that answer a
+        // description, in tests/every_effect_builtin_says_what_it_yields.rs.
+        Expr::App { head, args, piped, .. } => {
+            if let Expr::Ident(n, _) = head.as_ref() {
+                if let Some(y) = group_yield(ctx, n.as_str(), args.len()) {
+                    return y;
+                }
             }
-            _ => TOP & !FAIL,
-        },
+            if *piped {
+                return TOP & !FAIL;
+            }
+            match head.as_ref() {
+                // a file that is not there yields none, which os/read_file names
+                // `file_not_found`; the text arm keeps its type, which the loop
+                // analyses read
+                Expr::Ident(n, _) if base(n) == "read_file" => STR | NONE,
+                Expr::Ident(n, _) if base(n) == "stdin" => STR,
+                // status, stdout, stderr — the std wrapper reads them into a record
+                Expr::Ident(n, _) if base(n) == "run" => LIST,
+                // the handle a later kill names, and the three socket
+                // handles the net wrappers read into their records
+                Expr::Ident(n, _)
+                    if matches!(base(n), "start" | "listen" | "accept" | "net_port") =>
+                {
+                    INT
+                }
+                Expr::Ident(n, _) if base(n) == "args" => LIST,
+                Expr::Ident(n, _) if base(n) == "random" => INT,
+                // the bytes a connection had waiting, as text
+                Expr::Ident(n, _) if base(n) == "net_read" => STR,
+                // an unset variable yields none, which is a value the consumer
+                // dispatches on rather than a failure it has to trap
+                Expr::Ident(n, _) if base(n) == "env" => STR | NONE,
+                Expr::Ident(n, _) if matches!(base(n), "exists" | "is_dir") => TRUE | FALSE,
+                Expr::Ident(n, _) if base(n) == "list_dir" => LIST,
+                Expr::Ident(n, _) if base(n) == "now" => INT,
+                // an unset variable yields none, which is a value the consumer
+                // dispatches on rather than a failure it has to trap
+                Expr::Ident(n, _)
+                    if matches!(
+                        base(n),
+                        "print"
+                            | "write"
+                            | "write_err"
+                            | "write_file"
+                            | "make_dir"
+                            | "sleep"
+                            | "kill"
+                            | "net_write"
+                            | "net_close"
+                    ) =>
+                {
+                    0
+                }
+                _ => TOP & !FAIL,
+            }
+        }
         // `a >> b` yields what its right side yields
-        Expr::Seq(_, b, _) => desc_yield(b),
+        Expr::Seq(_, b, _) => desc_yield_of(ctx, b),
         // a join yields nothing a continuation would see
         Expr::Join { .. } => 0,
         Expr::Guard { early, rest, .. } => {
             let rest_yield = match rest.last() {
-                Some(Stmt::Expr(e)) => desc_yield(e),
+                Some(Stmt::Expr(e)) => desc_yield_of(ctx, e),
                 _ => TOP & !FAIL,
             };
-            desc_yield(early) | rest_yield
+            desc_yield_of(ctx, early) | rest_yield
         }
         _ => TOP & !FAIL,
     }

@@ -1,0 +1,26 @@
+# The same read again, reached through a branch over two BOUND locals.
+#
+# `desc_yield_of` looks through a binding to what the bound description
+# yields, and it used to do that only at the top of the expression: the `if`
+# arm recursed into `desc_yield`, which sees an identifier and gives up. So a
+# chain head that is a bound local answered, and the same local inside a
+# branch did not. The recursion goes through the lookthrough now.
+import "std/os"
+import "std/text"
+
+fn pick n
+  a = os/read_file! "reading_branch.kso"
+  b = os/read_file! "reading_branch.kso"
+  source = if (n > 0) a b
+  source . fed
+
+fn fed cs
+  print "tallied {tally cs 200 0}"
+
+fn tally _ 0 acc
+  acc
+
+fn tally cs n acc
+  tally cs (n - 1) (acc + length (text/split cs "\n"))
+
+pick 1

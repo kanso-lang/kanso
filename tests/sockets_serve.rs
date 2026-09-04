@@ -112,6 +112,56 @@ net/listen 0 . (l -> net/port l . (p -> serving_at l p))
 os/run "sleep" ["3"] . (_ -> print "waited")
 "#;
 
+/// A request read off a socket and threaded through a loop that allocates.
+///
+/// `net/read` is written as a bare builtin call — `builtin_net_read c.handle`
+/// — with no declared step for the per-declaration yield to answer from, so it
+/// fell through to `desc_yield`'s builtin table, and the table did not name it.
+/// The loop's slot held a value of no known type, `beat.rs` kept the grow-only
+/// arena, and the bracket never happened. Four other effect builtins were
+/// missing the same way: `kill`, `listen`, `accept` and `net_port`.
+///
+/// Watched red: `beat_iters=0` on this program, against the 200 below.
+const A_REQUEST_THROUGH_A_LOOP: &str = r#"import "std/net"
+import "std/os"
+import "std/text"
+import "std/time"
+
+fn answered l c
+  net/read c
+    . tallied
+    . (_ -> net/write c (page "kanso"))
+    . (_ -> net/close_conn c)
+    . (_ -> net/close_listener l)
+
+fn tallied r
+  print "tallied {tally r 200 0}"
+
+fn tally _ 0 acc
+  acc
+
+fn tally cs n acc
+  tally cs (n - 1) (acc + length (text/split cs "\n"))
+
+fn done _
+  print "fetched"
+
+fn page body
+  "HTTP/1.1 200 OK\r\ncontent-length: {length body}\r\n\r\n{body}"
+
+fn serving_at l p
+  os/write_file "port.txt" "{p}" . (_ -> net/accept l) . (c -> answered l c)
+
+asked = time/sleep 400 . (_ -> os/read_file "port.txt") . fetched
+
+fn fetched p
+  url = "http://127.0.0.1:{p}/"
+  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] . done
+
+net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+asked
+"#;
+
 /// Runs one program on one engine and answers what it printed. `drive` runs
 /// against the port once the program is up, for the tests whose client is this
 /// harness rather than a statement of the program itself. `slot` only keeps
@@ -123,6 +173,18 @@ fn printed(
     slot: u16,
     drive: impl FnOnce(u16),
 ) -> String {
+    ran(name, source, engine, slot, drive).0
+}
+
+/// The same run, with what it said on stderr kept as well — which is where the
+/// counters go.
+fn ran(
+    name: &str,
+    source: &str,
+    engine: &[&str],
+    slot: u16,
+    drive: impl FnOnce(u16),
+) -> (String, String) {
     // One server at a time. The port is chosen by asking the os and letting
     // go, so anything that binds between the asking and the program's own
     // listen takes it — and the likeliest such thing is this file's other
@@ -141,6 +203,7 @@ fn printed(
         .arg("play")
         .arg("serve.kso")
         .args(engine)
+        .env("KANSO_COUNTERS", "1")
         .current_dir(&dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -191,7 +254,10 @@ fn printed(
         "engine {engine:?}: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    String::from_utf8_lossy(&output.stdout).into_owned()
+    (
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    )
 }
 
 /// Watched red on both engines: killed at sixty seconds with no output, each
@@ -359,4 +425,17 @@ fn a_listener_answers_the_port_it_was_given_on_both_engines() {
         std::fs::remove_dir_all(&dir).ok();
         assert!(reached.is_ok(), "nothing listening on {port} for {tag}");
     }
+}
+
+/// The loop past a socket read brackets every iteration.
+///
+/// Native only: `beat_iters` is a counter the emitted code keeps, and the
+/// interpreter has no beat to count. 200 and not 201 — the loop runs inside a
+/// fiber the scheduler resumed, so the outermost bracket the whole-program
+/// case gets is not there to count.
+#[test]
+fn a_request_read_off_a_socket_keeps_its_loop() {
+    let (out, counted) = ran("sockets-beat", A_REQUEST_THROUGH_A_LOOP, &[], 6, |_| {});
+    assert_eq!(out, "tallied 1200\nfetched\n");
+    assert!(counted.lines().any(|l| l == "beat_iters=200"), "the loop did not bracket: {counted}");
 }

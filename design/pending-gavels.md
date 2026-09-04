@@ -50,11 +50,155 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-Nothing. The section stays so the next entry has somewhere to land.
 (The sha256 digest question sat here briefly and was bounced on
 2026-08-29: performance questions with no surface area are the
 implementer's, per this file's own charter. The log carries the
 research mandate it left with.)
+
+### The compile row moves 2,551 between binaries that do no different work
+
+**Searched** design/compiler-log.md and design/log/compiler-log-archive.md for
+`/proc/self/maps`, `pthread_getattr_np`, `lang_start`, `bimodal` and `508`;
+design/pending-gavels.md for the compile row. The 2026-09-03 entry names the
+mechanism, kanso#1234 ruled NO EXCLUSION on 2026-09-03, and neither settles the
+question below.
+
+This entry was filed on 2026-09-04 under a heading about a welfare fall.
+**THAT HALF IS RULED AND GONE.** Clay, same day: the objective should
+incorporate the win the corpus could not see, so the corpus is what gets fixed.
+bench/readbench does it, the repair scores +2.69, and the fall it was filed
+about does not exist any more. What follows is the other half, which nobody has
+ruled on and which is not about welfare at all.
+
+**ADDED 2026-09-04, and it may change what the fall means.** The compile row
+was re-sat during this branch. `compile_instructions` is keyed per silicon and
+welfare reads the FIRST row of `bench/compile_instructions_by_cpu.txt` as a
+bare number. Measured, with nothing else changed:
+
+    41930035   welfare 73.05
+    41845704   welfare 73.06
+
+**What moves between those two numbers is BINARY LAYOUT, not silicon.** The
+first draft of this entry said it was a chip change, because the run that
+refused sat on Zen 4 where the previous sitting was Zen 3. The next run
+corrected it: Zen 3 counted 41,845,704 as well. Same chip, different binary —
+sha 42283602b2c8 against sha 0e081d4c2c96 — and **-84,331 for a source change
+the container measures at +34**. The two AMD models happen to agree to the
+instruction on this binary, which is what hid it for one run.
+
+So a relink bought 0.01 of welfare, the same size as the fall this entry is
+about, for 34 instructions of real front-end work. The by-cpu file's header
+already names layout as a term — a docs-only pull request once moved this row
+5,081 — and this is sixteen times that, against a floor that ratchets.
+
+The question, and it is not about this branch: **should a term whose movement
+is dominated by binary layout set a ratcheted floor at all?** The per-chip key
+was built to separate the chip from the change and it does that. It does not
+separate the LINK from the change, and nothing in the tree does. Shapes I can
+see, none of them chosen here: welfare reads each row against that row's own
+first recorded value, so the term measures movement rather than magnitude; or
+the compile term stays in the report and leaves the ratchet, which is close to
+the exclusion argument ruled against on 2026-09-03 and therefore not free; or
+the row is measured against a binary pinned some other way, which is a larger
+change than either.
+
+Nothing has been changed on any of it. The row was re-sat because CI refused
+and the refusal named the line to paste; that is the documented path and it is
+all that was done.
+
+**ADDED 2026-09-04, second sitting on the same question — a third chip landed
+on this binary and counted the same number.** CI refused again, this time on
+Intel Emerald Rapids (0x6/0xcf), and it counted 41,845,704: what Zen 4 and Zen
+3 both counted on sha 0e081d4c2c96. Three silicon keys, one binary, one value
+to the instruction. The row is added, which is the documented path, and again
+that is all that was done.
+
+It bears on the shape above, so it is filed under the same heading. Walking
+every recorded state of `bench/compile_instructions_by_cpu.txt`, one state has
+two chips carrying different values — `f6e24e91`, the commit that introduced
+the key. `compile_sample`'s binary sha landed in that same commit, so the
+readings that argued for keying by silicon are the readings whose binaries
+nobody wrote down, and the file's header describes their SOURCES as identical
+rather than their binaries. The layout term measured above is -84,365 against
+the roughly 5,124 that the key was built on.
+
+**This does not say the key is wrong, and it must not be read as saying so.**
+The row is no more a function of the binary than of the chip: Zen 4 read
+41,844,180 on this same sha, so something moves the count within one chip and
+one binary. Three agreeing chips say the chip term is small on this binary and
+cannot speak for another. Removing a measured guard on that would be trading
+evidence for an inference.
+
+So the question the shapes above are already waiting on gains a second half:
+if welfare is to stop reading a layout-dominated magnitude, is the per-chip key
+still buying anything, or is the thing that actually wants keying the BINARY?
+Answering the second without the first would be re-keying a term that may not
+belong in the ratchet at all. Nothing here proposes either.
+
+**ADDED 2026-09-04, and it corrects the note above while strengthening the one
+before it.** The layout term is measured now. Seven binaries on one chip, same
+procedure as the gate minus its container stop:
+
+    sha           .text     .data  .bss    instructions
+    9fcc6686dc47  2550854   2640   312     42,344,081   baseline
+    82ec0846958a  2550854   2640   312     42,344,081   dead pub fn, linker dropped it
+    5d50f9d9721d  2550854   2640   312     42,344,081   no_mangle fn, dropped too
+    8663815286be  2550854   2640   1336    42,344,081   +1 KiB .bss
+    09a6c2fab6b8  2550854   2640   312     42,344,093   +64 KiB .rodata
+    7fc53be7987e  2550854   2640   4408    42,346,211   +4 KiB .bss
+    3c1e1cff9e3b  2550854   2640   65848   42,346,211   +64 KiB .bss
+
+**2,130 instructions bought by moving a static nobody executes.** That is the
+half of this entry that was argued rather than shown, and it is shown now: the
+objective ratchets a number that a link can move by the size of the changes the
+vein exists to catch.
+
+**AND IT WITHDRAWS THE SUGGESTION THAT THE KEY MIGHT BE UNNECESSARY.** That
+rested on the header's claim that cargo does not build the same bytes twice. On
+this host it does — two from-scratch builds of an unchanged tree into different
+target directories both read sha `9fcc6686dc47`. Nothing under `docs/` or
+`design/` reaches an `include_str!`, so the docs-only pull request that moved
+this row 5,081 ran on an identical binary, and that 5,081 is the chip or the
+mode flip below. The per-silicon key keeps the evidence it was built on, and the
+second question in the note above is withdrawn rather than left standing.
+
+**CORRECTED SAME DAY, and the correction strengthens the entry.** The `.text`
+term was never tested above — every probe there left `.text` unmoved because the
+linker dropped each dead function. Keeping one (reached through an environment
+variable the gate never sets) gives ten binaries and six values:
+
+    sha           .text     .data  .bss    instructions
+    9fcc6686dc47  2550854   2640   312     42,344,081   baseline, three runs
+    82ec0846958a  2550854   2640   312     42,344,081   dead pub fn, dropped
+    5d50f9d9721d  2550854   2640   312     42,344,081   no_mangle fn, dropped
+    8663815286be  2550854   2640   1336    42,344,081   +1 KiB .bss
+    09a6c2fab6b8  2550854   2640   312     42,344,093   +64 KiB .rodata
+    5e73453bcc7b  2550950   2640   312     42,343,660   200 unreached fns
+    2152c689dc78  2566982   2640   312     42,345,628   400 unreached fns
+    2a4e10fb2116  2550950   2640   312     42,345,904   100 unreached fns
+    7fc53be7987e  2550854   2640   4408    42,346,211   +4 KiB .bss
+    3c1e1cff9e3b  2550854   2640   65848   42,346,211   +64 KiB .bss
+
+The baseline read 42,344,081 on three separate runs, so each value is a property
+of its binary. Two of these binaries share `.text`, `.data` and `.bss` to the
+byte and read 2,244 apart, which retracts "a relink alone is not the term" from
+the note above; six values retract "bimodal" with it.
+
+**The span is 2,551 instructions for source changes that do no work, and it goes
+both ways** — `5e73453bcc7b` reads 421 BELOW the baseline for two hundred
+functions no execution reaches. A ratchet reading this row would bank that as a
+win and then refuse the next change that gave it back. That is the entry's
+question with a number on it.
+
+**THE MODE FLIP IS THE THING TO NOTICE.** Seven binaries gave two values, and
+which one a binary lands on is decided by whether `.bss` crosses a boundary
+between one page and four. It matches what this vein has been reporting from the
+other end for a fortnight — two clusters 5,064 apart on one unchanged binary,
+the 508 lattice, Zen 4's pair on one sha. A ratchet reading a bimodal quantity
+banks the low mode and then refuses the high one, which is a gate that fires on
+the linker's luck. Whether that is worth a shape of its own, or is the same
+question as the first half, is part of what is being asked here. Nothing has
+been changed on any of it.
 
 
 ## Open, not blocking
@@ -123,3 +267,24 @@ header so a reader looking for the campaign finds where it went.
 - Survivor cap 4× block threshold: the multiplier is a judgment call;
   the principle (the dance's transient stays at threshold scale) is in
   the log.
+
+**THE MECHANISM IS NAMED NOW, AND IT IS A TERM ALREADY RULED ON.** callgrind's
+call graph: `std::rt::lang_start_internal` calls `pthread_getattr_np`, which
+parses `/proc/self/maps` with `getline` and `sscanf` to place Rust's stack
+guard. Splitting each profile into that parse and the program:
+
+    binary                      row          maps parse   the program
+    9fcc6686dc47 baseline       42,344,081      112,580    41,878,959
+    45c6dbed10bb +64 KiB .bss   42,346,211      114,710    41,878,959
+    2a4e10fb2116 100 fns        42,345,904      112,586    41,880,776
+    5e73453bcc7b 200 fns        42,343,660      110,317    41,880,801
+
+The `.bss` probe adds no code and the compiler's work is **identical to the
+instruction**. All 2,130 of the row's move is the parse.
+
+kanso#1234 found this term and the ruling of 2026-09-03 was NO EXCLUSION, so
+**nothing here asks to exclude it and nothing has been changed.** The new fact
+is its size: 0.27% of the row and 100% of its binary-to-binary drift, with
+`std::rt::lang_start::{{closure}}` sitting still through a change that moved the
+published row by 2,130. The ruling was made when the term was known to exist and
+not known to be the whole of the drift, and this entry is where that goes.
