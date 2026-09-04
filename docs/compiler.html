@@ -1560,7 +1560,9 @@ baseline          2550854   42,344,081  112,580  41,878,959
 +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
 +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959</code></pre>
 
-<p>the movement is above <code>main</code>. before a rust program runs, the loader maps its shared objects and the runtime places a stack guard, which parses <code>/proc/self/maps</code> &#8212; and how long that file is depends on where the linker happened to put things. so the row reads <code>std::rt::lang_start::{{closure}}</code> inclusive now, which is everything <code>main</code> does. that frame spans 1,028 across the same seven.</p>
+<p>the movement is above <code>main</code>. before a rust program runs, the loader maps its shared objects and the runtime places a stack guard, which parses <code>/proc/self/maps</code> &#8212; and how long that file is depends on where the linker happened to put things. so the row reads <code>kanso::main</code> inclusive now, which is everything the compiler does. that frame spans 1,028 across the same seven.</p>
+
+<p>the anchor is this crate&#39;s own symbol for a reason the first attempt supplied. it read <code>std::rt::lang_start::{{closure}}</code>, which is the standard library&#39;s, and ci refused: the toolchain the runners carry does not emit that frame. a name std owns can move under a version bump with nobody here touching a line. <code>kanso::main</code> carries an <code>inline(never)</code> that says why it exists, and sat exactly 10 instructions below the closure on every profile retained &#8212; the table above was read with the closure, and the spans are the same under either.</p>
 
 <p>&#167;38 ruled that glibc stays in the count, and it still is: every libc call the compiler makes is inside that frame. what comes out is the 465,122 instructions of process startup that happen before the compiler runs, which is a different thing from a measure of the compiler&#39;s own instructions going blind to work the compiler causes glibc to do.</p>
 

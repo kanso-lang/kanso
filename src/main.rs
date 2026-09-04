@@ -74,6 +74,16 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
 
 ";
 
+/// The compile row is read out of this frame, so it has to have one.
+///
+/// `scripts/gates/compile_instructions.sh` counts the compiler's own work by
+/// taking `kanso::main` inclusive out of a callgrind profile, which drops the
+/// loader and the stack guard above it. It anchored on
+/// `std::rt::lang_start::{{closure}}` for one round and CI refused: that name
+/// is the standard library's, and the toolchain the runners carry does not
+/// emit it. This one is ours. `inline(never)` is what stops a future compiler
+/// folding it into the shim that calls it and taking the anchor with it.
+#[inline(never)]
 fn main() -> ExitCode {
     let code = driven();
     kanso::phase::report();

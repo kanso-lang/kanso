@@ -3060,3 +3060,36 @@ size as the drop on that host — the startup half is an additive constant the
 old baseline also paid, so leaving it alone would read a measurement change as
 a free win. That correction and the re-sitting land together.
 
+
+## 2026-09-04 — THE ANCHOR WAS THE STANDARD LIBRARY'S, AND CI REFUSED IT
+
+**DONE, and it corrects the entry above.** That entry said the row reads
+`std::rt::lang_start::{{closure}}` inclusive. CI refused on the first run:
+
+    ::error::the profile carries no std::rt::lang_start::{{closure}} frame
+
+The frame is real on this container under rustc 1.94.1 and absent from the
+runners' profiles under 1.98.1. So the anchor was a name the standard library
+owns, which a version bump can move with nobody here touching a line — and the
+gate's own refusal path is the only reason that showed up as a stop rather than
+as a number.
+
+**The anchor is `kanso::main` now**, this crate's own symbol, with an
+`inline(never)` in src/main.rs whose doc comment says the measurement is why it
+is there. It sat exactly 10 instructions below the closure on all four profiles
+retained from the seven-binary sitting, and the baseline rebuilt with the
+annotation reads `row 42,344,081` — identical to the instruction — and
+`program 41,878,949`. So the annotation costs nothing and the published spans,
+3,963 whole-process against 1,028 in the frame, hold under either anchor.
+
+**The refusal now prints the profile before it refuses.** The round that made
+this necessary said "cannot be read out of it" and printed nothing that could
+be read instead, so finding out what the profile did contain took a second
+round. `callgrind_annotate --inclusive=yes --threshold=99 | head -30` goes to
+the job log first, and the refusal points at it. This is the same defect
+`scripts/perf_record` had for a day — a reader that reports its own failure
+without reporting what it saw.
+
+**`compiler libraries` was green on that same CI run**, which is the half of
+this change that was not being re-sat.
+

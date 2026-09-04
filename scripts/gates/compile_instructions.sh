@@ -104,8 +104,8 @@ tune=$tune:glibc.malloc.tcache_count=7
     --callgrind-out-file=/tmp/cg.compile ./kanso check lib/json \
     >/dev/null 2>/dev/null
 )
-# THE COMPILER'S OWN WORK, not the whole process. `std::rt::lang_start::
-# {{closure}}` inclusive is everything `main` does, and that INCLUDES every
+# THE COMPILER'S OWN WORK, not the whole process. `kanso::main` inclusive is
+# everything the compiler does, and that INCLUDES every
 # libc call the compiler makes — so this is not the "stop counting glibc" that
 # 2026-09-03 ruled out, and the difference is the whole point. What it drops is
 # the 465,122 instructions ABOVE that frame: the loader mapping five shared
@@ -113,7 +113,11 @@ tune=$tune:glibc.malloc.tcache_count=7
 # therefore moves with where the linker happened to put things.
 #
 # HOW MUCH IT BUYS, and it is not everything. Measured 2026-09-04 on seven
-# binaries whose sources differ only in code or data nothing reaches:
+# binaries whose sources differ only in code or data nothing reaches. The
+# `program` column is `std::rt::lang_start::{{closure}}` inclusive, which is
+# what these seven were read with; `kanso::main` sat exactly 10 below it on
+# every profile retained, and reads 41,878,949 on the baseline built with the
+# anchor pinned. The spans are the same either way.
 #
 #   variant           .text     row         maps     program
 #   baseline          2550854   42,344,081  112,580  41,878,959
@@ -140,23 +144,34 @@ tune=$tune:glibc.malloc.tcache_count=7
 # measured at 32,090. bench/compile_libraries_golden.txt watches that by name,
 # which is a better answer than a number moving inside the layout noise.
 #
-# A REFUSAL rather than an empty value when the frame is missing. A toolchain
-# that renames it must stop this gate, not pin whatever the pipe returned:
-# scripts/perf_record read welfare's score as a field of a line it never
-# checked, and reported `missing index 2` against its own reader for a day.
+# WHY THE ANCHOR IS OURS. This read `std::rt::lang_start::{{closure}}` for one
+# round and CI refused: that frame is the standard library's, the runners'
+# toolchain does not emit it, and a name std owns can move under a version bump
+# without anybody here touching a line. `kanso::main` is this crate's, carries
+# an `inline(never)` in src/main.rs that says so, and differed from the closure
+# by exactly 10 instructions on all four profiles measured on 2026-09-04 — so
+# the spans below are the same either way.
+#
+# A REFUSAL rather than an empty value when the frame is missing, and the
+# profile PRINTED FIRST so one job log says what it does contain. The round
+# that made this necessary refused with nothing to read: `scripts/perf_record`
+# had already spent a day reporting `missing index 2` against its own reader,
+# and a refusal that cannot be diagnosed from its own output repeats it.
 if ! command -v callgrind_annotate >/dev/null; then
   echo "::error::callgrind_annotate is not installed, and the row is read out"
   echo "::error::of its inclusive profile rather than the summary line."
   exit 1
 fi
+echo "=== the profile's top frames, inclusive"
+callgrind_annotate --inclusive=yes --threshold=99 /tmp/cg.compile 2>&1 | head -30
 own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.compile 2>/dev/null \
-      | awk '/lang_start::\{\{closure\}\}/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+      | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
 case "$own" in
   '' | *[!0-9]*)
-    echo "::error::the profile carries no std::rt::lang_start::{{closure}} frame,"
-    echo "::error::so the compiler's own work cannot be read out of it. A"
-    echo "::error::toolchain that renamed that frame stops this gate rather than"
-    echo "::error::pinning whatever the pipe returned."
+    echo "::error::the profile carries no kanso::main frame, so the compiler's"
+    echo "::error::own work cannot be read out of it. The listing above is what"
+    echo "::error::it does carry. A toolchain that folded that frame away stops"
+    echo "::error::this gate rather than pinning whatever the pipe returned."
     exit 1
     ;;
 esac

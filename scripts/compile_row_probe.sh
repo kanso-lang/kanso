@@ -24,8 +24,15 @@
 #   maps     pthread_getattr_np inclusive. std::rt::lang_start_internal calls
 #            it to place Rust's stack guard, and it parses /proc/self/maps
 #            with getline and sscanf. About 0.27% of the row.
-#   program  std::rt::lang_start::{{closure}} inclusive, which is everything
-#            the compiler actually does.
+#   program  `kanso::main` inclusive, which is everything the compiler actually
+#            does. It is this crate's own symbol rather than a standard-library
+#            one, for the reason scripts/gates/compile_instructions.sh gives:
+#            CI's toolchain does not emit the closure the gate first read.
+#
+# The three numbers below were read with `std::rt::lang_start::{{closure}}` as
+# the program frame, which is what the gate anchored on for one round;
+# `kanso::main` sits exactly 10 instructions below it on every profile retained,
+# so the spans quoted here hold under either anchor.
 #
 # Measured on 2026-09-04: the row moves up to 3,963 between binaries built from
 # sources that differ only in code or data no execution reaches, and `program`
@@ -78,6 +85,6 @@ if command -v callgrind_annotate >/dev/null; then
   callgrind_annotate --inclusive=yes --threshold=100 "$out" 2>/dev/null \
     | awk '
         /pthread_getattr_np@@/ && !maps { gsub(/,/, "", $1); maps = $1 }
-        /lang_start::\{\{closure\}\}/ && !prog { gsub(/,/, "", $1); prog = $1 }
+        /kanso::main/ && !prog { gsub(/,/, "", $1); prog = $1 }
         END { printf "probe maps=%s program=%s\n", maps, prog }'
 fi
