@@ -2560,10 +2560,17 @@ orders yet", because the arm it always had is the right one for data. The
 two `missing` samples and `rescued` insist, so they still show a failure
 reaching the endpoint and a rescue catching one.
 
-**Every read costs two more plan steps**, visible in the ch05 plan goldens:
-the wrapper's `found` lambda and, for the bang, `insisted`, where the bare
-builtin had none. Recorded rather than hidden — it is the price of naming
-the alternative in the language instead of in a message string.
+**Every read costs one more plan step**, visible in the ch05 plan goldens:
+the wrapper's lambda over the builtin, where the bare builtin had none.
+`count_plan` goes two continuations to three and `save_plan` one to two.
+Recorded rather than hidden — it is the price of naming the alternative in
+the language instead of in a message string.
+
+(This paragraph said TWO steps when it was first written, and it was right
+about the shape it described: `read_file!` was `read_file . insisted`, two
+kanso functions deep. The entry below rewrites the bang to read the builtin
+directly, which is one function, and the goldens moved with it. Corrected
+here rather than left to contradict the numbers a reader can run.)
 
 Welfare 73.06, on the floor and unmoved.
 
