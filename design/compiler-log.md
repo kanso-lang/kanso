@@ -20,33 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 (sixth) — the fifth reading, and three chips is enough
-
-CI landed on Zen 4 — the row removed an hour earlier for never having been
-measured on this binary — and read 41,831,767, the low mode, on sha
-de5bfab22fbd. Recorded, because an unrecorded chip is exactly what the gate
-asks for and because it is a measurement rather than a mode being chased.
-
-|  | family0x6-model0xcf | family0x19-model0x1 | family0x19-model0x11 |
-| --- | --- | --- | --- |
-| on sha de5bfab22fbd | 41,831,767 | 41,832,275 | 41,831,767 |
-| earlier, sha 55fb850296d1 | both | — | — |
-
-Three chips, two values, one binary across all three. Intel reads low, Zen 3
-reads high, Zen 4 reads low — and Intel read high as well, twenty minutes
-before it read low, on one binary with byte-identical CPU feature blocks.
-
-**So the chip does not select the mode**, and that is the whole premise
-`bench/compile_instructions_by_cpu.txt` is named for. Two chips agreeing is
-what the file already warns is not evidence they agree; three chips split two
-against one, with the odd one out having previously read the other value, is
-evidence of something else entirely.
-
-Every row is CI's own most recent reading now and nothing is predicted from
-another chip. Whether that is a stable arrangement or a coin flip per run is
-the question in design/pending-gavels.md, unchanged by this reading except
-that it is now five measurements rather than four.
-
 ## 2026-09-03 (seventh) — two of three chips have produced both values
 
 A run against the fully recorded table — all three chips present, every row
@@ -2739,3 +2712,62 @@ A third chip was recorded on kanso#1242 — `family0x1a-model0x2`, reading
 41,379,840, the same to the instruction as both AMD models. That says the keys
 agree on this binary and says nothing about whether one of them disagrees with
 itself.
+
+## 2026-09-04 — THREE OPEN MARKERS THE RECORD HAS ALREADY ANSWERED, AND ONE THAT MISLEADS
+
+**DONE.** Searched the live log and `design/log/compiler-log-archive.md` before
+filing: the archive carries the 2026-09-03 allocator measurement and the chip
+series moved there this afternoon, and nothing in either closes these by name.
+The live file carried five `OPEN` markers. Three are answered, and one of the
+three is worse than stale.
+
+**A LIVE ENTRY ASSERTS A HYPOTHESIS ITS OWN CORRECTION SITS IN THE ARCHIVE.**
+The ninth-entry thread reads *"glibc parsing `/proc/self/maps` before `main` is
+still the only mechanism that fits"*. It is not. The archived entry that
+corrects it diffs the two profiles and finds three rows moving, all of them the
+allocator:
+
+    _int_malloc        1,551,384   1,551,964   +580
+    _int_free          1,522,333   1,522,352    +19
+    memcmp-avx2-movbe  1,353,408   1,353,342    −66
+
+Every kanso symbol agrees to the instruction across the pair, and the entry
+rules the cpu out on 123 byte-identical feature lines.
+
+**I repeated the error today, which is the evidence that the shape is the
+problem rather than the wording.** Writing kanso#1243 I restated the maps
+hypothesis from the live entry, concluded that kanso#1241 had removed the
+mechanism, and pushed that. The archive corrected me on the read. A reader of
+the live log alone would make the same move, because the hypothesis is here and
+its refutation is forty thousand lines away with no pointer from this side. The
+trim rule says the archive keeps the older end and this file keeps the last
+forty; it does not say a live entry may go on asserting what an archived one
+disproved. When a trim splits a correction from what it corrects, the live half
+owes a line saying so — and this is that line.
+
+**The rewiring is done by another mechanism.** That thread describes
+`--toggle-collect` and what it would owe. Clay dropped the toggle, and
+kanso#1241 reached the same end by reading `kanso::main` inclusive out of the
+profile instead. Both debts were paid in that change: the guard exists (the gate
+refuses a profile carrying no such frame, and prints the frames it does carry),
+and the welfare baseline moved 57,029,831 -> 56,563,967 in the same commit, so
+the instrument change could not be banked.
+
+**The two-readings thread came out BOTH ways, which its dichotomy did not
+allow.** It said other chips holding their own values would mean the key
+separates nothing, and a second value on a recorded chip would mean neither
+suspect was the term. Since then: Zen 4 and Zen 3 read 41,379,840 on sha
+4dc725bdb40d; Intel `family0x1a-model0x2` read 41,379,840 this afternoon;
+`family0x6-model0x6a` read 41,379,840 on this branch, whose diff is `design/`
+alone; and `family0x6-model0xcf` produced two values 508 apart on one binary.
+Four keys agree wherever they have shared a binary AND one key disagrees with
+itself. Both branches fired, so the disjunction was wrong rather than either
+answer being.
+What survives is the narrower question the entry above already carries: what
+moves the heap base when everything else agrees.
+
+**What stays open is the corpus.** The five effect builtins are in no benchmark,
+so a socket read going from a 260 MB peak to 2 MB scores zero. readbench does
+not close it — that benchmark splits a string 200 times, which is the read
+beat's repair and not the builtins. It is open on purpose, with its reason
+written where it was filed.

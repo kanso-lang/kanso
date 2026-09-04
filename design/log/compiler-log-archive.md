@@ -42979,3 +42979,30 @@ down rather than assumed, since the two are indistinguishable from the diff.
 
 Added to the ledger entry as the strongest argument for ruling this rather than
 living with it.
+
+## 2026-09-03 (sixth) — the fifth reading, and three chips is enough
+
+CI landed on Zen 4 — the row removed an hour earlier for never having been
+measured on this binary — and read 41,831,767, the low mode, on sha
+de5bfab22fbd. Recorded, because an unrecorded chip is exactly what the gate
+asks for and because it is a measurement rather than a mode being chased.
+
+|  | family0x6-model0xcf | family0x19-model0x1 | family0x19-model0x11 |
+| --- | --- | --- | --- |
+| on sha de5bfab22fbd | 41,831,767 | 41,832,275 | 41,831,767 |
+| earlier, sha 55fb850296d1 | both | — | — |
+
+Three chips, two values, one binary across all three. Intel reads low, Zen 3
+reads high, Zen 4 reads low — and Intel read high as well, twenty minutes
+before it read low, on one binary with byte-identical CPU feature blocks.
+
+**So the chip does not select the mode**, and that is the whole premise
+`bench/compile_instructions_by_cpu.txt` is named for. Two chips agreeing is
+what the file already warns is not evidence they agree; three chips split two
+against one, with the odd one out having previously read the other value, is
+evidence of something else entirely.
+
+Every row is CI's own most recent reading now and nothing is predicted from
+another chip. Whether that is a stable arrangement or a coin flip per run is
+the question in design/pending-gavels.md, unchanged by this reading except
+that it is now five measurements rather than four.
