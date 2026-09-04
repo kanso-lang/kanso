@@ -82,3 +82,4 @@ pendbench defines=121 calls=1272 branches=653 lines=6686
 scanbench defines=322 calls=3766 branches=2256 lines=20537
 indexbench defines=48 calls=178 branches=112 lines=1574
 digestbench defines=181 calls=1627 branches=909 lines=9761
+readbench defines=51 calls=174 branches=121 lines=1753

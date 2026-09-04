@@ -350,6 +350,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/digest_counters.sh
+      # The only benchmark that reads its input through `os/read_file!`, and
+      # the only one whose arena grows a block a round when the read's yield is
+      # unknown. bench/make_jsonbench was hand-written around that hole, so the
+      # corpus was measuring the workaround and priced the repair at zero.
+      - name: read counters
+        id: read
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/read_counters.sh
       # The rows a failing vein wants copied into its golden are printed by
       # the gate that measured them, which is fourteen gates and two callgrind
       # dumps from the end of this job. The log API hands back a tail, so a
@@ -388,7 +397,8 @@ jobs:
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \
-                      "digest counters:${{ steps.digest.outcome }}"; do
+                      "digest counters:${{ steps.digest.outcome }}" \
+                      "read counters:${{ steps.read.outcome }}"; do
             case "$vein" in
               *:failure)
                 echo "::error::${vein%:*} disagrees with its golden"

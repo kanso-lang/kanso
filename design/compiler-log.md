@@ -20,45 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — THE REPORT NAMED THE GATE AND NOT ITS REASON
-
-**DONE.** Naming the gate in `ALREADY RED` answered the question it was built
-for on its first CI run — `sh scripts/gates/instructions.sh`, red because
-valgrind was not on the ratchet's box — and could not answer the second. With
-valgrind installed by `scripts/ratchet/toolchain.sh` the same gate is **still
-red on the baseline**, and a line that says only which gate leaves a reader
-holding hypotheses with no way to choose between them. The gate wrote down why
-it failed; the ratchet was throwing that away.
-
-`ALREADY RED` and `UNBUILT` now carry the last eight lines the gate printed,
-indented under the finding. Watched red on the fixture that commits a tracked
-python file: without the gate's words the refusal does not contain
-`crept_in.py`, and the spec says so.
-
-**One hypothesis is already dead.** The obvious candidate was the worktree: the
-baseline builds in `/tmp/kanso-ratchet-base` against a shared target symlink,
-and paths baked into a binary would move an instruction count the way a run id
-that gained a digit does. Built both ways and compared:
-
-```
-8a406faa2e27030c41bc8dd12ab9750fe5ddb408afe54cedd52ce66f5cd475d3  ./jsonbench
-8a406faa2e27030c41bc8dd12ab9750fe5ddb408afe54cedd52ce66f5cd475d3  /tmp/kanso-pathtest/jsonbench
-```
-
-Byte-identical. The benchmark does not depend on the directory it was built in,
-so whatever reddens that gate on the ratchet's runner is something else.
-
-**OPEN, and the next run answers it.** The live candidate is the one recorded
-two entries ago: `bench/instructions_golden.txt` is not keyed per silicon the
-way `compile_instructions` is, and the ratchet job lands on whatever CPU the
-pool gives it — a second, independent sitting of those eleven rows on a runner
-unrelated to the cost-goldens job's. If the gate's own words turn out to be a
-row diff, that settles it and the vein needs the treatment kanso#1226 gave the
-compile row. If they are something else entirely, they will say so, which is
-the whole point of printing them.
-
----
-
 ## 2026-09-03 — TWO SITTINGS OF THE SAME ELEVEN ROWS IN ONE COMMIT, AND THEY DISAGREE
 
 **MEASURED.** Printing the gate's own words paid on its first run. The
@@ -2938,3 +2899,78 @@ the two modes. Combined with the split that puts the whole mode difference in
 and stays one: nothing has printed a map's line count on two runners and
 compared them, which is still what would settle it, and
 `scripts/compile_row_probe.sh` now prints the term a runner would have to show.
+
+## 2026-09-04 — THE CORPUS WAS WRITTEN AROUND THE HOLE, SO THE OBJECTIVE PRICED THE REPAIR AT ZERO
+
+**DONE.** `bench/readbench` joins the objective, and the yield repair is worth
+**+2.69 welfare** where it was worth 0.000 an hour ago. Clay's ruling, verbatim:
+"that's just saying that your welfare metric should be incorporating that
+metric and it's not so you need to fix that right?"
+
+**WHAT THE CORPUS COULD NOT SEE.** `os/read_file!` fell to the top set because
+`desc_yield` read a chain's yield off the head's BARE name, so a loop past it
+lost its beat and ran on a grow-only arena. `bench/make_jsonbench` was written
+around exactly that: the bang was spelled out into a `fed` pair, with a comment
+saying it would come back when the yield was inferred. It did, in 62879e23 —
+and every counter in every cost golden was byte-identical, because the corpus
+had been measuring the workaround. Eleven benchmarks and not one of them read
+a file with the spelling the repair fixes.
+
+**THE BENCHMARK IS THE FIXTURE AT SIZE.** `tests/golden/read_beat/reading.kso`
+already did this at 200 rounds; readbench is the same loop over
+`bench/large.json`. Two compilers, same program, same bytes:
+
+    159f6b2b  arena_blocks 41  arena_peak_bytes 42,991,616  beat_iters 1
+    this head arena_blocks  1  arena_peak_bytes  1,048,576  beat_iters 201
+
+The round count is a free parameter and that is a hazard worth stating: the
+defective side is linear in rounds and the fixed side is flat, so the size of
+the ratio is a number somebody picks. It was picked by matching the fixture,
+before the score was computed, and not adjusted afterwards.
+
+**THE TWO MEMORY BASELINES ARE MEASURED, NOT GRANTED.** welfare.kso's entering
+rule puts a newcomer at its dimension's standing so landing day is never a
+score move, and its own comment leaves open "whether a granted baseline should
+be replaced by real history once the counter has some." This counter has some:
+41 blocks and 42,991,616 bytes, read off 159f6b2b today. Granting them would
+have scored the repair at zero a second time, which is the whole thing being
+fixed. They go into `bench/welfare_floor.json` by hand, so a reviewer sees them
+in the diff, and the report's granted list no longer names them.
+
+`read_instructions` IS granted, and the reason is that it has no history worth
+recording: 2,000,668,271 against 2,000,657,408, a fall of 10,863 or 0.0005%.
+The row is in the objective as a tripwire — the benchmark is here for its
+arena, and this is what stops a later change buying that arena back with
+instructions.
+
+**WHAT THE NUMBER DOES.** Both trees scored with the same model:
+
+    159f6b2b (the defect)   70.83
+    this head (the repair)  73.52
+
+So the floor's 73.06 was set on a model that could not see this dimension, and
+73.52 - 73.06 is not the size of the repair. The repair is 2.69; the model
+gaining a term it was blind to is worth -2.23 on the old tree. Both belong in
+the floor's `why` and neither is the other.
+
+**THE FOLD IS A NEGATIVE RESULT.** Before the ruling arrived the plan was to
+dissolve the fall by removing the five allocations `decl_yields` costs —
+`returns` and `decl_yields` folded into one `answers: Vec<Set>` of length 2n
+with an `nfns`, since both are asked in the same round, grow monotonically,
+travel the same edges and wake the same readers. It works: `compile_allocs`
+returns to 25,485 exactly, `compile_alloc_bytes` and `compile_peak_bytes` hold
+to the byte, rounds and visits are identical, and the yield fixtures pass. It
+also costs **9,562 instructions**, measured with `scripts/compile_row_probe.sh`
+on two binaries: `program` (the `lang_start::{{closure}}` inclusive count, the
+compiler's actual work) 41,878,959 -> 41,888,521, with `maps` identical at
+112,580 both sides, so the whole move is the fold and none of it is layout.
+Priced: 73.060846 unfolded against 73.060572 folded. The objective declines it,
+and the index computed to five places is what says so — the allocation counter
+alone would have accepted it.
+
+**AND A HOLE FOUND ON THE WAY.** `scripts/gates/scan_counters.sh` exists and no
+CI step runs it: grep for it across `.github/` returns nothing, while
+oneshot, basket, wide, pend, escape, digest and decode all have steps.
+scanbench's `arena_blocks` and `arena_peak_bytes` are both in the model, so
+`bench/cost_golden_scan.txt` is a golden nothing compares against. Not widened
+into this change; recorded here and queued.

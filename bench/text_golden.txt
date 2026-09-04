@@ -460,3 +460,4 @@ pendbench text=83474
 indexbench text=54162
 scanbench text=145106
 digestbench text=102738
+readbench text=49522

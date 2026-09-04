@@ -93,7 +93,12 @@ lower_i = ["deepbench" "escapebench" "pendbench" "indexbench" "text"]
 # because the spec that caught digestbench's omission caught it in the pull
 # request that added the row. Its arena and peak sides were classified from the
 # first day for the same reason the digest's were.
-lower_j = ["digestbench" "scanbench"]
+# readbench joined on 2026-09-04, in the pull request that added the row, for
+# the reason the two above give and one of its own: its work row is meant to
+# stay flat. The benchmark is in the objective for its arena, and this is the
+# entry that makes a rise in its instructions read as a regression rather than
+# as drift the listing shrugs at.
+lower_j = ["digestbench" "scanbench" "readbench"]
 
 lower_ab = text/concat lower_a (text/concat lower_b lower_bb)
 
