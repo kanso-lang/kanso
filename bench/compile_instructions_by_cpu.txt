@@ -813,5 +813,28 @@
 # So the row moves by layout far more than by the front-end work it is meant to
 # count, and it is the layout that the welfare floor then ratchets against.
 # That is in design/pending-gavels.md.
-family0x19-model0x11 41845704
+#
+# 2026-09-04, THE 508 LATTICE REAPPEARS ON THIS BINARY, and Zen 4's row is a
+# pair again. Same chip 0x19/0x11, same binary sha 0e081d4c2c96: 41,845,704
+# then 41,844,180. The gap is 1,524, which is 3 x 508, the same multiple the
+# previous binary produced on Zen 3.
+#
+# The profiles say the same thing they said last time. Every kanso frame is
+# identical to the instruction across the two runs — eval_expr'2 1,652,497,
+# check_merged 1,586,580, infer 1,251,996, lex_line 866,486, parse 589,004 —
+# and the only visible move is __memcmp_avx2_movbe, 1,356,842 against
+# 1,356,776, which is 66. The rest sits below callgrind's 90% cut.
+#
+# WHAT IS AND IS NOT ESTABLISHED. Gaps of 508 (twice, historically) and 1,524
+# (twice now) have been read. Every one is a multiple of 508, which is the
+# lattice reading. Two 1,524s in a row is NOT evidence of a fixed 1,524
+# separation — the 508 pairs are in this file's own history — and nothing here
+# claims one.
+#
+# THE CAP STILL BINDS. Zen 4 has two measured values and may hold both. A THIRD
+# distinct value on this key is refused, and that refusal is the finding to
+# write down rather than a reason to widen. Zen 4 stays FIRST and 41,845,704
+# stays its first value, because the golden's bare line and compiler.html read
+# the first row's first value.
+family0x19-model0x11 41845704 41844180
 family0x19-model0x1 41845704

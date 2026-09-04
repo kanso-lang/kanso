@@ -2579,6 +2579,22 @@ contains both. 0.01 of welfare — the same size as the fall this branch is
 blocked on — was bought here by a relink. Filed in design/pending-gavels.md
 with the corrected evidence; nothing changed on it.
 
+**THE 508 LATTICE REAPPEARS ON THIS BINARY, and Zen 4's row is a pair.** The
+run after the Zen 3 sitting was Zen 4 again and counted 41,844,180 where the
+row pinned 41,845,704 — same chip 0x19/0x11, same binary sha 0e081d4c2c96. The
+gap is 1,524, three 508s, and the profiles say what they said the last time
+this happened: every kanso frame identical to the instruction across the two
+runs, and only `__memcmp_avx2_movbe` moving, 1,356,842 against 1,356,776, which
+is 66.
+
+Gaps of 508 (twice, in this file's history) and of 1,524 (twice now) have been
+read, and every one is a multiple of 508. That is the lattice. Two 1,524s in a
+row is not evidence of a fixed separation and nothing here claims one.
+
+The cap of two binds and Zen 4 holds both measured values. Verified locally
+that the gate accepts either on that key, accepts Zen 3's single, refuses a
+third value one more 508 down, and refuses Zen 4's second value on Zen 3's key.
+
 **AND CI HAS BEEN RUNNING A NINE-BINARY PREFIX OF THE SUITE, on both hosts,
 for every run of this branch.** `cargo test` stops at the first failing test
 BINARY rather than the first failing test, and the binaries run in alphabetical
