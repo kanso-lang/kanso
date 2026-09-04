@@ -2293,6 +2293,22 @@ evacuate — the read's cohort copied 432 bytes, and a program whose source is
 is the decode's alone. The count is 2 now and `evac_bytes` is pinned beside it
 so the next reader cannot make the same mistake.
 
+**And the second cohort costs that fixture something, with a thread left
+open.** Its whole counter set: allocs 34 to 36, alloc_bytes 1,741,504 to
+1,941,536, evac_allocs 15 to 19, evac_bytes 432 to 400,496 — while
+`arena_blocks` holds at 3 and `arena_peak_bytes` at 3,297,184, byte for byte.
+So the decode's cohort copies its 200 KB result twice to reclaim about a
+megabyte, and the program's peak does not move, because a cohort reclaims at
+the pop and the peak was reached before it. On a program that exits there the
+copy buys nothing measurable.
+
+That is a question about the survivor-ratio guard's threshold rather than
+about this change: `2 * survivor > grown` keeps the region, and here 400 KB
+against roughly 1.2 MB says copy. The license was always meant to reach a
+decode whose argument is a proven string; what moved is that inference can now
+prove it. Whether the guard should also weigh WHEN the reclaim lands is not
+something this branch measured and is not asserted either way.
+
 **Emitted code falls on three programs, and so does the machine code.** The
 decoder: defines 175 to 174, calls 1,863 to 1,851, branches 1,199 to 1,196,
 lines 12,263 to 12,218. pendbench and digestbench each lose one call and one
