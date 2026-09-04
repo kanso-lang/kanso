@@ -2615,6 +2615,22 @@ ninety binaries behind one expected failure. The exit code is unchanged — a
 failure anywhere still fails the job — so the only difference is what a reader
 of the log can see.
 
+**THE RATCHET CANNOT GO GREEN WHILE WELFARE IS RED, and that is by design
+rather than a second fault.** Its job log says so exactly: `ratchet: the
+baseline is not green` … `ALREADY RED welfare … red before any mutation, so no
+row sharing it is proof`. That is
+`a_gate_red_before_the_mutation_is_refused_rather_than_credited` doing what it
+was built for — a mutation cannot be credited against a gate that was failing
+before it was applied. Seventeen rows are selected on this branch because it
+touches files many mutations patch, and every one of them shares the welfare
+gate.
+
+So the red count on this branch is not a list of problems. `welfare`, `specs`,
+`the other host (macos, arm)` and `the ratchet` are one cause with four faces,
+and the fourth is downstream of the first three rather than beside them.
+Written down because the ratchet's red looks like a new failure every time and
+is not one.
+
 **OPEN — the corpus still cannot see this class of fix.** Same shape as the
 gavel this branch is waiting on. The five builtins are absent from every
 benchmark, so a change that takes a socket read from a 260 MB peak to 2 MB
