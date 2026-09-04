@@ -127,29 +127,38 @@ fn every_counter_at_parity_scores_the_weights_alone() {
     assert_eq!(scored("parity", &[]), "welfare 48.00");
 }
 
-/// One of the nine GUARD counters a thousand times better than its baseline,
-/// the other eight and both advertised rows at parity. Saturating each
+/// One of the ten GUARD counters a thousand times better than its baseline,
+/// the other nine and both advertised rows at parity. Saturating each
 /// counter first bounds what the runaway can contribute at one, so the guard
-/// term is (8/3 + 1024/1026) / 9 * 0.15 and the score is 49.11.
+/// term is (9/3 + 1024/1026) / 10 * 0.15 and the score is 49.00.
 ///
 /// Saturating the MEAN instead answers well above this on the same fixture,
 /// which is the shape the 2026-08-29 ruling closed and what this number is
 /// here to catch: one benchmark would take its term almost to the ceiling
 /// while every other sat at parity.
 ///
-/// THE COUNT IS WHAT MOVES THIS NUMBER, and it moves LATE. It read 49.16 over
-/// eight counters until kanso#1221, four hours after kanso#1215 minted
-/// `scan_instructions`, `escape_instructions` and `index_instructions` — a
-/// minted counter enters the floor's baseline at the next ratchet rather than
-/// at the merge that mints it, and this fixture takes its names from that
-/// baseline. So a pull request that adds a run-speed counter leaves this spec
-/// green and the NEXT `--set` turns it red. Recompute the fraction above from
-/// the new count when that happens; the number is pinned rather than derived
-/// on purpose, because a spec that recomputes what the tool computes is
-/// asserting its own copy of the tool.
+/// THE COUNT IS WHAT MOVES THIS NUMBER, and it usually moves LATE. It read
+/// 49.16 over eight counters until kanso#1221, four hours after kanso#1215
+/// minted `scan_instructions`, `escape_instructions` and `index_instructions`
+/// — a minted counter enters the floor's baseline at the next ratchet rather
+/// than at the merge that mints it, and this fixture takes its names from that
+/// baseline. So a pull request that adds a run-speed counter usually leaves
+/// this spec green and the NEXT `--set` turns it red. Recompute the fraction
+/// above from the new count when that happens; the number is pinned rather
+/// than derived on purpose, because a spec that recomputes what the tool
+/// computes is asserting its own copy of the tool.
+///
+/// 2026-09-04 is the case where it did NOT move late: `read_instructions`
+/// joined the guards and the same pull request ran `--set`, so the mint and
+/// the ratchet were one change and this spec went red inside it. Nine guards
+/// became ten and 49.11 became 49.00. Nothing about the rule changed — the
+/// delay was never a property of the spec, only of the usual order — and the
+/// two neighbours held: parity stays 48.00 because it does not depend on the
+/// count, and the advertised runaway stays 52.99 because that half still has
+/// two rows.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 49.11");
+    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 49.00");
 }
 
 /// THE HALVES ARE NOT INTERCHANGEABLE. The same thousandfold win is worth
@@ -164,14 +173,17 @@ fn one_counter_running_away_cannot_carry_its_term() {
 /// differing is the property; their order is the direction.
 ///
 /// The gap is large because the halves are unequal in count as well as in
-/// kind: a runaway is one of two advertised rows and one of nine guards, so
-/// it moves its half by 1/2 rather than by 1/9.
+/// kind: a runaway is one of two advertised rows and one of ten guards, so
+/// it moves its half by 1/2 rather than by 1/10. The gap widens every time a
+/// guard is added, which is the right direction — a corpus with more shapes in
+/// it makes any one shape worth less — and it is why this pair is asserted as
+/// an ORDER as well as two numbers.
 #[test]
 fn a_win_on_an_advertised_row_outscores_the_same_win_on_a_guard() {
     let advertised = scored("advertised", &[("decode_instructions", 1024)]);
     let guard = scored("guard", &[("wide_instructions", 1024)]);
     assert_eq!(advertised, "welfare 52.99", "an advertised runaway");
-    assert_eq!(guard, "welfare 49.11", "the same runaway on a guard");
+    assert_eq!(guard, "welfare 49.00", "the same runaway on a guard");
     assert!(
         advertised > guard,
         "the advertised half is worth more per counter: {advertised} against {guard}"
