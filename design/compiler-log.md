@@ -2888,3 +2888,26 @@ after it.
 
 **Still genuinely open:** `bench/instructions_golden.txt` is not keyed per
 silicon the way the compile row is, and there is no `by_cpu` file beside it.
+
+**THE WORK VEIN CARRIES NONE OF THIS TERM, so the last open thread is a
+different question.** `bench/instructions_golden.txt` is not keyed per silicon
+and its eleven rows have disagreed between sittings, which invites reading the
+compile row's treatment across. The mechanism does not carry across. Profiling
+`jsonbench` the way the gate does and grepping both profiles for the parse:
+
+    symbol          compile row   jsonbench
+    getattr_np           2             0
+    lang_start           2             0
+    vfscanf              2             0
+    getdelim             2             0
+    sscanf               2             0
+
+The benchmarks are C the compiler emitted, linked natively. Nothing in them
+installs a Rust stack guard, so nothing parses `/proc/self/maps`, and the term
+that is 100% of the compile row's binary-to-binary drift is absent from the
+eleven work rows entirely. Whatever moves them between sittings is something
+else, and the compile row's per-silicon key is not a fix to copy over on the
+strength of today's finding.
+
+Recorded and left there. Saying what DOES move them wants two runners, which is
+CI's to give.
