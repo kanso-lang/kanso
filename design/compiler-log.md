@@ -2991,3 +2991,72 @@ harvesting its row from CI. Watched red on the old body, for `missing index 2`.
 that a healthy run still reads its score — passes on the OLD code too. It is
 there to catch a refusal that fires on a good run, which would cost the history
 every row it has, and it is not evidence for the fix.
+
+## 2026-09-04 — THE ROW COUNTS THE PROGRAM NOW, AND THREE QUARTERS OF THE LINKER'S LUCK GOES WITH IT
+
+**DONE, and it closes the last blocking entry in the ledger.** The entry asked
+whether a term whose movement is dominated by binary layout should set a
+ratcheted floor. Clay answered by redirecting the question — "can you not force
+that to be consistent with some initial setup that's specific to specs?" — and
+he was right that I had conflated two things. The 2026-09-03 ruling was NO
+EXCLUSION of glibc. Excluding the process's own startup is a different act and
+nobody had ruled on it.
+
+`scripts/gates/compile_instructions.sh` now reads `std::rt::lang_start::
+{{closure}}` inclusive out of the callgrind profile instead of the summary
+line. That frame is everything `main` does, so every libc call the compiler
+makes is still counted; what it drops is the 465,122 instructions above it —
+the loader mapping five shared objects, and Rust placing its stack guard, which
+parses `/proc/self/maps` with `getline` and `sscanf` and therefore moves with
+where the linker happened to put things.
+
+**How much it buys, on seven binaries whose sources differ only in code or data
+nothing reaches:**
+
+    variant           .text     row         maps     program
+    baseline          2550854   42,344,081  112,580  41,878,959
+    +50 dead fns      2552534   42,348,024  114,845  41,879,987
+    +200 dead fns     2558486   42,347,128  112,586  41,879,361
+    +400 dead fns     2565174   42,348,044  110,341  41,879,922
+    +3 KiB .bss       2550854   42,346,221  114,720  41,878,959
+    +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
+    +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959
+
+Whole process spans 3,963; the frame spans 1,028.
+
+**THE FIRST READING WAS WRONG AND THE CORRECTION IS THE INTERESTING PART.** Four
+binaries measured earlier — baseline, +3 KiB .bss, +64 KiB .bss, +64 KiB
+.rodata — gave 41,878,959 four times, and I wrote invariance into three files
+on the strength of it. Those are all DATA changes. The `.text` case had never
+been probed with the frame read out, and it does not hold: 7,632 bytes of code
+no execution reaches moves the frame 402, and the movement is not monotone in
+`.text` — fifty dead functions move it more than four hundred do. The first
+`.text` probe I ran was contaminated too, because it reached the functions
+through an environment variable, which is executed work; the honest version
+keeps them with a `#[used]` array of function pointers and calls nothing.
+`scripts/compile_row_probe.sh` said "ALL of that movement is in `maps`" and now
+says what the seven binaries show.
+
+**WHAT THE SPLIT GOES BLIND TO, and the guard for it.** Startup work scales
+with what gets loaded, so the one compiler change that moves the dropped half is
+growing a dependency — one more shared object measured at about 32,090.
+`bench/compile_libraries_golden.txt` pins the five sonames `ldd` reports and
+`scripts/gates/compile_libraries.sh` diffs them. A new dependency now turns red
+saying `libfoo.so.1 appeared` rather than showing 32,090 mixed into a term that
+moves 3,963 for nothing. Watched red both ways before it shipped: dropping
+`libm.so.6` from the golden, and adding a name that is not there.
+
+**The ratchet row's mutation is `a_library_the_row_cannot_see.sh`**, and it
+links Rust's standard library dynamically with `-C prefer-dynamic` rather than
+editing the golden — an edit to the golden would prove nothing about the thing
+being guarded. Watched red on the real gate: `> libstd-46d936097e8c5b85.so`.
+Its anchor is the absence of `.cargo/config.toml`, so a repo that grows one
+stops the mutation instead of silently appending into it.
+
+**OPEN.** The goldens still hold whole-process values and CI has to re-sit them
+under the new definition, which is a deliberate red round. When it does, the
+welfare baseline `compile_instructions: 57029831` owes a correction of the same
+size as the drop on that host — the startup half is an additive constant the
+old baseline also paid, so leaving it alone would read a measurement change as
+a free win. That correction and the re-sitting land together.
+

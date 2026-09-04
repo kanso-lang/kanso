@@ -739,8 +739,9 @@ rows_a = [formatting linting python_free goldens mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
-rows_b1 =
-  text/concat rows_b1a [thunk_walk scan_counters read_counters compile_libraries]
+rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
+
+rows_b1 = text/concat rows_b1a rows_b1z
 
 rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
 
