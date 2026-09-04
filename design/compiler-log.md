@@ -2528,6 +2528,28 @@ both were measured on a binary 34 instructions away from this one, which is the
 same reason Zen 4's pair went yesterday. It is a re-sitting when it next
 refuses.
 
+**NEGATIVE RESULT — the fix does NOT reach `http/serving`, and the guess that
+it would was worth checking.** The gather loop binds what `net/read` yields, so
+it looked like the shipped server had been on the grow-only arena for as long
+as the table was missing `net_read`. Measured, the same POST through
+`lib/net/http` on `48ac2f93` and on this head:
+
+    arena_blocks           6  ->  6
+    arena_peak_bytes  6,291,456  ->  6,291,456
+    beat_iters             0  ->  0
+    allocs             2,595  ->  2,586
+
+`beat_iters=0` on BOTH sides is the answer: that loop never bracketed, so there
+was no bracket for the missing yield to cost. It is not a self-recursive
+accumulator of the shape `beat.rs` brackets — `gathering` reaches `heard`
+reaches `joined` reaches `gathering`, through a continuation each time. The
+nine allocations are real and are all the fix is worth there.
+
+So the 45x above is what a program written directly against `net/read` pays,
+and the library's own server was never paying it. Written down because the
+opposite is the natural assumption and nothing in the tree would have
+contradicted it.
+
 **AND THE RE-SIT MOVED WELFARE, WHICH IT SHOULD NOT BE ABLE TO DO.** Measured
 by running `scripts/welfare` against each value the row has carried today, with
 nothing else changed:
