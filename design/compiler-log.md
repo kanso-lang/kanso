@@ -2803,8 +2803,27 @@ compile vein and misses the runtime one. Rather than copy welfare's rename table
 into a second place to go stale, a baseline that moved and matched no golden row
 is listed by its welfare name under RE-BASED, unclaimed, and refused unless the
 log delta names it. A runtime re-basing is then visible and priced even though
-the gate cannot say which row it belongs to. Reaching the rest means asking
-welfare for the mapping rather than restating it; that is the open end.
+the gate cannot say which row it belongs to.
+
+**Reaching the rest is not "ask welfare for the mapping", and the measurement
+says why. OPEN.** Written that way in this entry's first draft, then checked:
+`welfare --counters` prints 27 counters, and matching each one's value against
+every row of every golden the trend gate walks leaves 8 unmatched. Two are
+ambiguous — `decode_peak_bytes` reads 2,097,152, which is also
+`arena_peak_bytes` in the oneshot, basket and wide goldens — and six have no row
+carrying that value anywhere, because `peak_of` SUMS three pools:
+`arena_peak_bytes + held_peak_bytes + perm_peak_bytes`. A `*_peak_bytes` term is
+a derived quantity, not a row.
+
+So the link is not a rename table and cannot be a bijection: it is many-to-one
+for every memory term, and welfare does not know the trend gate's prefixes
+(`work_jsonbench` is the gate's spelling of the row welfare calls
+`decode_instructions`). What would close it is an explicit table naming, for
+each objective counter, the gate keys it is derived from and how — identity or
+sum — in one place, with a spec that replays the derivation and asserts it
+reproduces welfare's own reading. That is a real piece of design rather than a
+plumbing change, and this entry records the measurement that rules out the
+cheap version.
 
 **Watched, both directions.** The gate at f3047edd against 1a0cb51e reproduces
 the `improved:` line above; the same pair under the new gate reads `re-based:`
