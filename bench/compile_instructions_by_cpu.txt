@@ -1102,7 +1102,14 @@
 # measured them on this binary. CI draws one chip a run, so they come back one
 # at a time. The golden's bare line tracks the FIRST row, which is one of the
 # stale three, so it does not move yet either.
+#
+# The second run drew family0x6-model0xcf -- Emerald Rapids, a different vendor
+# and a different microarchitecture -- and read 41,380,022, which is what
+# family0x19-model0x1 read. So the new binary opens the way the old one closed:
+# two chips agreeing to the instruction. That is the fifth agreement across two
+# binaries, and it is what the collapse argument in this file's header has been
+# waiting for evidence of. Two rows are still stale.
 family0x19-model0x11 41379503
 family0x19-model0x1 41380022
-family0x6-model0xcf 41379503
+family0x6-model0xcf 41380022
 family0x6-model0x6a 41379503

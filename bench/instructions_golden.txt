@@ -136,7 +136,6 @@
 # The two rows the hosts disagree on are exactly the two whose rise is
 # layout: deepbench by 4,325 and pendbench by 27. A layout effect is a
 # property of the binary the host built, so that is the expected shape.
-
 # 2026-09-05 (kanso#1251): a comparison feeding an `if` branches on its own i1
 # instead of building a tagged KValue for a phi to merge and k_not_failure and
 # k_truthy to take apart. EVERY ROW FALLS AND NONE RISES, both sides measured

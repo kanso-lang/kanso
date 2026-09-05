@@ -3396,9 +3396,18 @@ change touched. What moved is the compiler's own layout: codegen.rs gained a
 routine and everything after it sits at a different address. This repo has
 measured that artifact before, when adding and removing allocas moved clang's
 inlining budget inside untouched functions; 519 instructions is its size here.
-Only the chip CI drew is re-sat. The other three rows are stale and stay so
-until CI draws them, one per run, and the golden's bare line tracks the first
-of those, so it does not move yet either.
+The next run drew family0x6-model0xcf, an Emerald Rapids, and read the same
+41,380,022 — a different vendor and a different microarchitecture landing on
+the instruction. Two rows are re-sat and two are stale, and they stay stale
+until CI draws them, one per run; the golden's bare line tracks the first of
+those, so it does not move yet either.
+
+That second reading matters beyond this change. The per-chip key exists
+because two AMD models once read 41,503,893 and 41,498,829 on ONE binary, and
+that divergence predates kanso#1241, which cut this row down to the compiler's
+own frame and left the ifunc dispatch the key was invented to separate outside
+the measurement. Every reading since has agreed: four chips on the old binary,
+and now two on the new one before a third has been asked.
 
 ### The fixtures, and the pair that passed for the wrong reason
 
