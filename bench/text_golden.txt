@@ -516,16 +516,16 @@
 # instruction vein records what it bought: twelve rows fall, widebench by
 # 1.85% and three more by about one per cent.
 #
-jsonbench text=94066
-encodebench text=115522
-oneshot text=118050
-basket text=107410
-widebench text=120242
+jsonbench text=94562
+encodebench text=116242
+oneshot text=118690
+basket text=107490
+widebench text=120850
 deepbench text=71234
 escapebench text=52578
 pendbench text=85938
 indexbench text=55890
 scanbench text=155938
-digestbench text=105794
+digestbench text=105890
 readbench text=51826
-livebench text=118498
+livebench text=119218

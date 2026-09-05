@@ -127,7 +127,7 @@
 # 2026-09-05 (the literal's fast door): the decoder gains one define, one
 # call and eleven lines -- the door itself, emitted once per module.
 #
-defines=179
-calls=1829
-branches=1172
-lines=12199
+defines=180
+calls=1830
+branches=1175
+lines=12245

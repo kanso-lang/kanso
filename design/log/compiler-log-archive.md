@@ -45207,3 +45207,47 @@ different halves: `os/read_file!` returns something that already carries its
 type and is answered by its own declaration, where `net/read c` is a bare
 builtin call with nothing to ask and needs the table. The socket fixture is
 still the only thing pinning the second half, and this does not change that.
+
+## 2026-09-04 — THE ROW NAMED THE INDEX IT WAS READING, NOT THE TOOL THAT FAILED
+
+**DONE.** `perf_record` asks welfare for the score and takes the second field of
+its first line. When welfare itself died it printed no such line, and the row
+builder reported `missing index 2` born in `score_in` — a message naming the
+reader instead of the tool it read, pointing at a file nothing was wrong with.
+Three CI heads failed that way during kanso#1240 while readbench's instruction
+row was being harvested, and each one sent a reader to `perf_record.kso:258`
+when the fault was two processes away.
+
+Reproduced before it was touched, in a staged tree with the readbench row cut
+out of the instructions golden:
+
+    error[endpoint]: unhandled err reached the executor: "missing index 2"
+      born in perf_record/score_in at scripts/perf_record/perf_record.kso:258
+
+and after:
+
+    welfare printed no score, so this row has none to carry. it exited 1
+    saying: ... "missing index "readbench"" born in welfare/worked at
+    scripts/welfare/welfare.kso:375
+
+The reader now points at welfare, and welfare names the counter.
+
+**THE OBVIOUS FIX IS WRONG AND WOULD HAVE BEEN WORSE THAN NONE.** `os/run`
+hands back a status, and refusing on a non-zero one is the shorter edit. But
+welfare exits 1 on a fall AND on a rise nobody ratcheted — `os/exit 1` at three
+sites — and it prints a score in every one of them. Those are the commits the
+perf history most needs: a refusal keyed to the status would go silent on
+exactly the rows a reader would later want. Checked in welfare.kso before
+writing anything, which is the only reason the shape is what gets asked and the
+status only rides along in the message.
+
+**The spec enters where a user enters**: a staged tree with the goldens copied,
+the compiler and scripts and library borrowed from the checkout, a git
+repository because the row carries its commit, and one counter's instruction
+row removed — the state a branch is in between minting a benchmark and
+harvesting its row from CI. Watched red on the old body, for `missing index 2`.
+
+**Only half of it discriminates, and the entry says so.** The second test —
+that a healthy run still reads its score — passes on the OLD code too. It is
+there to catch a refusal that fires on a good run, which would cost the history
+every row it has, and it is not evidence for the fix.

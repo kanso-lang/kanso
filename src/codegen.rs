@@ -394,6 +394,52 @@ slow:
   %f = call %KValue @k_b_length(%KValue %v)
   ret %KValue %f
 }
+; The bytes view of a string. `k_b_bytes` reads two fields out of the KStr and
+; writes a three-field header into the arena, and the arena bump is already
+; inline in k_b_append_byte above -- so all thirty instructions it cost were a
+; call, a tag ladder and a bump the emitter can write itself. One comparison
+; does the whole guard: a failure carries a tag that is not K_STR and goes to
+; %slow, where the C entry owns the message and the propagation exactly as
+; before. The counting path goes to %slow too, so k_stat_sh_bytes can never be
+; dropped -- the same arrangement k_b_append_byte uses, for the same reason.
+; KStr keeps its length in an i32, so the load is sign-extended; a view's cap
+; is zero, which is what marks the data as borrowed rather than owned.
+define internal %KValue @k_b_bytes_fast(%KValue %sv) alwaysinline {
+  %tag = extractvalue %KValue %sv, 0
+  %isstr = icmp eq i64 %tag, 6
+  br i1 %isstr, label %chks, label %slow
+chks:
+  %so = load i32, ptr @k_stats_on
+  %counting = icmp ne i32 %so, 0
+  br i1 %counting, label %slow, label %fast
+fast:
+  %left = load i64, ptr @k_arena_left
+  %has = icmp uge i64 %left, 32
+  br i1 %has, label %alloc, label %slow
+alloc:
+  %sp = extractvalue %KValue %sv, 1
+  %s = inttoptr i64 %sp to ptr
+  %data = load ptr, ptr %s
+  %lenp = getelementptr i8, ptr %s, i64 8
+  %len32 = load i32, ptr %lenp
+  %len = sext i32 %len32 to i64
+  %ar = load ptr, ptr @k_arena
+  %ar2 = getelementptr i8, ptr %ar, i64 32
+  store ptr %ar2, ptr @k_arena
+  %left2 = sub i64 %left, 32
+  store i64 %left2, ptr @k_arena_left
+  store i64 %len, ptr %ar
+  %hd = getelementptr i8, ptr %ar, i64 8
+  store ptr %data, ptr %hd
+  %hc = getelementptr i8, ptr %ar, i64 16
+  store i64 0, ptr %hc
+  %pi = ptrtoint ptr %ar to i64
+  %r0 = insertvalue %KValue { i64 13, i64 undef }, i64 %pi, 1
+  ret %KValue %r0
+slow:
+  %f = call %KValue @k_b_bytes(%KValue %sv)
+  ret %KValue %f
+}
 define internal %KValue @k_int(i64 %n) alwaysinline {
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %v
@@ -5489,6 +5535,11 @@ impl<'a> Backend<'a> {
                 // the scan a pointer, a length and four integers — six, and
                 // nothing spills.
                 "find2_below_fast"
+            } else if name == "bytes" {
+                // two field reads and a three-field header into the arena, and
+                // the arena bump is already inline in the append twin. The
+                // call and its tag ladder were most of the thirty this cost.
+                "bytes_fast"
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"
