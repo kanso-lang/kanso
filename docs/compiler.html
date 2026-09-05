@@ -584,6 +584,14 @@ basket         10,000                0          1,048,576</code></pre>
 
 <p>the attempt found a real defect on the way, which is the usual reason to build one. suppressing an arm per file broke a getter of a sibling module's type used as a value — <code>list/map ps _.x</code>, where one file declares the type and another reads the field — because a file asked about itself alone cannot see its sibling's read. the module differential caught it and the union across files fixed it, but nothing in <code>cargo test</code> would have.</p>
 
+<p><strong>13. calling the escape body directly instead of through a fold <span class="status status-declined">built, measured, declined</span></strong> — the json encoder escapes a string by folding over its bytes with <code>(a b -&gt; esc_byte a b)</code>. that lambda is an eta-expansion of <code>esc_byte</code> and the compiler does not reduce it, because <code>esc_byte</code> dispatches on a byte and a group with a byte-discriminated parameter cannot be handed out as a first-class value. the profile makes the case look easy: the lambda's wrapper is 712,277,200 instructions, <strong>13.59%</strong> of the encode board, one indirect call for every byte of every string that needs escaping.</p>
+
+<p>writing the walk by index removes the closure, the boxing and the indirect call, and it is slower. the benchmark that watches the shipped library goes 5,231,282,203 to 5,388,806,908 instructions, <strong>+3.01%</strong>. every allocation counter is byte-identical — allocs, alloc bytes, arena blocks, peak, held peak — and one counter moves: <code>beat_iters</code> goes 5,032,401 to 16,691,201, exactly one new beat per byte. the index walk satisfies the beat analysis where <code>fold</code>'s inner loop did not, so every step now marks the arena and rewinds it. removing the closure saved 279 million instructions; the beat cost 436 million, and its rewind reclaims nothing, because the iteration allocates nothing above the mark.</p>
+
+<p>a beat around a loop whose body allocates nothing is the general shape, and the profile it exposed did pay. <code>k_beat_iter</code> was 28.65% of escapebench, and eight of its thirty instructions were a sanity check on the mark's own two words — a question fixed when the mark is written and re-asked at every rewind. moving it to the push took escapebench 7.36%.</p>
+
+<p>recorded here so the fold does not get rewritten again on the strength of the profile alone.</p>
+
 
 <h2 id="lazy"><span class="sec-num">07</span>the lazy bet<span class="status status-shipped">v1 shipped</span></h2>
 

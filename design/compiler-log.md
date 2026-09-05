@@ -4085,6 +4085,15 @@ program with a beat loop dies at its first one. Watched: escapebench, rebuilt
 under the mutation, prints `error[runtime]: a beat mark and the arena disagree
 about the room that is left` and produces nothing. Restored, green.
 
+The fold rewrite that led here is DECLINED and recorded on the compiler page
+as item 13 of §06. The escape path's per-byte closure is real — 712,277,200
+instructions, 13.59% of the frozen encode board — and removing it by walking
+the string by index costs livebench 5,231,282,203 -> 5,388,806,908, +3.01%.
+Every allocation counter holds and `beat_iters` goes 5,032,401 -> 16,691,201,
+one new beat per byte: the index walk satisfies the beat analysis where
+`fold`'s inner loop did not. Removing the closure saved 279M and the beat cost
+436M. That is where the thirty instructions came to be counted at all.
+
 `bench/text_golden.txt` moves on all twelve rows, most of them down —
 escapebench -32, readbench -16, jsonbench +16, pendbench +64. The check's eight
 instructions are gone from one place and present in another, and where the
