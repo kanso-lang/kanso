@@ -20,102 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-04 — THE CORPUS WAS WRITTEN AROUND THE HOLE, SO THE OBJECTIVE PRICED THE REPAIR AT ZERO
-
-**DONE.** `bench/readbench` joins the objective, and the yield repair is worth
-**+2.69 welfare** where it was worth 0.000 an hour ago. Clay's ruling, verbatim:
-"that's just saying that your welfare metric should be incorporating that
-metric and it's not so you need to fix that right?"
-
-**WHAT THE CORPUS COULD NOT SEE.** `os/read_file!` fell to the top set because
-`desc_yield` read a chain's yield off the head's BARE name, so a loop past it
-lost its beat and ran on a grow-only arena. `bench/make_jsonbench` was written
-around exactly that: the bang was spelled out into a `fed` pair, with a comment
-saying it would come back when the yield was inferred. It did, in 62879e23 —
-and every counter in every cost golden was byte-identical, because the corpus
-had been measuring the workaround. Eleven benchmarks and not one of them read
-a file with the spelling the repair fixes.
-
-**THE BENCHMARK IS THE FIXTURE AT SIZE.** `tests/golden/read_beat/reading.kso`
-already did this at 200 rounds; readbench is the same loop over
-`bench/large.json`. Two compilers, same program, same bytes:
-
-    159f6b2b  arena_blocks 41  arena_peak_bytes 42,991,616  beat_iters 1
-    this head arena_blocks  1  arena_peak_bytes  1,048,576  beat_iters 201
-
-The round count is a free parameter and that is a hazard worth stating: the
-defective side is linear in rounds and the fixed side is flat, so the size of
-the ratio is a number somebody picks. It was picked by matching the fixture,
-before the score was computed, and not adjusted afterwards.
-
-**THE TWO MEMORY BASELINES ARE MEASURED, NOT GRANTED.** welfare.kso's entering
-rule puts a newcomer at its dimension's standing so landing day is never a
-score move, and its own comment leaves open "whether a granted baseline should
-be replaced by real history once the counter has some." This counter has some:
-41 blocks and 42,991,616 bytes, read off 159f6b2b today. Granting them would
-have scored the repair at zero a second time, which is the whole thing being
-fixed. They go into `bench/welfare_floor.json` by hand, so a reviewer sees them
-in the diff, and the report's granted list no longer names them.
-
-`read_instructions` IS granted, and the reason is that it has no history worth
-recording: 2,000,668,271 against 2,000,657,408, a fall of 10,863 or 0.0005%.
-The row is in the objective as a tripwire — the benchmark is here for its
-arena, and this is what stops a later change buying that arena back with
-instructions.
-
-**WHAT THE NUMBER DOES.** Both trees scored with the same model:
-
-    159f6b2b (the defect)   70.83
-    this head (the repair)  73.52
-
-So the floor's 73.06 was set on a model that could not see this dimension, and
-73.52 - 73.06 is not the size of the repair. The repair is 2.69; the model
-gaining a term it was blind to is worth -2.23 on the old tree. Both belong in
-the floor's `why` and neither is the other.
-
-**THE FOLD IS A NEGATIVE RESULT.** Before the ruling arrived the plan was to
-dissolve the fall by removing the five allocations `decl_yields` costs —
-`returns` and `decl_yields` folded into one `answers: Vec<Set>` of length 2n
-with an `nfns`, since both are asked in the same round, grow monotonically,
-travel the same edges and wake the same readers. It works: `compile_allocs`
-returns to 25,485 exactly, `compile_alloc_bytes` and `compile_peak_bytes` hold
-to the byte, rounds and visits are identical, and the yield fixtures pass. It
-also costs **9,562 instructions**, measured with `scripts/compile_row_probe.sh`
-on two binaries: `program` (the `lang_start::{{closure}}` inclusive count, the
-compiler's actual work) 41,878,959 -> 41,888,521, with `maps` identical at
-112,580 both sides, so the whole move is the fold and none of it is layout.
-Priced: 73.060846 unfolded against 73.060572 folded. The objective declines it,
-and the index computed to five places is what says so — the allocation counter
-alone would have accepted it.
-
-**AND A HOLE FOUND ON THE WAY.** `scripts/gates/scan_counters.sh` exists and no
-CI step runs it: grep for it across `.github/` returns nothing, while
-oneshot, basket, wide, pend, escape, digest and decode all have steps.
-scanbench's `arena_blocks` and `arena_peak_bytes` are both in the model, so
-`bench/cost_golden_scan.txt` is a golden nothing compares against. Not widened
-into this change; recorded here and queued.
-
-**ADDED LATER THE SAME DAY — the obvious mutation proves nothing.** The gate
-shipped with a hand-run refusal behind it and no ratchet row, which is the
-scan_counters hole in mirror image: that one had a row from the first and no CI
-step ran the gate. Both are closed now, and writing the mutation turned up
-something the entry above got wrong by implication.
-
-Dropping `| ctx.decl_yields[i]` from `call_yield` — the per-declaration yield
-join, the thing 62879e23 was about — leaves readbench reading arena_blocks 1,
-arena_peak_bytes 1,048,576 and beat_iters 201. Unchanged. Built and measured
-rather than assumed, which is the only reason it was caught: the edit looked
-like the mutation and would have shipped as one.
-
-What readbench pins is the GROUP CONSULT — a chain head naming a declaration
-the program made, asked what that declaration yields. Short-circuit it and the
-benchmark reads 41, 42,991,616 and 1, the defect's numbers to the byte on a
-compiler that has the repair. So the benchmark and the yield table cover
-different halves: `os/read_file!` returns something that already carries its
-type and is answered by its own declaration, where `net/read c` is a bare
-builtin call with nothing to ask and needs the table. The socket fixture is
-still the only thing pinning the second half, and this does not change that.
-
 ## 2026-09-04 — THE ROW NAMED THE INDEX IT WAS READING, NOT THE TOOL THAT FAILED
 
 **DONE.** `perf_record` asks welfare for the score and takes the second field of
@@ -3457,3 +3361,71 @@ code for speed scores as a pure win in the index and pays in a golden the
 index cannot read. That is the same shape as every other counter outside the
 model, and the model says so in its own preamble — what a model leaves out it
 implicitly weights at zero.
+
+---
+
+## 2026-09-05 — one row, one value, built; and two ratchet rows that had never run
+
+**DONE — the ruling in the entry above is implemented.**
+`bench/compile_instructions_by_cpu.txt` and `scripts/gates/compile_ir_row.sh`
+are deleted, with the three ratchet mutations and two specs that guarded the
+keying: `an_unrecorded_chip_is_waved_through`,
+`a_second_row_for_one_chip_is_read_by_nobody`, `a_pinned_pair_grows_into_a_band`,
+`tests/a_compile_row_is_read_against_its_own_chip.rs` and
+`tests/a_paired_chip_row_names_one_binary_twice.rs`.
+`bench/compile_instructions_golden.txt` keeps its 41,378,764 unchanged and is
+now the whole of the row.
+
+The comparison moved back inside `scripts/gates/compile_instructions.sh`: read
+the golden's single `compile_instructions=`, read the sitting, compare exactly.
+The refusal names the two outcomes the ruling separates and says how each is
+settled — a move attributed to the change under test goes through the ordinary
+ratchet with a sentence in this file, and a disagreement between two runs of one
+build is a reproduction failure that halts the vein and is hunted to its source.
+The `compile_binary sha256` and `compile_sample cpu=... sha=... row=...` lines
+stay and are named in the refusal as where a hunt starts, because they are what
+tells the two apart: one sha counting two rows is the failure, two shas is the
+change under test until the pair is built and both are read.
+
+`scripts/gates/host_gate.sh` and `scripts/gates/dispatch.sh` both stay.
+host_gate is the same-build check the ruling's "same build, any runner" clause
+rests on, and its answer 3 — measure, print, fail — is why an unnamed toolchain
+still leaves a sitting in the job log. dispatch is reporting only: the row is
+not read against what it prints, and what it prints is the first question about
+two numbers from one build.
+
+`tests/the_compile_row_holds_one_value.rs` pins what is left: one value line,
+bare digits, no chip table on disk, no gate naming one. Watched red three ways
+before it was watched green — a second number appended to the line, a second
+value line, and the table recreated with the gate reading it — each naming its
+own defect. `scripts/ratchet/mutations/the_compile_row_pins_a_second_value.sh`
+is the first of those as a ratchet mutation, because writing the disagreeing
+number down beside the value it disagreed with is exactly the repair the ruling
+forbids.
+
+**FOUND, while removing one of them — two ratchet rows were written and never
+joined the chain the harness runs.** `scripts/ratchet/ratchet.kso` binds each
+row and then assembles them into `rows` through a chain of `text/concat`s.
+`compile_ir_pair` was bound on the day the pair was ruled and never added to
+that chain, so the guard against a third value beside a pinned pair never ran
+once in its life; it was deleted here having proved nothing. `live_counters`
+was bound on 2026-09-05 with livebench, and is live — it is added to the chain
+in this change rather than deleted.
+
+That is the same defect this repo keeps finding and a cheaper version of it.
+kanso#1199 found two rows blind, kanso#1229 found three more and four checks
+that could not fail — and every one of those was at least being run.
+`tests/every_ratchet_row_is_run.rs` walks the concat chain from `rows` and
+names any binding it does not reach. It was watched red against both orphans
+before either was fixed.
+
+**No counter moves.** Nothing in this change is `include_str!`'d into the
+compiler: the gate scripts, `ratchet.kso`, the specs, `docs/compiler.html` and
+the goldens' own headers are all outside `src/lib.rs`'s `lib/*.kso` and
+`hako/*.kso` and outside `src/main.rs`'s `src/runtime.c`. The eleven runtime
+cost goldens, the six compile gates and the welfare floor are untouched.
+
+**OPEN — the 508 is still unexplained and is now a hunt rather than a mode.**
+The record's two candidate explanations are already out: the loader's directory
+order, and the build, which is byte-reproducible. `setarch -R` was applied to
+one of those two runs and not the other. If it reappears, it stops this vein.

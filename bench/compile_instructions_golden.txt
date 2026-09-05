@@ -36,6 +36,21 @@
 # A rise is a regression to explain and a fall is a win to bank. Movement is
 # fine; silence is not.
 #
+# ONE ROW, ONE VALUE, ruled 2026-09-05. This file held a bare number for the
+# objective while bench/compile_instructions_by_cpu.txt held one row per chip,
+# and for a fortnight a row could pin TWO values. Both are retired. Eight
+# within-binary sittings across two binaries, two vendors and four CPU
+# generations agree to the instruction; the 508 that bought the pair was two
+# binaries read as one; and the drift before that was Rust's stack guard
+# parsing /proc/self/maps at startup, which the gate now anchors past by
+# counting `kanso::main` inclusive.
+#
+# So every move is attributed to the change under test and handled by the
+# ordinary ratchet, and consistency is verified by reproduction: the same build
+# on any runner counts the same number. A run that disagrees is a REPRODUCTION
+# FAILURE. It halts this vein and is hunted to its source — never written down
+# beside the value it disagreed with, and never recorded as a mode.
+#
 # The row is the runner's, copied out of the job log the way this file's own
 # rule requires. On the gate's first run the container read 66,968,333 against
 # the runner's 66,450,587 — half a per cent apart on the same sources in the
@@ -833,4 +848,10 @@
 # both binaries — family0x19-model0x11 counted each — so none of it is the
 # silicon. The prelude gained a third twin and src/runtime.c a third raw door;
 # the front end does the same work and its own code moved under it.
+#
+# 2026-09-05: no change to the value. bench/compile_instructions_by_cpu.txt is
+# deleted and this file is the whole of the row. The dated entries above that
+# say "the first row of bench/compile_instructions_by_cpu.txt as always" read
+# against a table that no longer exists; they are left as written, because the
+# sittings they record happened.
 compile_instructions=41378764

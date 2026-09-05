@@ -9,10 +9,23 @@
 # quarter of the work went away silently, and a quarter coming back would have
 # been just as quiet.
 #
-# THE ROW IS KEYED BY SILICON. bench/compile_instructions_by_cpu.txt holds one
-# value per chip and is what this checks against;
-# bench/compile_instructions_golden.txt holds its first row again as a bare
-# number, for welfare and the trend gate, and this checks the two agree.
+# ONE ROW, ONE VALUE. Ruled 2026-09-05, and it retired a per-chip table and a
+# pinned pair. bench/compile_instructions_golden.txt holds a single
+# `compile_instructions=` and this checks the measurement against it exactly.
+# Every move is attributed to the change under test and handled by the ordinary
+# ratchet, like every other counter in the tree.
+#
+# CONSISTENCY IS VERIFIED BY REPRODUCTION rather than by keying: the same build
+# on any runner counts the same number. A run that disagrees is a reproduction
+# failure, and it HALTS THE VEIN and is hunted to its source — the way the row's
+# earlier drift turned out to be Rust's stack guard parsing /proc/self/maps at
+# startup, and the answer was to force the measurement to be consistent. Pinning
+# a second value, or recording the difference as a mode, is what that ruling
+# forbids.
+#
+# The evidence it was decided on: eight within-binary sittings across two
+# binaries, two vendors and four CPU generations, agreeing to the instruction
+# and none disagreeing, at a cost of eight red CI rounds spent adding rows.
 #
 # THE ROW IS MEASURED IN A BOX, not in the checkout, and the box holds the
 # library without its tests — scripts/gates/library_box.sh says why for both.
@@ -25,29 +38,22 @@
 # nobody wrote.
 set -e
 golden=bench/compile_instructions_golden.txt
-table=bench/compile_instructions_by_cpu.txt
-# A host neither file names still MEASURES on CI, so the job log carries the
-# sitting the refusal tells a reader to copy. scripts/gates/host_gate.sh carries
-# the reasons; 3 means measure, print, and fail at the end. Both files are asked,
-# and the worse answer wins — a stop from either is a stop.
+# A host the golden does not name still MEASURES on CI, so the job log carries
+# the sitting the refusal tells a reader to copy. scripts/gates/host_gate.sh
+# carries the reasons; 3 means measure, print, and fail at the end. The build is
+# what the golden names — a toolchain it does not name is not the same build, so
+# its number is not a reproduction of anything.
 host=0
 sh scripts/gates/host_gate.sh "$golden" || host=$?
 if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
   exit "$host"
 fi
-tablehost=0
-sh scripts/gates/host_gate.sh "$table" || tablehost=$?
-if [ "$tablehost" -ne 0 ] && [ "$tablehost" -ne 3 ]; then
-  exit "$tablehost"
-fi
-if [ "$tablehost" -eq 3 ]; then
-  host=3
-fi
 
-# And which silicon is about to count it, which decides WHICH ROW this run is
-# read against. The pool is at least four CPUs and glibc picks its memcpy by
-# ifunc, so one number cannot be right on all of them.
-# scripts/gates/dispatch.sh carries the reasons.
+# And which silicon is about to count it. Not because the row is keyed by it —
+# it is not, one row holds one value — but because a reproduction failure is
+# hunted from the job log, and the first question about two numbers from one
+# build is what they were counted on. scripts/gates/dispatch.sh carries the
+# reasons the pool is worth naming.
 sh scripts/gates/dispatch.sh name
 
 sh scripts/gates/library_box.sh
@@ -185,9 +191,10 @@ printf 'compile_instructions=%s\n' "$own" > compile_ir_got.txt
 # compiler, so editing the RUNTIME moves the compiler's bytes; held on one
 # chip with both shas printed, kanso#1226's runtime change moved it -5,621.
 #
-# The table keys out the first. This line is what would catch a third cause,
-# and is what caught the second: same cpu and same sha with different rows
-# would mean something is moving that neither the key nor the diff can see.
+# Neither is keyed out — the row is one value and both of those causes have to
+# reproduce. This line is how a disagreement is read: same sha with different
+# rows is a reproduction failure and halts the vein; different shas is the
+# change under test until the pair is built and both are read.
 printf 'compile_sample cpu="%s" sha=%.12s row=%s\n' \
   "$(sh scripts/gates/dispatch.sh name | sed -n 's/^silicon: //p')" \
   "$(sha256sum "$box/kanso" | cut -d' ' -f1)" \
@@ -201,16 +208,53 @@ if command -v callgrind_annotate >/dev/null; then
   callgrind_annotate --threshold=90 /tmp/cg.compile 2>&1 | head -40
 fi
 
-# Which row this run is read against, and whether it landed on it.
-# scripts/gates/compile_ir_row.sh is a separate file so its four refusals can
-# be watched failing without a callgrind run each time.
+# WHETHER IT LANDED ON THE ROW. One row, one value, compared exactly — the
+# ordinary ratchet every other counter in the tree gets.
+want=$(sed -n 's/^compile_instructions=//p' "$golden")
+got=$(sed -n 's/^compile_instructions=//p' compile_ir_got.txt)
+case "$want" in
+  '' | *[!0-9]*)
+    echo "::error::$golden carries no single compile_instructions= value, so"
+    echo "::error::there is nothing to compare the sitting above against. This"
+    echo "::error::vein is read by an exact compare and holds exactly one value."
+    exit 1
+    ;;
+esac
+
+# A toolchain the golden does not name is not the same build, so its number
+# reproduces nothing and is not read against the row. It is still printed above.
 if [ "$host" -eq 3 ]; then
-  echo "::error::the row above is this runner's sitting on a host $table does"
-  echo "::error::not name, so it is NOT read against any recorded chip. Copy it"
-  echo "::error::into $table and $golden together with the measured-on lines."
+  echo "::error::the sitting above was counted on a toolchain $golden does not"
+  echo "::error::name, so it is not a reproduction of the recorded build and"
+  echo "::error::says nothing about the value. Name the toolchain in $golden,"
+  echo "::error::with the measured-on lines, before reading a row off it."
   exit 1
 fi
 
-sh scripts/gates/compile_ir_row.sh "$table" "$golden" \
-  "$(sh scripts/gates/dispatch.sh key)" \
-  "$(sed -n 's/^compile_instructions=//p' compile_ir_got.txt)"
+if [ "$got" = "$want" ]; then
+  echo "compile_instructions: $got, on the row"
+  exit 0
+fi
+
+echo "::error::compile_instructions counted $got against $want in $golden,"
+echo "::error::a move of $((got - want)). Exactly one of two things is true,"
+echo "::error::and they are settled differently."
+echo "::error::"
+echo "::error::(1) THE CHANGE UNDER TEST MOVED IT. Ordinary ratchet: regenerate"
+echo "::error::    $golden, and say in design/compiler-log.md which way it went"
+echo "::error::    and why, which is the sentence the trend gate reads. Note"
+echo "::error::    that src/runtime.c and lib/*.kso are include_str!'d into the"
+echo "::error::    compiler, so a runtime or library edit moves this row with"
+echo "::error::    the front end untouched."
+echo "::error::"
+echo "::error::(2) THE SAME BUILD COUNTED TWO NUMBERS. That is a REPRODUCTION"
+echo "::error::    FAILURE. It halts this vein and is hunted to its source --"
+echo "::error::    never pinned as a second value, and never recorded as a mode."
+echo "::error::    The last one was Rust's stack guard parsing /proc/self/maps"
+echo "::error::    at startup, and the answer was to anchor the count at"
+echo "::error::    kanso::main so the measurement stopped depending on it."
+echo "::error::"
+echo "::error::The compile_binary sha256 and compile_sample lines above are"
+echo "::error::where the hunt starts: one sha counting two rows is (2); two"
+echo "::error::shas is (1) until the pair is built and both are read."
+exit 1

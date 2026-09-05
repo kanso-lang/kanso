@@ -362,46 +362,19 @@ compile_ir_host = row
   (breaking "compile_ir_host_unpinned")
   no_setup
 
-# The compile row is keyed by silicon now, and the answer that keying exists to
-# forbid is the cheap one: an unrecorded chip waved through. That cannot be
-# watched on the gate itself — the gate's own answer costs a callgrind run over
-# the whole front end, and it refuses on any host whose toolchain is not the
-# recorded one, so on a container it is red before it reads a row at all. The
-# refusals live in scripts/gates/compile_ir_row.sh, which is two files and four
-# strings, and this row watches them there.
-compile_ir_keyed = row
-  "a chip nobody counted this row on, waved through instead of refused"
+# ONE ROW, ONE VALUE, ruled 2026-09-05. The compile row was keyed by silicon
+# and could pin a pair; both are retired, and the shape they can come back in
+# is a second number appended to the golden's line by a run that disagreed.
+# That is the reproduction failure this vein now halts on rather than records,
+# so it is the thing to watch. It cannot be watched on the gate itself — the
+# gate's own answer costs a callgrind run over the whole front end and refuses
+# outright on a container's toolchain — so the spec reads the golden.
+compile_ir_one_value = row
+  "a second value pinned beside the row, until it admits anything counted"
   false
-  "cargo test --test a_compile_row_is_read_against_its_own_chip"
+  "cargo test --test the_compile_row_holds_one_value"
   "specs (unit, golden, differential)"
-  (breaking "an_unrecorded_chip_is_waved_through")
-  no_setup
-
-# The same file, a different way to be wrong, and this one came from a mistake
-# rather than a design: a chip's row was corrected in place AND appended in one
-# edit. The lookup takes the first match and stops, so the appended line said
-# nothing while sitting where the newest sitting goes, and every gate in the
-# tree was green over it.
-compile_ir_doubled = row
-  "a second row for one chip, read by nobody and trusted by everybody"
-  false
-  "cargo test --test a_compile_row_is_read_against_its_own_chip"
-  "specs (unit, golden, differential)"
-  (breaking "a_second_row_for_one_chip_is_read_by_nobody")
-  no_setup
-
-# The same file again, and the newest way to be wrong. A row may pin two values
-# now — two CI runs printed one binary sha and one cpu key and counted
-# 41,831,767 and 41,832,275, and neither the loader's directory order nor
-# address randomization was the term. Two is a ruled fallback; three is a band
-# being built a reading at a time, and a band that wide swallows changes the
-# size of kanso#1226's -5,621.
-compile_ir_pair = row
-  "a third value appended beside a pinned pair, until the row admits anything"
-  false
-  "cargo test --test a_compile_row_is_read_against_its_own_chip"
-  "specs (unit, golden, differential)"
-  (breaking "a_pinned_pair_grows_into_a_band")
+  (breaking "the_compile_row_pins_a_second_value")
   no_setup
 
 # A refusal is only as good as what it leaves a reader able to do. This one
@@ -831,7 +804,7 @@ rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
 rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
 
-rows_b1 = text/concat rows_b1a rows_b1z
+rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters])
 
 rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
 
@@ -841,7 +814,7 @@ rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
 
 rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host]
 
-rows_b1e0 = text/concat rows_b1d2 [compile_ir_keyed compile_ir_doubled]
+rows_b1e0 = text/concat rows_b1d2 [compile_ir_one_value]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 

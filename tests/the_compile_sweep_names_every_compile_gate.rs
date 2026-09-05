@@ -40,12 +40,12 @@ fn named() -> BTreeSet<String> {
 
 /// Every gate under scripts/gates whose script reads a compile-side golden.
 ///
-/// Two are excluded and both have a reason that is not "it was inconvenient".
-/// `compile_ir_row` reads the same table and is NOT a gate: it takes four
-/// arguments and `compile_instructions` calls it, split out so its refusals
-/// could be watched failing. `build_benchmarks` is not a gate either and says
-/// so in its own first line. `all_compile` matches its own list and is not a
-/// gate; `all_counters` reads the runtime side.
+/// One is excluded for a reason that is not "it was inconvenient":
+/// `build_benchmarks` is not a gate and says so in its own first line.
+/// `all_compile` matches its own list and is not a gate; `all_counters` reads
+/// the runtime side. `compile_ir_row` was a fourth exclusion until 2026-09-05,
+/// when the per-chip table it read was retired under the one-row-one-value
+/// ruling and the comparison moved back inside `compile_instructions`.
 fn compile_gates_on_disk() -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for entry in std::fs::read_dir(root().join("scripts/gates")).expect("the gates directory reads")
@@ -55,7 +55,7 @@ fn compile_gates_on_disk() -> BTreeSet<String> {
         if path.extension().and_then(|e| e.to_str()) != Some("sh") {
             continue;
         }
-        if matches!(name, "all_compile" | "all_counters" | "build_benchmarks" | "compile_ir_row") {
+        if matches!(name, "all_compile" | "all_counters" | "build_benchmarks") {
             continue;
         }
         let body = std::fs::read_to_string(&path).expect("a gate reads");
