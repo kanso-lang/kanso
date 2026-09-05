@@ -3673,11 +3673,30 @@ escapebench by 16 bytes and digestbench by 512, the latter alongside one more
 `define`, which is the record chain's block. The module compile row falls to
 `lines=5051 calls=752 branches=421` from `lines=5082 calls=763 branches=428`.
 
-**`compile_instructions` falls 281**, 41,380,537 -> **41,380,256**, measured as
-an A/B in the staged box at the fixed path; `compile_allocs` and
-`compile_peak_bytes` are byte-identical. The shape check runs once per group at
-emit time and the emitter then writes fewer lines, and 281 is what that trade is
-worth.
+**`compile_instructions` RISES 81,001**, 41,380,537 -> **41,461,538**, which is
+CI's sitting and not this container's. The container's A/B read a FALL of 281 —
+42,344,739 against 42,344,458 in the staged box at the fixed path — and it was
+wrong about the direction, not merely the magnitude. That is the first time in
+this session's six changes that the container and the runner have disagreed
+about a sign, and it is the vein CLAUDE.md already says a container may not
+record: the counters are the same events, but the compiler binary is built by a
+different toolchain against a different glibc, and 81,001 out of 41.4M is 0.196%
+— inside the range where those differ. The A/B stays useful for the RUNTIME
+rows, which landed on all thirteen values to the instruction; it is not evidence
+about this one. `compile_allocs` and `compile_peak_bytes` are byte-identical on
+both hosts.
+
+The rise is what the widening costs the compiler: `tag_switch_shape` runs over
+every group the literal switch refused, and `arm_case` over every arm of those.
+81,001 instructions at compile time against 207,927,998 saved in encodebench
+alone.
+
+**Reading that failure took the summary block, exactly as CLAUDE.md says.** The
+cost-goldens job reported `compile instructions` with a per-step conclusion of
+SUCCESS on this branch's head while its own vein summary said
+`compile instructions:failure` and failed the job. The eighteen counter steps
+are `continue-on-error`, so their conclusions are not the answer; the summary
+block is.
 
 **Welfare 74.4576 -> 74.5533**, banked in the same commit.
 
@@ -3761,9 +3780,11 @@ entry left it. `lines` in `bench/compile_golden.txt` lands on **5,018**: the
 fall from 42 to 40 while its lines rise by three, which is the switch replacing
 two check calls with a block.
 
-`compile_instructions` does not move at all — 42,344,458 on the container both
-sides — and neither do `compile_allocs` or `compile_peak_bytes`. Counting one
-more pattern kind per group at emit time is free at this scale.
+`compile_instructions` does not move at all: 42,344,458 on the container both
+sides, and **41,461,538** on CI for both this commit and the one before it, so
+the two hosts agree about this commit even where they disagreed about that one.
+`compile_allocs` and `compile_peak_bytes` hold too. Counting one more pattern
+kind per group at emit time is free at this scale.
 
 **Watched red.** The new micro golden `a_counted_recursion_reaches_its_base_arm`
 pins the base arm, a non-zero int, a negative, a string, `none` — the case the
