@@ -3306,12 +3306,27 @@ regenerated the .mem files and the four code goldens and missed it.
 
 **welfare 74.00**, from 73.99, and `--set` in this same commit.
 
-**A second chip counted the same compile row, and agreed exactly.** The push
+**Three chips counted the same compile row and all three agreed exactly.** The push
 that landed CI's sitting moved only goldens, the log and the pages, so the
 compiler binary was byte-identical to the one Zen 4 had counted. CI then drew
 family0x19-model0x1, found no row and refused, as an unrecorded chip must.
-It read 41,379,503 — Zen 4's value to the instruction. That is the third
-binary on which these two AMD models have agreed exactly, and the key stays
-anyway: the same two models were 5,064 apart on one earlier binary, so
-agreement is a property of a layout rather than of the silicon. The row is
-appended last, because the first is the one the golden carries.
+It read 41,379,503 — Zen 4's value to the instruction. The next round drew
+family0x6-model0xcf, the Intel, and read 41,379,503 as well.
+
+**That meets the condition this vein set for itself.** The block written when
+the utf8-over-slice twin landed said that three keys agreeing once is one
+binary, and that a later change showing the same three agree again is the
+evidence for asking whether the table should collapse — an argument made about
+the table, with the readings behind it, rather than a tidy-up. This is that
+second binary. Emerald Rapids, Zen 3 and Zen 4 now agree to the instruction on
+two of them, and the reason is legible: kanso#1241 cut this row down to the
+compiler's own frame, and the glibc ifunc dispatch the key was invented to
+separate lives in the loader and libc, outside that frame.
+
+The argument is not made in this change, which is a codegen change carrying a
+fixture and nine goldens; the second reading is recorded so it can be made
+from two rather than from one. What the current design cost here is worth
+recording beside it: this branch spent THREE CI rounds adding three rows that
+all say the same number, because the pool hands out a chip at random and every
+unrecorded one is a refusal. The rows are appended last, because the first is
+the one the golden carries.

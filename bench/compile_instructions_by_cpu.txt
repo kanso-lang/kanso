@@ -1044,5 +1044,30 @@
 # binary and were 5,064 apart. Agreement is a property of a binary's layout
 # and disagreement has been too. The key stays; the third agreement is
 # recorded so that a fourth has something to be the fourth of.
+#
+# 2026-09-05 (eighth), a THIRD chip on the same binary, and the same number
+# again. CI drew family0x6-model0xcf -- the Intel, not an AMD -- and read
+# 41,379,503, which is what both AMD models read. Nothing has changed the
+# compiler since the seventh block: three pushes have moved only goldens, the
+# log and the pages.
+#
+# THAT MEETS THE CONDITION THIS FILE SET FOR ITSELF. The block written on
+# 2026-09-05 (fifth, in kanso#1247's history) said: "If a later change shows
+# the same three keys agreeing again, THAT is the evidence for asking whether
+# the table should collapse -- and it would be an argument made about the
+# table, with the readings behind it, not a tidy-up." This is that second
+# binary. Emerald Rapids, Zen 3 and Zen 4 now agree to the instruction on two
+# different binaries, and the reason is legible: kanso#1241 cut this row down
+# to the compiler's own frame, and the ifunc dispatch the key was invented to
+# separate lives in the loader and libc, outside that frame.
+#
+# The argument is not made here and the table does not collapse in this
+# change, which is a codegen change carrying a fixture and nine goldens. What
+# is recorded is the second reading, so the argument can be made from two
+# rather than from one. What it costs meanwhile is also worth writing down:
+# this branch spent THREE CI rounds adding three rows that all say the same
+# number, because the pool hands out a chip at random and each unrecorded one
+# is a refusal.
 family0x19-model0x11 41379503
 family0x19-model0x1 41379503
+family0x6-model0xcf 41379503
