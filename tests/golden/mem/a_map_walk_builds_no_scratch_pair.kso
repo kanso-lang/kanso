@@ -4,11 +4,19 @@
 # stores its fields immediately after the header, so the block was written
 # once, read once and dropped.
 #
-# A thousand walks of an eight-key map is eight thousand records, and
-# `allocs` below counts them once each. Restore the scratch block and this
-# number goes up by eight thousand, which is what the fixture is for: the
-# encode benchmarks see the same shape three million times a run, and a
-# counter that moves by one on a one-key map cannot tell anyone that.
+# The records then stopped taking a bump apiece as well. They were already
+# landing next to each other, since k_alloc only moves a pointer, so entries
+# takes one block for all of them and carves it.
+#
+# A thousand walks of an eight-key map is eight thousand records in one
+# thousand blocks, and `allocs` below counts the blocks. Restore the per-record
+# bump and it reads 10010; restore the scratch pair on top of that and it reads
+# 18010. `alloc_bytes` and `sh_rec` are the same in all three, which is the
+# point: the records occupy the same arena at the same stride either way, and
+# only the arithmetic that reserved them moved.
+#
+# The encode benchmarks see this shape three million times a run, and a counter
+# that moves by one on a one-key map cannot tell anyone that.
 fn walk 0 acc _
   acc
 

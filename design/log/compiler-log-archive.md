@@ -45390,3 +45390,31 @@ smallest front-end change on record, which is what makes it liveable.
 of the ledger entry, and "about a thousand instructions of link luck" is the
 kind of sentence that stays vague for months. It is one glibc function and a
 heap base. Anyone who later finds a way to pin that base can close it.
+
+
+## 2026-09-04 — A SPEC THAT REPORTED ON THE STATE OF SOMEBODY'S TARGET DIRECTORY
+
+**DONE.** `tests/a_row_names_the_tool_that_failed` passed here and failed on CI,
+both cases, with the same line:
+
+    cannot start ./target/release/kanso
+
+`perf_record` runs `./target/release/kanso`, and the spec staged its scenario by
+symlinking the checkout's whole `target` into it. `cargo test` builds debug, so
+on a clean machine that path does not exist. The spec passed for anyone who had
+run `cargo build --release` first and failed for everyone else, which means what
+it was reporting on was the state of a directory rather than the state of the
+program.
+
+The healthy case is the one that shows it clearly. It asserts a healthy run says
+nothing on stderr; on CI it said `cannot start`, so the assertion fired for a
+reason that has nothing to do with what the spec is about. A spec whose green
+depends on an artifact it does not create is a spec that can go quiet at any
+time.
+
+**The stage brings its own compiler now**, symlinked from `CARGO_BIN_EXE_kanso`
+to `target/release/kanso` inside the stage. Reproduced first by moving the
+release binary aside — same message, same two cases — then green with the fix in
+place and the binary still absent. It costs 30 seconds against 7, because the
+inner calls run the debug build, and that is the price of a spec that carries
+its own subject.

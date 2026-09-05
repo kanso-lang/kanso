@@ -20,34 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-04 — A SPEC THAT REPORTED ON THE STATE OF SOMEBODY'S TARGET DIRECTORY
-
-**DONE.** `tests/a_row_names_the_tool_that_failed` passed here and failed on CI,
-both cases, with the same line:
-
-    cannot start ./target/release/kanso
-
-`perf_record` runs `./target/release/kanso`, and the spec staged its scenario by
-symlinking the checkout's whole `target` into it. `cargo test` builds debug, so
-on a clean machine that path does not exist. The spec passed for anyone who had
-run `cargo build --release` first and failed for everyone else, which means what
-it was reporting on was the state of a directory rather than the state of the
-program.
-
-The healthy case is the one that shows it clearly. It asserts a healthy run says
-nothing on stderr; on CI it said `cannot start`, so the assertion fired for a
-reason that has nothing to do with what the spec is about. A spec whose green
-depends on an artifact it does not create is a spec that can go quiet at any
-time.
-
-**The stage brings its own compiler now**, symlinked from `CARGO_BIN_EXE_kanso`
-to `target/release/kanso` inside the stage. Reproduced first by moving the
-release binary aside — same message, same two cases — then green with the fix in
-place and the binary still absent. It costs 30 seconds against 7, because the
-inner calls run the debug build, and that is the price of a spec that carries
-its own subject.
-
-
 ## 2026-09-04 — THE ROW IS RE-SAT, AND THE BASELINE MOVES WITH IT SO NOBODY BANKS A DEFINITION
 
 **DONE.** CI counted the compiler's own frame on Zen 4 (family0x19-model0x11),
@@ -3531,3 +3503,83 @@ instructions to explain why a pair goes on the stack, against 27,859,600 saved
 at run time. The container cannot compare this vein -- it refuses on three of
 the six compile gates -- so the value above is CI's, taken from the job log and
 written in rather than measured here.
+
+## 2026-09-05 — one block for a map's records, and three repairs that died first
+
+**DONE.** `k_b_entries` carved each entry's record out of its own arena bump.
+The records were already landing next to each other, because `k_alloc` only
+moves a pointer, so it takes one block for all `n` and carves it. encodebench
+builds 3,344,400 records over 1,104,400 calls, which means two bumps in every
+three were bookkeeping for a block the one before them had already reserved.
+
+    encode_allocs  11,486,225 -> 9,246,225   -2,240,000   -19.50%
+    live_allocs    11,474,876 -> 9,234,876   -2,240,000   -19.52%
+    oneshot_allocs     67,461 ->    61,861       -5,600    -8.30%
+
+    work_encodebench 4,893,408,112 -> 4,739,440,912  -153,967,200  -3.1463%
+    work_livebench   4,883,172,114 -> 4,729,204,914  -153,967,200  -3.1530%
+    work_oneshot        26,573,204 ->    26,188,286      -384,918  -1.4485%
+
+**`alloc_bytes` does not move by a byte, on any of the three.** That is the
+whole claim made checkable: the records occupy the same arena, in the same
+order, at the same stride. Only the arithmetic that reserved them moved. The mem
+fixture says it a second way — `a_map_walk_builds_no_scratch_pair` reads `allocs`
+10,010 -> 3,010, exactly eight records a walk becoming one block, with
+`alloc_bytes` and `sh_rec` byte-identical.
+
+68.7 instructions a bump saved. encodebench and livebench fall by the same
+153,967,200 because they run one program over one input against two copies of
+the library; jsonbench, escapebench and scanbench are byte-identical.
+
+**Which line died.** Before, callgrind on encodebench read `k_rec` at
+200,717,340 and `k_b_entries` at 110,939,200 — 311,656,540 between them. After,
+`k_rec` does not appear in the profile at all and `k_b_entries` reads
+157,636,000: the record construction moved inside it, so the arm that used to
+call out per entry is a header write. 311,656,540 - 157,636,000 = 154,020,540
+against the 153,967,200 the whole benchmark fell, and the 53,340 between them is
+`k_rec` still serving the few sites that are not `entries`, now under the
+threshold that prints.
+
+Welfare 74.38489702262615 -> 74.45755497201294, ratcheted here.
+
+**`.text` rises 288 bytes on the four rows that fell 112 in the entry above**,
+and they are the same four for the same reason: the binaries that link
+`entries` at all. The vein lands on **1,257,050** bytes across its thirteen
+rows, from 1,255,898. The slot stride, the inline header write and an arm for a
+failing field cost that. This vein is exact and its own — welfare weighs no
+machine-code term, ruled today — so the rise is stated rather than defended.
+
+**THREE REPAIRS DIED ON THE WAY, all built and measured against the entry
+above.** The profile that found this one also named `k_b_find2_below_raw` at
+271,083,600 over 4,190,000 calls — prologue and guards 14 apiece (21.6%), the
+SSE loop only 409,600 iterations (2.0%) because 91% of calls never enter it, and
+the scalar tail 203.5M (75.1%) over 18,354,000 byte-steps. The mean run is 5.9
+bytes, so no wider pass reaches it, and both narrow repairs cost:
+
+- the floor test in the byte domain, to kill the per-byte re-widening of a byte
+  the compare above had already zero-extended: **+14,956,000, +0.306%**. clang's
+  replacement shuffle costs more than the `movzbl` it removes.
+- sinking the wide pass's three splats behind an `i + 16 <= len` test, the shape
+  that worked at the utf-8 door in kanso#1246: **+10,101,600, +0.206%**.
+
+The third was `k_rec`, 60 instructions a record and fully straight-line, of
+which ten are five callee-saved push/pops — and `r12`/`r13` are touched only by
+two cold blocks, one of them the one-time `getenv` that `always_inline`
+`k_alloc` carries into every allocation site in the runtime. Outlining that into
+a `noinline, cold` helper did not shrink the frame and split the rows:
+encodebench -19,655 against **jsonbench +1,063,826 (+0.061%)**. A decode-side
+rise for an encode-side rounding error; the objective would decline it.
+
+**`compile_instructions` is CI's**, as the entry above says: this container
+refuses three of the six compile gates.
+
+**One question does NOT go to Clay, and the search is why.** kanso#1264 left
+"an emitter-level notion of a cold dispatch arm" as a ledger item.
+`design/log/compiler-log-archive.md`, "2026-09-02 (fourteenth) — that last
+question was mine, not Clay's", already withdrew the identical filing three days
+ago, citing pending-gavels.md's charter: an entry goes to him because it is
+about the language a user meets, and how a dispatch group is emitted is not
+something a user meets. An inferred cold arm is that same shape, so it stays
+mine and #290's remaining path is implementation. A user-written `noinline`
+would be different — that is new surface — but nothing measured yet says the
+inference is insufficient, so there is nothing to ask.

@@ -6044,16 +6044,40 @@ KValue k_b_entries(KValue mv) {
     long long n;
     KValue* s = k_map_sorted(m, &n);
     KValue* items = k_buf(n ? n : 1);
+    /* One arena block for all n records rather than one bump apiece. They were
+       already landing next to each other -- k_alloc only bumps a pointer -- so
+       this changes where the arithmetic happens and not where the bytes go.
+       encodebench builds 3,344,400 of these a run over 1,104,400 calls, so
+       two bumps in every three were bookkeeping for a block the one before it
+       had already reserved. The pair goes on the stack either way: k_rec and
+       the write below both copy into the storage that follows the header and
+       keep no reference to the arguments. */
+    size_t slot = (sizeof(KRec) + sizeof(KValue) * 2 + 15) & ~(size_t)15;
+    unsigned char* block = n > 0 ? (unsigned char*)k_alloc(slot * (size_t)n) : NULL;
     for (long long i = 0; i < n; i++) {
-        /* The pair goes on the stack. k_rec copies its arguments into the
-           storage that follows the record header and keeps no reference to
-           them, so the arena block this used to take was written once, read
-           once and never looked at again: 3,344,400 of them a run in
-           encodebench, 22.6% of every allocation the benchmark makes. */
-        KValue fields[2];
-        fields[0] = s[i * 2];
-        fields[1] = s[i * 2 + 1];
-        items[i] = k_rec(0, 2, fields);
+        KValue key = s[i * 2];
+        KValue val = s[i * 2 + 1];
+        if (__builtin_expect(!k_not_failure(key) || !k_not_failure(val), 0)) {
+            /* A failing field makes a record that is the failure, not a
+               record: the slot reserved for it above goes unused, and the
+               merge stays where every other construction site finds it. */
+            KValue fields[2];
+            fields[0] = key;
+            fields[1] = val;
+            items[i] = k_rec(0, 2, fields);
+            continue;
+        }
+        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_rec += (long long)slot;
+        KRec* r = (KRec*)(block + slot * (size_t)i);
+        r->type_id = 0;
+        r->nfields = 2;
+        r->fields = (KValue*)(r + 1);
+        r->fields[0] = key;
+        r->fields[1] = val;
+        KValue rv;
+        rv.tag = K_REC;
+        rv.payload = k_ptr(r);
+        items[i] = rv;
     }
     return k_list_own(items, n);
 }
