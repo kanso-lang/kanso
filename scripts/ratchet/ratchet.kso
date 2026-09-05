@@ -636,6 +636,18 @@ negative_sign = row
   (breaking "native_drops_a_negative_sign")
   release
 
+# A record of four fields or fewer copies them one at a time now, and a loop
+# can be wrong about a count where the memcpy it replaced could not be: the
+# count was that call's argument. A record that quietly loses its last field
+# answers differently everywhere, which is what the corpus is for.
+small_record = row
+  "a small record's copy loop dropping a field"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_small_record_drops_its_last_field")
+  release
+
 behaviour = row
   "a legal call answered differently at an edge, with nothing complaining"
   true
@@ -822,7 +834,7 @@ rows_c1p = text/concat rows_c1t [published_numbers]
 
 rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
-rows_c1c = text/concat rows_c1b [rendering negative_sign behaviour]
+rows_c1c = text/concat rows_c1b [rendering negative_sign small_record behaviour]
 
 rows_c1d = text/concat rows_c1c [numeric effects]
 

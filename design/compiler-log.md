@@ -3758,3 +3758,98 @@ leaves the bit clear at every read, because the encoder appends bytes constantly
 What would change the answer is a shape where bytes arrive in far fewer, far
 larger appends — well above 1.78 bytes an append. Neither the encoder nor any
 benchmark in the corpus is that shape.
+
+---
+
+## 2026-09-05 (fifteenth) — a small record copies its fields; the same trick on strings was declined by the objective
+
+**DONE**, and the shape of the result matters as much as the number: the change
+was built as one thing, measured, DECLINED by welfare, split in two, and the
+half that survives is the half that ships.
+
+### Where it started
+
+The encode profile's fourth line is `__memcpy_avx_unaligned_erms` at 296,718,038
+instructions, 5.59%. Asking who calls it splits into two populations:
+
+    105,821,532 (1.99%)  < k_b_append_grow        (10,400x)   10,175 each
+     61,271,600 (1.15%)  < encode_onto_2'2     (4,185,200x)     14.64 each
+     52,089,200 (0.98%)  < escape_clean_4      (3,480,400x)     14.97 each
+     40,132,800 (0.76%)  < k_rec               (3,344,400x)     12.00 each
+     23,795,613 (0.45%)  < k_str               (1,686,801x)     14.10 each
+     13,007,200 (0.24%)  < render_ryu            (849,200x)     15.32 each
+
+`k_b_append_grow` copies whole buffers and the vector path earns its entry
+there. The rest are twelve million calls moving a handful of bytes each, where
+glibc's entry sequence and size classification cost more than the move.
+
+### What was built, and what the objective said about it
+
+Two sites, both C: `k_rec`'s field copy, and `k_str_n`'s payload copy through a
+small-length helper doing two OVERLAPPING loads and stores of the widest type
+that fits — a pair covering `[0,w)` and `[len-w,len)`, which never writes past
+the end and needs no capacity slack.
+
+    encodebench   5,310,898,414 -> 5,283,224,747   -0.5211%
+    livebench     5,300,748,646 -> 5,273,072,605   -0.5221%
+    pendbench       681,319,612 ->   658,524,726   -3.3457%
+    readbench     2,038,397,263 -> 2,000,661,674   -1.8512%
+    widebench        57,200,932 ->    57,072,940   -0.2238%
+    oneshot          27,702,706 ->    27,667,778   -0.1261%
+    basket           39,736,877 ->    39,685,682   -0.1288%
+    jsonbench     1,745,057,595 -> 1,750,209,508   +0.2952%
+    scanbench     1,395,727,963 -> 1,409,772,188   +1.0062%
+    indexbench        4,692,009 ->     4,998,687   +6.5362%
+
+Seven fall and three rise, and **welfare reads 74.14 against a floor of
+74.15**. That is a fall, and the rule is not negotiable: the change goes, or the
+claim is that the weights are wrong. The weights are not wrong here — the
+decoder is what rose.
+
+### The split, and why it was the obvious next measurement
+
+The rises are all decode-side, and only one of the two sites is on the decoder's
+hot path: `k_str_n` builds a string for every token. Its payload is a json token,
+often longer than the sixteen bytes the helper handles, so the added length
+dispatch is a tax paid on every token to help none of them. Removing that half
+and keeping `k_rec`'s:
+
+    encodebench   5,310,898,414 -> 5,297,520,814   -0.2519%
+    livebench     5,300,748,646 -> 5,287,371,046   -0.2524%
+    pendbench       681,319,612 ->   666,111,812   -2.2321%
+    oneshot          27,702,706 ->    27,669,262   -0.1207%
+    basket           39,736,877 ->    39,728,728   -0.0205%
+    scanbench     1,395,727,963 -> 1,395,727,874         -89
+    jsonbench, widebench, deepbench, escapebench, indexbench,
+    digestbench, readbench                          exactly 0
+
+Nothing rises. **welfare 74.16 against the same 74.15 floor.**
+
+So `k_rec` ships and `k_str_n` does not, and the reason is legible rather than
+lucky: a record has two or three fields far more often than many, and the count
+is small enough that copying whole KValues beats a call. A json token is not
+that shape.
+
+### What it costs
+
+Machine code rises 64 bytes per benchmark — the unrolled copy is bigger than the
+call it replaces — and `bench/text_golden.txt` is regenerated with that rise
+stated. Whether the objective should weigh code size at all is the open question
+in design/pending-gavels.md; today it does not, and this is the kind of trade
+that would move if it did.
+
+`k_rec_reuse` a few lines above already copied fields with the same loop, which
+is precedent rather than coincidence: the shape was already known to be right
+where the count is small, and only the fresh-record path still paid the call.
+
+### The ratchet row
+
+The memcpy could not be wrong about its count, because the count was an
+argument. A loop can be. `a_small_record_drops_its_last_field` changes `i < n`
+to `i < n - 1` and the micro corpus goes red on the first fixture it reaches —
+watched, restored, green. The loop is written over a local `dst` so that the
+guard and the sed name one site: `k_rec_reuse`'s loop is textually identical
+otherwise.
+
+**OPEN.** `bench/instructions_golden.txt` and the compile row wait on CI, as
+they did for the entry two above. The chip table is emptied for the tenth time.
