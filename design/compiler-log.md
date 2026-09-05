@@ -20,209 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-04 — the yield is carried per declaration, and the corpus was measuring its own workaround
-
-**Searched first**, as the filing gate requires: design/compiler-log.md (the
-2026-09-03 entry names this fix, counts the eight absent wrappers and defers
-it), design/log/compiler-log-archive.md (2026-07-28 on `desc_yield`'s missing
-arms, 2026-07-29 on closing that gap with an error-corpus program) and every
-design/*.md. The fix below is the one the 2026-09-03 entry named and declined
-to make in place.
-
-**`desc_yield` answered from a table keyed on a chain head's bare name.**
-`os/read_file` hit it because the wrapper's name collides with the builtin's;
-`os/read_file!` — same body, one character more — missed and fell to the top
-set, and so did seven other std effect wrappers. A loop past any of them kept
-the grow-only arena. The yield is now a second per-declaration answer beside
-`ctx.returns`: the fixpoint asks the body's tail what running the description
-hands over, grows it monotonically, and wakes the same readers `returns` does.
-A call in yield position consults it. The table remains, reached only by names
-the program did not declare — true builtins.
-
-**Watched red first.** `tests/golden/read_beat/reading_insisted.kso` is the
-`os/read_file!` twin of `reading.kso`, same document and same loop:
-
-    reading.kso           beat_iters=201
-    reading_long.kso      beat_iters=801
-    reading_insisted.kso  beat_iters=1      <- before
-    reading_insisted.kso  beat_iters=201    <- after
-
-**`bench/make_jsonbench` gets its main back.** Its comment said the `fed` pair
-was written out because of this hole and would come out when the yield was
-inferred, so it does: `os/read_file! "bench/large.json" . go`. jsonbench reads
-`arena_blocks=2`, `arena_peak_bytes=2097152`, `beat_iters=151` — the same
-numbers the workaround produced. **Every counter in every cost golden is
-byte-identical.** That is the finding, not an aside: the corpus was measuring
-the workaround, so it could not have scored the fix.
-
-**The cohort fixture's comment was wrong about which cohort it pinned.**
-`a_bound_branch_chosen_pipe_still_fires_the_cohort` asserted `cohort_frees=1`
-and said the 1 was the decode proving its argument a string. It was the
-*read*: `os/read_file!` is a qualified call crossing down into `os` with a
-string argument, which is the license, and the decode was not licensed at all
-because the bound `source` answered top. The two are told apart by what they
-evacuate — the read's cohort copied 432 bytes, and a program whose source is
-`io/stdin` on both arms reads `cohort_frees=1` with `evac_bytes=400144`, which
-is the decode's alone. The count is 2 now and `evac_bytes` is pinned beside it
-so the next reader cannot make the same mistake.
-
-**And the second cohort costs that fixture something, with a thread left
-open.** Its whole counter set: allocs 34 to 36, alloc_bytes 1,741,504 to
-1,941,536, evac_allocs 15 to 19, evac_bytes 432 to 400,496 — while
-`arena_blocks` holds at 3 and `arena_peak_bytes` at 3,297,184, byte for byte.
-So the decode's cohort copies its 200 KB result twice to reclaim about a
-megabyte, and the program's peak does not move, because a cohort reclaims at
-the pop and the peak was reached before it. On a program that exits there the
-copy buys nothing measurable.
-
-That is a question about the survivor-ratio guard's threshold rather than
-about this change: `2 * survivor > grown` keeps the region, and here 400 KB
-against roughly 1.2 MB says copy. The license was always meant to reach a
-decode whose argument is a proven string; what moved is that inference can now
-prove it. Whether the guard should also weigh WHEN the reclaim lands is not
-something this branch measured and is not asserted either way.
-
-**Emitted code falls on three programs, and so does the machine code.** The
-decoder: defines 175 to 174, calls 1,863 to 1,851, branches 1,199 to 1,196,
-lines 12,263 to 12,218. pendbench and digestbench each lose one call and one
-line, and those two are the inference change alone — they never touched
-jsonbench's `fed`. `.text` falls on the same three and in the same
-proportions: jsonbench 86,418 to 86,002, pendbench 83,538 to 83,474,
-digestbench 102,802 to 102,738.
-
-**Three things were found by CI rather than here, all one mistake.** The local
-sweep ran nine runtime counter gates and three compile ones and stopped, on
-the belief that was the set. The cost-goldens job also runs `machine_code.sh`
-and `instructions.sh`, and named four red veins where two were expected; then
-`book_check.sh` failed on two panels, `ch04/missing.out` and
-`ch05/missing.out`, which print the same err whose birth line the comment
-above shifted. Three goldens under `tests/` had already needed the same edit,
-so the number of places that pin `os.kso:103` was four more than the three I
-found by grepping `tests/`.
-
-`.github/workflows/ci.yml` names FORTY-FIVE entry points. Twelve were being
-run. All of them that can run in this container have now been run and are
-green — every differential, the coverage and drift scans, the trend gate,
-`utf8_differential`, `row_carries_the_objective`, `native_checksum` — and the
-ones that cannot are the three host-gated compile veins and the ratchet.
-
-The lesson is the one CLAUDE.md already states about kq's five veins, and this
-is the kanso instance: the vein list is a file to read, never a set to recall.
-Reading it is one grep and it would have saved three rounds.
-
-**A second hole of the same shape, one level down.** `desc_yield_of` looks
-through a binding to what the bound description yields, and it did that only
-at the top of the expression: the `if` arm recursed into `desc_yield`, which
-sees an identifier and gives up. So a chain head that was a bound local
-answered and the same local inside a branch did not.
-`tests/golden/read_beat/reading_branch.kso` binds two reads, branches over
-them and pipes the result; it read `beat_iters=1` and reads 201 with the
-recursion routed through the lookthrough. That routing measured 381
-instructions CHEAPER than not doing it, which is below this row's own
-resolution — so it is free, and the four recursive positions all take it.
-
-**What it costs, measured rather than assumed.** compile_instructions
-42,239,175 to 42,348,055 on this container, +0.2578%, same command as the
-gate. Three shapes were tried:
-
-    naive                              42,544,586   +0.723%
-    one hash lookup, not two           42,483,163   +0.578%
-    stop at the top of the lattice     42,389,340   +0.356%
-    one wake per visit, inlined        42,348,055   +0.258%
-
-By callgrind the residual is `desc_yield` +49,409 and the group lookup about
-+18,000 (measured on the 42,348,436 reading, before the free lookthrough); `demand::analyze` +27,661 and the parser +15,773 are binary layout,
-and this change touches neither of those files.
-
-**A fourth shape was tried and is worse, which is the interesting one.**
-Computing the yield only for declarations some yield position has actually
-asked about — marking and waking on first ask — reads 43,390,986, a full
-percent above the baseline and worse than doing it for everything. The wake
-storm costs more than the walks it saves.
-
-**`lib/os/os.kso` carried a claim this change falsifies, and correcting it
-turned up a second thing.** `read_file!` is written as a chain off the builtin
-rather than a call to `read_file`, and its comment gave the reason: a chain
-whose head is a kanso function answered the top set. That is no longer true,
-and measured — `read_file path . (r -> insisted path r)` reads
-`arena_blocks=2` and `beat_iters=151` on jsonbench, the same as the shipped
-spelling. So the shorter form is available now.
-
-It is still not a one-line swap, and the benchmark could not have shown why.
-`read_file` answers `file_not_found` where the builtin answers `none`, so
-`insisted`'s first arm has to move with it; leaving that arm alone, a missing
-file reaches the caller as a record rather than a failure, and the program
-answers `length takes a list, string, or map, not os/file_not_found "…"` with
-the err gone. jsonbench reads a file that is there, so it passed both ways.
-The comment now says the constraint is retired and what moving the spelling
-would take; the code is unchanged.
-
-**CI's four sittings, and the three host-gated veins are pinned to them.**
-The work vein falls on the same three programs the emitted count did, and by
-amounts the size of the calls that went away:
-
-    jsonbench   2,098,864,932 -> 2,098,864,471    -461
-    pendbench     715,732,729 ->   715,732,721      -8
-    digestbench    81,256,613 ->    81,256,592     -21
-
-The other eight rows are byte-identical, which is the check that the fall is
-these three programs and not the runner.
-
-**compile_allocs rises by exactly five blocks, and the five are named.** 25,485
-to 25,490, with 1,712 more bytes. `compile_rounds` holds at 40 and
-`compile_passes` at 5, so the fixpoint does not iterate more — the five blocks
-are the `decl_yields` vector, one per whole-program inference, and the front
-end runs five. Measured in a worktree at `origin/main` against this branch on
-the same host, and the baseline read 25,485 there, matching CI's golden to the
-block: this counter is reproducible in the container even though its gate is
-keyed to the runner's rustc.
-
-**compile_instructions: 41,930,035 on family0x19-model0x1, sha 42283602b2c8.**
-Against the pair that row held, +99,431, or +0.2377%. The container measured
-this change at +108,880 on its own binary — two hosts, two absolute values,
-one direction and the same order of magnitude, which is as much agreement as
-this row admits.
-
-**The second mode arrived on the next run, and the gap is not 508.** Same
-chip, same binary sha 42283602b2c8: 41,930,035 then 41,931,559. That is
-**1,524, which is 3 x 508 exactly**. Every reading this file had recorded put
-the residual at one 508 — twice on Zen 3, and the header's Intel pair from a
-different binary — so this is the first that puts it at three, and it says the
-508 is a QUANTUM rather than a two-valued toggle. The row holds a pair of
-measured points on a lattice, not two modes.
-
-The profiles support that and nothing else. Across the two runs every kanso
-frame is identical to the instruction — `eval_expr'2` 1,652,497, `check_merged`
-1,586,580, `infer` 1,251,874, `lex_line` 866,486, `parse` 589,004 — and the
-only visible move is `__memcmp_avx2_movbe` 1,356,959 to 1,357,025, +66. The
-remaining 1,458 sits below callgrind's 90% cut. The front end does identical
-work; glibc walks a different heap.
-
-**What the cap of two now means here, and it is a question rather than a
-settled thing.** If the residual is a lattice, a third point is likely rather
-than surprising, and the cap will refuse it. That refusal is the finding to
-record and not a licence to widen: a row admitting every multiple of 508 pins
-nothing. What a third reading would actually raise is whether this term can be
-pinned per-chip at all, or whether the quantum has to be subtracted before
-comparison — and that is for the log and for Clay, not for the file's shape.
-Proven on the branch: the gate accepts both measured values and refuses
-41,932,067, which is one more 508.
-
-**Both per-cpu rows went stale and only one was re-sat, so the other is gone
-rather than carried.** Zen 4 has not been counted on this binary, and keeping
-its old pair would pin two numbers nobody measured for a compiler that no
-longer exists. Removing the row makes the gate refuse on that chip and print
-the sitting, which is what it already does for the Intel key. Proven on the
-branch: the gate accepts 41,930,035 on Zen 3, refuses a fabricated second
-value, and refuses the now-unkeyed Zen 4.
-
-**Welfare falls about 0.008 and the reason is the corpus, not the weights.**
-Filed as a pending gavel — "The welfare model cannot see the yield hole,
-because the corpus was written around it" — with the recommendation to ship
-and move the floor, and with the honest open question stated: whether "the
-corpus is blind here" may move a floor at all, or whether the corpus change
-has to come first.
-
 ## 2026-09-04 — the per-declaration yield reaches as far as the declarations, and five builtins were past the end of it
 
 **Searched first**, as the filing gate requires: design/compiler-log.md (the
@@ -4057,3 +3854,72 @@ Left alone here rather than rewritten on one container's evidence — the header
 already concedes "Nothing in them separated the change from the chip," and the
 five-key twelfth series is the better argument. OPEN, and cheap: the next
 person editing that header should price the 5,081 as chip, not as edit.
+
+## 2026-09-05 (twenty-fourth) — seventeen counters moved and this branch had not named one of them
+
+Searched the live log and the archive before filing. The archive's 2026-09-05
+entries for this branch name the runtime rows that fell and the compile row
+that rose; none of them names the emitted-code counters, and that is the gap
+the trend gate found.
+
+**And I read the job wrong for five rounds.** Three times I said every vein was
+green except `compile instructions`. That was read off the cost-goldens job's
+own vein summary — the `for vein in "emitted:success" ...` block — which lists
+eighteen gates and DOES NOT LIST THE TREND GATE. The trend gate is step 10 of
+that job, `nothing worsens unless something improves`, it runs `if: always()`,
+and it had been failing since the first round of this branch. The compile row's
+refusal masked it: the job was already red, so nothing drew attention to a
+second red step. The vein summary is not the job.
+
+**What moved, and the value each landed on.** The runtime side is in the
+entries above — twelve work rows fell, encodebench 5,094,896,927 and livebench
+5,084,687,524 among them. This is the other side of that trade, which nothing
+had written down:
+
+    branches                297     (bench/compile_golden.txt)
+    calls                   202
+    defines                 184
+    lines                 4,780
+    module_branches         425     (bench/compile_golden_modules.txt)
+    module_calls            762
+    module_defines           96
+    module_lines          5,035
+    emitted_branches      1,172     (bench/emitted_golden.txt)
+    emitted_calls         1,829
+    emitted_defines         179
+    emitted_lines        12,199
+    emitted_other_branches   8,768  (bench/emitted_golden_others.txt)
+    emitted_other_calls     14,662
+    emitted_other_defines    1,598
+    emitted_other_lines     90,913
+    text              1,134,488     (bench/text_golden.txt)
+    compile_instructions 41,378,764 (bench/compile_instructions_golden.txt)
+    work_escapebench    120,585,599 (bench/instructions_golden.txt)
+
+**Why each moved.** All of the emitted-code movement is the literal's door.
+`k_str_lit_fast` is one `define` per emitted program, carrying one branch (the
+tag test) and one call (the slow path), and eleven lines. That is exactly the
+shape of the deltas: +1 define, +1 branch, +1 call and +11 lines on the decoder
+itself, and +11 of each across the twelve other programs, eleven of which emit
+it. The micro and module compile goldens move for the same reason and no other.
+
+`text` rises 13,136 bytes over thirteen benchmarks. That is the shim inlined at
+every literal site plus ryū's 201-byte pair table and the length ladder beside
+it — machine code bought deliberately, and the twelve falling work rows are
+what it bought. The objective does not weigh machine-code size, which is a
+question already with Clay in design/pending-gavels.md and not re-opened here.
+
+`work_escapebench` rises 2 instructions on 120 million. escapebench has 47
+defines and 118 calls and barely touches a string literal, so it gains the
+shim's presence and almost none of its benefit. Two instructions is the
+honest cost of that and is not worth a fix.
+
+`compile_instructions` rises 1,120, which the two entries above this one argue
+about at length and settle: the chip is held fixed on CI across both binaries,
+so it is real, and the container's differential says the compiler's own frame
+falls 315. DONE.
+
+**The gate was right and the branch was silent.** Every one of these is a
+regression by the gate's definition and every one is the price of a trade the
+branch made on purpose. Saying so is the whole requirement — `movement is fine;
+silence is not` — and five rounds of CI went by with the sentence unwritten.
