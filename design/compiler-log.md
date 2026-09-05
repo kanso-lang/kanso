@@ -3477,3 +3477,73 @@ specs the change obviously touched — not `cargo test`. The gates all agreed;
 the suite did not. On a change that adds a row to a vein and a counter to the
 model, the suite is the check that matters, and it costs sixteen minutes
 against the two CI rounds it would have saved.
+
+## 2026-09-05 (ninth) — the other half of the sweep
+
+`scripts/gates/all_counters.sh` shipped three entries ago and reads the eleven
+runtime cost goldens. It does not read the compile side, and a change under
+`lib/` moves every vein there, because `lib/*.kso` is `include_str!`'d into the
+compiler: a line added to lib/json is a line the compiler carries and compiles.
+
+Earlier today that gap cost a reading. A twelve-line library change scored a
+welfare RISE of +0.0039 with the compile veins stale, and a FALL of −0.02 once
+they were regenerated. Two of the compile counters — `compile_allocs` and
+`compile_peak_bytes` — are welfare terms, so the objective was being read
+against numbers that no longer described the tree.
+
+`scripts/gates/all_compile.sh` runs the set. Six gates: `machine_code`,
+`emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`,
+`compile_libraries`.
+
+Running them by hand is what it replaces, and the reason is not typing. Three
+of the six refuse on a container whose glibc or rustc does not match the
+golden's measured-on line, and a refusal exits non-zero exactly like a
+regression. A session that runs them raw sees three failures and cannot tell
+which kind it has. So the sweep reads `host_gate.sh`'s own refusal sentence —
+"so the two cannot be compared", the only thing in the tree that prints it —
+and separates three verdicts:
+
+```
+machine_code           AGREED
+emitted_code           AGREED
+compile_memory         REFUSED
+compile_allocs         REFUSED
+compile_instructions   REFUSED
+compile_libraries      AGREED
+
+not compared here (CI measures these): compile_memory compile_allocs compile_instructions
+compile veins: nothing moved that this host can see
+```
+
+A gate that MOVED prints its diff inline. A gate that moved AND cannot compare
+exits at the move first, before the host gate runs, so a real diff never
+carries the refusal line.
+
+It is not a gate. CI runs the six directly, each its own step with its own row
+in the summary, and that is what fails a pull request. This exists so a
+container can tell a moved vein from an unmeasurable one before pushing.
+
+### The list is six, and I first wrote five
+
+The five names were the ones CLAUDE.md carries, and they are what I put on the
+line. Deriving the set instead — every script under `scripts/gates` that reads
+a `bench/compile_*golden`, `bench/text_golden` or `bench/emitted_golden` —
+turned up `compile_libraries` as well. Two scripts read those goldens and are
+not gates: `compile_ir_row` takes four arguments and `compile_instructions`
+calls it, and `build_benchmarks` says what it is in its own first line. Both
+exclusions are written into the spec rather than left as a filter someone has
+to reconstruct.
+
+`tests/the_compile_sweep_names_every_compile_gate.rs` replays that derivation
+against the tree, so a seventh gate added later is a red spec rather than a
+vein nobody sweeps. It pins the same property in CLAUDE.md's own bullet, which
+is the list a session actually reads before touching lib/ — that bullet named
+five for as long as it was written down, which is the second count in that file
+to be wrong on exactly those terms. The cost-golden count said four when there
+were ten and was pinned this morning for the same reason.
+
+All three tests were watched red before they were trusted: dropping
+`compile_libraries` from the sweep gives `has no entry for
+["compile_libraries"]`, adding a `compile_nothing` gives both `which reads no
+compile golden` and `which is not in scripts/gates`, and dropping the name from
+CLAUDE.md gives `does not name ["compile_libraries"]`.
