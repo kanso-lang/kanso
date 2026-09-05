@@ -1212,5 +1212,17 @@
 #
 # Two chips, two vendors, one binary, one number, on the first binary of the new
 # series. Ten readings now across three binaries with unanimity within each.
+#
+# AND A THIRD, on the round after that, and it is the same number for the third
+# time. CI drew family0x6-model0xcf -- Emerald Rapids, the second Intel -- found
+# no row, refused, and counted 41,381,326:
+#
+#     compile_sample cpu="cpu family 0x6 model 0xcf" sha=fe268554d931 row=41381326
+#
+# THREE KEYS ON ONE BINARY, TWO VENDORS, ONE NUMBER, and it took three CI rounds
+# to learn it because each chip refuses once. That is the cost the key charges
+# per binary, stated plainly, and it is the concrete figure on the other side of
+# the collapse argument the header keeps.
 family0x19-model0x1 41381326
 family0x6-model0x6a 41381326
+family0x6-model0xcf 41381326

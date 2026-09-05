@@ -3977,3 +3977,23 @@ the fresh table and refused:
 41,381,326 — what family0x19-model0x1 read on the same binary. Two chips, two
 vendors, one number, on the first binary of the new series. That is the tenth
 reading in the unanimity record the header of that file now keeps.
+
+### A third chip, and the key's price per binary is now a measured figure
+
+The round after that drew `family0x6-model0xcf`, Emerald Rapids, the second
+Intel. No row, refusal, 41,381,326 — the same number for the third time.
+
+    family0x19-model0x1   41,381,326   AMD Zen 3
+    family0x6-model0x6a   41,381,326   Ice Lake-SP
+    family0x6-model0xcf   41,381,326   Emerald Rapids
+
+Three keys, two vendors, one binary, one number, and it took THREE CI rounds to
+learn because each chip refuses once. That is what the per-chip key costs per
+binary that touches the compiler's bytes, and it is now a figure rather than an
+impression: one red round per unrecorded chip, and the pool has produced five
+distinct keys since the table was introduced.
+
+It belongs beside the collapse argument (#303) as the cost side, not as evidence
+for it. The evidence for it is the unanimity: eleven readings now, across three
+binaries, and every reading on a binary agrees with every other reading on that
+binary.
