@@ -20,51 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 (eighth) — what a failing test is allowed to tell you
-
-`design/pending-gavels.md` has carried the assert hako since 2026-08-17 with
-the gate lifted and a recommendation to build it. Built, and the measurement
-that motivates it was taken first rather than assumed.
-
-**What a failing `==` says.** A test is a constant and `==` is the assertion,
-which decides pass or fail and nothing else:
-
-    test_a_failure_on_purpose = decode "42" == 43
-    test_a_failure_on_purpose ... FAILED (returned false)
-
-The name, and no sign of what it got. The operands are gone by the time the
-runner holds the boolean, so the runner cannot recover them — whatever carries
-them has to be the assertion.
-
-**The concept was already there.** The runner prints the value a test
-returned, so a matcher answering a RECORD reports its own diff with no change
-to the runner at all. The same wrong assertion, both ways:
-
-    test_the_old_way ... FAILED (returned false)
-    test_the_new_way ... FAILED (returned expect/mismatch 43 42)
-
-That is the mushroom test passing rather than a feature being added. `lib/expect`
-is `expect`, `to`, `equal` and `be_true` — about twenty lines, no builtin, no
-runner change, and `expect` is the identity because the chain is the surface.
-
-**Kept out of `lib/testing` deliberately.** That hako's header says "nothing
-here adds a second way to write a test that can already be written", and a
-matcher IS a second spelling of `==`. The distinction that earns it a package
-of its own is that it is the only way to write a test that reports what it got;
-the stance in `lib/testing` stays intact and the addition is opt-in.
-
-**Watched red, and two of the four mutations the LANGUAGE refused.** Swapping
-the mismatch record's fields reddens the two specs that assert its shape;
-making the match arm answer a record instead of `true` reddens the two that
-assert a match. The other two — a mismatch answering `false`, and a generic
-first arm — do not compile: `error[unused]` on the now-dead bindings, and the
-most-specific-first ordering rule. A gate the compiler enforces needs no spec,
-and that is worth recording rather than counting as coverage.
-
-**The surface shape is still Clay's**, and the ledger entry stays until he
-rules on it. What has changed is that it is now a thing to read rather than a
-thing to imagine, and the evidence for wanting it is a measurement.
-
 ## 2026-08-31 — rider: pure fallibility is boxed too
 
 Clay raised `foo["bar"]!` against the effects-are-types gavel: an err
@@ -2851,3 +2806,128 @@ leaves 201 million instructions of `push`/`pop` on jsonbench, 9.6% of the
 decode. The decoder is a chain of mutually tail-calling functions, and a tail
 call pops the whole frame before its `jmp` and the target pushes it again. That
 is a different question from this one and nothing here answers it.
+
+## 2026-09-05 — the ascii test comes out from behind the wide pass
+
+Searched first: yesterday's entry on the entry-block stack slots is the nearest
+neighbour and is about placement rather than about this. The archive's
+2026-08-31 entry on `k_b_append_grow` is the same shape one layer down — a
+cheap path trapped behind an expensive function's prologue — and its conclusion
+was taken back by the welfare number. This one is not.
+
+`k_utf8_bad` counted the bytes, ran the ascii word-test, and then ran the wide
+SIMD pass, all in one function. LLVM will not inline that function anywhere:
+the wide pass is seven constant loads and two zeroed accumulators before its
+first block, and a table of three sixteen-byte lookups after it. So every token
+a json document holds paid a call to reach a two-load answer — 83,092,800
+instructions for 1,571,250 answers on jsonbench, 53 apiece for a mean run of
+seven ascii bytes.
+
+The front door is `always_inline` now and holds the counter and the test; the
+pass is `k_utf8_bad_wide` and is reached only by a run carrying a byte with the
+high bit set. Caller and callee are both in `runtime.c`, which is why a C
+attribute reaches this one at all — see the rider below for where it does not.
+
+```
+    jsonbench     1,914,624,003 -> 1,898,797,203   -0.827%   (container)
+    oneshot          30,109,010 ->    30,003,499   -0.350%
+    widebench        58,446,988 ->    58,318,988   -0.219%
+    basket           39,933,683 ->    39,915,674   -0.045%
+    encodebench   5,808,061,875 -> 5,807,958,536   -0.002%
+```
+
+Seven rows are byte-identical and none rises. Every allocation counter is
+unchanged and so is the emitted line count: this is entirely inside the runtime.
+
+**text 1,074,552 -> 1,081,288.** Five rows rise 1,168 to 1,392 bytes and seven
+hold exactly still: the ascii test is written at each of the validator's four
+call sites now instead of once inside the pass, and the grammar walk is a real
+function on every target rather than dead code behind an `#else`. The seven
+that hold are the programs that never reach utf-8 validation. jsonbench spends
+1,392 bytes for 36.9 million instructions.
+
+**The harness caught the rename, which is what it is for.**
+`scripts/utf8_differential` extracts the validator's text out of `runtime.c`
+rather than carrying a copy, and the split moved the signature it looks for: it
+answered `missing index 2` from `body_of` and stopped. It reads three pieces
+now — `k_all_ascii` verbatim, the wide pass as `harness_utf8_wide`, and the
+front door as `harness_utf8_ok` with its call renamed — so what is checked is
+the composition. 45,189,025 validator checks and 8,346,016 counter checks
+against the independently written reference, zero mismatches. Watched red
+first: dropping the door's call to the pass gives 30,746,942 mismatches.
+
+**RIDER on yesterday's OPEN thread — why the callee-saved 9.6% sits at entry.**
+The entry-block entry left 201 million instructions of `push`/`pop` unexplained.
+LLVM's shrink-wrapping cannot move them: it needs one save point dominating
+every use and one restore point post-dominating them, and these functions have
+three to eight returns spread across blocks. In jsonbench's emitted module
+`parse_value_2` has 3 returns and 1 `musttail`, `obj_key_start_4` 7 and 1,
+`string_at_4` 6 and 2, `array_step_3` 4 and 1, `scan_at_5` 8 and 7; the module
+holds 125 `musttail` sites across 15 functions with more than one. A `musttail`
+exit needs the epilogue before its `jmp`, so each of those blocks is a restore
+point and the prologue has to dominate all of them. The general remedy is
+`preserve_none`, the calling convention LLVM added for this shape, and it
+landed in LLVM 19. The pinned toolchain is Ubuntu clang 18.1.3, which rejects
+`preserve_nonecc` at the parser while accepting `tailcc` on the same file. The
+fix is named and gated on a toolchain bump. What stays inside reach is reducing
+what is live across the non-tail calls in the hot dispatchers, which is a
+per-function matter.
+
+**And then the third arm, in the same change.** With the ascii runs turned away
+the wide pass was 60,769,050 instructions over 203,700 calls, 3.29% of the
+decode: 13% of the document's strings are not ascii, and each cost 298 to
+validate about seven bytes. The setup is the whole of it, and its own comment
+already said so. The portable arm of that pass walked the grammar a byte at a
+time and nothing but a host without simd ever reached it, so it became a
+function and the door chooses on the length.
+
+```
+    jsonbench     1,898,797,203 -> 1,877,751,303   -1.108%   (container)
+    oneshot          30,003,499 ->    29,863,200   -0.468%
+    widebench        58,318,988 ->    58,270,995   -0.082%
+```
+
+Every arm returns the same sentence, so which one answered is not observable,
+and the harness reads a third piece now — with the threshold taken out of the
+line that defines it rather than written down twice. Watched red: dropping the
+surrogate bound on `0xED` gives 2,048 mismatches, exactly `ED A0-BF` by
+`80-BF`, so the fuzzer reaches the arm that moved.
+
+**DECLINED on the way: the lead byte's table.** Replacing the eight-comparison
+chain that decides a lead byte's width with a 256-entry table costs 1,428,150
+instructions instead of saving any — 1,877,751,303 against 1,879,179,453 on
+jsonbench. The chain is predictable, and the ascii bytes that dominate a
+mostly-ascii run are tested before it and never reach either. Recorded so it is
+not rediscovered.
+
+**CI's sitting, which is what the goldens carry.** The rows above are the
+container's; the runner counts a few hundred higher on every one of them and
+its numbers are the ones pinned. Five work counters move and none rises:
+`work_jsonbench` lands on 1,877,751,716 (−1.926%), `work_oneshot` on 29,863,599
+(−0.816%), `work_widebench` on 58,271,408 (−0.301%), `work_basket` on
+39,914,087 (−0.050%) and `work_encodebench` on 5,807,819,641 (−0.004%). The
+other seven are byte-identical.
+
+**And `compile_instructions` rose 682, to 41,378,393, which is layout.** The
+front end did not change on this branch — the diff is `src/runtime.c`, the
+differential harness, the goldens and this file. `src/runtime.c` is
+`include_str!`'d into the compiler, so editing the runtime moves the compiler's
+own bytes: 1,435 more of them here. `kanso check lib/json` emits nothing, so
+the validator that changed cannot run during the measurement. This is the
+seventh time this vein has moved for layout and the second time a runtime edit
+has done it — kanso#1226 moved it −5,621 the same way, held on one chip with
+both binary shas printed. `compile_allocs`, `compile_peak_bytes`, rounds and
+visits are byte-identical.
+
+The per-chip table was re-sat down to one row for the same reason: both AMD
+rows measured a binary that no longer exists, and the first CI run handed out
+Emerald Rapids (`family0x6-model0xcf`), new to the table under any binary. One
+reading on a new chip and a new binary cannot split the 682 between them, and
+the row said so.
+
+A second run settled it. Zen 3 (`family0x19-model0x1`) refused on the same
+branch and printed 41,378,393 — the same to the instruction as Emerald Rapids
+on this binary, and Zen 3 had read 41,377,711 on the one before it. One chip,
+two binaries: the whole 682 is the binary and none of it is the chip. Zen 3's
+row goes back last, because the first row is what welfare and the golden read
+and that authority stays where it was.

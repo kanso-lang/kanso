@@ -43037,3 +43037,48 @@ finding is the only thing here worth having. They stay as measured.
 
 Six readings is enough to decide on, so further ones go into the ledger's
 table rather than earning entries here.
+
+## 2026-09-03 (eighth) — what a failing test is allowed to tell you
+
+`design/pending-gavels.md` has carried the assert hako since 2026-08-17 with
+the gate lifted and a recommendation to build it. Built, and the measurement
+that motivates it was taken first rather than assumed.
+
+**What a failing `==` says.** A test is a constant and `==` is the assertion,
+which decides pass or fail and nothing else:
+
+    test_a_failure_on_purpose = decode "42" == 43
+    test_a_failure_on_purpose ... FAILED (returned false)
+
+The name, and no sign of what it got. The operands are gone by the time the
+runner holds the boolean, so the runner cannot recover them — whatever carries
+them has to be the assertion.
+
+**The concept was already there.** The runner prints the value a test
+returned, so a matcher answering a RECORD reports its own diff with no change
+to the runner at all. The same wrong assertion, both ways:
+
+    test_the_old_way ... FAILED (returned false)
+    test_the_new_way ... FAILED (returned expect/mismatch 43 42)
+
+That is the mushroom test passing rather than a feature being added. `lib/expect`
+is `expect`, `to`, `equal` and `be_true` — about twenty lines, no builtin, no
+runner change, and `expect` is the identity because the chain is the surface.
+
+**Kept out of `lib/testing` deliberately.** That hako's header says "nothing
+here adds a second way to write a test that can already be written", and a
+matcher IS a second spelling of `==`. The distinction that earns it a package
+of its own is that it is the only way to write a test that reports what it got;
+the stance in `lib/testing` stays intact and the addition is opt-in.
+
+**Watched red, and two of the four mutations the LANGUAGE refused.** Swapping
+the mismatch record's fields reddens the two specs that assert its shape;
+making the match arm answer a record instead of `true` reddens the two that
+assert a match. The other two — a mismatch answering `false`, and a generic
+first arm — do not compile: `error[unused]` on the now-dead bindings, and the
+most-specific-first ordering rule. A gate the compiler enforces needs no spec,
+and that is worth recording rather than counting as coverage.
+
+**The surface shape is still Clay's**, and the ledger entry stays until he
+rules on it. What has changed is that it is now a thing to read rather than a
+thing to imagine, and the evidence for wanting it is a measurement.
