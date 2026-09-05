@@ -1,0 +1,31 @@
+# the shape every counted recursion is written in: one literal base arm and a
+# generic tail. the native backend switches on the literal here — it used to
+# want two of them before it would — so this is where a base case wired to the
+# wrong arm, or a non-int sent to the base, shows up. `none` is the case the two
+# paths could differ on: the cascade's generic arm accepts it, and so must the
+# switch's default.
+import "std/json"
+
+fn said (err r)
+  "no arm: {r.reason}"
+
+fn step 0
+  "base"
+
+fn step n
+  "step {n}"
+
+fn total acc 0
+  acc
+
+fn total acc n
+  total (acc + n) (n - 1)
+
+pub play =
+  print (step 0)
+  >> print (step 3)
+  >> print (step (0 - 1))
+  >> print (step "x")
+  >> print (step none)
+  >> print (rescue (step (json/decode "[1, 2")) said)
+  >> print "{total 0 10}"

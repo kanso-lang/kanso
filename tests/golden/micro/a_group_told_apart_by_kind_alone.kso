@@ -1,0 +1,57 @@
+# every arm here names a kind of value and nothing finer, and no two arms
+# admit the same kind. the native backend answers a group shaped like this
+# with one switch on the value's tag instead of a cascade of checks, so this
+# is where a case wired to the wrong arm shows up: each line below has to
+# reach the arm the interpreter reaches, and a failure has to reach none of
+# them.
+import "std/json"
+
+type marks
+
+type stamps
+
+fn said (err r)
+  "no arm: {r.reason}"
+
+fn kind true
+  "true"
+
+fn kind false
+  "false"
+
+fn kind none
+  "none"
+
+fn kind marks
+  "marks"
+
+fn kind stamps
+  "stamps"
+
+fn kind n:int
+  "int {n}"
+
+fn kind x:float64
+  "float {x}"
+
+fn kind s:string
+  "string {s}"
+
+fn kind xs:[]some
+  "list {length xs}"
+
+fn kind m:map[string some]
+  "map {length (entries m)}"
+
+pub play =
+  print (kind true)
+  >> print (kind false)
+  >> print (kind none)
+  >> print (kind marks)
+  >> print (kind stamps)
+  >> print (kind 7)
+  >> print (kind 2.5)
+  >> print (kind "hi")
+  >> print (kind [1 2 3])
+  >> print (kind { "a":1 "b":2 })
+  >> print (rescue (kind (json/decode "[1, 2")) said)

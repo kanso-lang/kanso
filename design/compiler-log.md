@@ -3592,3 +3592,231 @@ something a user meets. An inferred cold arm is that same shape, so it stays
 mine and #290's remaining path is implementation. A user-written `noinline`
 would be different — that is new surface — but nothing measured yet says the
 inference is insufficient, so there is nothing to ask.
+
+---
+
+## 2026-09-05 — A GROUP TOLD APART BY THE KIND OF ITS ARGUMENT COMPILES TO ONE SWITCH
+
+**DONE.** `src/codegen.rs` had a switch dispatcher already, and it accepted two
+pattern kinds: an int literal and a nullary name. Everything else — `n:int`,
+`s:string`, `xs:[]some`, a marker record — fell to the arm cascade, which tests
+the arms in order. `json/encode_onto` has eight such arms and no int literal
+among them, so a map value walked seven checks before it reached its own, and
+the checks it walked were the ones the encoder runs most.
+
+The widening is `tag_switch_shape` and `arm_case` beside the two that were
+there. An arm qualifies when its discriminating pattern names a fixed set of
+KValue tags: `int` is tag 0, `float64` 1, `string` 6, a list annotation 9, a map
+annotation 10, `true`/`false`/`none` their own, and a record — a marker's bare
+mention or a declared type by name — tag 7 with an id inside it. The group
+qualifies when every arm names such a set, no two sets share a tag, and at most
+one arm, the last, is generic. Then order does not matter and the switch is the
+cascade, exactly.
+
+**Arms are not disjoint in general, which is why the disjointness is checked
+rather than assumed.** The formatter orders overloads most-specific first —
+literal, then concrete type, then generic — precisely because a nearer arm may
+shadow a wider one. A switch has no order to shadow with, so a group whose arms
+overlap keeps the cascade.
+
+Five shapes bail out, each a wrong answer rather than a slowdown if it did not:
+
+- a program that declares any subtype at all, because a K_SUB wrapper carries
+  tag 15 whatever it holds and the cascade's checks see through it;
+- an annotation that admits `err`, which is tested behind `k_not_own_err`;
+- a typeset, which matches when any member does;
+- `some`, which is every tag but none and err — a default, not a case;
+- two arms on the same tag with nothing finer to tell them apart.
+
+Records are the one shape that needs no disjointness. They all carry tag 7, so
+they chain inside that single case in source order — the order the cascade would
+have tried them in — each still asking `k_check_rec_fast`, which is what checks
+the field count as well as the id.
+
+**Measured, A/B, both compilers' benchmarks run from equal-length paths:**
+
+    encodebench    4,739,440,499 -> 4,531,512,501   -4.3872%
+    livebench      4,729,204,467 -> 4,544,123,403   -3.9136%
+    oneshot           26,187,873 ->     25,760,418   -1.6323%
+    scanbench      1,395,689,485 -> 1,384,644,605   -0.7914%
+    widebench         55,731,441 ->     55,667,434   -0.1148%
+    basket            38,533,957 ->     38,531,695   -0.0059%
+    jsonbench      1,732,114,716 -> 1,737,414,816   +0.3060%
+    digestbench       77,289,816 ->     77,353,362   +0.0822%
+
+**jsonbench's rise is an inlining consequence, not a per-call regression.**
+`scan_at_5` is gone from the profile — 133,577,400 instructions — and
+`parse_value_2'2` gained 136,356,000: the smaller dispatcher made the callee
+inlinable, and the inlined copy costs 2.8M more than the call did. `number_done`
+adds a further 2.5M the same way. The decode row lands on **1,737,415,229** and
+the digest row on **77,353,775**; both are worse and both are named here because
+the trend gate asks for exactly that.
+
+**The four worsened work rows and the one worsened emitted row, by name.**
+`work_jsonbench` lands on **1,737,415,229** and `work_digestbench` on
+**77,353,775** — the inlining consequence above, and the same shape in the
+digest's own dispatcher. `work_pendbench` lands on **666,094,366** and
+`work_indexbench` on **4,692,197**: 797 instructions and 3, on programs whose
+dispatchers the widening does not reach at all, which is what a link-order
+shuffle costs and is worth stating rather than rounding away.
+`emitted_other_defines` lands on **1,791**, one more than before, and the one is
+digestbench's record-chain block.
+
+**No allocation counter moved** — all eleven cost goldens agree with their
+goldens untouched, which is the right answer for a change that reshapes control
+flow and allocates nothing new.
+
+The emitted code falls everywhere it moves: the decoder's `calls` 1830 -> 1764,
+`branches` 1175 -> 1148, `lines` 12245 -> 12036, and every one of the twelve
+programs beside it. `.text` falls on ten of thirteen and rises on two —
+escapebench by 16 bytes and digestbench by 512, the latter alongside one more
+`define`, which is the record chain's block. The module compile row falls to
+`lines=5051 calls=752 branches=421` from `lines=5082 calls=763 branches=428`.
+
+**`compile_instructions` RISES 81,001**, 41,380,537 -> **41,461,538**, which is
+CI's sitting and not this container's. The container's A/B read a FALL of 281 —
+42,344,739 against 42,344,458 in the staged box at the fixed path — and it was
+wrong about the direction, not merely the magnitude. That is the first time in
+this session's six changes that the container and the runner have disagreed
+about a sign, and it is the vein CLAUDE.md already says a container may not
+record: the counters are the same events, but the compiler binary is built by a
+different toolchain against a different glibc, and 81,001 out of 41.4M is 0.196%
+— inside the range where those differ. The A/B stays useful for the RUNTIME
+rows, which landed on all thirteen values to the instruction; it is not evidence
+about this one. `compile_allocs` and `compile_peak_bytes` are byte-identical on
+both hosts.
+
+The rise is what the widening costs the compiler: `tag_switch_shape` runs over
+every group the literal switch refused, and `arm_case` over every arm of those.
+81,001 instructions at compile time against 207,927,998 saved in encodebench
+alone.
+
+**Reading that failure took the summary block, exactly as CLAUDE.md says.** The
+cost-goldens job reported `compile instructions` with a per-step conclusion of
+SUCCESS on this branch's head while its own vein summary said
+`compile instructions:failure` and failed the job. The eighteen counter steps
+are `continue-on-error`, so their conclusions are not the answer; the summary
+block is.
+
+**Welfare 74.4576 -> 74.5533**, banked in the same commit.
+
+**Watched red twice before it was trusted green.** The new micro golden
+`a_group_told_apart_by_kind_alone` names every tag the switch can reach —
+`true`, `false`, `none`, two markers, int, float, string, list, map — and a
+foreign failure that has to reach no arm at all. Sending the string case to the
+`true` arm turned `string hi` into `true` on native while the interpreter still
+said `string hi`; giving both marker arms the first one's id took the corpus off
+the end at `marks` and killed the program on `stamps`. Both mutations were
+reverted and the corpus is green.
+
+**BUILT, MEASURED, AND DECLINED BY THE OBJECTIVE — an arm that destructures
+stays on the cascade.** `Pattern::Ctor` qualifies here only when it has no
+fields and no as-pattern, because the switch dispatcher's arm bodies bind `Var`
+and `Annotated` and nothing else. The widening was written and it works: admit
+any ctor, and inside case 7 run the cascade's OWN `emit_pattern_known` with a
+fail label pointing at the next candidate, which handles nesting —
+`fold (capped left (cursor at source))` is two deep — and the field binds for
+free. It costs a record arm its separate block, because the pattern binds into
+`f.versions` and the body loop clears those per arm, so pattern and body are
+emitted together in the chain.
+
+    pendbench     666,098,261 -> 646,889,445   -2.8838%
+    livebench   4,544,121,405 -> 4,537,379,805  -0.1484%
+    basket         38,568,710 ->     38,526,582  -0.1092%
+    oneshot        25,760,418 ->     25,743,564  -0.0654%
+    scanbench   1,384,644,605 -> 1,399,635,295  +1.0826%
+    encodebench 4,531,510,503 -> 4,537,338,903  +0.1286%
+    digestbench    77,353,028 ->     77,386,056  +0.0427%
+
+Welfare falls, so the change goes. `d_list/next_1` in pendbench is where it
+works — 97,628,100 to 85,624,900, a fall of 12,003,200 on a group of twelve
+ctor arms with no generic tail — and scanbench pays 14,990,690 for the same
+shape.
+
+**And it refutes the reason it was built.** The lead was `d_list/fold_3` at
+21,777,196 instructions, 28.18% of digestbench and the largest single function
+in it, on the assumption that digestbench folds a plain list and so walks all
+twelve `k_check_rec_fast` tests to reach the generic tail. It does not: the row
+reads 21,810,224 after the widening, a RISE of 33,028. digestbench folds one of
+the twelve record shapes, reaches its arm inside the chain, and pays the tag
+switch on top of it. A twelve-deep cascade is not evidence that the twelve are
+being walked.
+
+**OPEN — a group mixing int literals with type patterns takes neither switch.**
+`switch_shape` refuses the type arms and `tag_switch_shape` refuses the
+literals. The shape that would serve both is a switch on the tag whose int case
+holds a second switch on the payload; nothing in the corpus asked for it yet.
+
+---
+
+## 2026-09-05 — ONE LITERAL AGAINST A GENERIC TAIL IS A SWITCH TOO
+
+**DONE, beside the entry above and in the same branch.** `switch_shape` had
+required two int-literal arms before it would build a switch. That threshold
+excluded the shape every counted recursion in the language is written in:
+
+    fn filled acc _ 0
+      acc
+
+    fn filled acc k n
+      filled (push acc ...) k (n - 1)
+
+One literal base case and a generic tail. The cascade tests the literal, then
+binds. escapebench's inner loop is exactly this, and it was walking the cascade
+on every iteration.
+
+**The blanket relaxation was measured first and DECLINED.** Dropping the
+threshold to one int arm outright reads:
+
+    escapebench   120,585,186 -> 114,597,187   -4.9658%
+    jsonbench   1,732,114,716 -> 1,778,998,567   +2.3934%
+    oneshot        25,760,418 ->     26,037,644   +1.0762%
+    deepbench     707,820,849 ->    708,508,852   +0.0972%
+
+Welfare 74.5533 -> **74.52**, a fall of 0.04. The decoder's rise is not a worse
+dispatch: `obj_key_start_4'2` FELL 77,361,900 and `obj_items_3'2` vanished
+entirely, but `obj_value_4` and its recursive twin appeared from nothing at
+158,579,100 — the group gained a switch, grew, and stopped being inlined into
+its caller. A lost inline, priced by the objective and refused by it.
+
+**What separates the two is a real distinction rather than a threshold.** Every
+decoder group the relaxation reached — `obj_key_start`, `obj_open`,
+`array_open`, `number_start?` — has a NULLARY arm beside its single literal:
+they are asking two different questions of one parameter, is-this-byte and
+is-this-the-end, and the cascade already orders them. `filled` has no nullary
+arm at all. So the rule is two int arms, or one against a generic tail and
+nothing else. Measured:
+
+    escapebench   120,585,186 -> 114,597,187   -4.9658%
+    basket         38,531,695 ->     38,568,710   +0.0961%
+    deepbench     707,820,849 ->    708,508,852   +0.0972%
+    jsonbench   1,732,114,716 -> 1,737,414,667    -0.0000%
+    oneshot        25,760,418 ->     25,760,418    +0.0000%
+
+The whole of the decoder's regression is gone and the whole of escapebench's win
+is kept. **Welfare 74.5533 -> 74.5605**, banked.
+
+**The worsened rows by name.** `work_basket` lands on **38,569,123**,
+`work_deepbench` on **708,508,207**, `work_pendbench` on **666,098,674** and
+`work_digestbench` on **77,353,441** — each a group that gained a switch whose
+literal is not on its hot path, so the switch costs a jump the cascade's first
+compare would have answered. `work_jsonbench` lands on **1,737,415,080**, which
+is the entry above's inlining consequence and 149 instructions below where that
+entry left it. `lines` in `bench/compile_golden.txt` lands on **5,018**: the
+`recursion` sample is the one of the five that has this shape, and its `calls`
+fall from 42 to 40 while its lines rise by three, which is the switch replacing
+two check calls with a block.
+
+`compile_instructions` does not move at all: 42,344,458 on the container both
+sides, and **41,461,538** on CI for both this commit and the one before it, so
+the two hosts agree about this commit even where they disagreed about that one.
+`compile_allocs` and `compile_peak_bytes` hold too. Counting one more pattern
+kind per group at emit time is free at this scale.
+
+**Watched red.** The new micro golden `a_counted_recursion_reaches_its_base_arm`
+pins the base arm, a non-zero int, a negative, a string, `none` — the case the
+two paths could genuinely differ on, since the cascade's generic arm accepts it
+and so must the switch's default — a foreign failure, and the recursion's own
+answer. Adding a digit to the switch's case value turned `base` into `step 0`
+and the sum from 55 into 54 against the interpreter. Reverted; the corpus is
+green.
