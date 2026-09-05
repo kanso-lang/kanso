@@ -1080,13 +1080,29 @@ fn shell dir cmd
 #
 #   kanso run scripts/ratchet -- touched origin/main
 #
-# keeps the rows whose mutation names a file the branch changed and proves that
-# handful. Naming is the test because a mutation patches what it writes down,
-# so a row naming nothing the branch touched cannot have been made inert by it.
-# The intersection is usually empty and occasionally one to three rows: #1171
-# touched src/runtime.c and #1157 and #1188 touched src/lib.rs, so all three
-# would have been answered on the pull request that broke them, for one to
-# three builds, and nothing on the rest.
+# keeps the rows whose mutation GUARDS on a file the branch changed and proves
+# that handful. `read_it` below says why the guard rather than the mention.
+#
+# HOW BIG THE HANDFUL IS depends on what the branch touched, and the honest
+# answer is a range rather than a number. A branch touching one source file
+# selects the rows guarding on it: #1171 touched src/runtime.c and #1157 and
+# #1188 touched src/lib.rs, and all three would have been answered on the pull
+# request that broke them. But src/runtime.c alone carries twenty guards, so a
+# runtime branch selects a large block however the rule is written, and the
+# saving here does not reach that case. Measured on three real diffs:
+#
+#     kanso#1249, 45 changed files    naming 32 rows -> guard 14
+#     kanso#1252, 21 changed files    naming  7 rows -> guard  1
+#     kanso#1253, 10 changed files    naming  8 rows -> guard  1
+#
+# Those are a reading of a corpus that moves: taken against the 73 mutations on
+# disk today. An earlier reading of the first two, at 72 mutations, put them at
+# 33 -> 12 and 8 -> 1. So the figures are an order of magnitude rather than a
+# pin, and the specs beside this deliberately assert no count for that reason.
+#
+# The comment this replaces said "usually empty and occasionally one to three",
+# which was true of the branches it cited and wrong by an order of magnitude on
+# a goldens-heavy one.
 #
 # It is a middle, not a replacement. `cover` still runs on every change and
 # the nightly still proves the whole table, because a row can also go blind
@@ -1123,8 +1139,39 @@ fn winnowed mode files list at acc false
 fn script_of r
   text/slice r.mutation 4 (length r.mutation)
 
+# WHAT A ROW DEPENDS ON is its guard, not every path its script mentions.
+#
+# A mutation carries `grep -q '<literal>' <file>` precisely so it refuses
+# rather than silently applying when the text it patches has moved. That guard
+# IS the dependency: a change can only make a mutation inert by moving what the
+# guard matches. Reading the whole script instead selects every row that
+# mentions a file for any reason, which on a goldens-heavy branch is most of
+# the table — measured against kanso#1249's 45 changed files, naming selected
+# 33 rows where 12 were at risk.
+#
+# GOLDENS COME OUT, checked rather than assumed. Over all the mutations on
+# disk, exactly two golden guards carry a value-shaped number and both are
+# POST-conditions checking what the mutation itself just wrote. Every other
+# golden guard matches a key name and a digit class — `^jsonbench [0-9]`,
+# `^defines=999999` — so a regeneration moves the digits and the guard still
+# matches. Regenerating a golden cannot make any of them inert, so a row whose
+# only touched guard is a golden has nothing to prove.
 fn read_it mode files list at acc r s
-  reaches mode files list at acc r (list/any? files (f -> spells? s f))
+  guards = guarding s
+  hit = list/any? files (f -> at_risk? guards f)
+  reaches mode files list at acc r hit
+
+fn guarding s
+  list/select (text/split s "\n") (l -> spells? l "grep -q")
+
+fn at_risk? guards f
+  source? f and list/any? guards (l -> spells? l f)
+
+fn source? f
+  not under? f "bench/" and not under? f "tests/golden/"
+
+fn under? f dir
+  length f > length dir and text/slice f 1 (length dir) == dir
 
 fn spells? text path
   length (text/split text path) > 1
@@ -1440,6 +1487,20 @@ fn chosen "prove" given
 
 fn chosen "touched" given
   touched (second given "origin/main") (third given "prove")
+
+# The selection rule, driven by a file list written on the command line rather
+# than asked of git:
+#
+#   kanso run scripts/ratchet -- select src/runtime.c bench/cost_golden.txt
+#
+# `touched` gets its files from `git diff` against a base, which makes the rule
+# it applies impossible to check without a repository shaped for the check.
+# This is the same rule with the same code and the list handed in, so a spec can
+# ask what a diff of one source file selects, what a goldens-only diff selects,
+# and what the two together select, on inputs it wrote down. It lists and stops;
+# proving is `touched`'s job.
+fn chosen "select" given
+  winnowing "list" (list/to_list (list/drop given 1)) rows 1 []
 
 fn chosen _ _
   cover
