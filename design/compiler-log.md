@@ -20,76 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — rider: the replay is ruled; the page's rule yields to it
-
-The cloud session held the chart replay because docs/numbers.html
-says "the welfare line is recorded, not recomputed... replaying
-history against today's baseline would rewrite it," and because the
-counter set has grown (digest in #1198; scan, escape, index in #1215),
-so a commit predating a counter has no value for it. Both points are
-answered by the record as it stands:
-
-- **The page's rule is older than the gavel and yields to it** —
-  later replaces older. Clay ruled the replay on 2026-08-31 ("yes"),
-  seeing the #184 re-scoring as a cliff that "was never a change in
-  the compiler." The page's sentence is rewritten to say what the
-  chart now shows: the current formula and baseline, replayed over
-  the stored rows, so the line is one definition applied everywhere.
-- **No backfilling.** The replayed series begins at the first commit
-  for which every counter in the current formula exists. Earlier
-  history is not invented through the granted-baseline machinery
-  (which admits a counter going forward, never backward); it is
-  either omitted or drawn from the recorded scores in a visibly
-  distinct style and labeled as scored under earlier definitions.
-  The directive of 2026-08-31 already said this; it is restated here
-  so it cannot be read as under-determined.
-- **The audit trail is untouched.** bench/welfare_floor.json keeps
-  every step with its reason — the 87.85 -> 73.83 re-scoring
-  included — and that file, not the chart, is where "what did a
-  commit ship with" is answered.
-
-## 2026-09-03 (twelfth) — the third chip shows both values, on one binary
-
-**DONE, and it is the gate reporting rather than a change.** Searched the live
-log and the archive before filing: the eleventh entry pins the pair and names
-two chips that had shown both, and nothing there records a third.
-
-CI on kanso#1235 counted **41,831,767** on `family0x19-model0x1`, whose row
-pinned only 41,832,275, on binary sha `de5bfab22fbd` — the same binary every
-reading in this sequence was taken on. The row becomes a pair. The refusal was
-correct and the number was real, which is the whole point of a pin that admits
-exactly what has been measured and nothing else.
-
-The standing on this binary:
-
-| chip | values seen |
-|---|---|
-| family0x6-model0xcf | both |
-| family0x19-model0x1 | both |
-| family0x19-model0x11 | both |
-| family0x6-model0xad | 41,832,275 only |
-
-**Three chips of four have produced both values and no chip has produced a
-third.** Two claims follow, and only the first is made here. The mode is a
-property of the run rather than of the silicon — three independent chips each
-producing the same two numbers is hard to read any other way. The second, that
-the per-chip key can therefore be retired, is NOT claimed: the fourth chip has
-one reading, and a key is retired on evidence rather than on a pattern that
-holds for three quarters of the rows.
-
-What would settle it is stated so the next session does not have to design an
-experiment: `family0x6-model0xad` reading 41,831,767. Every recorded row would
-then hold the same pair, the key would demonstrably distinguish nothing on this
-binary, and the file could collapse to one golden holding two values — the
-outcome its own header predicted for the case where pinning worked and the
-chips stopped disagreeing. Until then the key is kept, because it is still
-right about the cross-binary case the header decomposes, where two chips read
-5,124 apart.
-
-The mechanism is still the open question and is unchanged by this: glibc's
-`/proc/self/maps` parse fits the signature, and what is not established is that
-two runs differ in their maps by the 508 this needs.
-
 ## 2026-09-03 — gavel: the suffix contracts are refusals, as ruled in July
 
 On "What a `!` name promises on the declaration side" (#272), Clay:
@@ -3758,3 +3688,384 @@ leaves the bit clear at every read, because the encoder appends bytes constantly
 What would change the answer is a shape where bytes arrive in far fewer, far
 larger appends — well above 1.78 bytes an append. Neither the encoder nor any
 benchmark in the corpus is that shape.
+
+---
+
+## 2026-09-05 (fifteenth) — a small record copies its fields; the same trick on strings was declined by the objective
+
+**DONE**, and the shape of the result matters as much as the number: the change
+was built as one thing, measured, DECLINED by welfare, split in two, and the
+half that survives is the half that ships.
+
+### Where it started
+
+The encode profile's fourth line is `__memcpy_avx_unaligned_erms` at 296,718,038
+instructions, 5.59%. Asking who calls it splits into two populations:
+
+    105,821,532 (1.99%)  < k_b_append_grow        (10,400x)   10,175 each
+     61,271,600 (1.15%)  < encode_onto_2'2     (4,185,200x)     14.64 each
+     52,089,200 (0.98%)  < escape_clean_4      (3,480,400x)     14.97 each
+     40,132,800 (0.76%)  < k_rec               (3,344,400x)     12.00 each
+     23,795,613 (0.45%)  < k_str               (1,686,801x)     14.10 each
+     13,007,200 (0.24%)  < render_ryu            (849,200x)     15.32 each
+
+`k_b_append_grow` copies whole buffers and the vector path earns its entry
+there. The rest are twelve million calls moving a handful of bytes each, where
+glibc's entry sequence and size classification cost more than the move.
+
+### What was built, and what the objective said about it
+
+Two sites, both C: `k_rec`'s field copy, and `k_str_n`'s payload copy through a
+small-length helper doing two OVERLAPPING loads and stores of the widest type
+that fits — a pair covering `[0,w)` and `[len-w,len)`, which never writes past
+the end and needs no capacity slack.
+
+    encodebench   5,310,898,414 -> 5,283,224,747   -0.5211%
+    livebench     5,300,748,646 -> 5,273,072,605   -0.5221%
+    pendbench       681,319,612 ->   658,524,726   -3.3457%
+    readbench     2,038,397,263 -> 2,000,661,674   -1.8512%
+    widebench        57,200,932 ->    57,072,940   -0.2238%
+    oneshot          27,702,706 ->    27,667,778   -0.1261%
+    basket           39,736,877 ->    39,685,682   -0.1288%
+    jsonbench     1,745,057,595 -> 1,750,209,508   +0.2952%
+    scanbench     1,395,727,963 -> 1,409,772,188   +1.0062%
+    indexbench        4,692,009 ->     4,998,687   +6.5362%
+
+Seven fall and three rise, and **welfare reads 74.14 against a floor of
+74.15**. That is a fall, and the rule is not negotiable: the change goes, or the
+claim is that the weights are wrong. The weights are not wrong here — the
+decoder is what rose.
+
+### The split, and why it was the obvious next measurement
+
+The rises are all decode-side, and only one of the two sites is on the decoder's
+hot path: `k_str_n` builds a string for every token. Its payload is a json token,
+often longer than the sixteen bytes the helper handles, so the added length
+dispatch is a tax paid on every token to help none of them. Removing that half
+and keeping `k_rec`'s:
+
+    encodebench   5,310,898,414 -> 5,297,520,814   -0.2519%
+    livebench     5,300,748,646 -> 5,287,371,046   -0.2524%
+    pendbench       681,319,612 ->   666,111,812   -2.2321%
+    oneshot          27,702,706 ->    27,669,262   -0.1207%
+    basket           39,736,877 ->    39,728,728   -0.0205%
+    scanbench     1,395,727,963 -> 1,395,727,874         -89
+    jsonbench, widebench, deepbench, escapebench, indexbench,
+    digestbench, readbench                          exactly 0
+
+Nothing rises. **welfare 74.16 against the same 74.15 floor.**
+
+So `k_rec` ships and `k_str_n` does not, and the reason is legible rather than
+lucky: a record has two or three fields far more often than many, and the count
+is small enough that copying whole KValues beats a call. A json token is not
+that shape.
+
+### What it costs
+
+Machine code rises 64 bytes per benchmark — the unrolled copy is bigger than the
+call it replaces — and `bench/text_golden.txt` is regenerated with that rise
+stated. Whether the objective should weigh code size at all is the open question
+in design/pending-gavels.md; today it does not, and this is the kind of trade
+that would move if it did.
+
+`k_rec_reuse` a few lines above already copied fields with the same loop, which
+is precedent rather than coincidence: the shape was already known to be right
+where the count is small, and only the fresh-record path still paid the call.
+
+### The ratchet row
+
+The memcpy could not be wrong about its count, because the count was an
+argument. A loop can be. `a_small_record_drops_its_last_field` changes `i < n`
+to `i < n - 1` and the micro corpus goes red on the first fixture it reaches —
+watched, restored, green. The loop is written over a local `dst` so that the
+guard and the sed name one site: `k_rec_reuse`'s loop is textually identical
+otherwise.
+
+### CI's rows, and every delta matching the container's
+
+The work vein could not be regenerated here — this container is glibc
+2.39-0ubuntu8.7 against the golden's 8.8 and `host_gate.sh` refuses. These are
+CI's, copied out of the job log, and every one of the thirteen differs from the
+container's reading by the same fixed 399 the exec path costs:
+
+    work_encodebench   5,310,898,813 -> 5,297,521,213   -13,377,600   -0.2519%
+    work_livebench     5,300,749,093 -> 5,287,371,493   -13,377,600   -0.2524%
+    work_pendbench       681,320,025 ->   666,112,225   -15,207,800   -2.2321%
+    work_oneshot          27,703,105 ->    27,669,661       -33,444   -0.1207%
+    work_basket           39,737,290 ->    39,729,141        -8,149   -0.0205%
+    work_scanbench     1,395,728,376 -> 1,395,728,287           -89
+
+The other seven rows do not move at all. NO WORK ROW RISES.
+
+**THE COMPILE ROW.** CI drew family0x19-model0x1 on the table this branch
+emptied, refused rather than comparing against nothing, and printed the row:
+
+    compile_sample cpu="cpu family 0x19 model 0x1" sha=77aec04ae49f row=41379381
+    compile_sample cpu="cpu family 0x6 model 0xcf" sha=77aec04ae49f row=41379381
+
+The second is Emerald Rapids, drawn on the next round; it found no row on the
+new series, refused, and counted the same number to the instruction. Two chips,
+two vendors, one binary, one number — and two CI rounds to learn it, because
+each chip refuses once.
+
+`compile_instructions` lands on 41,379,381 against the old series' 41,381,326, a
+FALL of 1,945 from a change that touches only the runtime. `kanso check lib/json`
+emits nothing, so the code that changed cannot run during the measurement; what
+moved is layout, for the eleventh time on this vein. compile_allocs holds at
+25,490 and compile_peak_bytes at 715,275.
+
+**AND `text` WORSENED, which is this change's real price.** The trend gate went
+red on it and was right to: the counter is `text`, it lands on **1,117,768**
+from 1,117,192, a rise of 576 across the corpus. That is the inline loop's
+machine code, 64 bytes in each of nine benchmarks, and it is what the branch
+BUYS the 13.4M encode instructions with. Naming the fall without naming the rise
+is the shape kanso#1205 caught, so both are here with their values.
+
+**WELFARE 74.15241668591877 -> 74.15975334184456**, a rise of 0.00733666, `--set`
+with its reason in the same change. The page's
+`compile.compile_instructions` span moves with the golden, because a number on
+the page and a number in a golden are one claim; `golden_prose` reads 0 drifted.
+
+## 2026-09-05 (sixteenth) — a short append copies its own bytes, and the corpus could not see the mutation that proves it
+
+**DONE**, and the interesting half is the spec rather than the number: the
+mutation this change ships with left the micro corpus GREEN the first time,
+which said the corpus had a hole where this arm should be.
+
+### Where it started
+
+kanso#1258's k_rec fix took one family of small copies out of the encoder. The
+profile on the binary it landed still put **256,585,238 instructions, 4.84% of
+encodebench, in `__memcpy_avx_unaligned_erms`**, and the caller tree divides it
+into two different things:
+
+    k_b_append_grow  105,821,532 over     10,400 calls   10,175 each
+    encode_onto_2'2   61,271,600 over  4,185,200 calls     14.6 each
+    escape_clean_4    52,089,200 over  3,480,400 calls    14.97 each
+    k_str             23,795,613 over  1,686,801 calls     14.1 each
+    render_ryu        13,007,200 over    849,200 calls     15.3 each
+
+The first row is a buffer growing and is real work. The rest are calls into
+glibc to move a handful of bytes, where most of the instructions are spent
+deciding how wide a move to make.
+
+The two big ones are the SAME SITE. `k_b_append_mut_byte` is emitted by
+`src/codegen.rs` and marked `alwaysinline`, so it lands inside whichever
+function appends; its string arm's `swrite` block held the only
+`llvm.memcpy` in emitted IR, at a runtime length. What it copies is an object
+key, a `"true"` or a `"null"`.
+
+### What it does
+
+Sixteen bytes or fewer are copied by a pair of overlapping loads — the first
+eight bytes and the last eight, each end read once and written once, no loop
+and no count — with a four-byte pair below eight and three single bytes below
+four. Anything longer keeps the call, where the vector path earns its entry.
+
+**MEASURED**, thirteen benchmarks under callgrind from the repo root, both
+sides, against the k_rec tree:
+
+    encodebench   5,297,520,814 -> 5,241,342,014   -56,178,800   -1.0605%
+    livebench     5,287,371,046 -> 5,231,192,246   -56,178,800   -1.0625%
+    oneshot          27,669,262 ->    27,528,815      -140,447   -0.5076%
+    widebench        57,200,932 ->    57,104,953       -95,979   -0.1678%
+
+The other nine rows do not move at all. NO ROW RISES. encodebench and livebench
+fall by the same 56,178,800 to the instruction, which is what a change to what
+the compiler EMITS does to a program and to the same program built against the
+shipped library.
+
+**WELFARE 74.16 -> 74.18** with kanso#1258 already in.
+
+### What it costs, and where the linker disagrees with the emitter
+
+Every program gains **54 emitted lines**, because the ladder is written once
+into each module's intrinsic prelude. Only FOUR gain machine code:
+
+    jsonbench     92,434 ->  92,722    +288
+    encodebench  112,978 -> 113,650    +672
+    oneshot      114,866 -> 115,826    +960
+    widebench    117,010 -> 118,482  +1,472
+
+and the other eight are byte-identical. The linker drops the arm in the
+programs that never append a string, so the emitted count and the .text count
+disagree about what this change costs — which is the reason both veins exist
+rather than one.
+
+SEVEN counters worsen and every one is named by its KEY with the value it lands
+on, because a paragraph that prices only the fall is the shape kanso#1205
+caught — and naming a counter loosely is the same failure, which this entry
+committed on its first draft and the gate caught:
+
+    text                    1,117,768 -> 1,121,160    +3,392
+    emitted_lines              12,134 ->    12,188       +54
+    emitted_calls               1,835 ->     1,836        +1
+    emitted_branches            1,163 ->     1,171        +8
+    emitted_other_lines        90,198 ->    90,792      +594
+    emitted_other_calls        14,728 ->    14,739       +11
+    emitted_other_branches      8,669 ->     8,757       +88
+
+The first draft wrote "the decoder's `emitted` lands on lines=12,188" and left
+the other five unnamed, and `scripts/trend_gate` refused all six: the key is
+`emitted_lines`, not `lines`, exactly as it is `work_widebench` and not
+`widebench`. The gate is right to be literal about this. A paragraph that names
+a counter by a nickname reads as pricing to a human and as silence to the gate,
+and the whole point of the rule is that the gate is the one that cannot be
+talked round.
+
+The decoder's three and the other eleven programs' three move for one reason:
+the ladder is written once into each module's intrinsic prelude, 54 lines and 8
+branches and one call apiece. That is what the encode's 56,178,800 instructions
+are bought with, and the objective says the trade is worth making.
+
+### The mutation was right and the corpus was blind
+
+The obvious mutation is the copy-paste this shape invites: the eight-byte
+pair's two stores differ in one character, so write the head word where the
+tail word belongs. Applied, rebuilt, ran the micro corpus — **green**.
+
+The corpus's only whole-string append fixture,
+`an_in_place_append_takes_a_whole_string`, appends a byte and the five-byte
+`"-mid-"`. Five bytes take the four-byte pair, which copies `[0,4)` and `[1,5)`
+and is correct either way. Nothing in the corpus reached the eight-byte arm at
+all, so a mutation that corrupts every append of nine to sixteen bytes had
+nothing to fail.
+
+`an_in_place_append_crosses_its_width_arms` appends 1, 3, 5, 8, 9, 12, 16, 17
+and 24 bytes, one on each side of every boundary, with a byte through the same
+call site so the byte arm keeps answering. Under the mutation it reads
+**9,602 656,002** where it should read **9,602 697,194**: the length is right
+and the bytes are wrong, which is the whole point of summing them. Restored,
+green. Ratchet row `short_append`.
+
+**The general lesson is about coverage, not this fixture.** A boundary that no
+existing test crosses is a boundary the mutation corpus cannot defend, and the
+way to find that out is to write the mutation FIRST and watch what it does to a
+green suite. A mutation that passes is not a bad mutation; it is a report.
+
+### CI's rows, and four predictions that came back exact
+
+The work vein could not be regenerated here — this container is glibc
+2.39-0ubuntu8.7 against the golden's 8.8 and `host_gate.sh` refuses. These are
+CI's, and each of the four moved rows lands on the container's delta applied to
+the previous golden, to the instruction:
+
+    work_encodebench   5,297,521,213 -> 5,241,342,413   -56,178,800   -1.0605%
+    work_livebench     5,287,371,493 -> 5,231,192,693   -56,178,800   -1.0625%
+    work_oneshot          27,669,661 ->    27,529,214      -140,447   -0.5076%
+    work_widebench        57,201,345 ->    57,105,366       -95,979   -0.1678%
+
+The other nine do not move. `emitted` and `machine code` agreed with the goldens
+regenerated here without a round of their own, which is what a deterministic
+vein should do.
+
+**A CHIP THIS VEIN HAD NOT SEEN.** CI drew `family0x19-model0x11` — Zen 4, whose
+row was removed unmeasured on 2026-09-01 rather than carried — found no row on
+the emptied table, refused, and counted:
+
+    compile_sample cpu="cpu family 0x19 model 0x11" sha=... row=41378194
+
+The new series opens at **41,378,194** against the old series' 41,379,381. When
+only that reading existed the difference was NOT attributable and this entry said
+so: a different binary AND a different chip, which is the pair the per-silicon
+key exists to stop anyone separating from one number. It recorded a prediction —
+that the next chip to refuse would read 41,378,194 too — and the very next round
+settled it, because the chip CI drew was **family0x19-model0x1**, the Zen 3 that
+had counted the old series:
+
+    family0x19-model0x11   41,378,194   Zen 4, new binary
+    family0x19-model0x1    41,378,194   Zen 3, new binary
+    family0x19-model0x1    41,379,381   Zen 3, OLD binary
+
+So two things are now settled that one reading could not settle. The two chips
+agree to the instruction, as every pair has on every binary so far. And the same
+chip on both binaries makes the move attributable: **compile_instructions falls
+1,187** on this change, with the silicon held fixed. `kanso check lib/json`
+emits nothing, so the ladder cannot run during the measurement; what moved is
+layout, for the twelfth time on this vein.
+
+The general point is the one the table was built for. A single refusal on a
+fresh chip carries a binary change and a silicon change in one number and can
+attribute neither; a second refusal on a chip already in the record separates
+them for free. That is worth waiting a round for, and it is the answer to what
+the per-chip key BUYS — the cost side (one CI round per chip per binary) has
+been measured for weeks and sits in design/pending-gavels.md, and this is the
+first time the benefit has been written down with a number beside it.
+
+**WELFARE 74.15975334184456 -> 74.18425551910869**, a rise of 0.02450218,
+`--set` with its reason. The page's `compile.compile_instructions` span moves
+with the golden; `golden_prose` reads 0 drifted.
+
+## 2026-09-05 (seventeenth) — the compile vein the ladder moved, and eight calls that were prose
+
+Two things, both found by the macos/arm job going red on the entry above while
+every runtime counter agreed.
+
+### The vein the sweeps do not read
+
+`bench/compile_golden.txt` and `bench/compile_golden_modules.txt` are read by
+`tests/compile_cost.rs` and by nothing else. `all_counters.sh` walks the eleven
+runtime veins and `all_compile.sh` walks the six compile GATES; this pair is a
+spec, so neither sweep touches it, and the append ladder moved it:
+
+    recursion    lines 890 -> 944   branches 55 -> 59
+    dispatch     lines 886 -> 940   branches 54 -> 58
+    guards       lines 883 -> 937   branches 55 -> 59
+    records      lines 934 -> 988   branches 58 -> 62
+    build_block  lines 859 -> 913   branches 50 -> 54
+    module       lines 4,970 -> 5,024   branches 420 -> 424
+
+The same 54 lines and the same four conditional branches in every sample,
+including the three that never append a byte: the emitter writes the ladder into
+each module's prelude and the linker drops it where nothing calls it. That is
+the same shape `emitted_lines` moved by, measured on a different corpus. `rounds`
+and `visits` do not move, and `defines` does not either — the ladder is blocks
+inside a function that already existed.
+
+Summed the way the trend gate reads them, `lines` lands on 4,722 and `branches`
+on 292 across the five samples; `module_lines` lands on 5,024 and
+`module_branches` on 424. All four rise, and they are the price of the append
+ladder's 1.06% off encodebench in the entry above — the ladder is written once
+per module whether the module appends anything or not.
+
+The gap is worth naming because CLAUDE.md already warns that the counters sweep
+does not read the compile veins, and this is a third set that neither sweep
+reads. A run of `cargo test --release` catches it. CI did, a round late, on the
+one job whose meta targets run.
+
+### Eight calls that were never emitted
+
+Both counters read `calls` as a substring search over the whole IR text —
+`grep -c 'call '` in `scripts/gates/emitted_code.sh`, `ir.matches(" call ")` in
+`tests/compile_cost.rs` — and the prelude is commented. "a call into glibc's
+memcpy", "a real call on every `if` condition and constructor", "each paying a
+call into the runtime and a second call into the": the word appears eight times
+in comment lines and nine times as an occurrence, because one of those lines
+uses it twice.
+
+I found this by rewording one comment and watching `calls` move by one with the
+emitted code byte-identical. A counter that moves when prose moves cannot say
+what it is there to say, so both counters drop comment lines before counting:
+
+    emitted (decoder)   calls 1,835 -> 1,828     (-7: one prose line gained
+                                                  by the ladder, eight dropped)
+    emitted (each of
+    the eleven others)  calls -7, e.g. encodebench 1,694 -> 1,687
+    compile samples     calls -8, e.g. recursion 48 -> 40, module 769 -> 761
+
+The two columns fall by different amounts on the same change because the gate
+counts LINES and the spec counts OCCURRENCES, and one comment line carries the
+word twice. No emitted instruction changed; `defines`, `branches` and `lines`
+are untouched by the fix, since those three already anchor at the start of a
+line and never could see a comment.
+
+`tests/the_emitted_call_counter_ignores_comments.rs` pins it. The spec lifts the
+stripper and the counting pipeline out of the gate script rather than restating
+them, builds a two-comment one-call module, and asserts `calls=1`. Watched red
+with the stripper replaced by `cat`: it read `calls=3`, the one real call plus
+two comments. Restored, green.
+
+The ratchet corpus has a row for a counter that goes blind. This is the other
+direction — a counter reading high on text that is not code — and the eight it
+was reading are constant, so no gate ever fired. It came out only because a
+change touched the prose beside the code.

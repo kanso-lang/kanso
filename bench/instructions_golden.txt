@@ -158,15 +158,15 @@
 # only touches comparisons reaches neither, and that they are EXACTLY still is
 # the check that the other ten falls are the change rather than the weather.
 jsonbench 1745058008
-encodebench 5310898813
-oneshot 27703105
-basket 39737290
-widebench 57201345
+encodebench 5241342413
+oneshot 27529214
+basket 39729141
+widebench 57105366
 deepbench 714674674
 escapebench 130170600
-pendbench 681320025
+pendbench 666112225
 indexbench 4692422
-scanbench 1395728376
+scanbench 1395728287
 digestbench 77290782
 readbench 2038397676
-livebench 5300749093
+livebench 5231192693

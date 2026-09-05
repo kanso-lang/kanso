@@ -1223,6 +1223,33 @@
 # to learn it because each chip refuses once. That is the cost the key charges
 # per binary, stated plainly, and it is the concrete figure on the other side of
 # the collapse argument the header keeps.
-family0x19-model0x1 41381326
-family0x6-model0x6a 41381326
-family0x6-model0xcf 41381326
+#
+# 2026-09-05 (tenth), and the table is empty again for the same reason as the
+# ninth. A record of four fields or fewer copies them one KValue at a time
+# rather than through memcpy, which is an edit to src/runtime.c, and
+# src/runtime.c is `include_str!`'d into the compiler. All three rows counted
+# the binary before it and are removed rather than carried forward: a value
+# counted against the old binary is worse than no value.
+#
+# What the three said is worth keeping even though the rows go. They were
+# family0x19-model0x1, family0x6-model0x6a and family0x6-model0xcf reading
+# 41,381,326 on one binary -- three keys, two vendors, one number, learned over
+# three consecutive CI rounds because each chip refuses once. That is what the
+# key costs per binary that touches the compiler's bytes, and it is the cost
+# side of the collapse question filed in design/pending-gavels.md.
+#
+# CI supplies the first row of the next series.
+#
+# 2026-09-05 (eleventh), and the reason is the same one with a different file.
+# The emitted string append copies sixteen bytes or fewer inline, which is an
+# edit to src/codegen.rs -- the compiler's own source, so the binary is a
+# different binary and both rows on the table counted the one before it.
+# They were family0x19-model0x1 and family0x6-model0xcf, both reading
+# 41,379,381 on the binary kanso#1258 landed: two chips, two vendors, one
+# number, learned over two CI rounds. Removed rather than carried forward, for
+# the reason this header has now given eleven times -- a value counted against
+# the old binary is worse than no value.
+#
+# CI supplies the first row of the next series.
+family0x19-model0x11 41378194
+family0x19-model0x1 41378194

@@ -43733,3 +43733,74 @@ file_not_found type." Gaveled as doctrine:
 
 The renaming of the box from `effect` to `result` is recommended
 beside this and awaits its own word.
+
+## 2026-09-03 — rider: the replay is ruled; the page's rule yields to it
+
+The cloud session held the chart replay because docs/numbers.html
+says "the welfare line is recorded, not recomputed... replaying
+history against today's baseline would rewrite it," and because the
+counter set has grown (digest in #1198; scan, escape, index in #1215),
+so a commit predating a counter has no value for it. Both points are
+answered by the record as it stands:
+
+- **The page's rule is older than the gavel and yields to it** —
+  later replaces older. Clay ruled the replay on 2026-08-31 ("yes"),
+  seeing the #184 re-scoring as a cliff that "was never a change in
+  the compiler." The page's sentence is rewritten to say what the
+  chart now shows: the current formula and baseline, replayed over
+  the stored rows, so the line is one definition applied everywhere.
+- **No backfilling.** The replayed series begins at the first commit
+  for which every counter in the current formula exists. Earlier
+  history is not invented through the granted-baseline machinery
+  (which admits a counter going forward, never backward); it is
+  either omitted or drawn from the recorded scores in a visibly
+  distinct style and labeled as scored under earlier definitions.
+  The directive of 2026-08-31 already said this; it is restated here
+  so it cannot be read as under-determined.
+- **The audit trail is untouched.** bench/welfare_floor.json keeps
+  every step with its reason — the 87.85 -> 73.83 re-scoring
+  included — and that file, not the chart, is where "what did a
+  commit ship with" is answered.
+
+## 2026-09-03 (twelfth) — the third chip shows both values, on one binary
+
+**DONE, and it is the gate reporting rather than a change.** Searched the live
+log and the archive before filing: the eleventh entry pins the pair and names
+two chips that had shown both, and nothing there records a third.
+
+CI on kanso#1235 counted **41,831,767** on `family0x19-model0x1`, whose row
+pinned only 41,832,275, on binary sha `de5bfab22fbd` — the same binary every
+reading in this sequence was taken on. The row becomes a pair. The refusal was
+correct and the number was real, which is the whole point of a pin that admits
+exactly what has been measured and nothing else.
+
+The standing on this binary:
+
+| chip | values seen |
+|---|---|
+| family0x6-model0xcf | both |
+| family0x19-model0x1 | both |
+| family0x19-model0x11 | both |
+| family0x6-model0xad | 41,832,275 only |
+
+**Three chips of four have produced both values and no chip has produced a
+third.** Two claims follow, and only the first is made here. The mode is a
+property of the run rather than of the silicon — three independent chips each
+producing the same two numbers is hard to read any other way. The second, that
+the per-chip key can therefore be retired, is NOT claimed: the fourth chip has
+one reading, and a key is retired on evidence rather than on a pattern that
+holds for three quarters of the rows.
+
+What would settle it is stated so the next session does not have to design an
+experiment: `family0x6-model0xad` reading 41,831,767. Every recorded row would
+then hold the same pair, the key would demonstrably distinguish nothing on this
+binary, and the file could collapse to one golden holding two values — the
+outcome its own header predicted for the case where pinning worked and the
+chips stopped disagreeing. Until then the key is kept, because it is still
+right about the cross-binary case the header decomposes, where two chips read
+5,124 apart.
+
+The mechanism is still the open question and is unchanged by this: glibc's
+`/proc/self/maps` parse fits the signature, and what is not established is that
+two runs differ in their maps by the 508 this needs.
+

@@ -192,9 +192,63 @@ sfr:
   %sfits = icmp sle i64 %slenn, %scapa
   %sok = and i1 %satfront, %sfits
   br i1 %sok, label %swrite, label %slow
+; The copy. A key, a `true` or a `null` is a handful of bytes, and a call into
+; glibc's memcpy spends most of its instructions deciding how wide a move to
+; make before it makes one. Sixteen bytes or fewer are copied here as a pair of
+; overlapping loads, which reads and writes each end once and needs no loop and
+; no count: 7,670,800 of these in encodebench and 3,480,400 more from the escape
+; path. Anything longer keeps the call, where the vector path earns its entry.
 swrite:
   %sdst = getelementptr i8, ptr %sadata, i64 %slen
+  %ssmall = icmp ult i64 %n, 17
+  br i1 %ssmall, label %sw16, label %swbig
+swbig:
   call void @llvm.memcpy.p0.p0.i64(ptr %sdst, ptr %sdata, i64 %n, i1 false)
+  br label %swdone
+sw16:
+  %sge8 = icmp ugt i64 %n, 7
+  br i1 %sge8, label %sw8, label %sw7
+sw8:
+  %sw8a = load i64, ptr %sdata, align 1
+  %sw8se = getelementptr i8, ptr %sdata, i64 %n
+  %sw8sp = getelementptr i8, ptr %sw8se, i64 -8
+  %sw8b = load i64, ptr %sw8sp, align 1
+  store i64 %sw8a, ptr %sdst, align 1
+  %sw8de = getelementptr i8, ptr %sdst, i64 %n
+  %sw8dp = getelementptr i8, ptr %sw8de, i64 -8
+  store i64 %sw8b, ptr %sw8dp, align 1
+  br label %swdone
+sw7:
+  %sge4 = icmp ugt i64 %n, 3
+  br i1 %sge4, label %sw4, label %sw3
+sw4:
+  %sw4a = load i32, ptr %sdata, align 1
+  %sw4se = getelementptr i8, ptr %sdata, i64 %n
+  %sw4sp = getelementptr i8, ptr %sw4se, i64 -4
+  %sw4b = load i32, ptr %sw4sp, align 1
+  store i32 %sw4a, ptr %sdst, align 1
+  %sw4de = getelementptr i8, ptr %sdst, i64 %n
+  %sw4dp = getelementptr i8, ptr %sw4de, i64 -4
+  store i32 %sw4b, ptr %sw4dp, align 1
+  br label %swdone
+sw3:
+  %sge1 = icmp ugt i64 %n, 0
+  br i1 %sge1, label %sw1, label %swdone
+sw1:
+  %sw1a = load i8, ptr %sdata, align 1
+  store i8 %sw1a, ptr %sdst, align 1
+  %swmid = lshr i64 %n, 1
+  %sw1sm = getelementptr i8, ptr %sdata, i64 %swmid
+  %sw1b = load i8, ptr %sw1sm, align 1
+  %sw1dm = getelementptr i8, ptr %sdst, i64 %swmid
+  store i8 %sw1b, ptr %sw1dm, align 1
+  %swlast = add i64 %n, -1
+  %sw1sl = getelementptr i8, ptr %sdata, i64 %swlast
+  %sw1c = load i8, ptr %sw1sl, align 1
+  %sw1dl = getelementptr i8, ptr %sdst, i64 %swlast
+  store i8 %sw1c, ptr %sw1dl, align 1
+  br label %swdone
+swdone:
   store i64 %slenn, ptr %susedp
   store i64 %slenn, ptr %sb
   ret %KValue %acc
