@@ -256,6 +256,18 @@ read_counters = row
   (breaking "a_bang_read_loses_its_beat")
   benchmarks
 
+# livebench joined on 2026-09-05 and this row with it, for the reason the
+# paragraph above gives. Its defect is a library one on purpose: the frozen
+# copy in bench/encodebench would not move by an instruction, which is both why
+# that control is worth keeping and why this vein had to exist beside it.
+live_counters = row
+  "an encoder that folds a clean string byte by byte"
+  true
+  (gating "live_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_encoder_that_walks_a_clean_string")
+  benchmarks
+
 # The compile row stopped counting process startup on 2026-09-04, because that
 # half moves with binary layout and not with the compiler. What it can still
 # hide is a new dependency, whose startup cost was measured at 32,090, so this

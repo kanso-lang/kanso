@@ -297,6 +297,14 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/oneshot_counters.sh
+      # The encode vein beside it reads a frozen copy of lib/json on purpose,
+      # so nothing watched the library's own encoder at load until this joined
+      # on 2026-09-05. bench/livebench/README says why the frozen copy stays.
+      - name: live encode counters
+        id: live
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/live_counters.sh
       - name: basket counters
         id: basket
         if: always()
@@ -408,6 +416,7 @@ jobs:
                       "decode counters:${{ steps.decode.outcome }}" \
                       "escape counters:${{ steps.escape.outcome }}" \
                       "one-shot counters:${{ steps.oneshot.outcome }}" \
+                      "live encode counters:${{ steps.live.outcome }}" \
                       "basket counters:${{ steps.basket.outcome }}" \
                       "compile memory:${{ steps.compile_memory.outcome }}" \
                       "compile allocations:${{ steps.compile_allocs.outcome }}" \

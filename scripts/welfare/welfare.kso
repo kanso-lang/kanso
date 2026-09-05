@@ -175,7 +175,22 @@ edge_work = ["scan_instructions" "escape_instructions" "index_instructions"]
 # and not the other is a trade the index cannot see.
 read_work = ["read_instructions"]
 
-paced_work = text/concat (text/concat digest_work edge_work) read_work
+# livebench runs encodebench's program against the library that SHIPS. The
+# encode row beside it reads a frozen copy of lib/json, deliberately, so that a
+# move there is the compiler's — and the cost of that control was that no term
+# in this model could see the library's own encoder. bench/oneshot imports the
+# real library and encodes once, which priced a 1.70% fall in the escape path
+# at four thousandths of a point.
+#
+# It enters at its dimension's standing like every other granted baseline, so
+# landing day moves the number by nothing. From here it pays and charges like
+# the rest, and a library encode change is finally something the objective can
+# weigh rather than round off.
+live_work = ["live_instructions"]
+
+tail_work = text/concat read_work live_work
+
+paced_work = text/concat (text/concat digest_work edge_work) tail_work
 
 run_speed_counters = text/concat (text/concat decode_work held_work) paced_work
 
@@ -373,7 +388,8 @@ fn worked work
   xi = [["escape_instructions" work["escapebench"]!]]
   ii = [["index_instructions" work["indexbench"]!]]
   ri = [["read_instructions" work["readbench"]!]]
-  edge = text/concat si (text/concat xi (text/concat ii ri))
+  li = [["live_instructions" work["livebench"]!]]
+  edge = text/concat si (text/concat xi (text/concat ii (text/concat ri li)))
   more = text/concat (text/concat wi pi) (text/concat ni gi)
   rest = text/concat oi (text/concat bi (text/concat more edge))
   text/concat (text/concat di ei) rest

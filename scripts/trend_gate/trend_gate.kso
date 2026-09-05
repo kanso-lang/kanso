@@ -100,7 +100,11 @@ lower_i = ["deepbench" "escapebench" "pendbench" "indexbench" "text"]
 # stay flat. The benchmark is in the objective for its arena, and this is the
 # entry that makes a rise in its instructions read as a regression rather than
 # as drift the listing shrugs at.
-lower_j = ["digestbench" "scanbench" "readbench"]
+# livebench joined on 2026-09-05, in the pull request that added the row, for
+# the reason the three above give. Its own reason to be here is that it exists
+# to make a library encode change visible at all: a benchmark added to see a
+# fall, whose rises read as drift, would be worse than not adding it.
+lower_j = ["digestbench" "scanbench" "readbench" "livebench"]
 
 lower_ab = text/concat lower_a (text/concat lower_b lower_bb)
 
@@ -251,6 +255,13 @@ bench_digest = [["bench/cost_golden_digest.txt" "digest_"]]
 # its own gate diffs it byte for byte.
 bench_read = [["bench/cost_golden_read.txt" "read_"]]
 
+# livebench joined on 2026-09-05. It is encodebench's program against the
+# library that ships rather than the frozen copy beside it, so this is the vein
+# a change to lib/json's encoder moves. A benchmark whose golden the gate does
+# not walk is one whose regressions arrive unpriced, which is the shape the
+# three siblings above were added to close.
+bench_live = [["bench/cost_golden_live.txt" "live_"]]
+
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
@@ -263,7 +274,9 @@ bench_emits = text/concat bench_emitted bench_emitted_others
 
 bench_run = text/concat bench_work (text/concat bench_emits bench_text)
 
-bench_wd = text/concat bench_wide (text/concat bench_digest bench_read)
+bench_rl = text/concat bench_read bench_live
+
+bench_wd = text/concat bench_wide (text/concat bench_digest bench_rl)
 
 bench_rest = text/concat bench_escape (text/concat bench_scan bench_wd)
 

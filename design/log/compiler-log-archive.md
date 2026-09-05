@@ -43330,3 +43330,73 @@ both reopens the question, and then the fallback is the pinned pair,
 never blindness. The entry leaves Blocking with this commit; the
 rustc-patch rider is the implementer's (the pin did its job;
 regenerate with a sentence).
+
+## 2026-09-03 (tenth) — the bimodal row is made deterministic, not excused
+
+**DONE for the two suspects, OPEN for the answer.** Supersedes the OPEN
+paragraph closing the entry above, which planned to exclude process startup from
+the count. Clay ruled against that the same afternoon: "if changes to the
+compiler can interact with glibc in a way that means generally more/less work,
+which the 'compiler's own instructions' measure would be blind to, then we need
+a way to include glibc's instructions but make them consistent." He is right,
+and the toggle is dropped — it would have made the vein blind to exactly the
+case he names. No pair, no band, no exclusion.
+
+The ruling named two suspects, both fitting the measured signature: five
+consecutive runs in one container agree exactly while two runners on one binary
+and chip disagree, so the randomness is fixed at container birth rather than per
+exec. Both are now tested and both answers differ from the guess.
+
+**Readdir order was already sorted, and cannot be the term.** `src/lib.rs`
+sorts the files a compile reads before reading any of them; `src/eval.rs` sorts
+what `list_dir` answers. The four remaining `read_dir` calls are in
+`src/main.rs` on the `test` path and order-independent by construction — three
+are `.any()` or `.count()`, and the fourth is a vector whose only order-sensitive
+use is a single-element match.
+
+One was sorted anyway on the rule rather than the symptom, and then WITHDRAWN,
+which is the more useful finding. It changed no answer and it changed the
+binary: `.text` 2,514,718 -> 2,517,278, moving this row 41,831,767 -> 41,834,008
+and invalidating every recorded value. That is the wrong price for a defensive
+sort, and worse than its cost is what it did to the experiment — the ruling asks
+for the modes to be measured away on several fresh runners, and a changed binary
+makes every earlier reading incomparable, so `setarch -R` and a new layout would
+have been confounded from the first run. With the sort out, the binary is
+main's, the recorded rows stand, and setarch is the only variable. The
+determinism fix is worth landing on its own once this vein is settled and the
+row it moves is not the row under test.
+
+**ASLR is disabled now, and on the container it changes nothing.** `setarch -R`
+reads 42,235,790 against 42,235,790 without it, and forty unwrapped runs on one
+binary returned one value forty times. Applied regardless: the modes have only
+ever appeared on the runners, and a container cannot rule out what it has never
+reproduced. The gate prints `compile_aslr disabled=` so the job log says whether
+the wrapper took; CI reads `yes`.
+
+**Nothing is priced, because nothing moved.** With the sort withdrawn this
+branch changes `scripts/gates/compile_instructions.sh` and no compiler source,
+so the binary is byte-identical to main's and every counter reads what main
+records. The trend gate has nothing to say and welfare holds at 76.1742943805134
+against its own floor. An earlier revision of this branch did move
+`compile_instructions` +2,241 and spent 0.00015 of the score declaring it; that
+is reverted, and the declaration with it.
+
+**The evidence so far, and it is not yet an answer.** Two CI readings on binary
+sha b0e5a906c73d, twelve minutes apart, both on family0x19-model0x11, both
+41,834,008 — the first agreement on one binary since the pair appeared. That
+binary is the withdrawn one, so the agreement is kept as history rather than as
+a result: it says the value repeats, on a tree that no longer exists. Against
+that, a control taken at the same time on kanso#1235, which runs the UNFIXED
+gate: 41,831,767 on a design-only diff, then 41,832,275 with one HTML file
+added, same binary, 508 apart. So the modes were live on the old gate minutes
+before the new gate read the same value twice.
+
+**OPEN.** Two agreeing readings on one chip is not enough. What settles it is
+the other chips landing on their own values and holding them. If they do, glibc
+stays counted under a single exact pin and the per-chip key separates nothing —
+the file collapses back to one golden. If a second value appears on a recorded
+chip, neither suspect was the term, and the entry above already names what is
+left: glibc parses `/proc/self/maps` before `main` to find the stack bounds, one
+more shared library in the process moves the row 32,090, and that cost belongs
+to the host's memory map rather than to the compiler. That is what "make them
+consistent" would then have to reach.

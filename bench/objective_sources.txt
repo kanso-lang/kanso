@@ -36,6 +36,7 @@ scan_instructions work_scanbench
 escape_instructions work_escapebench
 index_instructions work_indexbench
 read_instructions work_readbench
+live_instructions work_livebench
 
 # peak memory: three pools summed, which is why no single row holds it
 decode_peak_bytes arena_peak_bytes

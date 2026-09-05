@@ -1109,7 +1109,15 @@
 # two chips agreeing to the instruction. That is the fifth agreement across two
 # binaries, and it is what the collapse argument in this file's header has been
 # waiting for evidence of. Two rows are still stale.
-family0x19-model0x11 41379503
+# 2026-09-05 (kanso#1252): family0x19-model0x11 is the THIRD chip seen to read
+# both values on one binary, and it is now pinned as a pair. The run that found
+# it changed nothing compiled into the compiler — kanso#1252 adds a benchmark,
+# a gate and a log entry, and `git diff origin/main -- src/ Cargo.toml
+# Cargo.lock lib/` is empty — so the binary is the one kanso#1251 landed green
+# at 41,379,503 on this same family and model. Same silicon, same source, the
+# other value: that is the residual this file's header describes, not a front
+# end that moved.
+family0x19-model0x11 41379503 41380022
 family0x19-model0x1 41380022
 family0x6-model0xcf 41380022
 family0x6-model0x6a 41379503

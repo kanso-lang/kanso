@@ -57,8 +57,12 @@ sh scripts/gates/dispatch.sh name
 # 2,000,657,408, a fall of 10,863 or 0.0005% — and that is the point of
 # counting it: the benchmark is in the objective for its MEMORY, and this row
 # is what stops a future change buying that memory back with instructions.
+# livebench joined on 2026-09-05. It runs encodebench's program against the
+# library that ships rather than the frozen copy, so this is the row that sees a
+# change to lib/json's encoder at load. Reading it beside encodebench also gives
+# the frozen control's drift: 10,149,724 instructions, 0.19%, when it was added.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench readbench; do
+         indexbench scanbench digestbench readbench livebench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
     >/dev/null 2>/tmp/ir.$b

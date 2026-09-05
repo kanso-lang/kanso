@@ -50,6 +50,7 @@ fn the_counter_set_is_the_one_the_formula_reads() {
         "escape_instructions",
         "index_instructions",
         "read_instructions",
+        "live_instructions",
         "decode_peak_bytes",
         "decode_arena_blocks",
         "encode_peak_bytes",

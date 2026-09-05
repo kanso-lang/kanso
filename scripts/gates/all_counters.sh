@@ -38,7 +38,8 @@ pend:pendbench:bench/cost_golden_pend.txt
 escape:escapebench:bench/cost_golden_escape.txt
 digest:digestbench:bench/cost_golden_digest.txt
 read:readbench:bench/cost_golden_read.txt
-scan:scanbench:bench/cost_golden_scan.txt"
+scan:scanbench:bench/cost_golden_scan.txt
+live:livebench:bench/cost_golden_live.txt"
 
 moved=""
 for row in $veins; do
@@ -69,7 +70,7 @@ for row in $veins; do
 done
 
 if [ -z "$moved" ]; then
-  echo "counters: all ten veins agree with their goldens"
+  echo "counters: all eleven veins agree with their goldens"
   exit 0
 fi
 echo "counters moved:$moved"

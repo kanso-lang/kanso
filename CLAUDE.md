@@ -66,15 +66,29 @@ section is where its instructions will appear.
   rule exists because a conflict resolution once silently deleted
   Eisel-Lemire from main and nothing noticed.
 - **Counters changed → regenerate every vein in the same PR**: all .mem
-  files, all TEN cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
+  files, all ELEVEN cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
   then book panels — and the SIBLINGS, which keep veins of their own. This
   line said "all TEN cost goldens" until 2026-09-05 and there were ten; a
   branch that read it regenerated the .mem vein and the code goldens and
   missed nine, and CI found them a round late. `sh
-  scripts/gates/all_counters.sh` reads every one of the ten and names every
+  scripts/gates/all_counters.sh` reads every one of the eleven and names every
   vein that moved, and `--write` regenerates them, header intact. Do not
   count them from memory; the count in this sentence was wrong for as long as
-  it was written down. kq keeps
+  it was written down.
+- **The sweep does NOT read the compile veins, and a library change moves
+  them.** `lib/*.kso` is `include_str!`'d into the compiler (`src/lib.rs`), so
+  adding a line to lib/json is a line the compiler carries and compiles.
+  `all_counters.sh` names the runtime cost goldens only; `machine_code`,
+  `emitted_code`, `compile_memory`, `compile_allocs` and `compile_instructions`
+  are separate gates and two of their counters are welfare terms. On 2026-09-05
+  a twelve-line library change read as a welfare RISE with the compile veins
+  stale and a FALL once they were regenerated. Run those five by hand after any
+  edit under lib/.
+- **A library edit needs `cargo build` before it takes effect**, for the same
+  reason. In a worktree whose compiler was built first, `kanso build` succeeded
+  with `lib/json/text.kso` holding outright syntax garbage. `all_counters.sh`
+  begins with `cargo build --release`, which is why the sweep is safe and a
+  bare `kanso build` is not. kq keeps
   FIVE, and reading a short list of them is how a pin goes stale: allocation
   counters in `bench/cost_golden.txt`, `bench/cost_golden_decode.txt` and
   `bench/cost_golden_escapes.txt`, RETIRED INSTRUCTIONS in
