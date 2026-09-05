@@ -1175,7 +1175,20 @@
 # It also settles what the correction above rests on from outside it. The
 # golden read 41,379,503 and a chip that had never been asked counted
 # 41,380,022 on the first attempt.
-family0x19-model0x11 41380022
-family0x19-model0x1 41380022
-family0x6-model0xcf 41380022
-family0x1a-model0x2 41380022
+# 2026-09-05 (ninth), and the table is empty. The negative render writes
+# straight into the caller's buffer behind the sign, which is an edit to
+# src/runtime.c, and src/runtime.c is `include_str!`'d into the compiler. All
+# four rows counted the binary before it and are removed rather than carried
+# forward with a delta applied, for the reason this file has now given nine
+# times: a value counted against the old binary is worse than no value.
+#
+# What the four said is worth keeping in the prose even though the rows go.
+# They were five keys -- three AMD generations and one Intel -- reading
+# 41,380,022 on one binary, and the four before them read 41,379,503 on the
+# binary before that. Nine readings, two binaries, and unanimity within each.
+# The collapse argument the header has been collecting evidence for now rests
+# on that rather than on any residual; it is filed for a ruling as "Should a
+# chip row still be allowed to pin two values?" in design/pending-gavels.md.
+#
+# CI supplies the first row of the next series. The gate refuses in the
+# meantime and prints the line to add, which is what the empty state is for.

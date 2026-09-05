@@ -3783,10 +3783,14 @@ static KValue k_render_at(KValue v, long long quote, int held) {
                representation directly — no probing, no dtoa */
             k_stat_ryu_renders++;
             if (d < 0) {
-                char inner[63];
-                render_ryu(-d, inner);
+                /* Straight into the caller's buffer behind the sign. The
+                   scratch this replaced was 63 bytes and a strcpy of the whole
+                   rendering, paid on 430,400 of encodebench's 849,200 renders.
+                   buf is 64 and render_ryu writes at most the 63 the scratch
+                   held, so the byte the sign takes is the byte that was
+                   spare. */
                 buf[0] = '-';
-                strcpy(buf + 1, inner);
+                render_ryu(-d, buf + 1);
             } else {
                 render_ryu(d, buf);
             }
