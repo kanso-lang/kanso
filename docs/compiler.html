@@ -592,6 +592,14 @@ basket         10,000                0          1,048,576</code></pre>
 
 <p>recorded here so the fold does not get rewritten again on the strength of the profile alone.</p>
 
+<p><strong>14. refusing a beat to a loop that rewinds for nothing <span class="status status-declined">built, measured, declined</span></strong> — the entry above ends on a beat that reclaimed nothing, and the obvious next move is to stop granting it. escapebench is where to look: one group, <code>filled</code>, owns 1,206,000 of that benchmark's 1,206,002 rewinds, and a probe in the rewind says 99.75% of them find the arena pointer exactly where the mark left it. at about twenty-two instructions each that is 26 million of escapebench's 121, spent putting back something nothing moved.</p>
+
+<p>the analysis already refuses a beat to a loop that allocates nothing — <code>PureLoop</code>, one line — so the question was only why <code>filled</code> is not in that case. refusing it by hand and measuring says the shipped benchmark loses 33,263,355 instructions, <strong>27.58%</strong>, with allocations, arena blocks and peak byte-identical. at twenty-five times the inner length, still byte-identical. at a hundred and fifty times, where the growing accumulator's superseded buffers finally exceed one arena block, the picture inverts: one block and 1,048,576 bytes with the bracket, <strong>two blocks and 3,145,744</strong> without it.</p>
+
+<p>so the bracket is doing its job and the first two measurements were reading a workload that fits in one block either way. the cost is real and the benefit is real and they show up at different input sizes, which is the whole reason a rewind exists. three attempts on the runtime side went the same way: an early exit when the arena has not moved changes what gets flushed and moves <code>sh_buf</code> on two benchmarks; marking the rewind <code>always_inline</code> does inline it under lto and costs the live encode board more than it saves the guard; and an inline guard in emitted code would pay fourteen instructions on every rewind that has work to do, which on that board is four million of them.</p>
+
+<p>what survives is a note about the corpus rather than the compiler. escapebench pins this bracket's cost on every run and its benefit on none of them, so a change that deleted the bracket would have read as a 27.6% win with every memory counter flat — the failure its own README was written to prevent, one level in. whether to raise its size is a live question and not a free one: the row is a welfare term and a bigger benchmark is a slower job.</p>
+
 
 <h2 id="lazy"><span class="sec-num">07</span>the lazy bet<span class="status status-shipped">v1 shipped</span></h2>
 

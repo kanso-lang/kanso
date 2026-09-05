@@ -4129,6 +4129,34 @@ side.
 **WELFARE 74.21933255238363 -> 74.21937425493788**, a second `--set` with the
 compile row's own reason.
 
+### The beat that looked profitless, and the scale that said otherwise
+
+The entry's own finding — a rewind that reclaims nothing — was chased to the
+group that owns it and then declined. `d_escapebench/more_4` holds 1,206,000 of
+escapebench's 1,206,002 rewinds, and that is `filled`; a probe says 99.75% of
+them find `k_arena` exactly where the mark left it. Refusing that group its beat
+by hand, beside the `PureLoop` test `beat.rs` already has:
+
+    span=400   n=3000   -33,263,355 instructions (-27.58%), every memory
+                        counter byte-identical
+    span=10000 n=300    every memory counter byte-identical
+    span=60000 n=60     arena_blocks 1 -> 2, peak 1,048,576 -> 3,145,744
+
+**Two scales agreed that the bracket bought nothing and the third disagreed.**
+The first two were measuring a workload that fits in one arena block either
+way; at the third the growing accumulator's superseded buffers exceed a block
+and the rewind is the only thing holding the peak down. The bracket is doing
+its job. Recorded on the page as item 14 of §06, with the three runtime
+attempts that failed beside it, so none of them is tried again from the profile
+alone.
+
+What survives is about the corpus. escapebench pins this bracket's COST on
+every run and its BENEFIT on none, so a change deleting it would have read as a
+27.6% win with every memory counter flat — which is the failure its own README
+exists to prevent, one level in. Whether to raise its size is Clay's, and not
+free: `escape_instructions` is a welfare term and a bigger benchmark is a
+slower job.
+
 `bench/text_golden.txt` moves on all twelve rows, most of them down —
 escapebench -32, readbench -16, jsonbench +16, pendbench +64. The check's eight
 instructions are gone from one place and present in another, and where the
