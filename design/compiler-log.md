@@ -20,233 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — the read's answer had no type, and the decode lost its bracket
-
-Searched the live log and the archive before filing. The live log's io-half
-entry of this morning is the migration; the archive's `beat` entries are the
-tier work of August and the carry-tier decline of 2026-09-01. Neither has the
-read's shape or the yield hole, so this is a defect the io half introduced
-and the golden caught.
-
-**What broke.** `os/read_file` answers `text | file_not_found`, and a builtin
-cannot name a type declared in kanso, so the builtin handed back a
-two-element list `[there, text]` and the wrapper read it. The list costs the
-caller the string's type: inference gives a list index the top set, `beat.rs`
-reads that set to decide whether a slot may be carried across a rewind, and
-an untyped slot keeps the grow-only arena. jsonbench decoded the same bytes
-with 248 arena blocks instead of 2, a 260 MB peak instead of 2 MB, and
-`beat_iters` 1 instead of 151. Same decoder, same document, 124 times the
-peak.
-
-**The builtin answers `none`.** The shape `os/env` already uses for a
-variable that is not set, and inference already types it: `read_file` yields
-`STR | NONE`, the wrapper's `found` dispatches on the none arm, and the text
-arm keeps its type. All three engines make the same split — the interpreter
-on `ErrorKind::NotFound`, native on `ENOENT` or `ENOTDIR`, the playground
-refusing because it has no filesystem.
-
-**`none` is threadable.** It has no payload, so nothing in it can dangle
-across a rewind — the criterion `THREADED` already states for strings and
-records. Its absence cost jsonbench the plain beat: with `NONE` out of the
-set the loop is a *carry* beat, evacuating its document argument every
-iteration, and with it in the set the loop is a plain beat that rewinds.
-Measured both ways on the branch.
-
-**And a hole the fix walked into.** `os/read_file` is typed because
-`desc_yield` reads a chain's yield by the head's BARE NAME, and the wrapper's
-name collides with the builtin's. `os/read_file!` — same body, one character
-more — matches nothing and falls to the top set. Written out:
-
-    os/read_file  "large.json" . go   loop/3: beat: rewinds every iteration
-    os/read_file! "large.json" . go   loop/3: grow-only: argument 1 ...
-
-Same package, same loop, one character apart.
-
-**Counted, because the bang is the small end of it.** Cross the table's
-entries against every std wrapper that sits over an effect builtin and EIGHT
-wrapper names are absent: `net/listen`, `net/port`, `net/accept`, `net/read`,
-`net/close_conn`, `net/close_listener`, `os/read_file!` and `os/kill`. The
-names that do hit are hitting by coincidence — `os/write_file` because the
-wrapper and the builtin happen to share a name, `net/write` because it lands
-on the `write` entry meant for `io/write` — and the table's own `net_write`
-and `net_close` rows are reachable only from inside lib/net, since the
-wrappers are called `write`, `close_conn` and `close_listener`.
-
-`net/read` is the one that matters. A socket server looping over the bytes it
-read is the ordinary shape, and it pays what jsonbench paid. On a twelve-line
-probe whose loop allocates once per iteration:
-
-    os/read_file  "x" . go    beat: rewinds every iteration
-    os/read_file! "x" . go    grow-only: argument 1 may carry heap
-    net/listen ":0" . (l -> net/accept l . (c -> net/read c . go))
-                              grow-only: argument 1 may carry heap
-
-The cause is proven rather than inferred: adding one arm reading
-`base(n) == "read" | "net_read" => STR` and rebuilding flips the net/read
-probe to `beat: rewinds every iteration`. That arm was reverted and is not in
-this branch, because more table rows are the bug. The fix is to infer a kanso
-function's yield in the fixpoint beside `ctx.returns` and have `desc_yield_of`
-consult it, leaving the table to cover true builtins only — a change to the
-fixpoint rather than a patch to a match arm, which is why it is named here and
-not made here.
-
-So jsonbench's generated main writes the arm out — `fed`, which is
-`os/read_file!` at the call site — with the reason in
-`bench/make_jsonbench`. Both spellings mean the same thing, and when a kanso
-function's yield is inferred it goes back to the bang.
-
-**The goldens moved, uniformly and once.** Five programs read a file at
-runtime and all five pay the same: allocs +9, alloc_bytes +288,
-`cohort_frees` 0 to 1, `evac_allocs` +12, `carry_dedup` +2. That is the read
-wrapper's dispatch, once per program rather than per iteration, and it is the
-price of naming absence in the type. The decode's own shape is unchanged —
-`arena_blocks` 2, `arena_peak_bytes` 2,097,152, `beat_iters` 151,
-`el_parses` 318,450, `find2_calls` 1,571,250 all byte-identical to main.
-
-Welfare 73.06, unmoved: the objective weighs instructions, peaks and blocks,
-and nine allocations move none of them.
-
-**The spec.** `tests/golden/read_beat` reads its own source and loops over it
-200 times and 800 times; `beat_iters` reads 201 and 801. Watched red with the
-list put back in `read_value` and `found` back to `if r[1]! r[2]!`: both
-report 0, the loop never bracketing. It asserts `beat_iters` rather than
-`arena_blocks` because these programs fit one block under either shape —
-measured — and a check that cannot fail is worse than none. The block count
-is pinned where it is sensitive, in `bench/cost_golden.txt`.
-
-**Every vein the read's shape moved, named.** The trend gate reads this
-paragraph, and each counter below moved for the one reason above — the read
-wrapper's arms are code the compiler now writes and each program now runs.
-
-The decoder's own emitted code: `emitted_defines` 168 → 175,
-`emitted_calls` 1,820 → 1,863, `emitted_branches` 1,186 → 1,199,
-`emitted_lines` 12,053 → 12,263. The eight programs beside it:
-`emitted_other_defines` 1,468 → 1,492, `emitted_other_calls` 14,526 →
-14,653, `emitted_other_branches` 8,673 → 8,713, `emitted_other_lines`
-87,659 → 88,322. The machine code follows: `text` 1,010,214 → 1,021,094
-across the eleven, jsonbench alone 83,938 → 86,418.
-
-The runtime counters, the same +9 allocations and +288 bytes on each program
-that reads a file, with the evacuation and dedup that come with the extra
-dispatch: `allocs`, `alloc_bytes`, `evac_allocs`, `evac_bytes`,
-`cohort_frees`, `carry_dedup` on the decode vein; `encode_allocs`,
-`encode_alloc_bytes`, `encode_evac_allocs`, `encode_evac_bytes`,
-`encode_cohort_frees`, `encode_carry_dedup` on encode; `oneshot_allocs`,
-`oneshot_alloc_bytes`, `oneshot_evac_allocs`, `oneshot_evac_bytes`,
-`oneshot_cohort_frees`, `oneshot_carry_dedup`; `wide_allocs`,
-`wide_alloc_bytes`, `wide_evac_allocs`, `wide_evac_bytes`,
-`wide_cohort_frees`, `wide_carry_dedup`; `digest_allocs`,
-`digest_alloc_bytes`, `digest_evac_allocs`, `digest_evac_bytes`,
-`digest_cohort_frees`, `digest_carry_dedup`.
-
-The published figure moved with them: the landing panel and §04's golden
-paragraph both quote the decode's allocation count, 4,999,958 → 4,999,967.
-
-Three veins refuse from the container and say so in their own words —
-`bench/instructions_golden.txt` (measured on glibc 2.39-0ubuntu8.8, here
-8.7), `bench/compile_allocs_golden.txt` and
-`bench/compile_memory_golden.txt` (rustc 1.98.1, here 1.94.1). Their rows
-are copied out of the CI job log, which is what those refusals instruct.
-
-Each of those, with the value it landed on, because the trend gate reads the
-number and not only the name: `alloc_bytes` 259,660,208 to 259,660,496,
-`evac_bytes` 112 to 496, `encode_alloc_bytes` 853,081,504 to 853,081,792,
-`encode_allocs` 16,249,018 to 16,249,027, `encode_evac_bytes` 576 to 960,
-`oneshot_alloc_bytes` 4,434,348 to 4,434,636, `oneshot_allocs` 79,361 to
-79,370, `oneshot_evac_bytes` 96 to 480, `wide_alloc_bytes` 6,452,160 to
-6,452,432, `wide_allocs` 144,020 to 144,029, `wide_evac_allocs` 244 to 256,
-`wide_evac_bytes` 519,728 to 520,080, `digest_alloc_bytes` 54,149,841 to
-54,150,129, `digest_allocs` 230,214 to 230,223, `digest_evac_bytes` 1,520 to
-1,904.
-
-**The eleven work rows, and why two of them fell.** CI counted the
-instruction vein on this branch. Four rows rose: `work_jsonbench`
-2,098,860,167 to 2,098,864,932, `work_encodebench` 5,846,994,767 to
-5,847,000,948, `work_oneshot` 31,427,567 to 31,431,613, `work_digestbench`
-81,252,316 to 81,256,613. Four to six thousand instructions each, on the
-programs that read a file, once at startup — the same dispatch that shows as
-+9 allocations in their cost goldens.
-
-Two fell, and by more: `widebench` 59,506,462 to 59,384,053 and `deepbench`
-676,465,730 to 675,925,724. deepbench imports no `std/os` and reads nothing,
-so nothing in the io half can reach it. What reaches it is `src/runtime.c`,
-which grew seventeen lines and is compiled into every program. Replacing
-runtime.c with main's and rebuilding deepbench in the container reproduces
-the fall to the instruction: 676,462,050 against 675,922,044, −540,006, the
-same figure CI measured on a host whose absolute counts differ by 3,680.
-
-widebench's −122,409 lands in the same code and will not decompose the same
-way. Its beat tiers are identical on both trees, and callgrind names the
-movers:
-`k_copy_size'2` −47,468, `k_exec` −36,594, `k_copy_size` −31,665, `k_exec'2`
-−15,942. All four are runtime.c functions this branch does not edit; the hot
-kanso code — `d_widebench/value_for_3'2`, `render_ryu`, `k_ten_holds` — is
-byte-identical. But swapping runtime.c alone accounts for only −16,007 of it,
-because the runtime is compiled together with the program, and the emitted
-wrappers the io half adds change what clang inlines from the runtime into
-widebench. The two halves interact and are not separable by subtraction.
-
-Four of the remaining five moved by a single instruction — `basket`,
-`escapebench`, `indexbench`, `scanbench` — and `pendbench` fell 209.
-
-**`compile_instructions` 41,829,232 to 41,830,604**, and the row it lands in
-is a fresh one. The front end genuinely changed — `os/read_file` yields
-`STR | NONE`, lib/os gained two arms, `THREADED` gained a set — so every
-chip's row in `bench/compile_instructions_by_cpu.txt` went stale at once and
-the two that were there are deleted rather than carried. CI landed on Zen 4,
-which has no reading on the binary those two were counted against, so the
-1,372 is a chip and a binary moved together and cannot be read as front-end
-work. The other two chips are re-sittings when they next refuse, one per CI
-run, which is the price this file's header already names for a keyed row.
-
-CI then landed on Zen 3 and refused, which is the deletion working: no row,
-no comparison. It counted 41,830,604 on sha d89bda86538a — `family0x19-
-model0x11`'s value to the instruction — and I wrote the row and said the two
-AMD models agree for the second consecutive binary.
-
-**That was one reading, and the next one corrected it.** Nine minutes later
-the same chip on the same binary counted 41,831,112:
-
-    00:37:38  family0x19-model0x1  d89bda86538a  41,830,604
-    00:46:23  family0x19-model0x1  d89bda86538a  41,831,112
-
-508 apart, which is the residual this file's header records on the INTEL from
-an entirely different binary — 41,831,767 and 41,832,275. Two vendors, two
-binaries, the same gap. That is the strongest evidence the vein has that the
-split is one mechanism rather than a coincidence of layouts, and it arrived
-because a single pin refused a second reading instead of averaging it.
-
-Where it lives, off the two profiles: every kanso frame is identical to the
-instruction — `eval_expr'2` 1,633,593, `check_merged` 1,586,580, `infer`
-1,238,613, `lex_line` 866,486, `parse` 589,004 — and the whole difference is
-glibc, `_int_malloc` −580, `_int_free` −19, `__memcmp_avx2_movbe` +66. The
-front end does the same work; the allocator walks a different heap. That is
-what the header attributes this term to and what pinning the tunables did not
-remove.
-
-So Zen 3's row takes the pair and Zen 4's stays a single, because Zen 4 has
-shown one mode on this binary and a pair there would be a prediction. The
-Intel row is still absent and still wants its own sitting, one per CI run, as
-the header priced it.
-
-**And the prediction resolved itself within the hour.** Main's first run after
-the merge landed on Zen 4 and counted 41,831,112 against its single — the
-second mode, the same 508. So the pair was not a prediction there either; it
-was one reading away, and the single refusing is what produced the second.
-
-    family0x19-model0x11   41,830,604   and   41,831,112
-    family0x19-model0x1    41,830,604   and   41,831,112
-
-Four readings, two chips, one binary, and every one lands on one of two
-values. Neither model has produced a third. The mode belongs to the run and
-not to the silicon: the same silicon produces both, and different silicon
-produces the same pair. What would settle it is a third value on any chip, or
-one chip producing the same value twenty times running. The cap of two is what
-refuses to quietly absorb the first if it comes.
-
-Welfare 73.06, unmoved: 1,372 instructions on a term whose baseline is
-57,029,831 is below the gate's own resolution.
-
 ## 2026-09-04 — the yield is carried per declaration, and the corpus was measuring its own workaround
 
 **Searched first**, as the filing gate requires: design/compiler-log.md (the
@@ -4236,3 +4009,51 @@ series and reads 41,378,764 as well, that is another unanimity and the pool's
 absolute agreement is holding while its deltas are not — which is a sharper
 statement of what the key buys than the header currently makes. Worth one line
 in the header when the second row lands, and not before.
+
+## 2026-09-05 (twenty-third) — the chip CAN be held fixed, and the entry above said it could not
+
+Searched the live log and the archive before filing. This corrects the entry
+immediately above, which is one round old and was wrong about what the record
+could support. Nothing else in either file is affected.
+
+**What the entry above said.** "Two things differ between the two readings and
+neither can be held fixed. CI drew Zen 4 on CI's glibc; this is Emerald Rapids
+on the container's." True when written. The next CI round drew
+`family0x6-model0xcf` — Emerald Rapids, the container's own family and model —
+and the twelfth series has a sitting for that key. So CI has now counted the
+same chip on both binaries, on one toolchain:
+
+    41,377,644   twelfth series, family0x6-model0xcf
+    41,378,764   thirteenth series, family0x6-model0xcf   +1,120
+
+The chip is held fixed and the toolchain is held fixed. The +1,120 is what the
+front end costs on CI across this branch, and calling it unattributable was
+premature by one round.
+
+**The container still reads the other way, and the reason is narrower now.**
+Same family and model here, and `kanso::main` inclusive falls 315. What differs
+between the two is the toolchain the row is counted under, which is the one
+thing `scripts/gates/host_gate.sh` refuses over. The row carries glibc's
+allocator and its ifunc-resolved string routines, so a rise there on one libc
+and a fall on another is the shape the archive's 2026-09-03 entry described.
+The compiler's own frame falling while the row rises is that entry's finding
+restated, and it is now on the same chip rather than across two.
+
+**Both chips on the new binary agree to the instruction.** Zen 4 and Emerald
+Rapids, two vendors, two independent CI builds, 41,378,764 twice. The twelfth
+series managed five keys on one number; the thirteenth has two after two
+rounds. The OPEN item in the entry above asked for exactly this and can be
+closed: the pool's ABSOLUTE agreement within a binary is holding, and the
+per-chip key is buying less than its header feared. DONE.
+
+**And the build is byte-reproducible, which the header does not say.** Nothing
+under `docs/` or `design/` is `include_str!`'d, there is no `build.rs`, and no
+`env!` or git state reaches the binary; a forced rebuild of every `.rs` here
+produced the same sha256 fc014d0fba0e. So a commit touching only docs, design
+or bench cannot move this row. The table's header still offers "5,081
+instructions from an edit the compiler cannot see" as its headline measurement
+of the effect, and that reading predates the sorts and `setarch` of kanso#1234.
+Left alone here rather than rewritten on one container's evidence — the header
+already concedes "Nothing in them separated the change from the chip," and the
+five-key twelfth series is the better argument. OPEN, and cheap: the next
+person editing that header should price the 5,081 as chip, not as edit.
