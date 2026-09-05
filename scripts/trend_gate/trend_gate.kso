@@ -100,7 +100,11 @@ lower_i = ["deepbench" "escapebench" "pendbench" "indexbench" "text"]
 # stay flat. The benchmark is in the objective for its arena, and this is the
 # entry that makes a rise in its instructions read as a regression rather than
 # as drift the listing shrugs at.
-lower_j = ["digestbench" "scanbench" "readbench"]
+# livebench joined on 2026-09-05, in the pull request that added the row, for
+# the reason the three above give. Its own reason to be here is that it exists
+# to make a library encode change visible at all: a benchmark added to see a
+# fall, whose rises read as drift, would be worse than not adding it.
+lower_j = ["digestbench" "scanbench" "readbench" "livebench"]
 
 lower_ab = text/concat lower_a (text/concat lower_b lower_bb)
 

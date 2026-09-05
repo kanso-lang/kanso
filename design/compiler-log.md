@@ -3452,3 +3452,28 @@ That makes THREE of the four recorded chips seen reading both numbers, and the
 two values are the same two every time. A key that separates chips which all
 read the same pair is a key that is not separating anything, and the collapse
 argument that has been waiting on evidence now has its third reading.
+
+### Round two: two specs that were doing exactly their job
+
+The suite caught what the counter gates could not, and both failures are the
+same shape as the ones this benchmark exists to prevent.
+
+**`every_benchmark_in_the_work_vein_has_a_direction`** reported livebench "in
+`bench/instructions_golden.txt` and in no direction table, so a rise in any of
+them reads as UNCLASSIFIED drift and the trend gate exits green". Its own
+header records digestbench arriving in the vein a day before it arrived in the
+table, and a 6.5x regression passing green in between. livebench is now in
+`lower_j` beside digestbench, scanbench and readbench. A benchmark added to
+make a fall visible, whose rises read as drift, would be worse than not adding
+it.
+
+**`the_score_says_what_it_was_made_of`** pins the objective's counter set by
+hand rather than deriving it, so that a row can carry exactly what the formula
+reads. `live_instructions` joined the model and not that list.
+
+Neither was found locally, because the checks run before pushing were the
+counter sweep, the ratchet, the trend gate, welfare, format, clippy and the two
+specs the change obviously touched — not `cargo test`. The gates all agreed;
+the suite did not. On a change that adds a row to a vein and a counter to the
+model, the suite is the check that matters, and it costs sixteen minutes
+against the two CI rounds it would have saved.
