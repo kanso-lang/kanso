@@ -4161,3 +4161,36 @@ slower job.
 escapebench -32, readbench -16, jsonbench +16, pendbench +64. The check's eight
 instructions are gone from one place and present in another, and where the
 linker puts what is left is not something this change chose.
+
+## 2026-09-05 — gavel: corpus first — a blind corpus is repaired, never excused
+
+On "The welfare model cannot see the yield hole, because the corpus
+was written around it" (filed by #1240). The fix carries a chain's
+yield per declaration, closing a hole where eight std effect wrappers
+(os/read_file!, the net wrappers, os/kill) ran a loop on the grow-only
+arena — a natural read loop paid 260 MB against 2 MB. It costs the
+front end +0.2587% and every runtime counter is byte-identical,
+because jsonbench had been hand-written to route around the hole and
+the corpus was measuring the workaround. Welfare falls 0.008.
+
+Clay declined the entry's recommendation (move the floor with "the
+corpus is blind" as the reason). Ruling: **"the corpus is blind" is
+never a reason to lower the floor; it is a corpus defect, and the
+remedy is the one #1215 already set** — add the benchmark the
+objective could not see, baseline it forward, and let the fix score.
+Concretely:
+
+1. The fixture the PR already carries — the natural read loop
+   (reading_insisted.kso: 1 -> 201 beat iterations, 260 MB -> 2 MB)
+   — is promoted into the benchmark corpus as a run-speed and
+   run-memory shelf under the granted-baseline machinery.
+2. Its baseline is measured on the PRE-fix code, so the objective
+   sees the hole.
+3. The fix lands on top; the change scores as the memory win it is;
+   the floor RISES and is set in the same PR.
+
+The golden half of the doctrine was already met (the fixture was
+watched red first); this is the objective half. Clay's framing: the
+corpus must incorporate the behaviour being fixed so it stands as a
+test against the bug going forward — goldens catch a regression,
+the objective prices one. The ledger entry leaves with this commit.
