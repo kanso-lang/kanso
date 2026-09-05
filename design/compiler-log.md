@@ -20,39 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-04 — THE ANCHOR WAS THE STANDARD LIBRARY'S, AND CI REFUSED IT
-
-**DONE, and it corrects the entry above.** That entry said the row reads
-`std::rt::lang_start::{{closure}}` inclusive. CI refused on the first run:
-
-    ::error::the profile carries no std::rt::lang_start::{{closure}} frame
-
-The frame is real on this container under rustc 1.94.1 and absent from the
-runners' profiles under 1.98.1. So the anchor was a name the standard library
-owns, which a version bump can move with nobody here touching a line — and the
-gate's own refusal path is the only reason that showed up as a stop rather than
-as a number.
-
-**The anchor is `kanso::main` now**, this crate's own symbol, with an
-`inline(never)` in src/main.rs whose doc comment says the measurement is why it
-is there. It sat exactly 10 instructions below the closure on all four profiles
-retained from the seven-binary sitting, and the baseline rebuilt with the
-annotation reads `row 42,344,081` — identical to the instruction — and
-`program 41,878,949`. So the annotation costs nothing and the published spans,
-3,963 whole-process against 1,028 in the frame, hold under either anchor.
-
-**The refusal now prints the profile before it refuses.** The round that made
-this necessary said "cannot be read out of it" and printed nothing that could
-be read instead, so finding out what the profile did contain took a second
-round. `callgrind_annotate --inclusive=yes --threshold=99 | head -30` goes to
-the job log first, and the refusal points at it. This is the same defect
-`scripts/perf_record` had for a day — a reader that reports its own failure
-without reporting what it saw.
-
-**`compiler libraries` was green on that same CI run**, which is the half of
-this change that was not being re-sat.
-
-
 ## 2026-09-04 — THE 1,028 IS ONE MEMCMP, AND IT IS ALIGNMENT
 
 **DONE.** The entry above left a residual: the compiler's own frame still moves
@@ -3491,3 +3458,47 @@ for one lambda — `klam17` musttailing the body and `w_klam17` wrapping it — 
 they cost nothing: `klam17` never appears in the profile, LLVM collapsed both
 frames. And removing the escape fold's closure outright was measured earlier at
 livebench +3.01%; the beat is why the closure form is cheaper.
+
+---
+
+## 2026-09-05 — the split is measured now, and it does nothing
+
+**Closes the OPEN thread in "the escape reducer's frame costs more than its
+work, and three repairs died first"**, which said the library-level split had
+not been measured. It has, an hour later, and it is a no-op. This file is
+append-only, so that entry stands as written; `docs/compiler.html` §54 is not,
+and its one clause is corrected in the same change.
+
+`lib/json/text.kso`'s `esc_byte` has seven literal arms differing only in the
+byte after the backslash, each writing `text/append (text/append acc 92) c`.
+Each inlines two copies of `k_b_append_mut_byte`, which is where the reducer's
+694 instructions come from. The experiment gave the seven arms one shared body:
+
+    fn esc_pair acc c
+      text/append (text/append acc 92) c
+
+Against merged main built beside it:
+
+    work_livebench    4,911,031,267 -> 4,911,031,267   identical
+    work_oneshot         26,642,454 ->    26,642,454   identical
+    work_jsonbench    1,732,114,716 -> 1,732,114,716   identical
+    work_encodebench  4,921,267,313 -> 4,921,267,313   identical, frozen copy
+    .text on all four: identical to bench/text_golden.txt
+
+LLVM inlines the shared body back into all seven arms and emits the same code
+byte for byte. Reverted; nothing of it is in the tree.
+
+**What it settles.** The inliner reassembles whatever the source separates, so
+no source-level restructuring shrinks that body. Keeping the cold arms out of
+line needs a way to SAY so, and kanso has no `noinline` for user code — which
+makes it a language question rather than a performance patch. kanso#1186 did
+the equivalent by hand in `k_b_append_grow`, where the C attribute was
+available. So #290's two paths are the toolchain (`preserve_none`, LLVM 19
+against CI's clang 18.1.3) and an emitter-level notion of a cold dispatch arm.
+
+**A guard on the measurement, because it nearly went the other way.**
+`w_klam17` is 692 instructions in encodebench and 786 in livebench. Those are
+different binaries and the sizes are not comparable across them; reading the
+786 as growth is the same cross-binary mistake this log recorded on the compile
+row two days ago. The instruction counts and the `.text` sizes are what settled
+it, and neither moved.
