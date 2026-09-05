@@ -789,6 +789,7 @@ declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare %KValue @k_list_lit(i64, ptr)
 declare %KValue @k_map_lit(i64, ptr)
 declare %KValue @k_closure(ptr, i64, i64, ptr)
+declare %KValue @k_closure_lit(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
 declare %KValue @k_env_get(ptr, i64)
 declare %KValue @k_b_at(%KValue, %KValue)
@@ -1149,6 +1150,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         knotted,
         print_value_wrapper: false,
         caf_cells: Vec::new(),
+        closure_cells: Vec::new(),
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
     };
@@ -1191,6 +1193,8 @@ struct Backend<'a> {
     /// fills these before main any more: a constant builds itself on the
     /// first read, so one nobody reads is never built.
     caf_cells: Vec<String>,
+    /// one permanent slot per zero-capture lambda site, built on first visit
+    closure_cells: Vec<String>,
     demand: crate::demand::DemandInfo<'a>,
     /// (site evaluator symbol, captured-arg count), indexed by site id.
     thunk_sites: Vec<(String, usize)>,
@@ -2312,6 +2316,9 @@ impl<'a> Backend<'a> {
         for cell in &self.caf_cells {
             let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
             let _ = writeln!(out, "@{cell}_ready = internal global i8 0");
+        }
+        for cell in &self.closure_cells {
+            let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
         }
         for (name, bytes) in &self.strings {
             let _ = writeln!(
@@ -3929,7 +3936,23 @@ impl<'a> Backend<'a> {
                 let lifted = format!("klam{}", self.lift_counter);
                 self.lift_counter += 1;
                 self.emit_lifted(&lifted, &param_names, &captures, body, f)?;
-                let n = captures.len().max(1);
+                // A lambda that captures nothing is the same value every
+                // evaluation, so it builds once into a permanent slot -- the
+                // arrangement `str_const` already uses for a string literal.
+                // The alloca, the two allocations and the memcpy go away and
+                // the site is a load after the first visit.
+                if captures.is_empty() {
+                    let cell = format!("{lifted}_cell");
+                    self.closure_cells.push(cell.clone());
+                    let t = f.tmp();
+                    // the ccc wrapper, never the tailcc fn: C calls this pointer
+                    f.line(&format!(
+                        "{t} = call %KValue @k_closure_lit(ptr @w_{lifted}, i64 {}, ptr @{cell})",
+                        params.len()
+                    ));
+                    return Ok(t);
+                }
+                let n = captures.len();
                 let arr = f.tmp();
                 f.line(&format!("{arr} = alloca [{n} x %KValue]"));
                 for (i, cap) in captures.iter().enumerate() {

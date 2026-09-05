@@ -1,0 +1,10 @@
+two lambdas in one body: 115
+the same body again: 115
+and with another value: 121
+a free one through a call: 12
+the same one twice: 24
+a capture of five: 6
+a capture of nine: 10
+five again, after nine: 6
+folded with a free step: 6
+folded again: 15

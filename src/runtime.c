@@ -5529,6 +5529,27 @@ KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, 
     KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
 }
 
+/* A lambda that captures nothing is the same value every evaluation, the way
+   a string literal is, so it builds once into a permanent slot instead of a
+   closure and an empty environment per visit. `escape_able_2` in encodebench
+   built 709,200 of them, two arena allocations each, to hand `list/fold` a
+   closure that never differed.
+
+   Permanent rather than arena storage for the reason k_str_lit gives: the
+   slot outlives every beat, and a rewind cannot reach what malloc handed out.
+   The environment is allocated even though ncaps is zero, because the carry
+   path reads `cl->env` unconditionally when it sizes a copy. */
+KValue k_closure_lit(KValue (*fn)(void*, KValue), long long arity, KValue* slot) {
+    if (slot->tag != K_CLOSURE) {
+        KClosure* c = k_alloc_perm(sizeof(KClosure));
+        KValue* env = k_alloc_perm(sizeof(KValue));
+        env->tag = K_INT; env->payload = 0;
+        c->fn = fn; c->env = env; c->ncaps = 0; c->arity = arity;
+        slot->tag = K_CLOSURE; slot->payload = k_ptr(c);
+    }
+    return *slot;
+}
+
 KValue k_fnref(void* described) {
     KValue v; v.tag = K_FNREF; v.payload = (long long)(intptr_t)described; return v;
 }

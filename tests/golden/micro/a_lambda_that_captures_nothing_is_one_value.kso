@@ -1,0 +1,39 @@
+# A lambda that captures nothing is the same value every time it is
+# evaluated, so the native emitter builds it once into a permanent slot
+# instead of allocating a closure and an empty environment on every visit --
+# the arrangement a string literal has always had. `escape_able_2` in
+# encodebench built 709,200 of them to hand `list/fold` a closure that never
+# differed.
+#
+# That makes closure identity shared where it used to be fresh, and nothing
+# pinned what sharing must not change. Two capture-free lambdas in one body
+# each need their own slot; a lambda that DOES capture must still get a fresh
+# closure per call, or the second `adder` would answer through the first
+# one's environment.
+import "std/list"
+
+fn pair_of v
+  a = (x -> x * 2)
+  b = (x -> x + 100)
+  a v + b v
+
+fn adder n
+  (x -> x + n)
+
+fn apply g v
+  g v
+
+fn twice_through g v
+  g v + g v
+
+pub play =
+  print "two lambdas in one body: {pair_of 5}"
+  >> print "the same body again: {pair_of 5}"
+  >> print "and with another value: {pair_of 7}"
+  >> print "a free one through a call: {apply (x -> x * 3) 4}"
+  >> print "the same one twice: {twice_through (x -> x * 3) 4}"
+  >> print "a capture of five: {apply (adder 5) 1}"
+  >> print "a capture of nine: {apply (adder 9) 1}"
+  >> print "five again, after nine: {apply (adder 5) 1}"
+  >> print "folded with a free step: {list/fold [1 2 3] 0 (a b -> a + b)}"
+  >> print "folded again: {list/fold [4 5 6] 0 (a b -> a + b)}"

@@ -20,56 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-02 — gavel: the weights, tuned to the developer's order of noticing
-
-Clay, asked whether the welfare weights were justifiably optimal,
-restated the objective: "the core thing we're attempting to optimize
-for here is ultimately developer happiness. performance should be
-insane, but if a language doesn't compile wickedly fast, like go,
-devs may choose not to use it in the first place." He took the
-recommendation that followed. The weights argument, recorded as the
-doctrine requires before the floor moves:
-
-    term             was    now   satiation
-    run speed        0.30   0.30  2.0   (unchanged)
-    run memory       0.30   0.26  2.0
-    compile speed    0.28   0.32  0.5
-    compile memory   0.12   0.12  0.5   (unchanged)
-
-- **Compile speed rises, funded from run memory.** A developer feels
-  compile latency on every edit and feels peak memory only when
-  something falls over. Compile latency is an adoption gate; the
-  memory model is the identity, but the objective's job is to punish
-  regressions in the order developers notice them. Compile memory
-  stays at 0.12 — the compiler's own footprint is a CI-container
-  guard, not something a developer perceives.
-- **The run-speed term splits in two halves.** Half is the equal-
-  weighted mean of the advertised workloads — decode (jsonbench) and
-  encode (encodebench), the rows the front page makes claims about
-  and the workload the language exists for. Half is the equal-
-  weighted mean of every other run benchmark in the objective — the
-  shape guards, today oneshot, basket, wide, deep, pending, scan and
-  digest (the last two joined in #1215) — which stress the memory
-  model and protect against pathologies. The rule is "advertised
-  versus everything else", so a benchmark added later lands in the
-  guard half without this entry needing an edit. A shape win no longer scores as if a real workload
-  got faster; the guards stay fully armed against regression. Per-
-  counter saturation (the #184 ruling) applies inside each half
-  before its mean.
-- **Satiation constants stand.** Compile at 0.5 already says the
-  target is instant and past instant nothing more is bought, with
-  the curve's asymmetry making a compile regression cost more than
-  the equivalent gain earns — the adoption-gate shape. Runtime at
-  2.0 says eight times faster is eight times faster.
-- **The exclusions stand**: wall time (nondeterministic), binary
-  size (measured pointing the wrong way, #1217/#1219, pinned by
-  spec), and everything unmeasurable, which the floor-permeable-to-
-  language rule keeps welfare from vetoing.
-
-Lands as a weights change: recorded here, `--set` in the same PR with
-this entry's reason, the floor re-set, and the chart replay re-run so
-the history reads under one definition.
-
 ## 2026-09-03 (ninth) — the compile row was counting the host's memory map
 
 **DONE (the finding). Clay ruled on the entry the same day, and the ruling is
@@ -3198,3 +3148,185 @@ during the measurement; what moved is layout, for the ninth time on this vein.
 are byte-identical.
 
 **welfare 73.99**, from 73.91, and `--set` in this same commit.
+
+## 2026-09-05 (fifth) — a lambda that captures nothing is one value
+
+**Searched first**, as the filing gate requires: `grep -n "closure" design/compiler-log.md
+design/log/compiler-log-archive.md` returns the closure-call dispatch work
+(kanso#1119, the builtin's count at the front door) and the arity divergence
+(kanso#1229), neither of which touches how a closure is BUILT. `k_closure` has
+allocated a header and an environment per evaluation since the emitter first
+wrote one, and nothing in the log or the archive proposes otherwise.
+
+**The find came out of the profile the find2_below twin left.** After that
+change encodebench sits at 5,563,212,122 and `k_closure` is 709,200 calls and
+48,225,600 instructions of it, 0.87%, with 39,006,110 of that its own body.
+Every call is TWO arena allocations — a `KClosure` and an environment, sized
+`ncaps ? ncaps : 1` so the empty one is allocated too — and 1,418,400 of
+encodebench's 16,249,027 allocations are that pair. Two of the three
+`k_closure` sites the emitter writes for encodebench pass `ncaps` 0.
+`escape_able_2` is the hot one: it allocas a one-slot array, stores nothing
+into it, and hands `list/fold` a closure that never differs.
+
+**A lambda that captures nothing is the same value every evaluation, which is
+what `str_const` already says about a string literal** — "a literal is the
+same value every evaluation, so it builds once into a permanent slot instead
+of allocating per visit". `k_closure_lit` is `k_str_lit` with a closure in it:
+a per-site `KValue` cell, `k_alloc_perm` on the first visit, the cell returned
+on every visit after. Codegen emits it whenever the capture list comes out
+empty, and the alloca goes with the allocations.
+
+**The measurement, one host, one directory, the base binaries swapped in place
+so the exec path cannot move the count.**
+
+    encodebench   5,563,212,122 -> 5,527,056,277   -36,155,845   -0.6499%
+    digestbench      80,995,238 ->    80,558,930      -436,308   -0.5387%
+    oneshot          28,623,204 ->    28,533,106       -90,098   -0.3148%
+    scanbench     1,406,297,911 -> 1,406,247,294       -50,617   -0.0036%
+    deepbench       678,046,045 ->   716,507,476   +38,461,431   +5.6724%
+    basket, widebench, pendbench, readbench and jsonbench rise by 3,200 or
+    less each; escapebench and indexbench do not move at all.
+
+**deepbench's rise is code layout and callgrind says so with call counts.**
+The carry walk visits the SAME nodes: `k_copy_size'2` is entered 859,622 times
+before and 857,697 after, `k_copy_size` 1,534,544 and 1,535,314, `k_ptrmap_at`
+1,571,990 and 1,571,239 — every one within 0.2%. What moved is the cost of a
+visit: 273,639,699 instructions over 2,394,166 entries is 114.3 apiece against
+301,674,351 over 2,393,011, which is 126.1. Twelve instructions more per call,
+in a function this change does not touch, on a program that enters it two and
+a half million times. Removing the allocas from the emitted module moved
+clang's inlining budget inside `k_copy_size` under LTO.
+
+**Two attempts to steer it, both declined by measurement.** The first marked
+every literal closure with a shared sentinel environment and short-circuited
+it to "survives" in `k_slots_survive`, `k_interior_survives`, `k_copy_size`
+and `k_deep_copy`, on the theory that permanent storage answering no to
+`k_survives` was forcing copies. deepbench went to +6.0799% and took basket,
+widebench and pendbench up with it — more code in the same hot walk, and the
+theory was wrong anyway: deepbench's own `k_closure` only falls 26,840,055 to
+23,980,088, so most of its closures capture something and were never
+literals. The second marked `k_closure_lit` `noinline, cold`: deepbench stayed
+at +5.63% and encodebench's gain shrank from 0.6499% to 0.2805%. A probe that
+added the same function under a name codegen never emits left every benchmark
+binary BYTE-IDENTICAL, which is the useful negative — the layout move needs
+the emitted module to change, not just runtime.c to grow.
+
+**The objective takes the trade.** welfare reads 73.99170779271341 against
+74.00198125390742 on the container's own sitting for both sides, a rise of
+0.01027. It is a thin one, and the reason it is thin is that RUNTIME
+ALLOCATION COUNTS ARE NOT IN THE OBJECTIVE — only peak bytes and arena blocks
+are — so the 1,418,400 allocations encodebench stops making score exactly
+zero. The instruction rows are the whole of what welfare sees here.
+
+**tests/golden/micro/a_lambda_that_captures_nothing_is_one_value.kso**, ten
+cases, because sharing closure identity is the new risk and nothing pinned it.
+Two capture-free lambdas in one body each need their own slot; a lambda that
+DOES capture must still get a fresh closure per call. Watched red twice.
+Routing a one-capture lambda through the literal path moves exactly the three
+capture lines — "a capture of five" 6 to 1, "a capture of nine" 10 to 1, "five
+again, after nine" 6 to 1, because the capture is never stored — and leaves
+the seven capture-free lines alone. Giving every lambda site ONE cell moves
+"two lambdas in one body" 115 to 20, since `b` resolves to `a`, and turns the
+fold's two-argument lambda into `error[runtime]: this function takes 1
+argument(s), got 2`.
+
+**Every counter that worsened, with the value it landed on.** The emitter
+writes one global and one call where it wrote an alloca and a store, and the
+globals are lines nothing removes: `emitted_lines` 12,344, `module_lines`
+5,068, `emitted_other_lines` 91,445, `text` 1,119,560. `emitted_defines`,
+`emitted_calls` and `emitted_branches` hold at 178, 1,859 and 1,200, and the
+five programs in `bench/compile_golden.txt` hold entirely — none of them
+writes a lambda. `.text` FALLS on the two programs with no capture-free
+lambda to convert, escapebench 52,658 to 52,466 and indexbench 56,002 to
+55,810, and rises on the other ten.
+
+**The mem vein moves in both directions and the trade is the point.** Fifteen
+files trade arena allocations for permanent ones, one pair per lambda site,
+paid once for a process rather than once per visit, and each lands on a value
+worth writing down: a_digest_holds_every_block_it_walked_perm_allocs 34,
+a_repaired_node_below_the_mark_holds_tenure_perm_allocs 20,
+fused_tally_perm_allocs 9, effect_push_shape_perm_allocs 6,
+fold_push_shape_perm_allocs 6, fused_map_shape_perm_allocs 6,
+early_exit_perm_allocs 5, fused_select_shape_perm_allocs 5,
+skip_shape_perm_allocs 5, sort_shape_perm_allocs 5, take_shape_perm_allocs 5,
+a_loop_invariant_capture_is_copied_every_rewind_perm_allocs 4,
+tally_shape_perm_allocs 4, fused_reducer_perm_allocs 3 and
+piped_reducer_perm_allocs 3. Against that, `allocs` falls in every one of
+the fifteen — 1,980 to 1,850 in the digest, 5,137 to 5,133 in the repaired
+node, 23 to 19 in early_exit — and `alloc_bytes` with it.
+
+The work rows and welfare wait on CI's sitting, and the compile row goes stale
+with them: both `src/codegen.rs` and `src/runtime.c` changed, so the compiler's
+own bytes moved for the tenth time on that vein.
+
+**CI's sitting, and the two hosts agreed on ten of twelve rows.** Four work
+rows fall: work_encodebench 5,527,056,676 (−36,155,845, −0.6499%),
+work_digestbench 80,559,329 (−436,308, −0.5387%), work_oneshot 28,533,505
+(−90,098, −0.3148%) and work_scanbench 1,406,247,707 (−50,617). Every one of
+those four deltas is the container's TO THE INSTRUCTION, as are
+work_jsonbench's, work_basket's, work_readbench's, work_widebench's and both
+unmoved rows — ten of twelve, the third consecutive change on which this vein
+has recorded exact agreement between runner and container.
+
+**The two the hosts disagree on are exactly the two whose rise is layout.**
+work_deepbench 716,506,831 (+38,457,106, +5.6724%) against the container's
++38,461,431, and work_pendbench 700,529,602 (+27,807) against +27,780. A
+layout effect is a property of the binary a host built, so a per-host
+difference there is the shape to expect; a work difference would not have
+been. The remaining rises are the same thing smaller: work_basket 39,878,996
+(+3,200), work_readbench 2,038,397,546 (+3,578), work_jsonbench 1,783,183,673
+(+378), work_widebench 57,839,754 (+360). work_escapebench 130,170,757 and
+work_indexbench 4,792,124 do not move at all, because neither program has a
+capture-free lambda to convert.
+
+**Every counter vein moved the same way, and the trade is one shape.** Nine
+cost goldens swap arena allocations for a permanent pair per lambda site.
+`allocs` falls in all nine — decode 4,999,965, encode 14,830,625 (−1,418,402),
+oneshot 75,822, basket 28,170, pend 4,007,400, scan 3,975,888, wide 144,027,
+digest 213,707, read 615 — and `alloc_bytes` with each. Against that,
+`perm_allocs` lands on decode_perm_allocs 6, encode_perm_allocs 14,
+oneshot_perm_allocs 12, basket_perm_allocs 41, pend_perm_allocs 25,
+scan_perm_allocs 51, wide_perm_allocs 8, digest_perm_allocs 36 and
+read_perm_allocs 5. Three more pending-cell counters move with the shape of
+what the evacuation now walks: pend_evac_bytes 501,056, pend_survive_slots
+118,477 and pend_sh_buf 32,134,704.
+
+**compile_instructions 41,379,503**, re-sat on family0x19-model0x11 after CI
+refused an unrecorded chip. This move is not only layout: the emitter writes
+one global and one call where it wrote an alloca and two stores, so
+`kanso check lib/json` really does emit different bytes. compile_allocs holds
+at 25,490 and compile_peak_bytes at 715,275.
+
+**Two book panels went with the counters** and nothing but the full check
+caught them: docs/book/samples/ch10/counters_counters.out and
+docs/book/samples/ch12/fused_counters.out both print `allocs` and
+`perm_allocs`, and both move 12 to 10 and 1 to 3. The ch10 counters sample is
+named in CLAUDE.md's list of veins to regenerate together, and this session
+regenerated the .mem files and the four code goldens and missed it.
+
+**welfare 74.00**, from 73.99, and `--set` in this same commit.
+
+**Three chips counted the same compile row and all three agreed exactly.** The push
+that landed CI's sitting moved only goldens, the log and the pages, so the
+compiler binary was byte-identical to the one Zen 4 had counted. CI then drew
+family0x19-model0x1, found no row and refused, as an unrecorded chip must.
+It read 41,379,503 — Zen 4's value to the instruction. The next round drew
+family0x6-model0xcf, the Intel, and read 41,379,503 as well.
+
+**That meets the condition this vein set for itself.** The block written when
+the utf8-over-slice twin landed said that three keys agreeing once is one
+binary, and that a later change showing the same three agree again is the
+evidence for asking whether the table should collapse — an argument made about
+the table, with the readings behind it, rather than a tidy-up. This is that
+second binary. Emerald Rapids, Zen 3 and Zen 4 now agree to the instruction on
+two of them, and the reason is legible: kanso#1241 cut this row down to the
+compiler's own frame, and the glibc ifunc dispatch the key was invented to
+separate lives in the loader and libc, outside that frame.
+
+The argument is not made in this change, which is a codegen change carrying a
+fixture and nine goldens; the second reading is recorded so it can be made
+from two rather than from one. What the current design cost here is worth
+recording beside it: this branch spent THREE CI rounds adding three rows that
+all say the same number, because the pool hands out a chip at random and every
+unrecorded one is a refusal. The rows are appended last, because the first is
+the one the golden carries.

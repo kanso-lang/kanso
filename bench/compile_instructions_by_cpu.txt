@@ -1010,4 +1010,64 @@
 # while compile_allocs, compile_peak_bytes, rounds and visits stay
 # byte-identical. `kanso check lib/json` emits nothing, so the scan door that
 # changed cannot run during the measurement; what moves is layout.
-family0x19-model0x1 41377855
+#
+# 2026-09-05 (sixth), and the table is one row again for the third time in two
+# days. The capture-free closure literal changes BOTH src/codegen.rs and
+# src/runtime.c, so the compiler's own bytes moved twice over and every row
+# went stale with them. CI drew family0x19-model0x11 -- a chip with no row,
+# because the block above had just removed its stale one -- and refused rather
+# than comparing 41,379,503 to somebody else's number. The Zen 3 row it
+# replaces measured the binary before this one and is removed rather than
+# carried forward with a delta applied.
+#
+# This one is not only layout. The emitter writes one global and one call
+# where it wrote an alloca and two stores, so `kanso check lib/json` really
+# does emit different bytes; compile_allocs holds at 25,490 and
+# compile_peak_bytes at 715,275, so the front end does the same work at a
+# different size. That is the tenth move on this vein and the first where the
+# emitted output, rather than the layout under it, is part of the reason.
+#
+# 2026-09-05 (seventh), and this one is a NEW CHIP rather than a re-sitting.
+# The push before it moved only goldens, the log and the pages, so the
+# compiler binary is byte-identical to the one Zen 4 counted; CI then drew
+# family0x19-model0x1, found no row for it and refused. The key is appended
+# LAST, because the first row is what bench/compile_instructions_golden.txt
+# carries and what welfare reads.
+#
+# IT READ 41,379,503 -- Zen 4's value TO THE INSTRUCTION, on the same binary.
+# That is the third binary on which these two AMD models have agreed exactly,
+# after the two recorded on 2026-09-03 and 2026-09-04. The header's standing
+# question is whether the family-and-model key is finer than the effect, and
+# three agreements is now the longest run of evidence that it might be. It is
+# still not enough to collapse the table: the falsification recorded above
+# stands, where the same two models read 41,503,893 and 41,498,829 on one
+# binary and were 5,064 apart. Agreement is a property of a binary's layout
+# and disagreement has been too. The key stays; the third agreement is
+# recorded so that a fourth has something to be the fourth of.
+#
+# 2026-09-05 (eighth), a THIRD chip on the same binary, and the same number
+# again. CI drew family0x6-model0xcf -- the Intel, not an AMD -- and read
+# 41,379,503, which is what both AMD models read. Nothing has changed the
+# compiler since the seventh block: three pushes have moved only goldens, the
+# log and the pages.
+#
+# THAT MEETS THE CONDITION THIS FILE SET FOR ITSELF. The block written on
+# 2026-09-05 (fifth, in kanso#1247's history) said: "If a later change shows
+# the same three keys agreeing again, THAT is the evidence for asking whether
+# the table should collapse -- and it would be an argument made about the
+# table, with the readings behind it, not a tidy-up." This is that second
+# binary. Emerald Rapids, Zen 3 and Zen 4 now agree to the instruction on two
+# different binaries, and the reason is legible: kanso#1241 cut this row down
+# to the compiler's own frame, and the ifunc dispatch the key was invented to
+# separate lives in the loader and libc, outside that frame.
+#
+# The argument is not made here and the table does not collapse in this
+# change, which is a codegen change carrying a fixture and nine goldens. What
+# is recorded is the second reading, so the argument can be made from two
+# rather than from one. What it costs meanwhile is also worth writing down:
+# this branch spent THREE CI rounds adding three rows that all say the same
+# number, because the pool hands out a chip at random and each unrecorded one
+# is a refusal.
+family0x19-model0x11 41379503
+family0x19-model0x1 41379503
+family0x6-model0xcf 41379503

@@ -114,15 +114,37 @@
 # Nine of the twelve benchmark binaries came out byte-identical to the ones
 # before the change, so those rows could not move; widebench's binary differed
 # and its count did not.
-jsonbench 1783183295
-encodebench 5563212521
-oneshot 28623603
-basket 39875796
-widebench 57839394
-deepbench 678049725
+#
+# 2026-09-05 (fifth): the capture-free closure literal. FOUR rows fall and
+# eight rise, and the eight are two different things. work_encodebench lands
+# on 5,527,056,676 (-36,155,845, -0.6499%), work_digestbench on 80,559,329
+# (-436,308, -0.5387%), work_oneshot on 28,533,505 (-90,098, -0.3148%) and
+# work_scanbench on 1,406,247,707 (-50,617). Ten of the twelve deltas are the
+# container's TO THE INSTRUCTION, which is the third consecutive change on
+# which the two hosts have agreed exactly.
+#
+# work_deepbench lands on 716,506,831, a rise of 38,457,106 and 5.6724%, and
+# it is code layout rather than work: the carry walk visits the same nodes to
+# within 0.2% -- k_copy_size is entered 1,534,544 times before and 1,535,314
+# after -- and each visit costs twelve instructions more. The other seven
+# rises are small and the same shape: work_pendbench 700,529,602 (+27,807),
+# work_basket 39,878,996 (+3,200), work_readbench 2,038,397,546 (+3,578),
+# work_jsonbench 1,783,183,673 (+378), work_widebench 57,839,754 (+360).
+# work_escapebench 130,170,757 and work_indexbench 4,792,124 do not move at
+# all -- neither program has a capture-free lambda to convert.
+#
+# The two rows the hosts disagree on are exactly the two whose rise is
+# layout: deepbench by 4,325 and pendbench by 27. A layout effect is a
+# property of the binary the host built, so that is the expected shape.
+jsonbench 1783183673
+encodebench 5527056676
+oneshot 28533505
+basket 39878996
+widebench 57839754
+deepbench 716506831
 escapebench 130170757
-pendbench 700501795
+pendbench 700529602
 indexbench 4792124
-scanbench 1406298324
-digestbench 80995637
-readbench 2038393968
+scanbench 1406247707
+digestbench 80559329
+readbench 2038397546
