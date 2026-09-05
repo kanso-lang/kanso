@@ -58,6 +58,68 @@ research mandate it left with.)
 ## Open, not blocking
 
 
+### Should a chip row still be allowed to pin two values?
+
+**Searched:** the live log's eleventh and twelfth entries of 2026-09-03 pin the
+pair and record the second and third chips showing both values; the archive
+carries the 5,064-apart clusters the glibc tunables closed and proposes no
+pinned pair; `design/*.md` carries none. `bench/compile_instructions_by_cpu.txt`
+quotes the ruling that created the mechanism — "only a residual that survives
+both reopens the question, and then the fallback is the pinned pair, never
+blindness" — and `scripts/gates/compile_ir_row.sh` implements it, capping a row
+at two and refusing a third.
+
+**Why it is asked.** The mechanism was ruled a fallback for a residual of 508
+instructions that survived both named suspects. Two things have happened to
+that premise since, and they point opposite ways, so both are set out here
+rather than summarised.
+
+THE TREE CONTRADICTS ITSELF ABOUT THE 508. The log's twelfth entry says CI
+counted 41,831,767 on `family0x19-model0x1` "on binary sha de5bfab22fbd — the
+same binary every reading in this sequence was taken on", which is a
+within-binary pair and is what the mechanism is for.
+`scripts/gates/compile_instructions.sh` says the opposite in its own comment:
+"What the 508 actually was: two binaries. sha 55fb850296d1 counted 41,831,767
+and sha de5bfab22fbd counts 41,832,275." Same value, two different shas. One of
+those records is wrong and I have not established which; the CI runs that would
+settle it are outside the retention I can read.
+
+AND THE SECOND PAIR WAS DEFINITELY TWO BINARIES. That one is mine and is proved
+off git rather than inferred. kanso#1252 pinned `family0x19-model0x11 41379503
+41380022` as a chip reading both values. It was not: 41,379,503 is the
+pre-kanso#1251 binary, which every chip read at 31c54078, and 41,380,022 is the
+post-#1251 value CI measured on that chip. #1251 changed codegen and re-sat only
+two of the four rows, saying so in its own commit message; I read the leftover
+as a second mode. kanso#1253 corrected it, and the cost was that the objective
+scored against a `compile_instructions` no chip had counted on this binary for
+the interval between.
+
+**What the record now supports.** Five chip keys have read 41,380,022 on the
+current binary — two AMD generations, a third AMD family that had never appeared
+in the pool, and one Intel — and four read 41,379,503 on the one before it.
+Unanimity within each binary, and the binary explaining every difference. That
+is the collapse argument, and it needs no residual at all.
+
+**The question, in two parts.** Should a row pin one value rather than two? And
+should the table carry the compiler binary's sha256, so that a row measured
+against a different binary refuses instead of being carried? The gate already
+prints that sha on every run; the table does not store it, which is exactly how
+a stale value survived long enough to become half a pair.
+
+**Why it is not blocking.** The correction is shipped and the table is
+consistent today. What waits is whether the mechanism stays.
+
+**Cost of each answer.** Keeping the pair keeps a fallback whose premise is at
+best disputed by the tree's own records, and which has absorbed one stale value
+already. Removing it means a compiler change makes every row stale at once and
+CI re-sits them one chip per run — up to five red rounds per binary — unless the
+key collapses too, in which case one row is re-sat and the rest follow.
+
+**Recommendation: one row, one value, and a binary stamp — but the
+contradiction above is the thing to rule on first.** If the log's twelfth entry
+is right, a within-binary pair has been seen once and the mechanism has a
+premise. If the gate's comment is right, it never has.
+
 ### Should the welfare index carry a term for machine-code size?
 
 **Searched:** design/compiler-log.md and the archive carry the weights gavel

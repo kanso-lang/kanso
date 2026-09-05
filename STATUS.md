@@ -272,17 +272,20 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Four questions wait in `design/pending-gavels.md`** — none blocking, four
+**Five questions wait in `design/pending-gavels.md`** — none blocking, five
 open — each with a recommendation. Counted from the ledger on 2026-09-05 by
 reading its headings, which is what this line has always claimed to do and
 had stopped doing: it said nineteen while the ledger held three. Fifteen had
 been gaveled and had left the file as the lifecycle requires, and the count
 here was carried forward instead of recounted. The three standing are the
 compile row's residual layout term, the book teaching the boundary language,
-and the assert hako; the fourth is new today — whether the welfare index
-should carry a term for machine-code size, raised by an inline that buys
-15,427,521 instructions on jsonbench and costs 34,320 bytes across all twelve
-programs.
+and the assert hako. Two are new today: whether the welfare index should carry
+a term for machine-code size, raised by an inline that buys 15,427,521
+instructions on jsonbench and costs 34,320 bytes across all twelve programs;
+and whether a chip row may still pin two values, raised because the tree
+contradicts itself about the 508-instruction residual that mechanism was ruled
+a fallback for, and because the second pair ever written turned out to be two
+binaries.
 
 **The rules that carry forward**, each earned twice:
 
