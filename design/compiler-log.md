@@ -3706,3 +3706,69 @@ Worth writing down that the drift gate reads `git log -1 -- docs/compiler.html`,
 so an uncommitted page edit is invisible to it. It went on reporting five
 entries ahead until the edit was committed, which reads like the fix not
 working.
+
+## 2026-09-05 (eleventh) — the ratchet's touched mode keys on the guard
+
+`kanso run scripts/ratchet -- touched origin/main` proves the rows a branch
+could have made inert. It decided which by reading each mutation's whole script
+and keeping any row that MENTIONED a changed path, and that is the wrong
+question. A mutation carries `grep -q '<literal>' <file>` so that it refuses
+rather than silently applying when the text it patches has moved. That guard is
+the row's dependency on the tree: a change can only make a mutation inert by
+moving what the guard matches. Everything else a script mentions is incidental.
+
+Measured against three merged diffs, on the 73 mutations on disk today:
+
+```
+kanso#1249, 45 changed files    naming 32 rows -> guard 14
+kanso#1252, 21 changed files    naming  7 rows -> guard  1
+kanso#1253, 10 changed files    naming  8 rows -> guard  1
+```
+
+The gap is goldens. A branch that regenerates them has made no mutation inert,
+because a golden guard cannot go stale from a regeneration: over the whole
+corpus exactly two carry a value-shaped number and both are POST-conditions
+checking what the mutation itself just wrote. Every other golden guard matches
+a key name and a digit class — `^jsonbench [0-9]`, `^defines=999999` — which a
+new number still satisfies. So a row whose only touched guard is a golden has
+nothing to prove, and the rule drops it.
+
+### The comment it replaces was wrong by an order of magnitude
+
+It said the intersection is "usually empty and occasionally one to three rows",
+and cited three branches that touched one source file each. True of those, and
+false of any branch that regenerates goldens — which is most performance work.
+The replacement gives a range and names the case it does not help: `src/runtime.c`
+alone carries twelve guards, so a runtime branch selects a large block however
+the rule is written.
+
+### The numbers I shipped were not the numbers I had measured
+
+The change was prepared against 72 mutations and cited 33 → 12 and 8 → 1.
+kanso#1252 added `an_encoder_that_walks_a_clean_string.sh`, and re-measuring on
+today's tree reads 32 → 14 and 7 → 1. Nothing about the rule changed; the corpus
+did. Both readings are in the comment now, with their mutation counts, because a
+figure taken against a moving corpus is an order of magnitude rather than a pin
+— and that is exactly why the three specs beside it assert no count at all.
+
+### The specs
+
+`tests/a_golden_in_the_diff_selects_no_extra_row.rs` drives the rule through a
+new `select` mode, which takes its file list from the command line rather than
+from `git diff`. `touched` asks git, so a spec for it needs a repository shaped
+for the check; `select` is the same rule with the list handed in, so the diffs
+are ones the spec wrote down.
+
+Three properties, each false under the naming rule:
+
+- a goldens-only diff selects nothing (naming: 11 rows)
+- adding goldens to a source diff selects exactly what the source file selects
+  alone
+- every row a source file selects guards on that file — reading the mutations
+  directly rather than trusting the selection, because a rule that keyed on
+  something other than the guard could satisfy the first two and still be wrong
+
+All three were watched red against the rule they replace, and each failed with
+its own message: `14 rows were selected and 12 mutations guard on src/runtime.c`,
+`a goldens-only diff selected 11 rows`, and the equality between the two
+selections.
