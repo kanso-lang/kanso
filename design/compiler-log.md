@@ -4111,11 +4111,18 @@ Same silicon, both binaries, so the fall of **550** is attributable without
 waiting for a second chip. `kanso check lib/json` emits nothing and runs no
 beat loop, so what moved is layout, for the thirteenth time on this vein.
 
-The next round drew `family0x6-model0xcf`, an Intel Emerald Rapids, which read
-**41,377,644** as well: two chips, two vendors, one number on this binary, at
-the cost of one CI round each. That is the table's ordinary behaviour and the
-reason the collapse question in design/pending-gavels.md now carries both
-readings priced.
+The next two rounds drew chips with no row on the new series, and both read
+**41,377,644** as well:
+
+    family0x19-model0x1    AMD Zen 3
+    family0x6-model0xcf    Intel Emerald Rapids
+    family0x1a-model0x2    AMD Zen 5
+
+Three keys, two vendors, three CI rounds, one number. The third is a family
+this vein had never seen — 0x1a is Zen 5, where every AMD row before it was
+0x19 — and it agreed to the instruction on a chip generation the pool had not
+produced before. That is the table's ordinary behaviour and the reason the
+collapse question in design/pending-gavels.md now carries both readings priced.
 **WELFARE 74.21933255238363 -> 74.21937425493788**, a second `--set` with the
 compile row's own reason.
 
