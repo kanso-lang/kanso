@@ -3305,3 +3305,13 @@ named in CLAUDE.md's list of veins to regenerate together, and this session
 regenerated the .mem files and the four code goldens and missed it.
 
 **welfare 74.00**, from 73.99, and `--set` in this same commit.
+
+**A second chip counted the same compile row, and agreed exactly.** The push
+that landed CI's sitting moved only goldens, the log and the pages, so the
+compiler binary was byte-identical to the one Zen 4 had counted. CI then drew
+family0x19-model0x1, found no row and refused, as an unrecorded chip must.
+It read 41,379,503 — Zen 4's value to the instruction. That is the third
+binary on which these two AMD models have agreed exactly, and the key stays
+anyway: the same two models were 5,064 apart on one earlier binary, so
+agreement is a property of a layout rather than of the silicon. The row is
+appended last, because the first is the one the golden carries.

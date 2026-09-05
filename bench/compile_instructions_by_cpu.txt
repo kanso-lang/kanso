@@ -1026,4 +1026,23 @@
 # compile_peak_bytes at 715,275, so the front end does the same work at a
 # different size. That is the tenth move on this vein and the first where the
 # emitted output, rather than the layout under it, is part of the reason.
+#
+# 2026-09-05 (seventh), and this one is a NEW CHIP rather than a re-sitting.
+# The push before it moved only goldens, the log and the pages, so the
+# compiler binary is byte-identical to the one Zen 4 counted; CI then drew
+# family0x19-model0x1, found no row for it and refused. The key is appended
+# LAST, because the first row is what bench/compile_instructions_golden.txt
+# carries and what welfare reads.
+#
+# IT READ 41,379,503 -- Zen 4's value TO THE INSTRUCTION, on the same binary.
+# That is the third binary on which these two AMD models have agreed exactly,
+# after the two recorded on 2026-09-03 and 2026-09-04. The header's standing
+# question is whether the family-and-model key is finer than the effect, and
+# three agreements is now the longest run of evidence that it might be. It is
+# still not enough to collapse the table: the falsification recorded above
+# stands, where the same two models read 41,503,893 and 41,498,829 on one
+# binary and were 5,064 apart. Agreement is a property of a binary's layout
+# and disagreement has been too. The key stays; the third agreement is
+# recorded so that a fourth has something to be the fourth of.
 family0x19-model0x11 41379503
+family0x19-model0x1 41379503
