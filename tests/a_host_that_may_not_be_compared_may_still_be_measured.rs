@@ -16,7 +16,7 @@
 //! sitting is the only one that may ever be recorded.
 //!
 //! Split into its own script so the three answers can be watched without a
-//! callgrind run each time, the same reason `compile_ir_row.sh` is separate.
+//! callgrind run each time.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

@@ -32,10 +32,10 @@ set -e
 # replays that derivation, so a gate added later is a red spec rather than a
 # vein nobody sweeps.
 #
-# TWO ARE DELIBERATELY OUT. `compile_ir_row` reads the same table but is not a
-# gate — it takes four arguments and `compile_instructions` calls it, split out
-# so its refusals could be watched. `build_benchmarks` is not a gate either and
-# says so in its own first line.
+# ONE IS DELIBERATELY OUT. `build_benchmarks` is not a gate and says so in its
+# own first line. `compile_ir_row` used to be the second exclusion; it went with
+# the per-chip table on 2026-09-05, and the compile row now compares against its
+# single golden inside `compile_instructions` itself.
 gates="machine_code emitted_code compile_memory compile_allocs compile_instructions compile_libraries"
 moved=""
 refused=""

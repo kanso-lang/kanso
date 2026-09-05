@@ -8,12 +8,13 @@ is stale — say so.
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
 only indexes it. **Blocking right now: none.** The compile row's drift was the
-last blocking entry, and it is answered: Clay said on 2026-09-04 to force the
-measurement to be consistent rather than rule on the shapes the entry listed,
-so the row counts the compiler's own frame and a golden of five sonames
-watches what it links. The residual — about a thousand instructions of link
-luck, against 29,000 for the smallest front-end change on record — moved to
-"Open, not blocking" with its measurement.
+last blocking entry, and Clay finished it on 2026-09-05: one row, one value.
+The pinned pair and the per-chip key are retired, every move is attributed to
+the change under test and handled by the ordinary ratchet, and consistency is
+verified by reproduction — same build, any runner, same number. A reproduction
+failure halts the vein and is hunted to its source, the way the
+`/proc/self/maps` term was, rather than pinned or recorded as a mode. The
+residual entry that had moved to "Open, not blocking" is retired with it.
 
 That entry was filed carrying a second question, about a 0.008 welfare fall,
 and Clay ruled that half on 2026-09-04: the objective should incorporate the
@@ -24,8 +25,9 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Two questions are waiting, and both carry a recommendation** — neither
-blocking. Counted from the ledger, which is the only place that count is true;
+**Three questions are waiting** — none blocking. Two more left the ledger on
+2026-09-05 in the same sitting as the compile row: machine-code size gets no
+term in welfare, and `.text` stays in its own exact vein. Counted from the ledger, which is the only place that count is true;
 this file said fourteen in one paragraph and sixteen in another until the
 2026-08-29 sitting ruled the rest. The July letters are closed: Clay ruled the
 last five in one sitting on 2026-08-26, and that ruling reached main only on
