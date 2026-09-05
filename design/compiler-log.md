@@ -3820,3 +3820,33 @@ and so must the switch's default — a foreign failure, and the recursion's own
 answer. Adding a digit to the switch's case value turned `base` into `step 0`
 and the sum from 55 into 54 against the interpreter. Reverted; the corpus is
 green.
+
+---
+
+## 2026-09-05 — THE NUMBER THE BRANCH LANDED ON WAS 74.5580, AND THE ENTRY ABOVE SAYS 74.5605
+
+**DONE.** kanso#1266 merged as 1510959a. Its second entry closes with
+"Welfare 74.5533 -> **74.5605**, banked", and that was true when it was written
+and false by the time the branch landed: the third commit took CI's
+`compile_instructions` of 41,461,538 in place of the container's 41,380,256, and
+the floor moved with it. `bench/welfare_floor.json` reads **74.55797330321042**.
+
+The three settings in order, which is what the history file already carries:
+
+    74.5533   the tag switch
+    74.5605   one literal against a generic tail
+    74.5580   CI's compile row, 81,001 instructions higher than the container said
+
+The branch still ratcheted up 0.1004 from the 74.4576 it started at. The middle
+figure was never wrong about its own change; it was set on a compile row that
+had not been measured yet, and the last setting is the first one taken on
+numbers CI produced.
+
+**The commit message of that third commit says "re-set on CI's: 74.5641", and
+that is a mistake in a merged message.** 74.5641 was the floor BEFORE the
+re-set — the value the second commit banked — not after it. The message cannot
+be edited; this entry is where a reader who follows that number finds out it
+names the wrong side of the change.
+
+Nothing else moved. `welfare` on merged main reads 74.56 against a floor of
+74.56 and passes.
