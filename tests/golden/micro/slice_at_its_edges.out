@@ -1,0 +1,12 @@
+two bytes: [104 105]
+one byte: [32]
+the whole of it: [104 105 32 116 104 101 114 101]
+the last byte: [101]
+from below one: []
+backwards: []
+past the end: []
+wholly past the end: []
+a list falls through: [20 30]
+a list past the end: []
+a string falls through: hi
+a string past the end: 

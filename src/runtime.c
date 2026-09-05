@@ -7083,6 +7083,18 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
     return k_int(by->len + 1);
 }
 
+/* The bytes arm of `slice`, with the KValue convention taken off its inputs.
+   A view is a header and two words, so the arithmetic here is four compares
+   and an add; everything before it in `k_b_slice` is the boxing. The emitter
+   reaches this door through the `k_b_slice_fast` shim, which tests the three
+   tags itself; `k_b_slice` below is the same call for anything the shim turns
+   away, and for the list and string containers, which do not come here. */
+KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
+                     long long to) {
+    if (from < 1 || from > to || to > len) return k_bytes_view(data, 0);
+    return k_bytes_view(data + (from - 1), to - from + 1);
+}
+
 KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(fromv)) return fromv;
@@ -7091,8 +7103,7 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     long long from = fromv.payload, to = tov.payload;
     if (container.tag == K_BYTES) {
         KBytes* b = k_as_bytes(container);
-        if (from < 1 || from > to || to > b->len) return k_bytes_view(b->data, 0);
-        return k_bytes_view(b->data + (from - 1), to - from + 1);
+        return k_b_slice_raw(b->data, b->len, from, to);
     }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
