@@ -3850,3 +3850,84 @@ names the wrong side of the change.
 
 Nothing else moved. `welfare` on merged main reads 74.56 against a floor of
 74.56 and passes.
+
+## 2026-09-05 — WHERE ENCODE_ONTO'S 38.20% GOES: 27 INSTRUCTIONS BEFORE ANY ARM RUNS
+
+**DONE (#337).** `d_encodebench/encode_onto_2'2` is 1,730,978,829 instructions,
+38.20% of encodebench and more than twice the next function. kanso#1266's tag
+switch is inside that figure, so what follows is the residual: the arms' own
+work, plus what the merged function costs to enter and leave.
+
+Measured with callgrind at instruction granularity (`--dump-instr=yes`), joined
+to `objdump -d` over the function's 1,794 instructions. 606 of them execute and
+the join accounts for 1,730,978,829 of 1,730,978,829. Grouped by how many times
+each instruction runs, because in a function this shape the execution count is
+what names the path:
+
+    per call    10,581,600 × 27 instrs   285,703,200   16.51% of fn   6.30% of encodebench
+    escape fold 11,658,800 × 29          338,105,200   19.53%         7.46%
+      its exits 12,368,000 ×  5           61,840,000    3.57%         1.36%
+    string arms  4,190,000 × 63          263,970,000   15.25%         5.82%
+    list arms    2,728,400 × 41          111,864,400    6.46%         2.47%
+    map arms     2,240,000 × 44           98,560,000    5.69%         2.17%
+
+**The 27 per-call instructions are three blocks and nothing else.** Twelve at
+the entry: six callee-saved pushes, a 392-byte stack subtraction, three register
+moves, and a two-instruction test for a failing accumulator. Seven for the tag
+switch: bounds test, jump-table index, indirect jump. Eight to leave: stack add,
+six pops, and `ret $0x8`, callee-pops because the dispatchers are `tailcc`.
+
+The frame by itself — the fifteen instructions that push, pop and move the stack
+pointer — is 158,724,000, 3.50% of encodebench. The int arm and the bool arm pay
+it as fully as the map arm does, because the nine arms are one function and its
+frame is the union of what they need. The switch is 74,071,200, 1.63% of
+encodebench; that is what the ladder kanso#1266 removed came down to.
+
+**The escape fold's loop machinery is 399,945,200 inside this function**, 8.83%
+of encodebench, on top of `w_klam17`'s 712,277,200 outside it. The fold is 1.11
+billion instructions over 11,658,800 laps, 24.6% of encodebench — task #304's
+66-a-byte figure, seen from the caller's side.
+
+**The counters cost 29,615,600 here**, 1.71% of the function: twelve
+`cmpl $0x0, k_stats_on(%rip)` sites, one at the head of each inlined in-place
+fast path, sending the work to the out-of-line runtime function when counting is
+on so the counters stay platform-invariant. That is what the measuring apparatus
+costs in one function, and it buys the counters their invariance.
+
+### The arity test in the fold's loop: DECLINED at 0.0783%
+
+`call_twin`'s comment says the ten callable tests it inlines "are loop-invariant
+and LICM can hoist them out of the loop TailCallElim makes of the recursion".
+One of them survives per lap. At `0x6392`, `cmpq $0x2,0x18(%rcx)` reloads the
+closure pointer from its spill slot and re-reads the arity field, 11,658,800
+times.
+
+A closure's `fn` and `arity` are written once, by `k_closure` or
+`k_closure_lit`, and never again: the evacuation at `src/runtime.c:1822`
+repoints a live closure's `env` and touches nothing else, and the copy at 1706
+writes a new object. So both loads can carry `!invariant.load`, which LICM
+honours explicitly. Marking them produced a **byte-identical binary**. The load
+is control-dependent on the tag test, `%c` arrives through an `inttoptr`, and
+LLVM cannot establish the address as dereferenceable well enough to speculate
+the load above its guard.
+
+The test was then deleted outright to price it. Not shippable — a measurement:
+
+    encodebench   4,531,877,717 → 4,528,331,717   −3,546,000   −0.0783%
+    livebench     4,544,488,605 → 4,540,942,605   −3,546,000   −0.0780%
+    digestbench      77,353,042 →    76,296,144   −1,056,898   −1.3663%
+    escapebench     114,597,201 →   114,597,201            0
+
+With the arity branch gone the fold's loop carries `cmpq $0xb,0x38(%rsp)`
+instead — the closure tag test, which the baseline had hoisted. LLVM keeps one
+guard in that loop and substitutes another when you take one away, so one check
+a lap is the floor here. The 3,546,000 is a spill reload disappearing at a
+different site, not a check leaving the fold.
+
+Both changes reverted; `src/codegen.rs` is back at what `1510959a` merged.
+
+**What is left to aim at**, in order of what the profile says it is worth: the
+392-byte frame and the six callee-saved registers, 3.50% of encodebench, which
+only splitting the merged group can reach; the fold's per-lap dispatch, which
+#290 prices at 2.84% and the toolchain blocks; and the string arms' 5.82%,
+which is `text/append` already inlined and running its guards.
