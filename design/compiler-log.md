@@ -20,83 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 (ninth) — the compile row was counting the host's memory map
-
-**DONE (the finding). Clay ruled on the entry the same day, and the ruling is
-option 1 with the term named: make the row deterministic with glibc still
-counted — no pinned pair, no band, no exclusion.** His words: "if changes to the
-compiler can interact with glibc in a way that means generally more/less work,
-which the 'compiler's own instructions' measure would be blind to, then we need
-a way to include glibc's instructions but make them consistent."
-
-That is right, and it kills the fix this session had built. Collecting from
-`kanso::main` and leaving startup out would have made the vein blind to exactly
-the case he names: a compiler change that causes glibc to do more work. The
-toggle is dropped.
-
-What survives is the measurement, because the ruling asks for the term and this
-is the term.
-
-`kanso check` reads `/proc/self/maps` before it reads a line of kanso. glibc's
-`pthread_getattr_np` does it on Rust's behalf, to find the main thread's stack:
-open the file, read it in 1024-byte chunks, `sscanf` each line until the one
-holding the stack pointer turns up. What that costs is a property of the host's
-memory map — how many mappings it has, how long their pathnames are — and this
-vein has been counting it since it was minted.
-
-The container reads the row deterministically, which is what made this
-findable: forty runs of the gate's exact command on one binary returned one
-value forty times. So the knobs below move a number that does not otherwise
-move.
-
-    one more shared library in the process     +32,090
-
-That is an `LD_PRELOAD` of an empty `.so`: four more lines for the parse to
-walk, and thirty-two thousand instructions the compiler never executed.
-Smaller edits to the same text give smaller steps. Lengthening the executable's
-own file name from nine characters to ten moves the row +2,193, and the profile
-diff across that pair names the maps parse and nothing else — `__vfscanf_internal`
-+1,180, `____strtoul_l_internal` +576, `_IO_sputbackc` +88, then `getdelim`,
-`getline`, `_IO_setb` and `pthread_getattr_np` itself. Zero kanso symbols move.
-
-That is the signature the six CI readings recorded: "every kanso symbol agrees
-to the instruction ... three rows differ and all three are glibc". A startup
-term is global rather than per-chip, which is why two of three chips produced
-both values, and why pinning the glibc tunables took the spread from 5,064 to
-508 without closing it.
-
-The 508 itself is the downstream half. What the parse allocates and frees
-before `main` sits under everything the compiler allocates afterwards, so
-`_int_malloc` walks different bins and `memcmp` compares at different
-alignments for an identical request sequence. A second knob isolates that half:
-`argv[0]` at 39 characters rather than 38 moves the row +480, all of it in
-`__memcmp_avx2_movbe`.
-
-**It can be measured out**, which is why this is an instrument repair and not a
-question for Clay. Collecting from the compiler's own entry point rather than
-from `exec`:
-
-    valgrind --tool=callgrind --collect-atstart=no --toggle-collect=kanso::main
-
-                                  raw        toggled
-    one more shared library    +32,090             -6
-    name 9 -> 10 characters     +2,193             +5
-    36 name lengths, spread      2,900             90
-
-Ten toggled runs on one binary returned one value ten times. The residual 90 is
-`argv[0]`, which the box already holds fixed at `./kanso`.
-
-**OPEN — the rewiring itself.** Changing what the gate collects invalidates
-every row in `bench/compile_instructions_by_cpu.txt`, the bare golden the trend
-gate and `golden_prose` read, welfare's baseline for the counter, and the pinned
-figure in the compiler page. Only CI may write those values, one chip per run,
-so it is its own change and lands red until it is re-sat. Two things it owes:
-a guard, because a `--toggle-collect` whose function is missing yields
-`summary: 0` and exit 0 — a silent zero that would be reported as the front end
-moving; and a welfare re-baseline in the same commit, because the number falls
-by about 1% without a single instruction of work being removed, and banking that
-as a win would be recording an instrument change as an improvement.
-
 ## 2026-09-03 — gavel: the bimodal row is made deterministic, not excused
 
 On "The compile-instructions row is bimodal" (#265), Clay declined
@@ -3330,3 +3253,91 @@ recording beside it: this branch spent THREE CI rounds adding three rows that
 all say the same number, because the pool hands out a chip at random and every
 unrecorded one is a refusal. The rows are appended last, because the first is
 the one the golden carries.
+
+## 2026-09-05 (sixth) — ten cost goldens, and the file that said four
+
+**Searched first**, as the filing gate requires. `grep -n "cost golden"
+design/compiler-log.md design/log/compiler-log-archive.md CLAUDE.md` returns the
+counter-regeneration rule in several places and no entry proposing a single
+local sweep; `ls scripts/gates/*counters*.sh` returns ten files and nothing in
+the tree runs them together.
+
+### What the gap cost
+
+kanso#1249's first push regenerated the mem vein, the four code goldens and the
+wasm blob, and missed nine `bench/cost_golden*.txt` files and two book panels.
+CI found them a round late. The cause was not carelessness about the list, it
+was the list: CLAUDE.md's "Counters changed → regenerate every vein in the same
+PR" said **all four cost goldens**, and there are ten. A session that read the
+instruction and followed it exactly would still have missed six.
+
+### The sweep
+
+`scripts/gates/all_counters.sh` builds the benchmarks once, then walks a table
+of ten `vein:program:golden` rows and diffs each measured file against its
+golden with the comment headers stripped. It does not stop at the first
+disagreement — the point of having one command is to learn about all ten in one
+run — and it prints `counters moved: …` naming every vein that differs.
+`--write` rewrites the data rows in place while preserving each golden's
+comment header, which a `cp` of the measured file destroys;
+`bench/cost_golden_wide.txt` and `bench/cost_golden_pend.txt` both carry one.
+
+### The spec, watched red
+
+`tests/every_counter_gate_is_in_the_sweep.rs`, three tests.
+
+The first compares the sweep's table against `scripts/gates/*_counters.sh` on
+disk, so a gate added without a row turns it red. Its first version demanded a
+row for a vein called "all", because the glob matched `all_counters.sh` itself;
+that is recorded in the test's doc comment as how it proved it could fail. The
+second checks that every row names a golden and a program that exist.
+
+The third extracts the word immediately before "cost goldens" in CLAUDE.md and
+compares it to the number of `bench/cost_golden*.txt` files. With "four"
+restored it reads *there are 10 cost goldens and CLAUDE.md counts them "four"*.
+It was written wrong the first time: it asserted that the claim contained "10",
+which is true with "four" written, because the same line names the ch10
+counters sample. A spec that cannot fail is what this log has caught more than
+once, and this one was caught by trying to break it before believing it.
+
+### The sweep run against two real trees
+
+Green on a clean tree, and green again on a tree carrying an unrelated
+runtime.c change that moves instructions but no counted event — which is the
+answer that change needed and could not otherwise have had cheaply.
+
+Watched red by perturbing `allocs` in two goldens at once. It reports BOTH:
+
+    === encode (bench/cost_golden_encode.txt)
+    1c1
+    < allocs=999999
+    ---
+    > allocs=14830625
+    === pend (bench/cost_golden_pend.txt)
+    1c1
+    < allocs=888888
+    ---
+    > allocs=4007400
+    counters moved: encode pend
+    run with --write to regenerate them, then say why in design/compiler-log.md
+
+Exit 1 when anything moved, 0 when nothing did. Not stopping at the first
+disagreement is the property worth having: a session that learns about one
+moved vein per build learns slowly.
+
+### Two CI rounds this branch could not have avoided
+
+The first was mine: the row check asserted `bench/<program>` exists, and
+`bench/jsonbench/` is gitignored and written by `bench/make_jsonbench`, so it
+is in any tree that has run the benchmarks and in no fresh clone. It read
+state the repository does not carry, which is the shape of the bug this whole
+file is about. The fix accepts either the directory or its generator.
+
+The second was the compile row. CI drew `family0x6-model0x6a`, an Ice Lake-SP
+with no row in `bench/compile_instructions_by_cpu.txt`, and refused — on a
+value of 41,379,503, which is what the three recorded chips read. That is
+four keys reading one number on one binary, and nothing here touches the
+compiler: CLAUDE.md, a shell script and a Rust test file are none of them
+`include_str!`'d. The row is recorded with the reading beside it. The
+argument for collapsing the table still has the 5,064-instruction
+falsification to answer and is not made here.

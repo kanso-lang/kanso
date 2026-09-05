@@ -1068,6 +1068,24 @@
 # this branch spent THREE CI rounds adding three rows that all say the same
 # number, because the pool hands out a chip at random and each unrecorded one
 # is a refusal.
+#
+# 2026-09-05 (ninth), a FOURTH chip, and the same number a fourth time. CI
+# drew family0x6-model0x6a -- an Ice Lake-SP, the second Intel -- and read
+# 41,379,503, which is what the two AMDs and Emerald Rapids read. The branch
+# it refused on touches CLAUDE.md, a shell script and a Rust test file, none
+# of which the compiler include_str!s, so the front end is byte-identical to
+# the one the other three rows counted.
+#
+# Four keys, one binary, one number. The block above set the condition for
+# arguing the table down to a single row and said the argument would be made
+# from the readings; there are four of them now. It is still not made here:
+# this is a row being added so a refusal stops, and the falsification two
+# blocks up -- the same two AMD models 5,064 apart on one binary -- is what
+# the argument has to answer.
+#
+# The cost of not making it is this branch: two CI rounds, one to learn the
+# chip and one to record it, on a change that cannot touch this number.
 family0x19-model0x11 41379503
 family0x19-model0x1 41379503
 family0x6-model0xcf 41379503
+family0x6-model0x6a 41379503
