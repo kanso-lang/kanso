@@ -20,75 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-04 — THE ROW COUNTS THE PROGRAM NOW, AND THREE QUARTERS OF THE LINKER'S LUCK GOES WITH IT
-
-**DONE, and it closes the last blocking entry in the ledger.** The entry asked
-whether a term whose movement is dominated by binary layout should set a
-ratcheted floor. Clay answered by redirecting the question — "can you not force
-that to be consistent with some initial setup that's specific to specs?" — and
-he was right that I had conflated two things. The 2026-09-03 ruling was NO
-EXCLUSION of glibc. Excluding the process's own startup is a different act and
-nobody had ruled on it.
-
-`scripts/gates/compile_instructions.sh` now reads `std::rt::lang_start::
-{{closure}}` inclusive out of the callgrind profile instead of the summary
-line. That frame is everything `main` does, so every libc call the compiler
-makes is still counted; what it drops is the 465,122 instructions above it —
-the loader mapping five shared objects, and Rust placing its stack guard, which
-parses `/proc/self/maps` with `getline` and `sscanf` and therefore moves with
-where the linker happened to put things.
-
-**How much it buys, on seven binaries whose sources differ only in code or data
-nothing reaches:**
-
-    variant           .text     row         maps     program
-    baseline          2550854   42,344,081  112,580  41,878,959
-    +50 dead fns      2552534   42,348,024  114,845  41,879,987
-    +200 dead fns     2558486   42,347,128  112,586  41,879,361
-    +400 dead fns     2565174   42,348,044  110,341  41,879,922
-    +3 KiB .bss       2550854   42,346,221  114,720  41,878,959
-    +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
-    +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959
-
-Whole process spans 3,963; the frame spans 1,028.
-
-**THE FIRST READING WAS WRONG AND THE CORRECTION IS THE INTERESTING PART.** Four
-binaries measured earlier — baseline, +3 KiB .bss, +64 KiB .bss, +64 KiB
-.rodata — gave 41,878,959 four times, and I wrote invariance into three files
-on the strength of it. Those are all DATA changes. The `.text` case had never
-been probed with the frame read out, and it does not hold: 7,632 bytes of code
-no execution reaches moves the frame 402, and the movement is not monotone in
-`.text` — fifty dead functions move it more than four hundred do. The first
-`.text` probe I ran was contaminated too, because it reached the functions
-through an environment variable, which is executed work; the honest version
-keeps them with a `#[used]` array of function pointers and calls nothing.
-`scripts/compile_row_probe.sh` said "ALL of that movement is in `maps`" and now
-says what the seven binaries show.
-
-**WHAT THE SPLIT GOES BLIND TO, and the guard for it.** Startup work scales
-with what gets loaded, so the one compiler change that moves the dropped half is
-growing a dependency — one more shared object measured at about 32,090.
-`bench/compile_libraries_golden.txt` pins the five sonames `ldd` reports and
-`scripts/gates/compile_libraries.sh` diffs them. A new dependency now turns red
-saying `libfoo.so.1 appeared` rather than showing 32,090 mixed into a term that
-moves 3,963 for nothing. Watched red both ways before it shipped: dropping
-`libm.so.6` from the golden, and adding a name that is not there.
-
-**The ratchet row's mutation is `a_library_the_row_cannot_see.sh`**, and it
-links Rust's standard library dynamically with `-C prefer-dynamic` rather than
-editing the golden — an edit to the golden would prove nothing about the thing
-being guarded. Watched red on the real gate: `> libstd-46d936097e8c5b85.so`.
-Its anchor is the absence of `.cargo/config.toml`, so a repo that grows one
-stops the mutation instead of silently appending into it.
-
-**OPEN.** The goldens still hold whole-process values and CI has to re-sit them
-under the new definition, which is a deliberate red round. When it does, the
-welfare baseline `compile_instructions: 57029831` owes a correction of the same
-size as the drop on that host — the startup half is an additive constant the
-old baseline also paid, so leaving it alone would read a measurement change as
-a free win. That correction and the re-sitting land together.
-
-
 ## 2026-09-04 — THE ANCHOR WAS THE STANDARD LIBRARY'S, AND CI REFUSED IT
 
 **DONE, and it corrects the entry above.** That entry said the row reads
@@ -3497,3 +3428,66 @@ sequence inlined eighteen times. Deciding the sign once rather than per site is
 the next thing to measure. The double forwarder is NOT the cost and does not
 need measuring again: `klam17` never appears in the profile, LLVM collapsed both
 frames into `w_klam17`.
+
+---
+
+## 2026-09-05 — the escape reducer's frame costs more than its work, and three repairs died first
+
+**MEASURED, nothing built.** After the bytes view inlined, `w_klam17` — the
+C-ABI wrapper `k_closure_lit` points at, called through a function pointer by
+`list/fold` — is the second-largest line in the encode profile: 11,658,800
+calls, 712,888,240 instructions, **61.15 a byte** of every string escaped.
+callgrind `--dump-instr=yes` over 244 distinct instructions:
+
+    11,658,800 x 17 = 198,199,600  (27.80%)  every call
+    11,658,000 x 11 = 128,238,000  (17.99%)  every call but 800
+     9,834,000 x 24 = 236,016,000  (33.11%)  the clean byte, 84.3% of calls
+     9,833,200 x  5 =  49,166,000  ( 6.90%)  clean
+    ~450,000 x ~40  =  68,800,000  ( 9.66%)  the escape cases, 3.9% of calls
+
+A clean byte costs about fifty-three and the escape machinery is under a tenth
+of the line.
+
+**The twenty-eight fixed instructions are the frame**, disassembled and named
+rather than inferred. Prologue: `push %rbp %r15 %r14 %r13 %r12 %rbx`,
+`sub $0x18,%rsp`, two argument moves, the failure test, the byte test and the
+range ladder. Epilogue: two stores, `add $0x18,%rsp`, six pops, `ret`. Six
+callee-saved registers pushed and popped per input byte is 12 x 11,658,800 =
+**139,905,600, 2.84% of encodebench**; with the stack slot and the ret,
+174,882,000, 3.55%. The tag work is about eleven instructions.
+
+The frame is the body's doing, and the program's three lambda wrappers give the
+relationship in one disassembly pass: 692 instructions of body pushes six
+registers, 68 pushes four, 53 pushes three. So the clean path pays for the
+escape path's register pressure. That makes this a number for the `preserve_none`
+thread, which wants LLVM 19 against CI's clang 18.1.3 and stays blocked. The
+unblocked shape is the split `k_b_append_grow` already uses in C — a small hot
+leaf tail-calling a cold half — and it is not measured.
+
+**THREE REPAIRS DIED BEFORE ANY WAS BUILT**, which is the part worth keeping.
+The append twin normalises a builder's capacity with a `neg`, a compare and a
+conditional move, and that shape appears eighteen times in the reducer's machine
+code.
+
+1. I read eighteen as a per-byte cost. They are eighteen inlined CALL SITES and
+   one byte takes one path, so the normalisation costs about three of the 61.
+   The ceiling on removing it entirely was 0.7% of encodebench, not 5%.
+2. It cannot be removed. The sign of `cap` records the storage regime — positive
+   from the arena, negative malloc'd and permanent so a rewind cannot reach it.
+   `k_buf_perm` writes `-cap`, `k_buf_cap` normalises with the same abs, and
+   `k_buf_donate` refuses a negative one to the arena's shelf.
+3. It cannot be hoisted to the fold's entry either, which was the surviving
+   idea. `k_b_append_grow` writes `a->cap = marked` on the mutating path and
+   picks the sign per call from the beat depth and whether the header survives
+   the innermost mark, so a live accumulator's regime flips mid-fold on every
+   growth. There is no invariant.
+
+All three came out of reading two functions. The first is the one to remember:
+a static instruction count is not a dynamic one, and I had the arithmetic
+backwards before the disassembly corrected it.
+
+**Also recorded, so nobody re-measures them.** The emitter writes two forwarders
+for one lambda — `klam17` musttailing the body and `w_klam17` wrapping it — and
+they cost nothing: `klam17` never appears in the profile, LLVM collapsed both
+frames. And removing the escape fold's closure outright was measured earlier at
+livebench +3.01%; the beat is why the closure form is cheaper.

@@ -283,6 +283,16 @@ Only Clay arms, disarms or retimes it.
   and repeat. A PR is not "shipped" until this loop closes; saying
   otherwise is false reporting. (Auto-merge silently failed to fire on
   green PRs more than once, and stale docs sat live for hours.)
+- **Reading the cost-goldens job takes two sources, and neither alone is it.**
+  Its eighteen counter steps are `continue-on-error`, so the per-step
+  conclusions the API returns say SUCCESS even when the gate failed — on
+  kanso#1262 the API reported `how much work` and `compile instructions` green
+  while the job's own vein summary said `work:failure` and `compile
+  instructions:failure`, and that summary is the step that fails the job. So
+  the summary block (`for vein in "emitted:success" ...`) is the authority for
+  those eighteen, AND it omits the trend gate and `page_drift`, whose own
+  step conclusions are reliable. Read both. Every other job in the run can be
+  read from its steps.
 - **Opening a PR without arming a wake is how one gets abandoned.** In a
   container nothing runs between turns: a session is woken by a subscription
   or a scheduled check-in and by nothing else. So the moment a PR is opened,
