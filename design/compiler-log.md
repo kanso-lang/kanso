@@ -3461,6 +3461,34 @@ table and 8.09% after, and the pair table's own price at the function level is
 comparable — three encode changes landed between them and each moved the
 denominator — so the page now names the day for each figure.
 
+**CI'S SITTING, and the two hosts agree on every delta to the instruction.**
+The container may measure the runtime vein but may not record it — its glibc is
+2.39-0ubuntu8.7 against the golden's 2.39-0ubuntu8.8 — so `bench/instructions_
+golden.txt` carries CI's rows. The absolute numbers differ from the container's
+by a constant few hundred, which is the host offset this vein has always had;
+the DELTAS are identical, benchmark by benchmark, which is the reproduction the
+one-row-one-value ruling asks for:
+
+    work_jsonbench    1,736,104,978 -> 1,732,115,129   -0.2298%
+    work_encodebench  5,094,896,927 -> 4,921,267,712   -3.4079%
+    work_oneshot         27,103,536 ->    26,642,853   -1.6997%
+    work_basket          38,562,384 ->    38,534,370   -0.0726%
+    work_widebench       56,003,869 ->    55,731,854   -0.4857%
+    work_digestbench     77,290,245 ->    77,290,229        -16
+    work_livebench    5,084,687,524 -> 4,911,031,714   -3.4153%
+    work_deepbench 707,820,204, work_escapebench 120,585,599,
+    work_pendbench 666,093,569, work_indexbench 4,692,194,
+    work_scanbench 1,395,689,898, work_readbench 2,038,392,076: unmoved
+
+**The compile row falls too: compile_instructions 41,377,380**, from 41,378,764,
+a fall of 1,384. src/codegen.rs is the compiler's own source, so a shim added to
+it moves the compiler's bytes and the layout under them; the front end does the
+same work. This is the first move of that row under the one-row-one-value
+ruling, and it is settled the way the ruling says: attributed to the change
+under test, regenerated, and named here.
+
+**welfare 74.2879 -> 74.3720**, and the floor is set in this change.
+
 **OPEN — the escape reducer is 61.1 instructions a byte.** After this change
 `w_klam17` is 14.47% of encode: 11,658,800 calls for 712,277,200 instructions.
 Its compiled body carries eighteen copies of the append twin's `neg`/`cmp`/
