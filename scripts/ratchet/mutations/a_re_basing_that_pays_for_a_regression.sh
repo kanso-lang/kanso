@@ -22,7 +22,21 @@
 # nothing about how the move was CLASSIFIED. What must refuse this branch is
 # the pure-regression rule: jsonbench got worse, the re-basing is not a win,
 # and no history entry attributes the fall.
+#
+# THE VEINS ARE PUT BACK TO THE BASE FIRST. The pure-regression rule is about
+# the whole branch and not about this file, so a branch that improved a counter
+# of its own pays for the worsening below and the row proves nothing. It went
+# blind exactly that way on kanso#1245: eleven work rows fell there, and the
+# gate read the mutation's rise as a trade rather than a regression. Resetting
+# the two vein directories leaves the three edits below as the only moves the
+# gate can see, on any branch.
 set -e
+base=origin/main
+git rev-parse --verify --quiet "$base" >/dev/null || {
+  echo "this mutation resets the veins to $base, which is not here; fetch it" >&2
+  exit 1
+}
+git checkout "$base" -- bench tests/golden/mem
 grep -q '^compile_instructions=[0-9]' bench/compile_instructions_golden.txt || {
   echo "the compile row changed shape; this mutation needs rewriting" >&2
   exit 1

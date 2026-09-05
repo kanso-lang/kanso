@@ -43006,3 +43006,34 @@ Every row is CI's own most recent reading now and nothing is predicted from
 another chip. Whether that is a stable arrangement or a coin flip per run is
 the question in design/pending-gavels.md, unchanged by this reading except
 that it is now five measurements rather than four.
+
+## 2026-09-03 (seventh) — two of three chips have produced both values
+
+A run against the fully recorded table — all three chips present, every row
+from CI's own sitting — counted 41,831,767 and refused. The only row not
+already holding that value is Zen 3, which read 41,832,275 eighteen minutes
+earlier on the same binary.
+
+| chip | on sha de5bfab22fbd |
+| --- | --- |
+| family0x6-model0xcf | both values, twelve minutes apart |
+| family0x19-model0x1 | both values, eighteen minutes apart |
+| family0x19-model0x11 | the low value once |
+
+**So the mode is not a property of the silicon.** Two of three chips have
+produced both, on one binary, with byte-identical CPU feature blocks where
+those were compared. The modes are GLOBAL and the key
+`bench/compile_instructions_by_cpu.txt` is built on separates nothing.
+
+That simplifies what is filed rather than complicating it: what wants
+recording is two acceptable values for the vein, not two per chip. The
+ledger entry says so now.
+
+**The rows are not flipped to the value just seen**, and this is the entry
+that has to say why, because six readings in one afternoon is exactly the
+pressure under which a session starts chasing. Setting each row to whatever
+CI last read would make the gate green and would delete the finding, and the
+finding is the only thing here worth having. They stay as measured.
+
+Six readings is enough to decide on, so further ones go into the ledger's
+table rather than earning entries here.

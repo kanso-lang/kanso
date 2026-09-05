@@ -20,37 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 (seventh) — two of three chips have produced both values
-
-A run against the fully recorded table — all three chips present, every row
-from CI's own sitting — counted 41,831,767 and refused. The only row not
-already holding that value is Zen 3, which read 41,832,275 eighteen minutes
-earlier on the same binary.
-
-| chip | on sha de5bfab22fbd |
-| --- | --- |
-| family0x6-model0xcf | both values, twelve minutes apart |
-| family0x19-model0x1 | both values, eighteen minutes apart |
-| family0x19-model0x11 | the low value once |
-
-**So the mode is not a property of the silicon.** Two of three chips have
-produced both, on one binary, with byte-identical CPU feature blocks where
-those were compared. The modes are GLOBAL and the key
-`bench/compile_instructions_by_cpu.txt` is built on separates nothing.
-
-That simplifies what is filed rather than complicating it: what wants
-recording is two acceptable values for the vein, not two per chip. The
-ledger entry says so now.
-
-**The rows are not flipped to the value just seen**, and this is the entry
-that has to say why, because six readings in one afternoon is exactly the
-pressure under which a session starts chasing. Setting each row to whatever
-CI last read would make the gate green and would delete the finding, and the
-finding is the only thing here worth having. They stay as measured.
-
-Six readings is enough to decide on, so further ones go into the ledger's
-table rather than earning entries here.
-
 ## 2026-09-03 (eighth) — what a failing test is allowed to tell you
 
 `design/pending-gavels.md` has carried the assert hako since 2026-08-17 with
@@ -2771,3 +2740,114 @@ so a socket read going from a 260 MB peak to 2 MB scores zero. readbench does
 not close it — that benchmark splits a string 200 times, which is the read
 beat's repair and not the builtins. It is open on purpose, with its reason
 written where it was filed.
+
+## 2026-09-04 — where a program claims its stack
+
+Searched first: the archive's 2026-08-31 entry on `k_b_append_grow` is the
+nearest thing, and it is about a runtime helper's callee-saved prologue rather
+than about the emitted module. Nothing in the log, the archive or the compiler
+page mentions where an `alloca` stands. This is new.
+
+The emitter wrote each call's argument array in the block that filled it. A
+record built inside an `if` arm put its array in that arm; a dispatch arm the
+same. Sixty-eight of the decoder's seventy-three stack slots stood outside
+their function's first block, and LLVM reads a slot placed there as a dynamic
+stack object whatever its size: the function keeps a frame pointer it would
+otherwise omit, restores `rsp` through it on every return path, and claims the
+slot again on each pass instead of once.
+
+Callgrind, on jsonbench before the change: `push`/`pop`/`leave` are 252,410,292
+of 2,098,864,058 instructions, 12.03% of the decode. The frame pointer's own
+share — `push %rbp`, `mov %rsp,%rbp`, `pop %rbp` and the `lea -0xN(%rbp),%rsp`
+that restores the stack — is 51,317,285 of those. The rest is callee-saved
+registers, which a fixed frame does not remove.
+
+The fix holds every `alloca` back at a single choke point in `FnEmit` and
+writes them at the head of the entry block, so a site nobody has written yet
+gets the placement too. Hoisting them by hand in the `.ll` measured the same
+number as the compiler change does, which is how the size of the move was known
+before any Rust was written.
+
+```
+    jsonbench     2,098,864,058 -> 1,914,624,003   -8.778%   (container)
+    encodebench   5,847,000,948 -> 5,808,061,875   -0.666%
+    oneshot          31,431,613 ->    30,109,010   -4.208%
+    basket           40,300,171 ->    39,933,683   -0.909%
+    widebench        59,384,053 ->    58,446,988   -1.578%
+    deepbench       675,925,724 ->   678,046,033   +0.314%
+    escapebench     130,170,750 ->   130,170,344   -0.000%
+    pendbench       715,732,721 ->   702,115,194   -1.903%
+    indexbench        5,242,362 ->     5,241,703   -0.013%
+    scanbench     1,423,437,575 -> 1,425,333,592   +0.133%
+    digestbench      81,256,592 ->    80,996,019   -0.321%
+    readbench     2,000,657,821 -> 2,000,657,400   -0.000%
+```
+
+These are the container's numbers and its glibc is not the runner's, so
+`bench/instructions_golden.txt` is regenerated from CI's own sitting rather
+than from here. CI counted, on the same commit:
+
+```
+    jsonbench     2,098,864,471 -> 1,914,624,416   -8.778%   (runner)
+    encodebench   5,847,000,948 -> 5,808,062,274   -0.666%
+    oneshot          31,431,613 ->    30,109,409   -4.207%
+    basket           40,300,171 ->    39,934,096   -0.908%
+    widebench        59,384,053 ->    58,447,401   -1.578%
+    deepbench       675,925,724 ->   678,049,713   +0.314%
+    escapebench     130,170,750 ->   130,170,743   -0.000%
+    pendbench       715,732,721 ->   702,115,580   -1.903%
+    indexbench        5,242,362 ->     5,242,116   -0.005%
+    scanbench     1,423,437,575 -> 1,425,334,005   +0.133%
+    digestbench      81,256,592 ->    80,996,418   -0.320%
+    readbench     2,000,657,821 -> 2,000,657,813   -0.000%
+```
+
+**work_deepbench rises to 678,049,713 and work_scanbench to 1,425,334,005.**
+Those are the two the container also had rising, to the same third decimal
+place, and they are the two whose `.text` grows most — scanbench by 3,424
+bytes and deepbench by 128. Neither is a change to what those programs do:
+every allocation counter in both is byte-identical, the emitted line count is
+byte-identical, and the source they run is untouched. What moved is the layout
+LLVM had to schedule against. They are bought by the ten that fall, which the
+welfare number prices at 73.53 -> 73.73.
+
+**compile_instructions 41,379,840 -> 41,377,711**, a fall of 2,129: the emitter
+holds a `Vec` of slot lines per function and splices it, and that is cheaper
+than what it replaced. The per-chip table is re-sat down to the one row CI
+measured, Zen 3. The other three keys were all reading 41,379,840, and they
+measure a compiler that no longer exists — removed rather than carried with the
+delta applied, the same call the Zen 4 row got on 2026-09-03. Ten rows fall and two rise. The two that rise are the two whose
+`.text` grows most, which is the shape to expect: a fixed frame gives LLVM a
+different layout to schedule against and it inlines differently in both
+directions.
+
+Not one allocation counter moves. All ten counter gates are byte-identical, and
+so is `bench/emitted_golden.txt` — the same lines are written either way and
+only their order changes. That is the reason this needed a spec of its own:
+`tests/a_stack_slot_stands_in_the_entry_block.rs` builds a record in each arm
+of an `if` and reads the emitted `.ll`. Watched red before it was watched green,
+reporting two of three slots adrift in `d_slot/pick_1`.
+
+**text 1,070,072 -> 1,074,552.** Six rows fall, six rise, none by more than
+2.4%, and the largest single move is scanbench 145,106 -> 148,530. jsonbench
+spends 672 bytes here for 184 million instructions.
+
+**welfare 73.53 -> 73.73**, floor set in the same commit.
+
+**A ratchet row went blind on this branch, and the row was right.**
+`a_re_basing_that_pays_for_a_regression` writes a re-basing beside a plain
+worsening and requires the trend gate to refuse under the pure-regression rule.
+Here it stayed green: the branch's own eleven falling work rows sat on the other
+side of the mutation's rise, so the gate read a trade. The rule is about the
+whole branch and the mutation was only about its own three files, which is a
+hole any improving branch would have opened. It now resets `bench` and
+`tests/golden/mem` to the base before it edits, so the three values it writes
+are the only moves the gate can see. Watched red afterwards, and for the row's
+own reason: `RE-BASED ... compile_instructions` followed by the pure-regression
+refusal.
+
+**OPEN — what the callee-saved registers cost.** Removing the frame pointer
+leaves 201 million instructions of `push`/`pop` on jsonbench, 9.6% of the
+decode. The decoder is a chain of mutually tail-calling functions, and a tail
+call pops the whole frame before its `jmp` and the target pushes it again. That
+is a different question from this one and nothing here answers it.

@@ -449,15 +449,24 @@
 # 110,594 -> 108,514 — 1,936 to 2,080 bytes each, and the seven programs that
 # do not dispatch on bytes do not move at all. The dispatch tree stopped
 # rebuilding a KValue from a raw byte only to pull it apart again.
-jsonbench text=86002
-encodebench text=107122
-oneshot text=109154
-basket text=100306
-widebench text=110578
-deepbench text=69602
-escapebench text=52306
-pendbench text=83474
-indexbench text=54162
-scanbench text=145106
-digestbench text=102738
-readbench text=49522
+# 2026-09-04 (a stack slot stands in the entry block): six rows fall and six
+# rise, none by more than 2.4%, and the largest single move is scanbench 145,106
+# -> 148,530. The argument arrays now stand at the head of each function instead
+# of in the block that fills them, which takes the frame pointer and the `rsp`
+# restore out of the functions that had one and leaves LLVM a fixed frame to
+# lay out. It then inlines and schedules differently, in both directions: the
+# work vein falls on ten of twelve benchmarks and rises on two, and this vein
+# does the same without the two agreeing on which. jsonbench spends 672 bytes
+# here to save 184 million instructions.
+jsonbench text=86674
+encodebench text=106738
+oneshot text=109298
+basket text=100786
+widebench text=110258
+deepbench text=69730
+escapebench text=52258
+pendbench text=83218
+indexbench text=54050
+scanbench text=148530
+digestbench text=103426
+readbench text=49586
