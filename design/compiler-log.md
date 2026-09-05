@@ -3570,8 +3570,17 @@ a `noinline, cold` helper did not shrink the frame and split the rows:
 encodebench -19,655 against **jsonbench +1,063,826 (+0.061%)**. A decode-side
 rise for an encode-side rounding error; the objective would decline it.
 
-**`compile_instructions` is CI's**, as the entry above says: this container
-refuses three of the six compile gates.
+**`compile_instructions` lands on 41,380,537**, a rise of 2,073 from 41,378,464,
+and it is the compiler reading itself again: `src/runtime.c` is `include_str!`'d
+into the compiler, so the carve, the failing-field arm and the comment above
+them are lines the compiler carries and writes out for clang. This container
+refuses three of the six compile gates, so the value is CI's, read out of the
+job log rather than measured here.
+
+CI's `work` and `machine code` veins were both green on the first round of this
+change: every instruction row and every `.text` row landed on the value written
+in ahead of the sitting. That is five consecutive changes on which the container
+and the runner have agreed to the instruction.
 
 **One question does NOT go to Clay, and the search is why.** kanso#1264 left
 "an emitter-level notion of a cold dispatch arm" as a ledger item.
