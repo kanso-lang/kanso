@@ -182,9 +182,51 @@
 # per cent. escapebench rises by 2. No allocation counter moves. Every .text
 # row grows, by 64 bytes on escapebench to 2,304 on scanbench, in proportion to
 # how many literal sites each program has.
+#
+# 2026-09-05 (the entries pair goes on the stack): THREE rows fall and TEN hold
+# exactly still. k_b_entries built each map entry's two fields in an arena
+# block and handed that block to k_rec, which copies its arguments into the
+# storage after the record header and keeps no reference to them -- so the
+# block was written once, read once and dropped. It is a stack array now.
+#
+#   encodebench  4,921,267,712 -> 4,893,408,112  -27,859,600  -0.5661%
+#   livebench    4,911,031,714 -> 4,883,172,114  -27,859,600  -0.5673%
+#   oneshot         26,642,853 ->    26,573,204      -69,649  -0.2614%
+#
+# encodebench and livebench fall by the SAME 27,859,600, which is the two
+# benchmarks running one program over one input against two copies of the
+# library. The ten that hold render no map through `entries` -- jsonbench only
+# decodes -- and that they are EXACTLY still is the check that the three falls
+# are the change rather than the weather.
+#
+# The rows above are the container's deltas applied to CI's landed values: it
+# measured 4,921,267,372 -> 4,893,407,772 and 26,642,513 -> 26,572,864 on its
+# own pair of builds, the fixed 340 being the exec path this vein's header
+# warns about. CI's own sitting is the record and corrects these if they
+# differ.
+#
+# 2026-09-05 (one block for a map's records): THREE rows fall and TEN hold
+# exactly still, the same three and the same ten as the entry above.
+# k_b_entries carved each entry's record out of its own arena bump; the records
+# were already landing next to each other, since k_alloc only moves a pointer,
+# so it takes one block for all n and carves it. 3,344,400 records over
+# 1,104,400 calls means two bumps in every three were bookkeeping for a block
+# the one before them had already reserved.
+#
+#   encodebench  4,893,408,112 -> 4,739,440,912  -153,967,200  -3.1463%
+#   livebench    4,883,172,114 -> 4,729,204,914  -153,967,200  -3.1530%
+#   oneshot         26,573,204 ->    26,188,286      -384,918  -1.4485%
+#
+# encodebench and livebench fall by the SAME 153,967,200 again -- one program,
+# one input, two copies of the library -- and 68.7 instructions a bump saved.
+# The rows are the container's own A/B deltas applied to CI's landed values: it
+# measured 4,893,407,772 -> 4,739,440,572 and 26,572,864 -> 26,187,946 on its
+# own pair of builds. The previous change's three predictions landed to the
+# instruction, which is why this one is written the same way; CI's sitting is
+# still the record.
 jsonbench 1732115129
-encodebench 4921267712
-oneshot 26642853
+encodebench 4739440912
+oneshot 26188286
 basket 38534370
 widebench 55731854
 deepbench 707820204
@@ -194,4 +236,4 @@ indexbench 4692194
 scanbench 1395689898
 digestbench 77290229
 readbench 2038392076
-livebench 4911031714
+livebench 4729204914
