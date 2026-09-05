@@ -20,339 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 (eleventh) — one binary, one chip, two values: the pair is pinned
-
-**DONE.** Closes the OPEN half of the entry above, which had the two suspects
-tested and the answer outstanding. Searched the live log and
-`design/log/compiler-log-archive.md` for prior treatments of the compile row's
-spread before filing: the archive carries the 5,064-apart clusters that the
-glibc tunables closed, and the live log carries the ninth and tenth entries.
-Nothing there proposes a pinned pair, so this is new.
-
-**Both suspects are falsified, and `setarch -R` comes back out.** The ruling
-applied it on the argument that the modes only ever appear on the runners and a
-container cannot rule out what it has never reproduced. That was the right
-reason to try it and CI has now answered: `e47e412d` printed
-`compile_aslr disabled=yes` and counted 41,832,275 on a chip whose row held
-41,831,767. It moved nothing on the container either — 42,235,790 against
-42,235,790, and forty unwrapped runs returning one value forty times. A knob
-measured twice to move nothing is not carried, so the gate loses it and keeps
-the finding.
-
-**What settles it is the sha the gate prints.** `compile_binary sha256=` was
-added to pair a reading with the binary that produced it and had never yet
-answered a question. It answers this one:
-
-| commit | binary sha | cpu | counted |
-|---|---|---|---|
-| `fc993f83` | `de5bfab22fbd` | family 0x6 model 0xcf | 41,831,767 |
-| `e47e412d` | `de5bfab22fbd` | family 0x6 model 0xcf | 41,832,275 |
-
-One binary, one chip, two values, eight minutes apart. The second ran with
-`setarch -R` and the first without, so the same pair is the falsifier for the
-last suspect. A third run — main at `5b0f2eb1` — counted 41,832,275 on
-`family0x19-model0x11` against a recorded 41,831,767, so the second chip has
-shown both values on this binary too.
-
-I got this wrong once in the middle of the investigation and it is worth
-recording how. Two runs agreeing at 41,832,275 on one sha, against rows recorded
-on an older sha, read as "the binary moved and the rows are stale" — a tidier
-answer than bimodality, and I had reverted the pair machinery on it before
-fetching the third log. `fc993f83` killed it: same sha, same chip, the low
-value. Two points that agree are consistent with almost anything.
-
-**So the row pins a pair, which the ruling pre-authorised**: "only a residual
-that survives both reopens the question, and then the fallback is the pinned
-pair, never blindness." `scripts/gates/compile_ir_row.sh` grows three refusals
-— a row that pins neither one value nor two, a row that pins three, and a pair
-whose halves are the same number — and the lookup takes every value on the row
-and asks whether the count is among them. Two is a cap and not a convention: a
-band wide enough to hold 508 also holds kanso#1226's -5,621, which was a real
-change to the compiler. The golden's bare line stays the reference row's FIRST
-value, so a mode flip cannot reach welfare or the trend gate as a regression;
-`bench/compile_instructions_golden.txt` is byte-identical to main's on this
-branch, which is the check that it cannot.
-
-Six specs, all watched red first, and three ratchet mutations verified to redden
-this suite: the new `a_pinned_pair_grows_into_a_band`, plus the two existing
-mutations whose refusal-count guards had to move from five to seven.
-
-**A fourth chip, recorded the same afternoon.** CI landed on
-`family0x6-model0xad` — Granite Rapids, new to the pool — and the gate refused
-rather than passing on another chip's number, which is the unrecorded-chip
-design doing its job. It counted 41,832,275 on the same binary
-`de5bfab22fbd`, so three of the four recorded chips have now read the high
-value there and two of them have read both. It is recorded as a SINGLE,
-because one reading is one reading and a row may not claim a mode nobody has
-seen it take.
-
-That standing is an argument the per-chip key is separating nothing on this
-binary: the value looks like a property of the run rather than of the silicon.
-Not acted on. The key costs nothing while it is still right about the
-cross-binary case the file's header decomposes, and one binary is not enough
-to retire it.
-
-**OPEN, and stated as a measurement rather than a plan.** The ninth entry's
-term — glibc parsing `/proc/self/maps` before `main`, at a cost that is a
-property of the host's memory map — is still the only mechanism that fits, and
-it is not established that two runners differ in their maps by the 508 this
-needs. The row would have to print the map's line count beside the count to
-say. Nothing rests on the answer now that the pair holds the gate green.
-
-## 2026-09-03 — the weights move to the developer's order of noticing
-
-**DONE for the weights and the floor, HELD for the replay.** Implements the
-gavel of 2026-09-02, which recorded the argument and left the build. Searched
-the live log and `design/log/compiler-log-archive.md` before filing: the
-archive carries the 2026-08-29 saturation ruling and the entries that priced
-0.30/0.30/0.28/0.12, and nothing there implements this split.
-
-    term                    was    now   satiation
-    run speed (advertised)         0.15  2.0    new half
-    run speed (guards)             0.15  2.0    new half
-    run speed               0.30    —    2.0    splits
-    run memory              0.30   0.26  2.0
-    compile speed           0.28   0.32  0.5
-    compile memory          0.12   0.12  0.5    (unchanged)
-
-**Two terms of 0.15, not one term averaging two halves.** They are the same
-arithmetic and the pair reports better: the breakdown says which half moved.
-The guard half is written as the REMAINDER — `guard_work` is `held_work` plus
-`paced_work` — so a benchmark added later lands there without this entry or
-that line needing an edit, which is what "advertised versus everything else"
-asks for.
-
-**What the split buys, in the numbers.** Nine guards against two advertised
-rows meant a guard carried nine elevenths of the run-speed term and the front
-page's own claims carried two elevenths. A shape win scored as if a real
-workload had got faster. On the parity fixture a thousandfold win now scores
-**52.99** on an advertised row against **49.11** on a guard; before the split
-both read **48.48**, because a counter was a counter.
-
-**The score falls 76.1743 to 73.0623 and nothing about the compiler changed.**
-Both halves of that are worth stating. The fall is real — under the developer's
-stated order of noticing the project is further from ideal than the old weights
-said, because compile cost is the weakest dimension (+36.3% instructions,
-+143.7% allocations against baseline) and it just gained weight, while run
-memory, which is strong, lost some. And it is not a regression: no counter
-moved, and scores either side of this commit were taken with different rulers.
-That is the second such step in this line; the first is the 2026-08-29
-saturation ruling, 87.85 to 73.83.
-
-**The floor is edited by hand, and the tool asked for that.** `--set` refuses
-to lower the objective — "A fall means the change is worse by the project's
-stated preferences ... this is Clay's call to make, in conversation — not a
-flag's. (The floor file itself can be edited by hand, where a reviewer will see
-it.)" The gavel is that conversation, so the reason goes in the history entry
-and the number goes in the file, where the diff shows it. The refusal is right
-and stays; a flag that could lower the floor is a flag that could launder a
-regression.
-
-Three specs, and the two that existed were watched red at the numbers above
-before the pins moved. The new one —
-`a_win_on_an_advertised_row_outscores_the_same_win_on_a_guard` — was watched
-red against the unsplit formula, where it read 48.48 for both fixtures, which
-is exactly the property it exists to deny.
-
-**HELD, and sent to Clay: the chart replay.** The gavel ends "the chart replay
-re-run so the history reads under one definition." `docs/numbers.html` states
-the opposite rule and stated it before the gavel: "the welfare line is
-recorded, not recomputed. the score a commit shipped with is a fact about that
-commit, and replaying history against today's baseline would rewrite it." It
-already carries the 2026-08-29 step documented as a discontinuity rather than
-replayed.
-
-A replay is also under-determined, which is the part the gavel could not have
-known. The objective's counter set has grown — the digest in #1198, scan,
-escape and index in #1215 — so a commit whose goldens predate a counter has no
-value for it, and scoring it under today's formula means inventing one through
-the granted-baseline machinery. That machinery exists to admit a counter going
-forward at its dimension's standing, not to backfill a history it was never in.
-Not resolved here, because what the recorded line MEANS is his to say and not a
-matter of how to compute it.
-
-## 2026-09-03 — the replay could not be computed, and the reason is the rows
-
-**DONE for the prerequisite, the chart itself still to build.** Searched the
-live log and the archive before filing: the 2026-08-31 directive rules the
-replay and the rider of today restates it against the page's older sentence.
-Neither says what the stored rows contain, which turned out to be the thing
-that decides whether a replay is possible at all.
-
-**The rows carry 12 of the 24 counters the formula reads.** Measured on the
-newest row in the perf-history branch — commit `a100f4f`, this afternoon's
-merge:
-
-    missing: wide_instructions, deep_instructions, pending_instructions,
-             digest_instructions, scan_instructions, escape_instructions,
-             index_instructions, scan_arena_blocks, scan_peak_bytes,
-             digest_peak_bytes, digest_arena_blocks, compile_instructions
-
-`compile_instructions` among them, which is the vein this whole day was about.
-`perf_record` writes a hand-picked list that has not kept step with the model:
-the digest counters joined the objective in #1198 and scan, escape and index in
-#1215, and none of them joined the row.
-
-So the rider's rule — "the replayed series begins at the first commit for which
-every counter in the current formula exists" — names no commit. Applied to the
-data as it stands the replayed line is EMPTY, and would have been empty however
-carefully the chart was written. That is worth stating plainly because the
-failure would have looked like a charting bug.
-
-**The fix is that the objective names its own counter set.** `welfare
---counters` prints the `name=value` pairs `score` was given, and `perf_record`
-records those. Assembling the list a second time in `perf_record` is what
-produced this: two lists drift the first time a counter joins the model, and
-nothing was watching the second one. Printed from where the score is computed,
-the row cannot fall behind the formula — a counter that enters the model enters
-the row in the same commit.
-
-Three specs, two of them watched red against main's welfare, where the flag
-prints the banner instead of a counter set. The third pins that asking what was
-scored does not move the floor, because a second door to the ratchet is the one
-thing this must never become.
-
-**STILL TO BUILD, and it needs rows that do not exist yet.** `perf_record` has
-to carry the printed set into the history row, and the chart has to replay the
-current formula over the rows that carry it. The replayed line then starts at
-the first commit merged after that lands, which satisfies "no backfill" by
-construction rather than by a rule anyone has to remember. The recorded
-`welfare` field stays for the earlier rows, drawn distinctly and labeled as
-scored under earlier definitions, and `bench/welfare_floor.json` remains the
-audit trail either way.
-
-## 2026-09-03 — the objective emits its own model, so the chart can replay it
-
-**DONE for the parameters, the chart still to draw.** Searched the live log and
-the archive before filing: the entry above records that the rows carried 12 of
-24 counters and fixes that; nothing there covers where the WEIGHTS reach the
-chart from, which is the second half of the same problem.
-
-The replay has to happen on the page, because the page is static and the rule
-is "the current formula and baseline over the stored rows" — a value computed
-once and stored cannot re-score old rows when the formula next moves. That puts
-two things at risk of being copied onto the page: the numbers and the
-arithmetic.
-
-**The numbers are the dangerous half and now come from the tool.** `welfare
---model` prints the terms and the baseline in the shape every other vein here
-uses:
-
-    term run speed (advertised)|0.15|2.0|decode_instructions,encode_instructions
-    base decode_instructions=3266896510
-
-A weight retyped into a chart is a weight that survives the next gavel, and the
-line would then show a formula nobody ruled while looking exactly as
-authoritative. Emitted, it cannot: the 0.32 that landed this afternoon is in
-that output because it is in the model.
-
-**json was the first attempt and was the wrong reach.** It made both readers —
-this repo's spec and the chart's javascript — grow a parser apiece. Lines cost
-neither.
-
-**The arithmetic is restated on the page, and a spec makes that safe.**
-`the_model_and_the_rule_reproduce_the_score` reads only `--model` and
-`--counters`, applies the rule as a reader of the 2026-08-29 gavel would state
-it — saturate `r / (r + s)` per counter, mean within the term, weight, sum —
-and asserts the answer against welfare's own banner. It agrees to 73.06. That
-agreement is evidence rather than tautology because the test shares no code
-with the tool; it is written from the ruling, not from the implementation.
-
-A second spec pins that the weights sum to one. A term added without taking
-weight from another reweighs every other term silently, which is a change to
-what the project wants made by arithmetic instead of by a gavel.
-
-Both were watched red. Emitting `t.satiation` where the weight belongs made the
-reproduction spec answer 479.0922 against welfare's 73.06 — the restatement and
-the tool disagreeing is exactly the failure it exists to catch. Raising the
-compile-speed weight to 0.33 made the sum spec say 1.0100000000000002.
-
-**STILL TO DRAW.** numbers.html reads the emitted model, replays over the rows
-carrying the full counter set, starts the line at the first such row, keeps the
-earlier rows' recorded scores in a visibly distinct style labelled as scored
-under earlier definitions, and its "recorded, not recomputed" sentence is
-rewritten to match. That needs a real row, which CI writes on the commit after
-the counter-set change lands. The sentence and the chart move together: a page
-claiming a replay it does not perform is the one outcome worse than the stale
-sentence.
-
-## 2026-09-03 (second) — the chart replays, and the sentence that denied it is gone
-
-**DONE.** Searched the live log and the archive before filing: the entry above
-built `welfare --model` and left the drawing undone, and the 2026-08-31
-directive "the welfare chart replays the current formula" is the ruling this
-answers. Nothing in either file draws it.
-
-**Two lines where there was one.** The solid one is the replay: every row
-scored by the model and baseline in force today, so its points can be read
-against each other. The dashed one is what each commit shipped with, kept
-because it is the record and it is where the 2026-08-29 definition step lives.
-They share a scale. Drawn to their own ranges each would fill the plot and the
-reader would compare two shapes with no axis between them, when the gap where
-they overlap is the thing worth seeing.
-
-**No backfill, and it is a spec rather than an intention.** `replayScore`
-answers null for a row missing any counter the model reads, so the solid line
-starts at the first row carrying the whole set — today that is the commit after
-the counter-set change, and before it the rows genuinely do not hold the
-numbers. `a_row_missing_a_counter_is_not_scored` pins it at three rows: whole,
-partial, empty. Watched red by making a missing counter skip rather than
-refuse, which scored a half-row 16.67 and drew it beside real points.
-
-**The page's own functions are what the spec runs.** `parseModel` and
-`replayScore` are lifted out of the html by brace matching and run under node
-against `welfare --model` and `welfare --counters`; the answer has to be
-welfare's own. A copy pasted into a test would agree with itself forever.
-Watched red by replacing the saturation term with a constant: 72.2758 against
-73.06, which is exactly the size of drift that looks like a real move.
-
-**`model.txt` sits beside `history.jsonl`,** written by the same job, replaced
-rather than appended — it describes the model as it stands and its history is
-welfare_floor.json. If it cannot be fetched the recorded line still draws and
-the replayed one is absent, which is the right failure: a page with no numbers
-beats a page with stale ones.
-
-**The sentence is gone.** "the welfare line is recorded, not recomputed" was
-true when written and stopped being true on 2026-08-31. The page now says the
-score is computed in the browser from each commit's counters against today's
-baseline, and says where the baseline comes from.
-
-The ratchet gained `chart_replay`, anchored on the saturation term rather than
-a number, because the number moves whenever the compiler does.
-
-## 2026-09-03 — gavel: failures are for the exceptional; the bang chooses the channel
-
-Clay, correcting a "map ten files and collect the results" example:
-"if you're talking about files you expect to be there, then them not
-being there is exceptional. if you know it's possible for them to not
-be there, you wouldn't use an exception, you'd just return a
-file_not_found type." Gaveled as doctrine:
-
-- **A failure is for the exceptional. An anticipated outcome is
-  data.** If an alternative is part of the operation's normal
-  vocabulary, the answer is a typeset — `text | file_not_found` — and
-  dispatch handles both arms like any values: no box, no bubbling, no
-  rescue license. The failure channel, with its provenance and cause
-  chain, is for what the program did not plan for.
-- **The bang chooses the channel, everywhere.** The map rule already
-  ruled — `foo[k]` answers `none` as data, `foo[k]!` answers a
-  failure — generalizes to every operation with an anticipated
-  alternative, io included: `io/read_file path` answers
-  `text | file_not_found`; `io/read_file! path` is the caller
-  insisting, and a violation bubbles as a failure. The suffix
-  grammar's contract (a `!` name answers a box) is the same rule seen
-  from the declaration side. The canonical chain reads
-  `io/read_file! path .> json/parse .! ... .? when_failed`.
-- **Downstream, not decisions:** containers may still hold results
-  (test matchers, supervisors, #1057), since holding is neither
-  proceeding-as-success nor an unmarked conversion; and the io
-  boundary deep-demands the program's final value, so a failure
-  buried in an output structure fails the run unless it was rescued
-  into data first.
-
-The renaming of the box from `effect` to `result` is recommended
-beside this and awaits its own word.
-
 ## 2026-09-03 — rider: the replay is ruled; the page's rule yields to it
 
 The cloud session held the chart replay because docs/numbers.html
@@ -3997,3 +3664,97 @@ It belongs beside the collapse argument (#303) as the cost side, not as evidence
 for it. The evidence for it is the unanimity: eleven readings now, across three
 binaries, and every reading on a binary agrees with every other reading on that
 binary.
+
+---
+
+## 2026-09-05 (fourteenth) — two things the counters could not see, one of them a decline
+
+Both came out of reading the encode profile on the binary kanso#1256 landed
+(c072c8b5), looking for the next candidate. Neither is a change. Both are
+recorded because an unrecorded negative result gets rediscovered.
+
+### The counter run is a different execution, and nothing said so
+
+**DETERMINED, no defect.** `k_b_append_mut_byte` and every other in-place fast
+arm opens with
+
+    %bso = load i32, ptr @k_stats_on
+    %bcount = icmp ne i32 %bso, 0
+    br i1 %bcount, label %slow, label %bfast
+
+so `KANSO_COUNTERS` does not add arithmetic to a run — it sends every append,
+push and put through the C. One binary, two runs under callgrind:
+
+    counters off   5,310,898,414
+    counters on    6,450,750,955
+    delta          1,139,852,541   +21.4625%
+
+The golden reports `allocs=14,830,625` for the same program, and 1,139,852,541 /
+14,830,625 = 76.86 instructions per counted event, which is the size of one call
+into the C with its frame. The arithmetic fits the mechanism.
+
+**I first read this as the allocation counters overcounting** — the bail
+degrading a mutating append into an allocating one, which would have meant the
+objective was weighing allocations production never makes. `k_b_append_into`
+kills that: its slow arm is `k_b_append_mut`, mutate=1, which on the same
+condition the fast arm tests writes in place, returns `acc`, allocates nothing
+and increments `k_stat_append_fast`. The C reproduces the fast arm's
+classification rather than defeating it, and `push_mut_fast` and `put_mut_fast`
+are the same shape.
+
+So the counted events are honest and each vein is honest about what it claims:
+the cost goldens count events, the instruction golden counts production work.
+What is worth writing down is only that the two veins measure two DIFFERENT
+EXECUTIONS of the same binary, 21.46% apart on encodebench, and that this
+explains rather than is explained by a pattern in the record — kanso#1221
+through #1224 each moved the instruction vein with no allocation counter
+moving, because the fast paths they added are invisible to a run that does not
+execute them.
+
+### The utf-8 validity bit, DECLINED by arithmetic before it was built
+
+`k_utf8_bad_wide` is 111,966,800 instructions on encodebench, 2.108%, from 400
+calls of `k_b_utf8` — once per iteration over all 188,698 bytes of the finished
+document at 1.4834 instructions a byte. The ascii fast path cannot answer
+because 5,865 of those bytes have the high bit set. The encoder is validating
+utf-8 it produced itself: structural characters, the ascii output of `k_itoa`
+and `render_ryu`, and strings that were already `str`.
+
+The obvious fix is a "still valid utf-8" bit on the bytes header, held by an
+append of a `K_STR` or an ascii byte and cleared by anything else, with
+`k_utf8_finish` skipping the pass when it holds. The surface is small: `KBytes`
+already has eight spare bytes per header, because the arena stride is 32 and the
+struct is 24; two C constructors set the tag; five sites write bytes; one site
+reads the answer.
+
+**It does not pay, and the encode counter already said so.**
+
+    append_fast=42312800
+
+42,312,800 appends across 400 iterations is 105,782 an iteration for 188,698
+document bytes — 1.78 bytes an append. Maintaining the claim costs a load, an
+and and a store on that arm:
+
+    3 x 42,312,800 = 126,938,400 to maintain
+                     111,966,800 saved
+                     ------------
+                     +14,971,600, a net LOSS of 0.28% on encodebench
+
+Even at two instructions an append it is 84.6M against 112M, a margin a fourth
+header field's cache pressure would erase.
+
+**The general reason is worth more than the number.** The validator reads every
+byte once at 1.4834 instructions apiece, and the appends already touch every one
+of those same bytes. Per-append tracking cannot be cheaper than a per-byte scan
+of the same bytes; it is the same work moved earlier and paid whether or not
+anyone asks for it. Skipping a validation means proving validity, and the proof
+costs what the check costs.
+
+Two variants die the same way. ORing each byte into an accumulator and testing
+the high bit at the end IS the ascii test, which this document fails by 5,865
+bytes. Letting the byte arm clear unconditionally and only strings hold the bit
+leaves the bit clear at every read, because the encoder appends bytes constantly.
+
+What would change the answer is a shape where bytes arrive in far fewer, far
+larger appends — well above 1.78 bytes an append. Neither the encoder nor any
+benchmark in the corpus is that shape.
