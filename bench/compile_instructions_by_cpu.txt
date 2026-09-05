@@ -938,3 +938,16 @@
 # nothing, so the validator that changed cannot run during the measurement.
 # compile_allocs, compile_peak_bytes, rounds and visits are byte-identical.
 family0x6-model0xcf 41378393
+# And the chip whose row this branch removed, re-sat on the new binary: Zen 3
+# (family0x19-model0x1) refused on kanso#1246 and printed 41,378,393 — the same
+# to the instruction as Emerald Rapids on the same binary. Two keys, one number,
+# which is what every binary any two of these keys have shared has produced.
+#
+# It also settles the attribution the note above could not make. Zen 3 read
+# 41,377,711 on the old binary and reads 41,378,393 on this one: ONE CHIP, TWO
+# BINARIES, so the 682 is the binary and none of it is the chip. The runtime
+# edit moved the compiler's own bytes, as the header's kanso#1226 note says it
+# does, and the front end is doing the same work it was.
+# It goes last: the FIRST row is what welfare and
+# compile_instructions_golden.txt read, and that authority stays where it was.
+family0x19-model0x1 41378393

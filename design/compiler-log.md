@@ -2919,8 +2919,15 @@ has done it — kanso#1226 moved it −5,621 the same way, held on one chip with
 both binary shas printed. `compile_allocs`, `compile_peak_bytes`, rounds and
 visits are byte-identical.
 
-The per-chip table is re-sat down to one row for the same reason. Both AMD rows
-measured a binary that no longer exists, and CI handed out Emerald Rapids
-(`family0x6-model0xcf`), which is new to the table under any binary. So the 682
-cannot be split between the new chip and the new binary from one reading, and
-the row says so rather than claiming an attribution it does not have.
+The per-chip table was re-sat down to one row for the same reason: both AMD
+rows measured a binary that no longer exists, and the first CI run handed out
+Emerald Rapids (`family0x6-model0xcf`), new to the table under any binary. One
+reading on a new chip and a new binary cannot split the 682 between them, and
+the row said so.
+
+A second run settled it. Zen 3 (`family0x19-model0x1`) refused on the same
+branch and printed 41,378,393 — the same to the instruction as Emerald Rapids
+on this binary, and Zen 3 had read 41,377,711 on the one before it. One chip,
+two binaries: the whole 682 is the binary and none of it is the chip. Zen 3's
+row goes back last, because the first row is what welfare and the golden read
+and that authority stays where it was.

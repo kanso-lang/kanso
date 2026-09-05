@@ -821,5 +821,7 @@
 # CI handed out. The front end did not change. src/runtime.c is include_str!'d
 # into the compiler, so the three arms at the utf-8 door moved the compiler's
 # bytes and the layout under them. A rise of 682, which is layout for the
-# seventh time on this vein.
+# seventh time on this vein. Held on ONE CHIP across both binaries: Zen 3 read
+# 41,377,711 before the runtime edit and 41,378,393 after it, so none of the
+# 682 is the chip.
 compile_instructions=41378393
