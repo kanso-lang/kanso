@@ -17,6 +17,14 @@ const K_FALSE: i64 = 3;
 const K_NONE: i64 = 4;
 const K_ERR: i64 = 5;
 
+/// What an arm's discriminating pattern tests, when a switch on the value's tag
+/// can express it. Records are `Rec` rather than a tag because they all carry
+/// tag 7 and are told apart by the id and field count inside.
+enum ArmCase {
+    Tags(Vec<i64>),
+    Rec(i64, usize),
+}
+
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
 %KBytes = type { i64, ptr }
@@ -2608,12 +2616,136 @@ impl<'a> Backend<'a> {
         }
     }
 
+    /// What an arm's discriminating pattern tests, when a switch on the tag can
+    /// express it. `None` means the arm cannot be a case: it wants a guard no
+    /// tag names, it admits everything, or this backend cannot say what it
+    /// matches.
+    fn arm_case(&self, p: &Pattern) -> Option<ArmCase> {
+        match p {
+            Pattern::Nullary(nm, _) => Some(ArmCase::Tags(vec![match nm.as_str() {
+                "true" => K_TRUE,
+                "false" => K_FALSE,
+                _ => K_NONE,
+            }])),
+            // A marker's bare mention is its value, so it binds nothing and
+            // the whole of it is the record check. A ctor with fields wants
+            // bindings the arm bodies below do not make.
+            Pattern::Ctor { ty, fields, whole } => match fields.is_empty() && whole.is_none() {
+                true => Some(ArmCase::Rec(*self.type_ids.get(ty.as_str())?, 0)),
+                false => None,
+            },
+            Pattern::Annotated { ty, .. } => {
+                // These two answer before the guard and typeset logic below
+                // them in the cascade, so they answer before it here too.
+                if ty.ends_with("[]") {
+                    return Some(ArmCase::Tags(vec![9]));
+                }
+                if ty.contains('[') {
+                    return Some(ArmCase::Tags(vec![10]));
+                }
+                // An annotation that admits err is tested behind
+                // `k_not_own_err`, and a typeset matches when any member does.
+                // Neither is a tag, so neither is a case.
+                if self.admits_err(ty) || self.typesets.contains_key(ty.as_str()) {
+                    return None;
+                }
+                match ty.as_str() {
+                    "int" => Some(ArmCase::Tags(vec![0])),
+                    "float64" => Some(ArmCase::Tags(vec![1])),
+                    "string" => Some(ArmCase::Tags(vec![6])),
+                    "bool" => Some(ArmCase::Tags(vec![K_TRUE, K_FALSE])),
+                    "none" => Some(ArmCase::Tags(vec![K_NONE])),
+                    // `some` is every tag but none and err, which a default
+                    // expresses and a case does not.
+                    "some" => None,
+                    other => Some(ArmCase::Rec(
+                        *self.type_ids.get(other)?,
+                        self.field_count(other).ok()?,
+                    )),
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// A group whose arms discriminate on one parameter by the kind of value it
+    /// is compiles to a switch on the tag instead of a cascade of checks. The
+    /// cascade tests arms in order, so the switch is only the same program when
+    /// no two arms can match the same value: every arm names a set of tags,
+    /// those sets are pairwise disjoint, and at most one arm — the last — is
+    /// generic and stands as the default.
+    ///
+    /// Records are the exception that needs no disjointness. They all carry tag
+    /// 7, so they chain inside that one case in source order, which is the
+    /// order the cascade would have tried them in.
+    fn tag_switch_shape(&self, decls: &[&FnDecl]) -> Option<usize> {
+        // A subtype is a K_SUB wrapper whose own tag is 15 whatever it holds,
+        // and the cascade's checks see through it. A switch on the tag would
+        // send every subtype value to the default.
+        if !self.sub_parents.is_empty() {
+            return None;
+        }
+        let arity = decls[0].params.len();
+        if arity == 0 {
+            return None;
+        }
+        let mut disc: Option<usize> = None;
+        for decl in decls {
+            for (i, pattern) in decl.params.iter().enumerate() {
+                match pattern {
+                    Pattern::Var(..) | Pattern::Wildcard(..) => {}
+                    _ => {
+                        if disc.is_some_and(|d| d != i) {
+                            return None;
+                        }
+                        disc = Some(i);
+                    }
+                }
+            }
+        }
+        let disc = disc?;
+        let mut claimed: Vec<i64> = Vec::new();
+        let mut cases = 0;
+        for (k, decl) in decls.iter().enumerate() {
+            match &decl.params[disc] {
+                Pattern::Var(..) | Pattern::Wildcard(..) => {
+                    if k + 1 != decls.len() {
+                        return None;
+                    }
+                }
+                p => {
+                    match self.arm_case(p)? {
+                        ArmCase::Tags(tags) => {
+                            for t in tags {
+                                if t == 7 || claimed.contains(&t) {
+                                    return None;
+                                }
+                                claimed.push(t);
+                            }
+                        }
+                        ArmCase::Rec(..) => {
+                            if !claimed.contains(&7) {
+                                claimed.push(7);
+                            }
+                        }
+                    }
+                    cases += 1;
+                }
+            }
+        }
+        match cases >= 2 {
+            true => Some(disc),
+            false => None,
+        }
+    }
+
     fn emit_switch_dispatcher(
         &mut self,
         name: &str,
         arity: usize,
         decls: &[&FnDecl],
         disc: usize,
+        by_tag: bool,
     ) -> Result<(), String> {
         let params = self.abi_params(name, arity);
         let ret = self.ret_ty(name, arity);
@@ -2670,106 +2802,168 @@ impl<'a> Backend<'a> {
         f.start_block(&dispatch);
         let dv = format!("%x{disc}");
         let tag = inline_tag(&mut f, &dv);
-        // classify arms
-        let mut int_cases: Vec<(String, String)> = Vec::new();
-        let mut nullary_cases: Vec<(i64, String)> = Vec::new();
-        let mut generic_arm: Option<usize> = None;
         let mut arm_labels = Vec::new();
-        for (k, decl) in decls.iter().enumerate() {
-            let label = format!("arm{k}");
-            arm_labels.push(label.clone());
-            match &decl.params[disc] {
-                Pattern::IntLit(n, _) => int_cases.push((n.to_string(), label)),
-                Pattern::Nullary(nm, _) => {
-                    let t = match nm.as_str() {
-                        "true" => K_TRUE,
-                        "false" => K_FALSE,
-                        _ => K_NONE,
-                    };
-                    nullary_cases.push((t, label));
+        for k in 0..decls.len() {
+            arm_labels.push(format!("arm{k}"));
+        }
+        if by_tag {
+            // One case per tag the arms name, and the arms that name none —
+            // the generic one, a value the group does not answer for, and a
+            // failure — share the default. The record arms live inside case 7
+            // together, in the order the cascade would have tried them.
+            let mut tag_cases: Vec<(i64, String)> = Vec::new();
+            let mut rec_arms: Vec<(i64, usize, String)> = Vec::new();
+            let mut generic_arm: Option<usize> = None;
+            for (k, decl) in decls.iter().enumerate() {
+                let label = arm_labels[k].clone();
+                match self.arm_case(&decl.params[disc]) {
+                    Some(ArmCase::Tags(tags)) => {
+                        for t in tags {
+                            tag_cases.push((t, label.clone()));
+                        }
+                    }
+                    Some(ArmCase::Rec(id, nfields)) => rec_arms.push((id, nfields, label)),
+                    None => generic_arm = Some(k),
                 }
-                _ => generic_arm = Some(k),
             }
-        }
-        let generic_label = match generic_arm {
-            Some(k) => format!("arm{k}"),
-            None => "nomatch".to_string(),
-        };
-        // A byte discriminator crossed as a raw i64 — the byte, or 256 for
-        // none — and `rebox_params` rebuilt a KValue from it for the tree below
-        // to take apart again. The comment there says the round trip folds back
-        // into a raw switch. It does not: `str_char`'s loop spends seven
-        // instructions a byte on `cmp $0x100 / sete / cmove / shl` before it
-        // reaches its first arm, and every byte-dispatching function in the
-        // json decoder pays the same. Switch on the raw value instead, with 256
-        // standing for the `none` arm. The rebox stays emitted for the arms
-        // whose bodies read the byte as a value; where none do it is dead and
-        // the optimiser drops it, and where some do it sinks into those arms.
-        //
-        // Only when every nullary arm is `none`: a byte is never `true` or
-        // `false`, so a group naming one is not the shape this describes.
-        //
-        // And only when every int arm is a byte. 256 is the sentinel this
-        // switch reads as `none`, so a group that writes `fn kind 256` would
-        // send a read past the end of a byte string to that arm — an arm no
-        // byte can ever reach. The boxed tree below is immune, because it
-        // tests the tag before it looks at the payload, and the divergence was
-        // real: `kind cs[3]` on a two-byte string answered "a byte that cannot
-        // be" on native against the interpreter's "some other byte". A literal
-        // outside 0..255 keeps its group on the boxed path, where it stays
-        // dead the way the oracle says it is.
-        let raw_switchable = self.is_byte_disc(name, arity, disc)
-            && nullary_cases.iter().all(|(t, _)| *t == K_NONE)
-            && int_cases
-                .iter()
-                .all(|(n, _)| n.parse::<i128>().is_ok_and(|v| (0..=255).contains(&v)));
-        if raw_switchable {
+            let generic_label = match generic_arm {
+                Some(k) => format!("arm{k}"),
+                None => "nomatch".to_string(),
+            };
+            let dflt = f.label();
+            let rec7 = f.label();
             let mut cases: Vec<String> =
-                int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
-            for (_, l) in &nullary_cases {
-                cases.push(format!("    i64 256, label %{l}"));
+                tag_cases.iter().map(|(t, l)| format!("    i64 {t}, label %{l}")).collect();
+            if !rec_arms.is_empty() {
+                cases.push(format!("    i64 7, label %{rec7}"));
             }
-            f.line(&format!(
-                "switch i64 %x{disc}r, label %{generic_label} [
-{}
-  ]",
-                cases.join(
-                    "
-"
-                )
-            ));
+            f.line(&format!("switch i64 {tag}, label %{dflt} [\n{}\n  ]", cases.join("\n")));
+            if !rec_arms.is_empty() {
+                f.start_block(&rec7);
+                for (id, nfields, label) in &rec_arms {
+                    let c = f.tmp();
+                    f.line(&format!(
+                        "{c} = call i64 @k_check_rec_fast(%KValue {dv}, i64 {id}, i64 {nfields})"
+                    ));
+                    let b = f.tmp();
+                    f.line(&format!("{b} = icmp ne i64 {c}, 0"));
+                    let next = f.label();
+                    f.line(&format!("br i1 {b}, label %{label}, label %{next}"));
+                    f.start_block(&next);
+                }
+                f.line(&format!("br label %{dflt}"));
+            }
+            f.start_block(&dflt);
+            // With no generic arm both sides of the test are `nomatch`, so
+            // there is nothing to ask.
+            match generic_arm {
+                None => f.line("br label %nomatch"),
+                Some(_) => {
+                    let disc_ok = inline_not_failure(&mut f, &dv);
+                    f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %nomatch"));
+                }
+            }
         } else {
-            let is_int = f.tmp();
-            f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
-            let int_block = f.label();
-            let not_int = f.label();
-            f.line(&format!("br i1 {is_int}, label %{int_block}, label %{not_int}"));
-            f.start_block(&int_block);
-            let payload = inline_payload(&mut f, &dv);
-            let cases: Vec<String> =
-                int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
-            f.line(&format!(
-                "switch i64 {payload}, label %{generic_label} [
+            // classify arms
+            let mut int_cases: Vec<(String, String)> = Vec::new();
+            let mut nullary_cases: Vec<(i64, String)> = Vec::new();
+            let mut generic_arm: Option<usize> = None;
+            for (k, decl) in decls.iter().enumerate() {
+                let label = arm_labels[k].clone();
+                match &decl.params[disc] {
+                    Pattern::IntLit(n, _) => int_cases.push((n.to_string(), label)),
+                    Pattern::Nullary(nm, _) => {
+                        let t = match nm.as_str() {
+                            "true" => K_TRUE,
+                            "false" => K_FALSE,
+                            _ => K_NONE,
+                        };
+                        nullary_cases.push((t, label));
+                    }
+                    _ => generic_arm = Some(k),
+                }
+            }
+            let generic_label = match generic_arm {
+                Some(k) => format!("arm{k}"),
+                None => "nomatch".to_string(),
+            };
+            // A byte discriminator crossed as a raw i64 — the byte, or 256 for
+            // none — and `rebox_params` rebuilt a KValue from it for the tree below
+            // to take apart again. The comment there says the round trip folds back
+            // into a raw switch. It does not: `str_char`'s loop spends seven
+            // instructions a byte on `cmp $0x100 / sete / cmove / shl` before it
+            // reaches its first arm, and every byte-dispatching function in the
+            // json decoder pays the same. Switch on the raw value instead, with 256
+            // standing for the `none` arm. The rebox stays emitted for the arms
+            // whose bodies read the byte as a value; where none do it is dead and
+            // the optimiser drops it, and where some do it sinks into those arms.
+            //
+            // Only when every nullary arm is `none`: a byte is never `true` or
+            // `false`, so a group naming one is not the shape this describes.
+            //
+            // And only when every int arm is a byte. 256 is the sentinel this
+            // switch reads as `none`, so a group that writes `fn kind 256` would
+            // send a read past the end of a byte string to that arm — an arm no
+            // byte can ever reach. The boxed tree below is immune, because it
+            // tests the tag before it looks at the payload, and the divergence was
+            // real: `kind cs[3]` on a two-byte string answered "a byte that cannot
+            // be" on native against the interpreter's "some other byte". A literal
+            // outside 0..255 keeps its group on the boxed path, where it stays
+            // dead the way the oracle says it is.
+            let raw_switchable = self.is_byte_disc(name, arity, disc)
+                && nullary_cases.iter().all(|(t, _)| *t == K_NONE)
+                && int_cases
+                    .iter()
+                    .all(|(n, _)| n.parse::<i128>().is_ok_and(|v| (0..=255).contains(&v)));
+            if raw_switchable {
+                let mut cases: Vec<String> =
+                    int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
+                for (_, l) in &nullary_cases {
+                    cases.push(format!("    i64 256, label %{l}"));
+                }
+                f.line(&format!(
+                    "switch i64 %x{disc}r, label %{generic_label} [
 {}
   ]",
-                cases.join(
-                    "
+                    cases.join(
+                        "
 "
-                )
-            ));
-            f.start_block(&not_int);
-            // nullary tags, then generic (non-failure) or propagation
-            for (t, l) in &nullary_cases {
-                let hit = f.tmp();
-                f.line(&format!("{hit} = icmp eq i64 {tag}, {t}"));
-                let next = f.label();
-                f.line(&format!("br i1 {hit}, label %{l}, label %{next}"));
-                f.start_block(&next);
+                    )
+                ));
+            } else {
+                let is_int = f.tmp();
+                f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
+                let int_block = f.label();
+                let not_int = f.label();
+                f.line(&format!("br i1 {is_int}, label %{int_block}, label %{not_int}"));
+                f.start_block(&int_block);
+                let payload = inline_payload(&mut f, &dv);
+                let cases: Vec<String> =
+                    int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
+                f.line(&format!(
+                    "switch i64 {payload}, label %{generic_label} [
+{}
+  ]",
+                    cases.join(
+                        "
+"
+                    )
+                ));
+                f.start_block(&not_int);
+                // nullary tags, then generic (non-failure) or propagation
+                for (t, l) in &nullary_cases {
+                    let hit = f.tmp();
+                    f.line(&format!("{hit} = icmp eq i64 {tag}, {t}"));
+                    let next = f.label();
+                    f.line(&format!("br i1 {hit}, label %{l}, label %{next}"));
+                    f.start_block(&next);
+                }
+                let disc_ok = inline_not_failure(&mut f, &dv);
+                let nomatch = "nomatch".to_string();
+                f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %{nomatch}"));
             }
-            let disc_ok = inline_not_failure(&mut f, &dv);
-            let nomatch = "nomatch".to_string();
-            f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %{nomatch}"));
         }
+
         f.start_block("nomatch");
         // no arm matched: the discriminator is the only possible failure here
         let disc_fail = f.tmp();
@@ -2801,8 +2995,13 @@ impl<'a> Backend<'a> {
             f.file = decl.file.clone();
             f.synthetic = decl.synthetic;
             for (i, pattern) in decl.params.iter().enumerate() {
-                if let Pattern::Var(pname, _) = pattern {
-                    f.bind(pname, &format!("%x{i}"));
+                // The switch has already decided what the value is, so an
+                // annotation here is only a name for it.
+                match pattern {
+                    Pattern::Var(pname, _) | Pattern::Annotated { name: pname, .. } => {
+                        f.bind(pname, &format!("%x{i}"))
+                    }
+                    _ => {}
                 }
             }
             self.emit_fn_body(&mut f, &decl.body)?;
@@ -2968,7 +3167,10 @@ impl<'a> Backend<'a> {
         decls: &[&FnDecl],
     ) -> Result<(), String> {
         if let Some(disc) = Self::switch_shape(decls) {
-            return self.emit_switch_dispatcher(name, arity, decls, disc);
+            return self.emit_switch_dispatcher(name, arity, decls, disc, false);
+        }
+        if let Some(disc) = self.tag_switch_shape(decls) {
+            return self.emit_switch_dispatcher(name, arity, decls, disc, true);
         }
         let params = self.abi_params(name, arity);
         let ret = self.ret_ty(name, arity);

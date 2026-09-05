@@ -100,15 +100,15 @@
 # 2026-09-05 (the literal's fast door): every program gains the same one
 # define and eleven lines.
 #
-encodebench defines=180 calls=1689 branches=1024 lines=11114
-oneshot defines=180 calls=1824 branches=1166 lines=12187
-basket defines=139 calls=1334 branches=767 lines=7828
-widebench defines=196 calls=1908 branches=1123 lines=12138
-deepbench defines=113 calls=854 branches=561 lines=5707
-escapebench defines=48 calls=119 branches=100 lines=1408
-pendbench defines=127 calls=1251 branches=652 lines=6813
-scanbench defines=328 calls=3731 branches=2236 lines=20561
-indexbench defines=54 calls=179 branches=127 lines=1794
-digestbench defines=187 calls=1607 branches=908 lines=9891
-readbench defines=57 calls=177 branches=137 lines=1984
-livebench defines=181 calls=1848 branches=1180 lines=12296
+encodebench defines=180 calls=1646 branches=1004 lines=11003
+oneshot defines=180 calls=1758 branches=1139 lines=11978
+basket defines=139 calls=1295 branches=755 lines=7729
+widebench defines=196 calls=1854 branches=1093 lines=11998
+deepbench defines=113 calls=843 branches=557 lines=5676
+escapebench defines=48 calls=112 branches=98 lines=1391
+pendbench defines=127 calls=1222 branches=642 lines=6734
+scanbench defines=328 calls=3295 branches=2135 lines=19658
+indexbench defines=54 calls=153 branches=120 lines=1733
+digestbench defines=188 calls=1576 branches=894 lines=9809
+readbench defines=57 calls=156 branches=131 lines=1933
+livebench defines=181 calls=1782 branches=1153 lines=12087

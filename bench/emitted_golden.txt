@@ -128,6 +128,6 @@
 # call and eleven lines -- the door itself, emitted once per module.
 #
 defines=180
-calls=1830
-branches=1175
-lines=12245
+calls=1764
+branches=1148
+lines=12036

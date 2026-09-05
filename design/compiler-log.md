@@ -3592,3 +3592,111 @@ something a user meets. An inferred cold arm is that same shape, so it stays
 mine and #290's remaining path is implementation. A user-written `noinline`
 would be different — that is new surface — but nothing measured yet says the
 inference is insufficient, so there is nothing to ask.
+
+---
+
+## 2026-09-05 — A GROUP TOLD APART BY THE KIND OF ITS ARGUMENT COMPILES TO ONE SWITCH
+
+**DONE.** `src/codegen.rs` had a switch dispatcher already, and it accepted two
+pattern kinds: an int literal and a nullary name. Everything else — `n:int`,
+`s:string`, `xs:[]some`, a marker record — fell to the arm cascade, which tests
+the arms in order. `json/encode_onto` has eight such arms and no int literal
+among them, so a map value walked seven checks before it reached its own, and
+the checks it walked were the ones the encoder runs most.
+
+The widening is `tag_switch_shape` and `arm_case` beside the two that were
+there. An arm qualifies when its discriminating pattern names a fixed set of
+KValue tags: `int` is tag 0, `float64` 1, `string` 6, a list annotation 9, a map
+annotation 10, `true`/`false`/`none` their own, and a record — a marker's bare
+mention or a declared type by name — tag 7 with an id inside it. The group
+qualifies when every arm names such a set, no two sets share a tag, and at most
+one arm, the last, is generic. Then order does not matter and the switch is the
+cascade, exactly.
+
+**Arms are not disjoint in general, which is why the disjointness is checked
+rather than assumed.** The formatter orders overloads most-specific first —
+literal, then concrete type, then generic — precisely because a nearer arm may
+shadow a wider one. A switch has no order to shadow with, so a group whose arms
+overlap keeps the cascade.
+
+Five shapes bail out, each a wrong answer rather than a slowdown if it did not:
+
+- a program that declares any subtype at all, because a K_SUB wrapper carries
+  tag 15 whatever it holds and the cascade's checks see through it;
+- an annotation that admits `err`, which is tested behind `k_not_own_err`;
+- a typeset, which matches when any member does;
+- `some`, which is every tag but none and err — a default, not a case;
+- two arms on the same tag with nothing finer to tell them apart.
+
+Records are the one shape that needs no disjointness. They all carry tag 7, so
+they chain inside that single case in source order — the order the cascade would
+have tried them in — each still asking `k_check_rec_fast`, which is what checks
+the field count as well as the id.
+
+**Measured, A/B, both compilers' benchmarks run from equal-length paths:**
+
+    encodebench    4,739,440,499 -> 4,531,512,501   -4.3872%
+    livebench      4,729,204,467 -> 4,544,123,403   -3.9136%
+    oneshot           26,187,873 ->     25,760,418   -1.6323%
+    scanbench      1,395,689,485 -> 1,384,644,605   -0.7914%
+    widebench         55,731,441 ->     55,667,434   -0.1148%
+    basket            38,533,957 ->     38,531,695   -0.0059%
+    jsonbench      1,732,114,716 -> 1,737,414,816   +0.3060%
+    digestbench       77,289,816 ->     77,353,362   +0.0822%
+
+**jsonbench's rise is an inlining consequence, not a per-call regression.**
+`scan_at_5` is gone from the profile — 133,577,400 instructions — and
+`parse_value_2'2` gained 136,356,000: the smaller dispatcher made the callee
+inlinable, and the inlined copy costs 2.8M more than the call did. `number_done`
+adds a further 2.5M the same way. The decode row lands on **1,737,415,229** and
+the digest row on **77,353,775**; both are worse and both are named here because
+the trend gate asks for exactly that.
+
+**The four worsened work rows and the one worsened emitted row, by name.**
+`work_jsonbench` lands on **1,737,415,229** and `work_digestbench` on
+**77,353,775** — the inlining consequence above, and the same shape in the
+digest's own dispatcher. `work_pendbench` lands on **666,094,366** and
+`work_indexbench` on **4,692,197**: 797 instructions and 3, on programs whose
+dispatchers the widening does not reach at all, which is what a link-order
+shuffle costs and is worth stating rather than rounding away.
+`emitted_other_defines` lands on **1,791**, one more than before, and the one is
+digestbench's record-chain block.
+
+**No allocation counter moved** — all eleven cost goldens agree with their
+goldens untouched, which is the right answer for a change that reshapes control
+flow and allocates nothing new.
+
+The emitted code falls everywhere it moves: the decoder's `calls` 1830 -> 1764,
+`branches` 1175 -> 1148, `lines` 12245 -> 12036, and every one of the twelve
+programs beside it. `.text` falls on ten of thirteen and rises on two —
+escapebench by 16 bytes and digestbench by 512, the latter alongside one more
+`define`, which is the record chain's block. The module compile row falls to
+`lines=5051 calls=752 branches=421` from `lines=5082 calls=763 branches=428`.
+
+**`compile_instructions` falls 281**, 41,380,537 -> **41,380,256**, measured as
+an A/B in the staged box at the fixed path; `compile_allocs` and
+`compile_peak_bytes` are byte-identical. The shape check runs once per group at
+emit time and the emitter then writes fewer lines, and 281 is what that trade is
+worth.
+
+**Welfare 74.4576 -> 74.5533**, banked in the same commit.
+
+**Watched red twice before it was trusted green.** The new micro golden
+`a_group_told_apart_by_kind_alone` names every tag the switch can reach —
+`true`, `false`, `none`, two markers, int, float, string, list, map — and a
+foreign failure that has to reach no arm at all. Sending the string case to the
+`true` arm turned `string hi` into `true` on native while the interpreter still
+said `string hi`; giving both marker arms the first one's id took the corpus off
+the end at `marks` and killed the program on `stamps`. Both mutations were
+reverted and the corpus is green.
+
+**OPEN — an arm that destructures is still on the cascade.** `Pattern::Ctor`
+qualifies here only when it has no fields and no as-pattern, because the switch
+dispatcher's arm bodies bind `Var` and `Annotated` and nothing else. A group of
+record arms that take their fields apart is the obvious next widening and it was
+not measured.
+
+**OPEN — a group mixing int literals with type patterns takes neither switch.**
+`switch_shape` refuses the type arms and `tag_switch_shape` refuses the
+literals. The shape that would serve both is a switch on the tag whose int case
+holds a second switch on the payload; nothing in the corpus asked for it yet.
