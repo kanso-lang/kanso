@@ -1,0 +1,30 @@
+# Where the two-byte scan answers, at every boundary the scan has. The one
+# find2 line in `bytes_are_their_own_value` finds a byte in the middle of a
+# four-byte string, which is the case a rewrite of the scan is least likely to
+# get wrong.
+#
+# The native emitter reaches the scan through a shim that unwraps the four
+# boxed arguments itself and calls a raw door taking five registers, so the
+# arithmetic here is written twice and this is what says the two agree. The
+# long string is twenty-four bytes: the vector step takes sixteen of them and
+# the remaining eight are walked one at a time, so a hit in each half is a
+# different piece of code answering.
+import "std/text"
+
+short = text/bytes "abcd"
+
+long = text/bytes "0123456789abcdefghijklmn"
+
+pub play =
+  print "middle: {text/find2 short 1 99 100}"
+  >> print "first byte: {text/find2 short 1 97 97}"
+  >> print "last byte: {text/find2 short 4 100 100}"
+  >> print "earlier of the two wins: {text/find2 short 1 100 97}"
+  >> print "no match: {text/find2 short 1 122 122}"
+  >> print "from past the end: {text/find2 short 9 97 98}"
+  >> print "from below one: {text/find2 short 0 97 97}"
+  >> print "from at zero on a hit: {text/find2 short 0 99 100}"
+  >> print "inside the vector step: {text/find2 long 1 53 53}"
+  >> print "past it, walked: {text/find2 long 1 109 109}"
+  >> print "the last byte of all: {text/find2 long 20 110 110}"
+  >> print "no match at all: {text/find2 long 1 122 122}"

@@ -1,0 +1,12 @@
+middle: 3
+first byte: 1
+last byte: 4
+earlier of the two wins: 1
+no match: 5
+from past the end: 5
+from below one: 1
+from at zero on a hit: 3
+inside the vector step: 6
+past it, walked: 23
+the last byte of all: 24
+no match at all: 25

@@ -467,11 +467,17 @@
 # short run answers there for a fifth of what the wide pass charges. The seven
 # that hold are the programs that never reach utf-8 validation at all.
 # jsonbench spends 1,392 bytes here to save 36.9 million instructions.
-jsonbench text=88066
-encodebench text=108130
-oneshot text=110690
+#
+# 2026-09-05 (find2 takes five scalars through a shim): four rows rise 400 to
+# 432 bytes and eight hold exactly still. The prelude shim is emitted in every
+# program, so the emitted-line count moves everywhere; the linker drops it
+# wherever nothing calls it, which is what the eight unmoved rows are. The four
+# that grow are the four that scan for a byte pair.
+jsonbench text=88498
+encodebench text=108530
+oneshot text=111122
 basket text=101954
-widebench text=111650
+widebench text=112050
 deepbench text=69730
 escapebench text=52258
 pendbench text=83218
