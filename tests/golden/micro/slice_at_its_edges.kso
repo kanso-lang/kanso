@@ -1,0 +1,28 @@
+# What `slice` answers at each end of its range, on each of the three things
+# it accepts. The one slice line in `bytes_are_their_own_value` takes the
+# first two bytes of an eight-byte string and nothing pins the ends.
+#
+# The native emitter tests the three tags in the prelude now and hands the
+# bytes arm a pointer, a length and two integers; a list, a string, or a
+# non-integer position falls through to the same C function it always
+# reached. Both arms are here, and the fallthrough is the reason the list
+# and string lines are.
+import "std/text"
+
+b = text/bytes "hi there"
+
+l = [10 20 30 40]
+
+pub play =
+  print "two bytes: {text/slice b 1 2}"
+  >> print "one byte: {text/slice b 3 3}"
+  >> print "the whole of it: {text/slice b 1 8}"
+  >> print "the last byte: {text/slice b 8 8}"
+  >> print "from below one: {text/slice b 0 2}"
+  >> print "backwards: {text/slice b 4 2}"
+  >> print "past the end: {text/slice b 7 9}"
+  >> print "wholly past the end: {text/slice b 12 14}"
+  >> print "a list falls through: {text/slice l 2 3}"
+  >> print "a list past the end: {text/slice l 3 9}"
+  >> print "a string falls through: {text/slice "hi there" 1 2}"
+  >> print "a string past the end: {text/slice "hi there" 7 9}"

@@ -937,17 +937,60 @@
 # is NOT is the front end doing more work — `kanso check lib/json` emits
 # nothing, so the validator that changed cannot run during the measurement.
 # compile_allocs, compile_peak_bytes, rounds and visits are byte-identical.
-family0x6-model0xcf 41378393
-# And the chip whose row this branch removed, re-sat on the new binary: Zen 3
-# (family0x19-model0x1) refused on kanso#1246 and printed 41,378,393 — the same
-# to the instruction as Emerald Rapids on the same binary. Two keys, one number,
-# which is what every binary any two of these keys have shared has produced.
+# 2026-09-05, and this time the attribution needs no second chip: Emerald
+# Rapids read 41,378,393 on the binary before the two prelude twins and
+# 41,378,619 on the one with them, a rise of 226 on ONE key across both. The
+# front end emits two more defines per module and src/runtime.c gained two raw
+# doors, and `kanso check lib/json` emits nothing, so what moved is the
+# compiler's own bytes and the layout under them rather than work it does.
+# Zen 3's row measured the binary before the twins and is removed rather than
+# carried forward with the delta applied, for the reason the header gives.
 #
-# It also settles the attribution the note above could not make. Zen 3 read
-# 41,377,711 on the old binary and reads 41,378,393 on this one: ONE CHIP, TWO
-# BINARIES, so the 682 is the binary and none of it is the chip. The runtime
-# edit moved the compiler's own bytes, as the header's kanso#1226 note says it
-# does, and the front end is doing the same work it was.
-# It goes last: the FIRST row is what welfare and
-# compile_instructions_golden.txt read, and that authority stays where it was.
-family0x19-model0x1 41378393
+# 2026-09-05 (later), and this one is an addition rather than a re-sitting. CI
+# handed out family0x19-model0x11 — AMD, and new to this table under any binary
+# — on the SAME commit Emerald Rapids had already counted. It read 41,378,619,
+# which is Emerald Rapids' value to the instruction. Two chips agreeing exactly
+# is what the header predicts for a compile that touches no ifunc-dispatched
+# string routine on a hot path, and it is not a licence to drop the key: the
+# 5,081 the header records came from a pool whose members disagreed, and one
+# agreement does not retire that. The row goes LAST because the first row is
+# what bench/compile_instructions_golden.txt carries and what welfare reads.
+#
+# And a third, on the very next run: family0x19-model0x1, the Zen 3 EPYC the
+# header names, reading 41,378,619 again. Three keys, one binary, one number.
+#
+# TWO THINGS FOLLOW AND THEY PULL OPPOSITE WAYS. The first is an attribution
+# that cost nothing: this key read 41,377,711 on the binary before the two
+# commits above, so Zen 3 confirms end to end the +908 that Emerald Rapids
+# measured in two steps of 682 and 226. Two chips agreeing on a delta is the
+# strongest form this vein takes.
+#
+# The second is that the header's mechanism did not show. It says one libc
+# runs different code on different silicon and cites 5,081 instructions of
+# spread; three keys agreeing exactly says that spread is not in what this row
+# counts NOW. kanso#1241 is the likely reason — the row was cut down to
+# `std::rt::lang_start::{{closure}}` inclusive, dropping the loader and the
+# stack-guard parse above it, and the 5,081 was measured before that cut.
+# __memcmp_avx2_movbe is ifunc-dispatched and inside the surviving frame at
+# 3.24%, so the mechanism is not gone; it simply did not move here.
+#
+# The key stays anyway. One binary agreeing on three chips is one binary, and
+# the cost of keeping the key is a CI run per chip while the cost of dropping
+# it is the regression this vein exists to catch. If a later change shows the
+# same three keys agreeing again, THAT is the evidence for asking whether the
+# table should collapse — and it would be an argument made about the table,
+# with the readings behind it, not a tidy-up.
+#
+# 2026-09-05 (fourth), and the table is one row again — the third time today
+# and the second by a RUNTIME change. src/runtime.c is include_str!'d into the
+# compiler, so a raw door added to it moves the compiler's own bytes and the
+# layout under them. This one moves them DOWN: family0x19-model0x11 read
+# 41,378,619 on the binary before the utf8-over-slice twin and 41,377,663 on
+# the one with it, a FALL of 956 held on one chip across both binaries, so
+# none of it is the silicon. `kanso check lib/json` emits nothing, so the
+# validator that changed cannot run during the measurement; what moved is
+# layout, for the eighth time on this vein. compile_allocs, compile_peak_bytes,
+# rounds and visits are byte-identical. The Emerald Rapids and Zen 3 rows
+# measured the binary before it and are removed rather than carried forward
+# with the delta applied, for the reason the header gives.
+family0x19-model0x11 41377663

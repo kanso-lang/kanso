@@ -58,6 +58,44 @@ research mandate it left with.)
 ## Open, not blocking
 
 
+### Should the welfare index carry a term for machine-code size?
+
+**Searched:** design/compiler-log.md and the archive carry the weights gavel
+of 2026-09-02 ("the weights, tuned to the developer's order of noticing") and
+gavel 1 of 2026-08-2x, which added compile cost to the objective after task
+#20 found it could not see what compiling costs to run. Both establish that
+the objective's terms are Clay's. Neither considered machine-code size.
+`bench/text_golden.txt` has watched `.text` since it was created, and its own
+header says the allocation counters and the emitted-line count cannot see it;
+nothing anywhere connects that vein to `scripts/welfare`. CLAUDE.md states the
+premise plainly — "wall time is absent because it cannot be made
+deterministic, and what a model leaves out it implicitly weights at zero" —
+and says arguing the model is the intended way to change it.
+
+**What raised it.** `k_str_n` gained an `always_inline` (kanso#1247). It buys
+15,427,521 instructions on jsonbench, 21,531,186 on scanbench and 8.585% on
+indexbench, and it costs 34,320 bytes of machine code — ALL TWELVE `.text`
+rows rise, 400 to 5,024 bytes each. The two prelude shims in the same PR grew
+four rows and eight, because the linker drops a twin nothing calls; a copy
+loop written at every site that makes a string cannot be dropped. welfare
+scored the change 73.85 -> 73.90 without seeing any of that.
+
+**Why it is not blocking.** All three changes in that PR rise on the current
+model, and all three rise on any model that weighs `.text` at less than what
+the instruction falls are worth. The 34,320 bytes are already priced in their
+own vein with a sentence, so nothing is silent — the question is only whether
+the SUM should carry the term. And the floor moved UP, so the rule that a
+disputed weight must be settled before the floor moves does not bite.
+
+**Recommendation: no term, and record why.** `.text` is watched exactly, per
+program, in a vein that already refuses a silent move, which is what the
+per-counter goldens are for; the welfare sum exists to catch a TRADE between
+dimensions, and a trade against machine-code size has now been seen once. One
+instance is thin evidence for a weight, and a weight guessed rather than
+measured would price every future inline decision by that guess. If the
+answer is instead that it should carry one, the honest way in is a satiation
+and a weight argued from cases — which needs more than this one.
+
 ### The compile row's residual layout term (was blocking; no longer)
 
 **ANSWERED on 2026-09-04 by building what Clay asked for, not by a ruling on

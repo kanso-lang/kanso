@@ -467,15 +467,39 @@
 # short run answers there for a fifth of what the wide pass charges. The seven
 # that hold are the programs that never reach utf-8 validation at all.
 # jsonbench spends 1,392 bytes here to save 36.9 million instructions.
-jsonbench text=88066
-encodebench text=108130
-oneshot text=110690
-basket text=101954
-widebench text=111650
-deepbench text=69730
-escapebench text=52258
-pendbench text=83218
-indexbench text=54050
-scanbench text=148530
-digestbench text=103426
-readbench text=49586
+#
+# 2026-09-05 (find2 takes five scalars through a shim): four rows rise 400 to
+# 432 bytes and eight hold exactly still. The prelude shim is emitted in every
+# program, so the emitted-line count moves everywhere; the linker drops it
+# wherever nothing calls it, which is what the eight unmoved rows are. The four
+# that grow are the four that scan for a byte pair.
+#
+# 2026-09-05 (k_str_n inlines at every call site): ALL TWELVE rows rise, 400 to
+# 5,024 bytes and 34,320 in total. This is the vein's whole point showing: the
+# two shims before it grew four rows and eight, because the linker drops a
+# prelude twin wherever nothing calls it, and this one is a copy loop written
+# out at every site that makes a string. jsonbench spends 4,320 bytes for
+# 15,427,521 instructions and scanbench 5,024 for 21,531,186; indexbench spends
+# 1,952 for 449,994, which is the worst rate of the twelve and still a fall of
+# 8.585%. The welfare index has no term for machine-code size, so the objective
+# cannot see this trade and does not price it — this row is where it is priced.
+#
+# 2026-09-05 (third): jsonbench 92,818 -> 92,834 and oneshot 115,250 ->
+# 115,266, 16 bytes each and nothing else. The `k_b_utf8_slice_fast` twin is
+# `internal` and the linker drops it from the ten programs that never reach
+# `utf8` over a `slice`, so the whole cost of this change sits on its two
+# callers. Against `k_str_n`'s 34,320 bytes over all twelve rows in
+# kanso#1247, the difference is that a dropped twin costs nothing where a copy
+# loop written at every call site cannot be dropped anywhere.
+jsonbench text=92834
+encodebench text=112674
+oneshot text=115266
+basket text=105682
+widebench text=116194
+deepbench text=70530
+escapebench text=52658
+pendbench text=85218
+indexbench text=56002
+scanbench text=153554
+digestbench text=105346
+readbench text=51346

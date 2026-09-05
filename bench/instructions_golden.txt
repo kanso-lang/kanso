@@ -72,15 +72,47 @@
 # byte-identical: they never reach utf-8 validation. No allocation counter
 # moves and the emitted line count is unchanged — this is entirely inside the
 # runtime.
-jsonbench 1877751716
-encodebench 5807819641
-oneshot 29863599
-basket 39914087
-widebench 58271408
-deepbench 678049713
-escapebench 130170743
-pendbench 702115580
-indexbench 5242116
-scanbench 1425334005
-digestbench 80996418
-readbench 2000657813
+#
+# 2026-09-05 (two doors take registers instead of boxes, and k_str_n inlines):
+# nine rows fall, three rise. work_jsonbench 1,877,751,716 -> 1,791,154,445, a
+# fall of 4.612%: the find2 and slice prelude twins test the argument tags in
+# the emitted module and hand a raw door scalars, so the boxed guards and the
+# stack-passed fourth KValue go. work_indexbench 5,242,116 -> 4,792,124
+# (-8.584%) and work_scanbench 1,425,334,005 -> 1,406,298,324 (-1.335%) are
+# mostly k_str_n's always_inline; scanbench's NET fall is what matters, since
+# the slice twin cost it 2,495,505 on its own and k_str_n returned more than
+# that. work_oneshot 29,275,729 (-1.968%), work_widebench 57,839,394 (-0.741%),
+# work_pendbench 700,501,795 (-0.230%), work_basket 39,875,796 (-0.096%),
+# work_encodebench 5,802,859,663 (-0.085%), work_digestbench 80,995,637 (-781).
+#
+# THREE RISE. work_deepbench 678,049,713 -> 678,049,725 and work_escapebench
+# 130,170,743 -> 130,170,757 are twelve and fourteen instructions, which is the
+# twins' tag tests on the few calls those programs make. work_readbench
+# 2,000,657,813 -> 2,038,393,968, a rise of 1.886%, is k_str_n and is real: that
+# benchmark reads a file and holds few short strings and many long ones, and an
+# inlined copy loop loses to a called one when the copy dominates. The objective
+# takes the trade -- see the entry of the same date, and bench/text_golden.txt
+# for the 34,320 bytes of machine code it also costs.
+#
+# 2026-09-05 (third): the utf8-over-slice twin. Three rows fall and nine hold
+# EXACTLY still, which is what the local A/B predicted: eight of the twelve
+# benchmark binaries came out byte-identical to the ones before the change, so
+# those rows could not move, and widebench's binary differed while its count
+# did not. work_jsonbench lands on 1,783,183,295, a fall of 7,971,150 and
+# 0.4450%. work_oneshot lands on 29,222,587, a fall of 53,142 and 0.1815%.
+# work_encodebench lands on 5,802,806,121, a fall of 53,542. The container
+# measured the same three deltas TO THE INSTRUCTION on its own pair of builds,
+# which is the strongest agreement this vein has recorded between the two
+# hosts.
+jsonbench 1783183295
+encodebench 5802806121
+oneshot 29222587
+basket 39875796
+widebench 57839394
+deepbench 678049725
+escapebench 130170757
+pendbench 700501795
+indexbench 4792124
+scanbench 1406298324
+digestbench 80995637
+readbench 2038393968

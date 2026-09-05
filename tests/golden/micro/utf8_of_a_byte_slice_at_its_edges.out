@@ -1,0 +1,12 @@
+two bytes: hi
+one byte:  
+the whole of it: hi there
+the last byte: e
+from below one: 
+backwards: 
+past the end: 
+wholly past the end: 
+a sequence whole: hé
+a sequence cut: refused
+its tail alone: refused
+a list falls through: hi

@@ -92,7 +92,19 @@
 # tree to take apart again; the tree switches on the raw value now. The
 # branches this drops are the tag test and the none test the tree wrote per
 # call. jsonbench retires 13.56% fewer instructions for it.
-defines=174
-calls=1851
-branches=1196
-lines=12218
+#
+# 2026-09-05 (slice takes four scalars through a shim): +1 define, +2 calls,
+# +1 branch, +25 lines, in every program whether it slices bytes or not. That
+# is the prelude twin: the emitter writes it once per module and the linker
+# drops it wherever nothing calls it, which is why only eight of the twelve
+# .text rows grew. The find2 shim before it cost the same shape.
+#
+# 2026-09-05 (third): one more prelude twin, `k_b_utf8_slice_fast`, and the
+# same shape a third time — +1 define, +2 calls, +1 branch, +25 lines here and
+# +26 in every other module. The emitter writes the twin whether the program
+# calls the builtin or not; only jsonbench and oneshot grew any machine code
+# for it, 16 bytes each.
+defines=177
+calls=1857
+branches=1199
+lines=12298

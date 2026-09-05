@@ -1,0 +1,37 @@
+# `utf8` over a `slice` is fused into one call, and the bytes container is the
+# arm the fusion exists for. tests/golden/runtime/utf8_of_a_slice_names_the
+# _wrapper.kso reaches the same lowering with a LIST, which falls through to
+# the general slice and the general utf8 — so the door that clamps a range
+# against a byte buffer and validates in place had nothing on it.
+#
+# The native emitter tests the three tags in the prelude and hands that door a
+# pointer, a length and two integers. Every range the clamp can refuse is
+# below, and so is each side of the validity test: a sequence taken whole, the
+# same sequence cut in half, and a lone continuation byte.
+import "std/text"
+
+b = text/bytes "hi there"
+
+# "hé" — 0x68 0xc3 0xa9, so byte 2 opens a two-byte sequence and byte 3
+# finishes it.
+w = text/bytes "hé"
+
+fn told (err _)
+  "refused"
+
+fn told s
+  "{s}"
+
+pub play =
+  print "two bytes: {told (text/utf8 (text/slice b 1 2))}"
+  >> print "one byte: {told (text/utf8 (text/slice b 3 3))}"
+  >> print "the whole of it: {told (text/utf8 (text/slice b 1 8))}"
+  >> print "the last byte: {told (text/utf8 (text/slice b 8 8))}"
+  >> print "from below one: {told (text/utf8 (text/slice b 0 2))}"
+  >> print "backwards: {told (text/utf8 (text/slice b 4 2))}"
+  >> print "past the end: {told (text/utf8 (text/slice b 7 9))}"
+  >> print "wholly past the end: {told (text/utf8 (text/slice b 12 14))}"
+  >> print "a sequence whole: {told (text/utf8 (text/slice w 1 3))}"
+  >> print "a sequence cut: {told (text/utf8 (text/slice w 1 2))}"
+  >> print "its tail alone: {told (text/utf8 (text/slice w 3 3))}"
+  >> print "a list falls through: {told (text/utf8 (text/slice [104 105] 1 2))}"

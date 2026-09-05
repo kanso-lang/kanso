@@ -2289,6 +2289,16 @@ KValue k_str_lit(const char* data, long long len, KValue* slot) {
     return *slot;
 }
 
+/* Inlined at every call site, which is a trade the objective priced rather
+   than a free win. It is 1,305,302 calls on jsonbench alone, 46 instructions
+   apiece, and most of a short string's cost is the call rather than the arena
+   bump and the memcpy inside it. Inlining it makes ten work rows fall and one
+   rise — readbench by 1.886% — and grows every program's `.text` by 400 to
+   4,368 bytes. Opening the door at only the hot caller instead keeps readbench
+   still and every `.text` row still, and scores 73.79 against this shape's
+   73.82. The sum is the objective and the terms are diagnostics, so this is
+   the shape that ships; the narrow one is recorded in the log beside it. */
+__attribute__((always_inline))
 KValue k_str_n(const char* data, long long len) {
     if (len == 1) {
         unsigned char b = (unsigned char)data[0];
@@ -6146,19 +6156,31 @@ static KValue k_utf8_finish(KValue bv, const char* origin);
 KValue k_b_slice(KValue container, KValue fromv, KValue tov);
 KValue k_b_utf8(KValue lv, const char* origin);
 
+/* The bytes arm of `utf8` over a slice, with the KValue convention taken off
+   its inputs. Three KValues and a pointer want seven of the six integer
+   registers the SysV ABI has, so the last argument spills to the stack and the
+   callee reloads it; the arithmetic that follows is a clamp and two adds. The
+   emitter reaches this door through the `k_b_utf8_slice_fast` shim, which
+   tests the three tags itself; `k_b_utf8_slice` below is the same call for
+   anything the shim turns away. */
+KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
+                          long long from, long long to, const char* origin) {
+    const char* data = (const char*)bytes;
+    long long len = 0;
+    if (!(from < 1 || from > to || to > blen)) {
+        data += from - 1;
+        len = to - from + 1;
+    }
+    KValue bad = k_utf8_bad(data, len, origin);
+    if (bad.tag == K_ERR) return bad;
+    return k_str_n(data, len);
+}
+
 KValue k_b_utf8_slice(KValue container, KValue fromv, KValue tov, const char* origin) {
     if (container.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(container);
-        long long from = fromv.payload, to = tov.payload;
-        const char* data = (const char*)b->data;
-        long long len = 0;
-        if (!(from < 1 || from > to || to > b->len)) {
-            data += from - 1;
-            len = to - from + 1;
-        }
-        KValue bad = k_utf8_bad(data, len, origin);
-        if (bad.tag == K_ERR) return bad;
-        return k_str_n(data, len);
+        return k_b_utf8_slice_raw(b->data, b->len, fromv.payload, tov.payload,
+                                  origin);
     }
     KValue sliced = k_b_slice(container, fromv, tov);
     return k_b_utf8(sliced, origin);
@@ -6794,43 +6816,60 @@ KValue k_b_length(KValue v) {
 /* Scan for the first of two bytes at or after a 1-based position — the string
    scanner's inner loop, done as a tight pass instead of one boxed dispatch per
    byte. Returns the 1-based hit, or len+1 when neither byte appears. */
-KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
+/* The scan, with the KValue convention taken off it. Every argument fits in a
+   register here, where four KValues do not: three of them fill the six the
+   SysV ABI has and the fourth arrives as a pointer to the stack, which the
+   caller has to store and the callee has to load and unpack before it can
+   splat the byte. That unpacking was fourteen of this function's fifty-four
+   instructions on jsonbench and the scan itself was ten. The emitter reaches
+   this door directly through the `k_b_find2_fast` shim; `k_b_find2` below is
+   the same call for anything the shim's tag test turns away. */
+long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
+                        long long a, long long b) {
     k_stat_find2_calls++;
-    if (!k_not_failure(cs)) return cs;
-    if (!k_not_failure(from)) return from;
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-    if (cs.tag != K_BYTES) k_die("find2 takes bytes");
-    KBytes* by = k_as_bytes(cs);
-    long long p = from.payload < 1 ? 0 : from.payload - 1;
-    unsigned char ca = (unsigned char)(a.payload & 0xff);
-    unsigned char cb = (unsigned char)(b.payload & 0xff);
-    const unsigned char* d = by->data;
+    long long p = from < 1 ? 0 : from - 1;
+    unsigned char ca = (unsigned char)(a & 0xff);
+    unsigned char cb = (unsigned char)(b & 0xff);
     long long i = p;
 #if defined(__aarch64__)
     /* 16 bytes per step; the shrn-by-4 narrow turns the match vector into a
        64-bit mask (4 bits per byte), so ctz/4 names the first hit. */
     uint8x16_t va = vdupq_n_u8(ca), vb = vdupq_n_u8(cb);
-    for (; i + 16 <= by->len; i += 16) {
+    for (; i + 16 <= len; i += 16) {
         uint8x16_t chunk = vld1q_u8(d + i);
         uint8x16_t m = vorrq_u8(vceqq_u8(chunk, va), vceqq_u8(chunk, vb));
         uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
         uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
-        if (mask) return k_int(i + (__builtin_ctzll(mask) >> 2) + 1);
+        if (mask) return (i + (__builtin_ctzll(mask) >> 2) + 1);
     }
 #elif defined(__x86_64__)
     __m128i va = _mm_set1_epi8((char)ca), vb = _mm_set1_epi8((char)cb);
-    for (; i + 16 <= by->len; i += 16) {
+    for (; i + 16 <= len; i += 16) {
         __m128i chunk = _mm_loadu_si128((const __m128i*)(d + i));
         __m128i m = _mm_or_si128(_mm_cmpeq_epi8(chunk, va), _mm_cmpeq_epi8(chunk, vb));
         int mask = _mm_movemask_epi8(m);
-        if (mask) return k_int(i + __builtin_ctz(mask) + 1);
+        if (mask) return (i + __builtin_ctz(mask) + 1);
     }
 #endif
-    for (; i < by->len; i++) {
-        if (d[i] == ca || d[i] == cb) return k_int(i + 1);
+    for (; i < len; i++) {
+        if (d[i] == ca || d[i] == cb) return (i + 1);
     }
-    return k_int(by->len + 1);
+    return len + 1;
 }
+
+KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
+    if (!k_not_failure(cs)) { k_stat_find2_calls++; return cs; }
+    if (!k_not_failure(from)) { k_stat_find2_calls++; return from; }
+    if (!k_not_failure(a) || !k_not_failure(b)) {
+        k_stat_find2_calls++;
+        return k_both_or_either(a, b);
+    }
+    if (cs.tag != K_BYTES) { k_stat_find2_calls++; k_die("find2 takes bytes"); }
+    KBytes* by = k_as_bytes(cs);
+    return k_int(k_b_find2_raw(by->data, by->len, from.payload, a.payload,
+                               b.payload));
+}
+
 
 /* The byte builder. Appends a string, a bytes value, or a single byte
    onto a bytes accumulator. The accumulator owns a KBuf-headed buffer and
@@ -7066,6 +7105,18 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
     return k_int(by->len + 1);
 }
 
+/* The bytes arm of `slice`, with the KValue convention taken off its inputs.
+   A view is a header and two words, so the arithmetic here is four compares
+   and an add; everything before it in `k_b_slice` is the boxing. The emitter
+   reaches this door through the `k_b_slice_fast` shim, which tests the three
+   tags itself; `k_b_slice` below is the same call for anything the shim turns
+   away, and for the list and string containers, which do not come here. */
+KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
+                     long long to) {
+    if (from < 1 || from > to || to > len) return k_bytes_view(data, 0);
+    return k_bytes_view(data + (from - 1), to - from + 1);
+}
+
 KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(fromv)) return fromv;
@@ -7074,8 +7125,7 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     long long from = fromv.payload, to = tov.payload;
     if (container.tag == K_BYTES) {
         KBytes* b = k_as_bytes(container);
-        if (from < 1 || from > to || to > b->len) return k_bytes_view(b->data, 0);
-        return k_bytes_view(b->data + (from - 1), to - from + 1);
+        return k_b_slice_raw(b->data, b->len, from, to);
     }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
