@@ -3851,5 +3851,41 @@ watched, restored, green. The loop is written over a local `dst` so that the
 guard and the sed name one site: `k_rec_reuse`'s loop is textually identical
 otherwise.
 
-**OPEN.** `bench/instructions_golden.txt` and the compile row wait on CI, as
-they did for the entry two above. The chip table is emptied for the tenth time.
+### CI's rows, and every delta matching the container's
+
+The work vein could not be regenerated here — this container is glibc
+2.39-0ubuntu8.7 against the golden's 8.8 and `host_gate.sh` refuses. These are
+CI's, copied out of the job log, and every one of the thirteen differs from the
+container's reading by the same fixed 399 the exec path costs:
+
+    work_encodebench   5,310,898,813 -> 5,297,521,213   -13,377,600   -0.2519%
+    work_livebench     5,300,749,093 -> 5,287,371,493   -13,377,600   -0.2524%
+    work_pendbench       681,320,025 ->   666,112,225   -15,207,800   -2.2321%
+    work_oneshot          27,703,105 ->    27,669,661       -33,444   -0.1207%
+    work_basket           39,737,290 ->    39,729,141        -8,149   -0.0205%
+    work_scanbench     1,395,728,376 -> 1,395,728,287           -89
+
+The other seven rows do not move at all. NO WORK ROW RISES.
+
+**THE COMPILE ROW.** CI drew family0x19-model0x1 on the table this branch
+emptied, refused rather than comparing against nothing, and printed the row:
+
+    compile_sample cpu="cpu family 0x19 model 0x1" sha=77aec04ae49f row=41379381
+
+`compile_instructions` lands on 41,379,381 against the old series' 41,381,326, a
+FALL of 1,945 from a change that touches only the runtime. `kanso check lib/json`
+emits nothing, so the code that changed cannot run during the measurement; what
+moved is layout, for the eleventh time on this vein. compile_allocs holds at
+25,490 and compile_peak_bytes at 715,275.
+
+**AND `text` WORSENED, which is this change's real price.** The trend gate went
+red on it and was right to: the counter is `text`, it lands on **1,117,768**
+from 1,117,192, a rise of 576 across the corpus. That is the inline loop's
+machine code, 64 bytes in each of nine benchmarks, and it is what the branch
+BUYS the 13.4M encode instructions with. Naming the fall without naming the rise
+is the shape kanso#1205 caught, so both are here with their values.
+
+**WELFARE 74.15241668591877 -> 74.15975334184456**, a rise of 0.00733666, `--set`
+with its reason in the same change. The page's
+`compile.compile_instructions` span moves with the golden, because a number on
+the page and a number in a golden are one claim; `golden_prose` reads 0 drifted.
