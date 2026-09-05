@@ -6072,6 +6072,47 @@ static int k_all_ascii(const char* data, long long len) {
     return 1;
 }
 
+#define K_UTF8_SCALAR_MAX 32
+
+
+/* The grammar walked a byte at a time. It was the portable arm of the wide
+   pass and nothing but a host without simd ever reached it; it is a function
+   now because a short run is cheaper here than in the wide pass, which spends
+   seven constant loads and two zeroed accumulators before its first block and
+   then reads a trailing zero block whatever the length. 298 instructions to
+   answer for seven bytes was what jsonbench measured. Every arm returns the
+   same sentence the wide pass returns, so which one answered is not
+   observable. */
+static KValue k_utf8_bad_scalar(const char* data, long long len, const char* origin) {
+    long long i = 0;
+    while (i < len) {
+        long long block_end = i + 16 <= len ? i + 16 : len;
+        while (i < block_end) {
+            unsigned char b0 = (unsigned char)data[i];
+            if (b0 < 0x80) { i += 1; continue; }
+            long w;
+            unsigned lo = 0x80, hi = 0xBF;
+            if (b0 >= 0xC2 && b0 <= 0xDF) { w = 2; }
+            else if (b0 == 0xE0) { w = 3; lo = 0xA0; }
+            else if (b0 >= 0xE1 && b0 <= 0xEC) { w = 3; }
+            else if (b0 == 0xED) { w = 3; hi = 0x9F; }
+            else if (b0 >= 0xEE && b0 <= 0xEF) { w = 3; }
+            else if (b0 == 0xF0) { w = 4; lo = 0x90; }
+            else if (b0 >= 0xF1 && b0 <= 0xF3) { w = 4; }
+            else if (b0 == 0xF4) { w = 4; hi = 0x8F; }
+            else return k_err(k_str("invalid utf-8"), origin);
+            if (i + w > len) return k_err(k_str("invalid utf-8"), origin);
+            unsigned char b1 = (unsigned char)data[i + 1];
+            if (b1 < lo || b1 > hi) return k_err(k_str("invalid utf-8"), origin);
+            for (long j = 2; j < w; j++) {
+                if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
+            }
+            i += w;
+        }
+    }
+    return k_none();
+}
+
 static KValue k_utf8_bad_wide(const char* data, long long len, const char* origin);
 
 /* The front door to utf-8 validation, and it answers without one for every
@@ -6087,6 +6128,7 @@ static inline __attribute__((always_inline))
 KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     k_stat_utf8_bytes += len;
     if (k_all_ascii(data, len)) return k_none();
+    if (len <= K_UTF8_SCALAR_MAX) return k_utf8_bad_scalar(data, len, origin);
     return k_utf8_bad_wide(data, len, origin);
 }
 static KValue k_utf8_check(char* data, long long len, const char* origin);
@@ -6302,32 +6344,7 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
         return k_err(k_str("invalid utf-8"), origin);
     return k_none();
 #else
-    long long i = 0;
-    while (i < len) {
-        long long block_end = i + 16 <= len ? i + 16 : len;
-        while (i < block_end) {
-            unsigned char b0 = (unsigned char)data[i];
-            if (b0 < 0x80) { i += 1; continue; }
-            long w;
-            unsigned lo = 0x80, hi = 0xBF;
-            if (b0 >= 0xC2 && b0 <= 0xDF) { w = 2; }
-            else if (b0 == 0xE0) { w = 3; lo = 0xA0; }
-            else if (b0 >= 0xE1 && b0 <= 0xEC) { w = 3; }
-            else if (b0 == 0xED) { w = 3; hi = 0x9F; }
-            else if (b0 >= 0xEE && b0 <= 0xEF) { w = 3; }
-            else if (b0 == 0xF0) { w = 4; lo = 0x90; }
-            else if (b0 >= 0xF1 && b0 <= 0xF3) { w = 4; }
-            else if (b0 == 0xF4) { w = 4; hi = 0x8F; }
-            else return k_err(k_str("invalid utf-8"), origin);
-            if (i + w > len) return k_err(k_str("invalid utf-8"), origin);
-            unsigned char b1 = (unsigned char)data[i + 1];
-            if (b1 < lo || b1 > hi) return k_err(k_str("invalid utf-8"), origin);
-            for (long j = 2; j < w; j++) {
-                if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
-            }
-            i += w;
-        }
-    }
+    return k_utf8_bad_scalar(data, len, origin);
     return k_none();
 #endif
 }

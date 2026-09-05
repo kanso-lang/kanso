@@ -35,6 +35,23 @@ wide_head = "static KValue k_utf8_bad_wide(const char* data, long long len,"
 
 wide_sig = "{wide_head}{sig_tail}"
 
+# The third arm. A run under the threshold walks the grammar a byte at a time
+# rather than paying the wide pass's setup, and the door chooses between them
+# on the length — so the threshold is extracted too rather than written twice.
+scalar_head = "static KValue k_utf8_bad_scalar(const char* data, long long len,"
+
+scalar_sig = "{scalar_head}{sig_tail}"
+
+scalar_out = "static int harness_utf8_scalar(const char* data,"
+
+harness_scalar_sig = "{scalar_out} long long len) \{"
+
+scalar_call = "return k_utf8_bad_scalar(data, len, origin);"
+
+harness_scalar_call = "return harness_utf8_scalar(data, len);"
+
+threshold_head = "#define K_UTF8_SCALAR_MAX "
+
 wide_out = "static int harness_utf8_wide(const char* data,"
 
 harness_wide_sig = "{wide_out} long long len) \{"
@@ -112,9 +129,23 @@ fn swapped src from to
 fn as_harness src
   ascii = body_of src ascii_sig
   wide = as_wide (no_err (body_of src wide_sig))
+  scalar = as_scalar (no_err (body_of src scalar_sig))
   door = as_door (body_of src signature)
   chars = swapped (body_of src chars_sig) chars_sig harness_chars_sig
-  "{header}{ascii}\n{wide}\n{door}\n{chars}\n"
+  cap = threshold_of src
+  "{header}{cap}\n{ascii}\n{wide}\n{scalar}\n{door}\n{chars}\n"
+
+# The threshold the door reads, taken from the line that defines it.
+fn threshold_of src
+  parts = text/split src threshold_head
+  "{threshold_head}{cut_at_newline parts[2]!}"
+
+fn cut_at_newline s
+  (text/split s "\n")[1]!
+
+fn as_scalar body
+  named = swapped body scalar_sig harness_scalar_sig
+  swapped named "return k_none();" "return 1;"
 
 fn as_wide body
   named = swapped body wide_sig harness_wide_sig
@@ -124,7 +155,8 @@ fn as_door body
   named = swapped body signature harness_sig
   ok = swapped named "return k_none();" "return 1;"
   counted = swapped ok "k_stat_utf8_bytes += len;" ""
-  swapped counted wide_call harness_wide_call
+  wided = swapped counted wide_call harness_wide_call
+  swapped wided scalar_call harness_scalar_call
 
 # The validator's x86 path is written in ssse3 intrinsics, which clang refuses
 # to compile unless the target is told it has them.
