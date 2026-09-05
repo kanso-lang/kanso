@@ -2593,6 +2593,7 @@ impl<'a> Backend<'a> {
         }
         let mut disc: Option<usize> = None;
         let mut int_arms = 0;
+        let mut nullary_arms = 0;
         for decl in decls {
             for (i, pattern) in decl.params.iter().enumerate() {
                 match pattern {
@@ -2602,15 +2603,20 @@ impl<'a> Backend<'a> {
                             return None;
                         }
                         disc = Some(i);
-                        if matches!(pattern, Pattern::IntLit(..)) {
-                            int_arms += 1;
+                        match matches!(pattern, Pattern::IntLit(..)) {
+                            true => int_arms += 1,
+                            false => nullary_arms += 1,
                         }
                     }
                     _ => return None,
                 }
             }
         }
-        match (disc, int_arms >= 2) {
+        // Two int arms, or one against a generic tail and nothing else — the
+        // shape every counted recursion is written in, `fn f acc 0` beside
+        // `fn f acc n`.
+        let switchable = int_arms >= 2 || (int_arms == 1 && nullary_arms == 0);
+        match (disc, switchable) {
             (Some(d), true) => Some(d),
             _ => None,
         }

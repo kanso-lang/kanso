@@ -3700,3 +3700,75 @@ not measured.
 `switch_shape` refuses the type arms and `tag_switch_shape` refuses the
 literals. The shape that would serve both is a switch on the tag whose int case
 holds a second switch on the payload; nothing in the corpus asked for it yet.
+
+---
+
+## 2026-09-05 — ONE LITERAL AGAINST A GENERIC TAIL IS A SWITCH TOO
+
+**DONE, beside the entry above and in the same branch.** `switch_shape` had
+required two int-literal arms before it would build a switch. That threshold
+excluded the shape every counted recursion in the language is written in:
+
+    fn filled acc _ 0
+      acc
+
+    fn filled acc k n
+      filled (push acc ...) k (n - 1)
+
+One literal base case and a generic tail. The cascade tests the literal, then
+binds. escapebench's inner loop is exactly this, and it was walking the cascade
+on every iteration.
+
+**The blanket relaxation was measured first and DECLINED.** Dropping the
+threshold to one int arm outright reads:
+
+    escapebench   120,585,186 -> 114,597,187   -4.9658%
+    jsonbench   1,732,114,716 -> 1,778,998,567   +2.3934%
+    oneshot        25,760,418 ->     26,037,644   +1.0762%
+    deepbench     707,820,849 ->    708,508,852   +0.0972%
+
+Welfare 74.5533 -> **74.52**, a fall of 0.04. The decoder's rise is not a worse
+dispatch: `obj_key_start_4'2` FELL 77,361,900 and `obj_items_3'2` vanished
+entirely, but `obj_value_4` and its recursive twin appeared from nothing at
+158,579,100 — the group gained a switch, grew, and stopped being inlined into
+its caller. A lost inline, priced by the objective and refused by it.
+
+**What separates the two is a real distinction rather than a threshold.** Every
+decoder group the relaxation reached — `obj_key_start`, `obj_open`,
+`array_open`, `number_start?` — has a NULLARY arm beside its single literal:
+they are asking two different questions of one parameter, is-this-byte and
+is-this-the-end, and the cascade already orders them. `filled` has no nullary
+arm at all. So the rule is two int arms, or one against a generic tail and
+nothing else. Measured:
+
+    escapebench   120,585,186 -> 114,597,187   -4.9658%
+    basket         38,531,695 ->     38,568,710   +0.0961%
+    deepbench     707,820,849 ->    708,508,852   +0.0972%
+    jsonbench   1,732,114,716 -> 1,737,414,667    -0.0000%
+    oneshot        25,760,418 ->     25,760,418    +0.0000%
+
+The whole of the decoder's regression is gone and the whole of escapebench's win
+is kept. **Welfare 74.5533 -> 74.5605**, banked.
+
+**The worsened rows by name.** `work_basket` lands on **38,569,123**,
+`work_deepbench` on **708,508,207**, `work_pendbench` on **666,098,674** and
+`work_digestbench` on **77,353,441** — each a group that gained a switch whose
+literal is not on its hot path, so the switch costs a jump the cascade's first
+compare would have answered. `work_jsonbench` lands on **1,737,415,080**, which
+is the entry above's inlining consequence and 149 instructions below where that
+entry left it. `lines` in `bench/compile_golden.txt` lands on **5,018**: the
+`recursion` sample is the one of the five that has this shape, and its `calls`
+fall from 42 to 40 while its lines rise by three, which is the switch replacing
+two check calls with a block.
+
+`compile_instructions` does not move at all — 42,344,458 on the container both
+sides — and neither do `compile_allocs` or `compile_peak_bytes`. Counting one
+more pattern kind per group at emit time is free at this scale.
+
+**Watched red.** The new micro golden `a_counted_recursion_reaches_its_base_arm`
+pins the base arm, a non-zero int, a negative, a string, `none` — the case the
+two paths could genuinely differ on, since the cascade's generic arm accepts it
+and so must the switch's default — a foreign failure, and the recursion's own
+answer. Adding a digit to the switch's case value turned `base` into `step 0`
+and the sum from 55 into 54 against the interpreter. Reverted; the corpus is
+green.
