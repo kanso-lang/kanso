@@ -1240,3 +1240,4 @@
 #
 # CI supplies the first row of the next series.
 family0x19-model0x1 41379381
+family0x6-model0xcf 41379381

@@ -3871,6 +3871,12 @@ The other seven rows do not move at all. NO WORK ROW RISES.
 emptied, refused rather than comparing against nothing, and printed the row:
 
     compile_sample cpu="cpu family 0x19 model 0x1" sha=77aec04ae49f row=41379381
+    compile_sample cpu="cpu family 0x6 model 0xcf" sha=77aec04ae49f row=41379381
+
+The second is Emerald Rapids, drawn on the next round; it found no row on the
+new series, refused, and counted the same number to the instruction. Two chips,
+two vendors, one binary, one number — and two CI rounds to learn it, because
+each chip refuses once.
 
 `compile_instructions` lands on 41,379,381 against the old series' 41,381,326, a
 FALL of 1,945 from a change that touches only the runtime. `kanso check lib/json`
