@@ -77,14 +77,18 @@
 # — `k_b_utf8_slice_fast`, written into every module by the prelude. Ten of the
 # eleven programs here do not call it and the linker drops it from all ten:
 # bench/text_golden.txt moved on two rows only.
-encodebench defines=177 calls=1714 branches=1043 lines=11140
-oneshot defines=177 calls=1851 branches=1190 lines=12240
-basket defines=136 calls=1353 branches=771 lines=7781
-widebench defines=193 calls=1935 branches=1145 lines=12181
-deepbench defines=110 calls=869 branches=565 lines=5647
-escapebench defines=45 calls=122 branches=87 lines=1261
-pendbench defines=124 calls=1278 branches=656 lines=6768
-scanbench defines=325 calls=3772 branches=2259 lines=20619
-indexbench defines=51 calls=184 branches=115 lines=1656
-digestbench defines=184 calls=1633 branches=912 lines=9843
-readbench defines=54 calls=180 branches=124 lines=1835
+#
+# 2026-09-05 (fourth): every row gains 1 define, 2 calls, 1 branch and 35
+# lines for `k_b_find2_below_fast`. Nine of the eleven never call it and the
+# linker drops it from all nine: bench/text_golden.txt moves on three rows.
+encodebench defines=178 calls=1716 branches=1044 lines=11174
+oneshot defines=178 calls=1853 branches=1191 lines=12274
+basket defines=137 calls=1355 branches=772 lines=7816
+widebench defines=194 calls=1937 branches=1146 lines=12215
+deepbench defines=111 calls=871 branches=566 lines=5682
+escapebench defines=46 calls=124 branches=88 lines=1296
+pendbench defines=125 calls=1280 branches=657 lines=6803
+scanbench defines=326 calls=3774 branches=2260 lines=20654
+indexbench defines=52 calls=186 branches=116 lines=1691
+digestbench defines=185 calls=1635 branches=913 lines=9878
+readbench defines=55 calls=182 branches=125 lines=1870

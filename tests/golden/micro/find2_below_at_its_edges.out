@@ -1,0 +1,12 @@
+the a byte: 2
+the b byte: 3
+under the limit: 5
+no match at all: 10
+from below one: 2
+from past the end: 10
+from at the first hit: 2
+inside the vector step: 3
+past the vector step: 21
+the last byte of all: 24
+a zero limit is no limit: 10
+a limit past a byte: 1

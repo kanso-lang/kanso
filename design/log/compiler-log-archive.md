@@ -43143,3 +43143,25 @@ fused chain spellings — the chain dot plus one character of channel:
 - Pure fallibility benefits identically:
   `foo["bar"]! .? (e -> "anonymous")` is one-line handling with no
   ceremony, per the boxed-fallibility rider above.
+
+## 2026-08-31 — directive: the welfare chart replays the current formula
+
+Clay, seeing the #184 re-scoring as a cliff in the trend chart: the
+graph should be continuous. The history rows store raw counters per
+merge, so the chart's welfare line is to be RECOMPUTED — today's
+formula, today's baseline, replayed over every stored row — rather
+than plotting the number as it was computed at the time. The cliff
+disappears because it was never a change in the compiler.
+
+Rules of the replay:
+- The recomputed series starts where its counters start. A segment
+  computed over a subset of counters (before the instruction or
+  text veins existed) is either omitted or visibly labeled; it is
+  never passed off as the full formula.
+- The floor history in bench/welfare_floor.json stays exactly as it
+  is — it is the audit trail of when the objective moved, and it is
+  not smoothed. The chart reads the replay; the audit reads the
+  floor file.
+- Every future formula or baseline change re-runs the replay in the
+  same PR, so the chart is always one definition applied everywhere,
+  never a splice.

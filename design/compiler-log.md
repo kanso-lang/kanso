@@ -20,28 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-08-31 — directive: the welfare chart replays the current formula
-
-Clay, seeing the #184 re-scoring as a cliff in the trend chart: the
-graph should be continuous. The history rows store raw counters per
-merge, so the chart's welfare line is to be RECOMPUTED — today's
-formula, today's baseline, replayed over every stored row — rather
-than plotting the number as it was computed at the time. The cliff
-disappears because it was never a change in the compiler.
-
-Rules of the replay:
-- The recomputed series starts where its counters start. A segment
-  computed over a subset of counters (before the instruction or
-  text veins existed) is either omitted or visibly labeled; it is
-  never passed off as the full formula.
-- The floor history in bench/welfare_floor.json stays exactly as it
-  is — it is the audit trail of when the objective moved, and it is
-  not smoothed. The chart reads the replay; the audit reads the
-  floor file.
-- Every future formula or baseline change re-runs the replay in the
-  same PR, so the chart is always one definition applied everywhere,
-  never a splice.
-
 ## 2026-09-02 — gavel: the weights, tuned to the developer's order of noticing
 
 Clay, asked whether the welfare weights were justifiably optimal,
@@ -3128,3 +3106,95 @@ still a version short of it and shrink-wrapping is still ruled out by the exit
 counts, so nothing here is actionable yet; what changes is that the size of the
 prize is a measurement rather than an estimate, and it is smaller than the
 estimate was.
+
+## 2026-09-05 (fourth) — the largest spill, and the census that found it
+
+Three doors had been twinned by reading the profile and picking what looked
+expensive. The census asks the question directly instead: which of the doors
+the emitter declares take more than the six integer argument registers the
+SysV ABI has? A `KValue` is two of them, so the answer is countable from
+`src/codegen.rs` alone, and it is five — `k_call4` and `k_b_find2_below` at
+ten, `k_call3` and `k_b_find2` at eight, `k_b_utf8_slice` at seven.
+
+`k_b_find2` and `k_b_utf8_slice` were already done. `k_call3` and `k_call4`
+appear in no benchmark profile at all. That leaves `k_b_find2_below`, which
+carries 481,347,200 instructions of self cost in encodebench — 8.3% of it —
+and spills FOUR arguments, more than any other door in the tree.
+
+**The measurement, held on one host in one directory against a clean build of
+the commit it sits on.** encodebench 5,802,805,722 -> 5,563,212,122, a fall of
+239,593,600 and 4.1289%. oneshot 29,222,188 -> 28,623,204, 598,984 and 2.0498%.
+widebench's binary changed and its count did not move at all; jsonbench's
+binary is byte-identical, and so are the other eight, so those nine rows could
+not have moved. Nothing rises. `.text` grows 224 bytes on each of the three
+programs whose binaries changed and nothing on the other nine.
+
+The twin takes about half of what the door spent. Four spilled arguments are
+four stores in the caller and four loads and unpacks in the callee, on every
+call, in front of a scan that is a compare and a branch per byte.
+
+**And the census is worth keeping as a method.** `k_b_slice` fits in six
+registers and its twin still won, on the guards rather than the spill, so the
+overflow test is necessary for THIS mechanism and not sufficient for finding
+every candidate. What the count does give is a closed list: after this one,
+the only doors left that overflow are two the corpus never calls, so this
+family is finished unless a new door is declared or the two call doors start
+appearing in a benchmark.
+
+**tests/golden/micro/find2_below_at_its_edges.kso**, twelve cases. The one
+line in `bytes_are_their_own_value` took a hit on the first byte of a
+four-byte string and nothing else was pinned: not the clamp, not the limit
+guard that chooses between the sixteen-byte vector step and the scalar loop,
+not the tail the vector step cannot reach. The fixture covers each of the
+three ways a byte can match, both ends of the range, a hit inside the vector
+step and one only the tail reaches, and both ways the limit guard turns the
+vector path off — a zero limit, where the below-test can never fire, and a
+limit past any byte, where it fires on the first. Native and the interpreter
+agree byte for byte. Watched red: dropping the below-limit test from the raw
+door's scalar tail moves exactly the two cases that turn on it.
+
+**A counter nearly doubled in silence.** The body extracted into the raw door
+already opened with `k_stat_find2_calls++`, and the prologue written in front
+of it added a second. `find2_calls` is pinned in the cost goldens, so the
+first CI run would have refused a counter that moved for no reason anybody
+could name. It was caught by reading the extracted function before building
+it, which is the only reason it is a footnote rather than an entry of its own.
+
+**Every code counter the twin moved, with the value it landed on.** A fourth
+prelude twin is one `define`, two `call`s, one `branch` and thirty-five lines
+written into every module the emitter produces, whether the program reaches
+`find2_below` or not. `bench/emitted_golden.txt` reads `emitted_defines` 178,
+`emitted_calls` 1,859, `emitted_branches` 1,200 and `emitted_lines` 12,332;
+`bench/emitted_golden_others.txt` reads `emitted_other_defines` 1,587,
+`emitted_other_calls` 14,913, `emitted_other_branches` 8,878 and
+`emitted_other_lines` 91,353. `bench/compile_golden.txt` reads `defines` 179,
+`calls` 237, `branches` 272 and `lines` 4,452, with `rounds` and `visits`
+unmoved at 12 and 115. `bench/compile_golden_modules.txt` reads
+`module_defines` 95, `module_calls` 781, `module_branches` 415 and
+`module_lines` 5,058, its `module_rounds` and `module_visits` also unmoved.
+`text` lands on 1,117,976 — 672 bytes over three programs, and the other nine
+rows do not move because their binaries are byte-identical to the ones before
+this change.
+
+**CI's rows, and the two hosts agreed to the instruction again.**
+`bench/instructions_golden.txt` reads `work_encodebench` 5,563,212,521 and
+`work_oneshot` 28,623,603 — falls of 239,593,600 and 598,984, which are the
+container's two deltas exactly, on a different host with different absolute
+values. That is the second consecutive change on which this vein has recorded
+exact agreement between the runner and the container; the utf8-over-slice twin
+was the first. The other ten rows hold to the digit.
+
+**The compile row moved and the table is one row again.** `src/runtime.c` is
+`include_str!`'d into the compiler, so a door added to it moves the compiler's
+own bytes and the layout under them, and every chip's row goes stale at once.
+CI drew `family0x19-model0x1`, found no row for it — the previous entry's block
+had removed the stale one — and refused rather than comparing against somebody
+else's number. `compile_instructions` lands on 41,377,855 where the golden
+carried 41,377,663, and the Zen 4 row it replaces measured the binary before
+this one and is removed rather than carried forward with the delta applied.
+`kanso check lib/json` emits nothing, so the scan door that changed cannot run
+during the measurement; what moved is layout, for the ninth time on this vein.
+`compile_allocs` 25,490, `compile_peak_bytes` 715,275, `rounds` and `visits`
+are byte-identical.
+
+**welfare 73.99**, from 73.91, and `--set` in this same commit.
