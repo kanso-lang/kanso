@@ -17,13 +17,31 @@ import "std/text"
 # its edges are the lengths either side of a word and the characters that
 # straddle one, and the harness walks every arrangement of character widths
 # that fits in twenty-four bytes.
-sig_head = "static KValue k_utf8_bad(const char* data, long long len,"
-
 sig_tail = " const char* origin) \{"
 
-signature = "{sig_head}{sig_tail}"
+# The validator is two functions. `k_utf8_bad` is the front door: it counts the
+# bytes, asks the ascii predicate, and answers without touching the wide pass
+# for every token a json document holds. `k_utf8_bad_wide` is the pass itself,
+# reached only by a run carrying a byte with the high bit set. Both travel here
+# under their own names, and the door keeps calling the pass, so what this
+# checks is the composition rather than either half on its own.
+door_head = "KValue k_utf8_bad(const char* data, long long len,"
+
+signature = "{door_head}{sig_tail}"
 
 harness_sig = "static int harness_utf8_ok(const char* data, long long len) \{"
+
+wide_head = "static KValue k_utf8_bad_wide(const char* data, long long len,"
+
+wide_sig = "{wide_head}{sig_tail}"
+
+wide_out = "static int harness_utf8_wide(const char* data,"
+
+harness_wide_sig = "{wide_out} long long len) \{"
+
+wide_call = "return k_utf8_bad_wide(data, len, origin);"
+
+harness_wide_call = "return harness_utf8_wide(data, len);"
 
 # The character counter, extracted the same way and for the same reason. It
 # reaches the harness under a name of its own so the reference beside it can
@@ -92,13 +110,21 @@ fn swapped src from to
   text/join (text/split src from) to
 
 fn as_harness src
-  body = no_err (body_of src signature)
+  ascii = body_of src ascii_sig
+  wide = as_wide (no_err (body_of src wide_sig))
+  door = as_door (body_of src signature)
+  chars = swapped (body_of src chars_sig) chars_sig harness_chars_sig
+  "{header}{ascii}\n{wide}\n{door}\n{chars}\n"
+
+fn as_wide body
+  named = swapped body wide_sig harness_wide_sig
+  swapped named "return k_none();" "return 1;"
+
+fn as_door body
   named = swapped body signature harness_sig
   ok = swapped named "return k_none();" "return 1;"
   counted = swapped ok "k_stat_utf8_bytes += len;" ""
-  ascii = body_of src ascii_sig
-  chars = swapped (body_of src chars_sig) chars_sig harness_chars_sig
-  "{header}{ascii}\n{counted}\n{chars}\n"
+  swapped counted wide_call harness_wide_call
 
 # The validator's x86 path is written in ssse3 intrinsics, which clang refuses
 # to compile unless the target is told it has them.
