@@ -3306,11 +3306,26 @@ falsification to answer and is not made here.
 
 ## 2026-09-05 (seventh) — a condition is asked, not read
 
-Every work row in the corpus falls and none rises. digestbench −4.0580%,
-encodebench −3.6976%, oneshot −2.8065%, pendbench −2.7422%, jsonbench
-−2.1381%, indexbench −2.0954%, widebench −1.1047%, scanbench −0.7481%,
-basket −0.3558%, deepbench −0.2556%, and escapebench and readbench flat to
-four decimal places. Welfare 74.00 → 74.15 against a floor of 74.00.
+Every work row in the corpus falls and none rises, both sides counted by CI:
+
+    digestbench     80,559,329 ->     77,290,591    -3,268,738   -4.0576%
+    encodebench  5,527,056,676 ->  5,322,691,304  -204,365,372   -3.6975%
+    oneshot         28,533,505 ->     27,733,120      -800,385   -2.8051%
+    pendbench      700,529,602 ->    681,319,796   -19,209,806   -2.7422%
+    jsonbench    1,783,183,673 ->  1,745,058,173   -38,125,500   -2.1381%
+    indexbench       4,792,124 ->      4,692,123      -100,001   -2.0868%
+    widebench       57,839,754 ->     57,201,224      -638,530   -1.1040%
+    scanbench    1,406,247,707 ->  1,395,728,077   -10,519,630   -0.7481%
+    basket          39,878,996 ->     39,737,538      -141,458   -0.3547%
+    deepbench      716,506,831 ->    714,674,831    -1,832,000   -0.2557%
+    escapebench    130,170,757 ->    130,170,757             0    0.0000%
+    readbench    2,038,397,546 ->  2,038,397,546             0    0.0000%
+
+escapebench and readbench do not move by a single instruction, and that is
+the control rather than a disappointment: neither has a comparison in a hot
+loop — one tagged comparison in escapebench's whole emitted IR, two in
+readbench's — so a change that only touches comparisons must leave them
+exactly alone, and it does.
 
 Nothing in the runtime or the libraries changed. This is `src/codegen.rs`.
 
@@ -3359,16 +3374,31 @@ the tail form, where it returns.
 ### What it costs
 
 No allocation counter moves; all ten cost goldens are byte-identical. Emitted
-code and machine code both fall: the module's own compile golden goes from
-5,068 lines to 4,970 and 781 calls to 769 while gaining five branches, and
-pendbench, scanbench and digestbench lose calls, lines and text bytes
-together. Five more branches for twelve fewer calls is the trade.
+code and machine code both fall: module_lines 5,068 -> 4,970, module_calls
+781 -> 769, emitted_lines 12,344 -> 12,134, emitted_calls 1,859 -> 1,835,
+emitted_branches 1,200 -> 1,163, emitted_other_lines 91,445 -> 90,198,
+emitted_other_calls 14,913 -> 14,728, emitted_other_branches 8,878 -> 8,669,
+and text 1,119,560 -> 1,117,736.
 
-compile_instructions, compile_allocs and compile_memory could not be measured
-here — the container's rustc is 1.94.1 against the goldens' 1.98.1 — so CI
-measures them. The compiler binary changed, so the four chip rows in
-`bench/compile_instructions_by_cpu.txt` are stale and CI re-sits them one per
-run.
+ONE counter worsens, and it is the one the change is made of:
+**module_branches 415 -> 420**. Five branches is what a select and a phi and
+two calls become when the comparison decides the branch itself, and it buys
+twelve fewer calls and ninety-eight fewer lines in the same file, along with
+every fall listed above. The trend gate asked for it by name and by the value
+it landed on, which is 420.
+
+compile_allocs and compile_memory hold: 25,490 allocations and 715,275 peak
+bytes, both unchanged. compile_instructions RISES by 519, from 41,379,503 to
+**41,380,022** on family0x19-model0x1 — 0.00125% of the front end.
+
+`kanso check lib/json` emits no LLVM IR, so the front end runs no line this
+change touched. What moved is the compiler's own layout: codegen.rs gained a
+routine and everything after it sits at a different address. This repo has
+measured that artifact before, when adding and removing allocas moved clang's
+inlining budget inside untouched functions; 519 instructions is its size here.
+Only the chip CI drew is re-sat. The other three rows are stale and stay so
+until CI draws them, one per run, and the golden's bare line tracks the first
+of those, so it does not move yet either.
 
 ### The fixtures, and the pair that passed for the wrong reason
 
