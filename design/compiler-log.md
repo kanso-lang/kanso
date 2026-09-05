@@ -4194,3 +4194,16 @@ watched red first); this is the objective half. Clay's framing: the
 corpus must incorporate the behaviour being fixed so it stands as a
 test against the bug going forward — goldens catch a regression,
 the objective prices one. The ledger entry leaves with this commit.
+
+## 2026-09-05 — gavel: no machine-code-size term in welfare
+
+On "Should the welfare index carry a term for machine-code size?",
+Clay: "guessing is not okay so I guess no size term." No term.
+`.text` stays watched exactly, per program, in its own vein that
+refuses a silent move; the welfare sum exists to catch trades between
+dimensions, and one observed trade (kanso#1247's always_inline, 34,320
+bytes for tens of millions of instructions) is not evidence enough to
+weigh one. A weight guessed rather than argued from cases would price
+every future inline decision by the guess. If cases accumulate, the
+way in is a satiation and a weight argued from them, as a weights
+change. The ledger entry leaves with this commit.
