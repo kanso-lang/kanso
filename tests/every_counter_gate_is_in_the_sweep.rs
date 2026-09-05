@@ -1,0 +1,149 @@
+//! The local sweep names every counter gate, and cannot quietly miss one.
+//!
+//! `scripts/gates/all_counters.sh` exists because there are ten separate
+//! `*_counters.sh` gates and no single entry point, so following CLAUDE.md's
+//! "counters changed, regenerate every vein in the same PR" meant remembering
+//! ten filenames and which golden each one writes. kanso#1249 remembered the
+//! .mem vein, the four code goldens and the wasm blob and missed nine of the
+//! ten cost goldens; CI found them a round late.
+//!
+//! A sweep that names nine of ten is worse than no sweep, because it looks
+//! like coverage. So the table inside the script is pinned to a property of
+//! the tree rather than to anyone's memory: there is one row for every
+//! `scripts/gates/*_counters.sh`, and every row's golden is a file that
+//! exists. A new benchmark whose gate is added and whose row is not turns
+//! this red, which is the case the script is here to prevent.
+//!
+//! Reading the table is not running it. The behavioural half is the script
+//! itself, which the container runs before a push and CI runs vein by vein.
+
+use std::collections::BTreeSet;
+use std::path::Path;
+
+fn root() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+}
+
+const SWEEP: &str = include_str!("../scripts/gates/all_counters.sh");
+
+/// The `vein:program:golden` rows between the `veins="` line and its closing
+/// quote. Reading the whole file for colons would also pick up the comment
+/// prose, which is the shape of mistake that makes a check pass for the
+/// wrong reason.
+fn rows() -> Vec<(String, String, String)> {
+    let body = SWEEP
+        .split_once("veins=\"")
+        .expect("the sweep declares a veins table")
+        .1
+        .split_once('"')
+        .expect("the veins table is closed")
+        .0;
+    body.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let mut it = l.split(':');
+            let vein = it.next().expect("a row names its vein").to_string();
+            let program = it.next().expect("a row names its program").to_string();
+            let golden = it.next().expect("a row names its golden").to_string();
+            assert!(it.next().is_none(), "a row is exactly vein:program:golden, got {l:?}");
+            (vein, program, golden)
+        })
+        .collect()
+}
+
+/// Every `*_counters.sh` under scripts/gates, by the prefix that names its
+/// vein — minus the sweep itself, which matches the same suffix. The first
+/// draft did not exclude it and demanded a row for a vein called "all",
+/// which is how this test proved it could fail before it passed.
+fn gates_on_disk() -> BTreeSet<String> {
+    std::fs::read_dir(root().join("scripts/gates"))
+        .expect("the gates directory reads")
+        .map(|e| e.expect("a directory entry reads").file_name())
+        .filter_map(|n| {
+            let name = n.to_str()?.to_string();
+            let vein = name.strip_suffix("_counters.sh")?.to_string();
+            (vein != "all").then_some(vein)
+        })
+        .collect()
+}
+
+#[test]
+fn the_sweep_names_every_counter_gate() {
+    let named: BTreeSet<String> = rows().into_iter().map(|(v, _, _)| v).collect();
+    let on_disk = gates_on_disk();
+    assert!(!on_disk.is_empty(), "there is at least one counter gate to sweep");
+    let missing: Vec<_> = on_disk.difference(&named).collect();
+    assert!(
+        missing.is_empty(),
+        "scripts/gates/all_counters.sh has no row for {missing:?} — a sweep that \
+         names all but one looks like coverage and is not"
+    );
+    let extra: Vec<_> = named.difference(&on_disk).collect();
+    assert!(extra.is_empty(), "the sweep names {extra:?}, which has no gate on disk");
+}
+
+#[test]
+fn every_row_names_a_golden_and_a_program_that_exist() {
+    for (vein, program, golden) in rows() {
+        assert!(
+            root().join(&golden).exists(),
+            "{vein} points at {golden}, which is not in the tree"
+        );
+        assert!(
+            root().join("bench").join(&program).exists(),
+            "{vein} points at bench/{program}, which is not a benchmark directory"
+        );
+    }
+}
+
+/// CLAUDE.md tells a session which veins to regenerate, and its count of the
+/// cost goldens was WRONG: it said four when there were ten, and had said so
+/// long enough that nobody re-counted. A branch that followed it regenerated
+/// the .mem vein and the code goldens and missed nine cost goldens, which CI
+/// found a round late.
+///
+/// A number in prose is not a pin, so this pins it. The instruction may say
+/// the count in words or digits; either way it has to match the files.
+#[test]
+fn the_instructions_count_the_cost_goldens_correctly() {
+    let on_disk = std::fs::read_dir(root().join("bench"))
+        .expect("the bench directory reads")
+        .filter(|e| {
+            e.as_ref().is_ok_and(|e| {
+                e.file_name()
+                    .to_str()
+                    .is_some_and(|n| n.starts_with("cost_golden") && n.ends_with(".txt"))
+            })
+        })
+        .count();
+    let guidance =
+        std::fs::read_to_string(root().join("CLAUDE.md")).expect("the instructions read");
+    let claim = guidance
+        .lines()
+        .find(|l| l.contains("cost goldens,"))
+        .expect("the instructions name the cost goldens");
+    // The WORD immediately before "cost goldens", not a substring of the
+    // line. The first draft asked whether the line contained "10" and passed
+    // with "four" still written, because the same line names the ch10 sample.
+    // Watched red only after this.
+    let counted = claim
+        .split_once("cost goldens")
+        .expect("the line names the cost goldens")
+        .0
+        .split_whitespace()
+        .next_back()
+        .expect("a word stands before them")
+        .to_ascii_lowercase();
+    let spelled = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+        "eleven", "twelve",
+    ];
+    let want = spelled.get(on_disk).copied().unwrap_or("");
+    assert!(
+        counted == want || counted == on_disk.to_string(),
+        "there are {on_disk} cost goldens and CLAUDE.md counts them {counted:?} — the \
+         count in that sentence was wrong for as long as it was written down, so it \
+         is pinned rather than trusted"
+    );
+}

@@ -66,8 +66,15 @@ section is where its instructions will appear.
   rule exists because a conflict resolution once silently deleted
   Eisel-Lemire from main and nothing noticed.
 - **Counters changed → regenerate every vein in the same PR**: all .mem
-  files, all four cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
-  then book panels — and the SIBLINGS, which keep veins of their own. kq keeps
+  files, all TEN cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
+  then book panels — and the SIBLINGS, which keep veins of their own. This
+  line said "all TEN cost goldens" until 2026-09-05 and there were ten; a
+  branch that read it regenerated the .mem vein and the code goldens and
+  missed nine, and CI found them a round late. `sh
+  scripts/gates/all_counters.sh` reads every one of the ten and names every
+  vein that moved, and `--write` regenerates them, header intact. Do not
+  count them from memory; the count in this sentence was wrong for as long as
+  it was written down. kq keeps
   FIVE, and reading a short list of them is how a pin goes stale: allocation
   counters in `bench/cost_golden.txt`, `bench/cost_golden_decode.txt` and
   `bench/cost_golden_escapes.txt`, RETIRED INSTRUCTIONS in
