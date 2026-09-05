@@ -43165,3 +43165,53 @@ Rules of the replay:
 - Every future formula or baseline change re-runs the replay in the
   same PR, so the chart is always one definition applied everywhere,
   never a splice.
+
+## 2026-09-02 — gavel: the weights, tuned to the developer's order of noticing
+
+Clay, asked whether the welfare weights were justifiably optimal,
+restated the objective: "the core thing we're attempting to optimize
+for here is ultimately developer happiness. performance should be
+insane, but if a language doesn't compile wickedly fast, like go,
+devs may choose not to use it in the first place." He took the
+recommendation that followed. The weights argument, recorded as the
+doctrine requires before the floor moves:
+
+    term             was    now   satiation
+    run speed        0.30   0.30  2.0   (unchanged)
+    run memory       0.30   0.26  2.0
+    compile speed    0.28   0.32  0.5
+    compile memory   0.12   0.12  0.5   (unchanged)
+
+- **Compile speed rises, funded from run memory.** A developer feels
+  compile latency on every edit and feels peak memory only when
+  something falls over. Compile latency is an adoption gate; the
+  memory model is the identity, but the objective's job is to punish
+  regressions in the order developers notice them. Compile memory
+  stays at 0.12 — the compiler's own footprint is a CI-container
+  guard, not something a developer perceives.
+- **The run-speed term splits in two halves.** Half is the equal-
+  weighted mean of the advertised workloads — decode (jsonbench) and
+  encode (encodebench), the rows the front page makes claims about
+  and the workload the language exists for. Half is the equal-
+  weighted mean of every other run benchmark in the objective — the
+  shape guards, today oneshot, basket, wide, deep, pending, scan and
+  digest (the last two joined in #1215) — which stress the memory
+  model and protect against pathologies. The rule is "advertised
+  versus everything else", so a benchmark added later lands in the
+  guard half without this entry needing an edit. A shape win no longer scores as if a real workload
+  got faster; the guards stay fully armed against regression. Per-
+  counter saturation (the #184 ruling) applies inside each half
+  before its mean.
+- **Satiation constants stand.** Compile at 0.5 already says the
+  target is instant and past instant nothing more is bought, with
+  the curve's asymmetry making a compile regression cost more than
+  the equivalent gain earns — the adoption-gate shape. Runtime at
+  2.0 says eight times faster is eight times faster.
+- **The exclusions stand**: wall time (nondeterministic), binary
+  size (measured pointing the wrong way, #1217/#1219, pinned by
+  spec), and everything unmeasurable, which the floor-permeable-to-
+  language rule keeps welfare from vetoing.
+
+Lands as a weights change: recorded here, `--set` in the same PR with
+this entry's reason, the floor re-set, and the chart replay re-run so
+the history reads under one definition.

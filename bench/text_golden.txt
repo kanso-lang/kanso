@@ -495,15 +495,15 @@
 # 2026-09-05 (fourth): encodebench, oneshot and widebench each grow 224 bytes
 # for the `find2_below` twin and the other nine rows do not move at all,
 # because their binaries are byte-identical to the ones before it.
-jsonbench text=92834
-encodebench text=112898
-oneshot text=115490
-basket text=105682
-widebench text=116418
-deepbench text=70530
-escapebench text=52658
-pendbench text=85218
-indexbench text=56002
-scanbench text=153554
-digestbench text=105346
-readbench text=51346
+jsonbench text=93026
+encodebench text=113106
+oneshot text=115682
+basket text=105842
+widebench text=116610
+deepbench text=70738
+escapebench text=52466
+pendbench text=85410
+indexbench text=55810
+scanbench text=153714
+digestbench text=105618
+readbench text=51538

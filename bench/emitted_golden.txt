@@ -111,4 +111,4 @@
 defines=178
 calls=1859
 branches=1200
-lines=12332
+lines=12344
