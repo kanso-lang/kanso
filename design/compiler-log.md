@@ -20,91 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — the io half: absence is data, and the bang chooses the channel
-
-Searched the live log and the archive before filing. The archive's nineteen
-`read_file` mentions are the message wording, the not-text case and the
-os/io split; the live log's five are this thread. Neither has the typeset
-shape, so this is the gavel's io half arriving rather than a question asked
-twice.
-
-**What a read answers now.** `os/read_file path` answers `text |
-file_not_found`, and both arms dispatch like any values — no box, no
-bubbling, no rescue license. `os/read_file! path` is the caller insisting,
-and a missing file bubbles from it as a failure. That is Clay's ruling of
-this morning applied where he applied it: "if you know it's possible for
-them to not be there, you wouldn't use an exception, you'd just return a
-file_not_found type."
-
-The gavel writes `io/read_file`. It is built as `os/read_file`, because the
-Go split of 2026-08-17 put the filesystem in `std/os` and `io` keeps the
-read and write surface. The name in the ruling is shorthand for the
-operation, not a placement.
-
-**The shape, copied from `run`.** A builtin cannot name a type declared in
-kanso, so `builtin_read_file` answers a two-element list and the std wrapper
-names it — exactly what `run` already does with its three. `file_not_found`
-has one field, which makes it a transparent nominal subtype: the value IS
-the path, carrying the tag dispatch reads.
-
-**Where the split is made, on each engine.** The interpreter splits on
-`ErrorKind::NotFound`, native on `errno` being `ENOENT` or `ENOTDIR`. Every
-other reason to fail a read stays a failure, because none of them is part of
-reading's ordinary vocabulary. The playground has no filesystem at all, so
-every read there is unplanned and still errs; it refuses with its own clear
-diagnostic, which is what the differential law allows.
-
-    absent    interpreter and native    absent: nowhere.txt
-    present   interpreter and native    read: hello
-    insisted  interpreter and native    cannot read nowhere.txt: no such file
-
-**A divergence the fixtures caught before CI could.** `a_rescue_inside_a_
-joined_stage` reads one golden across three engines, and its comment says
-why: the arm discards the reason, so a page saying it has no filesystem and
-native saying the file is not there both come out `rescued`. With a plain
-read that stops being true — two engines answer data where the third errs.
-The bang restores it, and the fixture now carries that reason.
-
-**What the migration cost, counted.** Twenty-eight calls in thirteen scripts
-insist; sixteen more across the browser sweep, the book harnesses, the
-coverage scan and the benchmarks; five fixtures and three embedded programs
-that read a missing file to exercise the failure channel; and two goldens
-that cite an `os.kso` line number, because the new type sits above `exit`
-and moved it 39 to 51. That last is a cost the call-site survey could not
-see and the suite found in one run.
-
-Three plain reads remain in the migrated code, each deliberately: the fixture
-testing the argument check, hako's lock, and the book's showcase. Four more
-arrived later on this branch and are the point rather than a remainder — the
-`tests/golden/read_beat` fixtures, which exist to exercise the plain read's
-type. Counted here because the sentence above was written before them and a
-reader grepping for `os/read_file` finds seven.
-
-**hako lost a race.** `locked_at` called `os/exists` and then read the file
-it had just asked about. One read now, answering both cases, and the window
-between the two calls is gone with the second call.
-
-**The book teaches it from the other end.** `ch05/fallback.kso` was a sample
-that FAILED — a plain arm does not catch a failure, only `rescue` does, and
-its recorded output was the endpoint error. The same program now prints "no
-orders yet", because the arm it always had is the right one for data. The
-two `missing` samples and `rescued` insist, so they still show a failure
-reaching the endpoint and a rescue catching one.
-
-**Every read costs one more plan step**, visible in the ch05 plan goldens:
-the wrapper's lambda over the builtin, where the bare builtin had none.
-`count_plan` goes two continuations to three and `save_plan` one to two.
-Recorded rather than hidden — it is the price of naming the alternative in
-the language instead of in a message string.
-
-(This paragraph said TWO steps when it was first written, and it was right
-about the shape it described: `read_file!` was `read_file . insisted`, two
-kanso functions deep. The entry below rewrites the bang to read the builtin
-directly, which is one function, and the goldens moved with it. Corrected
-here rather than left to contradict the numbers a reader can run.)
-
-Welfare 73.06, on the floor and unmoved.
-
 ## 2026-09-03 — one welfare line, and thirty-six dips read
 
 Searched the live log and the archive before filing. The live log's
@@ -4285,3 +4200,79 @@ binary-to-binary drift band `scripts/compile_row_probe.sh` documents — because
 compiler when `kanso check lib/json` runs. A runtime improvement and a library
 improvement of the same runtime size are not the same price, and the difference
 is three orders of magnitude.
+
+---
+
+## 2026-09-05 (twenty-first) — the literal's slot was behind a call
+
+Reading down the encode walker's callees for the first time turned up a name
+nobody had looked at: `k_str_lit`, **2,500,000 calls** on encodebench for
+45,000,672 instructions.
+
+A string literal is the same value on every evaluation, so the emitter builds it
+once into permanent storage and a slot hands it back thereafter — the page has
+said so for weeks and the runtime comment says so above the function. What
+neither said is that the handing back is a CALL across the module line. After
+the first evaluation the whole body is: load the slot's tag, compare it to
+`K_STR`, load two words, return. Eighteen instructions apiece, and most of them
+are the call rather than the work.
+
+### The door
+
+The emitter already writes `alwaysinline` shims for exactly this shape —
+`k_b_find2_fast`, `k_b_length_fast`, the slice and utf8 twins — each an inline
+fast path over a runtime call kept for the cases the fast path cannot serve.
+The literal gets the same treatment: read the tag, return the slot if it is
+built, call the runtime if it is not.
+
+TWELVE ROWS FALL AND ONE RISES BY TWO INSTRUCTIONS:
+
+    widebench       57,059,796 ->  56,003,869   -1,055,927   -1.8506%
+    livebench    5,140,774,300 -> 5,084,687,524 -56,086,776   -1.0910%
+    encodebench  5,150,924,022 -> 5,094,896,927 -56,027,095   -1.0877%
+    deepbench      715,116,179 ->  707,820,204   -7,295,975   -1.0202%
+    oneshot         27,303,178 ->   27,103,536     -199,642   -0.7312%
+    basket          38,817,037 ->   38,562,384     -254,653   -0.6560%
+    jsonbench    1,745,056,955 -> 1,736,104,978  -8,951,977   -0.5130%
+    indexbench       4,692,386 ->    4,692,194         -192   -0.0041%
+    pendbench      666,111,554 ->  666,093,569      -17,985   -0.0027%
+    scanbench    1,395,728,266 -> 1,395,689,898     -38,368   -0.0027%
+    digestbench     77,290,402 ->   77,290,245         -157   -0.0002%
+    readbench    2,038,396,069 -> 2,038,392,076       -3,993   -0.0002%
+    escapebench    120,585,597 ->  120,585,599           +2   +0.0000%
+
+**This is the widest single change in the vein's history.** Every other one has
+reached the two or three benchmarks that exercise one path; a string literal is
+in every program, so the fall tracks how many literals a program evaluates and
+how often. widebench leads because its frozen json copy names its keys inline.
+escapebench barely has literals, and its two instructions are layout.
+
+No allocation counter moves — the door allocates nothing the call did not.
+Welfare 74.2493 -> 74.2879, banked with `--set`.
+
+### What it costs
+
+Every `.text` row grows, from **64 bytes on escapebench to 2,304 on scanbench**,
+in proportion to literal sites. That is the door inlined at each one, and it is
+the trade the objective priced: 13,888 bytes across the corpus against twelve
+falling rows, where `k_str_n`'s inlining a week ago cost 34,320 for a narrower
+win.
+
+The compile row moved **-584** on `kanso check lib/json`, inside the
+binary-to-binary drift band, because this is a `src/codegen.rs` change and the
+compile row does not compile emitted IR.
+
+### The vein all_compile.sh cannot see
+
+`tests/compile_cost.rs` went red and the six-gate sweep did not: the module and
+micro compile goldens are asserted by that test rather than by a gate, so
+`sh scripts/gates/all_compile.sh` reports nothing about them. Both moved by
+exactly the door — `defines` +1, `calls` +1, `branches` +1, and eleven lines on
+the module against twelve on each micro — with `rounds` and `visits` unchanged,
+which is the front end doing no more work for the extra emitted lines.
+
+Anyone following CLAUDE.md's compile sweep alone would have pushed a red branch.
+The sweep's own paragraph already warns that it reads the runtime cost goldens
+and that the compile gates are separate; this adds that two compile goldens are
+behind a `cargo test` rather than behind either. Regenerate them with
+`KANSO_REGEN_COMPILE_GOLDEN=1 cargo test --release --test compile_cost`.

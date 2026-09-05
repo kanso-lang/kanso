@@ -509,16 +509,23 @@
 # itself is rodata; the 112 is the extraction code. Thirteen identical deltas
 # is what a change entirely inside one runtime helper looks like from here.
 #
-jsonbench text=92850
-encodebench text=113746
-oneshot text=115954
-basket text=105986
-widebench text=118610
-deepbench text=71090
-escapebench text=52514
-pendbench text=85458
-indexbench text=55730
-scanbench text=153634
-digestbench text=105538
-readbench text=51586
-livebench text=116402
+#
+# 2026-09-05 (the literal's fast door): all thirteen rows grow, from 64 bytes
+# on escapebench to 2,304 on scanbench, in proportion to how many string
+# literal sites each program has. That is the price of the door, and the
+# instruction vein records what it bought: twelve rows fall, widebench by
+# 1.85% and three more by about one per cent.
+#
+jsonbench text=94066
+encodebench text=115522
+oneshot text=118050
+basket text=107410
+widebench text=120242
+deepbench text=71234
+escapebench text=52578
+pendbench text=85938
+indexbench text=55890
+scanbench text=155938
+digestbench text=105794
+readbench text=51826
+livebench text=118498

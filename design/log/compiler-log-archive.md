@@ -43967,3 +43967,91 @@ next reading on either chip is what says whether the modes came back.
 
 The row is recorded from CI's own sitting, which is what every row in this
 file is.
+
+
+---
+
+## 2026-09-03 — the io half: absence is data, and the bang chooses the channel
+
+Searched the live log and the archive before filing. The archive's nineteen
+`read_file` mentions are the message wording, the not-text case and the
+os/io split; the live log's five are this thread. Neither has the typeset
+shape, so this is the gavel's io half arriving rather than a question asked
+twice.
+
+**What a read answers now.** `os/read_file path` answers `text |
+file_not_found`, and both arms dispatch like any values — no box, no
+bubbling, no rescue license. `os/read_file! path` is the caller insisting,
+and a missing file bubbles from it as a failure. That is Clay's ruling of
+this morning applied where he applied it: "if you know it's possible for
+them to not be there, you wouldn't use an exception, you'd just return a
+file_not_found type."
+
+The gavel writes `io/read_file`. It is built as `os/read_file`, because the
+Go split of 2026-08-17 put the filesystem in `std/os` and `io` keeps the
+read and write surface. The name in the ruling is shorthand for the
+operation, not a placement.
+
+**The shape, copied from `run`.** A builtin cannot name a type declared in
+kanso, so `builtin_read_file` answers a two-element list and the std wrapper
+names it — exactly what `run` already does with its three. `file_not_found`
+has one field, which makes it a transparent nominal subtype: the value IS
+the path, carrying the tag dispatch reads.
+
+**Where the split is made, on each engine.** The interpreter splits on
+`ErrorKind::NotFound`, native on `errno` being `ENOENT` or `ENOTDIR`. Every
+other reason to fail a read stays a failure, because none of them is part of
+reading's ordinary vocabulary. The playground has no filesystem at all, so
+every read there is unplanned and still errs; it refuses with its own clear
+diagnostic, which is what the differential law allows.
+
+    absent    interpreter and native    absent: nowhere.txt
+    present   interpreter and native    read: hello
+    insisted  interpreter and native    cannot read nowhere.txt: no such file
+
+**A divergence the fixtures caught before CI could.** `a_rescue_inside_a_
+joined_stage` reads one golden across three engines, and its comment says
+why: the arm discards the reason, so a page saying it has no filesystem and
+native saying the file is not there both come out `rescued`. With a plain
+read that stops being true — two engines answer data where the third errs.
+The bang restores it, and the fixture now carries that reason.
+
+**What the migration cost, counted.** Twenty-eight calls in thirteen scripts
+insist; sixteen more across the browser sweep, the book harnesses, the
+coverage scan and the benchmarks; five fixtures and three embedded programs
+that read a missing file to exercise the failure channel; and two goldens
+that cite an `os.kso` line number, because the new type sits above `exit`
+and moved it 39 to 51. That last is a cost the call-site survey could not
+see and the suite found in one run.
+
+Three plain reads remain in the migrated code, each deliberately: the fixture
+testing the argument check, hako's lock, and the book's showcase. Four more
+arrived later on this branch and are the point rather than a remainder — the
+`tests/golden/read_beat` fixtures, which exist to exercise the plain read's
+type. Counted here because the sentence above was written before them and a
+reader grepping for `os/read_file` finds seven.
+
+**hako lost a race.** `locked_at` called `os/exists` and then read the file
+it had just asked about. One read now, answering both cases, and the window
+between the two calls is gone with the second call.
+
+**The book teaches it from the other end.** `ch05/fallback.kso` was a sample
+that FAILED — a plain arm does not catch a failure, only `rescue` does, and
+its recorded output was the endpoint error. The same program now prints "no
+orders yet", because the arm it always had is the right one for data. The
+two `missing` samples and `rescued` insist, so they still show a failure
+reaching the endpoint and a rescue catching one.
+
+**Every read costs one more plan step**, visible in the ch05 plan goldens:
+the wrapper's lambda over the builtin, where the bare builtin had none.
+`count_plan` goes two continuations to three and `save_plan` one to two.
+Recorded rather than hidden — it is the price of naming the alternative in
+the language instead of in a message string.
+
+(This paragraph said TWO steps when it was first written, and it was right
+about the shape it described: `read_file!` was `read_file . insisted`, two
+kanso functions deep. The entry below rewrites the bang to read the builtin
+directly, which is one function, and the goldens moved with it. Corrected
+here rather than left to contradict the numbers a reader can run.)
+
+Welfare 73.06, on the floor and unmoved.

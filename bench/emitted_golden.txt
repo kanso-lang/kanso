@@ -123,7 +123,11 @@
 # byte-identical, which is the single thing this gate exists to rule out. The
 # gate strips comment lines before counting calls now; `defines` and
 # `branches` anchor at the start of a line and never could see one.
-defines=178
-calls=1828
-branches=1171
-lines=12188
+#
+# 2026-09-05 (the literal's fast door): the decoder gains one define, one
+# call and eleven lines -- the door itself, emitted once per module.
+#
+defines=179
+calls=1829
+branches=1172
+lines=12199

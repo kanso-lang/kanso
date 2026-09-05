@@ -367,6 +367,17 @@ slow:
   %f = call %KValue @k_b_find2(%KValue %cs, %KValue %from, %KValue %a, %KValue %b)
   ret %KValue %f
 }
+define internal %KValue @k_str_lit_fast(ptr %data, i64 %len, ptr %slot) alwaysinline {
+  %tag = load i64, ptr %slot
+  %built = icmp eq i64 %tag, 6
+  br i1 %built, label %hit, label %miss
+hit:
+  %v = load %KValue, ptr %slot
+  ret %KValue %v
+miss:
+  %f = call %KValue @k_str_lit(ptr %data, i64 %len, ptr %slot)
+  ret %KValue %f
+}
 define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %is_list = icmp eq i64 %tag, 9
@@ -2432,7 +2443,7 @@ impl<'a> Backend<'a> {
         // into a permanent slot instead of allocating per visit
         let (name, len) = self.intern(text);
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_str_lit(ptr @{name}, i64 {len}, ptr @{name}_lit)"));
+        f.line(&format!("{t} = call %KValue @k_str_lit_fast(ptr @{name}, i64 {len}, ptr @{name}_lit)"));
         t
     }
 
