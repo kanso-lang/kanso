@@ -833,4 +833,4 @@
 # both binaries — family0x19-model0x11 counted each — so none of it is the
 # silicon. The prelude gained a third twin and src/runtime.c a third raw door;
 # the front end does the same work and its own code moved under it.
-compile_instructions=41379381
+compile_instructions=41378194

@@ -3925,7 +3925,37 @@ existing test crosses is a boundary the mutation corpus cannot defend, and the
 way to find that out is to write the mutation FIRST and watch what it does to a
 green suite. A mutation that passes is not a bad mutation; it is a report.
 
-**OPEN.** `bench/instructions_golden.txt` and the compile row wait on CI, for
-the same reason as the entry above: this container is glibc 2.39-0ubuntu8.7
-against the golden's 8.8. The chip table has two rows and this change touches
-the compiler's bytes, so it empties for the eleventh time.
+### CI's rows, and four predictions that came back exact
+
+The work vein could not be regenerated here — this container is glibc
+2.39-0ubuntu8.7 against the golden's 8.8 and `host_gate.sh` refuses. These are
+CI's, and each of the four moved rows lands on the container's delta applied to
+the previous golden, to the instruction:
+
+    work_encodebench   5,297,521,213 -> 5,241,342,413   -56,178,800   -1.0605%
+    work_livebench     5,287,371,493 -> 5,231,192,693   -56,178,800   -1.0625%
+    work_oneshot          27,669,661 ->    27,529,214      -140,447   -0.5076%
+    work_widebench        57,201,345 ->    57,105,366       -95,979   -0.1678%
+
+The other nine do not move. `emitted` and `machine code` agreed with the goldens
+regenerated here without a round of their own, which is what a deterministic
+vein should do.
+
+**A CHIP THIS VEIN HAD NOT SEEN.** CI drew `family0x19-model0x11` — Zen 4, whose
+row was removed unmeasured on 2026-09-01 rather than carried — found no row on
+the emptied table, refused, and counted:
+
+    compile_sample cpu="cpu family 0x19 model 0x11" sha=... row=41378194
+
+So the new series opens at **41,378,194** against the old series' 41,379,381, and
+that difference is NOT attributable. The old series' number was counted on two
+other chips; this one is a different binary AND a different chip, and the whole
+reason this table is keyed by silicon is that the two cannot be separated from
+one reading. Three chips have agreed to the instruction within a binary every
+time so far, so the prediction is that the next chip to refuse reads 41,378,194
+as well — and if it does not, that is a finding about the key rather than about
+this change. Recorded as a prediction, not as a conclusion.
+
+**WELFARE 74.15975334184456 -> 74.18425551910869**, a rise of 0.02450218,
+`--set` with its reason. The page's `compile.compile_instructions` span moves
+with the golden; `golden_prose` reads 0 drifted.

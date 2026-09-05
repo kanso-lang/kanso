@@ -1251,3 +1251,4 @@
 # the old binary is worse than no value.
 #
 # CI supplies the first row of the next series.
+family0x19-model0x11 41378194
