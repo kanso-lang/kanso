@@ -52,9 +52,9 @@ fn the_golden_pins_exactly_one_value() {
         &lines[1.min(lines.len())..]
     );
     let line = lines[0];
-    let value = line
-        .strip_prefix("compile_instructions=")
-        .unwrap_or_else(|| panic!("{GOLDEN}'s value line reads {line:?}, not compile_instructions="));
+    let value = line.strip_prefix("compile_instructions=").unwrap_or_else(|| {
+        panic!("{GOLDEN}'s value line reads {line:?}, not compile_instructions=")
+    });
     assert!(
         !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()),
         "{GOLDEN} pins {value:?}. One row, one value: a second number beside \

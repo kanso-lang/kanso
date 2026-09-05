@@ -17,14 +17,19 @@
 # The mutation is that move: a second value on the golden's line.
 set -e
 golden=bench/compile_instructions_golden.txt
-before=$(grep -c '^compile_instructions=[0-9][0-9]*$' "$golden")
+# `|| true` on both counts, because `set -e` and a count of zero are the same
+# exit status: grep says 1 when it matches nothing, and the second count below
+# is MEANT to be zero when the mutation worked. Without it this script exits 1
+# on success, and the ratchet reads a non-zero mutation as one that no longer
+# applies -- which is what CI said on the round that found this.
+before=$(grep -c '^compile_instructions=[0-9][0-9]*$' "$golden" || true)
 if [ "$before" -ne 1 ]; then
   echo "expected one bare value line in $golden, found $before;" >&2
   echo "the shape moved and this mutation needs rewriting" >&2
   exit 1
 fi
 sed -i 's/^\(compile_instructions=[0-9]*\)$/\1 41378765/' "$golden"
-after=$(grep -c '^compile_instructions=[0-9][0-9]*$' "$golden")
+after=$(grep -c '^compile_instructions=[0-9][0-9]*$' "$golden" || true)
 if [ "$after" -ne 0 ]; then
   echo "wanted the value line paired, and it is still bare" >&2
   exit 1
