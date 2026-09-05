@@ -31,7 +31,7 @@ grep -v '^#' bench/emitted_golden.txt > emitted_want.txt
 # in a second file so the decoder's history — which its comments are — stays
 # one series.
 for b in encodebench oneshot basket widebench deepbench escapebench pendbench scanbench \
-         indexbench digestbench readbench; do
+         indexbench digestbench readbench livebench; do
   printf '%s defines=%s calls=%s branches=%s lines=%s\n' "$b" \
     "$(grep -c '^define' $b.ll)" "$(strip_comments $b.ll | grep -c 'call ')" \
     "$(grep -c '^  br \|^  switch' $b.ll)" "$(wc -l < $b.ll | tr -d ' ')"

@@ -91,6 +91,11 @@
 # counter greps the whole .ll for `call `, and the prelude's comments use the
 # word eight times; the gate strips comment lines before counting now. No
 # emitted code changed.
+#
+# 2026-09-05: livebench joins, at 179 defines and 12,239 lines. Same gap and
+# the same day as the .text vein: the one benchmark that watches the shipped
+# library's encode path had nothing counting what the compiler wrote for it.
+#
 encodebench defines=178 calls=1687 branches=1020 lines=11057
 oneshot defines=178 calls=1822 branches=1162 lines=12130
 basket defines=137 calls=1332 branches=763 lines=7771
@@ -102,3 +107,4 @@ scanbench defines=326 calls=3729 branches=2232 lines=20503
 indexbench defines=52 calls=177 branches=123 lines=1736
 digestbench defines=185 calls=1605 branches=904 lines=9834
 readbench defines=55 calls=175 branches=133 lines=1926
+livebench defines=179 calls=1846 branches=1176 lines=12239

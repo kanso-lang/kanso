@@ -20,68 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — CI read the compile row, and the fall is not the compiler
-
-Searched the live log and the archive before filing. The maps-parse term is
-recorded here twice already — the 2026-09-03 entries that found it and the
-by-cpu table's own note — and neither says what happens when an ordinary
-change moves it. Nothing in either file records a compile row falling while
-the front end rose, so that part is new.
-
-The entry above ended by saying CI would read the compile counters this
-container cannot. It did, and the row refused: the table pinned 41,831,767 /
-41,832,275 on family0x6-model0xcf and the run counted 41,829,232, a fall of
-2,535.
-
-**The front end got more expensive while the row fell.** A differential
-settles it without needing the host pin, because a difference between two
-builds on one machine does not care what rustc CI runs. Same source, with the
-check and without, everything else held:
-
-    without the check   42,235,790
-    with the check      42,240,325   +4,535
-
-The profile diff attributes all of it, and exactly one kanso symbol moves:
-
-    kanso::check::check_merged                          +848
-
-The rest is glibc's startup parse of /proc/self/maps:
-
-    __vfscanf_internal                                +2,360
-    ____strtoul_l_internal                            +1,158
-    __memcmp_avx2_movbe                                 -841
-    getdelim, _IO_sputbackc, _IO_setb, sscanf, the rest  ~860
-
-So CI's 2,535 fall is +848 of front-end work and roughly 7,070 of maps-parse
-and allocator movement going the other way on a differently laid-out binary.
-The container moves that term the other way on the same source change. That is
-what a term keyed to the host's memory map rather than to the code does, and
-it is the mechanism this vein measured a few entries ago: one more shared
-library in the process moves the row +32,090 with the compiler executing
-identical instructions.
-
-The gate asks a change to say whether its move is a regression to explain or a
-win to bank. This one is neither. The compiler costs 848 more instructions to
-run, for a refusal it did not have, and the row it is measured by went down.
-
-**Every row cleared; one survives because CI re-sat it.** The binary is new —
-sha 0804abe57190 against the de5bfab22fbd every recorded reading was taken on
-— so the file's own rule decides the rest: a value measured against the old
-binary is worse than no value. Three rows go. family0x6-model0xcf holds
-41,829,232 as a SINGLE, and the golden's bare line follows it.
-
-The single is expected to refuse. Three chips have produced both modes on one
-binary, so an exact pin on one reading goes red about half the time until a
-second makes it a pair. Writing 41,829,740 to pre-empt that would be recording
-a number nobody counted, which this file refuses on every page.
-
-**Welfare does not move.** 73.06 against a floor of 73.06. 2,535 out of 41.8
-million is 0.006%, and compile cost satiates at 0.5, so the term does not
-reach two decimal places. There is nothing to ratchet.
-
-`docs/compiler.html`'s tagged figure moves with the golden; golden_prose was
-what caught it.
-
 ## 2026-09-03 — the second chip, and the two agree to the instruction
 
 The row cleared in the entry above left one chip recorded, and said the single
@@ -4161,3 +4099,126 @@ slower job.
 escapebench -32, readbench -16, jsonbench +16, pendbench +64. The check's eight
 instructions are gone from one place and present in another, and where the
 linker puts what is left is not something this change chose.
+
+---
+
+## 2026-09-05 (nineteenth) — the clean run in front of the first escape, declined four ways
+
+A fresh callgrind read of the merged corpus, looking for what sits on top now
+that the append ladder, `k_rec`'s copy and the beat check have all landed. On
+encodebench and its live twin the top of the board is the escape path, and it
+holds two entries:
+
+    d_json/encode_onto_2'2   832,741,200   15.99%
+    w_klam17                 712,277,200   13.67%   11,658,800 calls, 61.1 each
+    d_json/escape_clean_4    680,992,000   13.07%    4,190,000 calls, 162.5 each
+    render_ryu               467,153,200    8.97%      849,200 calls, 550 each
+    k_b_find2_below_raw      271,083,600    5.20%    4,190,000 calls, 64.7 each
+
+`w_klam17` is the escape fold's lambda, and item 13 of the page already carries
+why it cannot be reduced away. What it does not carry is that the fold walks
+bytes it has no business walking.
+
+### The run the scan already proved
+
+`escape_onto` scans a string once with `find2_below` for a quote, a backslash
+or a control byte, and `escape_clean` takes the whole-string copy when the scan
+found nothing. When it did find something the fold runs over **every byte of
+the string**, including the bytes in front of the first escape — bytes the scan
+has just proved need nothing.
+
+Counted on `bench/large.json`, which is the board:
+
+    strings                10,475
+    with an escape          1,773   16.93%
+    bytes in those         29,147
+      clean prefix          7,690   26.38%
+      from the first esc   21,457   73.62%
+    mean prefix              4.34 bytes
+    mean escaping string    16.44 bytes
+
+16.93% and 16.44 reproduce the profile's 709,201 fold entries over 4,190,000
+encodes and its 11,658,800 byte steps to the digit, so the model and the
+measurement are reading the same thing. **A quarter of the fold's work is a run
+already known to need nothing.**
+
+### It works, and the objective declines it
+
+Appending that run in one copy and folding a slice of the rest, four ways:
+
+                              livebench    oneshot   compile row   welfare
+    two helpers, guarded run   -3.0621%   -1.4450%      +390,025    -0.02
+    one helper, guarded run    -3.0621%   -1.4450%      +268,455    -0.01
+    no helper, no guard        -2.7457%   -1.2955%      +172,457    -0.00
+    no helper, guarded run     -3.0842%   -1.4555%      +213,359    -0.01
+
+The best runtime is 5,208,664,610 instructions to 5,048,017,249 on livebench
+and 27,562,238 to 27,161,080 on oneshot, with the frozen encodebench twin
+byte-identical and both checksums unchanged at 74072800. The compile column is
+`kanso check lib/json` measured by `scripts/compile_row_probe.sh` against the
+same baseline binary each time — 41,879,349 — and projected onto the golden;
+the runtime columns are container callgrind, whose deltas the log has repeatedly
+found to match CI's to the instruction.
+
+**The exchange rate is legible in the last two columns.** The guarded run costs
+40,902 more compile instructions than the unguarded one and buys 17,635,200
+more runtime instructions, a ratio of 431 to 1, and the index prefers the
+compile side. Two satiations produce that: compile cost satiates at 0.5 and
+sits near its baseline where the curve is steep, while `live_instructions`
+satiates at 2.0 and entered the corpus that morning as a granted baseline at
+its dimension's standing, where *r* is already 5.95 and a three per cent fall
+moves the term score by 0.0058.
+
+`compile_allocs` also rises and this host cannot measure it, so the true
+readings are at or below the ones above.
+
+### What paid, and what it says
+
+The three-helper shape's counters, for the record — the other shapes move the
+same way and were not swept:
+
+    live      allocs 14,819,276 -> 16,104,076   +8.67%
+              alloc_bytes 817,803,648 -> 863,471,648
+              sh_bytes 100,755,936 -> 131,591,136
+              append_fast 42,334,257 -> 39,833,857
+    compile   front_end_visits on lib/json 17,169 -> 17,460   +1.69%
+    emitted   jsonbench defines 178 -> 180, lines 12,188 -> 12,284
+    text      oneshot 115,842 -> 116,290
+
+Two slices per escaping string is where the allocations come from, and
+`append_fast` falling is the fold doing less.
+
+**This is an argument about the weights rather than about the change**, and it
+is filed as one in design/pending-gavels.md. A library change that buys runtime
+by growing the library charges the least satiated term in the model to feed one
+of the most satiated, and a benchmark that enters at its dimension's standing
+enters satiated — so the objective can never pay much for improving it. The
+code is reverted and item 15 of docs/compiler.html section 06 carries the
+decline so the next reading of this profile finds it.
+
+**This closes the thread the livebench entry left open**, and does not edit it.
+That entry — 2026-09-05, "Why a benchmark that duplicates one already in the
+corpus" — ends "It is being held for this benchmark rather than shipped against
+the old corpus", with the change priced at +0.0039 against stale compile veins
+and −0.02 once they were regenerated. The benchmark arrived, the change was
+re-measured against it, and the answer did not change. A reader who reaches that
+sentence first should read this entry next.
+
+### The vein that would have watched it, and could not
+
+The sweep turned up a real gap. `bench/text_golden.txt` had twelve rows and
+`bench/emitted_golden_others.txt` eleven, and livebench was in neither: the one
+benchmark that watches the shipped library's encode path was built, instruction
+counted and weighed for a day with nothing counting its machine code or what
+the compiler wrote for it.
+
+`scripts/gates/machine_code.sh` already carries the note that "scanbench and
+digestbench joined the corpus after this gate was written and nobody extended
+the list". livebench was the third, on two gates at once, which is what turns a
+convention into a spec. `tests/every_benchmark_is_in_the_objective.rs` gains
+four checks that derive each gate's list from the gate itself and its rows from
+the golden, and both new coverage checks were watched red naming `livebench`
+before the lists were fixed. The rows enter as measurements rather than moves:
+
+    livebench text=116290
+    livebench defines=179 calls=1846 branches=1176 lines=12239

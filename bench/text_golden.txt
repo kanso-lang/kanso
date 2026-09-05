@@ -495,6 +495,13 @@
 # 2026-09-05 (fourth): encodebench, oneshot and widebench each grow 224 bytes
 # for the `find2_below` twin and the other nine rows do not move at all,
 # because their binaries are byte-identical to the ones before it.
+#
+# 2026-09-05: livebench joins, at 116,290 bytes. It was built and weighed for
+# a day with nothing watching its machine code, which is the third time this
+# list has gone stale behind the corpus — scanbench and digestbench were the
+# first two. The row is a new measurement rather than a move, and no other
+# row changes with it.
+#
 jsonbench text=92738
 encodebench text=113634
 oneshot text=115842
@@ -507,3 +514,4 @@ indexbench text=55618
 scanbench text=153522
 digestbench text=105426
 readbench text=51474
+livebench text=116290

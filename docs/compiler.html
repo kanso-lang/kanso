@@ -600,6 +600,23 @@ basket         10,000                0          1,048,576</code></pre>
 
 <p>what survives is a note about the corpus rather than the compiler. escapebench pins this bracket's cost on every run and its benefit on none of them, so a change that deleted the bracket would have read as a 27.6% win with every memory counter flat — the failure its own README was written to prevent, one level in. whether to raise its size is a live question and not a free one: the row is a welfare term and a bigger benchmark is a slower job.</p>
 
+<p><strong>15. skipping the clean run in front of the first escape <span class="status status-declined">built four ways, measured, declined</span></strong> &#8212; a third pass at the same board, and the plainest of the three. the encoder scans a string once for a byte that needs escaping and, finding one, folds over <em>every</em> byte of the string through the lambda item 13 could not remove. the scan already knows where the first escape is. the bytes in front of it were proved clean by that scan and could leave in one copy.</p>
+
+<p>the distribution says the run is worth having. of the 10,475 strings on the board 1,773 carry an escape &#8212; 16.93%, which is the profile's 709,201 fold entries over 4,190,000 encodes to the digit &#8212; and those strings average 16.44 bytes with the first escape at byte 4.34. so <strong>26.38%</strong> of every byte the fold walks is a run already known to need nothing.</p>
+
+<p>it works, and the shipped library's benchmark falls <strong>3.08%</strong>: 5,208,664,610 instructions to 5,048,017,249, with the frozen twin byte-identical and both checksums unchanged. the objective still declines it, and the reason is the same in all four shapes it was written in:</p>
+
+<pre><code>                             livebench      oneshot   compile row   welfare
+two helpers, guarded run     -3.0621%     -1.4450%      +390,025    -0.02
+one helper, guarded run      -3.0621%     -1.4450%      +268,455    -0.01
+no helper, no guard          -2.7457%     -1.2955%      +172,457    -0.00
+no helper, guarded run       -3.0842%     -1.4555%      +213,359    -0.01
+</code></pre>
+
+<p>read down the last two columns and the exchange rate is legible. the guarded run costs 40,902 more compile instructions than the unguarded one and buys 17,635,200 more runtime instructions, a ratio of <strong>431 to 1</strong>, and the index prefers the compile side. the reason is the two satiations: compile cost satiates at 0.5 and this term sits near its baseline, where the curve is steep; the live encode row satiates at 2.0 and entered the corpus the same morning as a granted baseline, at its dimension's standing, where <em>r</em> is already near six and a three per cent fall moves the term score by 0.006. a library change that buys runtime by growing the library charges the least satiated term in the model to feed one of the most satiated.</p>
+
+<p>that is a statement about the weights rather than about the change, and it is filed as one. the code is reverted; the numbers are here so the next reading of the same profile finds them.</p>
+
 
 <h2 id="lazy"><span class="sec-num">07</span>the lazy bet<span class="status status-shipped">v1 shipped</span></h2>
 
