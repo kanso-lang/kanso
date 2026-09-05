@@ -1,0 +1,31 @@
+# `find2_below` scans for the first of two bytes OR anything under a limit, and
+# the one line in `bytes_are_their_own_value` takes a hit on the first byte of
+# a four-byte string. Nothing pinned the rest: not the clamp, not the limit
+# guard that chooses between the sixteen-byte vector step and the scalar loop,
+# and not the tail the vector step cannot reach.
+#
+# The native emitter tests the five tags in the prelude and hands the scan a
+# pointer, a length and four integers, because five KValues are ten
+# register-sized arguments where the abi has six. Every case below runs the
+# same scan through that door; the last two run it through the boxed one.
+import "std/text"
+
+s = text/bytes "abcd\tefgh"
+
+# 24 bytes, so the vector step takes the first sixteen and the scalar loop the
+# rest. The `x` at 20 is past the vector step; the `q` at 3 is inside it.
+long = text/bytes "abqdefghijklmnopqrstxyz0"
+
+pub play =
+  print "the a byte: {text/find2_below s 1 98 122 1}"
+  >> print "the b byte: {text/find2_below s 1 122 99 1}"
+  >> print "under the limit: {text/find2_below s 1 122 121 32}"
+  >> print "no match at all: {text/find2_below s 1 122 121 1}"
+  >> print "from below one: {text/find2_below s 0 98 122 1}"
+  >> print "from past the end: {text/find2_below s 99 98 122 1}"
+  >> print "from at the first hit: {text/find2_below s 2 98 122 1}"
+  >> print "inside the vector step: {text/find2_below long 1 113 122 1}"
+  >> print "past the vector step: {text/find2_below long 1 120 121 1}"
+  >> print "the last byte of all: {text/find2_below long 1 48 48 1}"
+  >> print "a zero limit is no limit: {text/find2_below s 1 122 121 0}"
+  >> print "a limit past a byte: {text/find2_below s 1 122 121 257}"

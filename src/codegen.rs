@@ -244,6 +244,39 @@ slow:
   %s = call %KValue @k_b_slice(%KValue %c, %KValue %f, %KValue %t)
   ret %KValue %s
 }
+define internal %KValue @k_b_find2_below_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, %KValue %lim) alwaysinline {
+  %cst = extractvalue %KValue %cs, 0
+  %ft = extractvalue %KValue %from, 0
+  %at = extractvalue %KValue %a, 0
+  %bt = extractvalue %KValue %b, 0
+  %lt = extractvalue %KValue %lim, 0
+  %isb = icmp eq i64 %cst, 13
+  %isf = icmp eq i64 %ft, 0
+  %isa = icmp eq i64 %at, 0
+  %isbb = icmp eq i64 %bt, 0
+  %isl = icmp eq i64 %lt, 0
+  %g1 = and i1 %isb, %isf
+  %g2 = and i1 %isa, %isbb
+  %g3 = and i1 %g1, %g2
+  %plain = and i1 %g3, %isl
+  br i1 %plain, label %scan, label %slow
+scan:
+  %bp = extractvalue %KValue %cs, 1
+  %by = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %by
+  %dp = getelementptr i8, ptr %by, i64 8
+  %d = load ptr, ptr %dp
+  %fv = extractvalue %KValue %from, 1
+  %av = extractvalue %KValue %a, 1
+  %bv = extractvalue %KValue %b, 1
+  %lv = extractvalue %KValue %lim, 1
+  %at1 = call i64 @k_b_find2_below_raw(ptr %d, i64 %len, i64 %fv, i64 %av, i64 %bv, i64 %lv)
+  %r = insertvalue %KValue { i64 0, i64 undef }, i64 %at1, 1
+  ret %KValue %r
+slow:
+  %f = call %KValue @k_b_find2_below(%KValue %cs, %KValue %from, %KValue %a, %KValue %b, %KValue %lim)
+  ret %KValue %f
+}
 define internal %KValue @k_b_find2_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b) alwaysinline {
   %cst = extractvalue %KValue %cs, 0
   %ft = extractvalue %KValue %from, 0
@@ -829,6 +862,7 @@ declare %KValue @k_b_utf8_slice_raw(ptr, i64, i64, i64, ptr)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
+declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
@@ -5218,6 +5252,14 @@ impl<'a> Backend<'a> {
                 // twin tests the tags, hands the scan five scalars, and folds
                 // to nothing at a call site whose needles are literals.
                 "find2_fast"
+            } else if name == "find2_below" {
+                // the same door with one more bound, and the largest spill of
+                // the five the emitter declares over six registers: FIVE
+                // KValues are ten register-sized arguments, so four arrive on
+                // the caller's stack. The twin tests the five tags and hands
+                // the scan a pointer, a length and four integers — six, and
+                // nothing spills.
+                "find2_below_fast"
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"

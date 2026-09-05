@@ -1639,6 +1639,16 @@ every changed counter is priced (or improved).</code></pre>
 
 <p>the fixture is <code>tests/golden/micro/utf8_of_a_byte_slice_at_its_edges.kso</code>. nothing in the corpus had reached this door over bytes: the one program that read an invalid byte through a slice passed a list, which falls through to the general slice and the general <code>utf8</code>. the fixture walks every range the clamp refuses and both sides of the validity test &#8212; a two-byte sequence taken whole, the same sequence cut in half, and its continuation byte alone.</p>
 
+<h2 id="census"><span class="sec-num">50</span>counting the doors instead of guessing them</h2>
+
+<p>three doors were twinned by reading a profile and picking what looked expensive. the question the mechanism actually asks is narrower and countable: which of the functions the emitter declares take more than the six integer argument registers the abi has? a <code>KValue</code> is two, so the answer comes out of the source with no measurement at all. it is five. <code>k_call4</code> and <code>k_b_find2_below</code> take ten, <code>k_call3</code> and <code>k_b_find2</code> eight, <code>k_b_utf8_slice</code> seven.</p>
+
+<p>two were already done and two are call doors no benchmark reaches. that leaves <code>find2_below</code>, which spills four arguments &#8212; more than anything else in the tree &#8212; and carries 481,347,200 instructions of self cost in the encode, 8.3% of it.</p>
+
+<p>the twin takes 239,593,600 of them, about half. encodebench falls 4.129% and the one-shot 2.050%; widebench&#39;s binary changed and its count did not, and the other nine binaries came out byte-identical, so those rows could not move. nothing rises. four spilled arguments are four stores in the caller and four loads and unpacks in the callee on every call, in front of a scan that is a compare and a branch per byte.</p>
+
+<p>the count is not a complete test for candidates, and <code>slice</code> is why: it fits in six registers and its twin won anyway, on the guards. what the count gives is a closed list for THIS mechanism. after <code>find2_below</code> the only doors that overflow are the two nothing calls, so the family is finished until a new door is declared.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
