@@ -2839,10 +2839,12 @@ attribute reaches this one at all — see the rider below for where it does not.
 Seven rows are byte-identical and none rises. Every allocation counter is
 unchanged and so is the emitted line count: this is entirely inside the runtime.
 
-**text 1,074,552 -> 1,075,912.** Five rows rise 144 to 304 bytes — the ascii
-test is written at each of the validator's four call sites now instead of once
-inside the pass — and the seven programs that never reach utf-8 validation hold
-exactly still. jsonbench spends 304 bytes for 15.8 million instructions.
+**text 1,074,552 -> 1,081,288.** Five rows rise 1,168 to 1,392 bytes and seven
+hold exactly still: the ascii test is written at each of the validator's four
+call sites now instead of once inside the pass, and the grammar walk is a real
+function on every target rather than dead code behind an `#else`. The seven
+that hold are the programs that never reach utf-8 validation. jsonbench spends
+1,392 bytes for 36.9 million instructions.
 
 **The harness caught the rename, which is what it is for.**
 `scripts/utf8_differential` extracts the validator's text out of `runtime.c`
@@ -2871,9 +2873,29 @@ fix is named and gated on a toolchain bump. What stays inside reach is reducing
 what is live across the non-tail calls in the hot dispatchers, which is a
 per-function matter.
 
-**OPEN — the wide pass costs 298 instructions for seven bytes.** Now that the
-front door turns away the ascii runs, what is left is 60,769,050 instructions
-over 203,700 calls, 3.29% of the decode: 13% of the document's strings are not
-ascii, and each costs 298 to validate about seven bytes. The setup is the whole
-of it. A scalar walk of the grammar would answer a short run in well under a
-hundred, and the choice between them is the length. Not built.
+**And then the third arm, in the same change.** With the ascii runs turned away
+the wide pass was 60,769,050 instructions over 203,700 calls, 3.29% of the
+decode: 13% of the document's strings are not ascii, and each cost 298 to
+validate about seven bytes. The setup is the whole of it, and its own comment
+already said so. The portable arm of that pass walked the grammar a byte at a
+time and nothing but a host without simd ever reached it, so it became a
+function and the door chooses on the length.
+
+```
+    jsonbench     1,898,797,203 -> 1,877,751,303   -1.108%   (container)
+    oneshot          30,003,499 ->    29,863,200   -0.468%
+    widebench        58,318,988 ->    58,270,995   -0.082%
+```
+
+Every arm returns the same sentence, so which one answered is not observable,
+and the harness reads a third piece now — with the threshold taken out of the
+line that defines it rather than written down twice. Watched red: dropping the
+surrogate bound on `0xED` gives 2,048 mismatches, exactly `ED A0-BF` by
+`80-BF`, so the fuzzer reaches the arm that moved.
+
+**DECLINED on the way: the lead byte's table.** Replacing the eight-comparison
+chain that decides a lead byte's width with a 256-entry table costs 1,428,150
+instructions instead of saving any — 1,877,751,303 against 1,879,179,453 on
+jsonbench. The chain is predictable, and the ascii bytes that dominate a
+mostly-ascii run are tested before it and never reach either. Recorded so it is
+not rediscovered.

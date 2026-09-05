@@ -458,17 +458,20 @@
 # work vein falls on ten of twelve benchmarks and rises on two, and this vein
 # does the same without the two agreeing on which. jsonbench spends 672 bytes
 # here to save 184 million instructions.
-# 2026-09-05 (the ascii test comes out from behind the wide pass): five rows
-# rise 144 to 304 bytes and seven hold exactly still. The ascii word-test and
-# the byte counter moved into an always_inline front door, so they are written
-# at each of the validator's four call sites instead of once inside the pass.
-# The seven that hold are the programs that never reach utf-8 validation at all.
-# jsonbench spends 304 bytes here to save 15.8 million instructions.
-jsonbench text=86978
-encodebench text=107042
-oneshot text=109602
-basket text=100930
-widebench text=110562
+# 2026-09-05 (the ascii test comes out from behind the wide pass, and a short
+# run walks the grammar): five rows rise 1,168 to 1,392 bytes and seven hold
+# exactly still. The ascii word-test and the byte counter moved into an
+# always_inline front door, so they are written at each of the validator's four
+# call sites instead of once inside the pass; and the grammar walk that used to
+# be the pass's portable arm is a real function on every target now, because a
+# short run answers there for a fifth of what the wide pass charges. The seven
+# that hold are the programs that never reach utf-8 validation at all.
+# jsonbench spends 1,392 bytes here to save 36.9 million instructions.
+jsonbench text=88066
+encodebench text=108130
+oneshot text=110690
+basket text=101954
+widebench text=111650
 deepbench text=69730
 escapebench text=52258
 pendbench text=83218
