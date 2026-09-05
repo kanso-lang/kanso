@@ -166,6 +166,34 @@ contradiction above is the thing to rule on first.** If the log's twelfth entry
 is right, a within-binary pair has been seen once and the mechanism has a
 premise. If the gate's comment is right, it never has.
 
+**THE THIRTEENTH SERIES, 2026-09-05, and it argues for one value.** The table
+was emptied when this branch moved the compiler binary, and CI has refilled two
+rows in two rounds:
+
+    family0x19-model0x11   41,378,764   AMD Zen 4
+    family0x6-model0xcf    41,378,764   Intel Emerald Rapids
+
+Two vendors, two independent builds, one number. With the twelfth series' five
+keys on 41,377,644 that is seven within-binary sittings across two binaries
+agreeing exactly and none disagreeing, which is the count this entry already
+reported and is now larger. Nothing since the pair was introduced has produced
+a second within-binary value.
+
+**And one candidate explanation for the pair's residual is gone.** The 508 the
+pair exists to hold was attributed to two runs of one binary on one chip. The
+build is byte-reproducible: there is no `build.rs`, nothing under `docs/` or
+`design/` is `include_str!`'d, no `env!` or git state reaches the binary, and a
+forced rebuild of every `.rs` here produced the same sha256. So the two runs
+that read 41,831,767 and 41,832,275 ran the same bytes, and whatever separated
+them was in the process rather than the program. That does not settle what it
+was — `setarch -R` was on for one and not the other, which this entry notes —
+but it removes "a rebuild made a different binary" from the list.
+
+**The cost side, re-measured.** Two rounds for two rows on this binary, against
+the twelfth series' five. The ceiling is still the pool's size and the pool is
+still not a fixed set, so five remains the floor of the estimate rather than
+its value.
+
 ### Should the welfare index carry a term for machine-code size?
 
 **Searched:** design/compiler-log.md and the archive carry the weights gavel
