@@ -272,14 +272,17 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Nineteen questions wait in `design/pending-gavels.md`** — none blocking,
-nineteen open — each with a recommendation, counted from the ledger rather
-than carried forward. Five are new today: the chain-line grammar, whether
-an err gains readers a callback can use, whether the backends should
-build a partial whose callee is a value, whether an identifier's name
-lives inline, and whether welfare satiates the mean of its ratios or each
-counter, which decides whether a benchmark 138 times better than its baseline
-carries two thirds of the run-speed term.
+**Four questions wait in `design/pending-gavels.md`** — none blocking, four
+open — each with a recommendation. Counted from the ledger on 2026-09-05 by
+reading its headings, which is what this line has always claimed to do and
+had stopped doing: it said nineteen while the ledger held three. Fifteen had
+been gaveled and had left the file as the lifecycle requires, and the count
+here was carried forward instead of recounted. The three standing are the
+compile row's residual layout term, the book teaching the boundary language,
+and the assert hako; the fourth is new today — whether the welfare index
+should carry a term for machine-code size, raised by an inline that buys
+15,427,521 instructions on jsonbench and costs 34,320 bytes across all twelve
+programs.
 
 **The rules that carry forward**, each earned twice:
 
