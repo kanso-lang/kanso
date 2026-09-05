@@ -3028,3 +3028,28 @@ the same. `bench/compile_golden_modules.txt` reads `module_defines` 93,
 `emitted_other_calls` 14,869, `emitted_other_branches` 8,856 and
 `emitted_other_lines` 90,688. `text` lands on 1,117,272, of which 34,320 is
 `k_str_n` and the rest the two twins.
+
+**CI's sitting, which is what the goldens carry.** The rows above are the
+container's. Nine of the runner's twelve fall: `work_jsonbench` lands on
+1,791,154,445 (−4.612% against main), `work_indexbench` on 4,792,124
+(−8.584%), `work_scanbench` on 1,406,298,324 (−1.335%), `work_oneshot` on
+29,275,729 (−1.968%), `work_widebench` on 57,839,394 (−0.741%),
+`work_pendbench` on 700,501,795 (−0.230%), `work_basket` on 39,875,796,
+`work_encodebench` on 5,802,859,663 and `work_digestbench` on 80,995,637.
+scanbench's is the number to read for the slice twin's cost: that twin took
+2,495,505 off it on its own and `k_str_n` gave back more, so the vein records
+a fall where the per-change readings record a rise and then a larger fall.
+
+**Three rise, and all three are named here because the trend gate refuses a
+move with no sentence.** `work_deepbench` lands on 678,049,725 and
+`work_escapebench` on 130,170,757 — twelve and fourteen instructions, the
+twins' tag tests on the few calls those two programs make. `work_readbench`
+lands on 2,038,393,968, a rise of 37,736,155 and 1.886%, and it is `k_str_n`:
+that benchmark reads a file and holds few short strings and many long ones,
+where an inlined copy loop loses to a called one. `compile_instructions` lands
+on 41,378,619, a rise of 226 — held on ONE chip across both binaries, Emerald
+Rapids reading 41,378,393 before the twins and 41,378,619 after, so none of it
+is the silicon. The prelude gained two twins and `runtime.c` two raw doors;
+`kanso check lib/json` emits nothing, so the front end does the same work.
+
+**welfare 73.77 -> 73.90**, banked with `--set` in the same commit.
