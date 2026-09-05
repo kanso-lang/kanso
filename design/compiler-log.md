@@ -3683,3 +3683,26 @@ Deleting 3.7 GB of stale scratch worktrees changed the message to the real
 assertion. Worth knowing, because "NotFound" on a file the fixture just copied
 reads as a bug in the fixture and is not one, and because I called it a
 race between two concurrent test runs before checking — it fails alone.
+
+### Two gates the correction owed, and only one of them was foreseen
+
+CI went red a second time on this branch, and neither failure was a counter.
+
+`page_drift` counted five log entries against a budget of three. Today's
+campaign put five entries in the log and moved the page not at all, which is
+exactly what that gate is for — its own words are "several entries with no page
+edit means the presented design has fallen behind what the compiler does". §52
+is the entry the log owed: one section for the campaign rather than one per
+commit, covering the two sweeps, why a library edit moves the compile veins,
+what the frozen benchmark cannot see, and the stale row.
+
+`golden_prose` then caught what the correction itself had done. The page quotes
+`compile_instructions` in a `data-golden` span, so moving the golden to
+41,380,022 made the prose stale by 519 the moment it was right. That is the
+gate working as designed: a number on the page and a number in a golden are the
+same claim, and only one of them had been edited.
+
+Worth writing down that the drift gate reads `git log -1 -- docs/compiler.html`,
+so an uncommitted page edit is invisible to it. It went on reporting five
+entries ahead until the edit was committed, which reads like the fix not
+working.
