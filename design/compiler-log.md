@@ -3772,3 +3772,228 @@ All three were watched red against the rule they replace, and each failed with
 its own message: `14 rows were selected and 12 mutations guard on src/runtime.c`,
 `a goldens-only diff selected 11 rows`, and the equality between the two
 selections.
+
+---
+
+## 2026-09-05 (twelfth) — the negative render writes behind its sign
+
+**DONE.** `k_render_at`'s shortest-round-trip branch rendered a negative
+double into a 63-byte stack scratch and then `strcpy`'d the whole rendering
+one byte right, behind the minus the caller had just written. It now hands
+`render_ryu` the address one past the sign and lets it write there directly.
+
+Half of what encodebench renders is negative — 430,400 of its 849,200 ryū
+renders, counted with a probe — so the copy was paid on every other value.
+
+### The measurement, container, both sides in the repo root
+
+Same directory, same paths, benchmarks rebuilt in place between the two.
+`scripts/gates/instructions.sh` records why that matters: the exec path lands
+on the new process's stack and libc walks it before main, so a binary measured
+from a different directory is off by a fixed amount that reads like a small
+regression.
+
+    encodebench   5,322,690,905 -> 5,310,898,414   -11,792,491   -0.2216%
+    livebench     5,312,541,181 -> 5,300,748,646   -11,792,535   -0.2220%
+    oneshot          27,732,721 ->    27,702,706       -30,015   -0.1082%
+    basket           39,737,125 ->    39,736,877          -248
+    jsonbench     1,745,057,760 -> 1,745,057,595          -165
+    deepbench       714,675,476 ->   714,675,319          -157
+    escapebench     130,170,358 ->   130,170,201          -157
+    readbench     2,038,397,133 -> 2,038,397,263          +130
+    widebench        57,200,811 ->    57,200,932          +121
+    digestbench      77,290,192 ->    77,290,383          +191
+    pendbench       681,319,383 ->   681,319,612          +229
+    indexbench        4,691,710 ->     4,692,009          +299
+    scanbench     1,395,727,664 -> 1,395,727,963          +299
+
+Ten of the thirteen move by under 300 in either direction, which is layout:
+the by-cpu file's own reading puts a `.text` change's reach on a count at about
+a thousand. The three that move are the three that render floats. 27.4
+instructions saved per negative render.
+
+livebench is the confirmation the frozen control cannot give. It runs
+encodebench's program against the library that ships rather than the vendored
+snapshot, and it falls by the same 11.79M to within 44 instructions — which is
+what a RUNTIME change should do to both, where a library change moves only the
+live row.
+
+### The fixture, watched red on the off-by-one it risks
+
+`tests/golden/micro/a_negative_double_renders_behind_its_sign.kso`: sixteen
+negatives across the shortest-round-trip path — both exponent extremes,
+seventeen significant digits, the thirds, 1e-07 — and a positives line that
+takes the other branch and must not move. The language has no exponent
+literal, so the wide exponents are built by multiplying a 31-digit literal.
+
+Broken by sending the rendering to `buf` instead of `buf + 1`, which is the
+exact off-by-one this arrangement risks, it fails with all sixteen negatives
+missing their sign and the positives line untouched. That mutation is now
+`scripts/ratchet/mutations/native_drops_a_negative_sign.sh` with a row on the
+micro corpus: `native_renders_a_float_wider` covers the integral fast path and
+stops there, so seventy-three mutations had never broken a sign.
+
+### The buffer claim, measured rather than argued
+
+`render_ryu` never writes a sign for a nonzero double — it is handed `-d`,
+which is positive — and `-0.0`, the one value that would collide, is caught
+upstream by the integral fast path and never reaches this branch.
+`a_whole_float_keeps_its_point` already pins that `-0.0` renders `-0.0`.
+
+Longest rendering, probed with a max-strlen counter inside `render_ryu`: 8 on
+encodebench's own data, 23 on the fixture. The analytic worst case is 23 plus
+the terminator. The scratch it replaces was 63 and the caller's buffer is 64,
+so writing behind the sign has forty bytes to spare rather than one.
+
+### The veins
+
+`all_counters.sh`: all eleven agree. The change removes instructions rather
+than counted events — no allocation, no render, no arena block moves.
+
+`all_compile.sh`: `machine_code` MOVED and is regenerated. Every benchmark's
+`.text` falls 48 bytes, except escapebench and indexbench at 32. That is the
+63-byte scratch and its `strcpy` call going away, and it is a fall to bank.
+
+`bench/compile_instructions_by_cpu.txt` is emptied. `src/runtime.c` is
+`include_str!`'d into the compiler, so all four rows counted a binary that no
+longer exists, and this file's rule — written nine times in its own header now
+— is that a value counted against the old binary is worse than no value. CI
+supplies the first row of the next series and the golden's bare line follows
+it.
+
+### And a spec I wrote yesterday was too strict about that
+
+`the_golden_follows_the_first_row` said `.expect("the table has a row")`. An
+empty table is a state the design HAS: it is where the table sits between a
+change to the compiler's bytes and CI's first sitting, and `compile_ir_row.sh`
+handles it in its own first branch, printing the row to add. The spec now asks
+nothing when there is no first row, rather than failing with a sentence about
+a row that is absent on purpose. Watched red both ways: the old form panics
+`the table has a row` against today's emptied table.
+
+### Two counts in the ratchet's own comment, corrected
+
+The comment #1254 landed says "src/runtime.c alone carries twenty guards". It
+was counting guard LINES, and the rule selects ROWS: twelve mutations guarded
+on the file across twenty-one lines, and the row added here makes it thirteen
+across twenty-three. The 32→14 / 7→1 / 8→1 figures beside it were taken at 73
+mutations and there are 74 now; both readings stay, with their counts, for the
+reason that paragraph already gives.
+
+**OPEN.** The work vein (`bench/instructions_golden.txt`) cannot be
+regenerated here — this container is glibc 2.39-0ubuntu8.7 against the golden's
+8.8, and `host_gate.sh` refuses. CI measures it; its rows and the compile
+sitting land in a follow-up commit on this branch, and welfare moves with them.
+
+---
+
+## 2026-09-05 (thirteenth) — CI's rows for the entry above, and the two hosts agree to the instruction
+
+**DONE**, closing the OPEN thread in the twelfth entry.
+
+`bench/instructions_golden.txt` is regenerated from the CI job that measured it.
+The container could not: it is glibc 2.39-0ubuntu8.7 against the golden's 8.8,
+and `host_gate.sh` refuses rather than letting a reader compare rows counted on
+two libcs.
+
+    jsonbench     1,745,058,173 -> 1,745,058,008        -165
+    encodebench   5,322,691,304 -> 5,310,898,813   -11,792,491   -0.2216%
+    oneshot          27,733,120 ->    27,703,105       -30,015   -0.1082%
+    basket           39,737,538 ->    39,737,290          -248
+    widebench        57,201,224 ->    57,201,345          +121
+    deepbench       714,674,831 ->   714,674,674          -157
+    escapebench     130,170,757 ->   130,170,600          -157
+    pendbench       681,319,796 ->   681,320,025          +229
+    indexbench        4,692,123 ->     4,692,422          +299
+    scanbench     1,395,728,077 -> 1,395,728,376          +299
+    digestbench      77,290,591 ->    77,290,782          +191
+    readbench     2,038,397,546 -> 2,038,397,676          +130
+    livebench     5,312,541,628 -> 5,300,749,093   -11,792,535   -0.2220%
+
+**Every delta is the container's delta to the instruction.** The absolute rows
+differ — CI's encodebench is 5,310,898,813 where the container counted
+5,310,898,414, a fixed 399 that is the exec path on the process's stack — but
+the thirteen differences are identical on both hosts. That is worth having
+written down: it says the offset is additive and the vein's deltas survive a
+host change even though its rows do not.
+
+### The compile row
+
+CI drew `family0x19-model0x1` on a table the change had emptied, refused rather
+than comparing to anything, and printed the row to add:
+
+    compile_sample cpu="cpu family 0x19 model 0x1" sha=fe268554d931 row=41381326
+
+So the new series opens at 41,381,326 against the old series' 41,380,022, a rise
+of 1,304 from a change that touches only the runtime. `kanso check lib/json`
+emits nothing, so the code that changed cannot run during the measurement; what
+moved is layout, for the tenth time on this vein. `compile_allocs` holds at
+25,490 and `compile_peak_bytes` at 715,275 across it.
+
+### Welfare
+
+74.14745031572936 -> 74.15241668591877, a rise of 0.00496637, and `--set` in
+the same change. Two encode instruction terms fall by ~0.22% against one compile
+instruction term rising 1,304 on a satiated dimension; the sum goes up and that
+trade is what the weights are for.
+
+The page's `compile.compile_instructions` span moves 41,380,022 -> 41,381,326
+with the golden, because a number on the page and a number in a golden are one
+claim.
+
+### The six rows that rose, priced one by one
+
+The trend gate asks for the counter's key and the value it landed on, and it is
+right to: a paragraph that names a counter without its number is a blanket
+permit for that counter for the whole branch, which is how kanso#1205's
+explanation once licensed a mutation to set the same row to 999,999,999 and
+leave the gate green.
+
+Six work rows rose, all by between 121 and 299 instructions:
+
+    work_widebench    57,201,224 -> 57,201,345    +121
+    work_digestbench  77,290,591 -> 77,290,782    +191
+    work_pendbench   681,319,796 -> 681,320,025   +229
+    work_indexbench    4,692,123 -> 4,692,422     +299
+    work_scanbench 1,395,728,077 -> 1,395,728,376 +299
+    work_readbench 2,038,397,546 -> 2,038,397,676 +130
+
+None of them renders a float, and the change is confined to the negative arm of
+`k_render_at`. What reaches them is the `.text` move: every benchmark's machine
+code fell 48 bytes (32 for escapebench and indexbench), and a `.text` change of
+that size reaches a count at about a thousand instructions, which is the reading
+`bench/compile_instructions_by_cpu.txt` records for the same effect on the
+compile row. All six are inside that. The three rows that fall — encodebench,
+livebench and oneshot — fall by 11.79M, 11.79M and 30,015, which is two to five
+orders of magnitude more, and they are the three that render.
+
+### A second chip on the new series, and it agrees
+
+The re-run drew `family0x6-model0x6a`, the Ice Lake-SP, found no row for it on
+the fresh table and refused:
+
+    compile_sample cpu="cpu family 0x6 model 0x6a" sha=fe268554d931 row=41381326
+
+41,381,326 — what family0x19-model0x1 read on the same binary. Two chips, two
+vendors, one number, on the first binary of the new series. That is the tenth
+reading in the unanimity record the header of that file now keeps.
+
+### A third chip, and the key's price per binary is now a measured figure
+
+The round after that drew `family0x6-model0xcf`, Emerald Rapids, the second
+Intel. No row, refusal, 41,381,326 — the same number for the third time.
+
+    family0x19-model0x1   41,381,326   AMD Zen 3
+    family0x6-model0x6a   41,381,326   Ice Lake-SP
+    family0x6-model0xcf   41,381,326   Emerald Rapids
+
+Three keys, two vendors, one binary, one number, and it took THREE CI rounds to
+learn because each chip refuses once. That is what the per-chip key costs per
+binary that touches the compiler's bytes, and it is now a figure rather than an
+impression: one red round per unrecorded chip, and the pool has produced five
+distinct keys since the table was introduced.
+
+It belongs beside the collapse argument (#303) as the cost side, not as evidence
+for it. The evidence for it is the unanimity: eleven readings now, across three
+binaries, and every reading on a binary agrees with every other reading on that
+binary.

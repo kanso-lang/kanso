@@ -621,6 +621,21 @@ rendering = row
   (breaking "native_renders_a_float_wider")
   release
 
+# The row above covers the INTEGRAL fast path, which is the cast that renders a
+# whole number under 1e15, and stops there. A value with a fraction or a wide
+# exponent takes the shortest-round-trip branch instead, where the sign and the
+# digits are placed by two different pieces of code that have to agree on an
+# offset: the caller writes the minus and render_ryu is handed the magnitude
+# and writes one byte past it. Seventy-three mutations and not one of them was
+# a sign.
+negative_sign = row
+  "a negative rendering placed one byte off, so the sign is overwritten"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "native_drops_a_negative_sign")
+  release
+
 behaviour = row
   "a legal call answered differently at an edge, with nothing complaining"
   true
@@ -807,7 +822,7 @@ rows_c1p = text/concat rows_c1t [published_numbers]
 
 rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
-rows_c1c = text/concat rows_c1b [rendering behaviour]
+rows_c1c = text/concat rows_c1b [rendering negative_sign behaviour]
 
 rows_c1d = text/concat rows_c1c [numeric effects]
 
@@ -1087,18 +1102,23 @@ fn shell dir cmd
 # answer is a range rather than a number. A branch touching one source file
 # selects the rows guarding on it: #1171 touched src/runtime.c and #1157 and
 # #1188 touched src/lib.rs, and all three would have been answered on the pull
-# request that broke them. But src/runtime.c alone carries twenty guards, so a
-# runtime branch selects a large block however the rule is written, and the
-# saving here does not reach that case. Measured on three real diffs:
+# request that broke them. But src/runtime.c alone is guarded on by thirteen
+# mutations, so a runtime branch selects a large block however the rule is
+# written, and the saving here does not reach that case. That number said
+# twenty and counted GUARD LINES rather than rows, which is not what the rule
+# selects: twelve mutations guarded on the file across twenty-one lines, and
+# the row this change adds makes it thirteen across twenty-three. Measured on
+# three real diffs:
 #
 #     kanso#1249, 45 changed files    naming 32 rows -> guard 14
 #     kanso#1252, 21 changed files    naming  7 rows -> guard  1
 #     kanso#1253, 10 changed files    naming  8 rows -> guard  1
 #
-# Those are a reading of a corpus that moves: taken against the 73 mutations on
-# disk today. An earlier reading of the first two, at 72 mutations, put them at
-# 33 -> 12 and 8 -> 1. So the figures are an order of magnitude rather than a
-# pin, and the specs beside this deliberately assert no count for that reason.
+# Those are a reading of a corpus that moves: taken against 73 mutations, and
+# there are 74 on disk now. An earlier reading of the first two, at 72
+# mutations, put them at 33 -> 12 and 8 -> 1. So the figures are an order of
+# magnitude rather than a pin, and the specs beside this deliberately assert no
+# count for that reason.
 #
 # The comment this replaces said "usually empty and occasionally one to three",
 # which was true of the branches it cited and wrong by an order of magnitude on

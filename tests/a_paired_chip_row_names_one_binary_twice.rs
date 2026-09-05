@@ -133,13 +133,21 @@ fn every_paired_row_cites_the_one_binary_that_read_both_values() {
 /// checks this on every run, but only on a host that gets as far as measuring —
 /// three of the compile gates refuse on a container, so a disagreement can sit
 /// unread locally until CI. Two files and no measurement, so a spec can ask.
+///
+/// An EMPTY table is a state the design has, and this spec said "the table has
+/// a row" when it was written a day ago. A change to the compiler's own bytes
+/// removes every row at once — a value counted against the old binary is worse
+/// than no value — and the table stays empty until CI draws a chip, refuses,
+/// and prints the row to add. `compile_ir_row.sh` handles that case in its
+/// first branch and says so. There is no first row for the golden to follow
+/// then, so this asks nothing rather than failing with a sentence about a row
+/// that is absent on purpose.
 #[test]
 fn the_golden_follows_the_first_row() {
-    let first = TABLE
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty() && !l.starts_with('#'))
-        .expect("the table has a row");
+    let Some(first) = TABLE.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with('#'))
+    else {
+        return;
+    };
     let want = first.split_whitespace().nth(1).expect("the first row pins a value");
     let golden = std::fs::read_to_string(root().join("bench/compile_instructions_golden.txt"))
         .expect("the golden reads");

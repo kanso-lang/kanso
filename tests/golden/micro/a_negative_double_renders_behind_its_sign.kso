@@ -1,0 +1,34 @@
+# A negative double renders straight into the caller's buffer behind its
+# sign. It used to render into a 63-byte scratch and then copy the whole
+# rendering one byte right, and half of every render encodebench makes is
+# negative, so that copy was 430,400 of its 849,200 renders.
+#
+# The sign is the risk: a rendering that goes to the wrong offset loses its
+# minus, keeps a stale byte, or truncates a digit. Every line below is a
+# negative the shortest-round-trip path renders, and the last line is the
+# positive half of the same values, which takes the other branch and must
+# not have moved.
+#
+# The language has no exponent literal, so the wide exponents are built by
+# multiplying and dividing rather than written down.
+e30 = 1000000000000000000000000000000.0
+
+e60 = e30 * e30
+
+e120 = e60 * e60
+
+e240 = e120 * e120
+
+wide = "{0.0 - e30} {0.0 - e60} {0.0 - e240}"
+
+narrow = "{0.0 - 1.0 / e30} {0.0 - 1.0 / e120} {0.0 - 1.0 / e240}"
+
+seventeen = "{-1.2345678901234567} {-9.999999999999999} {-1.0000000000000002}"
+
+thirds = "{-0.1} {-1.0 / 3.0} {-2.0 / 3.0} {-0.0000001}"
+
+positives = "{e30} {1.0 / e240} {1.2345678901234567} {0.1}"
+
+lines = "{wide}\n{narrow}\n{seventeen}\n{thirds}\n{positives}"
+
+pub play = print lines
