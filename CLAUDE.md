@@ -79,11 +79,18 @@ section is where its instructions will appear.
   them.** `lib/*.kso` is `include_str!`'d into the compiler (`src/lib.rs`), so
   adding a line to lib/json is a line the compiler carries and compiles.
   `all_counters.sh` names the runtime cost goldens only; `machine_code`,
-  `emitted_code`, `compile_memory`, `compile_allocs` and `compile_instructions`
-  are separate gates and two of their counters are welfare terms. On 2026-09-05
-  a twelve-line library change read as a welfare RISE with the compile veins
-  stale and a FALL once they were regenerated. Run those five by hand after any
-  edit under lib/.
+  `emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`
+  and `compile_libraries` are separate gates and two of their counters are
+  welfare terms. On 2026-09-05 a twelve-line library change read as a welfare
+  RISE with the compile veins stale and a FALL once they were regenerated.
+  `sh scripts/gates/all_compile.sh` runs the set after any edit under lib/ and
+  separates a vein that MOVED from one this host may not compare — three of
+  them refuse on a container, and a refusal exits non-zero exactly like a
+  regression, so a session that runs them raw and sees three failures learns
+  nothing it can act on. This sentence named five of them until 2026-09-05,
+  when deriving the set from the golden each script reads turned up the sixth;
+  `tests/the_compile_sweep_names_every_compile_gate.rs` pins the list in both
+  places now, because a list written down is a list that goes stale.
 - **A library edit needs `cargo build` before it takes effect**, for the same
   reason. In a worktree whose compiler was built first, `kanso build` succeeded
   with `lib/json/text.kso` holding outright syntax garbage. `all_counters.sh`

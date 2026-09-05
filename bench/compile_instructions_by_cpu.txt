@@ -1117,7 +1117,65 @@
 # at 41,379,503 on this same family and model. Same silicon, same source, the
 # other value: that is the residual this file's header describes, not a front
 # end that moved.
-family0x19-model0x11 41379503 41380022
+# 2026-09-05 (kanso#1253): THE PAIR ABOVE WAS TWO BINARIES, AND SO WAS THE GOLDEN.
+#
+# family0x19-model0x11 was pinned as `41379503 41380022` on the reading that it
+# was a third chip seen to read both values on one binary. Off git it is not:
+#
+#     31c54078   all four chips 41379503          the pre-kanso#1251 binary
+#     643399da   kanso#1251 changes codegen.rs; CI re-sits model0x1 and,
+#                on the second run, model0xcf, both to 41380022. model0x11
+#                and model0x6a are left stale, and the entry above says so
+#     65725d05   CI draws model0x11 on the post-#1251 binary and counts
+#                41380022 -- against a row still carrying the stale value
+#
+# So the two halves were the two binaries, and the entry that recorded the pair
+# cites no sha because there was none to cite. Every earlier pair in this file
+# names one: "same chip 0x19/0x11, same binary sha 0e081d4c2c96". That is the
+# whole content of the claim, and I did not make it.
+#
+# What it cost was not the row. The golden's bare line follows the FIRST row's
+# FIRST value, so bench/compile_instructions_golden.txt read 41379503 -- the
+# pre-#1251 number -- and compile_instructions is a welfare term and a trend
+# gate counter. The objective spent from #1251 to here reading a value no chip
+# had counted on this binary, and nothing went red because the pair admitted
+# the true one. The entry above saw the same thing coming and wrote it down:
+# "the golden's bare line tracks the FIRST row, which is one of the stale
+# three, so it does not move yet either." Recording a stale golden is not the
+# same as having one that is right.
+#
+# model0x11 is 41380022 alone. family0x6-model0x6a is REMOVED rather than
+# corrected: it has never been measured on this binary, and this file's rule,
+# written six times above, is that a value counted against the old binary is
+# worse than no value. It is a re-sitting when it next refuses, not a new chip.
+#
+# Three rows now, all 41380022, all counted on this binary by CI. The golden
+# moves 41379503 -> 41380022 and welfare with it, 74.14748966683695 ->
+# 74.14745031572936, a fall of 0.0000394 that is a correction rather than a
+# regression: the compiler did not change, the number recorded for it was wrong.
+#
+# tests/a_paired_chip_row_names_one_binary_twice.rs pins the citation now. A
+# row with two values must sit under a dated entry naming both of them beside a
+# binary sha, which is what the convention already was and what nothing checked.
+# 2026-09-05 (kanso#1253, the same run that found the above): A FIFTH CHIP,
+# AND IT AGREES.
+#
+# CI drew family0x1a-model0x2 -- AMD family 0x1a, a generation this pool has
+# never produced before -- and refused, because no row named it. It counted
+# 41,380,022, which is what the three recorded chips read on this binary. Its
+# job printed `compile_sample cpu="cpu family 0x1a model 0x2"
+# sha=31ccb3e99dde row=41380022`, and every row above was counted on that same
+# binary.
+#
+# So the reading is: five keys, three AMD generations and one Intel, one
+# binary, one number. That is a key separating nothing, which is the collapse
+# argument the header has been collecting evidence for, and it arrived on the
+# run that found the stale golden.
+#
+# It also settles what the correction above rests on from outside it. The
+# golden read 41,379,503 and a chip that had never been asked counted
+# 41,380,022 on the first attempt.
+family0x19-model0x11 41380022
 family0x19-model0x1 41380022
 family0x6-model0xcf 41380022
-family0x6-model0x6a 41379503
+family0x1a-model0x2 41380022

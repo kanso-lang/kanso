@@ -3477,3 +3477,232 @@ specs the change obviously touched — not `cargo test`. The gates all agreed;
 the suite did not. On a change that adds a row to a vein and a counter to the
 model, the suite is the check that matters, and it costs sixteen minutes
 against the two CI rounds it would have saved.
+
+## 2026-09-05 (ninth) — the other half of the sweep
+
+`scripts/gates/all_counters.sh` shipped three entries ago and reads the eleven
+runtime cost goldens. It does not read the compile side, and a change under
+`lib/` moves every vein there, because `lib/*.kso` is `include_str!`'d into the
+compiler: a line added to lib/json is a line the compiler carries and compiles.
+
+Earlier today that gap cost a reading. A twelve-line library change scored a
+welfare RISE of +0.0039 with the compile veins stale, and a FALL of −0.02 once
+they were regenerated. Two of the compile counters — `compile_allocs` and
+`compile_peak_bytes` — are welfare terms, so the objective was being read
+against numbers that no longer described the tree.
+
+`scripts/gates/all_compile.sh` runs the set. Six gates: `machine_code`,
+`emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`,
+`compile_libraries`.
+
+Running them by hand is what it replaces, and the reason is not typing. Three
+of the six refuse on a container whose glibc or rustc does not match the
+golden's measured-on line, and a refusal exits non-zero exactly like a
+regression. A session that runs them raw sees three failures and cannot tell
+which kind it has. So the sweep reads `host_gate.sh`'s own refusal sentence —
+"so the two cannot be compared", the only thing in the tree that prints it —
+and separates three verdicts:
+
+```
+machine_code           AGREED
+emitted_code           AGREED
+compile_memory         REFUSED
+compile_allocs         REFUSED
+compile_instructions   REFUSED
+compile_libraries      AGREED
+
+not compared here (CI measures these): compile_memory compile_allocs compile_instructions
+compile veins: nothing moved that this host can see
+```
+
+A gate that MOVED prints its diff inline. A gate that moved AND cannot compare
+exits at the move first, before the host gate runs, so a real diff never
+carries the refusal line.
+
+It is not a gate. CI runs the six directly, each its own step with its own row
+in the summary, and that is what fails a pull request. This exists so a
+container can tell a moved vein from an unmeasurable one before pushing.
+
+### The list is six, and I first wrote five
+
+The five names were the ones CLAUDE.md carries, and they are what I put on the
+line. Deriving the set instead — every script under `scripts/gates` that reads
+a `bench/compile_*golden`, `bench/text_golden` or `bench/emitted_golden` —
+turned up `compile_libraries` as well. Two scripts read those goldens and are
+not gates: `compile_ir_row` takes four arguments and `compile_instructions`
+calls it, and `build_benchmarks` says what it is in its own first line. Both
+exclusions are written into the spec rather than left as a filter someone has
+to reconstruct.
+
+`tests/the_compile_sweep_names_every_compile_gate.rs` replays that derivation
+against the tree, so a seventh gate added later is a red spec rather than a
+vein nobody sweeps. It pins the same property in CLAUDE.md's own bullet, which
+is the list a session actually reads before touching lib/ — that bullet named
+five for as long as it was written down, which is the second count in that file
+to be wrong on exactly those terms. The cost-golden count said four when there
+were ten and was pinned this morning for the same reason.
+
+All three tests were watched red before they were trusted: dropping
+`compile_libraries` from the sweep gives `has no entry for
+["compile_libraries"]`, adding a `compile_nothing` gives both `which reads no
+compile golden` and `which is not in scripts/gates`, and dropping the name from
+CLAUDE.md gives `does not name ["compile_libraries"]`.
+
+## 2026-09-05 (tenth) — the pair was two binaries, and so was the objective
+
+`bench/compile_instructions_by_cpu.txt` pinned `family0x19-model0x11 41379503
+41380022`. `compile_ir_row.sh` says what a pair is in its own words: "a key and
+the TWO values one chip has been seen to read ON ONE BINARY." These were two
+binaries.
+
+Read off git:
+
+```
+31c54078   all four chips 41,379,503                the pre-#1251 binary
+643399da   #1251 changes codegen.rs; CI re-sits model0x1, then model0xcf,
+           both to 41,380,022. model0x11 and model0x6a left stale, and
+           #1251's own entry says so
+65725d05   CI draws model0x11 on the post-#1251 binary and counts
+           41,380,022 -- against a row still carrying the stale value
+```
+
+I read the leftover as a second mode and wrote the pair. The 519 gap is what
+made it plausible: the within-binary residual recorded earlier on this vein was
+508, so a difference of that size between two binaries looks exactly like the
+thing the pair exists for.
+
+### What it cost
+
+The golden's bare line follows the first row's first value, so
+`bench/compile_instructions_golden.txt` read 41,379,503 — the pre-#1251
+number. `compile_instructions` is a welfare term and a trend-gate counter, so
+from #1251 until now the objective was scored against a value no chip had
+counted on this binary. Nothing went red, because the pair admitted the true
+value on every run that drew that chip.
+
+#1251's own entry saw the shape and wrote it down: "the golden's bare line
+tracks the FIRST row, which is one of the stale three, so it does not move yet
+either." Recording that the golden is stale is not the same as it being right,
+and a day is what the difference cost.
+
+### The fix
+
+model0x11 reads 41,380,022 alone. `family0x6-model0x6a` is removed rather than
+corrected — it has never been measured on this binary, and the rule written six
+times in that file's header is that a value counted against the old binary is
+worse than no value. Three rows remain, all 41,380,022, all CI's own readings
+on this binary.
+
+Welfare goes 74.14748966683695 -> 74.14745031572936, a fall of 0.0000394, and
+the floor is re-set with that reason. It is a correction rather than a
+regression: the compiler did not change, the number recorded for it did.
+
+### The spec, watched red on the defect itself
+
+Every pair written before this one cites its binary — "same chip 0x19/0x11,
+same binary sha 0e081d4c2c96: 41,845,704". The convention was there and nothing
+checked it, and the entry I wrote cites no sha because there was none to cite.
+
+`tests/a_paired_chip_row_names_one_binary_twice.rs` asks for it: a row pinning
+two values must sit under a dated entry naming both values beside a binary sha.
+It went red on main as it stood, which is the strongest form of watching a spec
+fail — the failing case is the defect rather than a mutation of it.
+
+Two drafts of it passed on that defect first, and both are worth writing down
+because both are the shape this repo keeps catching. The first asked for eight
+hex characters and found them in `41379503`, which is eight hex characters: the
+check answered yes using the very number it was demanding a citation for. The
+second scoped the search to "a run of comment lines", which in a file that is
+one long header followed by its rows is the whole header, so a sha from July
+justified a pair from September. The file's real unit is the dated entry.
+
+### What it does to the collapse argument (#303)
+
+The "third reading" — one chip seeing both values on one binary — does not
+exist. What the record supports is four chips agreeing at 41,379,503 on the
+pre-#1251 binary and three agreeing at 41,380,022 on the post-#1251 one. That is
+a stronger argument for collapsing the key than the one it replaces: unanimity
+per binary, rather than a chip disagreeing with itself.
+
+And it puts a question to the pair itself, which is on the ledger for Clay:
+`compile_instructions.sh` already records that the 508 the pair was ruled a
+fallback for "actually was: two binaries." Both recorded pairs are now two
+binaries, and neither is the within-binary bimodality the mechanism was built
+for.
+
+### The same CI run drew a fifth chip, and it agrees
+
+kanso#1253 went red on `compile instructions`, and the failure is a refusal
+rather than a regression: CI drew `family0x1a-model0x2` — AMD family 0x1a, a
+generation this pool had never produced — and no row named it. Its own log:
+
+```
+compile_sample cpu="cpu family 0x1a model 0x2" sha=31ccb3e99dde row=41380022
+##[error]nothing in bench/compile_instructions_by_cpu.txt was counted on
+##[error]family0x1a-model0x2, so this run's 41380022 cannot be compared
+```
+
+41,380,022 is what the three recorded chips read on this binary, first time of
+asking, from a generation none of them belongs to. Five keys, three AMD
+generations and one Intel, one binary, one number.
+
+Two things follow. The correction above no longer rests only on reading git:
+the golden said 41,379,503 and a chip that had never been asked counted
+41,380,022. And the collapse argument (#303) has its evidence from a direction
+nobody arranged — the key is not separating chips, because five of them across
+three microarchitectures cannot be separated.
+
+### And the ratchet admitted a counter, which a spec was waiting to catch
+
+`welfare_saturates_each_counter` went red on the `--set` above, and its own
+header had described the case in advance: a minted counter enters the floor's
+baseline at the next ratchet rather than at the merge that mints it, so the
+pull request that adds one usually leaves the spec green and the NEXT `--set`
+turns it red.
+
+kanso#1252 minted `live_instructions`. This change is the next `--set`, and it
+touches nothing about the run-speed half — it is a correction to
+`compile_instructions` — so the admission arrived here. Ten guards became
+eleven and the guard runaway went 49.00 to 48.91, which is the arithmetic the
+header pins: `((n-1)/3 + 1024/1026) / n * 0.15` reads 0.059971 at ten and
+0.059064 at eleven, and 0.00091 of weight is 0.09 of score. Both neighbours
+held, for the reasons already written there — parity does not depend on the
+count, and the advertised runaway still has two rows.
+
+The numbers are recomputed rather than derived, as that header insists.
+
+### The failure it wore first was a full disk
+
+Before any of that, all three of its tests failed with `the floor reads: Os {
+code: 2, kind: NotFound }`. The container was at 97% with 1.5 GB free, and the
+fixture copies the whole of `bench/` into a staging directory three times. The
+copy that lost the race was silent because `std::fs::copy` had already
+returned; what failed was the read of a file that never landed.
+
+Deleting 3.7 GB of stale scratch worktrees changed the message to the real
+assertion. Worth knowing, because "NotFound" on a file the fixture just copied
+reads as a bug in the fixture and is not one, and because I called it a
+race between two concurrent test runs before checking — it fails alone.
+
+### Two gates the correction owed, and only one of them was foreseen
+
+CI went red a second time on this branch, and neither failure was a counter.
+
+`page_drift` counted five log entries against a budget of three. Today's
+campaign put five entries in the log and moved the page not at all, which is
+exactly what that gate is for — its own words are "several entries with no page
+edit means the presented design has fallen behind what the compiler does". §52
+is the entry the log owed: one section for the campaign rather than one per
+commit, covering the two sweeps, why a library edit moves the compile veins,
+what the frozen benchmark cannot see, and the stale row.
+
+`golden_prose` then caught what the correction itself had done. The page quotes
+`compile_instructions` in a `data-golden` span, so moving the golden to
+41,380,022 made the prose stale by 519 the moment it was right. That is the
+gate working as designed: a number on the page and a number in a golden are the
+same claim, and only one of them had been edited.
+
+Worth writing down that the drift gate reads `git log -1 -- docs/compiler.html`,
+so an uncommitted page edit is invisible to it. It went on reporting five
+entries ahead until the edit was committed, which reads like the fix not
+working.
