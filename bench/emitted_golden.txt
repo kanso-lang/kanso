@@ -92,7 +92,7 @@
 # tree to take apart again; the tree switches on the raw value now. The
 # branches this drops are the tag test and the none test the tree wrote per
 # call. jsonbench retires 13.56% fewer instructions for it.
-defines=174
-calls=1851
-branches=1196
-lines=12218
+defines=175
+calls=1853
+branches=1197
+lines=12248

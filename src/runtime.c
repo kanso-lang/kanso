@@ -6794,43 +6794,60 @@ KValue k_b_length(KValue v) {
 /* Scan for the first of two bytes at or after a 1-based position — the string
    scanner's inner loop, done as a tight pass instead of one boxed dispatch per
    byte. Returns the 1-based hit, or len+1 when neither byte appears. */
-KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
+/* The scan, with the KValue convention taken off it. Every argument fits in a
+   register here, where four KValues do not: three of them fill the six the
+   SysV ABI has and the fourth arrives as a pointer to the stack, which the
+   caller has to store and the callee has to load and unpack before it can
+   splat the byte. That unpacking was fourteen of this function's fifty-four
+   instructions on jsonbench and the scan itself was ten. The emitter reaches
+   this door directly through the `k_b_find2_fast` shim; `k_b_find2` below is
+   the same call for anything the shim's tag test turns away. */
+long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
+                        long long a, long long b) {
     k_stat_find2_calls++;
-    if (!k_not_failure(cs)) return cs;
-    if (!k_not_failure(from)) return from;
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-    if (cs.tag != K_BYTES) k_die("find2 takes bytes");
-    KBytes* by = k_as_bytes(cs);
-    long long p = from.payload < 1 ? 0 : from.payload - 1;
-    unsigned char ca = (unsigned char)(a.payload & 0xff);
-    unsigned char cb = (unsigned char)(b.payload & 0xff);
-    const unsigned char* d = by->data;
+    long long p = from < 1 ? 0 : from - 1;
+    unsigned char ca = (unsigned char)(a & 0xff);
+    unsigned char cb = (unsigned char)(b & 0xff);
     long long i = p;
 #if defined(__aarch64__)
     /* 16 bytes per step; the shrn-by-4 narrow turns the match vector into a
        64-bit mask (4 bits per byte), so ctz/4 names the first hit. */
     uint8x16_t va = vdupq_n_u8(ca), vb = vdupq_n_u8(cb);
-    for (; i + 16 <= by->len; i += 16) {
+    for (; i + 16 <= len; i += 16) {
         uint8x16_t chunk = vld1q_u8(d + i);
         uint8x16_t m = vorrq_u8(vceqq_u8(chunk, va), vceqq_u8(chunk, vb));
         uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
         uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
-        if (mask) return k_int(i + (__builtin_ctzll(mask) >> 2) + 1);
+        if (mask) return (i + (__builtin_ctzll(mask) >> 2) + 1);
     }
 #elif defined(__x86_64__)
     __m128i va = _mm_set1_epi8((char)ca), vb = _mm_set1_epi8((char)cb);
-    for (; i + 16 <= by->len; i += 16) {
+    for (; i + 16 <= len; i += 16) {
         __m128i chunk = _mm_loadu_si128((const __m128i*)(d + i));
         __m128i m = _mm_or_si128(_mm_cmpeq_epi8(chunk, va), _mm_cmpeq_epi8(chunk, vb));
         int mask = _mm_movemask_epi8(m);
-        if (mask) return k_int(i + __builtin_ctz(mask) + 1);
+        if (mask) return (i + __builtin_ctz(mask) + 1);
     }
 #endif
-    for (; i < by->len; i++) {
-        if (d[i] == ca || d[i] == cb) return k_int(i + 1);
+    for (; i < len; i++) {
+        if (d[i] == ca || d[i] == cb) return (i + 1);
     }
-    return k_int(by->len + 1);
+    return len + 1;
 }
+
+KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
+    if (!k_not_failure(cs)) { k_stat_find2_calls++; return cs; }
+    if (!k_not_failure(from)) { k_stat_find2_calls++; return from; }
+    if (!k_not_failure(a) || !k_not_failure(b)) {
+        k_stat_find2_calls++;
+        return k_both_or_either(a, b);
+    }
+    if (cs.tag != K_BYTES) { k_stat_find2_calls++; k_die("find2 takes bytes"); }
+    KBytes* by = k_as_bytes(cs);
+    return k_int(k_b_find2_raw(by->data, by->len, from.payload, a.payload,
+                               b.payload));
+}
+
 
 /* The byte builder. Appends a string, a bytes value, or a single byte
    onto a bytes accumulator. The accumulator owns a KBuf-headed buffer and

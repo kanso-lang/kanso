@@ -196,6 +196,35 @@ slow:
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
+define internal %KValue @k_b_find2_fast(%KValue %cs, %KValue %from, %KValue %a, %KValue %b) alwaysinline {
+  %cst = extractvalue %KValue %cs, 0
+  %ft = extractvalue %KValue %from, 0
+  %at = extractvalue %KValue %a, 0
+  %bt = extractvalue %KValue %b, 0
+  %isb = icmp eq i64 %cst, 13
+  %isf = icmp eq i64 %ft, 0
+  %isa = icmp eq i64 %at, 0
+  %isbb = icmp eq i64 %bt, 0
+  %g1 = and i1 %isb, %isf
+  %g2 = and i1 %isa, %isbb
+  %plain = and i1 %g1, %g2
+  br i1 %plain, label %scan, label %slow
+scan:
+  %bp = extractvalue %KValue %cs, 1
+  %by = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %by
+  %dp = getelementptr i8, ptr %by, i64 8
+  %d = load ptr, ptr %dp
+  %fv = extractvalue %KValue %from, 1
+  %av = extractvalue %KValue %a, 1
+  %bv = extractvalue %KValue %b, 1
+  %at1 = call i64 @k_b_find2_raw(ptr %d, i64 %len, i64 %fv, i64 %av, i64 %bv)
+  %r = insertvalue %KValue { i64 0, i64 undef }, i64 %at1, 1
+  ret %KValue %r
+slow:
+  %f = call %KValue @k_b_find2(%KValue %cs, %KValue %from, %KValue %a, %KValue %b)
+  ret %KValue %f
+}
 define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %is_list = icmp eq i64 %tag, 9
@@ -748,6 +777,7 @@ declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_utf8_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
+declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_sort(%KValue)
@@ -5120,6 +5150,14 @@ impl<'a> Backend<'a> {
                 // operator route; these are the same work written as a name,
                 // which is how lib/bits spells what no operator says.
                 bit_twin(name)
+            } else if name == "find2" {
+                // four KValues do not fit the six registers the ABI has, so
+                // the fourth arrives on the stack and the callee unpacks it
+                // before it can splat the byte — fourteen instructions of the
+                // fifty-four this cost, where the scan itself was ten. The
+                // twin tests the tags, hands the scan five scalars, and folds
+                // to nothing at a call site whose needles are literals.
+                "find2_fast"
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"
