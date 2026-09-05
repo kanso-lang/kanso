@@ -43082,3 +43082,34 @@ and that is worth recording rather than counting as coverage.
 **The surface shape is still Clay's**, and the ledger entry stays until he
 rules on it. What has changed is that it is now a thing to read rather than a
 thing to imagine, and the evidence for wanting it is a measurement.
+
+## 2026-08-31 — rider: pure fallibility is boxed too
+
+Clay raised `foo["bar"]!` against the effects-are-types gavel: an err
+with no io underneath — value or effect? A crash-semantics reading
+(insistence violated = defect, halt) was proposed and DECLINED by
+Clay on the shipped mechanism: "you just get an error back and you
+can handle it however you want and it bubbles up. so maybe it should
+be an effect after all... since that's the only way to enforce the
+bubbling." That entailment is the ruling:
+
+- **Any operation whose answer includes an err yields `<t>effect`,
+  io or not.** The box is defined by fallibility — the unresolved
+  outcome — and io was never the criterion. One failure system.
+- `foo["bar"]` stays the data form: the value or `none`, absence as
+  ordinary data, no box (and post-`done`, `none` is unambiguous).
+- `foo["bar"]!` yields `<v>effect`; the suffix-grammar contract ("a
+  `!` function's answer typeset includes an err") re-reads as: a `!`
+  operation answers a box.
+- The bang family stays rescuable under the standing license — the
+  map-collision reasoning holds (the err is raised in std, std is
+  foreign to every caller). Nothing supersedes.
+- Enforcement is why: under explicit elimination the box is the only
+  carrier that makes bubbling mandatory. A bare err would need the
+  retired railway; a box cannot be dropped or mistaken for a value.
+
+Separately proposed and AWAITING GAVEL: the fused chain operators
+(`.>` bind, `.!` annotate, `.?` rescue — reviving the archived `.>`
+of 2026-08-16), bare-function right-hand sides, sole spelling in
+chain position with the words remaining prefix functions. Not ruled;
+recorded so the proposal is not re-derived.

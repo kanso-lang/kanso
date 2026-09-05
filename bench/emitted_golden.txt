@@ -92,7 +92,13 @@
 # tree to take apart again; the tree switches on the raw value now. The
 # branches this drops are the tag test and the none test the tree wrote per
 # call. jsonbench retires 13.56% fewer instructions for it.
-defines=175
-calls=1853
-branches=1197
-lines=12248
+#
+# 2026-09-05 (slice takes four scalars through a shim): +1 define, +2 calls,
+# +1 branch, +25 lines, in every program whether it slices bytes or not. That
+# is the prelude twin: the emitter writes it once per module and the linker
+# drops it wherever nothing calls it, which is why only eight of the twelve
+# .text rows grew. The find2 shim before it cost the same shape.
+defines=176
+calls=1855
+branches=1198
+lines=12273

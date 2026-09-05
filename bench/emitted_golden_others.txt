@@ -72,14 +72,14 @@
 # tree to take apart again; the tree switches on the raw value now. The
 # branches this drops are the tag test and the none test the tree wrote per
 # call. jsonbench retires 13.56% fewer instructions for it.
-encodebench defines=175 calls=1710 branches=1041 lines=11090
-oneshot defines=175 calls=1847 branches=1188 lines=12190
-basket defines=134 calls=1349 branches=769 lines=7730
-widebench defines=191 calls=1931 branches=1143 lines=12131
-deepbench defines=108 calls=865 branches=563 lines=5595
-escapebench defines=43 calls=118 branches=85 lines=1209
-pendbench defines=122 calls=1274 branches=654 lines=6717
-scanbench defines=323 calls=3768 branches=2257 lines=20568
-indexbench defines=49 calls=180 branches=113 lines=1605
-digestbench defines=182 calls=1629 branches=910 lines=9792
-readbench defines=52 calls=176 branches=122 lines=1784
+encodebench defines=176 calls=1712 branches=1042 lines=11115
+oneshot defines=176 calls=1849 branches=1189 lines=12215
+basket defines=135 calls=1351 branches=770 lines=7755
+widebench defines=192 calls=1933 branches=1144 lines=12156
+deepbench defines=109 calls=867 branches=564 lines=5621
+escapebench defines=44 calls=120 branches=86 lines=1235
+pendbench defines=123 calls=1276 branches=655 lines=6742
+scanbench defines=324 calls=3770 branches=2258 lines=20593
+indexbench defines=50 calls=182 branches=114 lines=1630
+digestbench defines=183 calls=1631 branches=911 lines=9817
+readbench defines=53 calls=178 branches=123 lines=1809

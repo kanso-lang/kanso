@@ -1613,6 +1613,22 @@ every changed counter is priced (or improved).</code></pre>
 
 <p>one thing measured and declined: replacing the eight-comparison chain that decides a lead byte&#39;s width with a 256-entry table costs 1,428,150 instructions instead of saving any. the chain is predictable, and the ascii bytes that dominate a mostly-ascii run are tested before it and reach neither.</p>
 
+<h2 id="scalars"><span class="sec-num">48</span>a door that takes registers instead of boxes</h2>
+
+<p>a builtin the emitter calls takes and returns <code>KValue</code>s, sixteen bytes each. the emitted module declares that type; clang compiles the same C function to the lowered one, <code>{i64,i64}</code> in and integers out, and lto sees two function types and keeps the call. so an <code>always_inline</code> written in <code>runtime.c</code> cannot reach a caller the compiler generated &#8212; marked on <code>k_b_find2</code> it moved the decode by zero instructions and left the symbol in the binary. the machine abi does agree; this is a barrier to inlining and not a miscompile.</p>
+
+<p>the lever is the prelude, a set of small llvm functions the emitter writes into every module and marks <code>alwaysinline</code>. a twin there tests the argument tags itself, unwraps what it needs, and calls a raw door taking scalars; anything the test turns away goes to the boxed function unchanged.</p>
+
+<p><code>find2</code> scans for the first of two bytes. four <code>KValue</code>s do not fit the six integer registers the abi has, so the fourth arrived as a pointer to the caller&#39;s stack and the callee loaded and unpacked it before it could splat the byte &#8212; fourteen of the function&#39;s fifty-four instructions, where the scan itself was ten. the raw door takes a pointer, a length and three integers. the decode falls 2.695%.</p>
+
+<p><code>slice</code>&#39;s bytes arm builds a view, a header and two words, behind three failure guards and two tag tests. the raw door takes four scalars and holds the four compares and the add. a further 1.126%, and widebench 0.659%.</p>
+
+<p>the second one costs something, and the cost is legible. four benchmarks rise &#8212; the ones that slice a list or a string, where every call now pays three tag tests before falling through. scanbench is 0.175% of that, and the others are thirteen instructions, two, and two hundred and fifty-six. the welfare index takes the trade at 73.82 to 73.85.</p>
+
+<p>and one function needed no twin at all. <code>k_str_n</code> copies n bytes into a fresh string; it is <code>static</code> and so is every caller, so the attribute reaches them. indexbench falls 8.585% and scanbench 1.508%, which more than repays what the slice twin cost there. readbench rises 1.886%: it reads a file and holds few short strings and many long ones, and an inlined copy loop loses to a called one when the copy dominates.</p>
+
+<p>its price is machine code. all twelve <code>.text</code> rows rise, 34,320 bytes in total, where the two twins grew four rows and eight &#8212; the linker drops a twin nothing calls, and a copy loop written at every site that makes a string cannot be dropped. the welfare index has no term for machine-code size, so it scored the change without seeing that. whether it should carry one is a question about the weights, left open beside the measurement that raises it.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
