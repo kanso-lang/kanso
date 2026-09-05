@@ -3432,3 +3432,23 @@ gates, two of their counters are welfare terms, and a library change moves all
 of them because the library is compiled into the compiler. The escape change
 above read as a welfare RISE with those veins stale and a FALL once they were
 regenerated, and nothing in the sweep would have said so.
+
+### Round one: CI's own sitting, and a third chip goes bimodal
+
+Two rows moved on the first CI round and neither is a regression.
+
+**work_livebench 5,312,541,181 -> 5,312,541,628** is CI's sitting replacing the
+container's; every other work row matched to the digit. The 447 is the same
+per-host offset the gate's header documents.
+
+**family0x19-model0x11 is pinned as a pair now, 41,379,503 41,380,022.** CI
+counted the second value on a run whose diff against main touches nothing
+compiled into the compiler — this branch adds a benchmark, a gate and a log
+entry, and `git diff origin/main -- src/ Cargo.toml Cargo.lock lib/` is empty —
+so the binary is the one kanso#1251 landed green at 41,379,503 on that same
+family and model. Same silicon, same source, the other value.
+
+That makes THREE of the four recorded chips seen reading both numbers, and the
+two values are the same two every time. A key that separates chips which all
+read the same pair is a key that is not separating anything, and the collapse
+argument that has been waiting on evidence now has its third reading.
