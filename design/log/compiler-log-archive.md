@@ -44055,3 +44055,101 @@ directly, which is one function, and the goldens moved with it. Corrected
 here rather than left to contradict the numbers a reader can run.)
 
 Welfare 73.06, on the floor and unmoved.
+
+## 2026-09-03 — one welfare line, and thirty-six dips read
+
+Searched the live log and the archive before filing. The live log's
+2026-08-31 entry rules the replay and the 2026-09-03 entries carry its
+implementation; the archive's `replay` mentions are the clock, the compile-
+memory backfill of 2026-08-01 and the 474-commit rebuild that was declined.
+Neither has the rescoring rule or the dip investigation, so this is the
+directive's answer rather than a question asked twice.
+
+**The directive.** Clay, on the chart: "i don't need anything 'replayed' vs
+'recorded', i'm just talking about re-doing it for those historical commits
+based on the numbers we already have, one time." Retire the two-line design.
+Rewrite `history.jsonl`'s welfare column in place, under the current formula,
+on the counters each row carries — terms average over present counters,
+absent terms dropped and weights renormalized per row, the row tagged with
+the formula that scored it. Repeat on every future formula change. And: "the
+line must be monotone non-decreasing except at a gaveled language feature;
+investigate any other dip as an un-ratcheted rise or a defect."
+
+**A correction to the reason he gave.** He said the chart drew no replayed
+line because `model.txt` had never reached the perf-history branch. That was
+true when he first looked and had already been fixed — the file landed with
+row 499, published by #1236's own merge. The real reason is worse. The
+replay refused any row missing a counter, and eighteen of the objective's
+twenty-four counters exist only in the last two rows of five hundred, so the
+line it could draw was two points long. Publishing `model.txt` would not have
+helped; the two-line design was unrescuable for a reason nobody had checked.
+
+**The counter presence, measured off the file.** `encode_arena_blocks`,
+`compile_allocs` and `compile_peak_bytes` in rows 1–138 and 290–500;
+`encode_instructions`, `oneshot_instructions` and `basket_instructions` from
+row 123; the other eighteen in rows 499 and 500. Rows 139–289 carry three
+counters of twenty-four.
+
+**Thirty-six dips, and thirty-three of them are real.** The falls at rows 34,
+56, 62, 65, 72, 128 and 134 are one counter: `compile_allocs` climbing
+118,364 to 137,324 across August, which is the front end getting more
+expensive a commit at a time with nothing watching that dimension yet. Row
+165 is `encode_instructions` 9.208G to 9.713G with `oneshot` and `basket`
+moving with it. The remaining twenty-five are the same shape, smaller. These
+are un-ratcheted rises exactly as the directive names them, visible now
+because one formula reads the whole file where each row was scored by
+whatever definition was in force that week.
+
+**Three are the rule meeting sparse rows, and they are the ones to know
+about.** Row 123 (−11.25): three instruction counters arrive with baselines
+set at their own commit's value, so each enters at a ratio of one and
+saturates at 0.333 while the mature counters sit far above. Row 139 (−25.59):
+the compile counters leave the rows entirely, the compile-speed and
+compile-memory terms are dropped, and 0.44 of weight renormalizes onto run
+terms scoring a third where compile scored two thirds. Row 499 (−0.88): the
+other eighteen arrive, mixed — the guard term rises 0.069 to 0.111, run
+memory falls 0.259 to 0.221. None is a compiler regression and none is a
+defect in the rewrite.
+
+**So every row carries `scored_weight`.** Each term's weight times the share
+of its counters the row holds; one means the row was scored on the whole
+objective. It reads 0.31, 0.41, 0.11, 0.41 and 1.00 across the four spans
+above, and it steps at exactly the three rows the score steps at for no
+compiler reason. Renormalization alone cannot say this: it asks whether a
+term can be scored at all, so a term keeps its full weight on one counter of
+ten and a row scored on six of twenty-four still reads 1.00.
+
+**The formula date moved into the model.** `welfare -- --model` now emits
+`formula <date>` ahead of the terms, and the rescorer stamps every row's
+`scored_by` from it and refuses a model without one. A copy of the date in
+the rescorer would keep its old value through the gavel that moved the
+formula, and five hundred rows would claim a definition that no longer
+exists.
+
+**The rewrite runs on every push, not only on a formula change.** It costs
+1.3 seconds over five hundred rows and removes the step somebody has to
+remember. It runs before perf-history is checked out, because that branch
+holds `history.jsonl` and nothing else — after the checkout there is no
+`scripts/welfare_rescore` in the tree to run. `model.txt` is deleted from the
+branch in the same push: nothing reads it now, and a copy of the weights
+nobody reads is a copy that goes stale unnoticed.
+
+**Two implementations of one formula, held together by a spec.** `welfare`
+scores the goldens and `welfare_rescore` scores a row, so the rule is stated
+twice and the second statement can drift. The spec builds the row the
+objective would record today, runs the rescorer on it, and requires welfare's
+own banner — rounded to welfare's two places rather than compared inside a
+tolerance. A 1% change to the rescorer's satiation turns it red at 72.90
+against 73.06. The ratchet row that watched the page's javascript now watches
+this.
+
+**Eight specs, three mutations watched red.** Removing the renormalization
+answers 25.00 where the fixture wants 33.3333; saturating the mean instead of
+each counter answers 90.20 where it wants 66.2954, which is the shape the
+2026-08-29 gavel closed; measuring coverage by term instead of by counter
+reads 1.00 where the fixture wants 0.63. Every number in the fixture is
+derived by hand in the comment beside it and none of them moves when a
+benchmark does.
+
+Welfare 73.06, unmoved. The rewritten column reads 73.0625 for the newest
+row, which is the same number to welfare's precision.
