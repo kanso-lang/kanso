@@ -20,76 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 (tenth) — the bimodal row is made deterministic, not excused
-
-**DONE for the two suspects, OPEN for the answer.** Supersedes the OPEN
-paragraph closing the entry above, which planned to exclude process startup from
-the count. Clay ruled against that the same afternoon: "if changes to the
-compiler can interact with glibc in a way that means generally more/less work,
-which the 'compiler's own instructions' measure would be blind to, then we need
-a way to include glibc's instructions but make them consistent." He is right,
-and the toggle is dropped — it would have made the vein blind to exactly the
-case he names. No pair, no band, no exclusion.
-
-The ruling named two suspects, both fitting the measured signature: five
-consecutive runs in one container agree exactly while two runners on one binary
-and chip disagree, so the randomness is fixed at container birth rather than per
-exec. Both are now tested and both answers differ from the guess.
-
-**Readdir order was already sorted, and cannot be the term.** `src/lib.rs`
-sorts the files a compile reads before reading any of them; `src/eval.rs` sorts
-what `list_dir` answers. The four remaining `read_dir` calls are in
-`src/main.rs` on the `test` path and order-independent by construction — three
-are `.any()` or `.count()`, and the fourth is a vector whose only order-sensitive
-use is a single-element match.
-
-One was sorted anyway on the rule rather than the symptom, and then WITHDRAWN,
-which is the more useful finding. It changed no answer and it changed the
-binary: `.text` 2,514,718 -> 2,517,278, moving this row 41,831,767 -> 41,834,008
-and invalidating every recorded value. That is the wrong price for a defensive
-sort, and worse than its cost is what it did to the experiment — the ruling asks
-for the modes to be measured away on several fresh runners, and a changed binary
-makes every earlier reading incomparable, so `setarch -R` and a new layout would
-have been confounded from the first run. With the sort out, the binary is
-main's, the recorded rows stand, and setarch is the only variable. The
-determinism fix is worth landing on its own once this vein is settled and the
-row it moves is not the row under test.
-
-**ASLR is disabled now, and on the container it changes nothing.** `setarch -R`
-reads 42,235,790 against 42,235,790 without it, and forty unwrapped runs on one
-binary returned one value forty times. Applied regardless: the modes have only
-ever appeared on the runners, and a container cannot rule out what it has never
-reproduced. The gate prints `compile_aslr disabled=` so the job log says whether
-the wrapper took; CI reads `yes`.
-
-**Nothing is priced, because nothing moved.** With the sort withdrawn this
-branch changes `scripts/gates/compile_instructions.sh` and no compiler source,
-so the binary is byte-identical to main's and every counter reads what main
-records. The trend gate has nothing to say and welfare holds at 76.1742943805134
-against its own floor. An earlier revision of this branch did move
-`compile_instructions` +2,241 and spent 0.00015 of the score declaring it; that
-is reverted, and the declaration with it.
-
-**The evidence so far, and it is not yet an answer.** Two CI readings on binary
-sha b0e5a906c73d, twelve minutes apart, both on family0x19-model0x11, both
-41,834,008 — the first agreement on one binary since the pair appeared. That
-binary is the withdrawn one, so the agreement is kept as history rather than as
-a result: it says the value repeats, on a tree that no longer exists. Against
-that, a control taken at the same time on kanso#1235, which runs the UNFIXED
-gate: 41,831,767 on a design-only diff, then 41,832,275 with one HTML file
-added, same binary, 508 apart. So the modes were live on the old gate minutes
-before the new gate read the same value twice.
-
-**OPEN.** Two agreeing readings on one chip is not enough. What settles it is
-the other chips landing on their own values and holding them. If they do, glibc
-stays counted under a single exact pin and the per-chip key separates nothing —
-the file collapses back to one golden. If a second value appears on a recorded
-chip, neither suspect was the term, and the entry above already names what is
-left: glibc parses `/proc/self/maps` before `main` to find the stack bounds, one
-more shared library in the process moves the row 32,090, and that cost belongs
-to the host's memory map rather than to the compiler. That is what "make them
-consistent" would then have to reach.
-
 ## 2026-09-03 (eleventh) — one binary, one chip, two values: the pair is pinned
 
 **DONE.** Closes the OPEN half of the entry above, which had the two suspects
@@ -3427,3 +3357,78 @@ Three breaks, three reddenings. Inverting the fused branch moves the two
 fused rows and leaves the text and record rows alone. Making the slow arm
 skip its failure test reddens both runtime fixtures. Fusing where a record
 routes to a user arm kills the micro program.
+
+## 2026-09-05 (eighth) — the library's encoder gets a watcher
+
+**DONE.** `bench/livebench` runs encodebench's program — decode
+`bench/large.json` once, encode it four hundred times — against the library
+that ships. It prints encodebench's exact checksum, 74072800, so the two do the
+same work, and the difference between them is the only thing that separates
+them: which copy of lib/json they hold.
+
+**work_livebench 5,312,541,181**, MINTED. The baseline carries no reading for
+it, so the first one is a measurement rather than a move. Beside encodebench's
+5,322,690,905 that is a gap of 10,149,724, or **0.19%** — the frozen control's
+drift from the shipped library since the snapshot was taken at 20ab931d on
+2026-08-07. `live_instructions` joins the objective as a granted baseline,
+entering at its dimension's standing, so welfare holds at 74.1474896668362 on
+landing day and the term pays and charges from here.
+
+### Why a benchmark that duplicates one already in the corpus
+
+`bench/encodebench` and `bench/widebench` vendor frozen snapshots of lib/json,
+and their READMEs say why: with the library held still, a move there is the
+compiler's. kanso#1230 is the recorded case where that control did the
+separating, and it stays.
+
+What the freeze costs is that nothing then watches the library's own encoder at
+load. `bench/jsonbench` is generated from lib/json but only decodes.
+`bench/oneshot` imports the real library and encodes exactly once, inside a
+program whose bulk is the decode beside it. So the whole encode side of the
+shipped library was watched by a single encode of a 185 KB document.
+
+That is not a hypothetical. A twelve-line change to lib/json's escape path that
+skips the proved-clean prefix — the scan has already shown those bytes need no
+escaping, so they leave in one copy instead of one at a time through a call —
+falls 471,213 instructions on oneshot, 1.70%, and the objective priced it at
++0.0039 before the compile veins were regenerated and −0.02 after. It is being
+held for this benchmark rather than shipped against the old corpus.
+
+### The mutation, and what each gate saw
+
+The ratchet row for the new vein carries a LIBRARY defect on purpose:
+`escape_clean` re-encodes the string and folds it byte by byte instead of
+taking the fast path when nothing needs escaping. Applied at 643399da:
+
+    live_counters      RED    allocs 14,819,276 -> 18,300,076, +23.5%
+                              append_fast 42,334,257 -> 56,462,657
+    oneshot_counters   RED    the same defect, at one encode's scale
+    encode_counters    GREEN  the frozen copy cannot see it at all
+
+The third line is the argument for this benchmark and the argument for keeping
+the frozen copy, in one reading.
+
+The first draft of that mutation deleted the fast path outright and left `s`
+and `n` unused, which the language refuses — so the tree did not compile, the
+gate never ran, and the row would have been credited for a build failure. It
+re-encodes `s` instead. `benchmarks` setup rebuilds the compiler first, which
+matters here for a reason worth writing down: `lib/*.kso` is `include_str!`'d
+into the compiler, so a library edit without a `cargo build` changes nothing.
+In a worktree built before the edit, `kanso build` succeeded with
+`lib/json/text.kso` holding outright syntax garbage.
+
+### The sweep, and the veins it does not read
+
+The cost goldens are eleven now, not ten. `scripts/gates/all_counters.sh` gains
+its row and CLAUDE.md its count, both pinned by
+`tests/every_counter_gate_is_in_the_sweep.rs` and both watched red: dropping
+the row reports `no row for ["live"]`, and leaving the count at "ten" reports
+`there are 11 cost goldens and CLAUDE.md counts them "ten"`.
+
+CLAUDE.md also gains what this thread found the hard way: **the sweep reads the
+runtime cost goldens and nothing else.** `machine_code`, `emitted_code`,
+`compile_memory`, `compile_allocs` and `compile_instructions` are separate
+gates, two of their counters are welfare terms, and a library change moves all
+of them because the library is compiled into the compiler. The escape change
+above read as a welfare RISE with those veins stale and a FALL once they were
+regenerated, and nothing in the sweep would have said so.

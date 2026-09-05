@@ -1,0 +1,10 @@
+import "std/json"
+
+pub fn hold text
+  json/decode text
+
+pub fn rounds _ 0 tally
+  print "wrote {tally}"
+
+pub fn rounds doc n tally
+  rounds doc (n - 1) (tally + length (json/encode doc))

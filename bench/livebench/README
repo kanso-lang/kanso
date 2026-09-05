@@ -1,0 +1,21 @@
+LIVEBENCH — encodebench's work, against the library that ships.
+
+This directory imports `std/json`. Its sibling bench/encodebench vendors a
+snapshot of lib/json frozen at 20ab931d (2026-08-07) and must keep doing so:
+with the library held still, a move in that benchmark is attributable to the
+COMPILER alone, and kanso#1230 is the recorded case where that control did the
+separating.
+
+The cost of the freeze is that nothing then watches the LIBRARY's encode path
+at load. bench/jsonbench is generated from lib/json but only decodes;
+bench/widebench carries a second frozen copy; bench/oneshot imports the real
+library and encodes exactly once. So a change to the library's encoder was
+measured, in practice, by a single encode of a 185 KB document inside a
+benchmark whose bulk is the decode beside it.
+
+The two directories run the same program on the same input for the same number
+of rounds, and both print the same checksum, 74072800. Reading them side by
+side is the point: their difference is the library's drift away from the frozen
+snapshot, and it was 10,149,724 instructions — 0.19% — on the day this was
+written. A frozen control and a live twin answer different questions, and the
+corpus had only the first.
