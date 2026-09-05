@@ -3709,11 +3709,38 @@ said `string hi`; giving both marker arms the first one's id took the corpus off
 the end at `marks` and killed the program on `stamps`. Both mutations were
 reverted and the corpus is green.
 
-**OPEN — an arm that destructures is still on the cascade.** `Pattern::Ctor`
-qualifies here only when it has no fields and no as-pattern, because the switch
-dispatcher's arm bodies bind `Var` and `Annotated` and nothing else. A group of
-record arms that take their fields apart is the obvious next widening and it was
-not measured.
+**BUILT, MEASURED, AND DECLINED BY THE OBJECTIVE — an arm that destructures
+stays on the cascade.** `Pattern::Ctor` qualifies here only when it has no
+fields and no as-pattern, because the switch dispatcher's arm bodies bind `Var`
+and `Annotated` and nothing else. The widening was written and it works: admit
+any ctor, and inside case 7 run the cascade's OWN `emit_pattern_known` with a
+fail label pointing at the next candidate, which handles nesting —
+`fold (capped left (cursor at source))` is two deep — and the field binds for
+free. It costs a record arm its separate block, because the pattern binds into
+`f.versions` and the body loop clears those per arm, so pattern and body are
+emitted together in the chain.
+
+    pendbench     666,098,261 -> 646,889,445   -2.8838%
+    livebench   4,544,121,405 -> 4,537,379,805  -0.1484%
+    basket         38,568,710 ->     38,526,582  -0.1092%
+    oneshot        25,760,418 ->     25,743,564  -0.0654%
+    scanbench   1,384,644,605 -> 1,399,635,295  +1.0826%
+    encodebench 4,531,510,503 -> 4,537,338,903  +0.1286%
+    digestbench    77,353,028 ->     77,386,056  +0.0427%
+
+Welfare falls, so the change goes. `d_list/next_1` in pendbench is where it
+works — 97,628,100 to 85,624,900, a fall of 12,003,200 on a group of twelve
+ctor arms with no generic tail — and scanbench pays 14,990,690 for the same
+shape.
+
+**And it refutes the reason it was built.** The lead was `d_list/fold_3` at
+21,777,196 instructions, 28.18% of digestbench and the largest single function
+in it, on the assumption that digestbench folds a plain list and so walks all
+twelve `k_check_rec_fast` tests to reach the generic tail. It does not: the row
+reads 21,810,224 after the widening, a RISE of 33,028. digestbench folds one of
+the twelve record shapes, reaches its arm inside the chain, and pays the tag
+switch on top of it. A twelve-deep cascade is not evidence that the twelve are
+being walked.
 
 **OPEN — a group mixing int literals with type patterns takes neither switch.**
 `switch_shape` refuses the type arms and `tag_switch_shape` refuses the
