@@ -3324,3 +3324,20 @@ Watched red by perturbing `allocs` in two goldens at once. It reports BOTH:
 Exit 1 when anything moved, 0 when nothing did. Not stopping at the first
 disagreement is the property worth having: a session that learns about one
 moved vein per build learns slowly.
+
+### Two CI rounds this branch could not have avoided
+
+The first was mine: the row check asserted `bench/<program>` exists, and
+`bench/jsonbench/` is gitignored and written by `bench/make_jsonbench`, so it
+is in any tree that has run the benchmarks and in no fresh clone. It read
+state the repository does not carry, which is the shape of the bug this whole
+file is about. The fix accepts either the directory or its generator.
+
+The second was the compile row. CI drew `family0x6-model0x6a`, an Ice Lake-SP
+with no row in `bench/compile_instructions_by_cpu.txt`, and refused — on a
+value of 41,379,503, which is what the three recorded chips read. That is
+four keys reading one number on one binary, and nothing here touches the
+compiler: CLAUDE.md, a shell script and a Rust test file are none of them
+`include_str!`'d. The row is recorded with the reading beside it. The
+argument for collapsing the table still has the 5,064-instruction
+falsification to answer and is not made here.
