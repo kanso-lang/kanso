@@ -3931,3 +3931,39 @@ Both changes reverted; `src/codegen.rs` is back at what `1510959a` merged.
 only splitting the merged group can reach; the fold's per-lap dispatch, which
 #290 prices at 2.84% and the toolchain blocks; and the string arms' 5.82%,
 which is `text/append` already inlined and running its guards.
+
+## 2026-09-05 — THE FRAME IS NOT REACHABLE BY SPLITTING THE GROUP
+
+**DECLINED, closing the line the entry above left.** That entry ends by naming
+the 392-byte frame and its six callee-saved registers — 3.50% of encodebench —
+as reachable by splitting the merged group. Measured, it is not.
+
+The frame is the size the arms LLVM chose to inline need between them, so the
+move to try is stopping it from inlining them. Priced by adding `noinline` to the
+arm helpers in `encodebench.ll` and recompiling that file with the flags
+`kanso build --release` uses, against a control built the same way from the
+unmodified file — 4,531,877,703, which is the shipped binary's 4,531,877,717 less
+the fourteen the exec path accounts for:
+
+    noinline                          Ir           delta             frame
+    escape_onto_2          4,647,812,129    +115,934,426  +2.5582%    0x28
+    encode_list_2          4,594,224,529     +62,346,826  +1.3757%   0x188
+    encode_list_2+map_2    4,615,208,129     +83,330,426  +1.8388%   0x188
+    encode_map_2           4,550,291,729     +18,414,026  +0.4063%   0x188
+    control                4,531,877,703                             0x188
+
+`escape_onto_2` is the arm that sizes the frame. Outlining it takes 392 bytes
+down to 40 and costs 2.5582%, against a whole frame worth 3.50% — and the callee
+then grows a frame of its own, so the 3.50% is not even fully available. The list
+and map arms do not size it at all, the frame staying 0x188 in both, and cost
+1.3757% and 0.4063% to outline. In every arrangement measured the inlining pays
+for the frame several times over.
+
+The probe is `.ll`-level and touches no compiler code: `noinline` added by hand
+to the `define` line, one `clang -O3 -flto -mssse3` per arrangement against the
+cached release runtime object. Nothing to revert.
+
+**The profile's three largest items are all spoken for now.** The frame, 3.50%,
+by this. The fold's per-lap dispatch, 2.84%, by the toolchain #290 waits on. The
+string arms' 5.82% is `text/append` already inlined and running its ownership
+guards, which kanso#1221 through kanso#1224 are the history of.
