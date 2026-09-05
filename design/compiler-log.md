@@ -3892,13 +3892,31 @@ programs that never append a string, so the emitted count and the .text count
 disagree about what this change costs — which is the reason both veins exist
 rather than one.
 
-Both counters worsen and both are named with the value they land on, because a
-paragraph that prices only the fall is the shape kanso#1205 caught. `text`
-lands on **1,121,160** from 1,117,768, a rise of 3,392. The decoder's `emitted`
-lands on **lines=12,188** from 12,134, with calls 1,835 -> 1,836 and branches
-1,163 -> 1,171; the other eleven programs move by the same 54 lines and 8
-branches each. That is what the encode's 56,178,800 instructions are bought
-with, and the objective says the trade is worth making.
+SEVEN counters worsen and every one is named by its KEY with the value it lands
+on, because a paragraph that prices only the fall is the shape kanso#1205
+caught — and naming a counter loosely is the same failure, which this entry
+committed on its first draft and the gate caught:
+
+    text                    1,117,768 -> 1,121,160    +3,392
+    emitted_lines              12,134 ->    12,188       +54
+    emitted_calls               1,835 ->     1,836        +1
+    emitted_branches            1,163 ->     1,171        +8
+    emitted_other_lines        90,198 ->    90,792      +594
+    emitted_other_calls        14,728 ->    14,739       +11
+    emitted_other_branches      8,669 ->     8,757       +88
+
+The first draft wrote "the decoder's `emitted` lands on lines=12,188" and left
+the other five unnamed, and `scripts/trend_gate` refused all six: the key is
+`emitted_lines`, not `lines`, exactly as it is `work_widebench` and not
+`widebench`. The gate is right to be literal about this. A paragraph that names
+a counter by a nickname reads as pricing to a human and as silence to the gate,
+and the whole point of the rule is that the gate is the one that cannot be
+talked round.
+
+The decoder's three and the other eleven programs' three move for one reason:
+the ladder is written once into each module's intrinsic prelude, 54 lines and 8
+branches and one call apiece. That is what the encode's 56,178,800 instructions
+are bought with, and the objective says the trade is worth making.
 
 ### The mutation was right and the corpus was blind
 
