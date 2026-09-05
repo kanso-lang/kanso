@@ -43804,3 +43804,71 @@ The mechanism is still the open question and is unchanged by this: glibc's
 `/proc/self/maps` parse fits the signature, and what is not established is that
 two runs differ in their maps by the 508 this needs.
 
+## 2026-09-03 — gavel: the suffix contracts are refusals, as ruled in July
+
+On "What a `!` name promises on the declaration side" (#272), Clay:
+"rule it." Option 1 — and it is not new. The July suffix-grammar
+ruling (archive, "The suffix grammar, with teeth") already said: "Both
+suffixes are checked contracts, not conventions: a `?` function must
+answer bool, and a `!` function's answer typeset must include an err
+type. The checker refuses violations of either." The entry did not
+cite it; the only news is that the contract was never implemented —
+`pub fn shout! x` answering a plain string compiles today.
+
+Under effects-are-types the contract reads directly off the answer
+type: **a `!` name must answer a result; a `?` name must answer bool;
+the checker refuses either violation at the declaration.** A bang
+that cannot fail is a lie in the name — `foo[k]!` differs from
+`foo[k]` precisely by being able to fail. The implementation question
+the entry raised (can infer see whether an answer reaches the failure
+channel) dissolved with failures becoming a type: the checker reads
+the declared or inferred answer type, the same way it reads any
+other. Options 2 (unchecked convention) and 3 (std-only) would
+respectively reverse a standing ruling and mint a two-tier rule the
+language has nowhere else; both declined. Enforce both suffixes in
+the same change, since `?` sits in the identical unimplemented state.
+The ledger entry leaves with this commit wherever it lives.
+
+## 2026-09-03 — the bang half of the suffix contract, and the half already built
+
+**DONE.** Searched the live log and the archive before filing, and this time
+for the right phrase: the archive's "The suffix grammar, with teeth" is the
+July ruling, and Clay's gavel above cites it. That search is what my #272
+ledger entry skipped, which is how a settled question got asked again.
+
+**The correction the fixtures forced.** Both the gavel and my own survey said
+`?` sat in the identical unimplemented state as `!`. It does not. A fixture
+answering a string from `ready?` is already refused, by a check in check.rs
+that reads the same inferred answer set this change reads:
+
+    error[naming]: `ready?` asks a question: a `?` function answers true or
+    false (err may ride along)
+
+So only the bang half was missing, and the change is one condition beside the
+one that was already there.
+
+**The measurement that explains why nobody noticed.** There are ZERO
+`!`-suffixed declarations anywhere in the tree, against 353 `?`-suffixed ones.
+The contract was unenforced because nothing exercised it. That also fixes the
+ordering with the io half: `io/read_file!` will be the first `!` name the
+language has ever had, so the guard lands before the name it guards rather
+than after.
+
+**The rule, mirroring the query direction exactly.** A `!` name's answer set
+must contain ERR. It fires on a provable lie only — an empty set means
+inference learned nothing, and TOP, which a generic driver widens to, still
+holds ERR, so neither is accused. That conservatism is not new caution; it is
+copied from the `?` direction, which has run over 353 declarations without a
+false positive.
+
+**Watched red, then watched the fixture prove itself.** `shout!` answering a
+plain string compiled clean and printed `hi!` before the change. After it, the
+refusal fires. Then the check was disabled and the corpus went red on that
+fixture, which is the half that matters: a golden that cannot fail is a golden
+that proves nothing.
+
+Diagnostics 309 to 310, none newly unpinned. All eight gate scripts and every
+std module still check. The compile counters could not be measured here — the
+container runs rustc 1.94.1 against the goldens' 1.98.1, which is the host pin
+doing its job — so CI reads them.
+

@@ -20,74 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — gavel: the suffix contracts are refusals, as ruled in July
-
-On "What a `!` name promises on the declaration side" (#272), Clay:
-"rule it." Option 1 — and it is not new. The July suffix-grammar
-ruling (archive, "The suffix grammar, with teeth") already said: "Both
-suffixes are checked contracts, not conventions: a `?` function must
-answer bool, and a `!` function's answer typeset must include an err
-type. The checker refuses violations of either." The entry did not
-cite it; the only news is that the contract was never implemented —
-`pub fn shout! x` answering a plain string compiles today.
-
-Under effects-are-types the contract reads directly off the answer
-type: **a `!` name must answer a result; a `?` name must answer bool;
-the checker refuses either violation at the declaration.** A bang
-that cannot fail is a lie in the name — `foo[k]!` differs from
-`foo[k]` precisely by being able to fail. The implementation question
-the entry raised (can infer see whether an answer reaches the failure
-channel) dissolved with failures becoming a type: the checker reads
-the declared or inferred answer type, the same way it reads any
-other. Options 2 (unchecked convention) and 3 (std-only) would
-respectively reverse a standing ruling and mint a two-tier rule the
-language has nowhere else; both declined. Enforce both suffixes in
-the same change, since `?` sits in the identical unimplemented state.
-The ledger entry leaves with this commit wherever it lives.
-
-## 2026-09-03 — the bang half of the suffix contract, and the half already built
-
-**DONE.** Searched the live log and the archive before filing, and this time
-for the right phrase: the archive's "The suffix grammar, with teeth" is the
-July ruling, and Clay's gavel above cites it. That search is what my #272
-ledger entry skipped, which is how a settled question got asked again.
-
-**The correction the fixtures forced.** Both the gavel and my own survey said
-`?` sat in the identical unimplemented state as `!`. It does not. A fixture
-answering a string from `ready?` is already refused, by a check in check.rs
-that reads the same inferred answer set this change reads:
-
-    error[naming]: `ready?` asks a question: a `?` function answers true or
-    false (err may ride along)
-
-So only the bang half was missing, and the change is one condition beside the
-one that was already there.
-
-**The measurement that explains why nobody noticed.** There are ZERO
-`!`-suffixed declarations anywhere in the tree, against 353 `?`-suffixed ones.
-The contract was unenforced because nothing exercised it. That also fixes the
-ordering with the io half: `io/read_file!` will be the first `!` name the
-language has ever had, so the guard lands before the name it guards rather
-than after.
-
-**The rule, mirroring the query direction exactly.** A `!` name's answer set
-must contain ERR. It fires on a provable lie only — an empty set means
-inference learned nothing, and TOP, which a generic driver widens to, still
-holds ERR, so neither is accused. That conservatism is not new caution; it is
-copied from the `?` direction, which has run over 353 declarations without a
-false positive.
-
-**Watched red, then watched the fixture prove itself.** `shout!` answering a
-plain string compiled clean and printed `hi!` before the change. After it, the
-refusal fires. Then the check was disabled and the corpus went red on that
-fixture, which is the half that matters: a golden that cannot fail is a golden
-that proves nothing.
-
-Diagnostics 309 to 310, none newly unpinned. All eight gate scripts and every
-std module still check. The compile counters could not be measured here — the
-container runs rustc 1.94.1 against the goldens' 1.98.1, which is the host pin
-doing its job — so CI reads them.
-
 ## 2026-09-03 — CI read the compile row, and the fall is not the compiler
 
 Searched the live log and the archive before filing. The maps-parse term is
@@ -4069,3 +4001,91 @@ The ratchet corpus has a row for a counter that goes blind. This is the other
 direction — a counter reading high on text that is not code — and the eight it
 was reading are constant, so no gate ever fired. It came out only because a
 change touched the prose beside the code.
+
+## 2026-09-05 (eighteenth) — a check that answered the same question every iteration
+
+`k_beat_iter` is 3.08% of livebench and **28.65% of escapebench**, at about
+thirty instructions a rewind. Eight of those thirty were one comparison,
+answered once and asked forever.
+
+### What the check is, and what it can see
+
+A beat loop rewinds the arena to its entry mark between iterations. The rewind
+restores two words from the mark and then asserted that they still met the end
+of the mark's block:
+
+    k_arena = m->ptr;
+    k_arena_left = m->left;
+    if (k_blocks && k_arena + k_arena_left != end(k_blocks)) k_die(...);
+
+A mark whose pointer and remaining count disagree with its block hands out
+memory past that block's end, and the damage surfaces later in an unrelated
+allocation — a glibc abort on linux and silence on macOS — so the check earns
+its place. What it does not earn is its position. The predicate reads
+`m->ptr`, `m->left` and `m->block`, and the block test three lines above has
+already established `k_blocks == m->block`; every term belongs to the mark. A
+mark is written in `k_beat_push` and never written again, so the rewind was
+re-deriving an answer fixed at the push.
+
+The check now sits in `k_beat_push`, immediately after the mark is written. It
+catches the same bad marks — the predicate is identical, over the same three
+values — once per loop entry instead of once per iteration, and a mark already
+broken when the push takes it is now reported at the push rather than one
+rewind later.
+
+### The comment said one comparison; on x86-64 it is eight instructions
+
+    4f8e:  test %rdx,%rdx        4f9d:  add  $0x10,%rax
+    4f91:  je   4fa6             4fa1:  cmp  %rax,%rsi
+    4f93:  add  %rax,%rsi        4fa4:  jne  4fa7
+    4f96:  mov  0x8(%rdx),%rax
+    4f9a:  add  %rdx,%rax
+
+`k_beat_iter` was thirty instructions on the taken path and is twenty-two now.
+The block end is a load, an add and an add before the comparison can happen,
+and the null guard is a test and a branch ahead of that. A comment that
+under-reports a hot cost by eight times is the kind of thing only a
+disassembly settles, which is why this entry carries one.
+
+### Thirteen benchmarks under callgrind, both binaries run from one directory
+
+    escapebench    130,170,260 ->   120,585,257   -9,585,003   -7.3634%
+    basket          39,728,726 ->    38,816,622     -912,104   -2.2958%
+    livebench    5,231,192,305 -> 5,208,574,712  -22,617,593   -0.4324%
+    encodebench  5,241,342,073 -> 5,218,724,482  -22,617,591   -0.4315%
+    oneshot         27,528,874 ->    27,472,340      -56,534   -0.2054%
+    deepbench      714,675,378 ->   715,116,883     +441,505   +0.0618%
+
+**deepbench rises, and the reason is the whole shape of the change.** The check
+did not vanish; it moved to the push, so a program pays for it once per beat
+ENTRY rather than once per beat ITERATION, and a program that enters more beats
+than it iterates comes out behind. 441,505 is 55,188 pushes at eight
+instructions, which is deepbench's excess of entries over rewinds. Every other
+row falls or holds, and encodebench and livebench fall by the same 22,617,59x —
+the same runtime linked into a program and into that program built against the
+shipped library. Nothing in `bench/cost_golden*.txt` moves: the counters count
+allocator events, and no allocator event changed.
+
+Those are container readings and sit a constant 340 below CI's; the goldens
+carry the same deltas. Priced by key: `work_deepbench` lands on **715,116,179**,
+the one work row that rises, and `text` lands on **1,121,352**, which is 192
+bytes of machine code across twelve programs.
+
+**WELFARE 74.18425551910869 -> 74.21933255238363**, `--set` with its reason.
+The trade the objective accepted is stated above and not hidden in the sum.
+
+### The pin, and why the obvious one is not available
+
+A diagnostic that never fires and a diagnostic that was deleted look identical
+from outside, so moving one needs a spec that the moved copy still runs. There
+is no kanso program that can corrupt a mark, so the corpus cannot reach the
+failing case from the front door. The ratchet can: `beat_mark` inverts the
+comparison, which makes it fail at every push instead of never, and every
+program with a beat loop dies at its first one. Watched: escapebench, rebuilt
+under the mutation, prints `error[runtime]: a beat mark and the arena disagree
+about the room that is left` and produces nothing. Restored, green.
+
+`bench/text_golden.txt` moves on all twelve rows, most of them down —
+escapebench -32, readbench -16, jsonbench +16, pendbench +64. The check's eight
+instructions are gone from one place and present in another, and where the
+linker puts what is left is not something this change chose.
