@@ -483,9 +483,17 @@
 # 1,952 for 449,994, which is the worst rate of the twelve and still a fall of
 # 8.585%. The welfare index has no term for machine-code size, so the objective
 # cannot see this trade and does not price it — this row is where it is priced.
-jsonbench text=92818
+#
+# 2026-09-05 (third): jsonbench 92,818 -> 92,834 and oneshot 115,250 ->
+# 115,266, 16 bytes each and nothing else. The `k_b_utf8_slice_fast` twin is
+# `internal` and the linker drops it from the ten programs that never reach
+# `utf8` over a `slice`, so the whole cost of this change sits on its two
+# callers. Against `k_str_n`'s 34,320 bytes over all twelve rows in
+# kanso#1247, the difference is that a dropped twin costs nothing where a copy
+# loop written at every call site cannot be dropped anywhere.
+jsonbench text=92834
 encodebench text=112674
-oneshot text=115250
+oneshot text=115266
 basket text=105682
 widebench text=116194
 deepbench text=70530

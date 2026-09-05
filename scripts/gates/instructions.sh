@@ -10,6 +10,19 @@
 # The environment is emptied because the kernel copies it onto the new
 # process's stack and libc walks it before main, so a run id that gained a
 # digit reads as fourteen instructions of work that nobody wrote.
+#
+# THE PATH TO THE BINARY DOES THE SAME THING, and emptying the environment
+# does not reach it. One byte-identical escapebench counted 130,170,344 run
+# from a worktree under /tmp and 130,170,358 run from the repo root; digestbench
+# moved by the same 14 across the same pair. The kernel puts the exec path on
+# that stack too, so where the binary sits shifts what libc walks before main.
+# CI always runs from the repo root, so the goldens are consistent and this
+# costs the gate nothing. It costs a LOCAL A/B everything: build the two
+# compilers in two worktrees, measure each where it was built, and every row
+# is off by a fixed amount that looks exactly like a small regression. Two
+# benchmarks whose binaries were byte-identical read +14 that way and were
+# briefly written up as risers. Copy both binaries to one directory and run
+# them there.
 set -e
 
 # Whose numbers these are, before spending a minute measuring against them.

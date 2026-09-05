@@ -1629,6 +1629,16 @@ every changed counter is priced (or improved).</code></pre>
 
 <p>its price is machine code. all twelve <code>.text</code> rows rise, 34,320 bytes in total, where the two twins grew four rows and eight &#8212; the linker drops a twin nothing calls, and a copy loop written at every site that makes a string cannot be dropped. the welfare index has no term for machine-code size, so it scored the change without seeing that. whether it should carry one is a question about the weights, left open beside the measurement that raises it.</p>
 
+<h2 id="origin"><span class="sec-num">49</span>the argument that would not fit</h2>
+
+<p><code>utf8</code> applied to <code>slice</code> is lowered as one call, and that call takes three <code>KValue</code>s and a pointer to the wrapper&#39;s origin &#8212; seven register-sized arguments where the sysv abi has six. the last one spills to the caller&#39;s stack and the callee reloads it before it can put the origin in an err. the raw door takes a pointer, a length, two integers and the origin, and nothing spills.</p>
+
+<p>the decode falls 0.445%, the one-shot 0.182%, and the encode 53,542 instructions. eight of the twelve benchmark binaries come out byte-identical to the ones before the change, so those rows could not have moved; of the four that did change, none rises.</p>
+
+<p>it costs 32 bytes of machine code, 16 on each of the two programs whose binaries grew. the twin is <code>internal</code> and the linker drops it where nothing calls it, which is why the whole cost sits on the callers.</p>
+
+<p>the fixture is <code>tests/golden/micro/utf8_of_a_byte_slice_at_its_edges.kso</code>. nothing in the corpus had reached this door over bytes: the one program that read an invalid byte through a slice passed a list, which falls through to the general slice and the general <code>utf8</code>. the fixture walks every range the clamp refuses and both sides of the validity test &#8212; a two-byte sequence taken whole, the same sequence cut in half, and its continuation byte alone.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

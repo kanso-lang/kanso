@@ -6156,19 +6156,31 @@ static KValue k_utf8_finish(KValue bv, const char* origin);
 KValue k_b_slice(KValue container, KValue fromv, KValue tov);
 KValue k_b_utf8(KValue lv, const char* origin);
 
+/* The bytes arm of `utf8` over a slice, with the KValue convention taken off
+   its inputs. Three KValues and a pointer want seven of the six integer
+   registers the SysV ABI has, so the last argument spills to the stack and the
+   callee reloads it; the arithmetic that follows is a clamp and two adds. The
+   emitter reaches this door through the `k_b_utf8_slice_fast` shim, which
+   tests the three tags itself; `k_b_utf8_slice` below is the same call for
+   anything the shim turns away. */
+KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
+                          long long from, long long to, const char* origin) {
+    const char* data = (const char*)bytes;
+    long long len = 0;
+    if (!(from < 1 || from > to || to > blen)) {
+        data += from - 1;
+        len = to - from + 1;
+    }
+    KValue bad = k_utf8_bad(data, len, origin);
+    if (bad.tag == K_ERR) return bad;
+    return k_str_n(data, len);
+}
+
 KValue k_b_utf8_slice(KValue container, KValue fromv, KValue tov, const char* origin) {
     if (container.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(container);
-        long long from = fromv.payload, to = tov.payload;
-        const char* data = (const char*)b->data;
-        long long len = 0;
-        if (!(from < 1 || from > to || to > b->len)) {
-            data += from - 1;
-            len = to - from + 1;
-        }
-        KValue bad = k_utf8_bad(data, len, origin);
-        if (bad.tag == K_ERR) return bad;
-        return k_str_n(data, len);
+        return k_b_utf8_slice_raw(b->data, b->len, fromv.payload, tov.payload,
+                                  origin);
     }
     KValue sliced = k_b_slice(container, fromv, tov);
     return k_b_utf8(sliced, origin);

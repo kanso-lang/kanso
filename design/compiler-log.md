@@ -20,36 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-08-31 — gavel: the fused chain operators
-
-Clay: "the fused operators are a Go." The three combinators gain
-fused chain spellings — the chain dot plus one character of channel:
-
-    config = io/read_file path
-      .> json/parse                      # chain through bind
-      .! (e -> "config: {e.reason}")     # chain through annotate
-      .? when_failed                     # chain through rescue
-
-- Each is pure sugar with a fixed desugaring: `x .> f` IS `bind x f`,
-  `.!` annotate, `.?` rescue. Semantics, licenses, and the auto-
-  rewrap live at the words; the parser learns three operators, not
-  three meanings. `.>` revives the archived spelling of 2026-08-16.
-- The right-hand side is a bare function — a lambda, a named
-  function, or a dispatch group — no wrapper lambda for the common
-  case: `.> json/parse`, `.? when_failed`.
-- **In chain position the fused operators are the only spelling.**
-  `. bind (f)` retires as a chain form, superseding the 2026-08-29
-  keep-the-dot ruling for the three combinators specifically; plain
-  `.` application chaining is untouched. The words remain ordinary
-  prefix functions everywhere else (`rescue (foo["bar"]!) handler`),
-  so each position has exactly one spelling.
-- All three land together, per the no-yagni-in-language-design rule:
-  a chain that can `.>` but must fall back to a word for annotate
-  would be the inconsistency this family exists to remove.
-- Pure fallibility benefits identically:
-  `foo["bar"]! .? (e -> "anonymous")` is one-line handling with no
-  ceremony, per the boxed-fallibility rider above.
-
 ## 2026-08-31 — directive: the welfare chart replays the current formula
 
 Clay, seeing the #184 re-scoring as a cliff in the trend chart: the
@@ -3053,3 +3023,89 @@ is the silicon. The prelude gained two twins and `runtime.c` two raw doors;
 `kanso check lib/json` emits nothing, so the front end does the same work.
 
 **welfare 73.77 -> 73.90**, banked with `--set` in the same commit.
+
+## 2026-09-05 (third) — the argument that would not fit
+
+`utf8` applied to `slice` has been lowered as a single call since the fusion
+landed, and that call carries three `KValue`s and a pointer to the wrapper's
+origin: seven register-sized arguments where the SysV ABI has six. The seventh
+spills to the caller's stack and the callee reloads it before it can put the
+origin in an err. `k_b_utf8_slice_raw` takes a pointer, a length, two integers
+and the origin — five — and the `k_b_utf8_slice_fast` twin in the prelude
+tests the three tags and calls it. This is the third door to take the shape
+kanso#1247's §48 describes, and the first where the spill rather than the
+unpack was the thing to remove.
+
+**Held on one host, in one directory, against a clean build of the commit it
+sits on.** jsonbench 1,791,154,032 -> 1,783,182,882, a fall of 7,971,150 and
+0.4450%. oneshot 29,275,330 -> 29,222,188, 53,142 and 0.1815%. encodebench
+5,802,859,264 -> 5,802,805,722, 53,542 and 0.0009%. widebench's binary changed
+and its count did not move at all. The other eight benchmark binaries came out
+BYTE-IDENTICAL to the ones before the change, so those eight rows could not
+have moved and were not measured twice. Nothing rises.
+
+**`.text` grows 32 bytes, 16 each on jsonbench and oneshot**, and the other
+ten rows are unchanged because their binaries are. The twin is `internal` and
+the linker drops it where nothing calls it, so the whole cost lands on the two
+callers. Beside `k_str_n`'s 34,320 bytes across all twelve rows in kanso#1247,
+this is the same mechanism reading the other way, and it is one more case for
+the `.text`-in-welfare question sitting in design/pending-gavels.md rather than
+an answer to it.
+
+**The fixture is tests/golden/micro/utf8_of_a_byte_slice_at_its_edges.kso, and
+the door had none.** tests/golden/runtime/utf8_of_a_slice_names_the_wrapper.kso
+reaches the same lowering with a LIST, which falls through to the general slice
+and the general `utf8`; the bytes arm — the arm the fusion exists for, and the
+one the raw door now holds — was pinned by nothing. The fixture walks every
+range the clamp refuses and both sides of the validity test, including a
+two-byte sequence taken whole, the same sequence cut in half, and its
+continuation byte alone. Watched red twice: with `k_utf8_bad` dropped from the
+raw door the two invalid cases print raw bytes instead of refusing, and with
+`to > blen` dropped from the clamp the output goes to binary.
+
+**A measurement mistake, recorded because the gate now carries the fix.** The
+first A/B built the baseline in a scratch worktree and the twin in the repo
+and measured each where it was built. escapebench and digestbench each read
++14, and both binaries were byte-identical to the baseline's. The same
+escapebench counts 130,170,344 under one path and 130,170,358 under the other:
+the kernel puts the exec path on the new process's stack beside the
+environment, and libc walks that before main. `scripts/gates/instructions.sh`
+already empties the environment for this reason and said nothing about the
+path; it does now. CI always runs from the repo root, so no golden was ever
+wrong — only a local comparison across two directories, which is how this vein
+gets measured while a change is being decided.
+
+**Every code counter the twin moved, with the value it landed on.** One prelude
+twin is one `define`, two `call`s, one `branch` and twenty-six lines written
+into every module the emitter produces, whether the program reaches `utf8` over
+a `slice` or not. `bench/emitted_golden.txt` reads `emitted_defines` 177,
+`emitted_calls` 1,857, `emitted_branches` 1,199 and `emitted_lines` 12,298;
+`bench/emitted_golden_others.txt` reads `emitted_other_defines` 1,576,
+`emitted_other_calls` 14,891, `emitted_other_branches` 8,867 and
+`emitted_other_lines` 90,971. `bench/compile_golden.txt` reads `defines` 174,
+`calls` 227, `branches` 267 and `lines` 4,277, with `rounds` and `visits`
+unmoved at 12 and 115 — the emitter writes more and deciding what to write
+costs the same. `bench/compile_golden_modules.txt` reads `module_defines` 94,
+`module_calls` 779, `module_branches` 414 and `module_lines` 5,023, its
+`module_rounds` and `module_visits` also unmoved. `text` lands on 1,117,304.
+
+**And the callee-saved question got its missing number, measured on this
+binary.** The log has carried "9.6% at entry" since the LLVM 19 investigation,
+with the per-function split recorded as unmeasured. It is 5.569% —
+99,299,946 instructions of 1,783,182,882 — counted by taking each symbol's
+pushes of rbx, rbp and r12-r15 from `objdump`, multiplying by callgrind's call
+count for that symbol, and doubling, because every call runs all the pushes and
+the taken exit runs the matching pops (a `musttail` jump restores them first,
+so it counts too). Where it sits: `d_jsonbench/parse_value_2` 32,569,200
+(1.826%, 2,714,100 calls over six registers), `obj_key_start_4` 15,049,800,
+`k_b_utf8_slice_raw` 10,442,400, `k_b_slice_raw` 5,391,000, `number_done_4`
+5,060,400, `k_buf` 5,026,200, `array_step_3` 4,953,600, `k_b_to_int` 3,769,200,
+`obj_items_3` 3,360,000, `k_b_append_grow` and `str_char_4` 3,191,400 each,
+`k_rec` 3,076,500, `k_str_lit` 2,127,616, `k_b_bytes` 1,064,400,
+`k_map_view_insert` 1,026,000. The generated decoder carries 3.6 points of the
+5.569 and the runtime's C doors carry 1.969, so a `preserve_none` that reached
+only the emitted functions would still be the larger half. The toolchain is
+still a version short of it and shrink-wrapping is still ruled out by the exit
+counts, so nothing here is actionable yet; what changes is that the size of the
+prize is a measurement rather than an estimate, and it is smaller than the
+estimate was.

@@ -196,6 +196,30 @@ slow:
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
+define internal %KValue @k_b_utf8_slice_fast(%KValue %c, %KValue %f, %KValue %t, ptr %o) alwaysinline {
+  %ct = extractvalue %KValue %c, 0
+  %ft = extractvalue %KValue %f, 0
+  %tt = extractvalue %KValue %t, 0
+  %isb = icmp eq i64 %ct, 13
+  %isf = icmp eq i64 %ft, 0
+  %ist = icmp eq i64 %tt, 0
+  %g1 = and i1 %isb, %isf
+  %plain = and i1 %g1, %ist
+  br i1 %plain, label %raw, label %slow
+raw:
+  %bp = extractvalue %KValue %c, 1
+  %by = inttoptr i64 %bp to ptr
+  %blen = load i64, ptr %by
+  %dp = getelementptr i8, ptr %by, i64 8
+  %d = load ptr, ptr %dp
+  %fv = extractvalue %KValue %f, 1
+  %tv = extractvalue %KValue %t, 1
+  %r = call %KValue @k_b_utf8_slice_raw(ptr %d, i64 %blen, i64 %fv, i64 %tv, ptr %o)
+  ret %KValue %r
+slow:
+  %s = call %KValue @k_b_utf8_slice(%KValue %c, %KValue %f, %KValue %t, ptr %o)
+  ret %KValue %s
+}
 define internal %KValue @k_b_slice_fast(%KValue %c, %KValue %f, %KValue %t) alwaysinline {
   %ct = extractvalue %KValue %c, 0
   %ft = extractvalue %KValue %f, 0
@@ -801,6 +825,7 @@ declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice_raw(ptr, i64, i64, i64)
 declare %KValue @k_b_utf8_slice(%KValue, %KValue, %KValue, ptr)
+declare %KValue @k_b_utf8_slice_raw(ptr, i64, i64, i64, ptr)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
@@ -4860,8 +4885,12 @@ impl<'a> Backend<'a> {
                             },
                         };
                         let t = f.tmp();
+                        // three KValues and the origin pointer want seven of
+                        // the six integer registers the abi has, so the last
+                        // spills and the callee reloads it; the twin tests the
+                        // three tags here and hands the raw door five scalars.
                         f.line(&format!(
-                            "{t} = call %KValue @k_b_utf8_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            "{t} = call %KValue @k_b_utf8_slice_fast(%KValue {}, %KValue {}, %KValue {}, {origin})",
                             parts[0], parts[1], parts[2]
                         ));
                         f.record(&t, infer::builtin_set("utf8", &[sliced]));

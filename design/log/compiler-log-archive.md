@@ -43113,3 +43113,33 @@ Separately proposed and AWAITING GAVEL: the fused chain operators
 of 2026-08-16), bare-function right-hand sides, sole spelling in
 chain position with the words remaining prefix functions. Not ruled;
 recorded so the proposal is not re-derived.
+
+## 2026-08-31 — gavel: the fused chain operators
+
+Clay: "the fused operators are a Go." The three combinators gain
+fused chain spellings — the chain dot plus one character of channel:
+
+    config = io/read_file path
+      .> json/parse                      # chain through bind
+      .! (e -> "config: {e.reason}")     # chain through annotate
+      .? when_failed                     # chain through rescue
+
+- Each is pure sugar with a fixed desugaring: `x .> f` IS `bind x f`,
+  `.!` annotate, `.?` rescue. Semantics, licenses, and the auto-
+  rewrap live at the words; the parser learns three operators, not
+  three meanings. `.>` revives the archived spelling of 2026-08-16.
+- The right-hand side is a bare function — a lambda, a named
+  function, or a dispatch group — no wrapper lambda for the common
+  case: `.> json/parse`, `.? when_failed`.
+- **In chain position the fused operators are the only spelling.**
+  `. bind (f)` retires as a chain form, superseding the 2026-08-29
+  keep-the-dot ruling for the three combinators specifically; plain
+  `.` application chaining is untouched. The words remain ordinary
+  prefix functions everywhere else (`rescue (foo["bar"]!) handler`),
+  so each position has exactly one spelling.
+- All three land together, per the no-yagni-in-language-design rule:
+  a chain that can `.>` but must fall back to a word for annotate
+  would be the inconsistency this family exists to remove.
+- Pure fallibility benefits identically:
+  `foo["bar"]! .? (e -> "anonymous")` is one-line handling with no
+  ceremony, per the boxed-fallibility rider above.

@@ -72,14 +72,19 @@
 # tree to take apart again; the tree switches on the raw value now. The
 # branches this drops are the tag test and the none test the tree wrote per
 # call. jsonbench retires 13.56% fewer instructions for it.
-encodebench defines=176 calls=1712 branches=1042 lines=11115
-oneshot defines=176 calls=1849 branches=1189 lines=12215
-basket defines=135 calls=1351 branches=770 lines=7755
-widebench defines=192 calls=1933 branches=1144 lines=12156
-deepbench defines=109 calls=867 branches=564 lines=5621
-escapebench defines=44 calls=120 branches=86 lines=1235
-pendbench defines=123 calls=1276 branches=655 lines=6742
-scanbench defines=324 calls=3770 branches=2258 lines=20593
-indexbench defines=50 calls=182 branches=114 lines=1630
-digestbench defines=183 calls=1631 branches=911 lines=9817
-readbench defines=53 calls=178 branches=123 lines=1809
+#
+# 2026-09-05 (third): every row gains 1 define, 2 calls, 1 branch and 26 lines
+# — `k_b_utf8_slice_fast`, written into every module by the prelude. Ten of the
+# eleven programs here do not call it and the linker drops it from all ten:
+# bench/text_golden.txt moved on two rows only.
+encodebench defines=177 calls=1714 branches=1043 lines=11140
+oneshot defines=177 calls=1851 branches=1190 lines=12240
+basket defines=136 calls=1353 branches=771 lines=7781
+widebench defines=193 calls=1935 branches=1145 lines=12181
+deepbench defines=110 calls=869 branches=565 lines=5647
+escapebench defines=45 calls=122 branches=87 lines=1261
+pendbench defines=124 calls=1278 branches=656 lines=6768
+scanbench defines=325 calls=3772 branches=2259 lines=20619
+indexbench defines=51 calls=184 branches=115 lines=1656
+digestbench defines=184 calls=1633 branches=912 lines=9843
+readbench defines=54 calls=180 branches=124 lines=1835

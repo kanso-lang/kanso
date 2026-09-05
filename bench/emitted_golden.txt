@@ -98,7 +98,13 @@
 # is the prelude twin: the emitter writes it once per module and the linker
 # drops it wherever nothing calls it, which is why only eight of the twelve
 # .text rows grew. The find2 shim before it cost the same shape.
-defines=176
-calls=1855
-branches=1198
-lines=12273
+#
+# 2026-09-05 (third): one more prelude twin, `k_b_utf8_slice_fast`, and the
+# same shape a third time — +1 define, +2 calls, +1 branch, +25 lines here and
+# +26 in every other module. The emitter writes the twin whether the program
+# calls the builtin or not; only jsonbench and oneshot grew any machine code
+# for it, 16 bytes each.
+defines=177
+calls=1857
+branches=1199
+lines=12298
