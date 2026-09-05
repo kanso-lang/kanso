@@ -1,0 +1,25 @@
+# The other half of tests/golden/micro/a_condition_is_asked_rather_than_read.
+# When codegen fuses a comparison into its branch, the fast arm answers from
+# the icmp and cannot fail, so the whole failure path belongs to the slow arm:
+# the runtime compares, the answer is a failure, and the `if` answers it
+# rather than choosing a side.
+#
+# The failure has to be BOUND INSIDE the body rather than handed in as an
+# argument. A failing argument short-circuits the arm before its body runs, so
+# a fixture written that way exits with the same message while never reaching
+# the comparison at all — it was written that way first, and breaking the slow
+# arm's failure test left it green.
+#
+# This is the condition in VALUE position, where the failure is one more arm
+# of the `if`'s merge. Its twin, a_failing_condition_in_tail_position_returns,
+# is the same question where the failure returns instead. The err is born in
+# this hako so no arm here may match it, which is why the program exits
+# non-zero and lives beside the runtime corpus rather than in micro.
+fn asked n
+  h = if (n == 0) (err "there is no number here") 5
+  answer = if (h < 3) "lt" "ge"
+  "chose {answer}"
+
+pub play =
+  print "{asked 1}"
+  print "{asked 0}"

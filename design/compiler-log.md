@@ -20,44 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — gavel: the bimodal row is made deterministic, not excused
-
-On "The compile-instructions row is bimodal" (#265), Clay declined
-both the pinned pair and an exclusion of glibc from the count: "if
-changes to the compiler can interact with glibc in a way that means
-generally more/less work, which the 'compiler's own instructions'
-measure would be blind to, then we need a way to include glibc's
-instructions but make them consistent, like how rspec can run with a
-seed... you run some instruction at the top to clear out the glibc
-state in test mode. this is crucial to be specific about."
-
-So the ruling is option 1 with the term named. The measured signature
-— five consecutive runs in one container agree exactly, two runners
-with the same binary and chip disagree — says the randomness is fixed
-at container birth, not per exec. Two suspects fit that shape and
-both are cheap to test:
-
-1. **Directory read order.** `kanso check lib/json` reads a source
-   directory; ext4's readdir order is a hash order seeded per
-   filesystem instance, so a fresh runner disk orders the same files
-   differently, consistently within one VM. If the loader does not
-   sort entries before compiling them, the allocation sequence — and
-   so the heap layout, and so the alignment paths in `_int_malloc`
-   and `memcmp` — differs per VM. This is a build-determinism defect
-   independent of the vein: the compiler's work must never depend on
-   inode hashes. Fix: sort in the loader.
-2. **ASLR.** Heap base and mmap addresses randomize per exec unless
-   disabled; `setarch -R` around the measurement removes the term.
-
-Environment (env -i), glibc tunables and glibc revision are already
-pinned. Apply both fixes, measure on several fresh runners; if the two
-modes collapse to one, glibc stays in the count under a single exact
-pin — no pair, no band, no exclusion. Only a residual that survives
-both reopens the question, and then the fallback is the pinned pair,
-never blindness. The entry leaves Blocking with this commit; the
-rustc-patch rider is the implementer's (the pin did its job;
-regenerate with a sentence).
-
 ## 2026-09-03 (tenth) — the bimodal row is made deterministic, not excused
 
 **DONE for the two suspects, OPEN for the answer.** Supersedes the OPEN
@@ -3341,3 +3303,88 @@ compiler: CLAUDE.md, a shell script and a Rust test file are none of them
 `include_str!`'d. The row is recorded with the reading beside it. The
 argument for collapsing the table still has the 5,064-instruction
 falsification to answer and is not made here.
+
+## 2026-09-05 (seventh) — a condition is asked, not read
+
+Every work row in the corpus falls and none rises. digestbench −4.0580%,
+encodebench −3.6976%, oneshot −2.8065%, pendbench −2.7422%, jsonbench
+−2.1381%, indexbench −2.0954%, widebench −1.1047%, scanbench −0.7481%,
+basket −0.3558%, deepbench −0.2556%, and escapebench and readbench flat to
+four decimal places. Welfare 74.00 → 74.15 against a floor of 74.00.
+
+Nothing in the runtime or the libraries changed. This is `src/codegen.rs`.
+
+### What the `if` was doing with a comparison
+
+`b < 32` in the json escape path emitted an `icmp slt` and then a `select` on
+it, building a KValue tagged 2 or 3. A phi merged that with `k_cmp`'s answer
+from the guarded slow arm, and the `if` then called `k_not_failure` and
+`k_truthy` on the phi and branched on the result. LLVM folds the pair away
+where the select reaches the branch directly; through the phi it cannot,
+because `k_cmp` may answer with a failure. What survived to machine code was
+
+    xor %eax,%eax ; cmp $0x20,%r15 ; setl %al ; xor $0x3,%rax
+    xor %edx,%edx ; cmp $0x2,%rax  ; jne
+
+`setl` becomes a tag and two instructions later the tag is compared back.
+`cmp $0x20,%r15 ; jge` is the whole of the work.
+
+### How it was found, and how much that one site cost
+
+Task #304 asked where the 66 instructions a byte in the escape fold go.
+callgrind with `--dump-instr=yes`, merged with objdump, attributes the
+ordinary-byte path — 9,834,000 of 11,658,800 steps — to the instruction: 20
+for the frame, 13 for value plumbing, 25 for the inlined byte append of which
+13 are guards, and 11 for the `b < 32` test. Those eleven are 108,174,000
+instructions where 19,668,000 would do, **1.6013% of encodebench from one
+comparison**.
+
+The same 66 also answered #304's own premise. Nothing is heap-boxed: a KValue
+is two words in registers, so "boxes both operands" named a tag
+materialisation rather than an allocation. The step's real costs are the
+indirect dispatch through the closure's stored `w_klam17` pointer, the frame
+(six callee-saved pushes for a function that writes one byte, which is #290's
+dimension), and this tag round trip.
+
+### The change
+
+`emit_cond` replaces `emit_expr` on the `if`'s condition. Where the condition
+is a comparison and neither operand routes to a user arm, the guarded compare
+branches straight to the then and else labels from its own i1 and builds
+nothing. The slow arm is unchanged — `k_cmp`, a failure test, a truthiness
+test — and its failure becomes one more arm of the `if`'s phi. Both `if` sites
+go through it: the value form, where a failing condition joins the merge, and
+the tail form, where it returns.
+
+### What it costs
+
+No allocation counter moves; all ten cost goldens are byte-identical. Emitted
+code and machine code both fall: the module's own compile golden goes from
+5,068 lines to 4,970 and 781 calls to 769 while gaining five branches, and
+pendbench, scanbench and digestbench lose calls, lines and text bytes
+together. Five more branches for twelve fewer calls is the trade.
+
+compile_instructions, compile_allocs and compile_memory could not be measured
+here — the container's rustc is 1.94.1 against the goldens' 1.98.1 — so CI
+measures them. The compiler binary changed, so the four chip rows in
+`bench/compile_instructions_by_cpu.txt` are stale and CI re-sits them one per
+run.
+
+### The fixtures, and the pair that passed for the wrong reason
+
+`tests/golden/micro/a_condition_is_asked_rather_than_read` runs the fast arm
+in both `if` forms, a text comparison through the slow arm, and a `<` declared
+over a record that must still reach its arm. Two runtime fixtures pin a
+failing comparison, one per `if` form.
+
+Both runtime fixtures were written first with the failure handed in as an
+ARGUMENT, and passed. A failing argument short-circuits the arm before its
+body runs, so the comparison was never reached: breaking the slow arm's
+failure test left them green. Binding the failure inside the body reaches it,
+and the endpoint trace shows the difference by losing its "passed through"
+line. Found by trying to break them, which is the only reason it was found.
+
+Three breaks, three reddenings. Inverting the fused branch moves the two
+fused rows and leaves the text and record rows alone. Making the slow arm
+skip its failure test reddens both runtime fixtures. Fusing where a record
+routes to a user arm kills the micro program.

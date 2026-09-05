@@ -1,0 +1,12 @@
+# The twin of a_failing_condition_answers_the_failure: the same failing
+# comparison as an `if` in TAIL position, where a failing condition returns
+# rather than joining a merge. Codegen emits the two forms through one
+# routine, and the only difference is where the failure goes, so a change that
+# got one right and the other wrong would pass the value-position spec alone.
+fn asked n
+  h = if (n == 0) (err "there is no number here") 5
+  if (h < 3) "lt" "ge"
+
+pub play =
+  print "{asked 1}"
+  print "{asked 0}"

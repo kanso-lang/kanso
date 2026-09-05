@@ -1,0 +1,36 @@
+# Every path an `if` over a comparison takes, because codegen fuses the
+# comparison into the branch: two ints answer from the icmp and build no
+# value at all, anything else goes to the runtime and is tested as one, a
+# `<` declared over a record still reaches its arm. The tail form and the
+# value form differ only in where a failing condition goes, so both are here;
+# what a failing condition itself answers is pinned beside this, in
+# tests/golden/runtime, because that program exits non-zero by design.
+type point
+  x
+
+fn < (point a) (point b)
+  a < b
+
+fn chose true
+  "yes"
+
+fn chose false
+  "no"
+
+fn ints_value a b
+  if (a < b) "lt" "ge"
+
+fn ints_tail a b
+  if (a < b) (chose true) (chose false)
+
+fn texts a b
+  if (a == b) "same" "different"
+
+fn recs a b
+  if (a < b) "smaller" "not smaller"
+
+pub play =
+  print "ints value: {ints_value 1 2} {ints_value 2 1}"
+  print "ints tail: {ints_tail 1 2} {ints_tail 2 1}"
+  print "texts: {texts "a" "a"} {texts "a" "b"}"
+  print "records: {recs (point 1) (point 2)}"

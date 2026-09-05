@@ -81,14 +81,14 @@
 # 2026-09-05 (fourth): every row gains 1 define, 2 calls, 1 branch and 35
 # lines for `k_b_find2_below_fast`. Nine of the eleven never call it and the
 # linker drops it from all nine: bench/text_golden.txt moves on three rows.
-encodebench defines=178 calls=1716 branches=1044 lines=11186
-oneshot defines=178 calls=1853 branches=1191 lines=12286
-basket defines=137 calls=1355 branches=772 lines=7825
-widebench defines=194 calls=1937 branches=1146 lines=12227
-deepbench defines=111 calls=871 branches=566 lines=5693
+encodebench defines=178 calls=1694 branches=1012 lines=11003
+oneshot defines=178 calls=1829 branches=1154 lines=12076
+basket defines=137 calls=1339 branches=755 lines=7717
+widebench defines=194 calls=1913 branches=1111 lines=12027
+deepbench defines=111 calls=859 branches=549 lines=5595
 escapebench defines=46 calls=124 branches=88 lines=1296
-pendbench defines=125 calls=1280 branches=657 lines=6814
-scanbench defines=326 calls=3774 branches=2260 lines=20666
-indexbench defines=52 calls=186 branches=116 lines=1691
-digestbench defines=185 calls=1635 branches=913 lines=9889
+pendbench defines=125 calls=1256 branches=640 lines=6701
+scanbench defines=326 calls=3736 branches=2224 lines=20449
+indexbench defines=52 calls=184 branches=115 lines=1682
+digestbench defines=185 calls=1612 branches=896 lines=9780
 readbench defines=55 calls=182 branches=125 lines=1872
