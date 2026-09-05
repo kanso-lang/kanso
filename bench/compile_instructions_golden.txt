@@ -828,4 +828,9 @@
 # 2026-09-05: 41,378,393 -> 41,378,619, a rise of 226 held on ONE chip across
 # both binaries, so none of it is the silicon. The prelude gained two twins and
 # the runtime two raw doors; the front end does the same work.
-compile_instructions=41378619
+#
+# 2026-09-05: 41,378,619 -> 41,377,663, a FALL of 956 held on ONE chip across
+# both binaries — family0x19-model0x11 counted each — so none of it is the
+# silicon. The prelude gained a third twin and src/runtime.c a third raw door;
+# the front end does the same work and its own code moved under it.
+compile_instructions=41377663

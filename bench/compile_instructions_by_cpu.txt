@@ -945,7 +945,6 @@
 # compiler's own bytes and the layout under them rather than work it does.
 # Zen 3's row measured the binary before the twins and is removed rather than
 # carried forward with the delta applied, for the reason the header gives.
-family0x6-model0xcf 41378619
 #
 # 2026-09-05 (later), and this one is an addition rather than a re-sitting. CI
 # handed out family0x19-model0x11 — AMD, and new to this table under any binary
@@ -956,7 +955,6 @@ family0x6-model0xcf 41378619
 # 5,081 the header records came from a pool whose members disagreed, and one
 # agreement does not retire that. The row goes LAST because the first row is
 # what bench/compile_instructions_golden.txt carries and what welfare reads.
-family0x19-model0x11 41378619
 #
 # And a third, on the very next run: family0x19-model0x1, the Zen 3 EPYC the
 # header names, reading 41,378,619 again. Three keys, one binary, one number.
@@ -982,4 +980,17 @@ family0x19-model0x11 41378619
 # same three keys agreeing again, THAT is the evidence for asking whether the
 # table should collapse — and it would be an argument made about the table,
 # with the readings behind it, not a tidy-up.
-family0x19-model0x1 41378619
+#
+# 2026-09-05 (fourth), and the table is one row again — the third time today
+# and the second by a RUNTIME change. src/runtime.c is include_str!'d into the
+# compiler, so a raw door added to it moves the compiler's own bytes and the
+# layout under them. This one moves them DOWN: family0x19-model0x11 read
+# 41,378,619 on the binary before the utf8-over-slice twin and 41,377,663 on
+# the one with it, a FALL of 956 held on one chip across both binaries, so
+# none of it is the silicon. `kanso check lib/json` emits nothing, so the
+# validator that changed cannot run during the measurement; what moved is
+# layout, for the eighth time on this vein. compile_allocs, compile_peak_bytes,
+# rounds and visits are byte-identical. The Emerald Rapids and Zen 3 rows
+# measured the binary before it and are removed rather than carried forward
+# with the delta applied, for the reason the header gives.
+family0x19-model0x11 41377663

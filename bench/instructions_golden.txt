@@ -93,9 +93,20 @@
 # inlined copy loop loses to a called one when the copy dominates. The objective
 # takes the trade -- see the entry of the same date, and bench/text_golden.txt
 # for the 34,320 bytes of machine code it also costs.
-jsonbench 1791154445
-encodebench 5802859663
-oneshot 29275729
+#
+# 2026-09-05 (third): the utf8-over-slice twin. Three rows fall and nine hold
+# EXACTLY still, which is what the local A/B predicted: eight of the twelve
+# benchmark binaries came out byte-identical to the ones before the change, so
+# those rows could not move, and widebench's binary differed while its count
+# did not. work_jsonbench lands on 1,783,183,295, a fall of 7,971,150 and
+# 0.4450%. work_oneshot lands on 29,222,587, a fall of 53,142 and 0.1815%.
+# work_encodebench lands on 5,802,806,121, a fall of 53,542. The container
+# measured the same three deltas TO THE INSTRUCTION on its own pair of builds,
+# which is the strongest agreement this vein has recorded between the two
+# hosts.
+jsonbench 1783183295
+encodebench 5802806121
+oneshot 29222587
 basket 39875796
 widebench 57839394
 deepbench 678049725

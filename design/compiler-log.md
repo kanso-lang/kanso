@@ -3089,6 +3089,25 @@ costs the same. `bench/compile_golden_modules.txt` reads `module_defines` 94,
 `module_calls` 779, `module_branches` 414 and `module_lines` 5,023, its
 `module_rounds` and `module_visits` also unmoved. `text` lands on 1,117,304.
 
+**CI's sitting, which is what the goldens carry, and it agrees with the
+container to the instruction.** `work_jsonbench` lands on 1,783,183,295,
+`work_oneshot` on 29,222,587 and `work_encodebench` on 5,802,806,121 — falls of
+7,971,150, 53,142 and 53,542, each of them the SAME NUMBER the container
+measured on its own pair of builds. Nine rows hold exactly still. That
+agreement is worth naming: the two hosts count different totals for every row
+and have never before matched on a delta, let alone on three.
+
+**`compile_instructions` lands on 41,377,663, a FALL of 956**, and this one
+needs no second chip either: family0x19-model0x11 counted 41,378,619 on the
+binary before the twin and 41,377,663 on the one with it, so none of the 956 is
+the silicon. `kanso check lib/json` emits nothing, so the door that changed
+cannot run during the measurement; the compiler's own bytes moved, which is
+layout for the eighth time on this vein and the first time it has gone down for
+a runtime edit. The Emerald Rapids and Zen 3 rows measured the binary before
+this change and are removed rather than carried with the delta applied.
+
+**welfare 73.90 -> 73.91**, banked with `--set` in the same commit.
+
 **And the callee-saved question got its missing number, measured on this
 binary.** The log has carried "9.6% at entry" since the LLVM 19 investigation,
 with the per-function split recorded as unmeasured. It is 5.569% —
