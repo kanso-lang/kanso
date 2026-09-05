@@ -157,11 +157,23 @@
 # in escapebench's whole emitted IR, two in readbench's -- so a change that
 # only touches comparisons reaches neither, and that they are EXACTLY still is
 # the check that the other ten falls are the change rather than the weather.
+#
+# 2026-09-05 (the digit pair table): FOUR rows fall and NINE hold exactly
+# still. ryu_d2d wrote its shortest digits one at a time -- a 64-bit division
+# per digit into a scratch buffer, then a reversal -- and now takes the length
+# from a ladder and writes pairs out of a table straight into place.
+# encodebench 5,218,724,822 -> 5,150,924,022 (-67,800,800, -1.2992%) and
+# livebench falls by the SAME 67,800,800 (-1.3017%), which is the two
+# benchmarks running the same program on the same input. oneshot -169,502
+# (-0.6170%), widebench -45,263 (-0.0793%). The nine that hold render no
+# floats, and that they are EXACTLY still is the check that the four falls are
+# the change rather than the weather. No allocation counter moves, no emitted
+# line moves, and every .text row rises by exactly 112 bytes.
 jsonbench 1745056955
-encodebench 5218724822
-oneshot 27472680
+encodebench 5150924022
+oneshot 27303178
 basket 38817037
-widebench 57105059
+widebench 57059796
 deepbench 715116179
 escapebench 120585597
 pendbench 666111554
@@ -169,4 +181,4 @@ indexbench 4692386
 scanbench 1395728266
 digestbench 77290402
 readbench 2038396069
-livebench 5208575100
+livebench 5140774300

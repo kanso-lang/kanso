@@ -43937,3 +43937,33 @@ reach two decimal places. There is nothing to ratchet.
 
 `docs/compiler.html`'s tagged figure moves with the golden; golden_prose was
 what caught it.
+
+
+---
+
+## 2026-09-03 — the second chip, and the two agree to the instruction
+
+The row cleared in the entry above left one chip recorded, and said the single
+was expected to refuse. It did, one run later and for the other reason the
+gate has: CI landed on Zen 3, whose stale row had just been removed, and
+refused because no row named it.
+
+It counted 41,829,232 — family0x6-model0xcf's value exactly, on the same
+binary sha 0804abe57190.
+
+    21:33  family0x6-model0xcf   0804abe57190   41,829,232
+    21:42  family0x19-model0x1   0804abe57190   41,829,232
+
+On the previous binary those two chips had each produced BOTH modes, 508
+apart, and this file's standing question was what still moves the heap layout
+when the binary, the cpu features, glibc, valgrind and the environment all
+agree. On this binary they do not differ at all.
+
+Two readings settle nothing. Each chip has shown one mode once, which is the
+same state that preceded the last disagreement, and reading agreement into it
+now would be the mistake this vein keeps catching. What it is: the first
+binary on which cross-chip agreement has been seen rather than the pair. The
+next reading on either chip is what says whether the modes came back.
+
+The row is recorded from CI's own sitting, which is what every row in this
+file is.

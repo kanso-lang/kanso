@@ -20,33 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 — the second chip, and the two agree to the instruction
-
-The row cleared in the entry above left one chip recorded, and said the single
-was expected to refuse. It did, one run later and for the other reason the
-gate has: CI landed on Zen 3, whose stale row had just been removed, and
-refused because no row named it.
-
-It counted 41,829,232 — family0x6-model0xcf's value exactly, on the same
-binary sha 0804abe57190.
-
-    21:33  family0x6-model0xcf   0804abe57190   41,829,232
-    21:42  family0x19-model0x1   0804abe57190   41,829,232
-
-On the previous binary those two chips had each produced BOTH modes, 508
-apart, and this file's standing question was what still moves the heap layout
-when the binary, the cpu features, glibc, valgrind and the environment all
-agree. On this binary they do not differ at all.
-
-Two readings settle nothing. Each chip has shown one mode once, which is the
-same state that preceded the last disagreement, and reading agreement into it
-now would be the mistake this vein keeps catching. What it is: the first
-binary on which cross-chip agreement has been seen rather than the pair. The
-next reading on either chip is what says whether the modes came back.
-
-The row is recorded from CI's own sitting, which is what every row in this
-file is.
-
 ## 2026-09-03 — the io half: absence is data, and the bang chooses the channel
 
 Searched the live log and the archive before filing. The archive's nineteen
@@ -4222,3 +4195,93 @@ before the lists were fixed. The rows enter as measurements rather than moves:
 
     livebench text=116290
     livebench defines=179 calls=1846 branches=1176 lines=12239
+
+---
+
+## 2026-09-05 (twentieth) — ryū's digits come out in pairs, and the split that said where to look
+
+The corpus profile after the escape thread put `render_ryu` at 467,153,200
+instructions, **8.95%** of the encode board, over 849,200 renders — 550 each.
+The page had been carrying that line as a dragonbox candidate with an estimated
+margin and no measurement of what was inside it.
+
+### The split, by noinline
+
+`ryu_d2d` is static with one caller and LTO folds it in, so the profile could
+not tell the digit core from the `%g` format layer. Marking it `noinline` for
+one build separates them exactly:
+
+    ryu_d2d      396,958,400   467.5 per render   85%
+    render_ryu    85,485,600   100.7 per render   15%
+
+**The core is 85% of the line.** That settles the dragonbox estimate the page
+had been guessing at — its margin applies to nearly all of `render_ryu` rather
+than part of it — and it says where to look first, which is the core's own
+tail.
+
+### The tail
+
+The digits came out one at a time:
+
+    while (output > 0) { tmp[n++] = '0' + output % 10; output /= 10; }
+    for (int a = 0; a < n; a++) dig[a] = tmp[n - 1 - a];
+
+One 64-bit division per digit into a scratch buffer, then a reversal. The
+replacement takes the length from a ladder and writes pairs out of a 100-entry
+table straight into `dig`, which is what reference ryū does and this port had
+not carried across. Four rows fall and NINE HOLD EXACTLY STILL:
+
+    encodebench   5,218,724,822 -> 5,150,924,022   -67,800,800   -1.2992%
+    livebench     5,208,575,100 -> 5,140,774,300   -67,800,800   -1.3017%
+    oneshot          27,472,680 ->     27,303,178      -169,502   -0.6170%
+    widebench        57,105,059 ->     57,059,796       -45,263   -0.0793%
+
+encodebench and livebench fall by the SAME 67,800,800 — the same program on the
+same input, one against a frozen library and one against the shipped one — and
+the nine that hold render no float at all. That they are exactly still is the
+check that the four falls are the change rather than the weather.
+
+No allocation counter moves, no emitted line moves, and every `.text` row rises
+by exactly **112 bytes**. Welfare 74.2194 -> 74.2493, banked with `--set`.
+
+### The domain the old loop had and the new one did not
+
+The harness caught a real narrowing before CI could. The old loop was total:
+handed any `uint64_t` it wrote that many digits. The new one walks DOWN from
+the length the ladder gives it, so a ladder that stops at seventeen digits and
+is handed an eighteen-digit value writes at a NEGATIVE INDEX. A double's
+shortest form never needs more than seventeen, so nothing in `ryu_d2d` can
+reach it — but a helper that writes out of bounds on an input it merely
+believes it cannot get is the shape this project's rules exist to stop. Three
+more rungs make it total, on a path nothing takes.
+
+Those three rungs are 96 bytes of unreachable code and they moved two counts
+that cannot execute them: encodebench by 802,800 and widebench by 499,900
+against the shape without them. That is the linker putting everything else
+somewhere else, and it is the same size of layout effect this vein recorded on
+deepbench a fortnight ago.
+
+### The harness
+
+`tests/the_shortest_digits_come_out_in_pairs.rs` cuts the table, the ladder and
+the extraction block out of `src/runtime.c`, compiles them beside a `snprintf`
+reference, and sweeps **120,000,057** values: every value to eight digits one
+at a time, every power of ten and its neighbours to the top of the range, and
+twenty million from a fixed seed across the whole of `uint64_t`. Zero
+disagreements. Watched red by moving one rung — `v < 1000` returning 4 — which
+reports the first disagreement at 100 and 903 in total.
+
+The text is lifted rather than copied, for the reason the harness ethos gives:
+a copy goes green on code nobody ships. `scripts/render_differential` covers 86
+values and `bench/large.json` 2,123, which is where the confidence for a change
+to a precision kernel would otherwise have stopped.
+
+### What this says about where to work
+
+The declined library change in the entry above cost 172,457 to 390,025 compile
+instructions and fell by the objective. This one costs **269** — inside the
+binary-to-binary drift band `scripts/compile_row_probe.sh` documents — because
+`src/runtime.c` is compiled by clang when a program is built, not by the
+compiler when `kanso check lib/json` runs. A runtime improvement and a library
+improvement of the same runtime size are not the same price, and the difference
+is three orders of magnitude.

@@ -502,16 +502,23 @@
 # first two. The row is a new measurement rather than a move, and no other
 # row changes with it.
 #
-jsonbench text=92738
-encodebench text=113634
-oneshot text=115842
-basket text=105874
-widebench text=118498
-deepbench text=70978
-escapebench text=52402
-pendbench text=85346
-indexbench text=55618
-scanbench text=153522
-digestbench text=105426
-readbench text=51474
-livebench text=116290
+#
+# 2026-09-05 (the digit pair table): all thirteen rows rise by EXACTLY 112
+# bytes. ryu_d2d writes its digits two at a time out of a 201-byte table now
+# rather than one at a time through a division and a reversal, and the table
+# itself is rodata; the 112 is the extraction code. Thirteen identical deltas
+# is what a change entirely inside one runtime helper looks like from here.
+#
+jsonbench text=92850
+encodebench text=113746
+oneshot text=115954
+basket text=105986
+widebench text=118610
+deepbench text=71090
+escapebench text=52514
+pendbench text=85458
+indexbench text=55730
+scanbench text=153634
+digestbench text=105538
+readbench text=51586
+livebench text=116402
