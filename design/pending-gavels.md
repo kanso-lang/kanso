@@ -115,19 +115,24 @@ the #1258 binary CI drew Zen 4 first, whose number could attribute nothing, and
 the −1,187 became readable only when the next round drew Zen 3. On the #1259
 binary CI drew Zen 3 first and the −550 was attributable in one round.
 
-THE COST IS THE ROUNDS. The #1258 binary spent two of them to reach two rows.
-The #1259 binary spent three, and the three agree:
+THE COST IS THE ROUNDS, AND IT IS BIGGER THAN THE ENTRY ABOVE ASSUMED. The
+#1258 binary spent two rounds to reach two rows. The #1259 binary spent FOUR:
 
-    family0x19-model0x1   41,377,644   AMD Zen 3
-    family0x6-model0xcf   41,377,644   Intel Emerald Rapids
-    family0x1a-model0x2   41,377,644   AMD Zen 5
+    family0x19-model0x1    41,377,644   AMD Zen 3
+    family0x6-model0xcf    41,377,644   Intel Emerald Rapids
+    family0x1a-model0x2    41,377,644   AMD Zen 5
+    family0x19-model0x11   41,377,644   AMD Zen 4
 
-The third is a family this vein had never seen — every AMD key before it was
-0x19, and 0x1a is Zen 5 — and it agreed to the instruction on a generation the
-pool had not produced before. So the count of within-binary keys that agree is
-now eight across two binaries, and the count that disagree is still zero. The
-table's own header says an unrecorded chip goes red asking for a sitting, so
-the ceiling on rounds is the pool's size and the pool is not fixed.
+Two vendors, three AMD generations, four CI rounds, one number. The Zen 5 key
+is a family this vein had never seen — every AMD key before it was 0x19 — and
+it agreed to the instruction on a generation the pool had not produced before.
+
+Counted rather than recalled: six within-binary keys across those two binaries
+agree and none disagrees. The table's header says an unrecorded chip goes red
+asking for a sitting, so the ceiling on rounds is the pool's size, and the pool
+grows: Zen 5 was not in it a week ago. A change to the compiler's bytes now
+costs four rounds where the earlier estimate in this entry said up to five, and
+the number is going up rather than settling.
 
 **What this does not settle.** Every one of these deltas is layout: `kanso check
 lib/json` emits nothing, so no runtime change can execute during the
