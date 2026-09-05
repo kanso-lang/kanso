@@ -1251,5 +1251,19 @@
 # the old binary is worse than no value.
 #
 # CI supplies the first row of the next series.
-family0x19-model0x11 41378194
-family0x19-model0x1 41378194
+#
+# 2026-09-05 (twelfth), and the file is src/runtime.c this time. The beat
+# mark's sanity check moves from the rewind to the push, and runtime.c is
+# `include_str!`'d into src/main.rs, so the compiler carries it and the binary
+# is a different binary. Both rows counted the one before it: they were
+# family0x19-model0x11 and family0x19-model0x1, both reading 41,378,194 --
+# two chips, one vendor, one number, learned over two CI rounds. Removed
+# rather than carried forward, for the reason this header has now given
+# twelve times.
+#
+# CI supplies the first row of the next series.
+family0x19-model0x1 41377644
+family0x6-model0xcf 41377644
+family0x1a-model0x2 41377644
+family0x19-model0x11 41377644
+family0x6-model0xad 41377644

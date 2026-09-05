@@ -810,14 +810,6 @@ static void k_beat_rewind_slow(KMark* m) {
     /* Every address above the mark is free to be handed out again, so the
        string the seek cursor names may not be there any more. One store. */
     k_seek_str = NULL;
-    /* A mark whose pointer and remaining count no longer meet the end of its
-       block hands out memory past that end, and the damage surfaces later in
-       an unrelated allocation — as a glibc abort on linux, and as nothing at
-       all on macOS. One comparison per rewind buys the report at the moment
-       the mark goes wrong. */
-    if (k_blocks && k_arena + k_arena_left != (char*)(k_blocks + 1) + k_blocks->cap) {
-        k_die("a beat mark and the arena disagree about the room that is left");
-    }
 }
 
 /* What a rewind does in the common case is write three words. Everything else
@@ -862,9 +854,6 @@ static inline void k_beat_rewind(KMark* m) {
         k_arena = m->ptr;
         k_arena_left = m->left;
         k_seek_str = NULL;
-        if (k_blocks && k_arena + k_arena_left != (char*)(k_blocks + 1) + k_blocks->cap) {
-            k_die("a beat mark and the arena disagree about the room that is left");
-        }
         return;
     }
     k_beat_rewind_slow(m);
@@ -872,6 +861,16 @@ static inline void k_beat_rewind(KMark* m) {
 
 void k_carry_clear(int depth);
 
+/* A mark whose pointer and remaining count no longer meet the end of its block
+   hands out memory past that end, and the damage surfaces later in an
+   unrelated allocation — as a glibc abort on linux, and as nothing at all on
+   macOS. The check used to sit in the rewind, where its comment called it one
+   comparison; on x86-64 it is eight instructions, and a beat loop pays them
+   once an iteration. It reads only the mark's own two words against its own
+   block, and a mark is written here and never again, so asking at the rewind
+   asks a question already answered: the same bad marks are caught, once per
+   loop entry instead of once per iteration, and a mark broken before the push
+   is now reported at the push. */
 void k_beat_push(void) {
     if (k_beat_depth < K_BEAT_MAX) {
         KMark* m = &k_beat_stack[k_beat_depth];
@@ -879,6 +878,9 @@ void k_beat_push(void) {
         m->ptr = k_arena;
         m->left = k_arena_left;
         m->bytes = k_live_block_bytes;
+        if (k_blocks && m->ptr + m->left != (char*)(k_blocks + 1) + k_blocks->cap) {
+            k_die("a beat mark and the arena disagree about the room that is left");
+        }
         k_carry_clear(k_beat_depth);
     }
     k_beat_depth++;
