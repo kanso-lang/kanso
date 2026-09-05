@@ -957,3 +957,29 @@ family0x6-model0xcf 41378619
 # agreement does not retire that. The row goes LAST because the first row is
 # what bench/compile_instructions_golden.txt carries and what welfare reads.
 family0x19-model0x11 41378619
+#
+# And a third, on the very next run: family0x19-model0x1, the Zen 3 EPYC the
+# header names, reading 41,378,619 again. Three keys, one binary, one number.
+#
+# TWO THINGS FOLLOW AND THEY PULL OPPOSITE WAYS. The first is an attribution
+# that cost nothing: this key read 41,377,711 on the binary before the two
+# commits above, so Zen 3 confirms end to end the +908 that Emerald Rapids
+# measured in two steps of 682 and 226. Two chips agreeing on a delta is the
+# strongest form this vein takes.
+#
+# The second is that the header's mechanism did not show. It says one libc
+# runs different code on different silicon and cites 5,081 instructions of
+# spread; three keys agreeing exactly says that spread is not in what this row
+# counts NOW. kanso#1241 is the likely reason — the row was cut down to
+# `std::rt::lang_start::{{closure}}` inclusive, dropping the loader and the
+# stack-guard parse above it, and the 5,081 was measured before that cut.
+# __memcmp_avx2_movbe is ifunc-dispatched and inside the surviving frame at
+# 3.24%, so the mechanism is not gone; it simply did not move here.
+#
+# The key stays anyway. One binary agreeing on three chips is one binary, and
+# the cost of keeping the key is a CI run per chip while the cost of dropping
+# it is the regression this vein exists to catch. If a later change shows the
+# same three keys agreeing again, THAT is the evidence for asking whether the
+# table should collapse — and it would be an argument made about the table,
+# with the readings behind it, not a tidy-up.
+family0x19-model0x1 41378619
