@@ -20,50 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-04 — THE ROW NAMED THE INDEX IT WAS READING, NOT THE TOOL THAT FAILED
-
-**DONE.** `perf_record` asks welfare for the score and takes the second field of
-its first line. When welfare itself died it printed no such line, and the row
-builder reported `missing index 2` born in `score_in` — a message naming the
-reader instead of the tool it read, pointing at a file nothing was wrong with.
-Three CI heads failed that way during kanso#1240 while readbench's instruction
-row was being harvested, and each one sent a reader to `perf_record.kso:258`
-when the fault was two processes away.
-
-Reproduced before it was touched, in a staged tree with the readbench row cut
-out of the instructions golden:
-
-    error[endpoint]: unhandled err reached the executor: "missing index 2"
-      born in perf_record/score_in at scripts/perf_record/perf_record.kso:258
-
-and after:
-
-    welfare printed no score, so this row has none to carry. it exited 1
-    saying: ... "missing index "readbench"" born in welfare/worked at
-    scripts/welfare/welfare.kso:375
-
-The reader now points at welfare, and welfare names the counter.
-
-**THE OBVIOUS FIX IS WRONG AND WOULD HAVE BEEN WORSE THAN NONE.** `os/run`
-hands back a status, and refusing on a non-zero one is the shorter edit. But
-welfare exits 1 on a fall AND on a rise nobody ratcheted — `os/exit 1` at three
-sites — and it prints a score in every one of them. Those are the commits the
-perf history most needs: a refusal keyed to the status would go silent on
-exactly the rows a reader would later want. Checked in welfare.kso before
-writing anything, which is the only reason the shape is what gets asked and the
-status only rides along in the message.
-
-**The spec enters where a user enters**: a staged tree with the goldens copied,
-the compiler and scripts and library borrowed from the checkout, a git
-repository because the row carries its commit, and one counter's instruction
-row removed — the state a branch is in between minting a benchmark and
-harvesting its row from CI. Watched red on the old body, for `missing index 2`.
-
-**Only half of it discriminates, and the entry says so.** The second test —
-that a healthy run still reads its score — passes on the OLD code too. It is
-there to catch a refusal that fires on a good run, which would cost the history
-every row it has, and it is not evidence for the fix.
-
 ## 2026-09-04 — THE ROW COUNTS THE PROGRAM NOW, AND THREE QUARTERS OF THE LINKER'S LUCK GOES WITH IT
 
 **DONE, and it closes the last blocking entry in the ledger.** The entry asked
@@ -3429,3 +3385,87 @@ cost goldens, the six compile gates and the welfare floor are untouched.
 The record's two candidate explanations are already out: the loader's directory
 order, and the build, which is byte-reproducible. `setarch -R` was applied to
 one of those two runs and not the other. If it reappears, it stops this vein.
+
+---
+
+## 2026-09-05 — the bytes view inlines, and seventeen counters pay for it
+
+**DONE — encodebench −3.4079%, livebench −3.4153%, oneshot −1.6997%.**
+`bytes` is a string's byte view. `k_b_bytes` read two fields out of the KStr
+and wrote a three-field header into the arena, and the arena bump was already
+inline in `k_b_append_byte` — so the thirty instructions it cost per call were a
+call, a tag ladder and a bump the emitter can write itself. `escape_onto_2`
+calls it once per string encoded: 4.19M calls in encodebench.
+
+`k_b_bytes_fast` is the shape the other doors use. One comparison does the whole
+guard: a failure carries a tag that is not K_STR and goes to `%slow`, where the
+C entry owns the message and the propagation exactly as before. The counting
+path goes to `%slow` too, so `k_stat_sh_bytes` can never be dropped — the
+arrangement `k_b_append_byte` uses, for the reason the presence-counter rule
+gives.
+
+Measured on one host, one pair of binaries, thirteen benchmarks under callgrind.
+Nothing rises:
+
+    encodebench   5,094,896,528 -> 4,921,267,313   -3.4079%
+    livebench     5,084,687,077 -> 4,911,031,267   -3.4153%
+    oneshot          27,103,137 ->    26,642,454   -1.6997%
+    widebench        56,003,456 ->    55,731,441   -0.4857%
+    jsonbench     1,736,104,565 -> 1,732,114,716   -0.2298%
+    basket           38,561,971 ->    38,533,957   -0.0726%
+    digestbench      77,289,846 ->    77,289,830        -16
+    deepbench, escapebench, pendbench, indexbench, scanbench, readbench: flat
+
+**ATTRIBUTED, and it beats its own arithmetic by four times.** The estimate was
+~42M, about 0.83% of encodebench; the fall is 173M. `callgrind_annotate` over
+the two profiles sums to −173,633,630 against the −173,629,215 the program
+moved:
+
+    k_b_bytes                       125,712,030 ->           0   -125,712,030
+    d_encodebench/encode_onto_2'2   821,723,227 -> 683,026,827   -138,696,400
+    d_encodebench/escape_clean_4    680,992,000 ->           0   -680,992,000
+    d_encodebench/escape_onto_2               0 -> 771,766,800   +771,766,800
+
+The call's own cost goes entirely: 125,712,030 over 4,190,000 calls is exactly
+30.0 instructions a call, which is what the disassembly counted. The other 48M
+is LLVM reshaping the escape path around the inlined body — the `escape_clean_4`
+specialised clone folds away and its work lands in `escape_onto_2`. Read those
+two rows together or neither makes sense.
+
+**WHAT IT COSTS, and every counter is named here because the trend gate reads
+this paragraph.** The shim's IR is written into every program the compiler
+emits, so the emitted and machine-code veins all rise and none of it is front-end
+work. `bench/compile_golden.txt`: branches 312, calls 207, defines 189, lines
+5,015. `bench/compile_golden_modules.txt`: module_branches 428, module_calls
+763, module_defines 97, module_lines 5,082. `bench/emitted_golden.txt`, the
+decoder: emitted_branches 1,175, emitted_calls 1,830, emitted_defines 180,
+emitted_lines 12,245. `bench/emitted_golden_others.txt`, the twelve programs
+beside it: emitted_other_branches 9,981, emitted_other_calls 16,521,
+emitted_other_defines 1,790, emitted_other_lines 103,721 — a uniform +3 / +1 /
++1 / +46 on each of the twelve, which is the shim written once per program.
+`bench/text_golden.txt`: text 1,256,346, a rise of 3,360 bytes over thirteen
+programs, encodebench 115,522 -> 116,242.
+
+That trade is what the 2026-09-05 machine-code ruling said the objective cannot
+see, and this is the first change to make it since. The exact veins see it;
+welfare does not, and does not need to for the sum to be right.
+
+**No allocation counter moves.** The shim claims the same 32 bytes from the same
+arena `k_bytes_view` did, so all eleven runtime cost goldens are byte-identical.
+
+**Also in this change: the page's 7.75% is dated.** `render_ryu` sat at 7.75% of
+encode in three places on docs/compiler.html with no sitting attached. It is a
+2026-09-02 reading. On 2026-09-05 the same line reads 9.20% before the pair
+table and 8.09% after, and the pair table's own price at the function level is
+480,160,400 instructions to 412,359,600, a fall of 14.12%. The two days are not
+comparable — three encode changes landed between them and each moved the
+denominator — so the page now names the day for each figure.
+
+**OPEN — the escape reducer is 61.1 instructions a byte.** After this change
+`w_klam17` is 14.47% of encode: 11,658,800 calls for 712,277,200 instructions.
+Its compiled body carries eighteen copies of the append twin's `neg`/`cmp`/
+`cmovs`/`jg` cap-sign shape, which is the twin's `%capneg`/`%isneg`/`%capa`
+sequence inlined eighteen times. Deciding the sign once rather than per site is
+the next thing to measure. The double forwarder is NOT the cost and does not
+need measuring again: `klam17` never appears in the profile, LLVM collapsed both
+frames into `w_klam17`.
