@@ -3947,14 +3947,32 @@ the emptied table, refused, and counted:
 
     compile_sample cpu="cpu family 0x19 model 0x11" sha=... row=41378194
 
-So the new series opens at **41,378,194** against the old series' 41,379,381, and
-that difference is NOT attributable. The old series' number was counted on two
-other chips; this one is a different binary AND a different chip, and the whole
-reason this table is keyed by silicon is that the two cannot be separated from
-one reading. Three chips have agreed to the instruction within a binary every
-time so far, so the prediction is that the next chip to refuse reads 41,378,194
-as well — and if it does not, that is a finding about the key rather than about
-this change. Recorded as a prediction, not as a conclusion.
+The new series opens at **41,378,194** against the old series' 41,379,381. When
+only that reading existed the difference was NOT attributable and this entry said
+so: a different binary AND a different chip, which is the pair the per-silicon
+key exists to stop anyone separating from one number. It recorded a prediction —
+that the next chip to refuse would read 41,378,194 too — and the very next round
+settled it, because the chip CI drew was **family0x19-model0x1**, the Zen 3 that
+had counted the old series:
+
+    family0x19-model0x11   41,378,194   Zen 4, new binary
+    family0x19-model0x1    41,378,194   Zen 3, new binary
+    family0x19-model0x1    41,379,381   Zen 3, OLD binary
+
+So two things are now settled that one reading could not settle. The two chips
+agree to the instruction, as every pair has on every binary so far. And the same
+chip on both binaries makes the move attributable: **compile_instructions falls
+1,187** on this change, with the silicon held fixed. `kanso check lib/json`
+emits nothing, so the ladder cannot run during the measurement; what moved is
+layout, for the twelfth time on this vein.
+
+The general point is the one the table was built for. A single refusal on a
+fresh chip carries a binary change and a silicon change in one number and can
+attribute neither; a second refusal on a chip already in the record separates
+them for free. That is worth waiting a round for, and it is the answer to what
+the per-chip key BUYS — the cost side (one CI round per chip per binary) has
+been measured for weeks and sits in design/pending-gavels.md, and this is the
+first time the benefit has been written down with a number beside it.
 
 **WELFARE 74.15975334184456 -> 74.18425551910869**, a rise of 0.02450218,
 `--set` with its reason. The page's `compile.compile_instructions` span moves
