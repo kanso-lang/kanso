@@ -20,51 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-03 (eighth) — what a failing test is allowed to tell you
-
-`design/pending-gavels.md` has carried the assert hako since 2026-08-17 with
-the gate lifted and a recommendation to build it. Built, and the measurement
-that motivates it was taken first rather than assumed.
-
-**What a failing `==` says.** A test is a constant and `==` is the assertion,
-which decides pass or fail and nothing else:
-
-    test_a_failure_on_purpose = decode "42" == 43
-    test_a_failure_on_purpose ... FAILED (returned false)
-
-The name, and no sign of what it got. The operands are gone by the time the
-runner holds the boolean, so the runner cannot recover them — whatever carries
-them has to be the assertion.
-
-**The concept was already there.** The runner prints the value a test
-returned, so a matcher answering a RECORD reports its own diff with no change
-to the runner at all. The same wrong assertion, both ways:
-
-    test_the_old_way ... FAILED (returned false)
-    test_the_new_way ... FAILED (returned expect/mismatch 43 42)
-
-That is the mushroom test passing rather than a feature being added. `lib/expect`
-is `expect`, `to`, `equal` and `be_true` — about twenty lines, no builtin, no
-runner change, and `expect` is the identity because the chain is the surface.
-
-**Kept out of `lib/testing` deliberately.** That hako's header says "nothing
-here adds a second way to write a test that can already be written", and a
-matcher IS a second spelling of `==`. The distinction that earns it a package
-of its own is that it is the only way to write a test that reports what it got;
-the stance in `lib/testing` stays intact and the addition is opt-in.
-
-**Watched red, and two of the four mutations the LANGUAGE refused.** Swapping
-the mismatch record's fields reddens the two specs that assert its shape;
-making the match arm answer a record instead of `true` reddens the two that
-assert a match. The other two — a mismatch answering `false`, and a generic
-first arm — do not compile: `error[unused]` on the now-dead bindings, and the
-most-specific-first ordering rule. A gate the compiler enforces needs no spec,
-and that is worth recording rather than counting as coverage.
-
-**The surface shape is still Clay's**, and the ledger entry stays until he
-rules on it. What has changed is that it is now a thing to read rather than a
-thing to imagine, and the evidence for wanting it is a measurement.
-
 ## 2026-08-31 — rider: pure fallibility is boxed too
 
 Clay raised `foo["bar"]!` against the effects-are-types gavel: an err
@@ -2851,3 +2806,74 @@ leaves 201 million instructions of `push`/`pop` on jsonbench, 9.6% of the
 decode. The decoder is a chain of mutually tail-calling functions, and a tail
 call pops the whole frame before its `jmp` and the target pushes it again. That
 is a different question from this one and nothing here answers it.
+
+## 2026-09-05 — the ascii test comes out from behind the wide pass
+
+Searched first: yesterday's entry on the entry-block stack slots is the nearest
+neighbour and is about placement rather than about this. The archive's
+2026-08-31 entry on `k_b_append_grow` is the same shape one layer down — a
+cheap path trapped behind an expensive function's prologue — and its conclusion
+was taken back by the welfare number. This one is not.
+
+`k_utf8_bad` counted the bytes, ran the ascii word-test, and then ran the wide
+SIMD pass, all in one function. LLVM will not inline that function anywhere:
+the wide pass is seven constant loads and two zeroed accumulators before its
+first block, and a table of three sixteen-byte lookups after it. So every token
+a json document holds paid a call to reach a two-load answer — 83,092,800
+instructions for 1,571,250 answers on jsonbench, 53 apiece for a mean run of
+seven ascii bytes.
+
+The front door is `always_inline` now and holds the counter and the test; the
+pass is `k_utf8_bad_wide` and is reached only by a run carrying a byte with the
+high bit set. Caller and callee are both in `runtime.c`, which is why a C
+attribute reaches this one at all — see the rider below for where it does not.
+
+```
+    jsonbench     1,914,624,003 -> 1,898,797,203   -0.827%   (container)
+    oneshot          30,109,010 ->    30,003,499   -0.350%
+    widebench        58,446,988 ->    58,318,988   -0.219%
+    basket           39,933,683 ->    39,915,674   -0.045%
+    encodebench   5,808,061,875 -> 5,807,958,536   -0.002%
+```
+
+Seven rows are byte-identical and none rises. Every allocation counter is
+unchanged and so is the emitted line count: this is entirely inside the runtime.
+
+**text 1,074,552 -> 1,075,912.** Five rows rise 144 to 304 bytes — the ascii
+test is written at each of the validator's four call sites now instead of once
+inside the pass — and the seven programs that never reach utf-8 validation hold
+exactly still. jsonbench spends 304 bytes for 15.8 million instructions.
+
+**The harness caught the rename, which is what it is for.**
+`scripts/utf8_differential` extracts the validator's text out of `runtime.c`
+rather than carrying a copy, and the split moved the signature it looks for: it
+answered `missing index 2` from `body_of` and stopped. It reads three pieces
+now — `k_all_ascii` verbatim, the wide pass as `harness_utf8_wide`, and the
+front door as `harness_utf8_ok` with its call renamed — so what is checked is
+the composition. 45,189,025 validator checks and 8,346,016 counter checks
+against the independently written reference, zero mismatches. Watched red
+first: dropping the door's call to the pass gives 30,746,942 mismatches.
+
+**RIDER on yesterday's OPEN thread — why the callee-saved 9.6% sits at entry.**
+The entry-block entry left 201 million instructions of `push`/`pop` unexplained.
+LLVM's shrink-wrapping cannot move them: it needs one save point dominating
+every use and one restore point post-dominating them, and these functions have
+three to eight returns spread across blocks. In jsonbench's emitted module
+`parse_value_2` has 3 returns and 1 `musttail`, `obj_key_start_4` 7 and 1,
+`string_at_4` 6 and 2, `array_step_3` 4 and 1, `scan_at_5` 8 and 7; the module
+holds 125 `musttail` sites across 15 functions with more than one. A `musttail`
+exit needs the epilogue before its `jmp`, so each of those blocks is a restore
+point and the prologue has to dominate all of them. The general remedy is
+`preserve_none`, the calling convention LLVM added for this shape, and it
+landed in LLVM 19. The pinned toolchain is Ubuntu clang 18.1.3, which rejects
+`preserve_nonecc` at the parser while accepting `tailcc` on the same file. The
+fix is named and gated on a toolchain bump. What stays inside reach is reducing
+what is live across the non-tail calls in the hot dispatchers, which is a
+per-function matter.
+
+**OPEN — the wide pass costs 298 instructions for seven bytes.** Now that the
+front door turns away the ascii runs, what is left is 60,769,050 instructions
+over 203,700 calls, 3.29% of the decode: 13% of the document's strings are not
+ascii, and each costs 298 to validate about seven bytes. The setup is the whole
+of it. A scalar walk of the grammar would answer a short run in well under a
+hundred, and the choice between them is the length. Not built.
