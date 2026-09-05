@@ -854,4 +854,4 @@
 # say "the first row of bench/compile_instructions_by_cpu.txt as always" read
 # against a table that no longer exists; they are left as written, because the
 # sittings they record happened.
-compile_instructions=41377380
+compile_instructions=41380537
