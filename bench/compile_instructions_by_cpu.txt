@@ -1262,8 +1262,20 @@
 # twelve times.
 #
 # CI supplies the first row of the next series.
-family0x19-model0x1 41377644
-family0x6-model0xcf 41377644
-family0x1a-model0x2 41377644
-family0x19-model0x11 41377644
-family0x6-model0xad 41377644
+#
+# 2026-09-05 (thirteenth), and the binary moved TWICE on one branch: ryu's
+# digit core writes its shortest digits out of a pair table now (src/runtime.c,
+# which src/main.rs `include_str!`s) and a string literal's slot gets an
+# alwaysinline door (src/codegen.rs). Five rows counted the binary before both
+# -- family0x19-model0x1, family0x6-model0xcf, family0x1a-model0x2,
+# family0x19-model0x11 and family0x6-model0xad, every one reading 41,377,644.
+# Two vendors, five chips, five CI rounds, one number, and the longest
+# agreement this file has recorded. Removed rather than carried forward, for
+# the reason this header has now given thirteen times -- a value counted
+# against the old binary is worse than no value.
+#
+# The reading that is NOT carried forward either: CI counted 41,378,856 on
+# family unknown at head 0d163fca, which is the ryu binary and not this one.
+# The literal's door and a rustfmt pass both landed after it.
+#
+# CI supplies the first row of the next series.
