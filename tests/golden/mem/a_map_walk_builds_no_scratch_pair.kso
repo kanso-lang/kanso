@@ -1,0 +1,20 @@
+# Every `entries` builds one record a key, and for a while it built two
+# allocations a key: an arena block holding the pair, and the record that
+# copied the pair out of it and never looked at the block again. k_rec
+# stores its fields immediately after the header, so the block was written
+# once, read once and dropped.
+#
+# A thousand walks of an eight-key map is eight thousand records, and
+# `allocs` below counts them once each. Restore the scratch block and this
+# number goes up by eight thousand, which is what the fixture is for: the
+# encode benchmarks see the same shape three million times a run, and a
+# counter that moves by one on a one-key map cannot tell anyone that.
+fn walk 0 acc _
+  acc
+
+fn walk n acc m
+  walk (n - 1) (acc + length (entries m)) m
+
+eight = { "a":1 "b":2 "c":3 "d":4 "e":5 "f":6 "g":7 "h":8 }
+
+pub play = print (walk 1000 0 eight)

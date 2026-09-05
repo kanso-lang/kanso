@@ -20,45 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-04 — THE 1,028 IS ONE MEMCMP, AND IT IS ALIGNMENT
-
-**DONE.** The entry above left a residual: the compiler's own frame still moves
-about a thousand instructions between binaries that do no different work, and
-said the movement comes from `.text`. Diffing the two profiles by self cost
-says exactly where, and the whole 3,047 of the two-hundred-function binary
-accounts for itself:
-
-    +1,624  _dl_relocate_object  (dl-machine.h)
-    +1,015  _dl_relocate_object  (do-rel.h)
-      +402  __memcmp_avx2_movbe
-        +6  ____strtoul_l_internal
-
-The first two are the loader, above `main`, and the split already drops them.
-**The 402 is the entire in-frame residual and it is one function** — glibc's
-AVX2 memcmp, counting differently on identical comparisons.
-
-That is an alignment difference, and this vein has reported it from the other
-end before: the comment on the pinned tunables in
-`scripts/gates/compile_instructions.sh` names two profiles that differed in
-`_int_malloc` and in `__memcmp_avx2_movbe` on one unchanged binary. Growing
-`.text` moves the end of `.bss`, the kernel starts the heap after it, and every
-allocation the front end makes lands at a different alignment. The comparisons
-are the same comparisons; the vector loop takes a different number of steps to
-reach them.
-
-**No fix is available from here.** The tunables pin malloc's thresholds and
-cache sizes, which is what made the row comparable in the first place, but none
-of them pins where the break starts — that is the kernel's, computed from the
-binary's own size. So the residual stands at about a thousand, attributed, with
-the mechanism named and the remedy out of reach. It is a twenty-eighth of the
-smallest front-end change on record, which is what makes it liveable.
-
-**Why this is worth having written down:** the residual was the last live half
-of the ledger entry, and "about a thousand instructions of link luck" is the
-kind of sentence that stays vague for months. It is one glibc function and a
-heap base. Anyone who later finds a way to pin that base can close it.
-
-
 ## 2026-09-04 — A SPEC THAT REPORTED ON THE STATE OF SOMEBODY'S TARGET DIRECTORY
 
 **DONE.** `tests/a_row_names_the_tool_that_failed` passed here and failed on CI,
@@ -3502,3 +3463,59 @@ different binaries and the sizes are not comparable across them; reading the
 786 as growth is the same cross-binary mistake this log recorded on the compile
 row two days ago. The instruction counts and the `.text` sizes are what settled
 it, and neither moved.
+
+## 2026-09-05 — the entries pair goes on the stack
+
+**DONE.** `k_b_entries` built each map entry's two fields in an arena block and
+handed that block to `k_rec`. Since kanso#1258 `k_rec` copies its arguments into
+the storage that follows the record header and keeps no reference to them, so
+the block was written once, read once and dropped. It is a `KValue fields[2]`
+now.
+
+3,344,400 of those a run in encodebench — `k_rec`'s own comment records the
+same count from the other side, since `k_b_entries` is where nearly all of them
+come from. That is 22.55% of every allocation the benchmark makes.
+
+    encode_allocs       14,830,625 -> 11,486,225   -3,344,400   -22.55%
+    encode_alloc_bytes 819,040,144 -> 712,019,344 -107,020,800  -13.07%
+    live_allocs         14,819,276 -> 11,474,876   -3,344,400   -22.57%
+    live_alloc_bytes   817,803,648 -> 710,782,848 -107,020,800  -13.09%
+    oneshot_allocs          75,822 ->     67,461       -8,361   -11.03%
+    oneshot_alloc_bytes  4,349,484 ->  4,081,932     -267,552    -6.15%
+
+Three instruction rows fall and ten hold exactly still:
+
+    work_encodebench 4,921,267,712 -> 4,893,408,112  -27,859,600  -0.5661%
+    work_livebench   4,911,031,714 -> 4,883,172,114  -27,859,600  -0.5673%
+    work_oneshot        26,642,853 ->    26,573,204      -69,649  -0.2614%
+
+encodebench and livebench fall by the same 27,859,600 because they run one
+program over one input against two copies of the library. 8.33 instructions an
+entry, which is the arena bump, the two stores into it and the reads back out.
+The ten that hold never take a map through `entries`; jsonbench only decodes.
+That they are exactly still is the check that the three falls are the change.
+
+Welfare 74.37196081105081 -> 74.38489702262615, ratcheted in this PR.
+
+**The `.text` vein separates two questions.** Four rows fall by exactly 112
+bytes — encodebench, oneshot, widebench, livebench — and widebench is the pair
+worth reading: its machine code shrinks and its work row does not move by an
+instruction. Its program names `entries`, so the function is linked in and gets
+smaller; its input never reaches the encoder, so nothing runs. jsonbench holds
+in both veins because the linker drops the function entirely.
+
+**The spec, and what the corpus already had.**
+`tests/golden/mem/a_map_walk_builds_no_scratch_pair.kso` walks an eight-key map
+a thousand times and pins `allocs=10010`. Restoring the block reads 18010 and
+`alloc_bytes` 256,000 higher — watched red before it was watched green. The
+corpus was not blind to this: `an_accumulator_loop_reclaims_its_garbage` calls
+`entries` once on a one-key map and its `allocs` falls by exactly 1 here. One is
+not a pin anybody would read, which is why the new fixture exists. No new
+ratchet row — `mem_shapes` already proves this gate catches a mutation.
+
+**On the instruction rows above.** The container is one glibc revision off the
+runner and may not record this vein, so those are its own A/B deltas applied to
+CI's landed values: it measured 4,921,267,372 -> 4,893,407,772 and 26,642,513 ->
+26,572,864 on its own pair of builds, the fixed 340 being the exec-path offset
+the golden's header warns about. CI's sitting is the record and corrects them if
+they differ.

@@ -45351,3 +45351,42 @@ without reporting what it saw.
 
 **`compiler libraries` was green on that same CI run**, which is the half of
 this change that was not being re-sat.
+
+
+## 2026-09-04 — THE 1,028 IS ONE MEMCMP, AND IT IS ALIGNMENT
+
+**DONE.** The entry above left a residual: the compiler's own frame still moves
+about a thousand instructions between binaries that do no different work, and
+said the movement comes from `.text`. Diffing the two profiles by self cost
+says exactly where, and the whole 3,047 of the two-hundred-function binary
+accounts for itself:
+
+    +1,624  _dl_relocate_object  (dl-machine.h)
+    +1,015  _dl_relocate_object  (do-rel.h)
+      +402  __memcmp_avx2_movbe
+        +6  ____strtoul_l_internal
+
+The first two are the loader, above `main`, and the split already drops them.
+**The 402 is the entire in-frame residual and it is one function** — glibc's
+AVX2 memcmp, counting differently on identical comparisons.
+
+That is an alignment difference, and this vein has reported it from the other
+end before: the comment on the pinned tunables in
+`scripts/gates/compile_instructions.sh` names two profiles that differed in
+`_int_malloc` and in `__memcmp_avx2_movbe` on one unchanged binary. Growing
+`.text` moves the end of `.bss`, the kernel starts the heap after it, and every
+allocation the front end makes lands at a different alignment. The comparisons
+are the same comparisons; the vector loop takes a different number of steps to
+reach them.
+
+**No fix is available from here.** The tunables pin malloc's thresholds and
+cache sizes, which is what made the row comparable in the first place, but none
+of them pins where the break starts — that is the kernel's, computed from the
+binary's own size. So the residual stands at about a thousand, attributed, with
+the mechanism named and the remedy out of reach. It is a twenty-eighth of the
+smallest front-end change on record, which is what makes it liveable.
+
+**Why this is worth having written down:** the residual was the last live half
+of the ledger entry, and "about a thousand instructions of link luck" is the
+kind of sentence that stays vague for months. It is one glibc function and a
+heap base. Anyone who later finds a way to pin that base can close it.

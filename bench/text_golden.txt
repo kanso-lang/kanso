@@ -516,11 +516,22 @@
 # instruction vein records what it bought: twelve rows fall, widebench by
 # 1.85% and three more by about one per cent.
 #
+# 2026-09-05 (the entries pair goes on the stack): FOUR rows fall by exactly
+# 112 bytes each and nine hold. k_b_entries no longer calls k_alloc for a
+# two-slot array it hands straight to k_rec, and 112 bytes is that call and its
+# bookkeeping. encodebench 116,242 -> 116,130, oneshot 118,690 -> 118,578,
+# widebench 120,850 -> 120,738, livebench 119,218 -> 119,106.
+#
+# widebench is the pair worth reading: its .text falls here and its work row
+# does not move by an instruction. Its program names `entries` -- the frozen
+# library's encoder has it -- so the code is linked in and shrinks, and its
+# input never reaches the encoder, so nothing runs. jsonbench holds in both
+# veins because it only decodes and the linker drops the function entirely.
 jsonbench text=94562
-encodebench text=116242
-oneshot text=118690
+encodebench text=116130
+oneshot text=118578
 basket text=107490
-widebench text=120850
+widebench text=120738
 deepbench text=71234
 escapebench text=52578
 pendbench text=85938
@@ -528,4 +539,4 @@ indexbench text=55890
 scanbench text=155938
 digestbench text=105890
 readbench text=51826
-livebench text=119218
+livebench text=119106

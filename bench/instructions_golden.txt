@@ -182,9 +182,31 @@
 # per cent. escapebench rises by 2. No allocation counter moves. Every .text
 # row grows, by 64 bytes on escapebench to 2,304 on scanbench, in proportion to
 # how many literal sites each program has.
+#
+# 2026-09-05 (the entries pair goes on the stack): THREE rows fall and TEN hold
+# exactly still. k_b_entries built each map entry's two fields in an arena
+# block and handed that block to k_rec, which copies its arguments into the
+# storage after the record header and keeps no reference to them -- so the
+# block was written once, read once and dropped. It is a stack array now.
+#
+#   encodebench  4,921,267,712 -> 4,893,408,112  -27,859,600  -0.5661%
+#   livebench    4,911,031,714 -> 4,883,172,114  -27,859,600  -0.5673%
+#   oneshot         26,642,853 ->    26,573,204      -69,649  -0.2614%
+#
+# encodebench and livebench fall by the SAME 27,859,600, which is the two
+# benchmarks running one program over one input against two copies of the
+# library. The ten that hold render no map through `entries` -- jsonbench only
+# decodes -- and that they are EXACTLY still is the check that the three falls
+# are the change rather than the weather.
+#
+# The rows above are the container's deltas applied to CI's landed values: it
+# measured 4,921,267,372 -> 4,893,407,772 and 26,642,513 -> 26,572,864 on its
+# own pair of builds, the fixed 340 being the exec path this vein's header
+# warns about. CI's own sitting is the record and corrects these if they
+# differ.
 jsonbench 1732115129
-encodebench 4921267712
-oneshot 26642853
+encodebench 4893408112
+oneshot 26573204
 basket 38534370
 widebench 55731854
 deepbench 707820204
@@ -194,4 +216,4 @@ indexbench 4692194
 scanbench 1395689898
 digestbench 77290229
 readbench 2038392076
-livebench 4911031714
+livebench 4883172114
