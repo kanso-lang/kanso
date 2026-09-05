@@ -2289,6 +2289,16 @@ KValue k_str_lit(const char* data, long long len, KValue* slot) {
     return *slot;
 }
 
+/* Inlined at every call site, which is a trade the objective priced rather
+   than a free win. It is 1,305,302 calls on jsonbench alone, 46 instructions
+   apiece, and most of a short string's cost is the call rather than the arena
+   bump and the memcpy inside it. Inlining it makes ten work rows fall and one
+   rise — readbench by 1.886% — and grows every program's `.text` by 400 to
+   4,368 bytes. Opening the door at only the hot caller instead keeps readbench
+   still and every `.text` row still, and scores 73.79 against this shape's
+   73.82. The sum is the objective and the terms are diagnostics, so this is
+   the shape that ships; the narrow one is recorded in the log beside it. */
+__attribute__((always_inline))
 KValue k_str_n(const char* data, long long len) {
     if (len == 1) {
         unsigned char b = (unsigned char)data[0];

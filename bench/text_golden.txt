@@ -473,15 +473,25 @@
 # program, so the emitted-line count moves everywhere; the linker drops it
 # wherever nothing calls it, which is what the eight unmoved rows are. The four
 # that grow are the four that scan for a byte pair.
-jsonbench text=88498
-encodebench text=108530
-oneshot text=111122
-basket text=101954
-widebench text=112050
-deepbench text=69730
-escapebench text=52258
-pendbench text=83218
-indexbench text=54050
-scanbench text=148530
-digestbench text=103426
-readbench text=49586
+#
+# 2026-09-05 (k_str_n inlines at every call site): ALL TWELVE rows rise, 400 to
+# 5,024 bytes and 34,320 in total. This is the vein's whole point showing: the
+# two shims before it grew four rows and eight, because the linker drops a
+# prelude twin wherever nothing calls it, and this one is a copy loop written
+# out at every site that makes a string. jsonbench spends 4,320 bytes for
+# 15,427,521 instructions and scanbench 5,024 for 21,531,186; indexbench spends
+# 1,952 for 449,994, which is the worst rate of the twelve and still a fall of
+# 8.585%. The welfare index has no term for machine-code size, so the objective
+# cannot see this trade and does not price it — this row is where it is priced.
+jsonbench text=92818
+encodebench text=112674
+oneshot text=115250
+basket text=105682
+widebench text=116194
+deepbench text=70530
+escapebench text=52658
+pendbench text=85218
+indexbench text=56002
+scanbench text=153554
+digestbench text=105346
+readbench text=51346
