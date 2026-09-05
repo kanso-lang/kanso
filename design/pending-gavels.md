@@ -94,11 +94,39 @@ as a second mode. kanso#1253 corrected it, and the cost was that the objective
 scored against a `compile_instructions` no chip had counted on this binary for
 the interval between.
 
-**What the record now supports.** Five chip keys have read 41,380,022 on the
-current binary — two AMD generations, a third AMD family that had never appeared
+**What the record now supports.** Five chip keys read 41,380,022 on the binary
+of 2026-09-03 — two AMD generations, a third AMD family that had never appeared
 in the pool, and one Intel — and four read 41,379,503 on the one before it.
 Unanimity within each binary, and the binary explaining every difference. That
 is the collapse argument, and it needs no residual at all.
+
+**BOTH READINGS, PRICED, 2026-09-05.** Three more binaries have gone through the
+table since, and they carry the cost side and the benefit side of the key in the
+same numbers. On one chip, `family0x19-model0x1`, held fixed across all three:
+
+    41,379,381   before kanso#1258
+    41,378,194   kanso#1258      -1,187
+    41,377,644   kanso#1259        -550
+
+THE BENEFIT IS THAT THOSE TWO DELTAS EXIST. A single refusal on a fresh chip
+carries a binary change and a silicon change in one number and can attribute
+neither; a refusal on a chip already in the record separates them for free. On
+the #1258 binary CI drew Zen 4 first, whose number could attribute nothing, and
+the −1,187 became readable only when the next round drew Zen 3. On the #1259
+binary CI drew Zen 3 first and the −550 was attributable in one round.
+
+THE COST IS THE ROUNDS. The #1258 binary spent two of them to reach two rows;
+the #1259 binary spent one. Neither series is unanimity — they are two rows and
+one row — and the table's own header says an unrecorded chip goes red asking for
+a sitting, so the ceiling is still the pool's size.
+
+**What this does not settle.** Every one of these deltas is layout: `kanso check
+lib/json` emits nothing, so no runtime change can execute during the
+measurement, and three consecutive binaries moved the row by 1,187 and 550 for
+reasons no diff explains. The key makes those readable rather than smaller. If
+the answer is one row and one value, the same three deltas are still readable
+provided the row carries the binary's sha, which is the second half of the
+question below and the half that does the work.
 
 **The question, in two parts.** Should a row pin one value rather than two? And
 should the table carry the compiler binary's sha256, so that a row measured
