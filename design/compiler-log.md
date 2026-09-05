@@ -4207,3 +4207,43 @@ weigh one. A weight guessed rather than argued from cases would price
 every future inline decision by the guess. If cases accumulate, the
 way in is a satiation and a weight argued from them, as a weights
 change. The ledger entry leaves with this commit.
+
+## 2026-09-05 — gavel: one row, one value, and every move is the compiler's
+
+On "Should a chip row still be allowed to pin two values?", Clay
+declined both the pinned pair and the proposed binary-sha stamp, and
+set the model the vein works under: "you have done enough work in the
+process to be confident that it is deterministic and so you treat it
+as such. if it got better then good if it got worse then bad and you
+assume it's always because of the compiler. but then of course you
+always just check to see if it's consistent. and if it's not you say
+okay well now we have to look for other sources of inconsistency and
+get ourselves back to a state where we're confident we've nailed them
+all."
+
+The ruling:
+
+- **One row, one value.** The pinned-pair mechanism and the per-chip
+  key retire. `bench/compile_instructions_by_cpu.txt` collapses to a
+  single number; the gate refuses any second value.
+- **Every move is attributed to the change under test.** A rise is a
+  regression to explain, a fall is a win to bank — the ordinary
+  ratchet — with no category of "the measurement drifted." The
+  measurement was made consistent (the row counts from the runtime's
+  entry closure inclusive, loader and stack guard excluded, per the
+  2026-09-04 build) and seven chip keys across two binaries agree to
+  the instruction on it; that is the evidence the model rests on.
+- **Consistency is checked, not assumed silently**: the same build
+  must reproduce its number on any runner and any run. A
+  reproduction failure — the number moving with no compiler change,
+  or two chips disagreeing on one binary — is not a mode to record
+  and not a pair to pin; it halts the vein and is hunted until the
+  source is found and removed, as the /proc/self/maps term was. The
+  vein returns to service when reproduction holds again.
+- No binary-sha stamp: under this model there is nothing for it to
+  distinguish. A move with no compiler change is by definition a
+  consistency failure, and the response to that is the hunt above.
+
+The entry leaves the ledger with this commit; its contradiction about
+the 508 (one binary or two) becomes moot, since neither reading
+licenses a pair.
