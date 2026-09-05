@@ -167,14 +167,16 @@ is right, a within-binary pair has been seen once and the mechanism has a
 premise. If the gate's comment is right, it never has.
 
 **THE THIRTEENTH SERIES, 2026-09-05, and it argues for one value.** The table
-was emptied when this branch moved the compiler binary, and CI has refilled two
-rows in two rounds:
+was emptied when this branch moved the compiler binary, and CI has refilled
+three rows in three rounds:
 
     family0x19-model0x11   41,378,764   AMD Zen 4
     family0x6-model0xcf    41,378,764   Intel Emerald Rapids
+    family0x19-model0x1    41,378,764   AMD Zen 3
 
-Two vendors, two independent builds, one number. With the twelfth series' five
-keys on 41,377,644 that is seven within-binary sittings across two binaries
+Two vendors, three independent builds, one number. With the twelfth series'
+five keys on 41,377,644 that is eight within-binary sittings across two
+binaries
 agreeing exactly and none disagreeing, which is the count this entry already
 reported and is now larger. Nothing since the pair was introduced has produced
 a second within-binary value.
@@ -189,8 +191,8 @@ them was in the process rather than the program. That does not settle what it
 was — `setarch -R` was on for one and not the other, which this entry notes —
 but it removes "a rebuild made a different binary" from the list.
 
-**The cost side, re-measured.** Two rounds for two rows on this binary, against
-the twelfth series' five. The ceiling is still the pool's size and the pool is
+**The cost side, re-measured.** Three rounds for three rows on this binary,
+against the twelfth series' five. The ceiling is still the pool's size and the pool is
 still not a fixed set, so five remains the floor of the estimate rather than
 its value.
 
