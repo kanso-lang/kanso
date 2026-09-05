@@ -2899,3 +2899,28 @@ instructions instead of saving any — 1,877,751,303 against 1,879,179,453 on
 jsonbench. The chain is predictable, and the ascii bytes that dominate a
 mostly-ascii run are tested before it and never reach either. Recorded so it is
 not rediscovered.
+
+**CI's sitting, which is what the goldens carry.** The rows above are the
+container's; the runner counts a few hundred higher on every one of them and
+its numbers are the ones pinned. Five work counters move and none rises:
+`work_jsonbench` lands on 1,877,751,716 (−1.926%), `work_oneshot` on 29,863,599
+(−0.816%), `work_widebench` on 58,271,408 (−0.301%), `work_basket` on
+39,914,087 (−0.050%) and `work_encodebench` on 5,807,819,641 (−0.004%). The
+other seven are byte-identical.
+
+**And `compile_instructions` rose 682, to 41,378,393, which is layout.** The
+front end did not change on this branch — the diff is `src/runtime.c`, the
+differential harness, the goldens and this file. `src/runtime.c` is
+`include_str!`'d into the compiler, so editing the runtime moves the compiler's
+own bytes: 1,435 more of them here. `kanso check lib/json` emits nothing, so
+the validator that changed cannot run during the measurement. This is the
+seventh time this vein has moved for layout and the second time a runtime edit
+has done it — kanso#1226 moved it −5,621 the same way, held on one chip with
+both binary shas printed. `compile_allocs`, `compile_peak_bytes`, rounds and
+visits are byte-identical.
+
+The per-chip table is re-sat down to one row for the same reason. Both AMD rows
+measured a binary that no longer exists, and CI handed out Emerald Rapids
+(`family0x6-model0xcf`), which is new to the table under any binary. So the 682
+cannot be split between the new chip and the new binary from one reading, and
+the row says so rather than claiming an attribution it does not have.

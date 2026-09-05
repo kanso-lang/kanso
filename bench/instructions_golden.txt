@@ -62,11 +62,21 @@
 # scanbench (+0.133%) rise, and they are the two whose .text grows most: a
 # fixed frame gives LLVM a different layout to schedule against and it inlines
 # differently in both directions. No allocation counter moves.
-jsonbench 1914624416
-encodebench 5808062274
-oneshot 30109409
-basket 39934096
-widebench 58447401
+#
+# 2026-09-05 (three arms at the utf-8 door): five rows fall and none rises.
+# The counter and the ascii word-test came out from behind the wide SIMD pass
+# into an always_inline front door, and a short run that is not ascii walks the
+# grammar rather than paying the pass's seven constant loads. jsonbench
+# 1,914,624,416 -> 1,877,751,716, a fall of 1.926%. oneshot -0.816%, widebench
+# -0.301%, basket -0.050%, encodebench -0.004%. The other seven are
+# byte-identical: they never reach utf-8 validation. No allocation counter
+# moves and the emitted line count is unchanged — this is entirely inside the
+# runtime.
+jsonbench 1877751716
+encodebench 5807819641
+oneshot 29863599
+basket 39914087
+widebench 58271408
 deepbench 678049713
 escapebench 130170743
 pendbench 702115580

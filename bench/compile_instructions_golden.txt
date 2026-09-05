@@ -814,4 +814,12 @@
 # 2026-09-04: 41,379,840 -> 41,377,711, the first row of
 # bench/compile_instructions_by_cpu.txt as always. The entry-block stack slots
 # changed the emitter and the front end's own count came with it. A fall.
-compile_instructions=41377711
+#
+# 2026-09-05: 41,377,711 -> 41,378,393, the first row of
+# bench/compile_instructions_by_cpu.txt as always — and that row is a different
+# chip from yesterday's, because the whole table was re-sat down to the one key
+# CI handed out. The front end did not change. src/runtime.c is include_str!'d
+# into the compiler, so the three arms at the utf-8 door moved the compiler's
+# bytes and the layout under them. A rise of 682, which is layout for the
+# seventh time on this vein.
+compile_instructions=41378393

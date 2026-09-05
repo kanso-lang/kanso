@@ -922,10 +922,19 @@
 # gives and the reason the Zen 4 row was removed on 2026-09-03: a row nobody
 # measured is not a sitting. CI re-sits each key as the pool hands it out, and
 # the gate refuses and prints until it does.
-family0x19-model0x1 41377711
-# And the second key under the new emitter: Zen 4 (family0x19-model0x11)
-# refused on this branch and printed 41,377,711 — the same to the instruction
-# as Zen 3 on the same binary. Two keys, one number, which is the arrangement
-# every binary these two have shared has produced. It goes last: the FIRST row
-# is what welfare and compile_instructions_golden.txt read.
-family0x19-model0x11 41377711
+# 2026-09-05, and the table is re-sat down to one row again — this time by a
+# RUNTIME change with the front end untouched. src/runtime.c is include_str!'d
+# into the compiler, so the three arms at the utf-8 door moved the compiler's
+# own bytes: 1,435 more of them, and the layout under them. The header's note
+# on kanso#1226 is the precedent for the mechanism, where a runtime edit moved
+# this row -5,621 on one held chip. Both AMD rows measured a binary that no
+# longer exists and are removed rather than carried with a delta applied, for
+# the reason the header gives.
+# Emerald Rapids (family0x6-model0xcf) is what CI handed out, and it is new to
+# the table under any binary: it counted 41,378,393. So this is a first sitting
+# on a new key and a first sitting on a new binary at once, and the +682 against
+# the old pair cannot be split between the two causes from one reading. What it
+# is NOT is the front end doing more work — `kanso check lib/json` emits
+# nothing, so the validator that changed cannot run during the measurement.
+# compile_allocs, compile_peak_bytes, rounds and visits are byte-identical.
+family0x6-model0xcf 41378393
