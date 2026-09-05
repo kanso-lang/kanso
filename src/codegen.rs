@@ -2443,7 +2443,9 @@ impl<'a> Backend<'a> {
         // into a permanent slot instead of allocating per visit
         let (name, len) = self.intern(text);
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_str_lit_fast(ptr @{name}, i64 {len}, ptr @{name}_lit)"));
+        f.line(&format!(
+            "{t} = call %KValue @k_str_lit_fast(ptr @{name}, i64 {len}, ptr @{name}_lit)"
+        ));
         t
     }
 

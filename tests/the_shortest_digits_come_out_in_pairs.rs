@@ -127,13 +127,8 @@ int main(void) {{
     let bin = dir.join("pairs");
     std::fs::write(&c, harness).expect("the harness writes");
 
-    let built = Command::new("clang")
-        .arg("-O2")
-        .arg(&c)
-        .arg("-o")
-        .arg(&bin)
-        .output()
-        .expect("clang runs");
+    let built =
+        Command::new("clang").arg("-O2").arg(&c).arg("-o").arg(&bin).output().expect("clang runs");
     assert!(
         built.status.success(),
         "the lifted extraction does not compile on its own: {}",
@@ -142,10 +137,7 @@ int main(void) {{
 
     let run = Command::new(&bin).output().expect("the harness runs");
     let said = String::from_utf8_lossy(&run.stdout);
-    assert!(
-        run.status.success(),
-        "the digit extraction disagrees with snprintf: {said}"
-    );
+    assert!(run.status.success(), "the digit extraction disagrees with snprintf: {said}");
     assert!(said.contains(" disagree"), "the harness said nothing: {said}");
     let _ = std::fs::remove_dir_all(&dir);
     println!("{said}");
