@@ -1192,3 +1192,15 @@
 #
 # CI supplies the first row of the next series. The gate refuses in the
 # meantime and prints the line to add, which is what the empty state is for.
+#
+# CI SUPPLIED IT ON THE FIRST ROUND. The run drew family0x19-model0x1, found no
+# row, refused rather than comparing to anything, and printed the line to add:
+#
+#     compile_sample cpu="cpu family 0x19 model 0x1" sha=fe268554d931 row=41381326
+#
+# So the new series opens at 41,381,326 against the old one's 41,380,022, a rise
+# of 1,304 on a change that removes a stack scratch from the RUNTIME. `kanso
+# check lib/json` emits nothing, so the code that changed cannot run during the
+# measurement; what moved is layout, for the tenth time on this vein.
+# compile_allocs holds at 25,490 and compile_peak_bytes at 715,275.
+family0x19-model0x1 41381326

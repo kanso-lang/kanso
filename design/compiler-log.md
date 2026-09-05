@@ -3884,3 +3884,59 @@ reason that paragraph already gives.
 regenerated here — this container is glibc 2.39-0ubuntu8.7 against the golden's
 8.8, and `host_gate.sh` refuses. CI measures it; its rows and the compile
 sitting land in a follow-up commit on this branch, and welfare moves with them.
+
+---
+
+## 2026-09-05 (thirteenth) — CI's rows for the entry above, and the two hosts agree to the instruction
+
+**DONE**, closing the OPEN thread in the twelfth entry.
+
+`bench/instructions_golden.txt` is regenerated from the CI job that measured it.
+The container could not: it is glibc 2.39-0ubuntu8.7 against the golden's 8.8,
+and `host_gate.sh` refuses rather than letting a reader compare rows counted on
+two libcs.
+
+    jsonbench     1,745,058,173 -> 1,745,058,008        -165
+    encodebench   5,322,691,304 -> 5,310,898,813   -11,792,491   -0.2216%
+    oneshot          27,733,120 ->    27,703,105       -30,015   -0.1082%
+    basket           39,737,538 ->    39,737,290          -248
+    widebench        57,201,224 ->    57,201,345          +121
+    deepbench       714,674,831 ->   714,674,674          -157
+    escapebench     130,170,757 ->   130,170,600          -157
+    pendbench       681,319,796 ->   681,320,025          +229
+    indexbench        4,692,123 ->     4,692,422          +299
+    scanbench     1,395,728,077 -> 1,395,728,376          +299
+    digestbench      77,290,591 ->    77,290,782          +191
+    readbench     2,038,397,546 -> 2,038,397,676          +130
+    livebench     5,312,541,628 -> 5,300,749,093   -11,792,535   -0.2220%
+
+**Every delta is the container's delta to the instruction.** The absolute rows
+differ — CI's encodebench is 5,310,898,813 where the container counted
+5,310,898,414, a fixed 399 that is the exec path on the process's stack — but
+the thirteen differences are identical on both hosts. That is worth having
+written down: it says the offset is additive and the vein's deltas survive a
+host change even though its rows do not.
+
+### The compile row
+
+CI drew `family0x19-model0x1` on a table the change had emptied, refused rather
+than comparing to anything, and printed the row to add:
+
+    compile_sample cpu="cpu family 0x19 model 0x1" sha=fe268554d931 row=41381326
+
+So the new series opens at 41,381,326 against the old series' 41,380,022, a rise
+of 1,304 from a change that touches only the runtime. `kanso check lib/json`
+emits nothing, so the code that changed cannot run during the measurement; what
+moved is layout, for the tenth time on this vein. `compile_allocs` holds at
+25,490 and `compile_peak_bytes` at 715,275 across it.
+
+### Welfare
+
+74.14745031572936 -> 74.15241668591877, a rise of 0.00496637, and `--set` in
+the same change. Two encode instruction terms fall by ~0.22% against one compile
+instruction term rising 1,304 on a satiated dimension; the sum goes up and that
+trade is what the weights are for.
+
+The page's `compile.compile_instructions` span moves 41,380,022 -> 41,381,326
+with the golden, because a number on the page and a number in a golden are one
+claim.
