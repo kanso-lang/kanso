@@ -1203,4 +1203,14 @@
 # check lib/json` emits nothing, so the code that changed cannot run during the
 # measurement; what moved is layout, for the tenth time on this vein.
 # compile_allocs holds at 25,490 and compile_peak_bytes at 715,275.
+#
+# AND A SECOND CHIP ON THE SAME BINARY, on the very next run. CI drew
+# family0x6-model0x6a -- the Intel, not the AMD above -- found no row, refused,
+# and counted 41,381,326: the same number to the instruction.
+#
+#     compile_sample cpu="cpu family 0x6 model 0x6a" sha=fe268554d931 row=41381326
+#
+# Two chips, two vendors, one binary, one number, on the first binary of the new
+# series. Ten readings now across three binaries with unanimity within each.
 family0x19-model0x1 41381326
+family0x6-model0x6a 41381326

@@ -3940,3 +3940,40 @@ trade is what the weights are for.
 The page's `compile.compile_instructions` span moves 41,380,022 -> 41,381,326
 with the golden, because a number on the page and a number in a golden are one
 claim.
+
+### The six rows that rose, priced one by one
+
+The trend gate asks for the counter's key and the value it landed on, and it is
+right to: a paragraph that names a counter without its number is a blanket
+permit for that counter for the whole branch, which is how kanso#1205's
+explanation once licensed a mutation to set the same row to 999,999,999 and
+leave the gate green.
+
+Six work rows rose, all by between 121 and 299 instructions:
+
+    work_widebench    57,201,224 -> 57,201,345    +121
+    work_digestbench  77,290,591 -> 77,290,782    +191
+    work_pendbench   681,319,796 -> 681,320,025   +229
+    work_indexbench    4,692,123 -> 4,692,422     +299
+    work_scanbench 1,395,728,077 -> 1,395,728,376 +299
+    work_readbench 2,038,397,546 -> 2,038,397,676 +130
+
+None of them renders a float, and the change is confined to the negative arm of
+`k_render_at`. What reaches them is the `.text` move: every benchmark's machine
+code fell 48 bytes (32 for escapebench and indexbench), and a `.text` change of
+that size reaches a count at about a thousand instructions, which is the reading
+`bench/compile_instructions_by_cpu.txt` records for the same effect on the
+compile row. All six are inside that. The three rows that fall — encodebench,
+livebench and oneshot — fall by 11.79M, 11.79M and 30,015, which is two to five
+orders of magnitude more, and they are the three that render.
+
+### A second chip on the new series, and it agrees
+
+The re-run drew `family0x6-model0x6a`, the Ice Lake-SP, found no row for it on
+the fresh table and refused:
+
+    compile_sample cpu="cpu family 0x6 model 0x6a" sha=fe268554d931 row=41381326
+
+41,381,326 — what family0x19-model0x1 read on the same binary. Two chips, two
+vendors, one number, on the first binary of the new series. That is the tenth
+reading in the unanimity record the header of that file now keeps.
