@@ -3258,3 +3258,50 @@ node, 23 to 19 in early_exit — and `alloc_bytes` with it.
 The work rows and welfare wait on CI's sitting, and the compile row goes stale
 with them: both `src/codegen.rs` and `src/runtime.c` changed, so the compiler's
 own bytes moved for the tenth time on that vein.
+
+**CI's sitting, and the two hosts agreed on ten of twelve rows.** Four work
+rows fall: work_encodebench 5,527,056,676 (−36,155,845, −0.6499%),
+work_digestbench 80,559,329 (−436,308, −0.5387%), work_oneshot 28,533,505
+(−90,098, −0.3148%) and work_scanbench 1,406,247,707 (−50,617). Every one of
+those four deltas is the container's TO THE INSTRUCTION, as are
+work_jsonbench's, work_basket's, work_readbench's, work_widebench's and both
+unmoved rows — ten of twelve, the third consecutive change on which this vein
+has recorded exact agreement between runner and container.
+
+**The two the hosts disagree on are exactly the two whose rise is layout.**
+work_deepbench 716,506,831 (+38,457,106, +5.6724%) against the container's
++38,461,431, and work_pendbench 700,529,602 (+27,807) against +27,780. A
+layout effect is a property of the binary a host built, so a per-host
+difference there is the shape to expect; a work difference would not have
+been. The remaining rises are the same thing smaller: work_basket 39,878,996
+(+3,200), work_readbench 2,038,397,546 (+3,578), work_jsonbench 1,783,183,673
+(+378), work_widebench 57,839,754 (+360). work_escapebench 130,170,757 and
+work_indexbench 4,792,124 do not move at all, because neither program has a
+capture-free lambda to convert.
+
+**Every counter vein moved the same way, and the trade is one shape.** Nine
+cost goldens swap arena allocations for a permanent pair per lambda site.
+`allocs` falls in all nine — decode 4,999,965, encode 14,830,625 (−1,418,402),
+oneshot 75,822, basket 28,170, pend 4,007,400, scan 3,975,888, wide 144,027,
+digest 213,707, read 615 — and `alloc_bytes` with each. Against that,
+`perm_allocs` lands on decode_perm_allocs 6, encode_perm_allocs 14,
+oneshot_perm_allocs 12, basket_perm_allocs 41, pend_perm_allocs 25,
+scan_perm_allocs 51, wide_perm_allocs 8, digest_perm_allocs 36 and
+read_perm_allocs 5. Three more pending-cell counters move with the shape of
+what the evacuation now walks: pend_evac_bytes 501,056, pend_survive_slots
+118,477 and pend_sh_buf 32,134,704.
+
+**compile_instructions 41,379,503**, re-sat on family0x19-model0x11 after CI
+refused an unrecorded chip. This move is not only layout: the emitter writes
+one global and one call where it wrote an alloca and two stores, so
+`kanso check lib/json` really does emit different bytes. compile_allocs holds
+at 25,490 and compile_peak_bytes at 715,275.
+
+**Two book panels went with the counters** and nothing but the full check
+caught them: docs/book/samples/ch10/counters_counters.out and
+docs/book/samples/ch12/fused_counters.out both print `allocs` and
+`perm_allocs`, and both move 12 to 10 and 1 to 3. The ch10 counters sample is
+named in CLAUDE.md's list of veins to regenerate together, and this session
+regenerated the .mem files and the four code goldens and missed it.
+
+**welfare 74.00**, from 73.99, and `--set` in this same commit.

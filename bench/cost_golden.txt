@@ -1,10 +1,10 @@
-allocs=4999967
-alloc_bytes=259660496
+allocs=4999965
+alloc_bytes=259660448
 arena_blocks=2
 arena_peak_bytes=2097152
 cohort_frees=1
 cohort_kept=0
-perm_allocs=4
+perm_allocs=6
 beat_iters=151
 evac_allocs=15
 evac_bytes=496

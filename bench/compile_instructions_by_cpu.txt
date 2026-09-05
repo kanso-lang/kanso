@@ -1010,4 +1010,20 @@
 # while compile_allocs, compile_peak_bytes, rounds and visits stay
 # byte-identical. `kanso check lib/json` emits nothing, so the scan door that
 # changed cannot run during the measurement; what moves is layout.
-family0x19-model0x1 41377855
+#
+# 2026-09-05 (sixth), and the table is one row again for the third time in two
+# days. The capture-free closure literal changes BOTH src/codegen.rs and
+# src/runtime.c, so the compiler's own bytes moved twice over and every row
+# went stale with them. CI drew family0x19-model0x11 -- a chip with no row,
+# because the block above had just removed its stale one -- and refused rather
+# than comparing 41,379,503 to somebody else's number. The Zen 3 row it
+# replaces measured the binary before this one and is removed rather than
+# carried forward with a delta applied.
+#
+# This one is not only layout. The emitter writes one global and one call
+# where it wrote an alloca and two stores, so `kanso check lib/json` really
+# does emit different bytes; compile_allocs holds at 25,490 and
+# compile_peak_bytes at 715,275, so the front end does the same work at a
+# different size. That is the tenth move on this vein and the first where the
+# emitted output, rather than the layout under it, is part of the reason.
+family0x19-model0x11 41379503
