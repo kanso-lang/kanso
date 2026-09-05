@@ -3547,3 +3547,139 @@ All three tests were watched red before they were trusted: dropping
 ["compile_libraries"]`, adding a `compile_nothing` gives both `which reads no
 compile golden` and `which is not in scripts/gates`, and dropping the name from
 CLAUDE.md gives `does not name ["compile_libraries"]`.
+
+## 2026-09-05 (tenth) — the pair was two binaries, and so was the objective
+
+`bench/compile_instructions_by_cpu.txt` pinned `family0x19-model0x11 41379503
+41380022`. `compile_ir_row.sh` says what a pair is in its own words: "a key and
+the TWO values one chip has been seen to read ON ONE BINARY." These were two
+binaries.
+
+Read off git:
+
+```
+31c54078   all four chips 41,379,503                the pre-#1251 binary
+643399da   #1251 changes codegen.rs; CI re-sits model0x1, then model0xcf,
+           both to 41,380,022. model0x11 and model0x6a left stale, and
+           #1251's own entry says so
+65725d05   CI draws model0x11 on the post-#1251 binary and counts
+           41,380,022 -- against a row still carrying the stale value
+```
+
+I read the leftover as a second mode and wrote the pair. The 519 gap is what
+made it plausible: the within-binary residual recorded earlier on this vein was
+508, so a difference of that size between two binaries looks exactly like the
+thing the pair exists for.
+
+### What it cost
+
+The golden's bare line follows the first row's first value, so
+`bench/compile_instructions_golden.txt` read 41,379,503 — the pre-#1251
+number. `compile_instructions` is a welfare term and a trend-gate counter, so
+from #1251 until now the objective was scored against a value no chip had
+counted on this binary. Nothing went red, because the pair admitted the true
+value on every run that drew that chip.
+
+#1251's own entry saw the shape and wrote it down: "the golden's bare line
+tracks the FIRST row, which is one of the stale three, so it does not move yet
+either." Recording that the golden is stale is not the same as it being right,
+and a day is what the difference cost.
+
+### The fix
+
+model0x11 reads 41,380,022 alone. `family0x6-model0x6a` is removed rather than
+corrected — it has never been measured on this binary, and the rule written six
+times in that file's header is that a value counted against the old binary is
+worse than no value. Three rows remain, all 41,380,022, all CI's own readings
+on this binary.
+
+Welfare goes 74.14748966683695 -> 74.14745031572936, a fall of 0.0000394, and
+the floor is re-set with that reason. It is a correction rather than a
+regression: the compiler did not change, the number recorded for it did.
+
+### The spec, watched red on the defect itself
+
+Every pair written before this one cites its binary — "same chip 0x19/0x11,
+same binary sha 0e081d4c2c96: 41,845,704". The convention was there and nothing
+checked it, and the entry I wrote cites no sha because there was none to cite.
+
+`tests/a_paired_chip_row_names_one_binary_twice.rs` asks for it: a row pinning
+two values must sit under a dated entry naming both values beside a binary sha.
+It went red on main as it stood, which is the strongest form of watching a spec
+fail — the failing case is the defect rather than a mutation of it.
+
+Two drafts of it passed on that defect first, and both are worth writing down
+because both are the shape this repo keeps catching. The first asked for eight
+hex characters and found them in `41379503`, which is eight hex characters: the
+check answered yes using the very number it was demanding a citation for. The
+second scoped the search to "a run of comment lines", which in a file that is
+one long header followed by its rows is the whole header, so a sha from July
+justified a pair from September. The file's real unit is the dated entry.
+
+### What it does to the collapse argument (#303)
+
+The "third reading" — one chip seeing both values on one binary — does not
+exist. What the record supports is four chips agreeing at 41,379,503 on the
+pre-#1251 binary and three agreeing at 41,380,022 on the post-#1251 one. That is
+a stronger argument for collapsing the key than the one it replaces: unanimity
+per binary, rather than a chip disagreeing with itself.
+
+And it puts a question to the pair itself, which is on the ledger for Clay:
+`compile_instructions.sh` already records that the 508 the pair was ruled a
+fallback for "actually was: two binaries." Both recorded pairs are now two
+binaries, and neither is the within-binary bimodality the mechanism was built
+for.
+
+### The same CI run drew a fifth chip, and it agrees
+
+kanso#1253 went red on `compile instructions`, and the failure is a refusal
+rather than a regression: CI drew `family0x1a-model0x2` — AMD family 0x1a, a
+generation this pool had never produced — and no row named it. Its own log:
+
+```
+compile_sample cpu="cpu family 0x1a model 0x2" sha=31ccb3e99dde row=41380022
+##[error]nothing in bench/compile_instructions_by_cpu.txt was counted on
+##[error]family0x1a-model0x2, so this run's 41380022 cannot be compared
+```
+
+41,380,022 is what the three recorded chips read on this binary, first time of
+asking, from a generation none of them belongs to. Five keys, three AMD
+generations and one Intel, one binary, one number.
+
+Two things follow. The correction above no longer rests only on reading git:
+the golden said 41,379,503 and a chip that had never been asked counted
+41,380,022. And the collapse argument (#303) has its evidence from a direction
+nobody arranged — the key is not separating chips, because five of them across
+three microarchitectures cannot be separated.
+
+### And the ratchet admitted a counter, which a spec was waiting to catch
+
+`welfare_saturates_each_counter` went red on the `--set` above, and its own
+header had described the case in advance: a minted counter enters the floor's
+baseline at the next ratchet rather than at the merge that mints it, so the
+pull request that adds one usually leaves the spec green and the NEXT `--set`
+turns it red.
+
+kanso#1252 minted `live_instructions`. This change is the next `--set`, and it
+touches nothing about the run-speed half — it is a correction to
+`compile_instructions` — so the admission arrived here. Ten guards became
+eleven and the guard runaway went 49.00 to 48.91, which is the arithmetic the
+header pins: `((n-1)/3 + 1024/1026) / n * 0.15` reads 0.059971 at ten and
+0.059064 at eleven, and 0.00091 of weight is 0.09 of score. Both neighbours
+held, for the reasons already written there — parity does not depend on the
+count, and the advertised runaway still has two rows.
+
+The numbers are recomputed rather than derived, as that header insists.
+
+### The failure it wore first was a full disk
+
+Before any of that, all three of its tests failed with `the floor reads: Os {
+code: 2, kind: NotFound }`. The container was at 97% with 1.5 GB free, and the
+fixture copies the whole of `bench/` into a staging directory three times. The
+copy that lost the race was silent because `std::fs::copy` had already
+returned; what failed was the read of a file that never landed.
+
+Deleting 3.7 GB of stale scratch worktrees changed the message to the real
+assertion. Worth knowing, because "NotFound" on a file the fixture just copied
+reads as a bug in the fixture and is not one, and because I called it a
+race between two concurrent test runs before checking — it fails alone.

@@ -127,10 +127,10 @@ fn every_counter_at_parity_scores_the_weights_alone() {
     assert_eq!(scored("parity", &[]), "welfare 48.00");
 }
 
-/// One of the ten GUARD counters a thousand times better than its baseline,
-/// the other nine and both advertised rows at parity. Saturating each
+/// One of the eleven GUARD counters a thousand times better than its baseline,
+/// the other ten and both advertised rows at parity. Saturating each
 /// counter first bounds what the runaway can contribute at one, so the guard
-/// term is (9/3 + 1024/1026) / 10 * 0.15 and the score is 49.00.
+/// term is (10/3 + 1024/1026) / 11 * 0.15 and the score is 48.91.
 ///
 /// Saturating the MEAN instead answers well above this on the same fixture,
 /// which is the shape the 2026-08-29 ruling closed and what this number is
@@ -156,9 +156,17 @@ fn every_counter_at_parity_scores_the_weights_alone() {
 /// two neighbours held: parity stays 48.00 because it does not depend on the
 /// count, and the advertised runaway stays 52.99 because that half still has
 /// two rows.
+///
+/// 2026-09-05 is the delayed case the paragraph above describes, and it is
+/// worth reading beside the 09-04 one because the two exhaust the shapes.
+/// kanso#1252 minted `live_instructions` and left this spec green; the next
+/// `--set` — a correction to compile_instructions in kanso#1253, touching
+/// nothing about the run-speed half — admitted it to the baseline and turned
+/// this red. Ten guards became eleven and 49.00 became 48.91. Both neighbours
+/// held again, for the same two reasons.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 49.00");
+    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 48.91");
 }
 
 /// THE HALVES ARE NOT INTERCHANGEABLE. The same thousandfold win is worth
@@ -183,7 +191,7 @@ fn a_win_on_an_advertised_row_outscores_the_same_win_on_a_guard() {
     let advertised = scored("advertised", &[("decode_instructions", 1024)]);
     let guard = scored("guard", &[("wide_instructions", 1024)]);
     assert_eq!(advertised, "welfare 52.99", "an advertised runaway");
-    assert_eq!(guard, "welfare 49.00", "the same runaway on a guard");
+    assert_eq!(guard, "welfare 48.91", "the same runaway on a guard");
     assert!(
         advertised > guard,
         "the advertised half is worth more per counter: {advertised} against {guard}"
