@@ -4110,6 +4110,12 @@ that counted the previous binary:
 Same silicon, both binaries, so the fall of **550** is attributable without
 waiting for a second chip. `kanso check lib/json` emits nothing and runs no
 beat loop, so what moved is layout, for the thirteenth time on this vein.
+
+The next round drew `family0x6-model0xcf`, an Intel Emerald Rapids, which read
+**41,377,644** as well: two chips, two vendors, one number on this binary, at
+the cost of one CI round each. That is the table's ordinary behaviour and the
+reason the collapse question in design/pending-gavels.md now carries both
+readings priced.
 **WELFARE 74.21933255238363 -> 74.21937425493788**, a second `--set` with the
 compile row's own reason.
 
