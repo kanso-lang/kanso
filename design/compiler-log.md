@@ -4094,6 +4094,25 @@ one new beat per byte: the index walk satisfies the beat analysis where
 `fold`'s inner loop did not. Removing the closure saved 279M and the beat cost
 436M. That is where the thirty instructions came to be counted at all.
 
+### CI's rows, and thirteen predictions that came back exact
+
+Every one of the thirteen work rows landed on the container's delta applied to
+the previous golden, to the instruction — the whole file, not a subset. `emitted`,
+`machine code` and all eleven counter veins agreed with the goldens regenerated
+here without a round of their own.
+
+CI drew **family0x19-model0x1** on the emptied chip table, which is the chip
+that counted the previous binary:
+
+    family0x19-model0x1   41,378,194   old binary
+    family0x19-model0x1   41,377,644   this binary
+
+Same silicon, both binaries, so the fall of **550** is attributable without
+waiting for a second chip. `kanso check lib/json` emits nothing and runs no
+beat loop, so what moved is layout, for the thirteenth time on this vein.
+**WELFARE 74.21933255238363 -> 74.21937425493788**, a second `--set` with the
+compile row's own reason.
+
 `bench/text_golden.txt` moves on all twelve rows, most of them down —
 escapebench -32, readbench -16, jsonbench +16, pendbench +64. The check's eight
 instructions are gone from one place and present in another, and where the
