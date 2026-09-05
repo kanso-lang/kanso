@@ -846,7 +846,9 @@ rows_c1p = text/concat rows_c1t [published_numbers]
 
 rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
-rows_c1c = text/concat rows_c1b [rendering negative_sign small_record short_append behaviour]
+rows_c1c0 = text/concat rows_c1b [rendering negative_sign small_record]
+
+rows_c1c = text/concat rows_c1c0 [short_append behaviour]
 
 rows_c1d = text/concat rows_c1c [numeric effects]
 
