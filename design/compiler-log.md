@@ -3514,8 +3514,20 @@ not a pin anybody would read, which is why the new fixture exists. No new
 ratchet row — `mem_shapes` already proves this gate catches a mutation.
 
 **On the instruction rows above.** The container is one glibc revision off the
-runner and may not record this vein, so those are its own A/B deltas applied to
+runner and may not record this vein, so those were its own A/B deltas applied to
 CI's landed values: it measured 4,921,267,372 -> 4,893,407,772 and 26,642,513 ->
 26,572,864 on its own pair of builds, the fixed 340 being the exec-path offset
-the golden's header warns about. CI's sitting is the record and corrects them if
-they differ.
+the golden's header warns about. CI's sitting is the record, and it landed on
+all three predictions TO THE INSTRUCTION -- 4,893,408,112, 4,883,172,114 and
+26,573,204 -- which is the fourth consecutive change the two hosts have agreed
+exactly on. The `.text` rows matched too.
+
+**ONE COUNTER WORSENS, and it is the compiler reading itself.**
+`compile_instructions` lands on **41,378,464**, a rise of 1,084 from 41,377,380.
+`src/runtime.c` is `include_str!`'d into the compiler by `src/main.rs`, so every
+line added to it is a line the compiler carries and writes out for clang, and
+this change added a nine-line comment to `k_b_entries` on top of the code. 1,084
+instructions to explain why a pair goes on the stack, against 27,859,600 saved
+at run time. The container cannot compare this vein -- it refuses on three of
+the six compile gates -- so the value above is CI's, taken from the job log and
+written in rather than measured here.
