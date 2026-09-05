@@ -648,6 +648,18 @@ small_record = row
   (breaking "a_small_record_drops_its_last_field")
   release
 
+# Sixteen bytes or fewer are appended by a pair of overlapping loads now, and
+# the two stores in that pair differ in one character. Writing the head word
+# where the tail word belongs corrupts every append of nine to sixteen bytes
+# and nothing else, which is the size of an ordinary object key.
+short_append = row
+  "a short append writing its head word twice"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_short_append_copies_its_head_twice")
+  release
+
 behaviour = row
   "a legal call answered differently at an edge, with nothing complaining"
   true
@@ -834,7 +846,7 @@ rows_c1p = text/concat rows_c1t [published_numbers]
 
 rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
-rows_c1c = text/concat rows_c1b [rendering negative_sign small_record behaviour]
+rows_c1c = text/concat rows_c1b [rendering negative_sign small_record short_append behaviour]
 
 rows_c1d = text/concat rows_c1c [numeric effects]
 

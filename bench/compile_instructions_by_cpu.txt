@@ -1239,5 +1239,15 @@
 # side of the collapse question filed in design/pending-gavels.md.
 #
 # CI supplies the first row of the next series.
-family0x19-model0x1 41379381
-family0x6-model0xcf 41379381
+#
+# 2026-09-05 (eleventh), and the reason is the same one with a different file.
+# The emitted string append copies sixteen bytes or fewer inline, which is an
+# edit to src/codegen.rs -- the compiler's own source, so the binary is a
+# different binary and both rows on the table counted the one before it.
+# They were family0x19-model0x1 and family0x6-model0xcf, both reading
+# 41,379,381 on the binary kanso#1258 landed: two chips, two vendors, one
+# number, learned over two CI rounds. Removed rather than carried forward, for
+# the reason this header has now given eleven times -- a value counted against
+# the old binary is worse than no value.
+#
+# CI supplies the first row of the next series.

@@ -109,6 +109,6 @@
 # same shape again — +1 define, +2 calls, +1 branch, +35 lines per module. The
 # emitter writes it whether the program calls the builtin or not.
 defines=178
-calls=1835
-branches=1163
-lines=12134
+calls=1836
+branches=1171
+lines=12188

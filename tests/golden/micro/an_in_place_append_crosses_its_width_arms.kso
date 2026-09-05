@@ -1,0 +1,46 @@
+# The in-place append's string arm copies sixteen bytes or fewer as a pair of
+# overlapping loads rather than a call into memcpy, and which pair it uses
+# depends on the length: eight-byte words above seven, four-byte words above
+# three, and three single bytes below that. Four arms, and its sibling
+# an_in_place_append_takes_a_whole_string reaches only two of them — everything
+# it appends is one or five bytes long.
+#
+# So the widths here are chosen to land one on each side of every boundary,
+# with a seventeen and a twenty-four to keep the call arm live: 1, 3, 5, 8, 9,
+# 12, 16, 17, 24, and a byte through the same call site so the byte arm keeps
+# answering while the string arms are exercised.
+#
+# The sum matters more than the length, because every one of these mutations
+# copies the right NUMBER of bytes and the wrong ones. Writing the head word
+# twice — the two stores in the eight-byte pair differ in one character —
+# leaves the length at 9,602 and moves the sum by 41,192, from 697,194 to
+# 656,002, with the length not moving at all.
+import "std/text"
+
+fn widened acc
+  a1 = text/append acc "z"
+  a3 = text/append a1 "abc"
+  a5 = text/append a3 "-mid-"
+  a8 = text/append a5 "01234567"
+  a9 = text/append a8 "ABCDEFGHI"
+  a12 = text/append a9 "0123456789ab"
+  a16 = text/append a12 "0123456789abcdef"
+  a17 = text/append a16 "0123456789abcdefg"
+  text/append a17 "0123456789abcdefghijklmn"
+
+fn grown acc 0
+  acc
+
+fn grown acc n
+  grown (text/append (widened acc) (65 + n % 26)) (n - 1)
+
+fn summed acc _ 0
+  acc
+
+fn summed acc cs i
+  summed (acc + cs[i]!) cs (i - 1)
+
+pub play =
+  seed = text/append (text/bytes "!") 33
+  built = grown seed 100
+  print "{length built} {summed 0 built (length built)}"
