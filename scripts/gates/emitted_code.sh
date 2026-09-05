@@ -10,9 +10,16 @@
 # at a time, and nothing was watching the dimension that moved. A diffuse
 # regression can only be caught where it happens.
 set -e
+# Comment lines are stripped before the call count, and only before that one.
+# `defines` anchors at ^define and `branches` at two spaces, so neither can see
+# a comment; `calls` was a bare substring, and the prelude's prose carried eight
+# of the word — "a call into glibc's memcpy", "a real call on every `if`" — into
+# every program's count. Reworded prose moved the counter with the emitted code
+# byte-identical, which is the one thing this gate exists to rule out.
+strip_comments() { grep -v '^;' "$1"; }
 {
   grep -c '^define' jsonbench.ll | sed 's/^/defines=/'
-  grep -c 'call ' jsonbench.ll | sed 's/^/calls=/'
+  strip_comments jsonbench.ll | grep -c 'call ' | sed 's/^/calls=/'
   grep -c '^  br \|^  switch' jsonbench.ll | sed 's/^/branches=/'
   wc -l < jsonbench.ll | tr -d ' ' | sed 's/^/lines=/'
 } > emitted.txt
@@ -26,7 +33,7 @@ grep -v '^#' bench/emitted_golden.txt > emitted_want.txt
 for b in encodebench oneshot basket widebench deepbench escapebench pendbench scanbench \
          indexbench digestbench readbench; do
   printf '%s defines=%s calls=%s branches=%s lines=%s\n' "$b" \
-    "$(grep -c '^define' $b.ll)" "$(grep -c 'call ' $b.ll)" \
+    "$(grep -c '^define' $b.ll)" "$(strip_comments $b.ll | grep -c 'call ')" \
     "$(grep -c '^  br \|^  switch' $b.ll)" "$(wc -l < $b.ll | tr -d ' ')"
 done > emitted_others.txt
 grep -v '^#' bench/emitted_golden_others.txt > emitted_others_want.txt

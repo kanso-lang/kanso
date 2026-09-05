@@ -51,8 +51,17 @@ const MODULES: &[&str] = &["module"];
 /// Counts that move only when the emitter's output does.
 fn shape(ir: &str) -> (usize, usize, usize, usize) {
     let lines = ir.lines().filter(|l| !l.trim().is_empty()).count();
-    let calls = ir.matches(" call ").count();
-    let branches = ir.matches("br i1 ").count();
+    // Comment lines are dropped before anything is counted. `calls` and
+    // `branches` are substring searches, and the prelude's comments use the
+    // word "call" eight times: rewording one of them moved this column with
+    // the emitted text byte-identical, which is the one thing the column is
+    // here to rule out. scripts/gates/emitted_code.sh reads the .ll the same
+    // way, and tests/the_emitted_call_counter_ignores_comments.rs pins it
+    // there.
+    let code: String =
+        ir.lines().filter(|l| !l.starts_with(';')).map(|l| format!("{l}\n")).collect();
+    let calls = code.matches(" call ").count();
+    let branches = code.matches("br i1 ").count();
     let defines = ir.lines().filter(|l| l.starts_with("define")).count();
     (lines, calls, branches, defines)
 }

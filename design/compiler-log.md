@@ -3995,3 +3995,77 @@ first time the benefit has been written down with a number beside it.
 **WELFARE 74.15975334184456 -> 74.18425551910869**, a rise of 0.02450218,
 `--set` with its reason. The page's `compile.compile_instructions` span moves
 with the golden; `golden_prose` reads 0 drifted.
+
+## 2026-09-05 (seventeenth) — the compile vein the ladder moved, and eight calls that were prose
+
+Two things, both found by the macos/arm job going red on the entry above while
+every runtime counter agreed.
+
+### The vein the sweeps do not read
+
+`bench/compile_golden.txt` and `bench/compile_golden_modules.txt` are read by
+`tests/compile_cost.rs` and by nothing else. `all_counters.sh` walks the eleven
+runtime veins and `all_compile.sh` walks the six compile GATES; this pair is a
+spec, so neither sweep touches it, and the append ladder moved it:
+
+    recursion    lines 890 -> 944   branches 55 -> 59
+    dispatch     lines 886 -> 940   branches 54 -> 58
+    guards       lines 883 -> 937   branches 55 -> 59
+    records      lines 934 -> 988   branches 58 -> 62
+    build_block  lines 859 -> 913   branches 50 -> 54
+    module       lines 4,970 -> 5,024   branches 420 -> 424
+
+The same 54 lines and the same four conditional branches in every sample,
+including the three that never append a byte: the emitter writes the ladder into
+each module's prelude and the linker drops it where nothing calls it. That is
+the same shape `emitted_lines` moved by, measured on a different corpus. `rounds`
+and `visits` do not move, and `defines` does not either — the ladder is blocks
+inside a function that already existed.
+
+Summed the way the trend gate reads them, `lines` lands on 4,722 and `branches`
+on 292 across the five samples; `module_lines` lands on 5,024 and
+`module_branches` on 424. All four rise, and they are the price of the append
+ladder's 1.06% off encodebench in the entry above — the ladder is written once
+per module whether the module appends anything or not.
+
+The gap is worth naming because CLAUDE.md already warns that the counters sweep
+does not read the compile veins, and this is a third set that neither sweep
+reads. A run of `cargo test --release` catches it. CI did, a round late, on the
+one job whose meta targets run.
+
+### Eight calls that were never emitted
+
+Both counters read `calls` as a substring search over the whole IR text —
+`grep -c 'call '` in `scripts/gates/emitted_code.sh`, `ir.matches(" call ")` in
+`tests/compile_cost.rs` — and the prelude is commented. "a call into glibc's
+memcpy", "a real call on every `if` condition and constructor", "each paying a
+call into the runtime and a second call into the": the word appears eight times
+in comment lines and nine times as an occurrence, because one of those lines
+uses it twice.
+
+I found this by rewording one comment and watching `calls` move by one with the
+emitted code byte-identical. A counter that moves when prose moves cannot say
+what it is there to say, so both counters drop comment lines before counting:
+
+    emitted (decoder)   calls 1,835 -> 1,828     (-7: one prose line gained
+                                                  by the ladder, eight dropped)
+    emitted (each of
+    the eleven others)  calls -7, e.g. encodebench 1,694 -> 1,687
+    compile samples     calls -8, e.g. recursion 48 -> 40, module 769 -> 761
+
+The two columns fall by different amounts on the same change because the gate
+counts LINES and the spec counts OCCURRENCES, and one comment line carries the
+word twice. No emitted instruction changed; `defines`, `branches` and `lines`
+are untouched by the fix, since those three already anchor at the start of a
+line and never could see a comment.
+
+`tests/the_emitted_call_counter_ignores_comments.rs` pins it. The spec lifts the
+stripper and the counting pipeline out of the gate script rather than restating
+them, builds a two-comment one-call module, and asserts `calls=1`. Watched red
+with the stripper replaced by `cat`: it read `calls=3`, the one real call plus
+two comments. Restored, green.
+
+The ratchet corpus has a row for a counter that goes blind. This is the other
+direction — a counter reading high on text that is not code — and the eight it
+was reading are constant, so no gate ever fired. It came out only because a
+change touched the prose beside the code.

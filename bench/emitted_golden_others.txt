@@ -81,14 +81,24 @@
 # 2026-09-05 (fourth): every row gains 1 define, 2 calls, 1 branch and 35
 # lines for `k_b_find2_below_fast`. Nine of the eleven never call it and the
 # linker drops it from all nine: bench/text_golden.txt moves on three rows.
-encodebench defines=178 calls=1695 branches=1020 lines=11057
-oneshot defines=178 calls=1830 branches=1162 lines=12130
-basket defines=137 calls=1340 branches=763 lines=7771
-widebench defines=194 calls=1914 branches=1119 lines=12081
-deepbench defines=111 calls=860 branches=557 lines=5649
-escapebench defines=46 calls=125 branches=96 lines=1350
-pendbench defines=125 calls=1257 branches=648 lines=6755
-scanbench defines=326 calls=3737 branches=2232 lines=20503
-indexbench defines=52 calls=185 branches=123 lines=1736
-digestbench defines=185 calls=1613 branches=904 lines=9834
-readbench defines=55 calls=183 branches=133 lines=1926
+#
+# 2026-09-05 (fifth): every row gains 8 branches and 54 lines — the in-place
+# append's copy became a width ladder in the prelude, written into every module
+# whether it appends anything or not. Four of the twelve .text rows grew; the
+# linker drops the arm from the other eight.
+#
+# 2026-09-05 (sixth): every row loses eight calls and nothing else moves. The
+# counter greps the whole .ll for `call `, and the prelude's comments use the
+# word eight times; the gate strips comment lines before counting now. No
+# emitted code changed.
+encodebench defines=178 calls=1687 branches=1020 lines=11057
+oneshot defines=178 calls=1822 branches=1162 lines=12130
+basket defines=137 calls=1332 branches=763 lines=7771
+widebench defines=194 calls=1906 branches=1119 lines=12081
+deepbench defines=111 calls=852 branches=557 lines=5649
+escapebench defines=46 calls=117 branches=96 lines=1350
+pendbench defines=125 calls=1249 branches=648 lines=6755
+scanbench defines=326 calls=3729 branches=2232 lines=20503
+indexbench defines=52 calls=177 branches=123 lines=1736
+digestbench defines=185 calls=1605 branches=904 lines=9834
+readbench defines=55 calls=175 branches=133 lines=1926
