@@ -1,0 +1,4 @@
+ints value: lt ge
+ints tail: yes no
+texts: same different
+records: smaller

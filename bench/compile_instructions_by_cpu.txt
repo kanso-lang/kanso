@@ -1085,7 +1085,31 @@
 #
 # The cost of not making it is this branch: two CI rounds, one to learn the
 # chip and one to record it, on a change that cannot touch this number.
+#
+# 2026-09-05 (tenth), the compiler moved and the re-sitting began. kanso#1251
+# changes codegen.rs, so all four rows went stale at once. CI drew
+# family0x19-model0x1 and counted 41,380,022 against the 41,379,503 the four
+# had agreed on: a rise of 519, or 0.00125%.
+#
+# `kanso check lib/json` does not emit LLVM IR, so the front end runs no line
+# this change touched. What moved is the compiler's own layout: codegen.rs
+# gained a routine, and the addresses everything else sits at moved with it.
+# That is the artifact this repo has measured before -- allocas moving clang's
+# inlining budget inside untouched functions -- and 519 instructions is its
+# size here.
+#
+# The other three rows are stale and are NOT re-sat here, because nothing has
+# measured them on this binary. CI draws one chip a run, so they come back one
+# at a time. The golden's bare line tracks the FIRST row, which is one of the
+# stale three, so it does not move yet either.
+#
+# The second run drew family0x6-model0xcf -- Emerald Rapids, a different vendor
+# and a different microarchitecture -- and read 41,380,022, which is what
+# family0x19-model0x1 read. So the new binary opens the way the old one closed:
+# two chips agreeing to the instruction. That is the fifth agreement across two
+# binaries, and it is what the collapse argument in this file's header has been
+# waiting for evidence of. Two rows are still stale.
 family0x19-model0x11 41379503
-family0x19-model0x1 41379503
-family0x6-model0xcf 41379503
+family0x19-model0x1 41380022
+family0x6-model0xcf 41380022
 family0x6-model0x6a 41379503

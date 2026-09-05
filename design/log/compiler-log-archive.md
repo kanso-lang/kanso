@@ -43292,3 +43292,41 @@ a guard, because a `--toggle-collect` whose function is missing yields
 moving; and a welfare re-baseline in the same commit, because the number falls
 by about 1% without a single instruction of work being removed, and banking that
 as a win would be recording an instrument change as an improvement.
+
+## 2026-09-03 — gavel: the bimodal row is made deterministic, not excused
+
+On "The compile-instructions row is bimodal" (#265), Clay declined
+both the pinned pair and an exclusion of glibc from the count: "if
+changes to the compiler can interact with glibc in a way that means
+generally more/less work, which the 'compiler's own instructions'
+measure would be blind to, then we need a way to include glibc's
+instructions but make them consistent, like how rspec can run with a
+seed... you run some instruction at the top to clear out the glibc
+state in test mode. this is crucial to be specific about."
+
+So the ruling is option 1 with the term named. The measured signature
+— five consecutive runs in one container agree exactly, two runners
+with the same binary and chip disagree — says the randomness is fixed
+at container birth, not per exec. Two suspects fit that shape and
+both are cheap to test:
+
+1. **Directory read order.** `kanso check lib/json` reads a source
+   directory; ext4's readdir order is a hash order seeded per
+   filesystem instance, so a fresh runner disk orders the same files
+   differently, consistently within one VM. If the loader does not
+   sort entries before compiling them, the allocation sequence — and
+   so the heap layout, and so the alignment paths in `_int_malloc`
+   and `memcmp` — differs per VM. This is a build-determinism defect
+   independent of the vein: the compiler's work must never depend on
+   inode hashes. Fix: sort in the loader.
+2. **ASLR.** Heap base and mmap addresses randomize per exec unless
+   disabled; `setarch -R` around the measurement removes the term.
+
+Environment (env -i), glibc tunables and glibc revision are already
+pinned. Apply both fixes, measure on several fresh runners; if the two
+modes collapse to one, glibc stays in the count under a single exact
+pin — no pair, no band, no exclusion. Only a residual that survives
+both reopens the question, and then the fallback is the pinned pair,
+never blindness. The entry leaves Blocking with this commit; the
+rustc-patch rider is the implementer's (the pin did its job;
+regenerate with a sentence).

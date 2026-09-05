@@ -136,15 +136,36 @@
 # The two rows the hosts disagree on are exactly the two whose rise is
 # layout: deepbench by 4,325 and pendbench by 27. A layout effect is a
 # property of the binary the host built, so that is the expected shape.
-jsonbench 1783183673
-encodebench 5527056676
-oneshot 28533505
-basket 39878996
-widebench 57839754
-deepbench 716506831
+# 2026-09-05 (kanso#1251): a comparison feeding an `if` branches on its own i1
+# instead of building a tagged KValue for a phi to merge and k_not_failure and
+# k_truthy to take apart. EVERY ROW FALLS AND NONE RISES, both sides measured
+# by CI:
+#
+#   digestbench  80,559,329 ->    77,290,591  -3,268,738  -4.0576%
+#   encodebench  5,527,056,676 -> 5,322,691,304  -204,365,372  -3.6975%
+#   oneshot      28,533,505 ->    27,733,120    -800,385  -2.8051%
+#   pendbench    700,529,602 ->  681,319,796 -19,209,806  -2.7422%
+#   jsonbench    1,783,183,673 -> 1,745,058,173 -38,125,500  -2.1381%
+#   indexbench   4,792,124 ->      4,692,123    -100,001  -2.0868%
+#   widebench    57,839,754 ->    57,201,224    -638,530  -1.1040%
+#   scanbench    1,406,247,707 -> 1,395,728,077 -10,519,630  -0.7481%
+#   basket       39,878,996 ->    39,737,538    -141,458  -0.3547%
+#   deepbench    716,506,831 ->  714,674,831  -1,832,000  -0.2557%
+#
+# escapebench 130,170,757 and readbench 2,038,397,546 do not move by a single
+# instruction. Neither has a comparison in a hot loop -- one tagged comparison
+# in escapebench's whole emitted IR, two in readbench's -- so a change that
+# only touches comparisons reaches neither, and that they are EXACTLY still is
+# the check that the other ten falls are the change rather than the weather.
+jsonbench 1745058173
+encodebench 5322691304
+oneshot 27733120
+basket 39737538
+widebench 57201224
+deepbench 714674831
 escapebench 130170757
-pendbench 700529602
-indexbench 4792124
-scanbench 1406247707
-digestbench 80559329
+pendbench 681319796
+indexbench 4692123
+scanbench 1395728077
+digestbench 77290591
 readbench 2038397546

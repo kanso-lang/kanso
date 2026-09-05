@@ -6,6 +6,13 @@ use crate::name::Name;
 use std::fmt::Write as _;
 
 const K_TRUE: i64 = 2;
+
+/// What an `if`'s condition left behind: the blocks that branched straight to
+/// the merge because the condition was a failure, each with the value it
+/// carried. A comparison on two ints leaves none, which is the point.
+struct Cond {
+    failed: Vec<(String, String)>,
+}
 const K_FALSE: i64 = 3;
 const K_NONE: i64 = 4;
 const K_ERR: i64 = 5;
@@ -4108,26 +4115,13 @@ impl<'a> Backend<'a> {
             }
             if let Expr::Ident(name, _) = &**head {
                 if name == "if" && f.lookup(name).is_none() {
-                    // A condition the demand analysis deferred arrives as a
-                    // thunk here just as it does off the tail path; force
-                    // before testing, and `maybe_force` still emits nothing
-                    // where the set proves there is no thunk.
-                    let cond = self.emit_expr(f, &args[0])?;
-                    let cond = self.maybe_force(f, cond);
-                    let ok = inline_not_failure(f, &cond);
-                    let check = f.label();
-                    let bail = f.label();
-                    f.line(&format!("br i1 {ok}, label %{check}, label %{bail}"));
-                    f.start_block(&bail);
-                    self.emit_ret(f, &cond);
-                    f.start_block(&check);
-                    let tv = f.tmp();
-                    f.line(&format!("{tv} = call i64 @k_truthy(%KValue {cond})"));
-                    let tb = f.tmp();
-                    f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
+                    // In tail position a failing condition returns rather than
+                    // joining a phi, which is the whole difference from the
+                    // value form; `emit_cond` takes no merge label and emits
+                    // the return itself.
                     let then_label = f.label();
                     let else_label = f.label();
-                    f.line(&format!("br i1 {tb}, label %{then_label}, label %{else_label}"));
+                    self.emit_cond(f, &args[0], &then_label, &else_label, None)?;
                     f.start_block(&then_label);
                     self.emit_tail(f, &args[1])?;
                     f.start_block(&else_label);
@@ -4286,6 +4280,164 @@ impl<'a> Backend<'a> {
         let value = self.emit_expr(f, expr)?;
         self.emit_ret(f, &value);
         Ok(())
+    }
+
+    /// A condition is asked a question, not read for a value, and a
+    /// comparison already knows the answer as an i1 before it builds anything.
+    ///
+    /// The value form costs eleven instructions where two would do. `b < 32`
+    /// in the json escape path emits `icmp slt` and then `select` on it to
+    /// build a KValue tagged 2 or 3, which a phi merges with `k_cmp`'s answer
+    /// from the guarded slow arm, and the `if` then calls `k_not_failure` and
+    /// `k_truthy` on the phi and branches on THAT. LLVM folds the pair away
+    /// where the select reaches the branch directly; through the phi it
+    /// cannot, because `k_cmp` may answer with a failure. So `setl` becomes a
+    /// tag and two instructions later the tag is compared back. Measured on
+    /// that one site: 108,174,000 instructions where 19,668,000 would do,
+    /// 1.60% of encodebench.
+    ///
+    /// So the fast arm branches on its own i1 and never builds a value. The
+    /// slow arm is unchanged — it calls the runtime, tests for a failure, asks
+    /// whether the answer is true, and the failure it may carry is one more
+    /// arm of the `if`'s phi. A condition that is not a comparison this can
+    /// fuse is emitted as a value and tested the way it always was.
+    fn emit_cond(
+        &mut self,
+        f: &mut FnEmit,
+        cond: &Expr,
+        then_label: &str,
+        else_label: &str,
+        merge: Option<&str>,
+    ) -> Result<Cond, String> {
+        if let Expr::BinOp { op, lhs, rhs, span } = cond {
+            if matches!(*op, "==" | "!=" | "<" | "<=" | ">" | ">=") {
+                let a = self.emit_expr(f, lhs)?;
+                let a = self.maybe_force(f, a);
+                let b = self.emit_expr(f, rhs)?;
+                let b = self.maybe_force(f, b);
+                let a = self.as_value(f, &a);
+                let b = self.as_value(f, &b);
+                // A record on either side dispatches to the operator's user
+                // arms, which answer with whatever the arm returns rather than
+                // a boolean, so that condition is a value like any other.
+                let armable = self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2);
+                let routed = armable && (f.set_of(&a) | f.set_of(&b)) & REC != 0;
+                if !routed {
+                    return Ok(
+                        self.emit_cmp_branch(f, op, &a, &b, *span, then_label, else_label, merge)
+                    );
+                }
+                let v = self.emit_binop(f, op, &a, &b, *span)?;
+                return Ok(self.test_cond_value(f, v, then_label, else_label, merge));
+            }
+        }
+        // A condition the demand analysis deferred arrives as a thunk, and
+        // asking a thunk whether it is true reads the thunk rather than the
+        // answer. Force before testing: `maybe_force` emits nothing where the
+        // set proves there is no thunk, so a strict condition is unchanged.
+        let v = self.emit_expr(f, cond)?;
+        let v = self.maybe_force(f, v);
+        Ok(self.test_cond_value(f, v, then_label, else_label, merge))
+    }
+
+    /// The value form: is it a failure, is it true, branch. The failure leaves
+    /// by the `if`'s merge carrying the condition itself, which is what the
+    /// language says an `if` over a failure answers.
+    fn test_cond_value(
+        &mut self,
+        f: &mut FnEmit,
+        v: String,
+        then_label: &str,
+        else_label: &str,
+        merge: Option<&str>,
+    ) -> Cond {
+        let ok = inline_not_failure(f, &v);
+        let check = f.label();
+        let failed = match merge {
+            Some(merge) => {
+                let fail_from = f.cur_label.clone();
+                f.line(&format!("br i1 {ok}, label %{check}, label %{merge}"));
+                vec![(v.clone(), fail_from)]
+            }
+            None => {
+                let bail = f.label();
+                f.line(&format!("br i1 {ok}, label %{check}, label %{bail}"));
+                f.start_block(&bail);
+                self.emit_ret(f, &v);
+                Vec::new()
+            }
+        };
+        f.start_block(&check);
+        let tv = f.tmp();
+        f.line(&format!("{tv} = call i64 @k_truthy(%KValue {v})"));
+        let tb = f.tmp();
+        f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
+        f.line(&format!("br i1 {tb}, label %{then_label}, label %{else_label}"));
+        Cond { failed }
+    }
+
+    /// The guarded comparison, branching instead of answering. Two ints take
+    /// the icmp straight to the branch; anything else goes to the runtime and
+    /// is tested as a value.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_cmp_branch(
+        &mut self,
+        f: &mut FnEmit,
+        op: &str,
+        a: &str,
+        b: &str,
+        span: Span,
+        then_label: &str,
+        else_label: &str,
+        merge: Option<&str>,
+    ) -> Cond {
+        let cmp = match op {
+            "==" => "eq",
+            "!=" => "ne",
+            "<" => "slt",
+            "<=" => "sle",
+            ">" => "sgt",
+            _ => "sge",
+        };
+        if f.set_of(a) == INT && f.set_of(b) == INT {
+            let pa = inline_payload(f, a);
+            let pb = inline_payload(f, b);
+            let c = f.tmp();
+            f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+            f.line(&format!("br i1 {c}, label %{then_label}, label %{else_label}"));
+            return Cond { failed: Vec::new() };
+        }
+        let code = match op {
+            "==" => 0,
+            "!=" => 1,
+            "<" => 2,
+            "<=" => 3,
+            ">" => 4,
+            _ => 5,
+        };
+        let _ = span;
+        let ta = inline_tag(f, a);
+        let tb = inline_tag(f, b);
+        let ia = f.tmp();
+        f.line(&format!("{ia} = icmp eq i64 {ta}, 0"));
+        let ib = f.tmp();
+        f.line(&format!("{ib} = icmp eq i64 {tb}, 0"));
+        let both = f.tmp();
+        f.line(&format!("{both} = and i1 {ia}, {ib}"));
+        let fast = f.label();
+        let slow = f.label();
+        f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
+        f.start_block(&fast);
+        let pa = inline_payload(f, a);
+        let pb = inline_payload(f, b);
+        let c = f.tmp();
+        f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+        f.line(&format!("br i1 {c}, label %{then_label}, label %{else_label}"));
+        f.start_block(&slow);
+        let sv = f.tmp();
+        f.line(&format!("{sv} = call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 {code})"));
+        f.record(&sv, infer::BOOL | FAIL);
+        self.test_cond_value(f, sv, then_label, else_label, merge)
     }
 
     fn emit_binop(
@@ -4867,29 +5019,10 @@ impl<'a> Backend<'a> {
             unreachable!("non-ident heads take the computed path");
         };
         if name == "if" {
-            // A condition the demand analysis deferred arrives as a thunk, and
-            // asking a thunk whether it is true reads the thunk rather than the
-            // answer. Force before testing: `maybe_force` emits nothing where
-            // the set proves there is no thunk, so a strict condition is
-            // unchanged.
-            let cond = self.emit_expr(f, &args[0])?;
-            let cond = self.maybe_force(f, cond);
-            let nf = f.tmp();
-            f.line(&format!("{nf} = call i64 @k_not_failure(%KValue {cond})"));
-            let ok = f.tmp();
-            f.line(&format!("{ok} = icmp ne i64 {nf}, 0"));
-            let check = f.label();
-            let merge = f.label();
-            let fail_from = f.cur_label.clone();
-            f.line(&format!("br i1 {ok}, label %{check}, label %{merge}"));
-            f.start_block(&check);
-            let tv = f.tmp();
-            f.line(&format!("{tv} = call i64 @k_truthy(%KValue {cond})"));
-            let tb = f.tmp();
-            f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
             let then_label = f.label();
             let else_label = f.label();
-            f.line(&format!("br i1 {tb}, label %{then_label}, label %{else_label}"));
+            let merge = f.label();
+            let cond = self.emit_cond(f, &args[0], &then_label, &else_label, Some(&merge))?;
             f.start_block(&then_label);
             let then_value = self.emit_expr(f, &args[1])?;
             let then_from = f.cur_label.clone();
@@ -4899,12 +5032,18 @@ impl<'a> Backend<'a> {
             let else_from = f.cur_label.clone();
             f.line(&format!("br label %{merge}"));
             f.start_block(&merge);
+            let mut arms = vec![
+                format!("[ {then_value}, %{then_from} ]"),
+                format!("[ {else_value}, %{else_from} ]"),
+            ];
+            let mut fail_set = 0;
+            for (v, from) in &cond.failed {
+                arms.push(format!("[ {v}, %{from} ]"));
+                fail_set |= f.set_of(v) & FAIL;
+            }
             let t = f.tmp();
-            f.line(&format!(
-                "{t} = phi %KValue [ {cond}, %{fail_from} ], [ {then_value}, %{then_from} ], \
-                 [ {else_value}, %{else_from} ]"
-            ));
-            f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | (f.set_of(&cond) & FAIL));
+            f.line(&format!("{t} = phi %KValue {}", arms.join(", ")));
+            f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | fail_set);
             return Ok(t);
         }
         // utf8 of a slice reads a byte view for a pointer and a length and
