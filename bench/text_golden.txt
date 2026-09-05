@@ -495,15 +495,37 @@
 # 2026-09-05 (fourth): encodebench, oneshot and widebench each grow 224 bytes
 # for the `find2_below` twin and the other nine rows do not move at all,
 # because their binaries are byte-identical to the ones before it.
-jsonbench text=92738
-encodebench text=113634
-oneshot text=115842
-basket text=105874
-widebench text=118498
-deepbench text=70978
-escapebench text=52402
-pendbench text=85346
-indexbench text=55618
-scanbench text=153522
-digestbench text=105426
-readbench text=51474
+#
+# 2026-09-05: livebench joins, at 116,290 bytes. It was built and weighed for
+# a day with nothing watching its machine code, which is the third time this
+# list has gone stale behind the corpus — scanbench and digestbench were the
+# first two. The row is a new measurement rather than a move, and no other
+# row changes with it.
+#
+#
+# 2026-09-05 (the digit pair table): all thirteen rows rise by EXACTLY 112
+# bytes. ryu_d2d writes its digits two at a time out of a 201-byte table now
+# rather than one at a time through a division and a reversal, and the table
+# itself is rodata; the 112 is the extraction code. Thirteen identical deltas
+# is what a change entirely inside one runtime helper looks like from here.
+#
+#
+# 2026-09-05 (the literal's fast door): all thirteen rows grow, from 64 bytes
+# on escapebench to 2,304 on scanbench, in proportion to how many string
+# literal sites each program has. That is the price of the door, and the
+# instruction vein records what it bought: twelve rows fall, widebench by
+# 1.85% and three more by about one per cent.
+#
+jsonbench text=94066
+encodebench text=115522
+oneshot text=118050
+basket text=107410
+widebench text=120242
+deepbench text=71234
+escapebench text=52578
+pendbench text=85938
+indexbench text=55890
+scanbench text=155938
+digestbench text=105794
+readbench text=51826
+livebench text=118498

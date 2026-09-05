@@ -166,6 +166,36 @@ contradiction above is the thing to rule on first.** If the log's twelfth entry
 is right, a within-binary pair has been seen once and the mechanism has a
 premise. If the gate's comment is right, it never has.
 
+**THE THIRTEENTH SERIES, 2026-09-05, and it argues for one value.** The table
+was emptied when this branch moved the compiler binary, and CI has refilled
+three rows in three rounds:
+
+    family0x19-model0x11   41,378,764   AMD Zen 4
+    family0x6-model0xcf    41,378,764   Intel Emerald Rapids
+    family0x19-model0x1    41,378,764   AMD Zen 3
+
+Two vendors, three independent builds, one number. With the twelfth series'
+five keys on 41,377,644 that is eight within-binary sittings across two
+binaries
+agreeing exactly and none disagreeing, which is the count this entry already
+reported and is now larger. Nothing since the pair was introduced has produced
+a second within-binary value.
+
+**And one candidate explanation for the pair's residual is gone.** The 508 the
+pair exists to hold was attributed to two runs of one binary on one chip. The
+build is byte-reproducible: there is no `build.rs`, nothing under `docs/` or
+`design/` is `include_str!`'d, no `env!` or git state reaches the binary, and a
+forced rebuild of every `.rs` here produced the same sha256. So the two runs
+that read 41,831,767 and 41,832,275 ran the same bytes, and whatever separated
+them was in the process rather than the program. That does not settle what it
+was — `setarch -R` was on for one and not the other, which this entry notes —
+but it removes "a rebuild made a different binary" from the list.
+
+**The cost side, re-measured.** Three rounds for three rows on this binary,
+against the twelfth series' five. The ceiling is still the pool's size and the pool is
+still not a fixed set, so five remains the floor of the estimate rather than
+its value.
+
 ### Should the welfare index carry a term for machine-code size?
 
 **Searched:** design/compiler-log.md and the archive carry the weights gavel
@@ -286,6 +316,68 @@ failure is spelled — that is ruled (three-forms gavel, 2026-08-26) and
 built on all three engines (kanso#1116), so designing it now cannot mean
 designing it twice. `rescue` is the word a matcher's own failure door
 would use.
+
+
+### Does a benchmark that enters at its dimension's standing enter unimprovable?
+
+**Searched:** the live log's entry of 2026-09-05 (nineteenth) carries the
+measurement and the arithmetic; the entry of the same date that added livebench
+records the granted-baseline rule and this change being held for it; the archive
+carries the satiation design (`r / (r + satiation)`, compile 0.5, runtime 2.0)
+and no entry asking this; `design/*.md` carries none. Item 15 of
+docs/compiler.html section 06 carries the declined change.
+
+**Why it is asked.** A change to `lib/json` that skips the clean run in front of
+a string's first escape falls livebench 3.08% and oneshot 1.46%, with every
+engine byte-identical on output, and the objective declines it in all four
+shapes it was written in. Nothing about the individual terms is wrong. The sum
+is what it is, and the reason is a pair of properties of the model meeting:
+
+    the guarded run over the unguarded one
+      buys   17,635,200 runtime instructions on livebench
+      costs      40,902 compile instructions
+      and the index prefers the compile side, at 431 to 1
+
+`compile_instructions` satiates at 0.5 and sits near its baseline, where the
+curve is steepest. `live_instructions` satiates at 2.0 and entered the corpus
+that morning as a GRANTED BASELINE, at its dimension's standing — which puts
+*r* at 5.95 before anything has been improved, so a three per cent fall moves
+the term score by 0.0058.
+
+**The general shape.** Entering a benchmark at its dimension's standing is what
+makes adding one welfare-neutral, and that rule is right for the reason it was
+written: a benchmark entering at *r* = 1 would hand its first improver enormous
+leverage. The side effect is that a benchmark added late enters SATIATED, and
+the objective can then never pay much for improving it — which is the opposite
+of why it was added. livebench was added because nothing watched the shipped
+library's encode path; four days later the objective cannot see a three per cent
+win on that path.
+
+**What is NOT being asked.** Not to move the floor for this change: the change
+is reverted and stays reverted whatever the ruling. Not to reweigh compile cost;
+0.5 has a measurement behind it and this entry does not touch it.
+
+**The question is whether a granted baseline should be re-based once the
+benchmark has been in the corpus for a while** — and if so, on what. Three
+readings, none costed:
+
+1. LEAVE IT. The rule is simple and a benchmark's entry standing is a fact
+   about the day it entered. A late benchmark being cheap to improve is the
+   price of adding benchmarks without moving the number, and the per-counter
+   goldens still catch a regression on it either way.
+2. RE-BASE ON FIRST MEASUREMENT. A granted baseline holds only until the
+   benchmark's first real sitting, after which its baseline is that sitting.
+   This makes the term improvable and keeps entry neutral, and it is a one-time
+   ratchet rather than a recurring one.
+3. RE-BASE ON ENTRY TO THE DIMENSION. A benchmark's baseline is what the
+   dimension's OTHER members were when it entered, replayed onto it. Closest to
+   the current rule's intent and the most work to define.
+
+**RECOMMENDATION: 2, and it is not urgent.** It is the smallest change that
+makes the thing the benchmark was added to watch worth improving, and it is
+checkable — `bench/objective_sources.txt` already records which counters are
+granted. Nothing is blocked on it: the declined change is recorded on the page
+and the rest of the queue does not touch a granted term.
 
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)

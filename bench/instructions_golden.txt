@@ -157,16 +157,41 @@
 # in escapebench's whole emitted IR, two in readbench's -- so a change that
 # only touches comparisons reaches neither, and that they are EXACTLY still is
 # the check that the other ten falls are the change rather than the weather.
-jsonbench 1745056955
-encodebench 5218724822
-oneshot 27472680
-basket 38817037
-widebench 57105059
-deepbench 715116179
-escapebench 120585597
-pendbench 666111554
-indexbench 4692386
-scanbench 1395728266
-digestbench 77290402
-readbench 2038396069
-livebench 5208575100
+#
+# 2026-09-05 (the digit pair table): FOUR rows fall and NINE hold exactly
+# still. ryu_d2d wrote its shortest digits one at a time -- a 64-bit division
+# per digit into a scratch buffer, then a reversal -- and now takes the length
+# from a ladder and writes pairs out of a table straight into place.
+# encodebench 5,218,724,822 -> 5,150,924,022 (-67,800,800, -1.2992%) and
+# livebench falls by the SAME 67,800,800 (-1.3017%), which is the two
+# benchmarks running the same program on the same input. oneshot -169,502
+# (-0.6170%), widebench -45,263 (-0.0793%). The nine that hold render no
+# floats, and that they are EXACTLY still is the check that the four falls are
+# the change rather than the weather. No allocation counter moves, no emitted
+# line moves, and every .text row rises by exactly 112 bytes.
+#
+# 2026-09-05 (the literal's fast door): TWELVE rows fall and one rises by two
+# instructions. `k_str_lit` was a real extern call at every string-literal
+# evaluation -- 2,500,000 of them on encodebench alone -- to load a slot, test
+# whether it had been built, and hand it back. It gets the door treatment the
+# emitter already gives find2, slice and length: an alwaysinline shim that
+# reads the slot's tag and returns it, calling the runtime only the first time.
+# widebench -1.8506%, livebench -1.0910%, encodebench -1.0877%, deepbench
+# -1.0202%, oneshot -0.7312%, basket -0.6560%, jsonbench -0.5130%; pendbench,
+# scanbench, indexbench, digestbench and readbench move under a hundredth of a
+# per cent. escapebench rises by 2. No allocation counter moves. Every .text
+# row grows, by 64 bytes on escapebench to 2,304 on scanbench, in proportion to
+# how many literal sites each program has.
+jsonbench 1736104978
+encodebench 5094896927
+oneshot 27103536
+basket 38562384
+widebench 56003869
+deepbench 707820204
+escapebench 120585599
+pendbench 666093569
+indexbench 4692194
+scanbench 1395689898
+digestbench 77290245
+readbench 2038392076
+livebench 5084687524

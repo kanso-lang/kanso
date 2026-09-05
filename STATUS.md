@@ -272,7 +272,7 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Five questions wait in `design/pending-gavels.md`** — none blocking, five
+**Six questions wait in `design/pending-gavels.md`** — none blocking, six
 open — each with a recommendation. Counted from the ledger on 2026-09-05 by
 reading its headings, which is what this line has always claimed to do and
 had stopped doing: it said nineteen while the ledger held three. Fifteen had
@@ -285,7 +285,10 @@ instructions on jsonbench and costs 34,320 bytes across all twelve programs;
 and whether a chip row may still pin two values, raised because the tree
 contradicts itself about the 508-instruction residual that mechanism was ruled
 a fallback for, and because the second pair ever written turned out to be two
-binaries.
+binaries. A sixth was filed later the same day: whether a benchmark that enters
+the objective at its dimension's standing enters unimprovable, raised by a
+library change that falls livebench 3.08% and is declined in all four shapes it
+was written in.
 
 **The rules that carry forward**, each earned twice:
 

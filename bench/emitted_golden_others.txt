@@ -91,14 +91,24 @@
 # counter greps the whole .ll for `call `, and the prelude's comments use the
 # word eight times; the gate strips comment lines before counting now. No
 # emitted code changed.
-encodebench defines=178 calls=1687 branches=1020 lines=11057
-oneshot defines=178 calls=1822 branches=1162 lines=12130
-basket defines=137 calls=1332 branches=763 lines=7771
-widebench defines=194 calls=1906 branches=1119 lines=12081
-deepbench defines=111 calls=852 branches=557 lines=5649
-escapebench defines=46 calls=117 branches=96 lines=1350
-pendbench defines=125 calls=1249 branches=648 lines=6755
-scanbench defines=326 calls=3729 branches=2232 lines=20503
-indexbench defines=52 calls=177 branches=123 lines=1736
-digestbench defines=185 calls=1605 branches=904 lines=9834
-readbench defines=55 calls=175 branches=133 lines=1926
+#
+# 2026-09-05: livebench joins, at 179 defines and 12,239 lines. Same gap and
+# the same day as the .text vein: the one benchmark that watches the shipped
+# library's encode path had nothing counting what the compiler wrote for it.
+#
+#
+# 2026-09-05 (the literal's fast door): every program gains the same one
+# define and eleven lines.
+#
+encodebench defines=179 calls=1688 branches=1021 lines=11068
+oneshot defines=179 calls=1823 branches=1163 lines=12141
+basket defines=138 calls=1333 branches=764 lines=7782
+widebench defines=195 calls=1907 branches=1120 lines=12092
+deepbench defines=112 calls=853 branches=558 lines=5660
+escapebench defines=47 calls=118 branches=97 lines=1361
+pendbench defines=126 calls=1250 branches=649 lines=6766
+scanbench defines=327 calls=3730 branches=2233 lines=20514
+indexbench defines=53 calls=178 branches=124 lines=1747
+digestbench defines=186 calls=1606 branches=905 lines=9845
+readbench defines=56 calls=176 branches=134 lines=1937
+livebench defines=180 calls=1847 branches=1177 lines=12250

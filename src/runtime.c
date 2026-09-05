@@ -3456,6 +3456,48 @@ static inline int ryu_multiple_of_pow2(uint64_t v, int p) {
     return (v & ((1ULL << p) - 1)) == 0;
 }
 
+/* Two digits a time, and the length first. The extraction loop below used to
+   do one 64-bit division per digit into a scratch buffer and then reverse it;
+   a pair table halves the divisions and writes straight into place. The ladder
+   climbs from one digit rather than down from seventeen because a json
+   document's floats are short: on bench/large.json the median shortest form is
+   well under half the 17 digits a double can need. */
+static const char RYU_DIGITS[201] =
+    "0001020304050607080910111213141516171819"
+    "2021222324252627282930313233343536373839"
+    "4041424344454647484950515253545556575859"
+    "6061626364656667686970717273747576777879"
+    "8081828384858687888990919293949596979899";
+
+static inline int ryu_declen(uint64_t v) {
+    if (v < 10ULL) return 1;
+    if (v < 100ULL) return 2;
+    if (v < 1000ULL) return 3;
+    if (v < 10000ULL) return 4;
+    if (v < 100000ULL) return 5;
+    if (v < 1000000ULL) return 6;
+    if (v < 10000000ULL) return 7;
+    if (v < 100000000ULL) return 8;
+    if (v < 1000000000ULL) return 9;
+    if (v < 10000000000ULL) return 10;
+    if (v < 100000000000ULL) return 11;
+    if (v < 1000000000000ULL) return 12;
+    if (v < 10000000000000ULL) return 13;
+    if (v < 100000000000000ULL) return 14;
+    if (v < 1000000000000000ULL) return 15;
+    if (v < 10000000000000000ULL) return 16;
+    if (v < 100000000000000000ULL) return 17;
+    /* A double's shortest form never needs more than seventeen digits, so the
+       three rungs below are unreachable from `ryu_d2d`. They are here because
+       the loop this replaced was total and this is not: the extraction walks
+       DOWN from the length it is given, so a length one short of the value
+       writes at a negative index rather than truncating. Three compares on a
+       path nothing takes buy back that difference. */
+    if (v < 1000000000000000000ULL) return 18;
+    if (v < 10000000000000000000ULL) return 19;
+    return 20;
+}
+
 /* shortest digits + decimal exponent for a positive finite double; returns
    digit count, digits in dig[], value = dig * 10^*e10 */
 static int ryu_d2d(double f, char* dig, int* e10) {
@@ -3563,10 +3605,16 @@ static int ryu_d2d(double f, char* dig, int* e10) {
         output = vr + (vr == vm || round_up);
     }
     *e10 = e10v + removed;
-    int n = 0;
-    char tmp[20];
-    while (output > 0) { tmp[n++] = (char)('0' + output % 10); output /= 10; }
-    for (int a = 0; a < n; a++) dig[a] = tmp[n - 1 - a];
+    int n = ryu_declen(output);
+    int a = n;
+    while (output >= 100) {
+        uint32_t c = (uint32_t)(output % 100);
+        output /= 100;
+        a -= 2;
+        __builtin_memcpy(dig + a, RYU_DIGITS + c * 2, 2);
+    }
+    if (output >= 10) __builtin_memcpy(dig, RYU_DIGITS + (uint32_t)output * 2, 2);
+    else dig[0] = (char)('0' + (uint32_t)output);
     dig[n] = 0;
     return n;
 }

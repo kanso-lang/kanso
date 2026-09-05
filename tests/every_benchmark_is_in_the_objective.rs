@@ -109,3 +109,70 @@ fn every_rowed_benchmark_is_weighed_by_the_objective() {
          run-speed group."
     );
 }
+
+/// The machine-code and emitted-code gates loop the same way the instructions
+/// gate does, so `measured` reads all three. Each list is derived from its
+/// gate rather than written down here, for the reason the module comment
+/// gives: a list here would be the next place to forget.
+///
+/// The machine-code gate's own comment records the last time one went stale —
+/// "scanbench and digestbench joined the corpus after this gate was written
+/// and nobody extended the list, so the two newest benchmarks were the two
+/// this vein could not see." livebench joined on 2026-09-05 and was the third,
+/// on both gates at once.
+#[test]
+fn every_built_benchmark_has_its_machine_code_sized() {
+    let built = built(&read("scripts/gates/build_benchmarks.sh"));
+    let sized = measured(&read("scripts/gates/machine_code.sh"));
+    let missing: Vec<_> = built.difference(&sized).collect();
+    assert!(
+        missing.is_empty(),
+        "these benchmarks are built and nothing measures how big their machine code \
+         is: {missing:?}. That is the dimension the allocation counters and the \
+         emitted-line count are both blind to. Add them to the loop in \
+         scripts/gates/machine_code.sh and to bench/text_golden.txt."
+    );
+}
+
+#[test]
+fn every_sized_benchmark_has_a_text_row() {
+    let sized = measured(&read("scripts/gates/machine_code.sh"));
+    let rowed = rowed(&read("bench/text_golden.txt"));
+    let missing: Vec<_> = sized.difference(&rowed).collect();
+    assert!(
+        missing.is_empty(),
+        "the gate sizes these and bench/text_golden.txt has no row to compare \
+         against, so the gate cannot fail on them: {missing:?}"
+    );
+}
+
+/// The emitted-code gate counts the decoder separately, against
+/// bench/emitted_golden.txt, so jsonbench is the one built benchmark its
+/// `others` loop is allowed to lack.
+#[test]
+fn every_built_benchmark_has_its_emitted_code_counted() {
+    let mut built = built(&read("scripts/gates/build_benchmarks.sh"));
+    built.remove("jsonbench");
+    let emitted = measured(&read("scripts/gates/emitted_code.sh"));
+    let missing: Vec<_> = built.difference(&emitted).collect();
+    assert!(
+        missing.is_empty(),
+        "these benchmarks are built and nothing counts what the compiler WROTE for \
+         them: {missing:?}. The decoder gained 20% more calls over a fortnight with \
+         every allocation counter byte-identical, which is what this vein is for. \
+         Add them to the `others` loop in scripts/gates/emitted_code.sh and to \
+         bench/emitted_golden_others.txt."
+    );
+}
+
+#[test]
+fn every_emitted_benchmark_has_a_row() {
+    let emitted = measured(&read("scripts/gates/emitted_code.sh"));
+    let rowed = rowed(&read("bench/emitted_golden_others.txt"));
+    let missing: Vec<_> = emitted.difference(&rowed).collect();
+    assert!(
+        missing.is_empty(),
+        "the gate counts these and bench/emitted_golden_others.txt has no row to \
+         compare against, so the gate cannot fail on them: {missing:?}"
+    );
+}
