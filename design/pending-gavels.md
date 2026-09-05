@@ -116,23 +116,27 @@ the −1,187 became readable only when the next round drew Zen 3. On the #1259
 binary CI drew Zen 3 first and the −550 was attributable in one round.
 
 THE COST IS THE ROUNDS, AND IT IS BIGGER THAN THE ENTRY ABOVE ASSUMED. The
-#1258 binary spent two rounds to reach two rows. The #1259 binary spent FOUR:
+#1258 binary spent two rounds to reach two rows. The #1259 binary spent FIVE:
 
     family0x19-model0x1    41,377,644   AMD Zen 3
     family0x6-model0xcf    41,377,644   Intel Emerald Rapids
     family0x1a-model0x2    41,377,644   AMD Zen 5
     family0x19-model0x11   41,377,644   AMD Zen 4
+    family0x6-model0xad    41,377,644   Intel Granite Rapids
 
-Two vendors, three AMD generations, four CI rounds, one number. The Zen 5 key
-is a family this vein had never seen — every AMD key before it was 0x19 — and
-it agreed to the instruction on a generation the pool had not produced before.
+Two vendors, five CI rounds, one number. TWO of those keys are silicon this
+vein had never seen — AMD family 0x1a, where every AMD key before it was 0x19,
+and Intel model 0xad — and both agreed to the instruction on generations the
+pool had not produced before.
 
-Counted rather than recalled: six within-binary keys across those two binaries
-agree and none disagrees. The table's header says an unrecorded chip goes red
-asking for a sitting, so the ceiling on rounds is the pool's size, and the pool
-grows: Zen 5 was not in it a week ago. A change to the compiler's bytes now
-costs four rounds where the earlier estimate in this entry said up to five, and
-the number is going up rather than settling.
+Counted rather than recalled: seven within-binary keys across those two
+binaries agree and none disagrees. The table's header says an unrecorded chip
+goes red asking for a sitting, so the ceiling on rounds is the pool's size —
+and the pool is not a fixed set. This entry's earlier estimate of "up to five
+red rounds per binary" has now been reached and the series is not closed, so
+five is a floor. That is the cost, measured rather than projected, and it is
+the number to weigh against a benefit that has so far been one attributable
+delta per binary.
 
 **What this does not settle.** Every one of these deltas is layout: `kanso check
 lib/json` emits nothing, so no runtime change can execute during the
