@@ -104,9 +104,19 @@
 # measured the same three deltas TO THE INSTRUCTION on its own pair of builds,
 # which is the strongest agreement this vein has recorded between the two
 # hosts.
+#
+# 2026-09-05 (fourth): the find2_below twin. TWO rows fall and TEN hold exactly
+# still. work_encodebench lands on 5,563,212,521, a fall of 239,593,600 and
+# 4.1289%. work_oneshot lands on 28,623,603, a fall of 598,984 and 2.0498%.
+# Nothing rises. The container's local A/B measured both deltas TO THE
+# INSTRUCTION -- 239,593,600 and 598,984 on its own pair of builds -- which is
+# the second consecutive change on which the two hosts have agreed exactly.
+# Nine of the twelve benchmark binaries came out byte-identical to the ones
+# before the change, so those rows could not move; widebench's binary differed
+# and its count did not.
 jsonbench 1783183295
-encodebench 5802806121
-oneshot 29222587
+encodebench 5563212521
+oneshot 28623603
 basket 39875796
 widebench 57839394
 deepbench 678049725

@@ -993,4 +993,21 @@
 # rounds and visits are byte-identical. The Emerald Rapids and Zen 3 rows
 # measured the binary before it and are removed rather than carried forward
 # with the delta applied, for the reason the header gives.
-family0x19-model0x11 41377663
+#
+# 2026-09-05 (fifth), and the table is one row again for the same reason, one
+# change later. The find2_below twin is another edit to src/runtime.c, so the
+# compiler's own bytes moved again and every row went stale with them. CI drew
+# family0x19-model0x1 -- a chip with no row, because the block above had just
+# removed its stale one -- and refused rather than comparing 41,377,855 to
+# somebody else's number. The Zen 4 row it replaces measured the binary before
+# this one and is removed rather than carried forward with a delta applied,
+# for the reason the header gives.
+#
+# The direction reversed. The previous runtime edit moved this row DOWN 956;
+# this one moves it UP, though the two readings are on different chips and the
+# comparison is therefore not one this file permits. What the file can say is
+# that a runtime edit moves the row at all, for the ninth time on this vein,
+# while compile_allocs, compile_peak_bytes, rounds and visits stay
+# byte-identical. `kanso check lib/json` emits nothing, so the scan door that
+# changed cannot run during the measurement; what moves is layout.
+family0x19-model0x1 41377855

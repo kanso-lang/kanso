@@ -3175,3 +3175,26 @@ unmoved at 12 and 115. `bench/compile_golden_modules.txt` reads
 `text` lands on 1,117,976 — 672 bytes over three programs, and the other nine
 rows do not move because their binaries are byte-identical to the ones before
 this change.
+
+**CI's rows, and the two hosts agreed to the instruction again.**
+`bench/instructions_golden.txt` reads `work_encodebench` 5,563,212,521 and
+`work_oneshot` 28,623,603 — falls of 239,593,600 and 598,984, which are the
+container's two deltas exactly, on a different host with different absolute
+values. That is the second consecutive change on which this vein has recorded
+exact agreement between the runner and the container; the utf8-over-slice twin
+was the first. The other ten rows hold to the digit.
+
+**The compile row moved and the table is one row again.** `src/runtime.c` is
+`include_str!`'d into the compiler, so a door added to it moves the compiler's
+own bytes and the layout under them, and every chip's row goes stale at once.
+CI drew `family0x19-model0x1`, found no row for it — the previous entry's block
+had removed the stale one — and refused rather than comparing against somebody
+else's number. `compile_instructions` lands on 41,377,855 where the golden
+carried 41,377,663, and the Zen 4 row it replaces measured the binary before
+this one and is removed rather than carried forward with the delta applied.
+`kanso check lib/json` emits nothing, so the scan door that changed cannot run
+during the measurement; what moved is layout, for the ninth time on this vein.
+`compile_allocs` 25,490, `compile_peak_bytes` 715,275, `rounds` and `visits`
+are byte-identical.
+
+**welfare 73.99**, from 73.91, and `--set` in this same commit.
