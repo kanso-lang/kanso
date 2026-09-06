@@ -6288,6 +6288,10 @@ reaches only the three programs that import it.
     module_calls              755 ->       756
     module_branches           431 ->       434
     module_defines             98 ->        99
+    defines                   194 ->       199      compile_golden.txt, summed
+    calls                     215 ->       220
+    branches                  357 ->       372
+    lines                   5,688 ->     5,918
 
 Ten of the twelve in `emitted_golden_others.txt` take the twin alone: +1
 define, +1 call, +3 branches, +46 lines. oneshot and livebench take `esc_pair`
@@ -6309,6 +6313,30 @@ linker placing the same work differently rather than more or less of it.
 `compile_instructions`, `compile_allocs` and `compile_peak_bytes` are CI's —
 this container is rustc 1.94.1 and glibc 2.39-0ubuntu8.7 against the goldens'
 1.98.1 and 8.8 — and the welfare floor moves with them.
+
+### CI's rows, from round one on 31537922
+
+The four veins this container may not compare were measured by the runner and
+copied in. Every one of them FALLS.
+
+    encodebench           4,328,660,413 -> 4,317,272,013   -0.2631%
+    livebench             4,339,000,449 -> 4,318,225,649   -0.4788%
+    oneshot                  23,956,486 ->    23,904,549   -0.2168%
+    compile_instructions     42,117,183 ->    42,061,345   -0.1326%
+    compile_allocs               25,913 ->        25,862   -0.1968%
+    compile_peak_bytes          725,365 ->       724,798   -0.0782%
+
+The ten other work rows hold to the instruction. They are the decode and the
+digest, and neither appends a byte the sets prove is an int nor imports
+lib/json/text's escape arms.
+
+The three compile terms falling together is the twin paying for itself twice.
+The library half deletes six copies of a two-append body, so there is less of
+lib/json to lex, parse, infer and check — that is `compile_allocs` and
+`compile_peak_bytes`. `compile_instructions` takes that plus the layout move
+any edit to src/codegen.rs makes, and this time the layout went the same way.
+
+Welfare 75.3427 -> 75.36, floor ratcheted in the same commit.
 
 ### The sweep #1279 built caught its first move, on the next change
 

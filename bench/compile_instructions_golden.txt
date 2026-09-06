@@ -904,4 +904,13 @@
 # `list/fold_flat` gained a parameter and lib/list gained a comment, and the
 # front end lexes, parses, infers and checks all of it. Held as the price of
 # seven runtime work rows falling, encodebench by 1.3766%.
-compile_instructions=42117183
+#
+# 2026-09-06 (the tags the sets already proved, and seven copies of one
+# body): 42,117,183 -> 42,061,345, a FALL of 55,838 or 0.1326%. Two things
+# move it in the same direction. lib/*.kso is include_str!'d into the
+# compiler, so folding seven copies of `esc_pair`'s body into one is
+# library text the front end no longer lexes, parses, infers and checks.
+# And src/codegen.rs is the compiler: its own bytes and the layout under
+# them move with any edit, here the `append_mut_int` twin and its
+# selection site. Banked.
+compile_instructions=42061345
