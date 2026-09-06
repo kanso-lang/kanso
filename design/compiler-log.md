@@ -5131,3 +5131,49 @@ new arm reaches — two int comparisons, the runtime path a text comparison
 takes, a `<` declared over a record, `not`, `or`, both nestings of the two, an
 `and` in tail position, and a hand-written `if` standing where a condition
 goes — and both engines answer it identically.
+
+---
+
+## 2026-09-06 (eighteenth) — the index's two bounds compares buy something
+
+`k_index_fast` and `k_b_at_fast` both test a 1-based position with two signed
+compares and an `and`:
+
+    %lo = icmp sgt i64 %i, 0
+    %hi = icmp sle i64 %i, %len
+    %inr = and i1 %lo, %hi
+
+One unsigned compare on the offset answers both. Below 1 the subtraction wraps
+to something enormous and fails the same `ult` that a position past the end
+fails, so `icmp ult (i - 1), len` is exactly equivalent and three instructions
+become two. Built, measured, DECLINED: it is worse on nine of the thirteen
+benchmarks.
+
+    livebench    4,436,935,278 -> 4,526,588,390   +89,653,112   +2.02%
+    encodebench  4,425,477,206 -> 4,502,836,968   +77,359,762   +1.75%
+    digestbench     77,352,921 ->    79,973,742    +2,620,821   +3.39%
+    oneshot         24,341,570 ->    24,594,343      +252,773   +1.04%
+    jsonbench    1,564,492,011 -> 1,568,798,811    +4,306,800   +0.28%
+    scanbench      776,364,429 ->   775,361,412    -1,003,017   -0.13%
+
+The checksum stays 24000, so this is not a correctness difference. What the two
+signed compares buy is a FACT: on the fast path LLVM knows `i >= 1` and
+`i <= len`, and it spends that on the addressing mode — every index in the
+decoder's disassembly reads `movzbl -0x1(%rax,%rbp,1)`, with the `-1` folded
+into the address. The unsigned form proves only `j < len`, so the offset is
+materialised at every use. Two instructions saved at the compare, more than two
+paid everywhere the result is read.
+
+Reverted, and the baseline returns to 1,564,492,011 to the instruction.
+
+The attribution that prompted it is worth keeping. On the decoder after the
+whitespace fold and the `and` change, `obj_key_start_4'2` is 205,282,500
+instructions, 13.12% of jsonbench and second only to `value_for_3'2` at 22.60%,
+and its whole body is six repeats of the indexed-load block at 1,060,050
+executions each. Two structural walls stand behind it, both already recorded:
+the length and the data pointer are RELOADED at every site because calls sit
+between them and may clobber memory, and there is no LLVM loop to hoist out of
+because the recursion is a mutual cycle. A third thing the join shows is
+smaller and real: the guard reads the index's tag with three compares before it
+compares the byte, and one of the three — the failure test — is provably dead,
+because the tag is a phi over exactly `{int, none}`.

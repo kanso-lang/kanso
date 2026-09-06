@@ -91,6 +91,16 @@ section is where its instructions will appear.
   when deriving the set from the golden each script reads turned up the sixth;
   `tests/the_compile_sweep_names_every_compile_gate.rs` pins the list in both
   places now, because a list written down is a list that goes stale.
+- **`compile_instructions` moves on ANY edit to the compiler's own Rust, and
+  "the backend never runs" does not say otherwise.** `kanso check lib/json`
+  stops before codegen, so an emitter change cannot alter a decision that row
+  counts — and src/codegen.rs IS the compiler, so its bytes and the layout
+  under them move anyway. On 2026-09-06 an `emit_cond` change moved it 131,267
+  instructions, 0.31%, with `compile_allocs` and `compile_peak_bytes`
+  byte-identical, and a commit, a log entry and a PR body all claimed the three
+  rows could not move. The other two really cannot; this one is a layout vein
+  and has recorded seven layout-only moves before, from runtime and prelude
+  edits. Project it from CI or take the red round.
 - **A library edit needs `cargo build` before it takes effect**, for the same
   reason. In a worktree whose compiler was built first, `kanso build` succeeded
   with `lib/json/text.kso` holding outright syntax garbage. `all_counters.sh`
