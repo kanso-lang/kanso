@@ -127,73 +127,51 @@ fn every_counter_at_parity_scores_the_weights_alone() {
     assert_eq!(scored("parity", &[]), "welfare 48.00");
 }
 
-/// One of the eleven GUARD counters a thousand times better than its baseline,
-/// the other ten and both advertised rows at parity. Saturating each
-/// counter first bounds what the runaway can contribute at one, so the guard
-/// term is (10/3 + 1024/1026) / 11 * 0.15 and the score is 48.91.
+/// COMPILE SPEED'S two counters, one of them a thousand times better than its
+/// baseline and the other at parity. Saturating each counter first bounds what
+/// the runaway can contribute at one, so the term is (1024/1024.5 + 2/3) / 2 *
+/// 0.32 and the score is 53.33. Saturating the MEAN instead answers 58.63 on
+/// the same fixture, which is the shape the 2026-08-29 ruling closed.
 ///
-/// Saturating the MEAN instead answers well above this on the same fixture,
-/// which is the shape the 2026-08-29 ruling closed and what this number is
-/// here to catch: one benchmark would take its term almost to the ceiling
-/// while every other sat at parity.
+/// It used to be asserted on the run side, where eleven counters shared one
+/// term and the number moved every time a benchmark joined. Clay's gavel of
+/// 2026-09-06 put the run side on one consolidated program, so each run term
+/// has exactly one counter and a runaway there IS the term -- there is nothing
+/// left for the rule to bound. Compile speed still has two, and the arithmetic
+/// under test never depended on which term carried it.
 ///
-/// THE COUNT IS WHAT MOVES THIS NUMBER, and it usually moves LATE. It read
-/// 49.16 over eight counters until kanso#1221, four hours after kanso#1215
-/// minted `scan_instructions`, `escape_instructions` and `index_instructions`
-/// — a minted counter enters the floor's baseline at the next ratchet rather
-/// than at the merge that mints it, and this fixture takes its names from that
-/// baseline. So a pull request that adds a run-speed counter usually leaves
-/// this spec green and the NEXT `--set` turns it red. Recompute the fraction
-/// above from the new count when that happens; the number is pinned rather
-/// than derived on purpose, because a spec that recomputes what the tool
-/// computes is asserting its own copy of the tool.
-///
-/// 2026-09-04 is the case where it did NOT move late: `read_instructions`
-/// joined the guards and the same pull request ran `--set`, so the mint and
-/// the ratchet were one change and this spec went red inside it. Nine guards
-/// became ten and 49.11 became 49.00. Nothing about the rule changed — the
-/// delay was never a property of the spec, only of the usual order — and the
-/// two neighbours held: parity stays 48.00 because it does not depend on the
-/// count, and the advertised runaway stays 52.99 because that half still has
-/// two rows.
-///
-/// 2026-09-05 is the delayed case the paragraph above describes, and it is
-/// worth reading beside the 09-04 one because the two exhaust the shapes.
-/// kanso#1252 minted `live_instructions` and left this spec green; the next
-/// `--set` — a correction to compile_instructions in kanso#1253, touching
-/// nothing about the run-speed half — admitted it to the baseline and turned
-/// this red. Ten guards became eleven and 49.00 became 48.91. Both neighbours
-/// held again, for the same two reasons.
+/// The count is what moves this number, and it is pinned rather than derived
+/// on purpose: a spec that recomputes what the tool computes is asserting its
+/// own copy of the tool. If a counter joins compile speed, recompute the
+/// fraction above from the new count.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("wide_instructions", 1024)]), "welfare 48.91");
+    assert_eq!(scored("runaway", &[("compile_instructions", 1024)]), "welfare 53.33");
 }
 
-/// THE HALVES ARE NOT INTERCHANGEABLE. The same thousandfold win is worth
-/// more on an advertised row than on a guard, and that is the whole content
-/// of Clay's 2026-09-02 split: half the run-speed weight belongs to decode
-/// and encode — the rows the front page makes claims about — and half to the
-/// nine shape guards between them.
+/// WEIGHT SAYS HOW MUCH A DIMENSION MATTERS; SATIATION SAYS HOW LONG IT KEEPS
+/// MATTERING. The same doubling is worth more on the run side than on the
+/// compile side, and the gap is the whole content of the two satiations: run
+/// terms satiate at 2.0, where a doubling moves satisfaction from 1/3 to 1/2,
+/// and compile terms at 0.5, where it moves from 2/3 to 4/5.
 ///
-/// Before the split all eleven counters sat in one term and the two fixtures
-/// below scored the SAME number, 48.48, because a counter was a counter. A
-/// shape win scored as if a real workload had got faster. These two numbers
-/// differing is the property; their order is the direction.
+/// This replaces the advertised/guards pair, which asserted that half the
+/// run-speed weight belonged to decode and encode and half to the shape
+/// guards between them. The 2026-09-06 gavel retired that split: the shapes
+/// are phases inside one program now, at measured proportions, so there are
+/// no halves to compare. The asymmetry this asserts is the one the model
+/// still has, and it is a property of the weights rather than of the compiler.
 ///
-/// The gap is large because the halves are unequal in count as well as in
-/// kind: a runaway is one of two advertised rows and one of ten guards, so
-/// it moves its half by 1/2 rather than by 1/10. The gap widens every time a
-/// guard is added, which is the right direction — a corpus with more shapes in
-/// it makes any one shape worth less — and it is why this pair is asserted as
-/// an ORDER as well as two numbers.
+/// 53.00 against 50.13: a doubling buys the run side 0.05 of the index and the
+/// compile side 0.0213, and compile speed carries the LARGER weight of the two.
 #[test]
-fn a_win_on_an_advertised_row_outscores_the_same_win_on_a_guard() {
-    let advertised = scored("advertised", &[("decode_instructions", 1024)]);
-    let guard = scored("guard", &[("wide_instructions", 1024)]);
-    assert_eq!(advertised, "welfare 52.99", "an advertised runaway");
-    assert_eq!(guard, "welfare 48.91", "the same runaway on a guard");
+fn a_doubling_is_worth_more_on_the_run_side_than_the_compile_side() {
+    let run = scored("doubled-run", &[("run_instructions", 2)]);
+    let compile = scored("doubled-compile", &[("compile_instructions", 2)]);
+    assert_eq!(run, "welfare 53.00", "a doubling of the run program's work");
+    assert_eq!(compile, "welfare 50.13", "the same doubling of what compiling costs");
     assert!(
-        advertised > guard,
-        "the advertised half is worth more per counter: {advertised} against {guard}"
+        run > compile,
+        "the run side satiates later, so it keeps paying: {run} against {compile}"
     );
 }

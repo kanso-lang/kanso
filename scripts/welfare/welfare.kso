@@ -83,27 +83,31 @@ floor_path = "bench/welfare_floor.json"
 # keeps paying for improvement. Runtime at 2.0: a decoder eight times faster is
 # eight times faster. Compile at 0.5: a front end already answering in six
 # milliseconds gains almost nothing from three.
-# RUN SPEED IS TWO TERMS, not one, and they are halves of the same 0.30. Ruled
-# by Clay 2026-09-02: half the weight is the advertised workloads — decode and
-# encode, the rows the front page makes claims about and the workload the
-# language exists for — and half is every other run benchmark, the shape guards
-# that stress the memory model and catch pathologies.
+# RUN SPEED IS ONE TERM OVER ONE PROGRAM. Ruled by Clay 2026-09-06.
 #
-# Two terms of 0.15 is exactly a mean of the two halves at 0.30, and it reports
-# better: the breakdown says which half moved. The rule is "advertised versus
-# everything else", so a benchmark added later lands in the guard half without
-# this line needing an edit — guard_work is defined as the remainder.
+# It was two halves of 0.30 -- the advertised workloads against the shape
+# guards -- over twenty-five counters across thirteen programs, each normalised
+# against its own baseline and averaged. Two things were wrong with that. A
+# guard and a real workload were priced the same per counter, so which SHELF a
+# benchmark sat on decided how much it was worth, and the shelving was an
+# argument rather than a measurement. And a program nobody runs got a vote: the
+# corpus grew by adding benchmarks, and every addition diluted every other row
+# by a fraction nobody chose.
 #
-# What it buys: a shape win no longer scores as if a real workload got faster.
-# Nine guards against two advertised rows meant a guard carried nine times an
-# advertised row's share of the term, so the front page's own claims were the
-# smallest thing in it. The guards stay fully armed against regression, at half
-# the term rather than nine elevenths of it.
-d_run_advertised = dimension advertised_work "run speed (advertised)" 2.0 0.15
+# One program answers both. bench/runbench does what a program using this
+# language does -- decodes and encodes for two thirds of its work, meets the
+# stress shapes for the rest -- and its proportions are stated in its own
+# header, measured phase by phase rather than asserted. Its retired
+# instructions are run speed and its peak is run memory. What used to be a
+# question about shelves is now a question about the mix, which is written
+# down in one place and can be argued with by re-measuring.
+#
+# The thirteen per-phase benchmarks all survive, with every golden they had.
+# They say WHERE a move came from, which one number cannot; the objective says
+# whether the project came out ahead, which thirteen numbers could not.
+d_run_speed = dimension run_speed_counters "run speed" 2.0 0.30
 
-d_run_guards = dimension guard_work "run speed (guards)" 2.0 0.15
-
-# Compile speed rises and run memory funds it. Ruled the same day, from the
+# Compile speed rises and run memory funds it. Ruled 2026-09-02, from the
 # objective restated: "the core thing we're attempting to optimize for here is
 # ultimately developer happiness. performance should be insane, but if a
 # language doesn't compile wickedly fast, like go, devs may choose not to use it
@@ -121,118 +125,28 @@ d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.12
 
 # Retired instructions, which is what a run costs. Laziness is priced here and
 # nowhere else: a thunk is an implementation detail, so no thunk counter carries
-# a weight and pendbench earns its place by what its work costs, like every
-# other row.
+# a weight, and the pending shape earns its place by what its work costs like
+# every other phase of the program.
 #
 # What this row cannot see, stated rather than left implicit: a thunk is a cell
 # allocated now and chased later, so much of its cost is locality, and an
-# instruction count is close to blind to that. The memory terms do not cover it
-# either — they price RETENTION, and a thunk allocated and freed inside a beat
-# moves neither while costing real traffic. Whether simulated cache misses close
-# that gap is a measurement nobody has taken.
+# instruction count is close to blind to that. The memory term does not cover
+# it either -- it prices RETENTION, and a thunk allocated and freed inside a
+# beat moves neither while costing real traffic. Whether simulated cache misses
+# close that gap is a measurement nobody has taken.
 #
-# Retired instructions, which is what a run costs. Allocation counts sat here
-# until a decode regression of eight and a half per cent scored zero: the
-# allocator was called exactly as often and the work rose anyway, because a
-# guard that runs per element allocates nothing. An allocation executes
-# instructions, so this sees what the counts saw and the rest besides.
-decode_work = ["decode_instructions" "encode_instructions"]
+# Allocation counts sat here until a decode regression of eight and a half per
+# cent scored zero: the allocator was called exactly as often and the work rose
+# anyway, because a guard that runs per element allocates nothing. An
+# allocation executes instructions, so this sees what the counts saw and the
+# rest besides.
+run_speed_counters = ["run_instructions"]
 
-held_small = ["oneshot_instructions" "basket_instructions"]
-
-held_shapes = ["wide_instructions" "deep_instructions" "pending_instructions"]
-
-held_work = text/concat held_small held_shapes
-
-# The digest sits on both sides of the model on purpose. Its peak is the row
-# it was built for, and a term that priced only the peak would rank a change
-# that reclaims per block above one that does not however long it takes, which
-# is how a fifty-two-fold slowdown scored zero on 2026-08-31. Pricing the work
-# beside the retention makes the trade a number instead of a preference.
-digest_work = ["digest_instructions"]
-
-# Three benchmarks ran in the corpus for weeks with their work weighed at
-# nothing. scanbench had no instruction row at all — its two memory counters
-# were in the model and the gate that counts instructions never listed it — and
-# escapebench and indexbench had rows in bench/instructions_golden.txt that
-# nothing here read. A dimension a model leaves out it weights at zero, so a
-# change that made string indexing twice as slow to save an allocation would
-# have scored as a gain. They enter at their dimension's standing like every
-# other granted baseline; landing day moves the number by nothing, and from
-# here they pay and charge like the rest.
-edge_work = ["scan_instructions" "escape_instructions" "index_instructions"]
-
-# readbench is the corpus's answer to a repair it could not see. Every other
-# benchmark here feeds itself from a literal or from a generator, so none of
-# them exercised what a program gets back from `os/read_file!` — and
-# bench/make_jsonbench was written AROUND that hole, with the bang spelled out
-# into a pair so its decode would keep its beat. The corpus was measuring the
-# workaround: when the yield was carried per declaration, every counter in
-# every golden held to the byte and the objective priced the repair at zero.
-#
-# Its work row is here for the reason the digest paragraph above gives. The
-# memory rows are the point of the benchmark, and a term counted on one axis
-# and not the other is a trade the index cannot see.
-read_work = ["read_instructions"]
-
-# livebench runs encodebench's program against the library that SHIPS. The
-# encode row beside it reads a frozen copy of lib/json, deliberately, so that a
-# move there is the compiler's — and the cost of that control was that no term
-# in this model could see the library's own encoder. bench/oneshot imports the
-# real library and encodes once, which priced a 1.70% fall in the escape path
-# at four thousandths of a point.
-#
-# It enters at its dimension's standing like every other granted baseline, so
-# landing day moves the number by nothing. From here it pays and charges like
-# the rest, and a library encode change is finally something the objective can
-# weigh rather than round off.
-live_work = ["live_instructions"]
-
-tail_work = text/concat read_work live_work
-
-paced_work = text/concat (text/concat digest_work edge_work) tail_work
-
-run_speed_counters = text/concat (text/concat decode_work held_work) paced_work
-
-# THE ADVERTISED HALF. decode_work already holds exactly the two rows the front
-# page makes claims about — jsonbench's decode and encodebench's encode — so
-# this names them rather than re-listing them, and the two stay in step.
-advertised_work = decode_work
-
-# THE GUARD HALF: everything else in run speed. Written as the remainder rather
-# than as a list, so a benchmark added to any of the lists above lands here
-# without this line or the gavel entry needing an edit.
-guard_work = text/concat held_work paced_work
-
-decode_memory = ["decode_peak_bytes" "decode_arena_blocks"]
-
-encode_memory = ["encode_peak_bytes" "encode_arena_blocks"]
-
-held_memory = ["oneshot_peak_bytes" "basket_peak_bytes"]
-
-# The only row bounded by the INPUT rather than by the program text. Every
-# other memory counter here measures a working set a change can shrink by a
-# constant; this one measures whether a scan gives its arena back per
-# position, which is a different question and the only one that gets worse as
-# a user's document gets longer.
-scan_memory = ["scan_arena_blocks" "scan_peak_bytes"]
-
-digest_memory = ["digest_peak_bytes" "digest_arena_blocks"]
-
-# The rows readbench exists for. Both, because a peak alone cannot say whether
-# the arena grew once or once per round, and this benchmark's whole subject is
-# which of those two a loop past a bang-read does.
-read_memory = ["read_peak_bytes" "read_arena_blocks"]
-
-codec_memory = text/concat decode_memory encode_memory
-
-held_and_scan = text/concat held_memory scan_memory
-
-run_memory_rows = text/concat codec_memory held_and_scan
-
-pooled_memory = text/concat digest_memory read_memory
-
-run_memory_counters = text/concat run_memory_rows pooled_memory
+# The arena, the held pool and the permanent pool, summed by `peak_of`. One
+# program, so one peak: a change that gives the arena back per position and a
+# change that never grows it are the same thing to this row, and the run
+# program's own phases are what make it possible for either to show.
+run_memory_counters = ["run_peak_bytes"]
 
 # What compiling COSTS, not what it counts. Rounds, visits and emitted lines
 # are the compiler's own bookkeeping — how many times a fixpoint went round,
@@ -255,7 +169,7 @@ compile_speed_counters = ["compile_instructions" "compile_allocs"]
 
 compile_memory_counters = ["compile_peak_bytes"]
 
-run_terms = [d_run_advertised d_run_guards d_run_memory]
+run_terms = [d_run_speed d_run_memory]
 
 compile_terms = [d_compile_speed d_compile_memory]
 
@@ -266,7 +180,7 @@ terms = text/concat run_terms compile_terms
 # the saturation rule — and it is emitted with the model so the one thing that
 # rewrites history.jsonl's welfare column does not keep its own copy to go
 # stale. The date is the day of the gavel that last moved the formula.
-formula = "2026-09-02"
+formula = "2026-09-06"
 
 # The baseline and the per-counter breakdown are keyed by counter, because a
 # counter is what is measured; a dimension is what it is measured FOR.
@@ -349,56 +263,25 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"]! + m["held_peak_bytes"]! + m["perm_peak_bytes"]!
 
-fn measured decode encode oneshot basket comp held work scan ir traffic dig red
-  d = [["decode_allocs" decode["allocs"]!]]
-  db = [["decode_arena_blocks" decode["arena_blocks"]!]]
-  dp = [["decode_peak_bytes" (peak_of decode)]]
-  e = [["encode_allocs" encode["allocs"]!]]
-  eb = [["encode_arena_blocks" encode["arena_blocks"]!]]
-  ep = [["encode_peak_bytes" (peak_of encode)]]
-  o = [["oneshot_peak_bytes" (peak_of oneshot)]]
-  b = [["basket_allocs" basket["allocs"]!]]
-  bp = [["basket_peak_bytes" (peak_of basket)]]
-  c = [["front_end_rounds" held["front_end_rounds"]!]]
-  v = [["front_end_visits" held["front_end_visits"]!]]
-  l = [["emitted_lines" comp["lines"]!]]
-  cm = [["compile_peak_bytes" held["compile_peak_bytes"]!]]
-  sb = [["scan_arena_blocks" scan["arena_blocks"]!]]
-  sp = [["scan_peak_bytes" (peak_of scan)]]
-  ins = worked work
+fn measured run work ir traffic held
+  rp = [["run_peak_bytes" (peak_of run)]]
   ci = [["compile_instructions" ir["compile_instructions"]!]]
   ca = [["compile_allocs" traffic["compile_allocs"]!]]
-  rows = text/concat (text/concat l cm) (text/concat sb sp)
-  dg = digest_rows dig
-  rd = read_rows red
-  pooled = text/concat dg rd
-  built = text/concat rows (text/concat ci (text/concat ca pooled))
-  gathered d db dp e eb ep o b bp c v (text/concat built ins)
+  cm = [["compile_peak_bytes" held["compile_peak_bytes"]!]]
+  compile = text/concat ci (text/concat ca cm)
+  list/to_h (text/concat (text/concat rp (worked work)) compile)
 
+# ONE ROW OUT OF FOURTEEN. bench/instructions_golden.txt carries a row for
+# every benchmark the gate counts, and since the 2026-09-06 gavel the objective
+# reads exactly one of them: the consolidated run program's. The thirteen
+# beside it are diagnostics -- they still fail CI when they move, and they say
+# WHERE a move came from, which one number cannot.
+#
+# The `!` is the pin. A golden that lost this row would otherwise score as
+# nothing rather than refusing, which is the shape of failure that put three
+# benchmarks in the model at zero weight for weeks.
 fn worked work
-  di = [["decode_instructions" work["jsonbench"]!]]
-  ei = [["encode_instructions" work["encodebench"]!]]
-  oi = [["oneshot_instructions" work["oneshot"]!]]
-  bi = [["basket_instructions" work["basket"]!]]
-  wi = [["wide_instructions" work["widebench"]!]]
-  pi = [["deep_instructions" work["deepbench"]!]]
-  ni = [["pending_instructions" work["pendbench"]!]]
-  gi = [["digest_instructions" work["digestbench"]!]]
-  si = [["scan_instructions" work["scanbench"]!]]
-  xi = [["escape_instructions" work["escapebench"]!]]
-  ii = [["index_instructions" work["indexbench"]!]]
-  ri = [["read_instructions" work["readbench"]!]]
-  li = [["live_instructions" work["livebench"]!]]
-  edge = text/concat si (text/concat xi (text/concat ii (text/concat ri li)))
-  more = text/concat (text/concat wi pi) (text/concat ni gi)
-  rest = text/concat oi (text/concat bi (text/concat more edge))
-  text/concat (text/concat di ei) rest
-
-fn gathered d db dp e eb ep o b bp c v l
-  head = text/concat (text/concat d db) (text/concat dp e)
-  mid = text/concat (text/concat eb ep) (text/concat o b)
-  tail = text/concat (text/concat bp c) (text/concat v l)
-  list/to_h (text/concat head (text/concat mid tail))
+  [["run_instructions" work["runbench"]!]]
 
 # How much a term being `ratio` times better than baseline is worth. A straight
 # ratio says the tenth halving is worth as much as the first, which is false:
@@ -526,138 +409,63 @@ fn filled s width false
 fn asked path
   os/read_file! path
 
-fn gauge d e o b c held w s ir ca g rd
-  comp = compile_totals c
-  cm = counters held
-  work = work_of w
-  dc = counters d
-  ec = counters e
-  scan = counters s
-  built = counters ir
-  tr = counters ca
-  dig = counters g
-  red = counters rd
-  pools = [(counters o) (counters b)]
-  now = measured dc ec pools[1]! pools[2]! comp cm work scan built tr dig red
-  os/read_file! floor_path . (held -> against now (json/decode held))
+fn gauge run w ir ca held
+  compile = [(counters ir) (counters ca) (counters held)]
+  now = measured (counters run) (work_of w) compile[1]! compile[2]! compile[3]!
+  os/read_file! floor_path . (f -> against now (json/decode f))
 
-# The digest bench's peak is the row it exists for; its block count comes
-# along because a peak alone cannot say whether the arena grew once or often.
-fn digest_rows dig
-  blocks = [["digest_arena_blocks" dig["arena_blocks"]!]]
-  peak = [["digest_peak_bytes" (peak_of dig)]]
-  text/concat blocks peak
-
-# One block and a megabyte when the loop brackets, one block a round and a
-# megabyte a round when it does not.
-fn read_rows red
-  blocks = [["read_arena_blocks" red["arena_blocks"]!]]
-  peak = [["read_peak_bytes" (peak_of red)]]
-  text/concat blocks peak
-
-# A term new to the model enters where its dimension already stands, so its
-# introduction is never a score move and only improvement from here pays.
+# Every counter the objective weighs stands on a measurement of its own.
 #
-# Entering at a ratio of one against ITSELF does not achieve that, which is
-# what this used to do. The run-speed counters sit far above one, so a newcomer
-# at one drags the term down and a benchmark costs welfare on the day it lands,
-# however healthy. The reference is a choice, not a measurement, so it is
-# chosen to mean what the rule above says: the standing the dimension already
-# has. Once the counter has real history that reference is behind it and
-# improvement pays from there.
+# One used to be granted a baseline instead: `entering` gave a counter new to
+# the model a reading of `now * standing`, the ratio whose satisfaction equalled
+# its dimension's current mean, so that landing day cost the floor nothing. The
+# rule existed because benchmarks joined the run side one at a time -- nine of
+# twenty-one counters stood on it -- and each arrival at parity would otherwise
+# have scored as a free win for measuring something.
 #
-# THE CHOICE IS NOT NEUTRAL AFTER LANDING DAY, and this is the part the rule
-# above does not say. Saturation is concave, so a counter granted a high
-# standing has little headroom left and one entering at parity has a great
-# deal, and how much a later change to that counter is worth follows from
-# where it entered. Measured on the carry-tier arms of 2026-09-01: with the
-# digest baselines at their dimension's standing the trade scored
-# 74.31 -> 73.75 and was declined; the same two arms with those baselines at
-# parity score 70.14 -> 72.99, which is an acceptance. The entering rule
-# decided that verdict.
+# It was never neutral after landing day. Saturation is concave, so a counter
+# granted a high standing has almost no headroom left and one entered at parity
+# has a great deal, and that difference decided at least one verdict: the
+# carry-tier arms of 2026-09-01 scored 74.31 -> 73.75 with the digest baselines
+# at their dimension's standing and 70.14 -> 72.99 with them at parity, a
+# decline and an acceptance of the same two arms.
 #
-# The rule stays, because the alternative pays people not to measure. What is
-# fixed here is that the arbitrariness was invisible: the floor file recorded
-# a granted baseline exactly like one with a measurement behind it. `granted`
-# now names them, `--set` carries the list forward, and the report says which
-# counters are standing on a rule.
-#
-# OPEN: whether a granted baseline should be replaced by real history once the
-# counter has some. Stated rather than buried; nothing here does it.
-fn baseline_of held now
-  base = held["baseline"]!
-  fresh = list/fold terms [] (acc t -> text/concat acc (entering base now t))
-  merged base fresh
+# Clay's gavel of 2026-09-06 put the run side on one consolidated program, so
+# nothing joins one benchmark at a time any more and the rule has nobody left
+# to grant a baseline to. What is left of it would only ever fire by accident,
+# on a counter somebody added to the model and forgot to measure -- which is
+# the thing to catch rather than to paper over.
+# The refusal is taken HERE, in the arm that decides whether to score at all,
+# rather than in a function returning either a baseline or a complaint. An
+# effect is a value in kanso: a `baseline_of` whose failing arm answered
+# `io/write_err ... . os/exit` handed that chain back to its caller as the
+# baseline, and `score` indexed it and died saying "indexing takes a list or
+# string with a 1-based position, or a map with a key" -- a true sentence about
+# the wrong thing, three functions from the missing key.
+fn unbaselined base
+  list/to_list (list/select counter_names (c -> base[c] == none))
 
-# The names this run had to grant, for the report and for the floor file. Read
-# off the same condition `entering` uses, so the two cannot disagree.
-fn granted_now held
-  base = held["baseline"]!
-  list/to_list (list/fold terms [] (acc t -> text/concat acc (minted base t)))
-
-fn minted base t
-  list/to_list (list/select t.counters (c -> base[c] == none))
-
-# Every counter standing on a rule rather than a measurement: the ones this
-# run granted, plus the ones an earlier run granted and wrote down.
-fn granted_all held
-  text/concat (written_down held["granted"]) (granted_now held)
-
-fn written_down none
-  []
-
-fn written_down g
-  g
-
-fn entering base now t
-  known = list/to_list (list/select t.counters (c -> base[c] != none))
-  missing = list/to_list (list/select t.counters (c -> base[c] == none))
-  at = standing now base known t.satiation
-  list/to_list (list/map missing (c -> [c (math/round (now[c]! * at))]))
-
-# Where the dimension already stands, as a ratio a newcomer can be given.
-#
-# The term is a mean of SATURATED values now, so standing at the mean ratio is
-# no longer the same thing as standing where the term stands — the curve is not
-# linear, and a newcomer placed at the mean ratio would move the term. What
-# leaves the term untouched is a newcomer whose SATISFACTION equals the mean
-# satisfaction, so that is computed and then read back through the curve:
-# `r / (r + s) = m` inverts to `r = m * s / (1 - m)`.
-#
-# A dimension whose counters are all new has nowhere to stand and enters at
-# one, which is the old rule and right for that case alone.
-fn standing now base known sat
-  stood now base known sat (length known == 0)
-
-fn stood _ _ _ _ true
-  1.0
-
-fn stood now base known sat false
-  each = list/map known (c -> satisfaction (ratio_of now base c) sat)
-  sats = list/to_list each
-  mean = list/sum sats / (1.0 * length sats)
-  mean * sat / (1.0 - mean)
-
-fn merged base fresh
-  carried base fresh (length fresh == 0)
-
-fn carried base _ true
-  base
-
-fn carried base fresh false
-  list/to_h (text/concat (pairs_of base) fresh)
-
-# What the baseline already holds, rather than what the model expects: a
-# counter new to the model has no entry here yet, and adding one is the job of
-# the fresh list this is concatenated with.
-fn pairs_of base
-  kept = list/select counter_names (c -> base[c] != none)
-  list/to_list (list/map kept (c -> [c base[c]!]))
+unmeasured = """
+  the objective weighs a counter the floor file has no baseline for, so there
+  is nothing to score it against. Until the 2026-09-06 gavel a missing baseline
+  was granted automatically, at the ratio that left its dimension's score
+  untouched; the run side is one program now and nothing joins it a benchmark
+  at a time, so a counter with no measurement behind it is a mistake. Measure
+  it and write the reading into bench/welfare_floor.json's baseline.
+"""
 
 fn against now held
-  base = baseline_of held now
+  base = held["baseline"]!
+  missing = unbaselined base
+  scored now held base missing (length missing == 0)
+
+fn scored now held base _ true
   value = score now base
   os/args . (a -> either now base held value a)
+
+fn scored _ _ _ missing false
+  listed = text/join missing ", "
+  io/write_err "{unmeasured}  no baseline for: {listed}\n" . (_ -> os/exit 2)
 
 # THE COUNTER SET THE SCORE WAS MADE OF, one `name=value` a line.
 #
@@ -775,10 +583,8 @@ fn paid base held value reason false
   rounded = 1.0 * units / 100.0
   note = list/to_h [["floor" rounded] ["why" reason]]
   grown_history = push (history_of held) note
-  standing_on = [["granted" (granted_all held)]]
   keys = [["baseline" base] ["floor" value] ["history" grown_history]]
-  out = text/concat keys standing_on
-  written (list/to_h out) value reason
+  written (list/to_h keys) value reason
 
 fn written held value reason
   os/write_file floor_path "{json/encode held}\n"
@@ -813,23 +619,7 @@ fn reported now base held value
   reason = text/slice (last_why held) 1 52
   tail = "(ceiling 100, ratchet {era_of held}: {reason}…)"
   io/write "{head}   {tail}\n"
-    . (_ -> on_a_rule held)
     . (_ -> detailed now base . (_ -> verdict value floor))
-
-# Which counters are standing on the entering rule rather than on a
-# measurement. A reader comparing two counters' ratios is comparing unlike
-# things unless they know which, and until this printed, nobody could.
-fn on_a_rule held
-  standing_on = granted_all held
-  ruled_by standing_on (length standing_on == 0)
-
-fn ruled_by _ true
-  io/write ""
-
-fn ruled_by standing_on false
-  listed = text/join standing_on ", "
-  said = "granted baselines (entered at their dimension's standing, never"
-  io/write "{said} measured): {listed}\n"
 
 fn moved? now base c
   base[c]! != now[c]!
@@ -923,41 +713,21 @@ fn rose gap
   >> io/write "next change is free to spend. Bank it in this same PR:\n"
   >> io/write "welfare --set \"what improved and why\".\n"
 
-fn with_decode d
-  asked "bench/cost_golden_encode.txt" . (e -> with_encode d e)
+# FIVE GOLDENS, where there were eleven. The run program's cost golden and its
+# row in the instruction golden are the whole runtime side now; the three
+# compile files are unchanged. The seven per-phase cost goldens this chain used
+# to read are still written, still compared by their own gates, and no longer
+# inputs to the number.
+fn with_run run
+  asked "bench/instructions_golden.txt" . (w -> with_work run w)
 
-fn with_encode d e
-  asked "bench/cost_golden_oneshot.txt" . (o -> with_oneshot d e o)
+fn with_work run w
+  asked "bench/compile_instructions_golden.txt" . (ir -> with_ir run w ir)
 
-fn with_oneshot d e o
-  asked "bench/cost_golden_basket.txt" . (b -> with_basket d e o b)
+fn with_ir run w ir
+  asked "bench/compile_allocs_golden.txt" . (ca -> with_traffic run w ir ca)
 
-fn with_basket d e o b
-  asked "bench/compile_golden.txt" . (c -> with_compile d e o b c)
+fn with_traffic run w ir ca
+  asked "bench/compile_memory_golden.txt" . (held -> gauge run w ir ca held)
 
-fn with_compile d e o b c
-  asked "bench/compile_memory_golden.txt" . (held -> with_held d e o b c held)
-
-fn with_ir d e o b c held w s ir
-  asked "bench/compile_allocs_golden.txt"
-    . (ca -> with_traffic d e o b c held w s ir ca)
-
-fn with_traffic d e o b c held w s ir ca
-  asked "bench/cost_golden_digest.txt"
-    . (g -> with_digest d e o b c held w s ir ca g)
-
-fn with_digest d e o b c held w s ir ca g
-  asked "bench/cost_golden_read.txt"
-    . (rd -> gauge d e o b c held w s ir ca g rd)
-
-fn with_held d e o b c held
-  asked "bench/instructions_golden.txt" . (w -> with_work d e o b c held w)
-
-fn with_work d e o b c held w
-  asked "bench/cost_golden_scan.txt" . (s -> with_scan d e o b c held w s)
-
-fn with_scan d e o b c held w s
-  asked "bench/compile_instructions_golden.txt"
-    . (ir -> with_ir d e o b c held w s ir)
-
-pub play = asked "bench/cost_golden.txt" . (d -> with_decode d)
+pub play = asked "bench/cost_golden_run.txt" . (r -> with_run r)

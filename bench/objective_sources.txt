@@ -27,50 +27,21 @@
 # since livebench joined on 2026-09-05. The spec replays the file rather than a
 # number, so nothing was ever unchecked; the prose was.
 
-# runtime work, one benchmark a row
-decode_instructions work_jsonbench
-encode_instructions work_encodebench
-oneshot_instructions work_oneshot
-basket_instructions work_basket
-wide_instructions work_widebench
-deep_instructions work_deepbench
-pending_instructions work_pendbench
-digest_instructions work_digestbench
-scan_instructions work_scanbench
-escape_instructions work_escapebench
-index_instructions work_indexbench
-read_instructions work_readbench
-live_instructions work_livebench
+# 2026-09-06: the run counters became two. Clay's gavel made welfare's runtime
+# side ONE consolidated program -- bench/runbench -- so the twenty-five rows
+# that were here (thirteen work rows, twelve memory rows) are five now: one
+# work row, three peak rows summed into one term, and the three compile rows
+# unchanged. Every per-phase golden those rows read still exists and still
+# fails CI when it moves; they stopped being objective INPUTS, which is what
+# the ruling changed.
 
-# peak memory: three pools summed, which is why no single row holds it
-decode_peak_bytes arena_peak_bytes
-decode_peak_bytes held_peak_bytes
-decode_peak_bytes perm_peak_bytes
-encode_peak_bytes encode_arena_peak_bytes
-encode_peak_bytes encode_held_peak_bytes
-encode_peak_bytes encode_perm_peak_bytes
-oneshot_peak_bytes oneshot_arena_peak_bytes
-oneshot_peak_bytes oneshot_held_peak_bytes
-oneshot_peak_bytes oneshot_perm_peak_bytes
-basket_peak_bytes basket_arena_peak_bytes
-basket_peak_bytes basket_held_peak_bytes
-basket_peak_bytes basket_perm_peak_bytes
-scan_peak_bytes scan_arena_peak_bytes
-scan_peak_bytes scan_held_peak_bytes
-scan_peak_bytes scan_perm_peak_bytes
-digest_peak_bytes digest_arena_peak_bytes
-digest_peak_bytes digest_held_peak_bytes
-digest_peak_bytes digest_perm_peak_bytes
-read_peak_bytes read_arena_peak_bytes
-read_peak_bytes read_held_peak_bytes
-read_peak_bytes read_perm_peak_bytes
+# runtime work: the run program's retired instructions
+run_instructions work_runbench
 
-# arena blocks claimed
-decode_arena_blocks arena_blocks
-encode_arena_blocks encode_arena_blocks
-scan_arena_blocks scan_arena_blocks
-digest_arena_blocks digest_arena_blocks
-read_arena_blocks read_arena_blocks
+# runtime memory: the three pools, summed by `peak_of` into one term
+run_peak_bytes run_arena_peak_bytes
+run_peak_bytes run_held_peak_bytes
+run_peak_bytes run_perm_peak_bytes
 
 # what compiling costs
 compile_instructions compile_instructions

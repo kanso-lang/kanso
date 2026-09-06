@@ -54,13 +54,18 @@ fn rowed(golden: &str) -> BTreeSet<String> {
 
 /// Every counter name welfare builds a row for in `worked`, which is where the
 /// instruction terms are assembled from the gate's output.
+///
+/// EVERY occurrence, not the first on each line. This read `find` once per
+/// line while `worked` held one row to a line, so the difference never showed;
+/// the 2026-09-06 gavel put the whole run side on one row and the count spec
+/// below could then be defeated by writing a second counter beside the first.
+/// The mutation that proved it: two `work["..."]` reads on one line, and the
+/// spec stayed green naming one benchmark.
 fn weighed(welfare: &str) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
-    for line in welfare.lines() {
-        let Some(open) = line.find("work[\"") else { continue };
-        let rest = &line[open + "work[\"".len()..];
-        let Some(shut) = rest.find('"') else { continue };
-        out.insert(rest[..shut].to_string());
+    for piece in welfare.split("work[\"").skip(1) {
+        let Some(shut) = piece.find('"') else { continue };
+        out.insert(piece[..shut].to_string());
     }
     out
 }
@@ -96,18 +101,47 @@ fn every_measured_benchmark_has_a_row() {
     );
 }
 
+/// The direction this file was written to check has inverted, and the reason
+/// is a ruling rather than a slip.
+///
+/// It used to read: every benchmark with an instruction row is weighed by the
+/// objective. Clay's gavel of 2026-09-06 made the run side ONE consolidated
+/// program, so the thirteen benchmarks beside it now have rows nothing in
+/// welfare reads, deliberately — they are diagnostics that say where a move
+/// came from, and the three specs above keep them honest: each is built,
+/// measured and rowed, so a regression in any of them still reddens a gate.
+///
+/// What is left to protect runs the other way. The run terms rest on one
+/// program, and a term naming a benchmark nothing builds would read the same
+/// number forever while looking like a measurement — the failure the old
+/// direction caught, arriving from the side the gavel left open.
 #[test]
-fn every_rowed_benchmark_is_weighed_by_the_objective() {
-    let rowed = rowed(&read("bench/instructions_golden.txt"));
+fn every_benchmark_the_objective_weighs_is_built_measured_and_rowed() {
     let weighed = weighed(&read("scripts/welfare/welfare.kso"));
-    let missing: Vec<_> = rowed.difference(&weighed).collect();
-    assert!(
-        missing.is_empty(),
-        "these have an instruction row that the welfare model never reads, so their \
-         runtime work is weighted at zero and a change that doubles it scores as \
-         neutral: {missing:?}. Give each a counter in `worked` and a term in a \
-         run-speed group."
+    assert_eq!(
+        weighed.len(),
+        1,
+        "the 2026-09-06 gavel put the objective's run side on one consolidated \
+         program. welfare reads {weighed:?}. If that is a deliberate change to \
+         what the project measures, it is a gavel and this number moves with it."
     );
+    let built = built(&read("scripts/gates/build_benchmarks.sh"));
+    let measured = measured(&read("scripts/gates/instructions.sh"));
+    let rowed = rowed(&read("bench/instructions_golden.txt"));
+    for vein in [
+        ("built by build_benchmarks.sh", &built),
+        ("measured by instructions.sh", &measured),
+        ("rowed in bench/instructions_golden.txt", &rowed),
+    ] {
+        let missing: Vec<_> = weighed.difference(vein.1).collect();
+        assert!(
+            missing.is_empty(),
+            "the objective weighs these and they are not {}: {missing:?}. A run \
+             term whose program nothing builds reads the same number forever and \
+             looks like a measurement while doing it.",
+            vein.0
+        );
+    }
 }
 
 /// The machine-code and emitted-code gates loop the same way the instructions

@@ -134,10 +134,44 @@ fn written m raw
 
 fn rescored m line
   row = json/decode line
-  told = put row "welfare" (fixed (score row m.terms m.base) 4)
+  weight = covered row m.terms m.base
+  told = columned row m.terms m.base (weight == 0.0)
   by = put told "scored_by" m.formula
-  weight = fixed (covered row m.terms m.base) 2
-  json/encode (put by "scored_weight" weight)
+  json/encode (put by "scored_weight" (fixed weight 2))
+
+# A row carrying no counter ANY term reads gets no welfare column. There is no
+# denominator left to renormalize onto, so there is no arithmetic that could
+# answer; the chart reads a missing column as a gap and `scored_weight` reads
+# 0.00 beside it.
+#
+# The case could not arise while the objective read twenty-eight counters over
+# thirteen benchmarks, because every row of the five hundred carried at least
+# one of them. The 2026-09-06 gavel made the run terms read one program that no
+# historical row was measured against, and 151 rows then carried none of the
+# five that remain. Until this arm existed the tool died on the first of them
+# with "`*` is not defined for these values" -- an empty denominator surfacing
+# three functions later, in the rounding.
+#
+# The stale column goes rather than staying. A number the previous formula
+# produced, sitting under a `scored_by` naming the new one, is the one outright
+# lie this tool can tell.
+fn columned row _ _ true
+  without row "welfare"
+
+fn columned row ts base false
+  put row "welfare" (fixed (score row ts base) 4)
+
+fn without m key
+  fold (entries m) {} (acc e -> unless_named acc e key)
+
+fn unless_named acc (entry k v) key
+  kept acc k v (k == key)
+
+fn kept acc _ _ true
+  acc
+
+fn kept acc k v false
+  put acc k v
 
 # --- the formula, on the counters a row carries -----------------------------
 # The counters a term can be scored on here: present in the row AND known to

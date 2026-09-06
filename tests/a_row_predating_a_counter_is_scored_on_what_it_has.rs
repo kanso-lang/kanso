@@ -52,6 +52,26 @@ const TWICE_AS_GOOD: &str = "{\"a\":50,\"b\":50,\"c\":50,\"commit\":\"r4\"}";
 /// ratio is 200: 200/202 for a, 1/3 for b, averaged, then 2/3 for compile.
 const ONE_AT_ZERO: &str = "{\"a\":0,\"b\":100,\"c\":100,\"commit\":\"r5\"}";
 
+/// A row carrying no counter any term reads. Every term is dropped, so there
+/// is no denominator left to renormalize onto and no arithmetic that could
+/// answer -- the row gets no welfare column at all, and the chart draws a gap
+/// where it sits.
+///
+/// It could not arise while the objective read twenty-eight counters spread
+/// over thirteen benchmarks: every row of the five hundred carried at least
+/// one. The 2026-09-06 gavel made the run terms read one program no historical
+/// row was ever measured against, and 151 rows of the file then carried none
+/// of the five counters left. The rescorer died on the first of them saying
+/// "`*` is not defined for these values", which is an empty denominator
+/// arriving three functions later as a multiplication.
+const NOTHING_SCORED: &str = "{\"d\":100,\"commit\":\"r6\"}";
+
+/// The same row with the score the PREVIOUS formula gave it. Leaving that
+/// number in place while stamping `scored_by` with the new formula would be
+/// the one outright lie this tool can tell: a reader would take the point as
+/// an answer to a question it was never asked. The column goes.
+const STALE_COLUMN: &str = "{\"d\":100,\"commit\":\"r7\",\"welfare\":\"99.9999\"}";
+
 fn rescored(key: &str, rows: &[&str]) -> Vec<String> {
     let (code, out, said) = ran(key, MODEL, rows);
     assert!(code, "the rescorer refused: {said}");
@@ -202,4 +222,28 @@ fn a_model_with_no_formula_line_is_refused() {
     let (ok, out, said) = ran("noformula", &model, &[WHOLE]);
     assert!(!ok, "it scored five hundred rows against nothing: {out:?}");
     assert!(said.contains("the model has no formula line"), "{said}");
+}
+
+/// The renormalization runs out: no term has a counter, so there is nothing
+/// to renormalize onto. `scored_weight` reads 0.00 and says why.
+#[test]
+fn a_row_with_no_scored_counter_gets_no_column() {
+    assert_eq!(
+        rescored("nothing", &[NOTHING_SCORED]),
+        vec![concat!(
+            "{\"commit\":\"r6\",\"d\":100,",
+            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.00\"}"
+        )]
+    );
+}
+
+#[test]
+fn a_score_from_the_old_formula_is_removed_rather_than_left() {
+    assert_eq!(
+        rescored("stale", &[STALE_COLUMN]),
+        vec![concat!(
+            "{\"commit\":\"r7\",\"d\":100,",
+            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.00\"}"
+        )]
+    );
 }

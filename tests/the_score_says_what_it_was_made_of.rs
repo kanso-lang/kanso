@@ -7,6 +7,10 @@
 //! 2026-09-03 the newest row — commit a100f4f — held 12 of the 24 counters the
 //! formula reads, `compile_instructions` among them.
 //!
+//! The set is five now rather than twenty-eight, and the reason it is worth
+//! pinning has not changed with the size: a row scored on yesterday's counter
+//! set is wrong without saying so, whichever direction the set moved.
+//!
 //! `welfare --counters` prints the set `score` was given, so a row can carry
 //! exactly what the formula reads. Printing it here rather than assembling it
 //! again in perf_record is the whole point: two lists drift the first time a
@@ -37,32 +41,14 @@ fn ask(root: &std::path::Path, args: &[&str]) -> String {
 #[test]
 fn the_counter_set_is_the_one_the_formula_reads() {
     let said = counters();
+    // Five since the 2026-09-06 gavel put the run side on one consolidated
+    // program. It was twenty-eight: thirteen work rows and twelve memory rows
+    // over thirteen benchmarks, plus the three compile rows. Every one of those
+    // goldens still exists and still fails CI when it moves; they stopped being
+    // objective INPUTS.
     let want = [
-        "decode_instructions",
-        "encode_instructions",
-        "oneshot_instructions",
-        "basket_instructions",
-        "wide_instructions",
-        "deep_instructions",
-        "pending_instructions",
-        "digest_instructions",
-        "scan_instructions",
-        "escape_instructions",
-        "index_instructions",
-        "read_instructions",
-        "live_instructions",
-        "decode_peak_bytes",
-        "decode_arena_blocks",
-        "encode_peak_bytes",
-        "encode_arena_blocks",
-        "oneshot_peak_bytes",
-        "basket_peak_bytes",
-        "scan_arena_blocks",
-        "scan_peak_bytes",
-        "digest_peak_bytes",
-        "digest_arena_blocks",
-        "read_peak_bytes",
-        "read_arena_blocks",
+        "run_instructions",
+        "run_peak_bytes",
         "compile_instructions",
         "compile_allocs",
         "compile_peak_bytes",

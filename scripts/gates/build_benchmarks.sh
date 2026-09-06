@@ -16,3 +16,4 @@ cargo build --release
 ./target/release/kanso build bench/digestbench --release >/dev/null
 ./target/release/kanso build bench/readbench --release >/dev/null
 ./target/release/kanso build bench/livebench --release >/dev/null
+./target/release/kanso build bench/runbench --release >/dev/null

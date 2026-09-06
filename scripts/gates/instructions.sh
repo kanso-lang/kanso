@@ -61,8 +61,14 @@ sh scripts/gates/dispatch.sh name
 # library that ships rather than the frozen copy, so this is the row that sees a
 # change to lib/json's encoder at load. Reading it beside encodebench also gives
 # the frozen control's drift: 10,149,724 instructions, 0.19%, when it was added.
+# runbench joined on 2026-09-06 and is not like the thirteen above it. Clay's
+# gavel that day made ITS row the objective's whole run-speed term, and left
+# the thirteen as diagnostics that say where a move came from. So this row is
+# the one that moves welfare and the rest are the breakdown; the loop treats
+# them identically, which is right, because a diagnostic nobody compares is
+# not one.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench readbench livebench; do
+         indexbench scanbench digestbench readbench livebench runbench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
     >/dev/null 2>/tmp/ir.$b

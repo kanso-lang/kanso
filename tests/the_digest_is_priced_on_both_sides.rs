@@ -1,14 +1,24 @@
-//! A streaming digest's peak and its work are both terms in the objective.
+//! The run program's peak and its work are both terms in the objective.
 //!
 //! On 2026-08-31 a change took an 8 KB digest from 79,691,776 arena bytes to
 //! 1,048,576 and scored exactly zero against welfare, because no counter in
 //! the model measured whether a peak grows with the input. The same change
-//! was 52x slower and that scored zero too. Both halves are in the model now,
+//! was 52x slower and that scored zero too. Both halves went into the model,
 //! and these are the two fixtures that go red if either leaves it.
 //!
 //! Pricing only the peak would be worse than pricing neither: it would rank
 //! any change that reclaims per block above one that does not, however long
 //! it takes, which is exactly the trade the 52x slowdown was.
+//!
+//! The rows moved on 2026-09-06. Clay's gavel put the objective's run side on
+//! one consolidated program, and the digest is a phase inside it carrying 5.05%
+//! of the work rather than a term of its own — so `digest_peak_bytes` and
+//! `digest_instructions` are diagnostics now and doctoring them scores nothing.
+//! The property is the same one and it is asserted where the objective reads:
+//! `bench/cost_golden_run.txt` for the peak, `bench/instructions_golden.txt`'s
+//! runbench row for the work. digestbench keeps its own golden and its own gate,
+//! so a digest regression still turns CI red; what this file watches is whether
+//! the INDEX can see both dimensions of one workload.
 
 use std::process::Command;
 
@@ -67,26 +77,26 @@ fn the_undoctored_goldens_hold_the_floor() {
     assert!(ok, "welfare is red before anything is doctored:\n{said}");
 }
 
-/// The row digestbench exists for. Ten times the arena bytes of a walk whose
-/// blocks are all dead the moment the next one starts.
+/// The dimension the digest thread was about: a peak that grows with the input
+/// rather than being reclaimed per block. Ten times the arena bytes.
 #[test]
-fn a_digest_peak_that_grew_costs_welfare() {
+fn a_run_peak_that_grew_costs_welfare() {
     let (ok, said) = scored(
         "peak",
-        "bench/cost_golden_digest.txt",
+        "bench/cost_golden_run.txt",
         "arena_peak_bytes=",
-        "arena_peak_bytes=545259520",
+        "arena_peak_bytes=1560450080",
     );
-    assert!(!ok, "a tenfold digest peak scored nothing:\n{said}");
-    assert!(said.contains("digest_peak_bytes"), "the fall names no digest row:\n{said}");
+    assert!(!ok, "a tenfold run peak scored nothing:\n{said}");
+    assert!(said.contains("run_peak_bytes"), "the fall names no run row:\n{said}");
 }
 
 /// The other half. A peak-only term would rank a change that reclaims per
 /// block above one that does not however long it takes.
 #[test]
-fn a_digest_that_got_slower_costs_welfare_too() {
+fn a_run_that_got_slower_costs_welfare_too() {
     let (ok, said) =
-        scored("work", "bench/instructions_golden.txt", "digestbench ", "digestbench 1525736190");
-    assert!(!ok, "a tenfold digest instruction count scored nothing:\n{said}");
-    assert!(said.contains("digest_instructions"), "the fall names no digest row:\n{said}");
+        scored("work", "bench/instructions_golden.txt", "runbench ", "runbench 30437427340");
+    assert!(!ok, "a tenfold run instruction count scored nothing:\n{said}");
+    assert!(said.contains("run_instructions"), "the fall names no run row:\n{said}");
 }
