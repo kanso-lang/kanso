@@ -249,13 +249,13 @@
 jsonbench 1737414226
 encodebench 4425477605
 oneshot 25494771
-basket 35508390
+basket 35510217
 widebench 54690359
 deepbench 708507318
 escapebench 114596730
-pendbench 605536009
+pendbench 605537209
 indexbench 4691365
-scanbench 774357155
+scanbench 776362839
 digestbench 77353320
-readbench 45883331
+readbench 4288131
 livebench 4438088517

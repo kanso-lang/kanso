@@ -542,13 +542,13 @@
 jsonbench text=95346
 encodebench text=116562
 oneshot text=118706
-basket text=108834
+basket text=109074
 widebench text=121106
 deepbench text=72130
 escapebench text=53474
-pendbench text=87298
+pendbench text=87538
 indexbench text=56754
-scanbench text=154290
+scanbench text=154530
 digestbench text=107218
-readbench text=53058
+readbench text=53298
 livebench text=119282
