@@ -4318,3 +4318,90 @@ correct where this one would not be.
 the prize and the reason the obvious route is closed. What is left unexamined in
 this function is the residual of the per-call band once the prologue is set
 aside, which is #290's ground and blocked on the same toolchain.
+
+---
+
+## 2026-09-06 — SPLIT ASKED MEMCMP PER BYTE POSITION: readbench −97.7490%, scanbench −44.0754%, welfare 75.16
+
+**DONE.** Searched first, as the filing gate requires: `readbench` and
+`scanbench` appear in this file and in `log/compiler-log-archive.md` only as
+rows that moved — thirty-odd mentions between them, every one a benchmark
+total. Neither has ever had a function-level reading, and `d_readbench` and
+`d_scanbench` return nothing in either file. `k_b_split` appears nowhere in
+this file and nowhere in the archive.
+
+**Two functions are 98.13% of readbench.** Callgrind on the merged main
+compiler, 2,038,390,385 instructions:
+
+    k_b_split              1,245,429,204   61.10%
+    __memcmp_avx2_movbe      754,792,000   37.03%
+
+The benchmark reads `bench/large.json` — 188,698 bytes with no newline in
+them — and splits it on `"\n"` two hundred times. `k_b_split` walked the bytes
+twice, once to count the pieces and once to cut them, and called `memcmp` at
+every position of both walks: **75,479,200 calls**, which is 200 rounds by two
+walks by 188,698 positions, at exactly 10.0 instructions a call. The function's
+own 1,245,429,204 is 16.5 instructions a position on top. Fifty-three
+instructions of input byte to learn that a one-byte separator is not there.
+
+**A match can only start where the separator's first byte is.** `memchr`
+covers the ground in one vectorised pass and `memcmp` runs only at the
+candidates it hands back; a one-byte separator skips the `memcmp` entirely.
+Both walks call one helper, so the counting pass and the cutting pass cannot
+drift apart again.
+
+    row            before             after            delta        pct
+    readbench   2,038,390,798     45,883,331   -1,992,507,467  -97.7490%
+    scanbench   1,384,644,173    774,357,155     -610,287,018  -44.0754%
+    basket         38,029,049     35,508,390       -2,520,659   -6.6282%
+    pendbench     605,691,420    605,536,009         -155,411   -0.0257%
+
+Nothing rises. The other nine rows are byte-identical on the container's own
+A/B, which is what says the four falls are the change: those nine programs
+call split nowhere, so a change confined to split cannot reach them.
+
+**scanbench was not the target and is the second largest win here.** It was one
+of the two benchmarks named in the previous entry's list of programs with no
+attribution at all, and it turns out to share readbench's defect without
+sharing its shape.
+
+**The `text` vein worsens, deliberately, from 1,262,522 to 1,264,058.** The
+four binaries that call split each gain the 384 bytes of `k_split_find`; the
+other nine never link it and are unchanged. 1,536 bytes for 2.6 billion
+instructions.
+
+**`compile_instructions` falls 41,461,798 -> 41,460,229, by 1,569.** The gate's
+own case (1): `src/runtime.c` is `include_str!`'d into the compiler, so editing
+the runtime moves what the compiler carries and compiles. Measured twice on the
+container, 41,881,485 -> 41,879,916 both times, the second reading identical to
+the first.
+
+**No allocation counter moves.** All eleven veins agree with their goldens
+untouched, which is the expected shape: the change removes instructions, not
+allocations.
+
+**Watched red twice, for two different reasons, and the second found a hole in
+the corpus.**
+
+The memchr span off by one — searching `len - seplen - from` bytes rather than
+one more — misses a separator sitting at the last position it can occupy, and
+the fixture says so in four cases: `"ab\n"` splits into one piece instead of
+two, `"ab"` on `"ab"` into one instead of two.
+
+Taking a matching first byte for a match without verifying the rest gives
+`"a:b::c"` on `"::"` three pieces instead of two, and `"→x→→y"` on `"→→"` a
+piece cut mid-codepoint. **The shipped corpus passed that mutation.**
+`tests/golden/micro/text_split.kso` had three multi-byte separator cases and in
+every one the separator's first byte occurred only where the whole separator
+did, so nothing in it could tell a first-byte match from a real one. Three
+cases were added that can, and the mutation reddens them on both engines
+against the interpreter's answers.
+
+**OPEN — the two walks are still two walks.** The counting pass exists to size
+the buffer, and it now costs a memchr sweep rather than a memcmp per byte, so
+it is cheap enough that removing it was not measured. A growable buffer or a
+recorded position list would halve the remaining scan. Not attempted here.
+
+**OPEN — `k_b_chars` and `k_b_at` are the neighbours with the same shape.**
+`k_b_chars` walks a string twice to count codepoints and then to cut them.
+Nobody has priced either at the instruction level.

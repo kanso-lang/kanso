@@ -6576,6 +6576,22 @@ KValue k_b_chars(KValue sv) {
    search needs no codepoint arithmetic to stay on boundaries. The scan this
    replaced asked `length` and `slice` at every position, both of which count
    codepoints from the start, so splitting a hundred kilobytes cost seconds. */
+/* The first position at or after `from` where sep occurs, or -1. A match can
+   only start where sep's first byte is, so memchr covers the ground and memcmp
+   runs only at the candidates it returns. The loop this replaced called memcmp
+   at every position: readbench split 188,698 bytes on "\n" that the bytes never
+   contain and paid 75,479,200 calls at ten instructions each to learn it. */
+static long k_split_find(const char* d, long len, const char* sep, long seplen, long from) {
+    while (from + seplen <= len) {
+        const char* p = memchr(d + from, sep[0], (size_t)(len - seplen - from + 1));
+        if (!p) return -1;
+        long at = (long)(p - d);
+        if (seplen == 1 || memcmp(d + at, sep, (size_t)seplen) == 0) return at;
+        from = at + 1;
+    }
+    return -1;
+}
+
 KValue k_b_split(KValue sv, KValue sepv) {
     if (!k_not_failure(sv)) return sv;
     if (!k_not_failure(sepv)) return sepv;
@@ -6584,24 +6600,20 @@ KValue k_b_split(KValue sv, KValue sepv) {
     KStr* sep = k_as_str(sepv);
     if (sep->len <= 0) k_die("split needs a separator");
     long count = 1;
-    for (long i = 0; i + sep->len <= s->len; ) {
-        if (memcmp(s->data + i, sep->data, (size_t)sep->len) == 0) {
-            count++;
-            i += sep->len;
-        } else {
-            i++;
-        }
+    for (long i = 0; ; ) {
+        long at = k_split_find(s->data, s->len, sep->data, sep->len, i);
+        if (at < 0) break;
+        count++;
+        i = at + sep->len;
     }
     KValue* items = k_buf(count);
     long at = 0, from = 0, n = 0;
-    while (at + sep->len <= s->len) {
-        if (memcmp(s->data + at, sep->data, (size_t)sep->len) == 0) {
-            items[n++] = k_str_n(s->data + from, at - from);
-            at += sep->len;
-            from = at;
-        } else {
-            at++;
-        }
+    for (;;) {
+        long hit = k_split_find(s->data, s->len, sep->data, sep->len, at);
+        if (hit < 0) break;
+        items[n++] = k_str_n(s->data + from, hit - from);
+        at = hit + sep->len;
+        from = at;
     }
     items[n++] = k_str_n(s->data + from, s->len - from);
     return k_list_own(items, n);
