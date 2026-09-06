@@ -5824,3 +5824,89 @@ reason the diff shows: the proven-bytes arm returns before the generic builtin
 path builds `args_ir`, a Vec of formatted Strings one per argument, and before
 it collects the argument sets `infer::builtin_set` reads. The emitter writes
 four IR lines where it wrote one call and does less work deciding to.
+
+---
+
+## 2026-09-06 (twenty-fifth) — the fold's container cannot be proved from the library, and the beat is why
+
+The twenty-fourth entry left the 1.4650% behind one wall: `list/fold_flat` is
+one function for lists and bytes both, so its `coll` carries the union and the
+emitter's proven-bytes paths cannot fire. The cheapest way to test whether that
+union is the whole story is to give the escape fold a container the sets CAN
+prove — a fold of identical shape, in `lib/json/text.kso`, called only with
+bytes:
+
+    fn escape_able acc bs
+      esc_flat bs acc (a b -> esc_byte a b) 1
+
+    fn esc_flat bs acc f i
+      if (length bs < i) acc (esc_flat bs (f acc bs[i]!) f (i + 1))
+
+The lambda is kept deliberately. #313 declined removing the escape fold's
+closure at livebench +3.01% and named the beat as the reason, so a version
+calling `esc_byte` directly would have re-run a declined experiment and
+confounded this one. Same closure, same arity, same body shape; the only thing
+that changes is which function the fold is.
+
+BUILT, MEASURED, DECLINED. Both programs stay correct (`wrote 74072800`,
+`checksum 24000`) and the cost is not close:
+
+    livebench    4,399,421,576 -> 4,740,164,338   +340,742,762   +7.74%
+    oneshot         24,107,081 ->     25,619,336     +1,512,255   +6.27%
+    jsonbench    1,542,924,177 -> 1,542,923,800           -377
+
+The live encode counters say what happened, so this is attributed rather than
+guessed:
+
+    allocs          9,233,103 ->  51,551,103    5.6x
+    alloc_bytes   710,726,112 -> 2,064,935,712  2.9x
+    sh_bytes      100,713,384 -> 1,116,345,384   11x
+    arena_peak_bytes  2,097,152 ->   7,340,032
+    beat_iters      5,032,401 ->         401
+
+The beat stopped. `beat_iters` falls by four orders of magnitude and the
+allocations it was reclaiming become real ones.
+
+**This isolates a variable #313 could not.** That entry removed the closure and
+respelled the fold together, and attributed its +3.01% to the closure. Here the
+closure is untouched and the beat collapses anyway, so a lambda's presence is
+not what the beat turns on.
+
+**And the beat that dies is not the fold's.** `KANSO_BEAT_REPORT=1` gives the
+same verdict for the fold in both shapes:
+
+    beat: list/fold_flat/4: grow-only: another group tail-calls it
+                            (unbracketed entry) (argument 2 also carries heap)
+    beat: json/esc_flat/4:  grow-only: another group tail-calls it
+                            (unbracketed entry) (argument 2 also carries heap)
+
+Grow-only both times: the fold never had a beat to lose. What the report shows
+moving is two functions the change does not touch:
+
+    json/encode_items/3   beat: rewinds every iteration
+                       -> grow-only: argument 1 may carry heap across the iteration
+    json/encode_pairs/3   beat: rewinds every iteration
+                       -> grow-only: argument 1 may carry heap across the iteration
+
+The encoder's item and pair loops are where livebench's five million beat
+iterations were, and respelling the fold two levels below them changes what the
+analysis concludes about their accumulator. **An earlier revision of this entry
+said the beat depends on which function the fold is and pointed at the
+`imported`/`carried` retains in `src/beat.rs`. That was wrong on both counts,
+and reading the report rather than the source is what corrected it.**
+
+The entry hop was tested too, since `escape_able -> list/fold -> fold_flat` has
+one more call than `escape_able -> esc_flat`. Mirroring it exactly --
+`escape_able -> esc_fold -> esc_flat` -- changes nothing: `beat_iters` 401 and
+`allocs` 51,551,103 again, to the instruction. So the depth of the entry is not
+it either. What remains is the accumulator's provenance, and the report names
+the conclusion (`argument 1 may carry heap`) without saying which step reached
+it; that is not established here.
+
+What it settles for the invariant-parameter thread: the library route is
+closed. A fold respelled where the sets can see it costs two loops above it
+their beats, and more than the proof was ever worth, so the 1.4650% has to be
+collected in the EMITTER with one fold, or not at all. It also sharpens the
+caution for that work: a specialisation that clones a fold has to be watched at
+its CALLERS, because this cost landed two levels up from the edit and the
+instruction row alone would have said only "+7.74%, unexplained".
