@@ -5295,6 +5295,20 @@ Every counter this branch moved, with the value it landed on:
     tally_shape_sh_buf 1,984 -> 2,016
     the_same_capture_built_below_the_mark_is_shared_sh_buf 10,944 -> 10,976
 
+bench/compile_golden.txt's five samples each gain the same 134 lines, and its
+four totals with them: lines 5,018 -> 5,688, calls 205 -> 215, branches
+312 -> 357, defines 189 -> 194. Per sample that is 1,006 -> 1,140 on
+recursion, 998 -> 1,132 on dispatch, 995 -> 1,129 on guards, 1,047 -> 1,181 on
+records and 972 -> 1,106 on build_block, with one more define and two more
+calls apiece. That is the door written into every module again. Rounds and
+visits do not move at all, which is the check that the front end decided
+nothing differently for these five.
+
+The module sample in bench/compile_golden_modules.txt carries the door too:
+module_lines 5,051 -> 5,185, module_calls 752 -> 754, module_branches
+421 -> 430, module_defines 97 -> 98, and module_rounds and module_visits
+hold.
+
 `tests/golden/mem/append_of_a_slice_boxes_nothing.mem` is the spec, and it was
 watched red: with the fusion switched off it reads allocs=85 and
 sh_bytes=1944 against the 45 and 984 it pins, one view per round over forty
