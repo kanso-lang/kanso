@@ -271,9 +271,22 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends clang-19
-          sudo update-alternatives --install /usr/bin/clang clang \
-            /usr/bin/clang-19 100
+          # /usr/bin/clang is a package-owned symlink to ../lib/llvm-18/bin/clang,
+          # NOT an update-alternatives path, so `update-alternatives --install`
+          # registers an alternative and leaves the symlink alone. The first
+          # attempt did exactly that: clang-19 was installed, `clang --version`
+          # still said 18.1.3, the probe answered false, and the job went red on
+          # a vein nobody expected. /usr/local/bin precedes /usr/bin on the
+          # runner, so a symlink there wins without touching the dpkg file.
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          # AND THE SELECTION IS ASSERTED, not printed. The first version of
+          # this step printed the version and checked nothing, so a silent
+          # no-op passed as success and cost a round.
           clang --version
+          clang --version | head -1 | grep -q 'clang version 19' || {
+            echo "::error::clang 19 is installed but not selected: $(clang --version | head -1)"
+            exit 1
+          }
       - name: build the benchmarks
         run: sh scripts/gates/build_benchmarks.sh
       # Each vein reports even when a sibling is red. They measure independent
