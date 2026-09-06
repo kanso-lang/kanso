@@ -5,4 +5,14 @@
 #
 # Kept apart from that file because the welfare index sums its rows: a sample
 # added there reads as a regression the size of the sample.
-module lines=5176 calls=753 branches=430 defines=98 rounds=6 visits=2403
+#
+# 2026-09-06 (the fold reads its length once): lines 5,176 -> 5,186, calls
+# 753 -> 755, branches 430 -> 431, visits 2,403 -> 2,409; rounds and defines
+# hold. `list/fold_flat` carries a fifth parameter, so its declaration and both
+# edges of its tail cycle each take one more argument -- the same +2 calls,
+# +1 branch, +10 lines every program in the emitted goldens moved by, and six
+# more expression visits to decide the extra name. This sample is the one that
+# imports, so it is the only row here that std/list can reach; the five in
+# bench/compile_golden.txt import nothing and hold. Held as the price of seven
+# runtime work rows falling, encodebench by 1.3766%.
+module lines=5186 calls=755 branches=431 defines=98 rounds=6 visits=2409

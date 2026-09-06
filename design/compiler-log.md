@@ -6013,6 +6013,18 @@ landed: `emitted_calls` 1,843 -> 1,845, `emitted_branches` 1,203 -> 1,204,
 104,622. escapebench, indexbench and readbench do not import std/list and hold
 to the line; `defines` holds everywhere.
 
+A ninth vein carries the same fifth parameter and I missed it on the first
+round, so CI found it: `bench/compile_golden_modules.txt`, which
+`tests/compile_cost.rs` reads and which `scripts/gates/all_compile.sh` does not.
+`module_calls` 753 -> 755, `module_branches` 430 -> 431, `module_lines` 5,176 ->
+5,186 and `module_visits` 2,403 -> 2,409; `rounds` and `defines` hold. It is the
+same +2, +1, +10 as the emitted goldens plus six more expression visits, and the
+`module` sample is the only row in that pair of files that imports anything, so
+the five samples in `bench/compile_golden.txt` hold. **The sweep script is not
+the list.** `all_compile.sh` names six gates and there is a seventh vein behind
+a cargo test; regenerate it with `KANSO_REGEN_COMPILE_GOLDEN=1 cargo test --test
+compile_cost` whenever lib/ moves.
+
 `text` FALLS, 1,233,434 -> 1,233,354, and the rows inside it disagree: five
 fall, two rise, six hold, with pendbench +864 and deepbench +144 against
 digestbench -368 and scanbench -192. Ten more IR lines in every one of them and
