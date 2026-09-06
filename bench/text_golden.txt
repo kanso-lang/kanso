@@ -566,16 +566,27 @@
 # each of the three programs that has an `append` of a `slice` in it. The door
 # is bigger than the call and the view header it replaces. Banked as the price
 # of jsonbench -1.0607% and one allocation per escaped string.
-jsonbench text=93362
-encodebench text=113314
-oneshot text=116882
-basket text=106642
-widebench text=117858
-deepbench text=70354
-escapebench text=52018
-pendbench text=85698
-indexbench text=55106
-scanbench text=152338
-digestbench text=105362
-readbench text=51666
-livebench text=117490
+#
+# 2026-09-06 (a capture-free lambda is a link-time constant): twelve of the
+# thirteen fall — jsonbench 93,362 -> 93,154, encodebench 113,314 -> 112,706,
+# livebench 117,490 -> 116,850, scanbench 152,338 -> 152,226. A lambda that
+# captures nothing used to reach `k_closure_lit` through a mutable cell; it is
+# a module constant now, so the call site, the first-visit branch and the store
+# all go, and the closure's function pointer folds at link time. digestbench is
+# the one that rises, 105,362 -> 105,554, and this entry does not say why: its
+# emitted lines FALL by seven over the same change, so the 192 bytes are a
+# choice LLVM made downstream of the direct call rather than anything the
+# emitter wrote. Banked.
+jsonbench text=93154
+encodebench text=112706
+oneshot text=116258
+basket text=106370
+widebench text=117282
+deepbench text=69986
+escapebench text=51810
+pendbench text=85266
+indexbench text=54882
+scanbench text=152226
+digestbench text=105554
+readbench text=51458
+livebench text=116850

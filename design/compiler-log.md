@@ -5570,3 +5570,80 @@ append, which is the fused path doing the work it exists to do.
 
 So what remains is per-call overhead and short loops earning their keep. A
 later reading should not go looking for another `value_for`.
+
+---
+
+## 2026-09-06 (twenty-third) — a lambda that captures nothing is a link-time constant
+
+`w_klam17` is 712,277,200 instructions of encodebench, 16.11%, over 11,658,800
+calls at 61.09 apiece. It is the escape fold's lambda — `(a b -> esc_byte a b)`
+in `lib/json/text.kso`, one call per byte of every string that carries an
+escape. Every one of those calls comes from `encode_onto`, because `list/fold`
+and `escape_able` are both inlined into it; the closure call is the only
+indirection left.
+
+Joining the callgrind profile to the disassembly instruction by instruction:
+
+    69a0  push %rbp / %r15 / %r14 / %r13 / %r12 / %rbx    1.00 a call
+    69aa  sub  $0x18,%rsp                                 1.00
+    ...
+    6b0d  the b >= 32 arm, 24 instructions                0.843
+    6c05  mov  %r15b,(%rsi,%rax,1)   ; the byte           0.843
+    7082  three movs, add rsp, six pops, ret              1.00
+
+Fifteen of the sixty-one are the frame: six callee-saved pushes, the stack
+adjustment, and their mirror on the way out. 84.3% of the calls take the arm
+that stores one byte.
+
+### Why the call could not be resolved
+
+`k_call2_fast` reaches the closure through `%fnp = load ptr, ptr %c`, and `%c`
+came from `k_closure_lit`, which fills a mutable global on first visit. LLVM
+cannot know what is in it, so the tag test, the arity test and the call itself
+all stayed. The emitted code says the value never changes: a lambda with no
+captures is the same closure every evaluation, which is why the cell existed.
+
+So the emitter writes the closure as a module constant instead:
+
+    @klam17_cell_env = internal constant %KValue zeroinitializer
+    @klam17_cell_clo = internal constant { ptr, ptr, i64, i64 }
+                       { ptr @w_klam17, ptr @klam17_cell_env, i64 0, i64 2 }
+    @klam17_cell     = internal constant %KValue
+                       { i64 11, i64 ptrtoint (ptr @klam17_cell_clo to i64) }
+
+and the site loads it. The tag folds to 11, the arity to 2, and
+`load ptr, ptr @klam17_cell_clo` folds to `@w_klam17`. The baseline binary
+reaches the lambda through `call *(%r14)`; this one writes
+`call 6810 <w_klam17>`.
+
+`k_deep_copy`'s in-place arm gains `if (cl->ncaps == 0) break;`. It used to
+memcpy a one-slot env and write `cl->env` back into the header when the env did
+not survive, which is a store into `.rodata` now. A closure over nothing holds
+no arena pointer, so there was nothing to evacuate either way.
+
+### What it bought
+
+    encodebench   4,421,026,939 -> 4,390,891,562   -0.6816%
+    jsonbench     1,542,924,905 -> 1,542,924,537   -368
+
+`livebench` is the other program that runs this fold, over `lib/json` rather
+than the frozen snapshot, and it reads 4,400,130,843 here against CI's golden
+of 4,432,419,027 — a fall of 32,288,184, 0.728%. That comparison crosses hosts,
+which is worth 23,339 instructions on encodebench, 0.0005%. `basket` falls
+4,090 and `pendbench` 7,757, both at the noise of that offset: eight
+capture-free lambdas in basket and five in pendbench, none of them in a loop.
+
+`w_klam17` itself does not move: LLVM declines to inline 240 instructions of
+jump table into a 606-instruction loop, so the frame is still paid. The whole
+of the encode fall is `encode_onto`, 1,730,978,829 -> 1,713,646,429, which is
+the two folded guards and the direct call at 1.487 instructions a call. The
+decoder has one capture-free lambda and it is not in a loop.
+
+`perm_allocs` falls in all ten cost goldens — two allocations per capture-free
+lambda, the KClosure and its one-slot env, now in `.rodata`. Emitted calls fall
+in every program: the decoder 1,847 -> 1,845, encodebench 1,648 -> 1,646,
+basket 1,278 -> 1,270. Three constants replace one call, so `lines` falls where
+the program has few such lambdas and rises slightly where it has many.
+
+The fifteen frame instructions are still there, and #290 is what would take
+them: `preserve_none` on the wrapper, blocked on LLVM 19.
