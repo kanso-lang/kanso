@@ -7,8 +7,15 @@
 # to buy runtime work, or the reverse. Movement is fine and silence is not:
 # regenerate deliberately and record which way it went, and why, in
 # design/compiler-log.md beside the runtime goldens.
-recursion lines=1140 calls=42 branches=72 defines=39 rounds=4 visits=45
-dispatch lines=1132 calls=45 branches=71 defines=39 rounds=2 visits=13
-guards lines=1129 calls=43 branches=72 defines=39 rounds=2 visits=25
-records lines=1181 calls=48 branches=75 defines=39 rounds=2 visits=20
-build_block lines=1106 calls=37 branches=67 defines=38 rounds=2 visits=12
+#
+# 2026-09-06 (the proven-tags append): all five samples move by the same
+# amounts -- +46 lines, +1 call, +3 branches, +1 define -- and rounds and
+# visits hold everywhere. None of these five imports anything, so this is the
+# k_b_append_mut_int twin arriving through the preamble the emitter writes for
+# every program, not through any library. (A dated note here is at risk until
+# the regen stops stripping them; the log entry carries the same figures.)
+recursion lines=1186 calls=43 branches=75 defines=40 rounds=4 visits=45
+dispatch lines=1178 calls=46 branches=74 defines=40 rounds=2 visits=13
+guards lines=1175 calls=44 branches=75 defines=40 rounds=2 visits=25
+records lines=1227 calls=49 branches=78 defines=40 rounds=2 visits=20
+build_block lines=1152 calls=38 branches=70 defines=39 rounds=2 visits=12

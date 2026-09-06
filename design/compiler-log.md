@@ -6227,3 +6227,132 @@ No counter moved in this change. It touches `scripts/gates/all_compile.sh`,
 `scripts/gates/all_counters.sh`,
 `tests/the_compile_sweep_names_every_compile_gate.rs`,
 `tests/every_counter_gate_is_in_the_sweep.rs`, CLAUDE.md and this file.
+
+## 2026-09-06 (twenty-eighth) — the tags the sets already proved, and seven copies of one body
+
+`esc_byte` dispatches on the byte before it appends it. By the time
+`k_b_append_mut_byte`'s twin opens with `atag == 13` and `xtag == 0`, both
+answers are already decided on the path that reached it, and LLVM will not
+thread them away: the block is a merge that other predecessors reach with other
+tags. Four instructions on 9,833,200 of encodebench's 11,658,800 escape-fold
+iterations.
+
+The emitter already knows both facts. `f.set_of(acc) == BYTES` and
+`f.set_of(x) == INT` are exactly what the twin re-asks, so where the sets prove
+them there is a second door that starts after the tag tests — `append_mut_int`,
+the same body from the stats flag onward. The ownership test and the frontier
+test still decide, and anything they refuse still falls through to the C path.
+
+The second change is in the library. `esc_byte`'s seven int-literal arms each
+spelled the same two-append body, so the lambda folded over a string carried
+seven expansions of one thing. They share `esc_pair` now.
+
+    change 1 alone   livebench −0.3843%   encodebench −0.2631%   oneshot −0.1738%
+    + change 2       livebench −0.0948%   oneshot −0.0429%
+    together         livebench −0.4787%
+
+**encodebench does not move on change 2, and that is correct.**
+`bench/encodebench/encodebench/` is a frozen copy of lib/json taken at 20ab931d
+on 2026-08-07, so a lib/json edit cannot reach it. `bench/livebench` is the
+benchmark that watches the shipped library, and it is the row to read for any
+library-side change.
+
+### The beat was checked first
+
+Both benchmarks were reported on the patched tree and again on the base at
+71c80472, sorted and diffed. `livebench` and `encodebench` are IDENTICAL, every
+group and every verdict. Neither change moves a beat.
+
+### No runtime counter moves at all
+
+All eleven cost veins agree, and the lazy tier regenerates byte-identical.
+That is the right shape: this removes instructions per iteration, not
+allocations. The runtime evidence is `bench/instructions_golden.txt`, which
+this container may not measure.
+
+### What it costs, by which change reaches which program
+
+The twin is written into the preamble every program carries, so it reaches all
+thirteen without anything importing anything. `esc_pair` is in lib/json, so it
+reaches only the three programs that import it.
+
+    emitted_defines           185 ->       187      the decoder takes both
+    emitted_calls           1,845 ->     1,846
+    emitted_branches        1,204 ->     1,209
+    emitted_lines          12,726 ->    12,801
+    emitted_other_defines   1,811 ->     1,825
+    emitted_other_calls    15,832 ->    15,844
+    emitted_other_branches  9,990 ->    10,030
+    emitted_other_lines   104,622 ->   105,232
+    module_lines            5,186 ->     5,232
+    module_calls              755 ->       756
+    module_branches           431 ->       434
+    module_defines             98 ->        99
+
+Ten of the twelve in `emitted_golden_others.txt` take the twin alone: +1
+define, +1 call, +3 branches, +46 lines. oneshot and livebench take `esc_pair`
+as well: +2 defines, +1 call, +5 branches, +75 lines. So `esc_pair` on its own
+is +1 define, +2 branches, +29 lines, and it is a fair trade — it buys the
+front end 26 fewer expressions to visit.
+
+`compile_golden.txt`'s five samples each move +46 lines, +1 call, +3 branches,
++1 define; rounds and visits hold. None of the five imports anything, which is
+what makes them the clean reading of the twin's cost on its own.
+
+Two rows FALL. `front_end_visits` 17,290 -> 17,264, because seven copies of one
+body became one. And `text` is a wash: four of the thirteen binaries move by 32
+bytes each and they split both ways — encodebench 112,546 -> 112,578 and
+widebench 117,170 -> 117,202 rise, oneshot 116,034 -> 116,002 and livebench
+116,642 -> 116,610 fall, nine hold. Net zero across the thirteen, which is the
+linker placing the same work differently rather than more or less of it.
+
+`compile_instructions`, `compile_allocs` and `compile_peak_bytes` are CI's —
+this container is rustc 1.94.1 and glibc 2.39-0ubuntu8.7 against the goldens'
+1.98.1 and 8.8 — and the welfare floor moves with them.
+
+### The sweep #1279 built caught its first move, on the next change
+
+`compile_cost` went MOVED locally, before the push. That vein was structurally
+invisible three hours ago: no file under scripts/gates named it, so neither the
+sweep's derived list nor the spec replaying that derivation could see it, and
+#1278 learned it existed only when `specs` and `the other host` went red on two
+rounds. The step added to close that hole earned itself on the very next
+change that moved it.
+
+### Regenerating it deleted the note the last change left
+
+`KANSO_REGEN_COMPILE_GOLDEN=1` writes the golden's original header plus the
+measured rows and drops everything in between. The dated note b3024fb9 added to
+`bench/compile_golden_modules.txt` this morning lasted three hours and vanished
+on this regeneration. It was visible only because `git diff --stat` showed the
+file SHRINKING by ten lines when it should have grown.
+
+`scripts/gates/all_counters.sh --write` is written specifically to avoid this,
+rewriting data rows line for line and leaving comments alone; the compile_cost
+regen does the opposite and nothing said so. Both notes are restored by hand and
+the asymmetry is written into the file. The fix belongs in the regen — either
+rewrite in place, or refuse when there are comments it would drop — with a spec
+that regenerates a golden carrying a note and asserts the note survives. That
+property is testable and is currently false.
+
+### The variance is unexplained
+
+Sitting to sitting on this container the encode rows move by about sixty
+instructions with no change to the tree. Two candidate causes were tested and
+refuted: the change itself (reverting src/codegen.rs reproduced the same
+numbers) and callgrind's argument length (`--callgrind-out-file=<path>` and
+`=/dev/null` both gave escapebench 114,584,277). A third does not apply —
+container versus runner, when both sittings were this container. The cause is
+UNKNOWN, and it is written that way rather than guessed a third time, because
+the first two guesses were asserted before they were tested and neither
+survived.
+
+The twenty-sixth entry carries the same ~60 on the encode-pair decline's two
+figures (livebench +9,900,860, oneshot +24,812). Percentages are unaffected to
+four decimals, and both readings were declines either way.
+
+### What is still open
+
+28 of the escape lambda's 61 instructions a byte are frame and dispatch, about
+7.5% of encodebench, and change 2 collects 0.0948% of it. The prior art runs
+both ways: #197 shipped this shape for −3.06%, #338 declined it at +2.5582%.

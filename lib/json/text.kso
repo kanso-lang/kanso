@@ -3,26 +3,33 @@ import "std/text"
 
 # escape appends onto the byte builder: int arms compile to a jump
 # table and each byte lands in the accumulator once
+# the seven escapes share one body, so the lambda that folds `esc_byte` over a
+# string carries one expansion of it rather than seven. Seven copies is what put
+# six callee-saved registers in the wrapper's prologue, and the hot arm -- a
+# plain byte, appended in place -- paid for all of them on every byte.
+fn esc_pair acc b
+  text/append (text/append acc 92) b
+
 fn esc_byte acc 8
-  text/append (text/append acc 92) 98
+  esc_pair acc 98
 
 fn esc_byte acc 9
-  text/append (text/append acc 92) 116
+  esc_pair acc 116
 
 fn esc_byte acc 10
-  text/append (text/append acc 92) 110
+  esc_pair acc 110
 
 fn esc_byte acc 12
-  text/append (text/append acc 92) 102
+  esc_pair acc 102
 
 fn esc_byte acc 13
-  text/append (text/append acc 92) 114
+  esc_pair acc 114
 
 fn esc_byte acc 34
-  text/append (text/append acc 92) 34
+  esc_pair acc 34
 
 fn esc_byte acc 92
-  text/append (text/append acc 92) 92
+  esc_pair acc 92
 
 fn esc_byte acc b
   if (b < 32) (u_bytes acc b) (text/append acc b)

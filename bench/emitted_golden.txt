@@ -174,7 +174,8 @@
 # imports it, and its instruction count does not move by one, because it never
 # calls the fold. escapebench, indexbench and readbench do not import std/list
 # and are byte-identical. Banked as the price of encodebench -1.3766%.
-defines=185
-calls=1845
-branches=1204
-lines=12726
+# 2026-09-06 (the proven-tags append, and the escape arms folded into esc_pair): the decoder carries BOTH changes -- the twin in the preamble and esc_pair from lib/json -- so defines 185 -> 187, calls 1,845 -> 1,846, branches 1,204 -> 1,209, lines 12,726 -> 12,801.
+defines=187
+calls=1846
+branches=1209
+lines=12801

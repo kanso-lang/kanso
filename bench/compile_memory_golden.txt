@@ -118,7 +118,7 @@ front_end_rounds=42
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
 # end has that much less to visit. Banked, and it moves the same way as the
 # runtime fall it comes with rather than paying for it.
-front_end_visits=17290
+front_end_visits=17264
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -147,4 +147,10 @@ front_end_visits=17290
 # rise of 872 or 0.12%. The container measured 725,365 too, to the byte, which
 # is one more sitting for #1271's finding that the two hosts agree on this row.
 # Held as the price of seven runtime work rows falling, encodebench by 1.3766%.
+#
+# 2026-09-06 (the escape arms folded into esc_pair): front_end_visits
+# 17,290 -> 17,264, a FALL of 26. `esc_byte`'s seven int-literal arms each
+# spelled the same two-append body; they share `esc_pair` now, so the front end
+# has 26 fewer expressions to visit on lib/json. rounds hold at 42.
+# compile_peak_bytes is CI's -- this container is not the golden's host.
 compile_peak_bytes=725365
