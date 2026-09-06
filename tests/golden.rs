@@ -466,7 +466,24 @@ fn micro_corpus_survives_a_release_build() {
             false => String::new(),
         };
 
-        let ran = Command::new(stage.join(&entry)).current_dir(&stage).output().expect("it runs");
+        // The binary runs under an 8 MB stack whatever the host allows. This
+        // gate is also the ratchet's proof that a tail call the release
+        // profile gives up is loud: a_record_rebuilt_at_depth hops two hundred
+        // thousand times, and with `musttail` gone each hop spends a frame,
+        // 12 to 16 MB of them. GitHub's Linux runners raised their default to
+        // 16 MB (actions/runner-images#3257), so the same mutation that
+        // segfaults in an 8 MB shell printed the right answer there, and the
+        // nightly read the row BLIND from 2026-09-05 -- the day the frames
+        // shrank under the runner's limit -- while every shell with the
+        // ordinary 8 MB kept proving it. A stack overflow is a fact about the
+        // program only once the stack is a number the test names.
+        let ran = Command::new("sh")
+            .arg("-c")
+            .arg("ulimit -s 8192 && exec \"$0\"")
+            .arg(stage.join(&entry))
+            .current_dir(&stage)
+            .output()
+            .expect("it runs");
         assert_eq!(
             String::from_utf8_lossy(&ran.stdout),
             expected_out,

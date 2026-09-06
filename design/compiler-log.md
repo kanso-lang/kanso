@@ -3198,3 +3198,46 @@ Against these, eight rows fall: `work_digestbench` 75,565,053 to 70,784,439,
 23,797,766 to 23,738,890. The objective weighs run speed through runbench, which
 is the fifth of those, and welfare rose. The trade is taken on the sum, not
 defended row by row.
+
+### The ratchet row that went blind, and whose it was
+
+The ratchet job read `1 rows proved nothing` on every head of this branch:
+
+    BLIND specs — a release build that gives up the guaranteed tail call: the gate stayed green
+
+Seven hypotheses were measured in the container and every one came back red,
+meaning the mutation reddened the gate here under clang 18, under clang 19,
+through the ratchet's own worktree-and-shared-target path, in CI's row order,
+and on heads whose goldens matched. The eighth thing checked was the record:
+the nightly `prove all` on main, which is the only run that exercises this row
+on a runner when a branch does not touch `src/main.rs`. It proved the row red
+on 2026-09-04 (159f6b2b) and read it BLIND on 2026-09-05 (794113fc) and
+2026-09-06 (def24ed3). The row was main's for two nights before this branch
+touched the file the mutation patches, and `touched` selected it. My earlier
+claim that "main at f534f487 was green" read the pull-request job, which on
+main itself selects no rows; it was not evidence about this row.
+
+The route the mutation takes is a stack overflow. `a_record_rebuilt_at_depth`
+hops two hundred thousand times through a pair of arms; with `musttail`
+stripped, each hop spends a frame, and the release binary dies before its
+`print`. What decides whether it dies is the host's stack limit, and the
+binary's need has been falling:
+
+    compiler at 159f6b2b (2026-09-04), mutated:  segfaults at 16384 KB, prints at 24576 KB
+    compiler at 974cf44f (this branch), mutated:  segfaults at 15360 KB, prints at 16384 KB
+
+both under clang 19.1.1, and the second the same under clang 18. GitHub's
+Linux runners raised their default stack from 8 MB to 16 MB
+(actions/runner-images#3257); every shell here has 8 MB. So the Sep 4 binary
+overflowed both, the Sep 5 binary overflowed only the container, and eighteen
+commits landed between the two nightlies -- the frames shrank under the
+runner's limit somewhere in #1245 through #1257, and nothing in the tree named
+the limit the proof depended on. The container could not reproduce CI because
+it was comparing against a number CI never printed.
+
+The fix pins the number: `micro_corpus_survives_a_release_build` runs each
+release-built sample under `ulimit -s 8192`, so the gate's reading stops
+depending on where it runs. Raising the container's limit to 32 MB reproduced
+the blind row locally; the fix reddens it there; and the unmutated corpus
+still passes under the pinned 8 MB, which is what the row proved on every
+shell before this. CI's ratchet is the spec that was red first, on eight heads.
