@@ -4971,3 +4971,27 @@ emitted_other_calls 15,818, emitted_other_branches 9,880, emitted_other_lines
 guarded whitespace arms and three helper functions are code the inlined
 `skip_ws` was not, and the digit test's `if` gives a little of it back. Against
 that the decode retires 166,710,002 fewer instructions, oneshot 1,111,390 fewer.
+
+---
+
+## 2026-09-06 (fourteenth) — the ratchet caught its own mutation going stale
+
+`a_decoder_that_answers_a_wrong_checksum` patched `acc2 = push acc v` in
+`array_step`, and that binding went in the eleventh entry above when the
+function stopped calling `skip_ws` and started handing its byte straight to
+`array_delim`. The ratchet's `applies_all` reported it on the same branch that
+caused it:
+
+    ratchet: 1 mutations no longer apply
+      STALE json decoder end-to-end (native, 150 decodes)
+
+The push is an argument now and the mutation doubles it there. Watched red on
+the new source before it was taken as fixed: the mutated decoder answers
+checksum 48000 against the 24000 it owes, which is the doubling the mutation's
+own comment predicts, and `scripts/gates/native_checksum.sh` exits 1 on it and 0
+restored.
+
+`applies_all` reads a worktree of HEAD rather than the working tree, so the fix
+has to be committed before the ratchet can see it. A session that edits the
+mutation and re-runs from the working tree gets the same STALE line and has no
+way to tell whether the edit was wrong.
