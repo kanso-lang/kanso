@@ -284,7 +284,14 @@ bench_ce = text/concat bench_cd (text/concat bench_de bench_run)
 
 bench_cf = text/concat bench_ce bench_rest
 
-bench_goldens = text/concat bench_ab bench_cf
+# The run program joined on 2026-09-06. Its three peak rows and its
+# instruction row are the objective's whole runtime side after Clay's gavel
+# that day, so this is the one cost golden whose movement moves welfare -- and
+# a golden the gate does not walk is one whose regressions arrive unpriced,
+# which is the shape the siblings above were each added to close.
+bench_runbench = [["bench/cost_golden_run.txt" "run_"]]
+
+bench_goldens = text/concat bench_runbench (text/concat bench_ab bench_cf)
 
 mem_dir = "tests/golden/mem"
 

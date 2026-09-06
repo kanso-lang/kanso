@@ -414,80 +414,58 @@ fn gauge run w ir ca held
   now = measured (counters run) (work_of w) compile[1]! compile[2]! compile[3]!
   os/read_file! floor_path . (f -> against now (json/decode f))
 
-fn baseline_of held now
-  base = held["baseline"]!
-  fresh = list/fold terms [] (acc t -> text/concat acc (entering base now t))
-  merged base fresh
-
-# The names this run had to grant, for the report and for the floor file. Read
-# off the same condition `entering` uses, so the two cannot disagree.
-fn granted_now held
-  base = held["baseline"]!
-  list/to_list (list/fold terms [] (acc t -> text/concat acc (minted base t)))
-
-fn minted base t
-  list/to_list (list/select t.counters (c -> base[c] == none))
-
-# Every counter standing on a rule rather than a measurement: the ones this
-# run granted, plus the ones an earlier run granted and wrote down.
-fn granted_all held
-  text/concat (written_down held["granted"]) (granted_now held)
-
-fn written_down none
-  []
-
-fn written_down g
-  g
-
-fn entering base now t
-  known = list/to_list (list/select t.counters (c -> base[c] != none))
-  missing = list/to_list (list/select t.counters (c -> base[c] == none))
-  at = standing now base known t.satiation
-  list/to_list (list/map missing (c -> [c (math/round (now[c]! * at))]))
-
-# Where the dimension already stands, as a ratio a newcomer can be given.
+# Every counter the objective weighs stands on a measurement of its own.
 #
-# The term is a mean of SATURATED values now, so standing at the mean ratio is
-# no longer the same thing as standing where the term stands — the curve is not
-# linear, and a newcomer placed at the mean ratio would move the term. What
-# leaves the term untouched is a newcomer whose SATISFACTION equals the mean
-# satisfaction, so that is computed and then read back through the curve:
-# `r / (r + s) = m` inverts to `r = m * s / (1 - m)`.
+# One used to be granted a baseline instead: `entering` gave a counter new to
+# the model a reading of `now * standing`, the ratio whose satisfaction equalled
+# its dimension's current mean, so that landing day cost the floor nothing. The
+# rule existed because benchmarks joined the run side one at a time -- nine of
+# twenty-one counters stood on it -- and each arrival at parity would otherwise
+# have scored as a free win for measuring something.
 #
-# A dimension whose counters are all new has nowhere to stand and enters at
-# one, which is the old rule and right for that case alone.
-fn standing now base known sat
-  stood now base known sat (length known == 0)
+# It was never neutral after landing day. Saturation is concave, so a counter
+# granted a high standing has almost no headroom left and one entered at parity
+# has a great deal, and that difference decided at least one verdict: the
+# carry-tier arms of 2026-09-01 scored 74.31 -> 73.75 with the digest baselines
+# at their dimension's standing and 70.14 -> 72.99 with them at parity, a
+# decline and an acceptance of the same two arms.
+#
+# Clay's gavel of 2026-09-06 put the run side on one consolidated program, so
+# nothing joins one benchmark at a time any more and the rule has nobody left
+# to grant a baseline to. What is left of it would only ever fire by accident,
+# on a counter somebody added to the model and forgot to measure -- which is
+# the thing to catch rather than to paper over.
+# The refusal is taken HERE, in the arm that decides whether to score at all,
+# rather than in a function returning either a baseline or a complaint. An
+# effect is a value in kanso: a `baseline_of` whose failing arm answered
+# `io/write_err ... . os/exit` handed that chain back to its caller as the
+# baseline, and `score` indexed it and died saying "indexing takes a list or
+# string with a 1-based position, or a map with a key" -- a true sentence about
+# the wrong thing, three functions from the missing key.
+fn unbaselined base
+  list/to_list (list/select counter_names (c -> base[c] == none))
 
-fn stood _ _ _ _ true
-  1.0
-
-fn stood now base known sat false
-  each = list/map known (c -> satisfaction (ratio_of now base c) sat)
-  sats = list/to_list each
-  mean = list/sum sats / (1.0 * length sats)
-  mean * sat / (1.0 - mean)
-
-fn merged base fresh
-  carried base fresh (length fresh == 0)
-
-fn carried base _ true
-  base
-
-fn carried base fresh false
-  list/to_h (text/concat (pairs_of base) fresh)
-
-# What the baseline already holds, rather than what the model expects: a
-# counter new to the model has no entry here yet, and adding one is the job of
-# the fresh list this is concatenated with.
-fn pairs_of base
-  kept = list/select counter_names (c -> base[c] != none)
-  list/to_list (list/map kept (c -> [c base[c]!]))
+unmeasured = """
+  the objective weighs a counter the floor file has no baseline for, so there
+  is nothing to score it against. Until the 2026-09-06 gavel a missing baseline
+  was granted automatically, at the ratio that left its dimension's score
+  untouched; the run side is one program now and nothing joins it a benchmark
+  at a time, so a counter with no measurement behind it is a mistake. Measure
+  it and write the reading into bench/welfare_floor.json's baseline.
+"""
 
 fn against now held
-  base = baseline_of held now
+  base = held["baseline"]!
+  missing = unbaselined base
+  scored now held base missing (length missing == 0)
+
+fn scored now held base _ true
   value = score now base
   os/args . (a -> either now base held value a)
+
+fn scored _ _ _ missing false
+  listed = text/join missing ", "
+  io/write_err "{unmeasured}  no baseline for: {listed}\n" . (_ -> os/exit 2)
 
 # THE COUNTER SET THE SCORE WAS MADE OF, one `name=value` a line.
 #
@@ -605,10 +583,8 @@ fn paid base held value reason false
   rounded = 1.0 * units / 100.0
   note = list/to_h [["floor" rounded] ["why" reason]]
   grown_history = push (history_of held) note
-  standing_on = [["granted" (granted_all held)]]
   keys = [["baseline" base] ["floor" value] ["history" grown_history]]
-  out = text/concat keys standing_on
-  written (list/to_h out) value reason
+  written (list/to_h keys) value reason
 
 fn written held value reason
   os/write_file floor_path "{json/encode held}\n"
@@ -643,23 +619,7 @@ fn reported now base held value
   reason = text/slice (last_why held) 1 52
   tail = "(ceiling 100, ratchet {era_of held}: {reason}…)"
   io/write "{head}   {tail}\n"
-    . (_ -> on_a_rule held)
     . (_ -> detailed now base . (_ -> verdict value floor))
-
-# Which counters are standing on the entering rule rather than on a
-# measurement. A reader comparing two counters' ratios is comparing unlike
-# things unless they know which, and until this printed, nobody could.
-fn on_a_rule held
-  standing_on = granted_all held
-  ruled_by standing_on (length standing_on == 0)
-
-fn ruled_by _ true
-  io/write ""
-
-fn ruled_by standing_on false
-  listed = text/join standing_on ", "
-  said = "granted baselines (entered at their dimension's standing, never"
-  io/write "{said} measured): {listed}\n"
 
 fn moved? now base c
   base[c]! != now[c]!

@@ -60,8 +60,9 @@ jobs:
           sh scripts/build_wasm.sh
       # --no-fail-fast because cargo stops at the first failing test
       # BINARY, not the first failing test, and the binaries run in
-      # alphabetical order. With welfare red in
-      # a_granted_baseline_says_it_is_one, both this job and the macos
+      # alphabetical order. With welfare red in its own spec (then
+      # a_granted_baseline_says_it_is_one, retired 2026-09-06 with the
+      # rule it pinned), both this job and the macos
       # one were running the nine binaries that sort before it and
       # reporting that as the suite. A socket spec added on 2026-09-04
       # had never executed on arm at all, and nothing said so: the job
@@ -101,8 +102,9 @@ jobs:
           sh scripts/build_wasm.sh
       # --no-fail-fast because cargo stops at the first failing test
       # BINARY, not the first failing test, and the binaries run in
-      # alphabetical order. With welfare red in
-      # a_granted_baseline_says_it_is_one, both this job and the macos
+      # alphabetical order. With welfare red in its own spec (then
+      # a_granted_baseline_says_it_is_one, retired 2026-09-06 with the
+      # rule it pinned), both this job and the macos
       # one were running the nine binaries that sort before it and
       # reporting that as the suite. A socket spec added on 2026-09-04
       # had never executed on arm at all, and nothing said so: the job
