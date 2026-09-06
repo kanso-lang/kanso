@@ -5869,17 +5869,44 @@ allocations it was reclaiming become real ones.
 
 **This isolates a variable #313 could not.** That entry removed the closure and
 respelled the fold together, and attributed its +3.01% to the closure. Here the
-closure is untouched and the beat collapses anyway, so what the beat depends on
-is which function the fold IS, not whether a lambda sits inside it. The
-placement is in `src/beat.rs`: every declaration whose file starts with `std/`
-or `lib/` is `imported`, imported groups are stripped from the carry tier, and
-`ids.retain(|g, _| !imported.contains(g.0) || !carried_needed.contains(g))`
-then drops an imported id whose carry was just taken away. `escape_able`
-reaching its fold through `list/fold` and reaching `esc_flat` directly are
-different shapes to that retain, and only one of them keeps a beat. Which of
-the two clauses does it is not established here and the entry does not guess.
+closure is untouched and the beat collapses anyway, so a lambda's presence is
+not what the beat turns on.
+
+**And the beat that dies is not the fold's.** `KANSO_BEAT_REPORT=1` gives the
+same verdict for the fold in both shapes:
+
+    beat: list/fold_flat/4: grow-only: another group tail-calls it
+                            (unbracketed entry) (argument 2 also carries heap)
+    beat: json/esc_flat/4:  grow-only: another group tail-calls it
+                            (unbracketed entry) (argument 2 also carries heap)
+
+Grow-only both times: the fold never had a beat to lose. What the report shows
+moving is two functions the change does not touch:
+
+    json/encode_items/3   beat: rewinds every iteration
+                       -> grow-only: argument 1 may carry heap across the iteration
+    json/encode_pairs/3   beat: rewinds every iteration
+                       -> grow-only: argument 1 may carry heap across the iteration
+
+The encoder's item and pair loops are where livebench's five million beat
+iterations were, and respelling the fold two levels below them changes what the
+analysis concludes about their accumulator. **An earlier revision of this entry
+said the beat depends on which function the fold is and pointed at the
+`imported`/`carried` retains in `src/beat.rs`. That was wrong on both counts,
+and reading the report rather than the source is what corrected it.**
+
+The entry hop was tested too, since `escape_able -> list/fold -> fold_flat` has
+one more call than `escape_able -> esc_flat`. Mirroring it exactly --
+`escape_able -> esc_fold -> esc_flat` -- changes nothing: `beat_iters` 401 and
+`allocs` 51,551,103 again, to the instruction. So the depth of the entry is not
+it either. What remains is the accumulator's provenance, and the report names
+the conclusion (`argument 1 may carry heap`) without saying which step reached
+it; that is not established here.
 
 What it settles for the invariant-parameter thread: the library route is
-closed. A fold respelled where the sets can see it loses more to the beat than
-the proof was ever worth, so the 1.4650% has to be collected in the EMITTER,
-with one fold, or not at all.
+closed. A fold respelled where the sets can see it costs two loops above it
+their beats, and more than the proof was ever worth, so the 1.4650% has to be
+collected in the EMITTER with one fold, or not at all. It also sharpens the
+caution for that work: a specialisation that clones a fold has to be watched at
+its CALLERS, because this cost landed two levels up from the edit and the
+instruction row alone would have said only "+7.74%, unexplained".
