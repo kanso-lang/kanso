@@ -4442,11 +4442,7 @@ impl<'a> Backend<'a> {
                 if captures.is_empty() {
                     let cell = format!("{lifted}_cell");
                     // the ccc wrapper, never the tailcc fn: C calls this pointer
-                    self.closure_consts.push((
-                        cell.clone(),
-                        format!("w_{lifted}"),
-                        params.len(),
-                    ));
+                    self.closure_consts.push((cell.clone(), format!("w_{lifted}"), params.len()));
                     let t = f.tmp();
                     f.line(&format!("{t} = load %KValue, ptr @{cell}"));
                     return Ok(t);

@@ -883,4 +883,10 @@
 # layout: lib/json gains a declaration, so there are expressions to visit and
 # two more fixpoint rounds — the same move compile_memory's rounds and visits
 # record. Banked as the price of jsonbench -1.0607%.
-compile_instructions=42089618
+#
+# 2026-09-06 (a capture-free lambda is a link-time constant): 42,089,618 ->
+# 42,092,346, a rise of 2,728 or 0.0065%. The emitter writes three module
+# constants where it wrote one `k_closure_lit` call, and src/codegen.rs is the
+# compiler, so its own bytes and the layout under them move whether or not the
+# decision this row counts changed.
+compile_instructions=42092346

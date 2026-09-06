@@ -5647,3 +5647,29 @@ the program has few such lambdas and rises slightly where it has many.
 
 The fifteen frame instructions are still there, and #290 is what would take
 them: `preserve_none` on the wrapper, blocked on LLVM 19.
+
+### CI's rows, and the one that rose
+
+    encodebench   4,421,003,600 -> 4,390,892,021   -0.6811%
+    livebench     4,432,419,027 -> 4,400,131,256   -0.7285%
+    oneshot          24,190,898 ->     24,109,317  -0.3373%
+    deepbench       705,892,821 ->    704,511,486  -0.1957%
+    digestbench      76,854,629 ->     77,175,692  +0.4177%
+
+Eleven of the thirteen fall. escapebench and indexbench rise by 28 each, which
+is one closure built once instead of a first-visit branch taken once.
+digestbench rises 321,063, and its `.text` rises 192 bytes over the same
+change while its emitted lines fall by seven — the direct call changes what
+LLVM inlines there, downstream of anything the emitter wrote. Welfare weighs
+all thirteen and reads 75.30 -> 75.31, so the trade is taken. `compile_instructions`
+rises 2,728, 0.0065%, which is what any edit to src/codegen.rs costs.
+
+### And the wrapper still cannot be inlined
+
+The direct call raises the obvious next question: `w_klam17` has one hot caller
+now, so mark it `alwaysinline` and let the loop swallow it. Built and measured:
+encodebench reads **4,390,891,562, byte-identical**. The IR changes — the
+wrapper is inlined into `encode_onto` and the tailcc body is called from there,
+rather than the body being inlined into the wrapper — and the machine
+instruction count does not move at all, because the frame is paid either way.
+Reverted. The fifteen instructions are #290's.
