@@ -309,12 +309,20 @@ Only Clay arms, disarms or retimes it.
 ### The welfare number only goes up
 
 - **One scalar covers runtime and compile cost together**, because the
-  per-counter goldens cannot see a trade. `scripts/welfare.kso` weighs decode
-  allocations and arena blocks, encode allocations and arena blocks, fixpoint
-  rounds, expression visits and emitted lines into a single score. **It is an
+  per-counter goldens cannot see a trade. `scripts/welfare/welfare.kso` weighs
+  TWENTY-EIGHT counters into a single score: an instruction row for each of the
+  thirteen benchmarks, twelve memory rows (peak bytes and arena blocks, by
+  benchmark), and three compile rows — `compile_instructions`, `compile_allocs`
+  and `compile_peak_bytes`. `bench/objective_sources.txt` is the list, and
+  `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
+  is checkable rather than remembered. **This sentence named the wrong terms
+  until 2026-09-06**: it said fixpoint rounds, expression visits and emitted
+  lines, none of which the objective has weighed since the 2026-09-03 rebuild,
+  and a session reading it spent a round expecting a 4.5% rise in emitted lines
+  to cost welfare when the objective cannot see that vein at all. **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its
-  moves mean anything. It currently reads about 85. Every
+  moves mean anything. It currently reads about 75. Every
   term is deterministic, so the number moves only when somebody changes the
   compiler. CI fails when it drops.
 - **The sum is the objective; the terms are diagnostics.** A term getting worse

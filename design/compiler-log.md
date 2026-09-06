@@ -4894,3 +4894,29 @@ All nine are the same thing said nine ways — six guarded arms, three helper
 functions and eleven `ws?` call sites are code the inlined `skip_ws` was not.
 They buy 125,115,152 instructions off the decode, and welfare weighs none of
 them.
+
+---
+
+## 2026-09-06 (twelfth) — the objective's own count was one behind, in three files
+
+CLAUDE.md said `scripts/welfare.kso` weighs "decode allocations and arena
+blocks, encode allocations and arena blocks, fixpoint rounds, expression visits
+and emitted lines". The path has a directory in it, and none of those last three
+has been a term since the 2026-09-03 rebuild. What the objective actually weighs
+is twenty-eight counters: an instruction row for each of the thirteen
+benchmarks, twelve memory rows, and `compile_instructions`, `compile_allocs`
+and `compile_peak_bytes`.
+
+The cost of the stale sentence is in the entry above. Building the four-arm
+whitespace fold, I read the emitted-lines rise of 4.5% as a welfare term and
+spent a round working out why the number went the other way; the objective
+cannot see that vein at all, and the fall came entirely from
+`compile_instructions`.
+
+`bench/objective_sources.txt` and the spec that replays it both said 27, and
+the file has held 28 since livebench joined on 2026-09-05. Nothing was
+unchecked — `tests/the_objective_reads_what_the_gate_watches.rs` reads the file
+rather than a number, and it passes — but three pieces of prose disagreed with
+the data beside them, which is the shape CLAUDE.md's own "all TEN cost goldens"
+correction was about. All three now say 28, and CLAUDE.md's sentence names the
+counters and points at the file rather than listing them from memory.

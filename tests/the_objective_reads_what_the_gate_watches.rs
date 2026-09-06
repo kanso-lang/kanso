@@ -7,7 +7,7 @@
 //! for the memory terms `peak_of` sums the arena, held and perm peaks, so a
 //! `*_peak_bytes` counter is a derived quantity with no row holding its value.
 //! Joining on values was measured before the file was written and cannot work:
-//! of the 27 counters, six match no row at all and two match several (2,097,152
+//! of the 28 counters, six match no row at all and two match several (2,097,152
 //! is `arena_peak_bytes` in four goldens at once).
 //!
 //! So it is written down, and a written-down link is one a rename silently
