@@ -12,9 +12,11 @@ fn array_delim _ none p _
 fn array_delim _ c p _
   fail p "expected `,` or `]`, found `{text/utf8 [c]}`"
 
+# No skip here: `parse_value` opens with its own `skip_ws`, and this one ran
+# on the same position first, so the second walk always found the byte the
+# first had stopped on. jsonbench's arrays paid it once an element.
 fn array_items cs p acc
-  p2 = skip_ws cs p
-  array_step cs (parse_value cs p2) acc
+  array_step cs (parse_value cs p) acc
 
 fn array_open _ 93 p
   parsed (p + 1) []

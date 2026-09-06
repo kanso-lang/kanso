@@ -127,7 +127,11 @@
 # 2026-09-05 (the literal's fast door): the decoder gains one define, one
 # call and eleven lines -- the door itself, emitted once per module.
 #
+#
+# 2026-09-06 (the array's second walk over the same whitespace): calls 1765 ->
+# 1764 and lines 12049 -> 12047. One `skip_ws` call and its two lines leave
+# `array_items`. Banked.
 defines=180
-calls=1765
+calls=1764
 branches=1150
-lines=12049
+lines=12047
