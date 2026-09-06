@@ -1,0 +1,16 @@
+# `append acc (slice cs a b)` is fused: the range is copied straight out of
+# `cs` and the view the slice would have been is never built. Forty rounds
+# against the same source, so a view per round would show as forty allocations
+# here. With the emitter's fusion removed this file reads allocs=85 and
+# sh_bytes=1944 against the 45 and 984 below.
+import "std/text"
+
+src = text/bytes "abcdefghij"
+
+fn take acc 0
+  acc
+
+fn take acc n
+  take (text/append acc (text/slice src 3 5)) (n - 1)
+
+pub play = print "{text/utf8 (take (text/bytes "") 40)}"

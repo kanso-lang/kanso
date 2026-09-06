@@ -7090,6 +7090,8 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
 
 static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
                                                         KValue x, int mutate);
+KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
+                        long long n, int mutate);
 
 /* A comma, a colon, a brace: three quarters of the appends the encoder makes
    are one byte into spare capacity, and this is the whole of that case.
@@ -7151,6 +7153,14 @@ static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
         k_die("append takes bytes and a string, bytes, or byte");
         return k_none();
     }
+    return k_b_append_range(acc, a, src, n, mutate);
+}
+
+/* The copy itself, once the source is a pointer and a length. `append_wide`
+   reaches it after unpacking a value; `append_slice` reaches it with a range
+   of a bytes value it never boxed. */
+KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
+                        long long n, int mutate) {
     long long acap = a->cap < 0 ? -a->cap : a->cap;
     if (acap) {
         KBuf* buf = ((KBuf*)a->data) - 1;
@@ -7256,6 +7266,38 @@ KValue k_b_append(KValue acc, KValue x) { return k_b_append_into(acc, x, 0); }
 
 /* The same append at a site the linearity analysis proved unique. */
 KValue k_b_append_mut(KValue acc, KValue x) { return k_b_append_into(acc, x, 1); }
+
+/* `append acc (slice cs from to)` where both sides are bytes. The slice is
+   built to be copied and dropped, and a view is a header the arena has to
+   hand out; this reads the range straight out of `cs` and hands
+   k_b_append_into a pointer and a length, so nothing is allocated for it.
+
+   The bounds rule is k_b_slice_raw's, to the character: an out-of-range or
+   inverted range is the empty slice, which appends nothing, and `acc` still
+   has to be bytes for that to be legal. Anything the tags turn away goes the
+   long way, so the two spellings cannot disagree. */
+KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
+                        long long mutate) {
+    if (!k_not_failure(acc)) return acc;
+    if (!k_not_failure(cs)) return cs;
+    if (!k_not_failure(fromv)) return fromv;
+    if (!k_not_failure(tov)) return tov;
+    if (cs.tag != K_BYTES || fromv.tag != K_INT || tov.tag != K_INT) {
+        return k_b_append_into(acc, k_b_slice(cs, fromv, tov), (int)mutate);
+    }
+    if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
+    KBytes* a = k_as_bytes(acc);
+    KBytes* src = k_as_bytes(cs);
+    long long from = fromv.payload, to = tov.payload;
+    /* The empty slice appends nothing, and the view it would have been is not
+       built: a fifth of the runs between two escapes are empty, and a header
+       allocated to carry zero bytes is 204,450 allocations a decode. */
+    if (from < 1 || from > to || to > src->len) {
+        return k_b_append_range(acc, a, src->data, 0, (int)mutate);
+    }
+    return k_b_append_range(acc, a, src->data + (from - 1), to - from + 1,
+                            (int)mutate);
+}
 
 /* find2 with a floor: also stops at the first byte below `lim`. Escape
    scanning wants this shape — quote, backslash, and control bytes all

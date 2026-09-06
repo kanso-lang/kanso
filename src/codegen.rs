@@ -265,6 +265,139 @@ slow:
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
+; `append acc (slice cs from to)` where the accumulator is unique, both sides
+; are bytes and the range fits the spare capacity it already has. That is the
+; whole of what the json decoder's escape walk does between two escapes, and
+; the out-of-line pair it used to reach — a call into `append_slice` and a
+; second into `append_range` — cost more than the byte-at-a-time walk it
+; replaced. The range is a pointer and a length here, so the claim is the same
+; five loads the byte arm above makes and the copy is the same small ladder.
+; Anything else — a growth, a counted run, an empty or out-of-range slice, a
+; non-unique accumulator — falls to the C, which is the only spelling of the
+; rule.
+define internal %KValue @k_b_append_slice_fast(%KValue %acc, %KValue %cs, %KValue %fv, %KValue %tv, i64 %mut) alwaysinline {
+  %ismut = icmp eq i64 %mut, 1
+  br i1 %ismut, label %qtags, label %qslow
+qtags:
+  %qat = extractvalue %KValue %acc, 0
+  %qab = icmp eq i64 %qat, 13
+  %qct = extractvalue %KValue %cs, 0
+  %qcb = icmp eq i64 %qct, 13
+  %qft = extractvalue %KValue %fv, 0
+  %qfi = icmp eq i64 %qft, 0
+  %qtt = extractvalue %KValue %tv, 0
+  %qti = icmp eq i64 %qtt, 0
+  %qt1 = and i1 %qab, %qcb
+  %qt2 = and i1 %qfi, %qti
+  %qt3 = and i1 %qt1, %qt2
+  br i1 %qt3, label %qstat, label %qslow
+qstat:
+  %qso = load i32, ptr @k_stats_on
+  %qcount = icmp ne i32 %qso, 0
+  br i1 %qcount, label %qslow, label %qrange
+; An out-of-range or inverted range is the empty slice, which appends nothing —
+; k_b_slice_raw's rule, and the reason it is answered here rather than sent to
+; the C: a fifth of the runs between two escapes are empty, because two escapes
+; sitting next to each other leave no bytes between them.
+qrange:
+  %qfrom = extractvalue %KValue %fv, 1
+  %qto = extractvalue %KValue %tv, 1
+  %qcp = extractvalue %KValue %cs, 1
+  %qc = inttoptr i64 %qcp to ptr
+  %qclen = load i64, ptr %qc
+  %qlo = icmp sge i64 %qfrom, 1
+  %qorder = icmp sle i64 %qfrom, %qto
+  %qhi = icmp sle i64 %qto, %qclen
+  %qr1 = and i1 %qlo, %qorder
+  %qgood = and i1 %qr1, %qhi
+  %qcdp = getelementptr i8, ptr %qc, i64 8
+  %qcdata = load ptr, ptr %qcdp
+  %qoff = add i64 %qfrom, -1
+  %qoffs = select i1 %qgood, i64 %qoff, i64 0
+  %qsrc = getelementptr i8, ptr %qcdata, i64 %qoffs
+  %qspan = sub i64 %qto, %qoff
+  %qn = select i1 %qgood, i64 %qspan, i64 0
+  %qbp = extractvalue %KValue %acc, 1
+  %qb = inttoptr i64 %qbp to ptr
+  %qlen = load i64, ptr %qb
+  %qadp = getelementptr i8, ptr %qb, i64 8
+  %qadata = load ptr, ptr %qadp
+  %qcapp = getelementptr i8, ptr %qb, i64 16
+  %qcap = load i64, ptr %qcapp
+  %qcapneg = sub i64 0, %qcap
+  %qisneg = icmp slt i64 %qcap, 0
+  %qcapa = select i1 %qisneg, i64 %qcapneg, i64 %qcap
+  %qowned = icmp ne i64 %qcap, 0
+  br i1 %qowned, label %qfr, label %qslow
+qfr:
+  %qusedp = getelementptr i8, ptr %qadata, i64 -8
+  %qused = load i64, ptr %qusedp
+  %qatfront = icmp eq i64 %qused, %qlen
+  %qlenn = add i64 %qlen, %qn
+  %qfits = icmp sle i64 %qlenn, %qcapa
+  %qok = and i1 %qatfront, %qfits
+  br i1 %qok, label %qwrite, label %qslow
+; The same ladder the string arm uses, for the same reason: a run between two
+; escapes is a median of three bytes, and a call into glibc's memcpy spends
+; most of its instructions deciding how wide a move to make.
+qwrite:
+  %qdst = getelementptr i8, ptr %qadata, i64 %qlen
+  %qsmall = icmp ult i64 %qn, 17
+  br i1 %qsmall, label %qw16, label %qwbig
+qwbig:
+  call void @llvm.memcpy.p0.p0.i64(ptr %qdst, ptr %qsrc, i64 %qn, i1 false)
+  br label %qwdone
+qw16:
+  %qge8 = icmp ugt i64 %qn, 7
+  br i1 %qge8, label %qw8, label %qw7
+qw8:
+  %qw8a = load i64, ptr %qsrc, align 1
+  %qw8se = getelementptr i8, ptr %qsrc, i64 %qn
+  %qw8sp = getelementptr i8, ptr %qw8se, i64 -8
+  %qw8b = load i64, ptr %qw8sp, align 1
+  store i64 %qw8a, ptr %qdst, align 1
+  %qw8de = getelementptr i8, ptr %qdst, i64 %qn
+  %qw8dp = getelementptr i8, ptr %qw8de, i64 -8
+  store i64 %qw8b, ptr %qw8dp, align 1
+  br label %qwdone
+qw7:
+  %qge4 = icmp ugt i64 %qn, 3
+  br i1 %qge4, label %qw4, label %qw3
+qw4:
+  %qw4a = load i32, ptr %qsrc, align 1
+  %qw4se = getelementptr i8, ptr %qsrc, i64 %qn
+  %qw4sp = getelementptr i8, ptr %qw4se, i64 -4
+  %qw4b = load i32, ptr %qw4sp, align 1
+  store i32 %qw4a, ptr %qdst, align 1
+  %qw4de = getelementptr i8, ptr %qdst, i64 %qn
+  %qw4dp = getelementptr i8, ptr %qw4de, i64 -4
+  store i32 %qw4b, ptr %qw4dp, align 1
+  br label %qwdone
+qw3:
+  %qge1 = icmp ugt i64 %qn, 0
+  br i1 %qge1, label %qw1, label %qwdone
+qw1:
+  %qw1a = load i8, ptr %qsrc, align 1
+  store i8 %qw1a, ptr %qdst, align 1
+  %qwmid = lshr i64 %qn, 1
+  %qw1sm = getelementptr i8, ptr %qsrc, i64 %qwmid
+  %qw1b = load i8, ptr %qw1sm, align 1
+  %qw1dm = getelementptr i8, ptr %qdst, i64 %qwmid
+  store i8 %qw1b, ptr %qw1dm, align 1
+  %qwlast = add i64 %qn, -1
+  %qw1sl = getelementptr i8, ptr %qsrc, i64 %qwlast
+  %qw1c = load i8, ptr %qw1sl, align 1
+  %qw1dl = getelementptr i8, ptr %qdst, i64 %qwlast
+  store i8 %qw1c, ptr %qw1dl, align 1
+  br label %qwdone
+qwdone:
+  store i64 %qlenn, ptr %qusedp
+  store i64 %qlenn, ptr %qb
+  ret %KValue %acc
+qslow:
+  %qf = call %KValue @k_b_append_slice(%KValue %acc, %KValue %cs, %KValue %fv, %KValue %tv, i64 %mut)
+  ret %KValue %qf
+}
 define internal %KValue @k_b_utf8_slice_fast(%KValue %c, %KValue %f, %KValue %t, ptr %o) alwaysinline {
   %ct = extractvalue %KValue %c, 0
   %ft = extractvalue %KValue %f, 0
@@ -991,6 +1124,7 @@ declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)
+declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
 declare %KValue @k_b_to_float(%KValue, ptr)
@@ -5455,6 +5589,45 @@ impl<'a> Backend<'a> {
                             parts[0], parts[1], parts[2]
                         ));
                         f.record(&t, infer::builtin_set("utf8", &[sliced]));
+                        return Ok(t);
+                    }
+                }
+            }
+        }
+        // `append acc (slice cs a b)` builds a view header for the only
+        // purpose of copying its bytes out and dropping it. The slice's whole
+        // content is a pointer and a length the accumulator's copy needs
+        // anyway, so the fused door reads the range out of `cs` and never
+        // boxes it. Same wrapper-spelling rule as the pair above: only the
+        // builtin spelling is fused, and `append` never gives birth to an err,
+        // so no origin has to move with it.
+        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
+            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[1] {
+                if let Expr::Ident(inner, _) = &**inner_head {
+                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                        && inner_args.len() == 3
+                    {
+                        let acc = self.emit_expr(f, &args[0])?;
+                        let acc = self.maybe_force(f, acc);
+                        let mut parts = Vec::new();
+                        for a in inner_args {
+                            let v = self.emit_expr(f, a)?;
+                            parts.push(self.maybe_force(f, v));
+                        }
+                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
+                        let sliced = infer::builtin_set("slice", &sets);
+                        // the same uniqueness the unfused site would have got
+                        let mutate = self.in_place_pushes.contains(&(
+                            f.file.clone(),
+                            span.line as usize,
+                            span.col as usize,
+                        ));
+                        let t = f.tmp();
+                        f.line(&format!(
+                            "{t} = call %KValue @k_b_append_slice_fast(%KValue {acc}, %KValue {}, %KValue {}, %KValue {}, i64 {})",
+                            parts[0], parts[1], parts[2], i64::from(mutate)
+                        ));
+                        f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), sliced]));
                         return Ok(t);
                     }
                 }

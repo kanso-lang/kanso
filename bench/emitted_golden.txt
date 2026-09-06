@@ -137,7 +137,16 @@
 # `emit_cond` recurses into an `if` standing in a condition, which is what an
 # `and` parses to, so the inner one is asked rather than built as a tagged
 # boolean and taken apart. Twenty branches go with the phis. Banked.
-defines=183
-calls=1832
-branches=1185
-lines=12509
+#
+# 2026-09-06 (append of a slice reads the range in place): defines 183 -> 185,
+# calls 1,832 -> 1,847, branches 1,185 -> 1,203, lines 12,509 -> 12,716, a rise
+# of 207 lines or 1.65%. 134 of those lines are the new `k_b_append_slice_fast`
+# door, which every program carries whether it uses one or not — the same shape
+# and the same price as `append_mut_byte` and `find2_fast` before it, and the
+# reason every other benchmark in emitted_golden_others.txt rises by exactly
+# 134 too. The rest is the decoder's own two fused sites. Banked as the price
+# of jsonbench -1.06% and one allocation per escaped string.
+defines=185
+calls=1847
+branches=1203
+lines=12716

@@ -75,8 +75,17 @@ fn str_char _ none p _
 fn str_char cs c p acc
   str_chars cs (p + 1) (text/append acc c)
 
+# The run between two escapes is one slice. A string with an escape used to
+# walk to the closing quote a character at a time, appending each, so a `\n`
+# near the front of a long value cost a byte-by-byte copy of everything after
+# it. find2 already knows how to skip to the next quote or backslash — it is
+# the call the escape-free path makes — and the emitter fuses the append of a
+# slice into one copy, so the run costs no view header.
 fn str_chars cs p acc
-  str_char cs cs[p] p acc
+  str_run cs p (text/find2 cs p 34 92) acc
+
+fn str_run cs p n acc
+  str_char cs cs[n] n (text/append acc (text/slice cs p (n - 1)))
 
 fn str_escape cs 34 p acc
   str_chars cs (p + 2) (text/append acc 34)

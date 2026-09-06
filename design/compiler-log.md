@@ -5180,6 +5180,128 @@ because the tag is a phi over exactly `{int, none}`.
 
 ---
 
+## 2026-09-06 (twentieth) — an append of a slice reads the range in place
+
+`d_jsonbench/str_char_4` was 164,974,500 instructions, 10.58% of the decode.
+It is the walk after an escape: once a string has a `\n` in it, `str_chars`
+went to the closing quote a character at a time, appending each. 1,773 of
+bench/large.json's 10,475 strings have an escape, and the walk covers 26,019
+bytes a parse — 42.27 instructions a byte, against roughly two on the find2
+path the escape-free strings take.
+
+find2 already knows how to skip to the next quote or backslash. Writing that:
+
+    fn str_chars cs p acc
+      str_run cs p (text/find2 cs p 34 92) acc
+
+    fn str_run cs p n acc
+      str_char cs cs[n] n (text/append acc (text/slice cs p (n - 1)))
+
+is WORSE on its own, by 3.4635%. The runs between two escapes are a median of
+three bytes, and a `slice` of three bytes is a view header the arena hands out
+to be read once and dropped: `k_b_slice_raw` appears at 59,127,900 where it
+was absent, and `k_b_append_wide` goes 7,446,600 to 54,299,400.
+
+So the emitter fuses the pair. `append acc (slice cs a b)` is recognised
+before either argument is emitted — the same place and the same wrapper-
+spelling rule as the `utf8` of a `slice` above it — and reaches
+`k_b_append_slice_fast`, an alwaysinline door that tests the four tags, does
+the slice's bounds arithmetic itself, and copies the range into the
+accumulator's spare capacity with the small-copy ladder the string arm of
+`append_mut_byte` already uses. Nothing is boxed.
+
+Three things had to be in it before it paid:
+
+- **The door has to inline.** Out of line, through the C, the pair cost
+  1,585,031,315 against the baseline's 1,559,465,765 — a call into
+  `append_slice` and a second into `append_range` are more than the byte walk
+  they replace.
+- **The empty range has to be answered inline.** 1,363 of the corpus's 6,335
+  runs are empty, because two escapes sitting next to each other leave no
+  bytes between them, and sending those to the C left the row at +1.6394%.
+- **The empty range must not build a view either.** `k_b_append_slice`'s C
+  path first appended `k_bytes_view(data, 0)`, which is a 32-byte header for
+  nothing: 204,450 allocations a decode, and the row read -0.9153% rather
+  than -1.0607%.
+
+Three work rows fall and ten are byte-identical:
+
+    work_jsonbench   1,559,465,765 -> 1,542,924,965  -16,540,800  -1.0607%
+    work_oneshot        24,299,710 ->    24,190,499     -109,211  -0.4494%
+    work_livebench   4,432,486,463 -> 4,432,418,614      -67,849  -0.0015%
+
+The decode's allocations fall with them: allocs 4,999,965 -> 4,734,015, a fall
+of 265,950, which is exactly one per escaped string per run — `string_at`'s
+own `append (slice ...)` at the head of the escape path is a fused site too,
+and its view is the one that goes. alloc_bytes 259,660,448 -> 251,150,048 and
+sh_bytes 27,950,400 -> 21,567,600 with it. find2_calls rises 1,571,250 ->
+2,521,500, one per run, and append_fast falls 3,218,550 -> 1,634,550: that is
+the trade, one scan for four appends.
+
+Machine code rises on exactly the three programs that have the pair in them —
+jsonbench 91,922 -> 93,362, oneshot 115,442 -> 116,882, livebench 116,050 ->
+117,490, 1,440 bytes each — and is byte-identical on the other ten, which is
+the check that the door is linked only where it is used. The emitted-line
+count rises everywhere, by 134 lines, because the emitter writes the door into
+every module and the linker drops it again.
+
+lib/json gains one declaration and the front end pays for it: rounds 40 -> 42,
+visits 17,068 -> 17,264, compile_peak_bytes 722,429 -> 724,493. Banked.
+Welfare holds at 75.30 and the floor is re-set on the new terms.
+
+The other gate keys this branch moves, by name: oneshot_append_fast, oneshot_find2_calls, front_end_rounds,
+front_end_visits, emitted_branches, emitted_calls, emitted_defines,
+emitted_lines, emitted_other_branches, emitted_other_calls,
+emitted_other_defines, emitted_other_lines, live_append_fast,
+live_find2_calls.
+oneshot_find2_calls 20,950 -> 27,285 and live_find2_calls 4,200,475 ->
+4,206,810 are the same scan-for-appends trade the decode makes;
+oneshot_append_fast 127,239 -> 116,679 and live_append_fast 42,334,257 ->
+42,323,697 are its other half. The four emitted_ keys and the four
+emitted_other_ keys are the door's 134 lines in every module.
+
+Every counter this branch moved, with the value it landed on:
+
+    emitted_branches 1,185 -> 1,203
+    emitted_calls 1,832 -> 1,847
+    emitted_defines 183 -> 185
+    emitted_lines 12,509 -> 12,716
+    emitted_other_branches 9,815 -> 9,981
+    emitted_other_calls 15,808 -> 15,858
+    emitted_other_defines 1,797 -> 1,811
+    emitted_other_lines 102,778 -> 104,532
+    a_builder_handed_on_is_still_a_builder_alloc_bytes 165 -> 198
+    a_cluster_entered_by_a_tail_call_sweeps_sh_str 9,035,232 -> 9,035,264
+    a_pushed_call_keeps_the_sweep_sh_buf 19,168 -> 19,200
+    a_repaired_node_below_the_mark_holds_tenure_sh_buf 10,976 -> 11,008
+    an_escaped_list_gives_its_buffer_back_sh_buf 6,368 -> 6,400
+    build_cycle.imported_sh_buf 176 -> 208
+    builder_guard_sh_str 176 -> 208
+    builder_reclaim_sh_bytes 936 -> 960
+    builder_transient_sh_bytes 1,896 -> 1,920
+    effect_push_shape_sh_buf 672 -> 704
+    fold_push_shape_sh_buf 174,848 -> 174,880
+    fused_map_shape_sh_buf 174,848 -> 174,880
+    fused_select_shape_sh_buf 174,848 -> 174,880
+    fused_tally_sh_buf 9,872 -> 9,904
+    record_fields_sh_buf 2,736 -> 2,768
+    sort_shape_sh_buf 180,464 -> 180,496
+    stream_write_sh_bytes 4,776 -> 4,800
+    string_builder_shape_alloc_bytes 8,246 -> 8,279
+    string_headers_sh_buf 2,736 -> 2,768
+    take_shape_sh_buf 174,848 -> 174,880
+    tally_shape_sh_buf 1,984 -> 2,016
+    the_same_capture_built_below_the_mark_is_shared_sh_buf 10,944 -> 10,976
+
+`tests/golden/mem/append_of_a_slice_boxes_nothing.mem` is the spec, and it was
+watched red: with the fusion switched off it reads allocs=85 and
+sh_bytes=1944 against the 45 and 984 it pins, one view per round over forty
+rounds. `tests/golden/micro/an_append_of_a_slice_reads_the_range_in_place`
+covers what the door has to answer the same way the unfused pair did — an
+inverted range, a start below one, an end past the length, a range inside
+multibyte text, and two appends threaded through one accumulator.
+
+
 ## 2026-09-06 (nineteenth) — the counter switch is set once, and every row falls
 
 `k_stats_on` initialised itself on first use, inside `k_alloc`:
@@ -5237,6 +5359,34 @@ every one of them upward. `builder_counts_once` is the shape of all of them —
 allocs 10 -> 11, alloc_bytes 22,557 -> 22,590, bytes_malloc 7 -> 8, sh_str
 32 -> 48 — one startup allocation and sixteen bytes of shared string that the
 lazy switch never saw.
+
+The gate keys that moved with them, so the sweep has them by name:
+a_builder_handed_on_is_still_a_builder_alloc_bytes,
+a_builder_handed_on_is_still_a_builder_allocs,
+a_builder_handed_on_is_still_a_builder_bytes_malloc,
+a_builder_handed_on_is_still_a_builder_sh_str,
+a_cluster_entered_by_a_tail_call_sweeps_sh_str,
+a_digest_holds_every_block_it_walked_sh_bytes,
+a_pushed_call_keeps_the_sweep_sh_buf,
+a_repaired_node_below_the_mark_holds_tenure_sh_buf,
+an_escaped_list_gives_its_buffer_back_sh_buf,
+an_unasked_equality_stays_a_cell_sh_str, append_in_place_sh_bytes,
+beat_builder_sh_bytes, beat_cycle_sh_bytes, build_cycle.imported_sh_buf,
+builder_counts_once_alloc_bytes, builder_counts_once_allocs,
+builder_counts_once_bytes_malloc, builder_counts_once_sh_str,
+builder_guard_sh_str, builder_reclaim_sh_bytes, builder_transient_sh_bytes,
+early_exit_sh_buf, effect_push_shape_sh_buf, fold_push_shape_sh_buf,
+force_path_sh_str, fresh_builder_sh_bytes, fresh_cycle_sh_bytes,
+fused_map_shape_sh_buf, fused_reducer_sh_buf, fused_select_shape_sh_buf,
+fused_tally_sh_buf, lazy_verdict_is_per_arm_sh_rec, many_cells_sh_str,
+piped_reducer_sh_buf, record_fields_sh_buf, record_reuse_shape_sh_rec,
+returned_thunk_sh_str, reuse_guard_sh_rec, shared_twice_sh_str,
+skip_shape_sh_buf, skip_unused_sh_str, skipped_err_sh_str,
+sort_shape_sh_buf, stream_fold_sh_str, stream_write_sh_bytes,
+string_builder_shape_alloc_bytes, string_builder_shape_allocs,
+string_builder_shape_bytes_malloc, string_builder_shape_sh_str,
+string_headers_sh_buf, take_shape_sh_buf, tally_shape_sh_buf,
+the_same_capture_built_below_the_mark_is_shared_sh_buf, unsafe_wrap_sh_buf.
 
 The book carries the same correction in two places. `ch10/counters_counters.out`
 and `ch12/fused_counters.out` are counted runs, and both read `sh_buf=0` where

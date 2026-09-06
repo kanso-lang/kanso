@@ -558,9 +558,17 @@
 # initialisation of `k_stats_on` was inlined into every hot caller along with
 # `k_alloc`, and each copy carried a getenv call and a second test; a
 # constructor sets the switch once and every copy of that goes.
-jsonbench text=91922
+#
+# 2026-09-06 (an append of a slice reads the range in place): three rows move
+# and ten are byte-identical, which is the check that the new inline door is
+# linked only where it is used. jsonbench 91,922 -> 93,362, oneshot 115,442 ->
+# 116,882, livebench 116,050 -> 117,490: 1,440 bytes each, the same door in
+# each of the three programs that has an `append` of a `slice` in it. The door
+# is bigger than the call and the view header it replaces. Banked as the price
+# of jsonbench -1.0607% and one allocation per escaped string.
+jsonbench text=93362
 encodebench text=113314
-oneshot text=115442
+oneshot text=116882
 basket text=106642
 widebench text=117858
 deepbench text=70354
@@ -570,4 +578,4 @@ indexbench text=55106
 scanbench text=152338
 digestbench text=105362
 readbench text=51666
-livebench text=116050
+livebench text=117490
