@@ -5226,9 +5226,9 @@ Three things had to be in it before it paid:
 
 Three work rows fall and ten are byte-identical:
 
-    work_jsonbench   1,559,465,765 -> 1,542,924,965  -16,540,800  -1.0607%
-    work_oneshot        24,299,710 ->    24,190,499     -109,211  -0.4494%
-    work_livebench   4,432,486,463 -> 4,432,418,614      -67,849  -0.0015%
+    work_jsonbench   1,559,466,178 -> 1,542,925,378  -16,540,800  -1.0607%
+    work_oneshot        24,300,109 ->    24,190,898     -109,211  -0.4494%
+    work_livebench   4,432,486,910 -> 4,432,419,027      -67,883  -0.0015%
 
 The decode's allocations fall with them: allocs 4,999,965 -> 4,734,015, a fall
 of 265,950, which is exactly one per escaped string per run — `string_at`'s
@@ -5246,7 +5246,9 @@ count rises everywhere, by 134 lines, because the emitter writes the door into
 every module and the linker drops it again.
 
 lib/json gains one declaration and the front end pays for it: rounds 40 -> 42,
-visits 17,068 -> 17,264, compile_peak_bytes 722,429 -> 724,493. Banked.
+visits 17,068 -> 17,264, compile_peak_bytes 722,429 -> 724,493,
+compile_allocs 25,817 -> 25,899, compile_instructions 41,888,129 ->
+42,089,618. Banked.
 Welfare holds at 75.30 and the floor is re-set on the new terms.
 
 The other gate keys this branch moves, by name: oneshot_append_fast, oneshot_find2_calls, front_end_rounds,

@@ -280,9 +280,17 @@
 # different glibc, so each is the golden plus the container's own A/B delta,
 # measured on one host from the repo root with both binaries in place. CI's
 # sitting is the record.
-jsonbench 1559466178
+#
+# 2026-09-06 (an append of a slice reads the range in place): three rows fall
+# and ten hold. work_jsonbench 1,559,466,178 -> 1,542,925,378, a fall of
+# 16,540,800 or 1.0607%; work_oneshot 24,300,109 -> 24,190,898, a fall of
+# 109,211 or 0.4494%; work_livebench 4,432,486,910 -> 4,432,419,027, a fall of
+# 67,883 or 0.0015%. The escape walk between two escapes is one find2 and one
+# copy where it was a byte at a time, and the view the slice would have been
+# is never built.
+jsonbench 1542925378
 encodebench 4421003600
-oneshot 24300109
+oneshot 24190898
 basket 35477286
 widebench 54610292
 deepbench 705892821
@@ -292,4 +300,4 @@ indexbench 4691237
 scanbench 768876199
 digestbench 76854629
 readbench 4283685
-livebench 4432486910
+livebench 4432419027
