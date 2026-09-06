@@ -5245,6 +5245,13 @@ write was the whole blocker; once it is gone LICM hoists without being told,
 and telling it costs something at the sites where the hoist was not the
 cheapest shape.
 
+`compile_instructions` moves 41,886,863 -> 41,888,129, a rise of 1,266 or
+0.003%, and it is layout from a file the compiler only carries: `src/runtime.c`
+is `include_str!`'d into `src/main.rs`, so twenty-six lines of C the front end
+never executes still shift the compiler's own bytes. `compile_allocs` and
+`compile_peak_bytes` are byte-identical, as they were the last two times this
+row moved on its own.
+
 The thirteen work rows are PROJECTIONS — the golden is CI's and this container
 reads a different glibc — so each is the golden plus the container's own A/B
 delta, measured on one host from the repo root with both binaries in place.
