@@ -253,9 +253,9 @@
 # which opens with its own; the second walk always started on the byte the
 # first had stopped on. The line is gone. Rows are the container's A/B deltas
 # applied to CI's landed values; ten of the thirteen deltas are zero.
-jsonbench 1698318826
+jsonbench 1573203674
 encodebench 4425477605
-oneshot 25234135
+oneshot 24400044
 basket 35510217
 widebench 54690359
 deepbench 708507318
@@ -265,4 +265,4 @@ indexbench 4691365
 scanbench 776362839
 digestbench 77353320
 readbench 4288131
-livebench 4437827881
+livebench 4436993800

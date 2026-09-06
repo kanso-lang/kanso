@@ -112,7 +112,7 @@ front_end_rounds=40
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
 # end has that much less to visit. Banked, and it moves the same way as the
 # runtime fall it comes with rather than paying for it.
-front_end_visits=17115
+front_end_visits=17092
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -127,4 +127,4 @@ front_end_visits=17115
 # than reasoned: with the codegen change reverted and lib/json unchanged, the
 # container reads 715,275 and 25,485, the same two numbers as the branch head,
 # to the byte. Banked as the price of a 17.14% fall in the decoder's runtime.
-compile_peak_bytes=715275
+compile_peak_bytes=714995
