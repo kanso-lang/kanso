@@ -3147,3 +3147,41 @@ it and is a record rather than a tracker. What this change moved -- fourteen
 work rows, fourteen .text rows, one compile row -- lives in the veins, and the
 counters the page does quote (`el_parses` at 318450, the four arena blocks) are
 pinned in cost goldens that came back green.
+
+### The seven rows that worsened, each with the value it landed on
+
+The trend gate asks for the number, not the argument, and it is right to: a
+regression named in prose but not priced is one nobody can check later. Against
+origin/main at f534f487:
+
+| counter | before | after |
+|---|---|---|
+| `work_jsonbench` | 1,526,907,200 | 1,558,677,818 |
+| `work_pendbench` | 605,515,353 | 620,703,023 |
+| `work_basket` | 35,365,571 | 36,001,898 |
+| `work_indexbench` | 4,691,265 | 4,771,217 |
+| `work_escapebench` | 114,584,676 | 114,626,851 |
+| `work_readbench` | 4,283,257 | 4,283,427 |
+| `text` | 1,468,908 | 1,479,004 |
+| `compile_instructions` | 42,061,735 | 42,163,520 |
+
+Six of the eight are the decode paying for the encode, which the section above
+attributes: a caller that may clobber every register spills what it wanted to
+keep across the call, and the decode's hot loops hold more live state across a
+closure call than the encode's do. `work_readbench` at 170 instructions and
+`work_escapebench` at 42,175 are too small to be that or anything else; they are
+the layout moving under a binary whose prologues changed.
+
+`text` is the sum of the fourteen rows and rises 10,096 bytes because the
+convention removes a prologue from each closure callee and pays at the call
+sites, which outnumber them. `compile_instructions` is the layout vein and is
+attributed above.
+
+Against these, eight rows fall: `work_digestbench` 75,565,053 to 70,784,439,
+`work_encodebench` 4,310,952,916 to 4,194,027,086, `work_livebench`
+4,318,118,863 to 4,213,463,624, `work_widebench` 54,609,871 to 53,465,568,
+`work_runbench` 3,043,743,748 to 3,012,388,655, `work_scanbench` 768,849,780 to
+766,291,267, `work_deepbench` 702,627,486 to 700,416,944 and `work_oneshot`
+23,797,766 to 23,738,890. The objective weighs run speed through runbench, which
+is the fifth of those, and welfare rose. The trade is taken on the sum, not
+defended row by row.
