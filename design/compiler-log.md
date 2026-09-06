@@ -4153,3 +4153,44 @@ benchmark — and that the analysis currently answers no to all of them.
 
 **OPEN**, deliberately: the next step is to read `reusable_records` against
 `lib/list`'s `next` arms and find out whether the no is a proof or a gap.
+
+## 2026-09-06 — THE REUSE ANALYSIS NEVER ASKS ABOUT A DESTRUCTURED PARAMETER
+
+**ANSWERED (#341).** The entry above left open whether `reusable_records`
+refusing all 3,200,900 of pendbench's record constructions is a proof about
+liveness or a gap. It is a gap, and a one-line one.
+
+`sole_finished_record` in `src/linear.rs:811` opens its loop over the arm's
+parameters with
+
+    let Pattern::Var(name, _) = pattern else { continue };
+
+so a parameter that is destructured rather than named is skipped before any
+question about it is asked. Every `next` arm in `lib/list/list.kso` destructures:
+`(cursor at source)`, `(bounded at stop source)`, `(capped left source)`,
+`(counting at)`, `(cycled at source)`, `(grown seed stretch)`,
+`(mapped shape source)`, `(paired left right)`, `(repeated value)`,
+`(sifted keep source test)`, `(skipped burn source)`. Eleven arms, no bare
+parameter among them, so the analysis produces no candidate for any of them —
+whatever the liveness would have said.
+
+The construction it would have to reason about is the one the arm writes as its
+own step: `onward = cursor (at + 1) source` reads `at` and `source` out of the
+cursor that arrived and builds another of the same width. That is the shape
+`k_rec_reuse` exists for, and the shape the doc comment on `reusable_records`
+describes — `shift (n - 1) (point (p.x + 1) p.y)`, with `p` finished by the time
+the constructor runs — with the parameter destructured at the door instead of
+read through a name.
+
+**This is a finding, not a licence.** Being skipped is not the same as being
+safe: whether the arriving cursor is finished still turns on
+`callers_hand_over`, and a lazy list exists so that a caller can hold a cursor
+and ask it for more later. Writing over one a caller still holds would be a
+miscompilation, which is the failure mode this analysis is built to avoid. What
+is established is that the question has never been put — the 30.39% is
+unexamined rather than examined and declined.
+
+**OPEN**: extend `sole_finished_record` to destructured parameters and find out
+what `callers_hand_over` answers for `list/next`. The measurement to take first
+is whether the eleven arms' incoming cursors are handed over, because a no there
+closes the thread at no cost.
