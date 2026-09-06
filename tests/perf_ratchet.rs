@@ -6,7 +6,8 @@
 
 fn ir_for(source: &str) -> String {
     let program = kanso::compile("spec.kso", source, false).expect("spec program compiles");
-    kanso::codegen::emit_ir(&program).expect("spec program lowers to IR")
+    kanso::codegen::emit_ir(&program, kanso::codegen::ClosureConvention::Absent)
+        .expect("spec program lowers to IR")
 }
 
 const RECURSIVE: &str = "fn build 0 acc

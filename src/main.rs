@@ -565,7 +565,7 @@ fn program_args() -> Vec<String> {
 }
 
 fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<String>) -> ExitCode {
-    let ir = match kanso::codegen::emit_ir(program) {
+    let ir = match kanso::codegen::emit_ir(program, closure_convention()) {
         Ok(ir) => ir,
         Err(unsupported) => {
             eprintln!("error: {unsupported}");
@@ -696,6 +696,57 @@ fn narrow_tailcc(ir: String) -> String {
 
 /// Release: whole-program LTO across the program and a freshly compiled
 /// runtime — the slowest build and the fastest binary.
+/// Whether this host's clang can take `preserve_none` on a closure body.
+///
+/// PROBED WITH THE .ll FORM, and deliberately not with the C attribute: the
+/// two fail in opposite ways. clang 18 rejects `preserve_nonecc` at the
+/// parser and merely WARNS about `__attribute__((preserve_none))`, so a probe
+/// built on the C half answers yes on a toolchain that would then refuse the
+/// module the emitter writes. The C side carries
+/// `-Werror=unknown-attributes` for the same reason, so a wrong answer breaks
+/// the build at the first define rather than producing a binary whose two
+/// halves disagree about registers.
+///
+/// Asked once per process. The emitted IR and the runtime object must agree,
+/// so `cached_runtime_object` keys on this too.
+fn closure_convention() -> kanso::codegen::ClosureConvention {
+    use kanso::codegen::ClosureConvention;
+    static ANSWER: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    match *ANSWER.get_or_init(preserve_none_probe) {
+        true => ClosureConvention::PreserveNone,
+        false => ClosureConvention::Absent,
+    }
+}
+
+/// Compile a two-define module: one carrying the convention, one calling
+/// through it. Both halves are there because a toolchain that parsed the
+/// define and refused the call site would still refuse what the emitter
+/// writes, and a probe testing only the define would not know.
+fn preserve_none_probe() -> bool {
+    let dir = std::env::temp_dir();
+    let ll = dir.join(format!("kanso_pn_probe_{}.ll", std::process::id()));
+    let obj = dir.join(format!("kanso_pn_probe_{}.o", std::process::id()));
+    let module = "define preserve_nonecc i64 @p(i64 %x) { ret i64 %x }\n\
+                  define i64 @q(i64 %x) {\n\
+                  \x20 %r = call preserve_nonecc i64 @p(i64 %x)\n\
+                  \x20 ret i64 %r\n\
+                  }\n";
+    if std::fs::write(&ll, module).is_err() {
+        return false;
+    }
+    let ok = std::process::Command::new("clang")
+        .args(["-Wno-override-module", "-c"])
+        .arg(&ll)
+        .arg("-o")
+        .arg(&obj)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    let _ = std::fs::remove_file(&ll);
+    let _ = std::fs::remove_file(&obj);
+    ok
+}
+
 fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
     let runtime_obj = cached_runtime_object("release", &["-O3", "-flto"])?;
     std::process::Command::new("clang")
@@ -733,6 +784,13 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     let mut hasher = std::hash::DefaultHasher::new();
     source.hash(&mut hasher);
     profile.hash(&mut hasher);
+    // THE CONVENTION IS NOT IN THE SOURCE -- it is a `-D` the probe decides,
+    // so a machine that gains or loses clang 19 would otherwise reuse an
+    // object built under the other answer and link it against IR built under
+    // the new one. The two halves disagreeing about registers is a
+    // miscompile, so it goes in the key.
+    let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
+    preserve.hash(&mut hasher);
     let key = hasher.finish();
     let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.o"));
     if object.exists() {
@@ -742,8 +800,16 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     std::fs::write(&c_path, source)?;
     let staging = std::env::temp_dir()
         .join(format!("kanso_runtime_{profile}_{key:016x}_{}.o", std::process::id()));
+    // `-Werror=unknown-attributes` is the belt to the probe's braces: clang 18
+    // only WARNS about `preserve_none` and would silently compile the runtime
+    // on the C convention while the emitted IR used the other one.
+    let convention: &[&str] = match preserve {
+        true => &["-DKANSO_PRESERVE_NONE", "-Werror=unknown-attributes"],
+        false => &[],
+    };
     let status = std::process::Command::new("clang")
         .args(opt)
+        .args(convention)
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
         .arg("-c")
         .arg(&c_path)
@@ -810,7 +876,7 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
     if plan {
         return run_plan(program, file, source);
     }
-    let ir = match kanso::codegen::emit_ir(program) {
+    let ir = match kanso::codegen::emit_ir(program, closure_convention()) {
         Ok(ir) => ir,
         Err(unsupported) => {
             eprintln!("error: {unsupported}");

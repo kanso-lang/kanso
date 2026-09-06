@@ -1374,7 +1374,35 @@ pub(crate) fn knotted_constants(program: &Program) -> crate::hash::Set<String> {
         .collect()
 }
 
-pub fn emit_ir(program: &Program) -> Result<String, String> {
+/// Whether the host's clang can take `preserve_none` on a closure body.
+///
+/// The emitter cannot ask -- it never runs clang -- so the answer arrives
+/// from whoever does. It is an explicit choice rather than a probe result on
+/// purpose: `tests/compile_cost.rs` and `tests/perf_ratchet.rs` pin
+/// compile-side goldens, and a golden that moved with the installed clang
+/// would go red on a developer's machine for something the developer did not
+/// do. Those callers pass `Absent` and their veins stay a property of the
+/// compiler. Only the two build paths in main.rs ask the probe.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ClosureConvention {
+    /// `preserve_nonecc` on closure bodies and the arms that call them.
+    PreserveNone,
+    /// The C convention, which every clang can take.
+    Absent,
+}
+
+impl ClosureConvention {
+    /// The keyword to write before a closure define or call, with its
+    /// trailing space, or nothing.
+    fn keyword(self) -> &'static str {
+        match self {
+            ClosureConvention::PreserveNone => "preserve_nonecc ",
+            ClosureConvention::Absent => "",
+        }
+    }
+}
+
+pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<String, String> {
     let knotted = knotted_constants(program);
     let inference = infer::infer(program);
     let mut type_ids = HashMap::default();
@@ -1423,6 +1451,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     beat.ids.retain(|(n, a), _| escape.returns_ty(n, *a).is_none());
     beat.demoted.retain(|(_, callee)| beat.ids.contains_key(callee));
     let mut backend = Backend {
+        convention,
         program,
         forwarders: forwarder_map(program),
         sub_parents: program
@@ -1465,6 +1494,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
 }
 
 struct Backend<'a> {
+    /// see `ClosureConvention`; decided by the caller, never probed here
+    convention: ClosureConvention,
     program: &'a Program,
     inference: infer::Inference,
     forwarders: HashMap<(String, usize), String>,
@@ -1875,7 +1906,7 @@ fn named_as_a_value(text: &str, temp: &str) -> bool {
 /// callable, a fnref, a wrong arity, a failing argument. That is why the
 /// order here may differ from the runtime's: the arm only fires where all
 /// the orders agree.
-fn call_twin(n: usize) -> String {
+fn call_twin(n: usize, convention: ClosureConvention) -> String {
     let args: String = (0..n).map(|i| format!(", %KValue %a{i}")).collect();
     let mut s = String::new();
     let _ =
@@ -1917,7 +1948,12 @@ fn call_twin(n: usize) -> String {
     let _ = writeln!(s, "  %envp = getelementptr i8, ptr %c, i64 8");
     let _ = writeln!(s, "  %env = load ptr, ptr %envp");
     let _ = writeln!(s, "  %fnp = load ptr, ptr %c");
-    let _ = writeln!(s, "  %r = call %KValue %fnp(ptr %env{args})");
+    // The closure pointer this loads was written by the wrapper emitter, so
+    // the two carry the same convention or the arguments land in the wrong
+    // registers. `%fnp` is only ever a closure body: the arm tested tag == 11
+    // above, so the fnref family (no env parameter) never reaches here.
+    let cc = convention.keyword();
+    let _ = writeln!(s, "  %r = call {cc}%KValue %fnp(ptr %env{args})");
     let _ = writeln!(s, "  ret %KValue %r");
     let _ = writeln!(s, "slow:");
     let _ = writeln!(s, "  %s = call %KValue @k_call{n}(%KValue %f{args})");
@@ -2637,7 +2673,7 @@ impl<'a> Backend<'a> {
         // DECLARES the way the other inline helpers are.
         let call_twins: String = (0..=4)
             .filter(|n| body.contains(&format!("@k_call{n}_fast(")))
-            .map(call_twin)
+            .map(|n| call_twin(n, self.convention))
             .collect();
         let declares: String = {
             let referenced = |sym: &str| {
@@ -6152,9 +6188,16 @@ impl<'a> Backend<'a> {
             "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{}}}\n",
             f.body()
         );
+        // The convention rides on the wrapper AND on every arm that calls
+        // through a closure pointer. Split them and the arguments arrive in
+        // the wrong registers: leaving the runtime's `k_call{n}` on the C
+        // convention while this carries preserve_none made encodebench print
+        // `error[runtime]: bytes takes a string` where its answer is
+        // `done: 74072800`.
+        let cc = self.convention.keyword();
         let _ = writeln!(
             self.body,
-            "define %KValue @w_{lifted}(ptr %env{sig}) {{\nentry:\n  %r = call \
+            "define {cc}%KValue @w_{lifted}(ptr %env{sig}) {{\nentry:\n  %r = call \
              tailcc %KValue @{lifted}(ptr %env{sig})\n  ret %KValue %r\n}}\n"
         );
         Ok(())

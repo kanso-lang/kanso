@@ -323,7 +323,23 @@ typedef struct {
     KValue* sorted;       /* cached sorted+deduped [k v k v...], or NULL */
     long long sorted_len; /* deduped entry count */
 } KMap;
-typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; long long arity; } KClosure;
+/* The closure calling convention. `preserve_none` (LLVM 19) lets a closure
+   body clobber every register, so its callee-saved prologue disappears and
+   the caller keeps what it needs instead -- worth 3.06% of encodebench and
+   1.57% of the consolidated run program, measured 2026-09-06. The host's
+   clang is whatever the host has, so the build PROBES for the keyword and
+   defines this to nothing when it is absent; every site that stores, passes
+   or calls a closure pointer carries it, and a mismatch is a miscompile
+   rather than a slowdown. The fnref family (`r->fn`, no env parameter) is
+   deliberately NOT converted: the emitted fast arm tests for a closure tag
+   before it calls, so the two families never meet. */
+#ifdef KANSO_PRESERVE_NONE
+#define K_CLOSCC __attribute__((preserve_none))
+#else
+#define K_CLOSCC
+#endif
+
+typedef struct { KValue (K_CLOSCC *fn)(void*, KValue); void* env; long long ncaps; long long arity; } KClosure;
 /* A named group handed out as a value. The emitter writes one of these per
    wrapper as a static, so the collector never sees it, and it carries the
    name because the group's diagnostic says which group. `builtin` says which
@@ -365,7 +381,7 @@ static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
 static KValue k_list_own(KValue* items, long long n);
 KValue k_call1(KValue f, KValue a);
-KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, KValue* caps);
+KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps);
 KValue k_env_get(void* env, long long i);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
@@ -4669,7 +4685,7 @@ KValue k_b_rescue(KValue subject, KValue callback) {
    The site rides as an int payload. It is a static literal the collector
    never owns and never traces, and a raw pointer in a payload is already how
    `k_fnref` carries what it carries. */
-static KValue k_annotate_wrap(void* env, KValue failure) {
+static K_CLOSCC KValue k_annotate_wrap(void* env, KValue failure) {
     KValue callback = k_env_get(env, 0);
     KValue site = k_env_get(env, 1);
     return k_b_wrap_err(k_call_decided(callback, failure), failure,
@@ -5640,7 +5656,7 @@ KValue k_list_lit(long long n, KValue* items) {
     return k_mklist(n, items);
 }
 
-KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
+KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
     KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
     memcpy(env, caps, sizeof(KValue) * ncaps);
@@ -5658,7 +5674,7 @@ KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, 
    slot outlives every beat, and a rewind cannot reach what malloc handed out.
    The environment is allocated even though ncaps is zero, because the carry
    path reads `cl->env` unconditionally when it sizes a copy. */
-KValue k_closure_lit(KValue (*fn)(void*, KValue), long long arity, KValue* slot) {
+KValue k_closure_lit(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, KValue* slot) {
     if (slot->tag != K_CLOSURE) {
         KClosure* c = k_alloc_perm(sizeof(KClosure));
         KValue* env = k_alloc_perm(sizeof(KValue));
@@ -5683,7 +5699,7 @@ KValue k_call0(KValue f) {
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
         if (c->arity != 0) k_die_arity(c->arity, 0);
-        return ((KValue(*)(void*))c->fn)(c->env);
+        return ((KValue(K_CLOSCC *)(void*))c->fn)(c->env);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
@@ -5734,7 +5750,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
         if (c->arity != 2) k_die_arity(c->arity, 2);
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
-        return ((KValue(*)(void*, KValue, KValue))c->fn)(c->env, a, b);
+        return ((KValue(K_CLOSCC *)(void*, KValue, KValue))c->fn)(c->env, a, b);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
@@ -5753,7 +5769,7 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
         if (cl->arity != 3) k_die_arity(cl->arity, 3);
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
-        return ((KValue(*)(void*, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c);
+        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
@@ -5774,7 +5790,7 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
         if (!k_not_failure(d)) return d;
-        return ((KValue(*)(void*, KValue, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c, d);
+        return ((KValue(K_CLOSCC *)(void*, KValue, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c, d);
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
