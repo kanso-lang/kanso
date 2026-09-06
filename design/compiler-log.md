@@ -6059,13 +6059,54 @@ same stale-prose family as the CLAUDE.md sentence corrected earlier today,
 which named fixpoint rounds and expression visits as objective terms for three
 days after they stopped being any.
 
+### The same edit on the encoder's pair, BUILT, MEASURED, DECLINED
+
+A crude census of lib/ — a column-0 `fn` reader, so it sees single-line headers
+and misses pattern-parameter arms — finds 19 self-recursive declarations of 617,
+and exactly three (declaration, parameter) pairs that are invariant across the
+self-calls AND take that parameter's length in the body: `json/encode_items`
+`xs`, `json/encode_pairs` `es`, `list/drain` `xs`. `fold_flat` has left the list
+because it no longer asks.
+
+Both remaining shapes were built. The beat report ran first each time and the
+beats SURVIVE in both — `encode_items` and `encode_pairs` still read `beat:
+rewinds every iteration`, which is what #1277 destroyed and what made that
+change cost 7.74%. This is a different thing, and it is worse anyway:
+
+    with an entry hop, as fold has     livebench +9,900,860   +0.2282%
+                                       oneshot      +24,812   +0.1036%
+    hoisted to the two callers, which
+    already hold the container         livebench +4,382,460   +0.1010%
+                                       oneshot      +11,016   +0.0460%
+
+Removing the hop halves the damage and does not turn it positive. Declined in
+both shapes.
+
+### What decides it: iterations per entry
+
+The saving is per ITERATION — three instructions off a loop guard — and the
+price is per ENTRY: one more argument at the call, and a `length` the caller now
+takes through the twin's tag test because nothing proves what it holds. The
+densities are measurable and they are far apart:
+
+    list/fold over the escape bytes   1,773 entries   29,147 iterations  16.44
+    json/encode_items over large.json's arrays   2,752   9,732 elements   3.54
+    json/encode_pairs over its objects           2,761   8,361 entries    3.03
+
+At sixteen iterations an entry the hoist is worth 1.3766%. At three it costs
+0.1010%. **So an emitter pass that hoisted every invariant length would make
+most sites worse.** The invariance is the cheap half of the question; the trip
+count is the half that decides, and the compiler cannot see it.
+
 ### What is still on the table
 
-52 of the 754 declarations under lib/ are self-recursive, and this is one hand
-edit of one of them. An invariance analysis in the emitter would reach the rest
-— `obj_key_start`, `skip_ws`, `encode_items`, `encode_pairs` among them —
-without a fifth parameter anywhere, since the hoist would happen in the emitter
-rather than in the text of the library. Two constraints found while looking: the predicate has to
-key on the dispatch GROUP rather than one arm, and self-calls miss mutual
-cycles, of which `bounded_flat -> bounded_more -> bounded_step` in
-lib/list/list.kso is one. `src/linear.rs:811` is the precedent to copy.
+The emitter-level pass, priced now rather than assumed. A hidden extra parameter
+is genuinely required, because there is no IR loop in a musttail cycle to hoist
+out of — what the entry on #346 found — so the pass changes a dispatch group's
+signature and every external caller of it. Two constraints found while looking:
+the predicate has to key on the GROUP rather than one arm, and self-calls miss
+mutual cycles, of which `bounded_flat -> bounded_more -> bounded_step` in
+lib/list/list.kso is one. `src/linear.rs:811` is the precedent to copy. Whether
+it is worth building at all now turns on the break-even above: the shapes it can
+help are the ones already entered through a wrapper, where the per-entry cost is
+paid before the pass arrives.
