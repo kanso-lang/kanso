@@ -5824,3 +5824,62 @@ reason the diff shows: the proven-bytes arm returns before the generic builtin
 path builds `args_ir`, a Vec of formatted Strings one per argument, and before
 it collects the argument sets `infer::builtin_set` reads. The emitter writes
 four IR lines where it wrote one call and does less work deciding to.
+
+---
+
+## 2026-09-06 (twenty-fifth) — the fold's container cannot be proved from the library, and the beat is why
+
+The twenty-fourth entry left the 1.4650% behind one wall: `list/fold_flat` is
+one function for lists and bytes both, so its `coll` carries the union and the
+emitter's proven-bytes paths cannot fire. The cheapest way to test whether that
+union is the whole story is to give the escape fold a container the sets CAN
+prove — a fold of identical shape, in `lib/json/text.kso`, called only with
+bytes:
+
+    fn escape_able acc bs
+      esc_flat bs acc (a b -> esc_byte a b) 1
+
+    fn esc_flat bs acc f i
+      if (length bs < i) acc (esc_flat bs (f acc bs[i]!) f (i + 1))
+
+The lambda is kept deliberately. #313 declined removing the escape fold's
+closure at livebench +3.01% and named the beat as the reason, so a version
+calling `esc_byte` directly would have re-run a declined experiment and
+confounded this one. Same closure, same arity, same body shape; the only thing
+that changes is which function the fold is.
+
+BUILT, MEASURED, DECLINED. Both programs stay correct (`wrote 74072800`,
+`checksum 24000`) and the cost is not close:
+
+    livebench    4,399,421,576 -> 4,740,164,338   +340,742,762   +7.74%
+    oneshot         24,107,081 ->     25,619,336     +1,512,255   +6.27%
+    jsonbench    1,542,924,177 -> 1,542,923,800           -377
+
+The live encode counters say what happened, so this is attributed rather than
+guessed:
+
+    allocs          9,233,103 ->  51,551,103    5.6x
+    alloc_bytes   710,726,112 -> 2,064,935,712  2.9x
+    sh_bytes      100,713,384 -> 1,116,345,384   11x
+    arena_peak_bytes  2,097,152 ->   7,340,032
+    beat_iters      5,032,401 ->         401
+
+The beat stopped. `beat_iters` falls by four orders of magnitude and the
+allocations it was reclaiming become real ones.
+
+**This isolates a variable #313 could not.** That entry removed the closure and
+respelled the fold together, and attributed its +3.01% to the closure. Here the
+closure is untouched and the beat collapses anyway, so what the beat depends on
+is which function the fold IS, not whether a lambda sits inside it. The
+placement is in `src/beat.rs`: every declaration whose file starts with `std/`
+or `lib/` is `imported`, imported groups are stripped from the carry tier, and
+`ids.retain(|g, _| !imported.contains(g.0) || !carried_needed.contains(g))`
+then drops an imported id whose carry was just taken away. `escape_able`
+reaching its fold through `list/fold` and reaching `esc_flat` directly are
+different shapes to that retain, and only one of them keeps a beat. Which of
+the two clauses does it is not established here and the entry does not guess.
+
+What it settles for the invariant-parameter thread: the library route is
+closed. A fold respelled where the sets can see it loses more to the beat than
+the proof was ever worth, so the 1.4650% has to be collected in the EMITTER,
+with one fold, or not at all.
