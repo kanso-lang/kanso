@@ -265,6 +265,52 @@ slow:
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
 }
+; The same claim again where the SETS already say what those two tag tests ask.
+; `esc_byte` dispatches on the byte before it appends it, so by the time the
+; twin above opens with `atag == 13` and `xtag == 0` both answers are already
+; decided on the path that got here -- and LLVM will not thread them away,
+; because the block is a merge that other predecessors reach with other tags.
+; Four instructions on 9,833,200 of encodebench's 11,658,800 escape-fold
+; iterations. Everything past the tags is the byte arm above, unchanged: the
+; stats flag, the ownership test and the frontier test still decide, and
+; anything they refuse still falls to the C.
+define internal %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x) alwaysinline {
+  %bso = load i32, ptr @k_stats_on
+  %bcount = icmp ne i32 %bso, 0
+  br i1 %bcount, label %slow, label %bfast
+bfast:
+  %bp = extractvalue %KValue %acc, 1
+  %b = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %b
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
+  %capp = getelementptr i8, ptr %b, i64 16
+  %cap = load i64, ptr %capp
+  %capneg = sub i64 0, %cap
+  %isneg = icmp slt i64 %cap, 0
+  %capa = select i1 %isneg, i64 %capneg, i64 %cap
+  %owned = icmp ne i64 %cap, 0
+  br i1 %owned, label %bfr, label %slow
+bfr:
+  %usedp = getelementptr i8, ptr %data, i64 -8
+  %used = load i64, ptr %usedp
+  %atfront = icmp eq i64 %used, %len
+  %len1 = add i64 %len, 1
+  %fits = icmp sle i64 %len1, %capa
+  %ok = and i1 %atfront, %fits
+  br i1 %ok, label %bwrite, label %slow
+bwrite:
+  %dst = getelementptr i8, ptr %data, i64 %len
+  %xv = extractvalue %KValue %x, 1
+  %byte = trunc i64 %xv to i8
+  store i8 %byte, ptr %dst
+  store i64 %len1, ptr %usedp
+  store i64 %len1, ptr %b
+  ret %KValue %acc
+slow:
+  %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
+  ret %KValue %f
+}
 ; `append acc (slice cs from to)` where the accumulator is unique, both sides
 ; are bytes and the range fits the spare capacity it already has. That is the
 ; whole of what the json decoder's escape walk does between two escapes, and
@@ -5982,8 +6028,14 @@ impl<'a> Backend<'a> {
                 "put_mut_fast"
             } else if name == "append" && in_place {
                 // the in-place byte claim inlines whole; a byte that does not
-                // fit falls through to the C path inside the twin
-                "append_mut_byte"
+                // fit falls through to the C path inside the twin. Where the
+                // sets already prove both tags -- a bytes accumulator and an
+                // int -- the twin's two opening tests are asked twice, so
+                // there is a second door that starts after them.
+                match f.set_of(&emitted[0]) == BYTES && f.set_of(&emitted[1]) == INT {
+                    true => "append_mut_int",
+                    false => "append_mut_byte",
+                }
             } else if BIT_TWINS.contains(&name) {
                 // one machine op each where the operand tags say int and a
                 // shift is in range. `&` `|` `^` reach the twin through the

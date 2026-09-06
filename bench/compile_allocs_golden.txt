@@ -279,4 +279,12 @@
 # allocate while it checks. The container is rustc=1.94.1 against this row's
 # 1.98.1 and cannot compare; 25,913 is CI's own reading from the round-one job
 # log. Held as the price of encodebench -1.3766%.
-compile_allocs=25913
+#
+# 2026-09-06 (the tags the sets already proved, and seven copies of one
+# body): 25,913 -> 25,862, a FALL of 51 or 0.20%. lib/json/text.kso's seven
+# int-literal escape arms each spelled the same two-append body and now
+# share `esc_pair`, so there is less library text for the front end to
+# allocate while it checks. The container is rustc=1.94.1 against this
+# row's 1.98.1 and cannot compare; 25,862 is CI's own reading from the
+# round-one job log on 31537922.
+compile_allocs=25862

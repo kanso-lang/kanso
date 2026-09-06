@@ -15,4 +15,17 @@
 # imports, so it is the only row here that std/list can reach; the five in
 # bench/compile_golden.txt import nothing and hold. Held as the price of seven
 # runtime work rows falling, encodebench by 1.3766%.
-module lines=5186 calls=755 branches=431 defines=98 rounds=6 visits=2409
+#
+# 2026-09-06 (the proven-tags append): lines 5,186 -> 5,232, calls 755 -> 756,
+# branches 431 -> 434, defines 98 -> 99; rounds and visits hold at 6 and 2,409.
+# That is the k_b_append_mut_int twin, which the emitter writes into the
+# preamble every program carries, so it reaches this sample without the sample
+# importing anything. The front end does not decide anything new -- hence the
+# flat rounds and visits -- it just carries 46 more lines through.
+#
+# BOTH NOTES ABOVE WERE STRIPPED ONCE. `KANSO_REGEN_COMPILE_GOLDEN=1` keeps the
+# header it was born with and drops everything after it that is not a data row,
+# so the first note lasted three hours and vanished on the next regeneration.
+# `all_counters.sh --write` preserves notes; this path does not. Restored by
+# hand; the asymmetry is filed.
+module lines=5232 calls=756 branches=434 defines=99 rounds=6 visits=2409

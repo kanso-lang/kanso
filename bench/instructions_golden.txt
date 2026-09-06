@@ -321,9 +321,17 @@
 # 54,609,871, digestbench 77,175,692 -> 77,175,689. basket, deepbench,
 # escapebench, pendbench, indexbench, scanbench and readbench hold to the
 # instruction: they have no `length` site the sets prove is bytes.
+# 2026-09-06 (the tags the sets already proved, and seven copies of one body):
+# encodebench 4,328,660,413 -> 4,317,272,013, a FALL of 0.2631%; livebench
+# 4,339,000,449 -> 4,318,225,649, a FALL of 0.4788%; oneshot 23,956,486 ->
+# 23,904,549, a FALL of 0.2168%. The emitter has a k_b_append_mut_int twin
+# now, so an in-place append of a byte the sets already prove is an int skips
+# the runtime tag check; and lib/json/text.kso's seven escape arms share one
+# esc_pair body. The ten other rows hold to the digit -- these are the encode
+# paths. CI's rows on 31537922.
 jsonbench 1542924650
-encodebench 4328660413
-oneshot 23956486
+encodebench 4317272013
+oneshot 23904549
 basket 35403587
 widebench 54609871
 deepbench 702627486
@@ -333,4 +341,4 @@ indexbench 4691265
 scanbench 768849900
 digestbench 75582475
 readbench 4283257
-livebench 4339000449
+livebench 4318225649

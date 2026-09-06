@@ -596,11 +596,12 @@
 # pendbench's +864 for ten IR lines is the clearest case and this entry does
 # not say why. jsonbench, encodebench, escapebench, indexbench and readbench
 # hold to the byte. Banked.
+# 2026-09-06 (the proven-tags append, and the escape arms folded into esc_pair): four of the thirteen move, by 32 bytes each, and they split both ways -- encodebench 112,546 -> 112,578 and widebench 117,170 -> 117,202 rise; oneshot 116,034 -> 116,002 and livebench 116,642 -> 116,610 fall. Nine hold. Net zero across the thirteen, which is the linker placing the same work differently rather than more or less of it.
 jsonbench text=93138
-encodebench text=112546
-oneshot text=116034
+encodebench text=112578
+oneshot text=116002
 basket text=106210
-widebench text=117170
+widebench text=117202
 deepbench text=70130
 escapebench text=51810
 pendbench text=86130
@@ -608,4 +609,4 @@ indexbench text=54882
 scanbench text=152034
 digestbench text=105170
 readbench text=51458
-livebench text=116642
+livebench text=116610

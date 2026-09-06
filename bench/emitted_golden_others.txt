@@ -134,15 +134,16 @@
 # more argument. escapebench, indexbench and readbench do not import std/list
 # and hold to the line. defines hold everywhere. Banked as the price of
 # encodebench -1.3766% and six other work rows falling.
-encodebench defines=181 calls=1646 branches=1012 lines=11140
-oneshot defines=185 calls=1838 branches=1193 lines=12655
-basket defines=140 calls=1272 branches=795 lines=7950
-widebench defines=197 calls=1855 branches=1106 lines=12150
-deepbench defines=114 calls=842 branches=576 lines=5837
-escapebench defines=49 calls=114 branches=113 lines=1539
-pendbench defines=128 calls=1225 branches=663 lines=6918
-scanbench defines=329 calls=3287 branches=2136 lines=19749
-indexbench defines=55 calls=154 branches=133 lines=1868
-digestbench defines=189 calls=1579 branches=910 lines=9964
-readbench defines=58 calls=158 branches=146 lines=2080
-livebench defines=186 calls=1862 branches=1207 lines=12772
+# 2026-09-06 (the proven-tags append, and the escape arms folded into esc_pair): every program gains the k_b_append_mut_int twin the emitter now writes into the preamble -- +1 define, +1 call, +3 branches, +46 lines. The two here that import lib/json, oneshot and livebench, gain esc_pair on top of it: +2 defines, +1 call, +5 branches, +75 lines. The other ten hold to the twin alone.
+encodebench defines=182 calls=1647 branches=1015 lines=11186
+oneshot defines=187 calls=1839 branches=1198 lines=12730
+basket defines=141 calls=1273 branches=798 lines=7996
+widebench defines=198 calls=1856 branches=1109 lines=12196
+deepbench defines=115 calls=843 branches=579 lines=5883
+escapebench defines=50 calls=115 branches=116 lines=1585
+pendbench defines=129 calls=1226 branches=666 lines=6964
+scanbench defines=330 calls=3288 branches=2139 lines=19795
+indexbench defines=56 calls=155 branches=136 lines=1914
+digestbench defines=190 calls=1580 branches=913 lines=10010
+readbench defines=59 calls=159 branches=149 lines=2126
+livebench defines=188 calls=1863 branches=1212 lines=12847
