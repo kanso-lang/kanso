@@ -2186,7 +2186,7 @@ static const char* k_c_off(void) { return k_color_mode() ? "\x1b[0m" : ""; }
 __attribute__((noreturn, noinline)) static void k_die_value(const char* msg, KValue v);
 __attribute__((noreturn, noinline)) static void k_die_got(const char* msg, KValue v);
 
-static void k_itoa(char* buf, long long v);
+static long long k_itoa(char* buf, long long v);
 
 __attribute__((noreturn, noinline)) void k_die_arity(long long want, long long got) {
     char w[24], g[24];
@@ -2222,18 +2222,78 @@ __attribute__((noreturn, noinline)) static void k_die_ref_arity(KFnref* r, long 
 
 /* Hand-rolled lld formatting: the vfprintf machinery showed up hot in
    the encode profile, and a digit loop beats it several times over. */
-static void k_itoa(char* buf, long long v) {
-    char tmp[24];
-    int n = 0;
-    unsigned long long u = v < 0 ? (unsigned long long)(-(v + 1)) + 1 : (unsigned long long)v;
-    do {
-        tmp[n++] = (char)('0' + (u % 10));
-        u /= 10;
-    } while (u);
+/* Two digits a time, and the length first — shared by `k_itoa` below and by
+   `render_ryu`'s digit extraction further down. Each used to do one 64-bit
+   division per digit into a scratch buffer and then reverse it; a pair table
+   halves the divisions and writes straight into place, which needs the length
+   before the first digit. The ladder climbs from one digit rather than down
+   from twenty because the values that reach it are small: a json document's
+   floats are short, and so are the integers beside them.
+
+   Nineteen digits is a long long's most, and twenty a uint64_t's, so every
+   rung is reachable from `k_itoa` even though `ryu_d2d` never passes more than
+   seventeen. The extraction walks DOWN from the length it is given, and a
+   length one short would write at a negative index rather than truncate. */
+static const char RYU_DIGITS[201] =
+    "0001020304050607080910111213141516171819"
+    "2021222324252627282930313233343536373839"
+    "4041424344454647484950515253545556575859"
+    "6061626364656667686970717273747576777879"
+    "8081828384858687888990919293949596979899";
+
+static inline int ryu_declen(uint64_t v) {
+    if (v < 10ULL) return 1;
+    if (v < 100ULL) return 2;
+    if (v < 1000ULL) return 3;
+    if (v < 10000ULL) return 4;
+    if (v < 100000ULL) return 5;
+    if (v < 1000000ULL) return 6;
+    if (v < 10000000ULL) return 7;
+    if (v < 100000000ULL) return 8;
+    if (v < 1000000000ULL) return 9;
+    if (v < 10000000000ULL) return 10;
+    if (v < 100000000000ULL) return 11;
+    if (v < 1000000000000ULL) return 12;
+    if (v < 10000000000000ULL) return 13;
+    if (v < 100000000000000ULL) return 14;
+    if (v < 1000000000000000ULL) return 15;
+    if (v < 10000000000000000ULL) return 16;
+    if (v < 100000000000000000ULL) return 17;
+    if (v < 1000000000000000000ULL) return 18;
+    if (v < 10000000000000000000ULL) return 19;
+    return 20;
+}
+
+/* Returns the number of digits written, not counting the terminator, so a
+   caller that turns the buffer into a string does not walk it again to find
+   out how long it is. `k_render_at` did exactly that on every number it
+   rendered: k_str is k_str_n behind a strlen, and the length was already here.
+
+   Digits come out in pairs, straight into place. This used to fill a scratch
+   buffer least-significant digit first, one division apiece, and then copy it
+   back reversed — two passes over the digits and twice the divisions. */
+static long long k_itoa(char* buf, long long v) {
     char* w = buf;
     if (v < 0) *w++ = '-';
-    while (n) *w++ = tmp[--n];
-    *w = 0;
+    uint64_t u = v < 0 ? (uint64_t)(-(v + 1)) + 1 : (uint64_t)v;
+    char* end = w + ryu_declen(u);
+    char* o = end;
+    while (u >= 100) {
+        uint32_t c = (uint32_t)(u % 100);
+        u /= 100;
+        o -= 2;
+        o[0] = RYU_DIGITS[c * 2];
+        o[1] = RYU_DIGITS[c * 2 + 1];
+    }
+    if (u >= 10) {
+        o -= 2;
+        o[0] = RYU_DIGITS[u * 2];
+        o[1] = RYU_DIGITS[u * 2 + 1];
+    } else {
+        *--o = (char)('0' + (uint32_t)u);
+    }
+    *end = 0;
+    return (long long)(end - buf);
 }
 
 static long long k_ptr(void* p) { return (long long)(intptr_t)p; }
@@ -3456,48 +3516,6 @@ static inline int ryu_multiple_of_pow2(uint64_t v, int p) {
     return (v & ((1ULL << p) - 1)) == 0;
 }
 
-/* Two digits a time, and the length first. The extraction loop below used to
-   do one 64-bit division per digit into a scratch buffer and then reverse it;
-   a pair table halves the divisions and writes straight into place. The ladder
-   climbs from one digit rather than down from seventeen because a json
-   document's floats are short: on bench/large.json the median shortest form is
-   well under half the 17 digits a double can need. */
-static const char RYU_DIGITS[201] =
-    "0001020304050607080910111213141516171819"
-    "2021222324252627282930313233343536373839"
-    "4041424344454647484950515253545556575859"
-    "6061626364656667686970717273747576777879"
-    "8081828384858687888990919293949596979899";
-
-static inline int ryu_declen(uint64_t v) {
-    if (v < 10ULL) return 1;
-    if (v < 100ULL) return 2;
-    if (v < 1000ULL) return 3;
-    if (v < 10000ULL) return 4;
-    if (v < 100000ULL) return 5;
-    if (v < 1000000ULL) return 6;
-    if (v < 10000000ULL) return 7;
-    if (v < 100000000ULL) return 8;
-    if (v < 1000000000ULL) return 9;
-    if (v < 10000000000ULL) return 10;
-    if (v < 100000000000ULL) return 11;
-    if (v < 1000000000000ULL) return 12;
-    if (v < 10000000000000ULL) return 13;
-    if (v < 100000000000000ULL) return 14;
-    if (v < 1000000000000000ULL) return 15;
-    if (v < 10000000000000000ULL) return 16;
-    if (v < 100000000000000000ULL) return 17;
-    /* A double's shortest form never needs more than seventeen digits, so the
-       three rungs below are unreachable from `ryu_d2d`. They are here because
-       the loop this replaced was total and this is not: the extraction walks
-       DOWN from the length it is given, so a length one short of the value
-       writes at a negative index rather than truncating. Three compares on a
-       path nothing takes buy back that difference. */
-    if (v < 1000000000000000000ULL) return 18;
-    if (v < 10000000000000000000ULL) return 19;
-    return 20;
-}
-
 /* shortest digits + decimal exponent for a positive finite double; returns
    digit count, digits in dig[], value = dig * 10^*e10 */
 static int ryu_d2d(double f, char* dig, int* e10) {
@@ -3621,12 +3639,13 @@ static int ryu_d2d(double f, char* dig, int* e10) {
 
 /* format (digits, k, e10) exactly as the probe would have: %g with
    precision max(15, k) — fixed vs exponent at X < -4 or X >= P */
-static void render_ryu(double d, char* buf) {
+/* Returns the length written, for the reason k_itoa's does. */
+static long long render_ryu(double d, char* buf) {
     if (d == 0.0) {
         char* z = buf;
         if (signbit(d)) *z++ = '-';
         z[0] = '0'; z[1] = '.'; z[2] = '0'; z[3] = 0;
-        return;
+        return (long long)(z - buf) + 3;
     }
     char dig[20];
     int e10;
@@ -3662,6 +3681,7 @@ static void render_ryu(double d, char* buf) {
         for (int i = 0; i < k; i++) *o++ = dig[i];
         *o = 0;
     }
+    return (long long)(o - buf);
 }
 
 
@@ -3813,10 +3833,15 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         return out;
     }
     char buf[64];
+    /* The two number arms write their digits into `buf` and set `nlen`, then
+       leave the switch by the one exit below. They shared a `k_str(buf)` per
+       return until the length came back from the writers; five k_str_n bodies
+       inlined there is 1,264 bytes of .text where one is 253. */
+    long long nlen;
     switch (v.tag) {
         case K_INT:
-            k_itoa(buf, v.payload);
-            return k_str(buf);
+            nlen = k_itoa(buf, v.payload);
+            break;
         case K_FLOAT: {
             double d = k_as_f(v);
             if (d == floor(d) && fabs(d) < 1e15 && isfinite(d)) {
@@ -3829,12 +3854,12 @@ static KValue k_render_at(KValue v, long long quote, int held) {
                 char* o = buf;
                 long long whole = (long long)d;
                 if (whole == 0 && signbit(d)) *o++ = '-';
-                k_itoa(o, whole);
-                while (*o) o++;
+                o += k_itoa(o, whole);
                 *o++ = '.';
                 *o++ = '0';
                 *o = 0;
-                return k_str(buf);
+                nlen = (long long)(o - buf);
+                break;
             }
             /* shortest round-trip: %g trims trailing zeros, so probing
                15..17 yields byte-identical strings to probing 1..17 — a
@@ -3850,11 +3875,11 @@ static KValue k_render_at(KValue v, long long quote, int held) {
                    held, so the byte the sign takes is the byte that was
                    spare. */
                 buf[0] = '-';
-                render_ryu(-d, buf + 1);
+                nlen = 1 + render_ryu(-d, buf + 1);
             } else {
-                render_ryu(d, buf);
+                nlen = render_ryu(d, buf);
             }
-            return k_str(buf);
+            break;
         }
         case K_TRUE: return k_str("true");
         case K_FALSE: return k_str("false");
@@ -3926,8 +3951,10 @@ static KValue k_render_at(KValue v, long long quote, int held) {
             return k_concat(out, k_str("]"));
         }
         case K_CLOSURE: case K_FNREF: return k_str("<fn>");
+        default: return k_str("<value>");
     }
-    return k_str("<value>");
+    /* The one exit the number arms take. Every other tag returned above. */
+    return k_str_n(buf, nlen);
 }
 
 static long long k_bytes_eq_list(KBytes* b, KList* l) {

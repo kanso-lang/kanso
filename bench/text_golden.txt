@@ -539,16 +539,16 @@
 # off encodebench, and this vein is exact and its own -- welfare weighs no
 # machine-code size term, ruled 2026-09-05 -- so the rise is a movement to state
 # rather than a regression to defend.
-jsonbench text=94466
-encodebench text=115682
-oneshot text=117826
-basket text=107570
-widebench text=120226
-deepbench text=71250
-escapebench text=52610
-pendbench text=86034
-indexbench text=55890
-scanbench text=153026
-digestbench text=106338
-readbench text=51794
-livebench text=118402
+jsonbench text=95346
+encodebench text=116562
+oneshot text=118706
+basket text=108450
+widebench text=121106
+deepbench text=72130
+escapebench text=53474
+pendbench text=86914
+indexbench text=56754
+scanbench text=153906
+digestbench text=107218
+readbench text=52674
+livebench text=119282

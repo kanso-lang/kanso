@@ -3967,3 +3967,354 @@ cached release runtime object. Nothing to revert.
 by this. The fold's per-lap dispatch, 2.84%, by the toolchain #290 waits on. The
 string arms' 5.82% is `text/append` already inlined and running its ownership
 guards, which kanso#1221 through kanso#1224 are the history of.
+
+## 2026-09-06 — THE DIGITS' LENGTH COMES BACK FROM THE WRITER
+
+**SHIPPED.** `k_render_at` wrote a number's digits into a stack buffer and then
+called `k_str(buf)`, which is `k_str_n(buf, strlen(buf))`. The length was
+already in the writer's hand: `k_itoa` finishes with `w` one past the last
+digit and `render_ryu` with `o`. Both return it now, and the number paths hand
+it to `k_str_n`. The integral-float arm dropped a second scan of its own,
+`while (*o) o++`, for the same reason.
+
+That strlen ran 1,686,801 times in encodebench — once per number in
+`bench/large.json`, four hundred rounds over. 837,601 of them integers through
+`k_itoa`, 849,200 doubles through `render_ryu`.
+
+    jsonbench      1,737,414,667 -> 1,737,413,871         -796   -0.0000%
+    encodebench    4,531,877,717 -> 4,484,267,699  -47,610,018   -1.0506%
+    livebench      4,544,488,605 -> 4,496,878,563  -47,610,042   -1.0476%
+    pendbench        666,098,261 ->   643,666,736  -22,431,525   -3.3676%
+    widebench         55,667,434 ->    55,125,808     -541,626   -0.9730%
+    basket            38,568,710 ->    38,336,500     -232,210   -0.6021%
+    oneshot           25,760,432 ->    25,641,457     -118,975   -0.4619%
+    deepbench        708,508,852 ->   708,508,063         -789   -0.0001%
+    escapebench      114,597,201 ->   114,596,410         -791   -0.0007%
+    scanbench      1,384,644,605 -> 1,384,643,781         -824   -0.0001%
+    readbench      2,038,391,263 -> 2,038,390,422         -841   -0.0000%
+    indexbench         4,691,784 ->     4,691,010         -774   -0.0165%
+    digestbench       77,353,042 ->    77,352,921         -121   -0.0002%
+
+Container readings; the golden carries CI's values plus these deltas, which is
+the projection that has landed to the digit for seven changes running.
+
+**Searched before filing.** `k_str` beside `k_render_at` appears once in the
+log, in kanso#1258's memcpy caller tree, where it is 23,795,613 instructions
+over 1,686,801 calls — the memcpy alone. Its full inclusive cost, 128,745,243
+or 2.84% of encodebench at 76.3 a call, was not recorded, and neither was the
+strlen inside it. Nothing in the archive touches the length.
+
+**The trade is .text, and the first shape of it was twice as expensive.**
+Writing `return k_str_n(buf, n)` at each of the number arms' five return sites
+inlined five `k_str_n` bodies and cost 1,264 bytes a benchmark, 1.311% of the
+`.text` vein. Folding the arms onto one exit — they set `nlen` and `break`, and
+a `default:` returns for every other tag — costs 608 a benchmark, 0.629%, and
+gives up between 0.01 and 0.04 points of the runtime fall. The 2026-09-05
+gavel says `.text` has no welfare term and stays an exact vein of its own, so
+this is a movement to state rather than a number to weigh. The `text` vein
+worsens, deliberately, from 1,251,114 to 1,258,986: **+7,872 bytes across the
+thirteen, bought with 48 million instructions.**
+
+**Welfare 74.5580 -> 74.59, banked in the same commit** with `--set`.
+
+**Watched red, for the right reason.** `k_itoa` returning `w - buf - 1` puts
+seven golden tests into failure and each one names the missing digit:
+`170000000000` for `1700000000000`, `800` for `8000`, `4 ` for `42 2`. The
+corpus can see a wrong length, which is the property that makes the green
+reading worth anything.
+
+Allocation counters do not move — `all_counters.sh` reports all eleven veins
+agreeing. `emitted_code` and `compile_libraries` agree; the three compile
+gates refuse on this container as they always do.
+
+## 2026-09-06 — THE BEAT IS 7.35% OF ENCODEBENCH AND BUYS 176x
+
+**ANSWERED (#339).** The three beat functions are 333.1 million instructions in
+encodebench, every one of them called from `encode_onto`:
+
+    k_beat_pop   147,721,600 over 2,204,800 calls   67.0 each
+    k_beat_iter  119,241,649 over 4,968,400 calls   24.0 each
+    k_beat_push   66,144,000 over 2,204,800 calls   30.0 each
+
+7.35% of the benchmark, and nothing had priced it here. `k_beat_iter` appears
+in the log once, at 3.08% of livebench and 28.65% of escapebench (kanso#1259);
+`k_beat_pop` and `k_beat_push` appear in the archive only as mechanism, never
+with an encodebench figure. All three names searched in
+`design/compiler-log.md` and `design/log/compiler-log-archive.md` before filing.
+
+**The loops are `encode_items_3` and `encode_pairs_3`** — JSON's array walk and
+its object walk, bracketed inside `encode_list_2` and `encode_map_2`, which LLVM
+inlines bodily into `encode_onto`. 2,204,800 brackets over 4,968,400 iterations
+is **2.25 laps a bracket**: large.json's arrays and objects are small, and each
+one pays 97 instructions of push and pop to rewind about twice.
+
+That ratio is the reason to look. The answer is that the bracket earns it many
+times over. Priced with a temporary `KANSO_NO_BEAT_PROBE` that makes
+`beat_loops` return nothing — never committed, the tree is back where it was,
+and all eleven counter veins agree:
+
+                          with the beat          without
+    instructions          4,484,267,699    4,131,433,533   -352,834,166  -7.87%
+    arena_peak_bytes          4,194,304      737,148,928           176x
+    arena_blocks                      4              703
+    beat_iters                5,032,401                1
+
+**The beat costs 7.87% of encodebench's work and holds the peak arena to four
+megabytes where the same program without it reaches seven hundred and
+thirty-seven.** Every bracket the analysis placed came out under the probe; the
+single `k_beat_push` left in the module is `d_Entry_0`'s, which codegen emits
+for the program itself rather than for a loop.
+
+This is #316's finding again on a second benchmark. A short loop's beat still
+reclaims, and shortness is not evidence against it. It also bears on #317,
+which asks whether escapebench pins the beat's cost on every run and its
+benefit on none: encodebench pins both, in a pair of counters the objective
+already weighs.
+
+## 2026-09-06 — K_ITOA TAKES THE PAIR TABLE RYU ALREADY CARRIES
+
+**SHIPPED.** kanso#1260 gave `render_ryu` a two-digit table and a length-first
+walk, and left `k_itoa` filling a 24-byte scratch one digit and one 64-bit
+division at a time, then copying it back reversed. `k_itoa` reads
+`RYU_DIGITS` and `ryu_declen` now and writes straight into place. The table and
+the ladder move up the file to sit above their first user; nothing about them
+changes except that `ryu_declen`'s top three rungs stop being unreachable —
+nineteen digits is a `long long`'s most, so `k_itoa` reaches every one.
+
+`k_itoa` was **74,845,459 instructions in pendbench, 11.63%**, the third
+largest function there behind `k_rec` and `d_list/next_1`; 113,519,777 and
+2.50% in encodebench.
+
+    benchmark      after the strlen change          now      itoa alone    both
+    pendbench              643,666,736      605,691,007      -5.8999%   -9.0688%
+    encodebench          4,484,267,699    4,425,477,206      -1.3110%   -2.3478%
+    livebench            4,496,878,563    4,438,088,070      -1.3074%   -2.3413%
+    basket                    38,336,500       38,028,636    -0.8031%   -1.4003%
+    widebench                 55,125,808       54,689,946    -0.7907%   -1.7559%
+    oneshot                   25,641,457       25,494,372    -0.5736%   -1.0328%
+
+No row rises. The seven not shown fall by their startup offsets.
+
+**The `.text` vein pays 3,536 bytes more than the entry above left it**, and
+1,262,522 against main's 1,251,114 — 11,408 across the thirteen for the two
+changes together. The table itself was already linked; what is new is the
+extraction, once per benchmark.
+
+**Watched red, for the right reason.** Writing the pair backwards —
+`o[0] = RYU_DIGITS[c * 2 + 1]` — turns every rendered integer into its digits
+transposed in pairs, and the corpus names them: `1070000000000` for
+`1700000000000`, `483215` for `482351`, `2349220001867460000` for
+`2432902008176640000`. The golden suite has to be able to see a wrong digit
+before its green reading means anything about a digit routine.
+
+Welfare 74.59 -> 74.62, banked in the same commit. All eleven allocation veins
+agree.
+
+## 2026-09-06 — K_REC IS 30% OF PENDBENCH, AND THE REUSE ANALYSIS REACHES 100 OF ITS 3,200,900
+
+**ATTRIBUTED (#340), no change.** kanso#1258 took `k_rec` out of encodebench's
+profile entirely — the entry above §54 records that it "does not appear in the
+profile at all" there. It is pendbench's largest function by a wide margin and
+had never been read on that benchmark.
+
+    k_rec   184,084,984 over 3,200,900 calls   57.5 each
+
+28.60% of the 643,666,736 pendbench ran at when this was measured, and 30.39% of
+the 605,691,007 the branch now lands on, because the `k_itoa` change above took
+74,845,459 out from under it.
+
+**Two call sites are all of it**, and they are the same one at two recursion
+depths:
+
+    d_list/next_1     96,026,195 over 1,600,400 calls   60.0 each
+    d_list/next_1'2   88,003,483 over 1,600,000 calls   55.0 each
+    d_pendbench/made_1    28,000 over       500 calls
+    d_list/iter_1         16,000 over       300 calls
+    d_list/fold_3         12,000 over       200 calls
+    k_rec_reuse            6,000 over       100 calls
+
+A lazy list's `next` builds a fresh cursor record every step, 3.2 million of
+them a run.
+
+**The runtime already has the shape that would avoid it and the analysis does
+not reach here.** `k_rec_reuse` writes the new fields over a victim record when
+the victim is a record of the same arity, and `src/codegen.rs` emits it wherever
+`reusable_records` — the linearity analysis, keyed by file and line and column —
+says this construction is the last reader of some record in scope. In pendbench
+it fires **100 times against 3,200,900**, and none of the hundred is in
+`d_list/next_1`.
+
+Whether it *should* reach there is the open question and not a defect on the
+evidence here: a lazy list's previous cursor may still be held by the caller,
+which is what laziness is for, and a reuse that wrote over a live cursor would
+be a miscompilation rather than a slow path. What the numbers establish is the
+size of the prize — 3.2 million constructions at 57.5 instructions, 30% of the
+benchmark — and that the analysis currently answers no to all of them.
+
+**OPEN**, deliberately: the next step is to read `reusable_records` against
+`lib/list`'s `next` arms and find out whether the no is a proof or a gap.
+
+## 2026-09-06 — THE REUSE ANALYSIS NEVER ASKS ABOUT A DESTRUCTURED PARAMETER
+
+**ANSWERED (#341).** The entry above left open whether `reusable_records`
+refusing all 3,200,900 of pendbench's record constructions is a proof about
+liveness or a gap. It is a gap, and a one-line one.
+
+`sole_finished_record` in `src/linear.rs:811` opens its loop over the arm's
+parameters with
+
+    let Pattern::Var(name, _) = pattern else { continue };
+
+so a parameter that is destructured rather than named is skipped before any
+question about it is asked. Every `next` arm in `lib/list/list.kso` destructures:
+`(cursor at source)`, `(bounded at stop source)`, `(capped left source)`,
+`(counting at)`, `(cycled at source)`, `(grown seed stretch)`,
+`(mapped shape source)`, `(paired left right)`, `(repeated value)`,
+`(sifted keep source test)`, `(skipped burn source)`. Eleven arms, no bare
+parameter among them, so the analysis produces no candidate for any of them —
+whatever the liveness would have said.
+
+The construction it would have to reason about is the one the arm writes as its
+own step: `onward = cursor (at + 1) source` reads `at` and `source` out of the
+cursor that arrived and builds another of the same width. That is the shape
+`k_rec_reuse` exists for, and the shape the doc comment on `reusable_records`
+describes — `shift (n - 1) (point (p.x + 1) p.y)`, with `p` finished by the time
+the constructor runs — with the parameter destructured at the door instead of
+read through a name.
+
+**This is a finding, not a licence.** Being skipped is not the same as being
+safe: whether the arriving cursor is finished still turns on
+`callers_hand_over`, and a lazy list exists so that a caller can hold a cursor
+and ask it for more later. Writing over one a caller still holds would be a
+miscompilation, which is the failure mode this analysis is built to avoid. What
+is established is that the question has never been put — the 30.39% is
+unexamined rather than examined and declined.
+
+**OPEN**: extend `sole_finished_record` to destructured parameters and find out
+what `callers_hand_over` answers for `list/next`. The measurement to take first
+is whether the eleven arms' incoming cursors are handed over, because a no there
+closes the thread at no cost.
+
+## 2026-09-06 — THE CURSOR IS NOT HANDED OVER, SO THE 30% CLOSES AT NO COST
+
+**CLOSED (#342).** The thread above ends where it was designed to end cheaply.
+Before extending `sole_finished_record` to destructured parameters, ask the
+other half of its condition about `list/next` and see whether the answer is
+already no.
+
+A temporary `KANSO_REUSE_PROBE` in `reusable_records` — never committed —
+printing `Analysis`'s two questions for every group whose name ends in `next`:
+
+    PROBE list/next/1  escapes_as_value=false  hand_over_p0=false  params=["Ctor/other"]
+
+`next` is never mentioned as a value, so the analysis has every one of its call
+sites to look at, and having looked at them it says some caller does not hand
+its cursor over uniquely. That is the answer a lazy list should give: a caller
+holds a cursor and asks it for more later, which is what the structure is for,
+and a reuse that wrote over a held cursor would be a miscompilation.
+
+**So the 3,200,900 constructions are refused twice over**, and only the first
+refusal was the one-line skip. Extending the analysis to destructured
+parameters would change nothing here: `sole_finished_record` requires both
+`here == everywhere` and `callers_hand_over`, and the second is already false.
+The 30.39% is not reachable this way.
+
+The gap the entry above found is still a gap — a destructured parameter is
+skipped before the question is asked, so some other arm somewhere may be losing
+a reuse it would qualify for. What is settled is that `list/next` is not one of
+them, and that pendbench's largest function is doing work the objective has no
+cheaper way to buy.
+
+## 2026-09-06 — CI'S NUMBERS, AND THE PROJECTION MISSED THE TWO ROWS THAT SHARE A PROGRAM
+
+**The goldens now hold CI's readings rather than the container's projection.**
+Both changes above were measured here and written in as CI's previous values
+plus the container's deltas, which is the method that had landed to the digit
+for seven changes running. On this branch it landed for eleven rows of thirteen
+and missed twice, by the same amount both times.
+
+    row            projected          CI              miss
+    encodebench    4,425,110,405   4,425,477,605   +367,200
+    livebench      4,437,721,317   4,438,088,517   +367,200
+    the other 11   exact
+
+encodebench and livebench are the same program — livebench runs encodebench's
+against the shipped library instead of the frozen copy — so a single cause
+shows up twice at identical size. The same pair missed by the same 367,200 on
+the previous head, so it is a property of that program on these two hosts and
+not of either change.
+
+`scripts/gates/dispatch.sh` exists to answer whether silicon accounts for a
+moved row, and it cannot answer here: `differs` returns 2 for want of a recorded
+block, and there is no `bench/dispatch.txt` because that was resolved
+deliberately — a recorded block would have blinded the ratchet. This run printed
+`cpu family 0x19 model 0x1`. What the numbers support is that the container's
+deltas are reliable for eleven of these thirteen programs and unreliable for the
+encode program on this pair of hosts; what would settle the mechanism is a
+sitting of that one program on both, which is not this change's to take.
+
+**`compile_instructions` moves from 41,461,538 to 41,461,798**, a rise of 260,
+and `docs/compiler.html`'s `data-golden` follows it. This is the gate's own case
+(1), which its failure text spells out: `src/runtime.c` is `include_str!`'d into
+the compiler, so a runtime edit moves this row with the front end untouched.
+Worth recording that the intermediate head measured +6,169 and the `k_itoa`
+commit brought it back to +260 — the row tracks the size and shape of the
+embedded text, not the compiler's work.
+
+Welfare reads 74.62 against a floor of 74.62 on CI's numbers, so the floor set
+on the projection stands without a re-set.
+
+## 2026-09-06 — PARSE_VALUE'S 26.98%, AND THE POINTER IT RELOADS 17 MILLION TIMES
+
+**ATTRIBUTED (#343).** The decode's largest function had a function-level figure
+and no instruction-level reading. `d_jsonbench/parse_value_2'2` is 468,780,150
+instructions, **26.98% of jsonbench** and more than double the next function.
+
+Searched first: `parse_value` appears three times in the log and not at all in
+the archive. kanso#1262 explains its growth — it absorbed `scan_at_5`'s
+133,577,400 by inlining and gained 136,356,000 doing it — and the entry-block
+thread (kanso#1245) with `preserve_none` behind it (#290, toolchain-blocked)
+covers its prologue. None of them reads what the 468 million is made of.
+
+Same method as `encode_onto`: callgrind at instruction granularity joined to
+`objdump` over the function's 1,021 instructions. 594 execute and the join
+accounts for all 468,780,150.
+
+**Grouped by execution count, the per-call band is the largest.** 49
+instructions run once per call at 2,713,950 calls — 132,983,550, 28.37% of the
+function and **7.65% of jsonbench**. That band holds the thirteen-instruction
+prologue (six pushes and a 120-byte frame), the entry's first two byte reads,
+and the dispatch on what the byte is.
+
+**The shape that repeats is the non-strict byte index.** `bs[i]` inlines to a
+bounds test, a reload of the buffer's data pointer, the fetch, and a `cmove`
+substituting the past-the-end sentinel:
+
+    test %rbx,%rbx              ; index above zero
+    jle  ...
+    cmp  %rbx,%rsi              ; index within the length
+    jl   ...
+    mov  0x8(%r14),%rcx         ; the data pointer, again
+    movzbl -0x1(%rcx,%rbx,1),%ecx
+    cmove %rdx,%rcx             ; or 0x100, past the end
+
+Twenty-two fetch sites execute **17,041,950** times between them, 0.98% of
+jsonbench. Twenty-three pointer reloads execute **17,359,050** times, 1.00% —
+one per fetch, plus one site that reloads without fetching.
+
+**The length is hoisted and the pointer is not.** `parse_value` loads the byte
+count once at entry and keeps it in `%rsi` for the whole call; it loads
+`0x8(%r14)` afresh at every read. `%r14` never changes, and the buffer it points
+into is the input document, which nothing in the decode appends to.
+
+LLVM is right not to hoist it and `!invariant.load` would be wrong: the `data`
+field of a bytes header is genuinely mutable, because `k_b_append_mut` rewrites
+it when a builder grows, and a callee between two fetches could do exactly that.
+What makes the decode's reads redundant is a fact about this buffer rather than
+about the type — the same distinction that made the closure's `!invariant.load`
+correct where this one would not be.
+
+**So the 1.00% is real and its fix is not one line.** Recorded as the size of
+the prize and the reason the obvious route is closed. What is left unexamined in
+this function is the residual of the per-call band once the prologue is set
+aside, which is #290's ground and blocked on the same toolchain.
