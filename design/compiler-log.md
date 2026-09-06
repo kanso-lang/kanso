@@ -5611,10 +5611,27 @@ So the emitter writes the closure as a module constant instead:
     @klam17_cell     = internal constant %KValue
                        { i64 11, i64 ptrtoint (ptr @klam17_cell_clo to i64) }
 
-and the site loads it. The tag folds to 11, the arity to 2, and
-`load ptr, ptr @klam17_cell_clo` folds to `@w_klam17`. The baseline binary
-reaches the lambda through `call *(%r14)`; this one writes
-`call 6810 <w_klam17>`.
+and the site loads it.
+
+**What actually folds, checked against the shipped binary rather than assumed.**
+The K_CLOSURE tag test folds and goes. The address folds: where the baseline
+loaded the closure pointer from a stack slot, `mov 0x38(%rsp),%r10`, this one
+writes `lea @klam17_cell_clo,%r10`. Two of the program's three call sites
+become `call 6810 <w_klam17>`.
+
+The hot one does not. At 0x61fb, the site the escape fold reaches 11,658,800
+times, the emitted code still reads
+
+    61e4  lea   0x23a65(%rip),%r10   # klam17_cell_clo
+    61eb  mov   0x8(%r10),%rdi       ; the env, loaded
+    61fb  call  *(%r10)              ; the fn, loaded
+
+and the arity is still re-read at 0x6214, `cmpq $0x2,0x18(%rcx)`, from that
+same constant. LLVM resolved the ADDRESS of a constant global and then declined
+to constant-fold three loads out of it. The payload crosses as an i64 by the
+KValue ABI, so the pointer reaches the load as `inttoptr(ptrtoint(@g))`; the
+two cold sites fold through that and this one does not. Why they differ is not
+established here, and this entry does not guess.
 
 `k_deep_copy`'s in-place arm gains `if (cl->ncaps == 0) break;`. It used to
 memcpy a one-slot env and write `cl->env` back into the header when the env did
@@ -5635,9 +5652,14 @@ capture-free lambdas in basket and five in pendbench, none of them in a loop.
 
 `w_klam17` itself does not move: LLVM declines to inline 240 instructions of
 jump table into a 606-instruction loop, so the frame is still paid. The whole
-of the encode fall is `encode_onto`, 1,730,978,829 -> 1,713,646,429, which is
-the two folded guards and the direct call at 1.487 instructions a call. The
-decoder has one capture-free lambda and it is not in a loop.
+of the encode fall is `encode_onto`, 1,730,978,829 -> 1,703,308,420, and joined
+instruction by instruction it is three things rather than a devirtualization:
+the `k_closure_lit` call and its first-visit branch leave the loop, the
+accumulator's tag test folds, and the loop stops reloading the list pointer
+from `0x50(%rsp)` every iteration because the frame has a register to spare —
+`sub $0x188,%rsp` becomes `sub $0x178`. The loop body is 33 instructions a byte
+where it was 34. The decoder has one capture-free lambda and it is not in a
+loop.
 
 `perm_allocs` falls in all ten cost goldens — two allocations per capture-free
 lambda, the KClosure and its one-slot env, now in `.rodata`. Emitted calls fall
@@ -5673,3 +5695,19 @@ wrapper is inlined into `encode_onto` and the tailcc body is called from there,
 rather than the body being inlined into the wrapper — and the machine
 instruction count does not move at all, because the frame is paid either way.
 Reverted. The fifteen instructions are #290's.
+
+### What is left, priced
+
+`encode_onto`'s sixty spine instructions — the ones that run on essentially
+every one of its 10,581,600 calls — are 672,571,200 instructions, **15.32% of
+encodebench**. Fifteen of them are the frame: six callee-saved pushes, a
+376-byte stack adjustment, and their mirror on the way out, 158,724,000
+instructions or 3.61%. #338 declined outlining the arm that sizes that frame at
++2.5582%, so the shape is known and priced.
+
+The rest is the fold loop, which runs 1.102 times per `encode_onto` call and
+carries the three unfolded loads above. Two of them are the closure's fn and
+env, which nothing about this program can change at run time; a third is the
+arity. That is three loads and a compare, 46.6M instructions, 1.06% of
+encodebench, sitting behind an `inttoptr(ptrtoint(@g))` the optimizer resolves
+for the address and not for the contents.
