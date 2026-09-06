@@ -176,10 +176,8 @@ fn what_the_sweep_reads() -> String {
 #[test]
 fn every_compile_golden_has_a_reader_in_the_sweep() {
     let read = what_the_sweep_reads();
-    let orphans: Vec<_> = compile_goldens_on_disk()
-        .into_iter()
-        .filter(|g| !read.contains(g.as_str()))
-        .collect();
+    let orphans: Vec<_> =
+        compile_goldens_on_disk().into_iter().filter(|g| !read.contains(g.as_str())).collect();
     assert!(
         orphans.is_empty(),
         "the compile sweep runs nothing that reads {orphans:?} — a golden with no \
@@ -199,16 +197,13 @@ fn every_compile_golden_has_a_reader_in_the_sweep() {
 /// finds out from CI.
 #[test]
 fn the_sweep_builds_the_artifacts_before_it_reads_them() {
-    let built = SWEEP
-        .find("scripts/gates/build_benchmarks.sh")
-        .expect(
-            "the sweep runs scripts/gates/build_benchmarks.sh — the gates read \
+    let built = SWEEP.find("scripts/gates/build_benchmarks.sh").expect(
+        "the sweep runs scripts/gates/build_benchmarks.sh — the gates read \
              *.ll and the linked binaries out of the working directory and none \
              of them produces those files",
-        );
-    let read = SWEEP
-        .find("\"scripts/gates/$g.sh\"")
-        .expect("the sweep runs each named gate by path");
+    );
+    let read =
+        SWEEP.find("\"scripts/gates/$g.sh\"").expect("the sweep runs each named gate by path");
     assert!(
         built < read,
         "the sweep runs a gate at byte {read} before building at byte {built} — \
