@@ -5231,6 +5231,13 @@ string with them, and thirty-two to forty-eight bytes of shared buffer on the
 other three. Small, and silently missing for as long as the switch has been
 lazy.
 
+The `.mem` vein carries it too: 45 of its files move, on `allocs`,
+`alloc_bytes`, `bytes_malloc`, `sh_str`, `sh_rec`, `sh_buf` and `sh_bytes`, and
+every one of them upward. `builder_counts_once` is the shape of all of them —
+allocs 10 -> 11, alloc_bytes 22,557 -> 22,590, bytes_malloc 7 -> 8, sh_str
+32 -> 48 — one startup allocation and sixteen bytes of shared string that the
+lazy switch never saw.
+
 The book carries the same correction in two places. `ch10/counters_counters.out`
 and `ch12/fused_counters.out` are counted runs, and both read `sh_buf=0` where
 they now read `sh_buf=32`: `k_buf` adds to `k_stat_sh_buf` BEFORE the `k_alloc`
