@@ -30,7 +30,25 @@ if [ -z "$golden" ]; then
   echo "::error::this wants the golden to check as its argument"
   exit 2
 fi
-want=$(sed -n 's/^# measured-on //p' "$golden")
+# A `measured-on` line is one or more `key=value` fields and NOTHING else.
+# The pattern used to be a plain prefix strip, and these goldens carry dated
+# notes in prose: a note opening "measured-on moves to clang 19.1.1 with these
+# rows" became a fact list naming `moves`, and the gate refused a host whose
+# rows were byte-identical to the golden. Prose is skipped rather than
+# corrected; a line SHAPED like a fact list still reaches the case below, so a
+# `clnag=19.1.1` typo is refused instead of quietly dropped. What is skipped
+# is a line shaped like neither -- `# measured-on glibc 2.39`, with the equals
+# missing -- and the report below names every fact this read, so a golden
+# comparing against fewer facts than it meant to says so in the job log.
+#
+# And the facts are joined with a space however many lines carry them. The
+# header above documents one fact a line, `have` is built by the loop below
+# with spaces, and comparing a newline-joined `want` against it refused a host
+# that matched fact for fact -- printing the two strings looking identical,
+# because the only difference was the whitespace between them.
+field='[a-z][a-z]*=[^ ]*'
+want=$(sed -n "s/^# measured-on \\($field\\( $field\\)*\\)$/\\1/p" "$golden" \
+       | tr '\n' ' ' | sed 's/  */ /g; s/^ //; s/ $//')
 if [ -z "$want" ]; then
   echo "::error::$golden names no host, so nothing can say whether its rows"
   echo "::error::may be read here. Add a measured-on line naming the"

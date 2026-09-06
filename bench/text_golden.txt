@@ -604,8 +604,8 @@
 # runtime trade rather than a size one, and bench/instructions_golden.txt is
 # where it is judged; this vein records what it cost in bytes.
 #
-# measured-on moves to clang 19.1.1 with these rows. A clang-18 host writes the
-# fallback module and cannot regenerate this file.
+# The measured-on line at the top moves to clang 19.1.1 with these rows. A
+# clang-18 host writes the fallback module and cannot regenerate this file.
 jsonbench text=92914
 encodebench text=113026
 oneshot text=115986
