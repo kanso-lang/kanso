@@ -118,7 +118,7 @@ front_end_rounds=42
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
 # end has that much less to visit. Banked, and it moves the same way as the
 # runtime fall it comes with rather than paying for it.
-front_end_visits=17264
+front_end_visits=17290
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -138,4 +138,13 @@ front_end_visits=17264
 # body for the front end to hold while it decides. The container reads this
 # row identically to the runner, as #1271's entry established, so the figure
 # here is the container's and CI is the confirmation.
-compile_peak_bytes=724493
+# 2026-09-06 (the fold reads its length once): visits 17,264 -> 17,290, a rise
+# of 26. `list/fold_flat` gained a fifth parameter, and `kanso check lib/json`
+# reaches lib/list because lib/json/text.kso imports it: twenty-six more
+# expression visits to decide one more name. rounds hold at 42. The peak row
+# below could not be compared here -- this container is rustc=1.94.1 against
+# the golden's 1.98.1 -- so 725,365 is CI's own reading, 724,493 -> 725,365, a
+# rise of 872 or 0.12%. The container measured 725,365 too, to the byte, which
+# is one more sitting for #1271's finding that the two hosts agree on this row.
+# Held as the price of seven runtime work rows falling, encodebench by 1.3766%.
+compile_peak_bytes=725365

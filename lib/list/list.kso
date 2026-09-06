@@ -176,10 +176,13 @@ pub fn fold (skipped burn source) init f
   fold_go (next (skipped burn source)) init f
 
 pub fn fold coll init f
-  fold_flat coll init f 1
+  fold_flat coll init f 1 (length coll)
 
-fn fold_flat coll acc f i
-  if (length coll < i) acc (fold_flat coll (f acc coll[i]!) f (i + 1))
+# the length is invariant across the cycle: coll is handed to every self-call
+# unchanged, so it is read once at the entry rather than re-derived on every
+# iteration through the twin's tag test
+fn fold_flat coll acc f i len
+  if (len < i) acc (fold_flat coll (f acc coll[i]!) f (i + 1) len)
 
 fn fold_go (done _) acc _
   acc

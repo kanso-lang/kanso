@@ -584,16 +584,28 @@
 # 116,850 -> 116,770. A `length` whose argument the sets already prove is
 # bytes no longer goes through the twin's tag test and its call arm; the eight
 # programs with no such site are byte-identical. Banked.
+#
+# 2026-09-06 (the fold reads its length once): five rows FALL, two rise, six
+# hold. oneshot 116,162 -> 116,034, basket 106,370 -> 106,210, widebench
+# 117,282 -> 117,170, scanbench 152,226 -> 152,034, digestbench 105,538 ->
+# 105,170; deepbench 69,986 -> 70,130 and pendbench 85,266 -> 86,130 go the
+# other way. The fold's loop guard loses a tag test and a header load, so the
+# code for it is smaller wherever the loop was inlined -- but the emitted lines
+# RISE by ten in every one of these programs, so which way the bytes go is
+# downstream of the emitter, as digestbench's entry above already found once.
+# pendbench's +864 for ten IR lines is the clearest case and this entry does
+# not say why. jsonbench, encodebench, escapebench, indexbench and readbench
+# hold to the byte. Banked.
 jsonbench text=93138
 encodebench text=112546
-oneshot text=116162
-basket text=106370
-widebench text=117282
-deepbench text=69986
+oneshot text=116034
+basket text=106210
+widebench text=117170
+deepbench text=70130
 escapebench text=51810
-pendbench text=85266
+pendbench text=86130
 indexbench text=54882
-scanbench text=152226
-digestbench text=105538
+scanbench text=152034
+digestbench text=105170
 readbench text=51458
-livebench text=116770
+livebench text=116642

@@ -58,3 +58,17 @@ test_all_bounds_naturals = not all? naturals (n -> n < 4)
 test_any_bounds_naturals = any? naturals (n -> n > 3)
 
 test_find_miss = (find [2 4 6] (n -> n > 9)) == none
+
+# fold's length rides in a parameter, read once at the entry rather than on
+# every iteration. These five would catch a hoist that stopped one short, ran
+# one long, or handed the elements over out of order -- none of which any
+# counter golden can see.
+test_fold_visits_in_order = fold ["a" "b" "c"] "" (acc x -> "{acc}{x}") == "abc"
+
+test_fold_visits_each_element_once = fold [10 20 30] 0 (acc x -> acc + x) == 60
+
+test_fold_counts_empty = fold [] 0 (acc _ -> acc + 1) == 0
+
+test_fold_counts_one = fold [5] 0 (acc _ -> acc + 1) == 1
+
+test_fold_counts_five = fold [5 5 5 5 5] 0 (acc _ -> acc + 1) == 5

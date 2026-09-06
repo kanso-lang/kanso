@@ -13,7 +13,13 @@ for k in rounds visits; do
   want=$(grep "^front_end_${k}=" "$golden" | cut -d= -f2)
   if [ "$got" != "$want" ]; then
     echo "::error::the front end's ${k} on lib/json moved: ${want} -> ${got}."
-    echo "::error::that is a welfare term. if intentional, regenerate"
+    echo "::error::rounds and visits are NOT welfare terms -- the objective has"
+    echo "::error::weighed compile_instructions, compile_allocs and"
+    echo "::error::compile_peak_bytes and nothing else about the front end since"
+    echo "::error::the 2026-09-03 rebuild, and bench/objective_sources.txt is the"
+    echo "::error::list. This line said they were until 2026-09-06. They are"
+    echo "::error::watched here because they count the compiler's own algorithm"
+    echo "::error::and so are the same on every host. If intentional, regenerate"
     echo "::error::$golden and say which way it went in"
     echo "::error::design/compiler-log.md."
     exit 1
