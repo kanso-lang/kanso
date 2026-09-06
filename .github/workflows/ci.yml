@@ -51,6 +51,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # The rebuild below OVERWRITES docs/kanso.wasm, so the committed blob's
+      # hash has to be taken first or it is gone.
+      - name: the committed wasm blob, before anything overwrites it
+        run: sha256sum docs/kanso.wasm | tee /tmp/wasm_committed.txt
       # the wasm engine test runs docs/kanso.wasm, and the committed artifact
       # is whatever the last author remembered to rebuild — building it here
       # is what makes the third engine's result about this commit's source
@@ -58,6 +62,33 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
+      # MEASUREMENT, NOT A GATE, and deliberately so. The committed blob does
+      # not reproduce on a container four rustc releases behind CI's stable,
+      # and nothing in the tree could say whether that is the toolchain or a
+      # genuinely non-deterministic build, because no job had ever compared
+      # the two on one machine. This does, and prints both either way; it
+      # cannot fail, which is why it carries no ratchet row. Once a few runs
+      # have said the same thing, the answer decides whether this becomes a
+      # gate or the committed blob stops being committed.
+      - name: does the committed wasm blob reproduce here
+        if: always()
+        run: |
+          before=$(cut -d" " -f1 /tmp/wasm_committed.txt)
+          after=$(sha256sum docs/kanso.wasm | cut -d" " -f1)
+          verdict="REPRODUCED"
+          [ "$before" = "$after" ] || verdict="DIFFERS"
+          {
+            echo "## wasm blob reproduction: $verdict"
+            echo ""
+            echo '```'
+            echo "committed  $before"
+            echo "rebuilt    $after"
+            rustc --version
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "committed  $before"
+          echo "rebuilt    $after"
+          echo "verdict    $verdict"
       # --no-fail-fast because cargo stops at the first failing test
       # BINARY, not the first failing test, and the binaries run in
       # alphabetical order. With welfare red in its own spec (then
