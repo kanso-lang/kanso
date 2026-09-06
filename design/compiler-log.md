@@ -5696,6 +5696,24 @@ rather than the body being inlined into the wrapper — and the machine
 instruction count does not move at all, because the frame is paid either way.
 Reverted. The fifteen instructions are #290's.
 
+### The four that rose, by the keys the gate reads
+
+    work_digestbench       76,854,629 ->  77,175,692   +0.4177%
+    work_escapebench      114,584,648 -> 114,584,676   +28
+    work_indexbench         4,691,237 ->   4,691,265   +28
+    compile_instructions   42,089,618 ->  42,092,346   +0.0065%
+
+`work_escapebench` and `work_indexbench` gain 28 apiece, which is one closure
+built once at link time instead of a first-visit branch taken once at run time.
+`compile_instructions` is what any edit to src/codegen.rs costs: the emitter is
+the compiler, so its own bytes and the layout under them move whether or not
+the decision this row counts changed. `work_digestbench` is the one with no
+account: its emitted lines FALL by seven over the same change while its `.text`
+rises 192 bytes, so the 321,063 is a choice LLVM made downstream of the direct
+call at digestbench's two cold sites, and this entry does not guess further.
+Welfare weighs all thirteen work rows and the three compile rows together and
+reads 75.30 -> 75.31, so the corpus is ahead and the trade is taken.
+
 ### What is left, priced
 
 `encode_onto`'s sixty spine instructions — the ones that run on essentially
