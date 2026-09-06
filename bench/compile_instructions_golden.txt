@@ -889,4 +889,13 @@
 # constants where it wrote one `k_closure_lit` call, and src/codegen.rs is the
 # compiler, so its own bytes and the layout under them move whether or not the
 # decision this row counts changed.
-compile_instructions=42092346
+#
+# 2026-09-06 (a `length` the sets prove is a header load): 42,092,346 ->
+# 42,091,852, a FALL of 494. A src/codegen.rs edit usually moves this row up,
+# because the file is the compiler and its layout moves with its bytes. It
+# falls here because the proven-bytes arm returns before the generic builtin
+# path builds `args_ir` -- a Vec of formatted Strings, one per argument -- and
+# before it collects the argument sets for `infer::builtin_set`. The emitter
+# writes four IR lines where it wrote one call and still does less work
+# deciding to.
+compile_instructions=42091852

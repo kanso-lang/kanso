@@ -5801,3 +5801,26 @@ four IR lines take its place: an `inttoptr`, a `getelementptr`, a `load` and an
 `insertvalue`. Four lines a call is the trade, and `text` falls 1,233,802 ->
 1,233,434 over the same change, so what the linker kept is smaller than what
 the emitter wrote. `defines` and `branches` hold in every program.
+
+CI's own sitting, which is the one the goldens hold, agrees with the container
+on every sign and on four of the six magnitudes to the instruction:
+
+    encodebench  4,390,892,021 -> 4,389,082,013   -1,810,008   -0.0412%
+    livebench    4,400,131,256 -> 4,399,422,049     -709,207   -0.0161%
+    oneshot         24,109,317 ->     24,107,540       -1,777   -0.0074%
+    jsonbench    1,542,924,950 -> 1,542,924,650         -300
+    widebench       54,609,879 ->     54,609,871           -8
+    digestbench     77,175,692 ->     77,175,689           -3
+
+basket, deepbench, escapebench, pendbench, indexbench, scanbench and readbench
+hold to the instruction. Welfare 75.31082442642723 -> 75.31169684664573,
+banked with `--set`.
+
+`compile_instructions` FALLS, 42,092,346 -> 42,091,852. CLAUDE.md's rule is that
+this row moves on any edit to the compiler's own Rust and usually upward,
+because src/codegen.rs is the compiler and the layout under its bytes moves with
+them; #1275 paid 2,728 for a smaller diff than this one. It falls here for a
+reason the diff shows: the proven-bytes arm returns before the generic builtin
+path builds `args_ir`, a Vec of formatted Strings one per argument, and before
+it collects the argument sets `infer::builtin_set` reads. The emitter writes
+four IR lines where it wrote one call and does less work deciding to.
