@@ -577,9 +577,16 @@
 # emitted lines FALL by seven over the same change, so the 192 bytes are a
 # choice LLVM made downstream of the direct call rather than anything the
 # emitter wrote. Banked.
-jsonbench text=93154
-encodebench text=112706
-oneshot text=116258
+#
+# 2026-09-06 (a `length` the sets prove is a header load): five rows FALL and
+# none rises -- jsonbench 93,154 -> 93,138, encodebench 112,706 -> 112,546,
+# oneshot 116,258 -> 116,162, digestbench 105,554 -> 105,538, livebench
+# 116,850 -> 116,770. A `length` whose argument the sets already prove is
+# bytes no longer goes through the twin's tag test and its call arm; the eight
+# programs with no such site are byte-identical. Banked.
+jsonbench text=93138
+encodebench text=112546
+oneshot text=116162
 basket text=106370
 widebench text=117282
 deepbench text=69986
@@ -587,6 +594,6 @@ escapebench text=51810
 pendbench text=85266
 indexbench text=54882
 scanbench text=152226
-digestbench text=105554
+digestbench text=105538
 readbench text=51458
-livebench text=116850
+livebench text=116770

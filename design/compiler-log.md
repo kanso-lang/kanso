@@ -5729,3 +5729,75 @@ env, which nothing about this program can change at run time; a third is the
 arity. That is three loads and a compare, 46.6M instructions, 1.06% of
 encodebench, sitting behind an `inttoptr(ptrtoint(@g))` the optimizer resolves
 for the address and not for the contents.
+
+---
+
+## 2026-09-06 (twenty-fourth) — the fold asks the length twice, and the tag test is why
+
+`encode_onto`'s escape fold reads the same header field twice per byte. The
+loop, at 0x62d2 in the shipped binary:
+
+    62d2  cmpq  $0xd,0x40(%rsp)   ; is the collection bytes?
+    62da  mov   (%r15),%rcx       ; the length, load one -- `length coll < i`
+    62dd  cmp   %r14,%rcx
+    62e7  ...   call k_b_length   ; the other arm
+    6324  cmp   %r14,(%r15)       ; the length, load two -- `coll[i]!`
+
+Both are `cmp %r14,(%r15)`, the identical comparison against the identical
+address, and nothing between them writes memory on the fast path. GVN does not
+forward the first to the second because the `k_b_length` call arm merges
+between them, and the merge is the tag test: `k_b_length_fast` inlines a header
+load for a list or a bytes and calls the C entry for anything else.
+
+**What the second compare is worth: 1.4650%.** Both emission sites in the
+demanded-index guard were neutralised in turn, which is unshippable and prices the guard:
+
+    the whole guard removed     4,390,891,562 -> 4,324,668,394   -1.5081%
+    only `idx <= len` removed   4,390,891,562 -> 4,326,560,692   -1.4650%
+    only `idx >= 1` removed                                      -0.0431%
+
+The `>= 1` half is nearly free because LLVM proves it from the induction
+variable; the upper bound and the load under it are the whole cost. #349
+already declined folding the two signed compares into one unsigned one -- the
+signed pair is what buys `movzbl -0x1(%rax,%rbp,1)`, with the `-1` in the
+address -- so this thread is about asking the same compare once rather than
+about asking fewer of them.
+
+**The static proof does not reach it.** The emitter has a `proven` path for the
+demanded index when `set_of(container) == BYTES`, and `length` had none, so a
+`length` of a value already proved bytes went through the twin's tag test for
+nothing. The emitter writes the header load directly now, and every row falls
+or holds:
+
+    encodebench  4,390,891,562 -> 4,389,081,554   -1,810,008   -0.0412%
+    livebench    4,400,130,843 -> 4,399,421,576     -709,267   -0.0161%
+    oneshot         24,108,858 ->     24,107,081       -1,777   -0.0074%
+    jsonbench    1,542,924,537 -> 1,542,924,177         -360
+    widebench       54,609,406 ->     54,609,398           -8
+    digestbench     77,175,233 ->     77,175,230           -3
+
+Six fall and the other seven are byte-identical -- basket, deepbench,
+pendbench, escapebench, indexbench, scanbench and readbench have no `length`
+site the sets prove. Nothing rises.
+
+**And it does not touch the fold.** `list/fold_flat` is one function for lists
+and bytes both, so its `coll` carries the union and neither its `length` nor
+its index gets the proof -- the tag test above is the run-time answer to a
+question the call site already knew. The fold is inlined into `encode_onto` and
+the back edge at 0x63f3 makes a machine loop of it, but the recursion is
+`musttail`, so LLVM sees no loop and LICM never runs: the tag test, the length
+load and the bound are paid on every byte.
+
+That names the next thing rather than doing it. `coll` is passed unchanged to
+every self-call, which makes it invariant across the cycle by construction, and
+an emitter that specialised on an invariant parameter's tag once at entry would
+collect the 1.4650% and the tag ladder with it.
+
+The two emitted-code veins move in opposite directions and the trend gate wants
+both named. `emitted_calls` falls 1,845 -> 1,843 and `emitted_other_calls`
+15,823 -> 15,814, because a call to the twin leaves each site. `emitted_lines`
+rises 12,708 -> 12,716 and `emitted_other_lines` 104,496 -> 104,532, because
+four IR lines take its place: an `inttoptr`, a `getelementptr`, a `load` and an
+`insertvalue`. Four lines a call is the trade, and `text` falls 1,233,802 ->
+1,233,434 over the same change, so what the linker kept is smaller than what
+the emitter wrote. `defines` and `branches` hold in every program.
