@@ -4995,3 +4995,44 @@ restored.
 has to be committed before the ratchet can see it. A session that edits the
 mutation and re-runs from the working tree gets the same STALE line and has no
 way to tell whether the edit was wrong.
+
+---
+
+## 2026-09-06 (fifteenth) — CI's compile rows, and the floor I set on a guess
+
+CI measured the branch and every projection landed exactly except the compile
+veins. All thirteen work rows, all four emitted rows, all twelve emitted-other
+rows and all thirteen `.text` rows came back byte-identical to the container's
+own A/B deltas applied to CI's previous sitting — twenty-nine rows, no misses.
+The three that could not be projected:
+
+    compile_instructions   42,022,241 -> 42,018,130   -4,111    projected, out by 4,111
+    compile_peak_bytes        714,995 ->   722,429   +7,434    NOT PROJECTED AT ALL
+    compile_allocs                  ?                          not yet read
+
+`compile_peak_bytes` is the one that matters. Both it and `compile_allocs`
+refuse on this container — rustc 1.94.1 against the runner's 1.98.1 — and a
+refusal exits before measuring, so the eleventh entry above carried CI's value
+for the PREVIOUS commit with no delta for its own change. The whitespace fold's
+six guarded arms and three helper functions are declarations the front end
+holds while it checks, and they cost 7,434 bytes, 1.04%.
+
+**So the floors of 75.32 and 75.33 were set on numbers nobody had measured.**
+With CI's two, the branch head reads **75.30**. That is still a rise against
+main's 75.17 — the decode is 9.6% cheaper and the objective takes the trade —
+but it is 0.03 below a floor I wrote from a projection, and the floor has to
+come down to what was measured rather than the change being excused past it.
+That is a re-basing of a number that was never a reading, not an accommodation:
+the weights are untouched and the runtime rows are exactly what was claimed.
+
+The floor is not moved in this commit, because `compile_allocs` is still
+unread and 75.30 is provisional in the same way 75.33 was. CI's next sitting
+gives it, and the floor is set once on three measured rows.
+
+**What to do differently.** A vein that refuses on the container is a vein with
+no projection, and carrying the previous commit's value into a golden reads as
+a measurement when it is a placeholder. The eleventh entry said so and set the
+floor anyway. Push with the row unchanged, take the red, and set the floor from
+CI — the same rule the 2026-09-06 (seventh) entry wrote for
+`compile_instructions`, which applies with more force here because this row
+cannot even be A/B'd.

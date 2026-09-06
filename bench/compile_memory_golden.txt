@@ -127,4 +127,4 @@ front_end_visits=17068
 # than reasoned: with the codegen change reverted and lib/json unchanged, the
 # container reads 715,275 and 25,485, the same two numbers as the branch head,
 # to the byte. Banked as the price of a 17.14% fall in the decoder's runtime.
-compile_peak_bytes=714995
+compile_peak_bytes=722429
