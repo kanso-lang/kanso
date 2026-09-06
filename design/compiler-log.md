@@ -3013,3 +3013,231 @@ answer to gate on and there is not one yet. A few runs saying the same thing
 decide whether this becomes a gate or the blob stops being committed; until
 then a step that turns CI red on a difference nobody has explained would be
 a gate written before its rule.
+
+## 2026-09-06 — THE CLOSURE CALLING CONVENTION, AND A STEP THAT ONLY PRINTED
+
+`preserve_none` is an LLVM 19 calling convention: the callee may clobber every
+register, so it needs no callee-saved prologue. kanso's closure calls are the
+shape it exists for — a call through a function pointer into a body that
+returns straight back. kanso#1287.
+
+### The emitter cannot write the keyword without asking
+
+The two spellings fail in opposite directions. clang 18 hard-errors on
+`preserve_nonecc` in a `.ll` and only warns on `__attribute__((preserve_none))`
+in C, where the warning is a silent no-op. A probe using the C attribute would
+answer yes on clang 18 and then emit nothing, so the probe writes a two-define
+`.ll` and compiles it. The C side is gated behind `K_CLOSCC` with
+`-DKANSO_PRESERVE_NONE` and `-Werror=unknown-attributes`, so the attribute
+cannot be quietly dropped on the runtime's nine closure-pointer sites.
+
+Both halves or neither: an emitter-only version MISCOMPILES. encodebench
+printed `error[runtime]: bytes takes a string` because `k_call2` still used the
+C convention while the emitted define had changed. The spec pins the define and
+the call site moving together for that reason, and dropping the call-site
+keyword fails it by name.
+
+### What it costs and what it buys
+
+CI's sitting, under clang 19. All fourteen work rows move and they split both
+ways:
+
+    digestbench  -6.3265%      readbench    +0.0040%
+    encodebench  -2.7123%      escapebench  +0.0368%
+    livebench    -2.4236%      indexbench   +1.7043%
+    widebench    -2.0954%      basket       +1.7993%
+    runbench     -1.0301%      jsonbench    +2.0807%
+    scanbench    -0.3328%      pendbench    +2.5082%
+    deepbench    -0.3146%
+    oneshot      -0.2474%
+
+The decode pays for the encode. A caller that may clobber every register spills
+what it wanted to keep across the call, and the decode's hot loops hold more
+live state across a closure call than the encode's do. `.text` grows on every
+benchmark, 528 bytes on readbench to 1,088 on basket: the convention removes
+each callee's prologue and pays at the call sites, which outnumber the callees.
+
+compile_instructions rises 42,061,735 -> 42,163,520, 0.2420%. The front end is
+untouched — `kanso check lib/json` stops before codegen — and compile_allocs
+and compile_peak_bytes are byte-identical, which is what says so. It is the
+layout vein and the largest move it has recorded, because the edit is larger
+than the ones before it: src/codegen.rs and src/main.rs are the compiler, and
+src/runtime.c is `include_str!`'d into it.
+
+Welfare 51.89 -> 51.95, and the floor is set.
+
+### THE SPLIT WAS WRONG, AND THE OBJECTIVE SAID SO
+
+The machinery shipped first, alone, so that each half would have one
+attributable effect. That reasoning ignored what judges a merge. With CI on
+clang 18 the probe answers false and the emitter writes the fallback, so the
+machinery alone is a 0.2420% compile cost with every runtime counter
+unchanged. Welfare scored it 51.88 against a floor of 51.89 — a fall, with no
+weights argument available for it. `tests/the_digest_is_priced_on_both_sides`
+caught the committed goldens failing to hold the floor, independently of my
+own arithmetic. Two halves that each fail and together pass are one change.
+
+### AND THE INSTALL DID NOT SELECT ANYTHING
+
+The step that installed clang 19 used `update-alternatives --install
+/usr/bin/clang`. On this image /usr/bin/clang is a package-owned symlink to
+`../lib/llvm-18/bin/clang` rather than an alternatives path, so the symlink
+stayed where it was. The step PRINTED `Ubuntu clang version 18.1.3` and nothing
+read it: the probe answered false, the goldens were regenerated against a
+toolchain nobody had selected, and the round measured nothing.
+
+The lesson is not the mechanism, which is an image detail. It is that a step
+which prints a fact instead of checking it cannot fail, and a check that cannot
+fail is the same defect this log has recorded under other names. The step
+greps for `clang version 19` and exits non-zero otherwise; /usr/local/bin
+precedes /usr/bin, so a symlink there wins without touching the dpkg file.
+
+That round also left a reading worth keeping: every work row rose by EXACTLY
+159 instructions, indexbench's 4.69M and encodebench's 4.31B alike, with
+emitted_code and machine_code byte-identical. A constant offset independent of
+workload is per-process startup rather than anything in a loop, and the run
+before it — same source, same clang 18 — had those rows byte-identical to
+their goldens, so the 159 arrived with the package install. It is NOT
+attributed. The rows it applied to have since been remeasured under clang 19
+and the number is not carried into them.
+
+### The veins now say which compiler measured them
+
+bench/text_golden.txt already carried `measured-on clang=`, moved to 19.1.1.
+bench/instructions_golden.txt gains one beside its glibc line: the emitter
+writes a different module when the probe fails, so those rows became a property
+of the host's clang the day it started probing. A clang-18 host writes the
+fallback and cannot regenerate either file.
+
+### And the second line broke the gate that reads it
+
+The instructions vein became the first golden in the tree to name two facts,
+and the gate refused a runner that matched both. `measured_on.sh` collects the
+lines with `sed -p`, so `want` came back newline-joined, while `have` is built
+by a loop that joins with spaces; the two are compared as one string. Its own
+header has documented the two-line form since it was written -- nothing had
+ever used it. The error printed the two strings looking identical, because the
+only difference was the whitespace between them.
+
+The same expression cost the machine-code vein a round for a second reason.
+The pattern was a plain prefix strip, so any comment line opening with the
+phrase became fact data, and these goldens carry dated notes in prose. A note
+reading "measured-on moves to clang 19.1.1 with these rows" -- mine, written in
+the commit above -- asked the host about a fact called `moves` and exited 2
+before measuring anything.
+
+Both reds landed on a run whose work rows were byte-identical to the goldens,
+which is worth saying plainly: the cost-goldens job named two veins and neither
+number had moved. A measured-on line is now one or more `key=value` fields and
+nothing else, joined with a space however many lines carry them. A line SHAPED
+like a fact list still reaches the case that refuses one it cannot read, so a
+`clnag=19.1.1` typo is caught rather than dropped;
+tests/a_golden_may_name_more_than_one_fact.rs pins that alongside the two
+repairs, and asks the gate what this host is rather than deriving it a second
+time. Four of its five were red first, each with the message CI printed.
+
+### The published numbers, and the one the sweep missed
+
+The checklist in CLAUDE.md, every surface: compiler.html's decode board, the
+lazy scoreboard, the recipe block, the compile-speed note, index.html's landing
+panel, about.html's prose. The board and the panel are ms/decode and peak
+memory, and the release rule holds those to a sitting on an idle box; every
+per-benchmark instruction figure on the page names the sitting that measured it
+and is a record rather than a tracker.
+
+That sweep concluded nothing moves, and it was wrong. §31 quotes
+`compile.compile_instructions` in a `data-golden` span -- a figure that TRACKS
+the golden rather than recording a sitting -- and this change moved that row, so
+the page read 42,061,735 against a golden of 42,163,520. `golden_prose` caught
+it on the first run of the welfare job, which is the first run this PR got,
+because welfare waits on cost-goldens and cost-goldens had been red until the
+trend gate was priced.
+
+The lesson is the one CLAUDE.md already states and the sweep still failed:
+walking a list of PAGES is not walking a list of NUMBERS. A `data-golden` span
+is not a dated record and cannot be reasoned about as one; the gate reads them
+all and is the only thing that should be trusted to. What the veins carry --
+fourteen work rows, fourteen .text rows, one compile row -- is unchanged by
+this, and the counters the page quotes as records (`el_parses` at 318450, the
+four arena blocks) sit in cost goldens that came back green.
+
+### The seven rows that worsened, each with the value it landed on
+
+The trend gate asks for the number, not the argument, and it is right to: a
+regression named in prose but not priced is one nobody can check later. Against
+origin/main at f534f487:
+
+| counter | before | after |
+|---|---|---|
+| `work_jsonbench` | 1,526,907,200 | 1,558,677,818 |
+| `work_pendbench` | 605,515,353 | 620,703,023 |
+| `work_basket` | 35,365,571 | 36,001,898 |
+| `work_indexbench` | 4,691,265 | 4,771,217 |
+| `work_escapebench` | 114,584,676 | 114,626,851 |
+| `work_readbench` | 4,283,257 | 4,283,427 |
+| `text` | 1,468,908 | 1,479,004 |
+| `compile_instructions` | 42,061,735 | 42,163,520 |
+
+Six of the eight are the decode paying for the encode, which the section above
+attributes: a caller that may clobber every register spills what it wanted to
+keep across the call, and the decode's hot loops hold more live state across a
+closure call than the encode's do. `work_readbench` at 170 instructions and
+`work_escapebench` at 42,175 are too small to be that or anything else; they are
+the layout moving under a binary whose prologues changed.
+
+`text` is the sum of the fourteen rows and rises 10,096 bytes because the
+convention removes a prologue from each closure callee and pays at the call
+sites, which outnumber them. `compile_instructions` is the layout vein and is
+attributed above.
+
+Against these, eight rows fall: `work_digestbench` 75,565,053 to 70,784,439,
+`work_encodebench` 4,310,952,916 to 4,194,027,086, `work_livebench`
+4,318,118,863 to 4,213,463,624, `work_widebench` 54,609,871 to 53,465,568,
+`work_runbench` 3,043,743,748 to 3,012,388,655, `work_scanbench` 768,849,780 to
+766,291,267, `work_deepbench` 702,627,486 to 700,416,944 and `work_oneshot`
+23,797,766 to 23,738,890. The objective weighs run speed through runbench, which
+is the fifth of those, and welfare rose. The trade is taken on the sum, not
+defended row by row.
+
+### The ratchet row that went blind, and whose it was
+
+The ratchet job read `1 rows proved nothing` on every head of this branch:
+
+    BLIND specs — a release build that gives up the guaranteed tail call: the gate stayed green
+
+Seven hypotheses were measured in the container and every one came back red,
+meaning the mutation reddened the gate here under clang 18, under clang 19,
+through the ratchet's own worktree-and-shared-target path, in CI's row order,
+and on heads whose goldens matched. The eighth thing checked was the record:
+the nightly `prove all` on main, which is the only run that exercises this row
+on a runner when a branch does not touch `src/main.rs`. It proved the row red
+on 2026-09-04 (159f6b2b) and read it BLIND on 2026-09-05 (794113fc) and
+2026-09-06 (def24ed3). The row was main's for two nights before this branch
+touched the file the mutation patches, and `touched` selected it. My earlier
+claim that "main at f534f487 was green" read the pull-request job, which on
+main itself selects no rows; it was not evidence about this row.
+
+The route the mutation takes is a stack overflow. `a_record_rebuilt_at_depth`
+hops two hundred thousand times through a pair of arms; with `musttail`
+stripped, each hop spends a frame, and the release binary dies before its
+`print`. What decides whether it dies is the host's stack limit, and the
+binary's need has been falling:
+
+    compiler at 159f6b2b (2026-09-04), mutated:  segfaults at 16384 KB, prints at 24576 KB
+    compiler at 974cf44f (this branch), mutated:  segfaults at 15360 KB, prints at 16384 KB
+
+both under clang 19.1.1, and the second the same under clang 18. GitHub's
+Linux runners raised their default stack from 8 MB to 16 MB
+(actions/runner-images#3257); every shell here has 8 MB. So the Sep 4 binary
+overflowed both, the Sep 5 binary overflowed only the container, and eighteen
+commits landed between the two nightlies -- the frames shrank under the
+runner's limit somewhere in #1245 through #1257, and nothing in the tree named
+the limit the proof depended on. The container could not reproduce CI because
+it was comparing against a number CI never printed.
+
+The fix pins the number: `micro_corpus_survives_a_release_build` runs each
+release-built sample under `ulimit -s 8192`, so the gate's reading stops
+depending on where it runs. Raising the container's limit to 32 MB reproduced
+the blind row locally; the fix reddens it there; and the unmutated corpus
+still passes under the pinned 8 MB, which is what the row proved on every
+shell before this. CI's ratchet is the spec that was red first, on eight heads.

@@ -21,7 +21,7 @@
 # this line against the clang it is running under before it measures anything.
 # The upstream version is pinned and the package revision is not: what selects
 # codegen is the release, and nothing here shows a revision moving a byte.
-# measured-on clang=18.1.3
+# measured-on clang=19.1.1
 #
 # 2026-08-12: encodebench 102,642 to 101,778, oneshot 101,826 to 100,962,
 # basket 93,186 to 92,322 — the same 864 bytes off each — and jsonbench
@@ -597,17 +597,26 @@
 # not say why. jsonbench, encodebench, escapebench, indexbench and readbench
 # hold to the byte. Banked.
 # 2026-09-06 (the proven-tags append, and the escape arms folded into esc_pair): four of the thirteen move, by 32 bytes each, and they split both ways -- encodebench 112,546 -> 112,578 and widebench 117,170 -> 117,202 rise; oneshot 116,034 -> 116,002 and livebench 116,642 -> 116,610 fall. Nine hold. Net zero across the thirteen, which is the linker placing the same work differently rather than more or less of it.
-jsonbench text=92370
-encodebench text=112402
-oneshot text=115234
-basket text=105810
-widebench text=117090
-deepbench text=70130
-escapebench text=51810
-pendbench text=86082
-indexbench text=54882
-scanbench text=151474
-digestbench text=104546
-readbench text=51458
-livebench text=115778
-runbench text=239842
+# 2026-09-06 (the closure calling convention, on clang 19): every row grows,
+# by 528 bytes on readbench to 1,088 on basket. preserve_none removes each
+# closure callee's callee-saved prologue and epilogue, and pays for it at the
+# call sites, which are more numerous than the callees. The convention is a
+# runtime trade rather than a size one, and bench/instructions_golden.txt is
+# where it is judged; this vein records what it cost in bytes.
+#
+# The measured-on line at the top moves to clang 19.1.1 with these rows. A
+# clang-18 host writes the fallback module and cannot regenerate this file.
+jsonbench text=92914
+encodebench text=113026
+oneshot text=115986
+basket text=106898
+widebench text=118018
+deepbench text=70738
+escapebench text=52386
+pendbench text=87026
+indexbench text=55490
+scanbench text=152178
+digestbench text=105442
+readbench text=51986
+livebench text=116530
+runbench text=240386

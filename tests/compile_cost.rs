@@ -28,7 +28,8 @@ fn rewrite_rows(path: &std::path::Path, header: &str, rows: &str) {
 
 fn ir_for(source: &str) -> String {
     let program = kanso::compile("sample.kso", source, false).expect("sample compiles");
-    kanso::codegen::emit_ir(&program).expect("sample lowers to IR")
+    kanso::codegen::emit_ir(&program, kanso::codegen::ClosureConvention::Absent)
+        .expect("sample lowers to IR")
 }
 
 /// The processing the emitted text cost: how many times the fixpoint went
@@ -55,7 +56,8 @@ fn module_entry(name: &str) -> kanso::ast::Program {
 }
 
 fn ir_for_module(name: &str) -> String {
-    kanso::codegen::emit_ir(&module_entry(name)).expect("module lowers to IR")
+    kanso::codegen::emit_ir(&module_entry(name), kanso::codegen::ClosureConvention::Absent)
+        .expect("module lowers to IR")
 }
 
 fn work_for_module(name: &str) -> (u64, u64) {

@@ -921,4 +921,22 @@
 # layout vein this file has recorded eight times now, and 390 instructions
 # is the smallest of them. compile_allocs and compile_peak_bytes are
 # byte-identical, which is what says the front end really did not move.
-compile_instructions=42061735
+# 2026-09-06 (the closure calling convention, probed for and threaded
+# through): 42,061,735 -> 42,163,520, a RISE of 101,785 or 0.2420%. The front
+# end is untouched -- `kanso check lib/json` stops before codegen, so no
+# decision this row counts was changed, and compile_allocs and
+# compile_peak_bytes are byte-identical, which is what says so. This is the
+# layout vein again, and the largest move it has recorded: the edit is larger
+# than the ones before it. src/codegen.rs and src/main.rs are the compiler, so
+# their own bytes and the layout under them move; and src/runtime.c is
+# include_str!'d into the compiler, so the K_CLOSCC macro and its nine
+# attribute sites are bytes the compiler carries whether or not any of them is
+# ever compiled.
+#
+# It was NOT predicted before CI measured it. The rule in CLAUDE.md says this
+# row usually moves on an edit to the compiler's own Rust and that kanso#1285
+# is a counterexample, so the PR said CI would decide and did not guess.
+#
+# Installing clang 19 does not move this row again: the compiler binary is
+# built by cargo, and clang compiles only the runtime and the emitted IR.
+compile_instructions=42163520
