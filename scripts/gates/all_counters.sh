@@ -76,9 +76,14 @@ done
 # counter change must regenerate, and until 2026-09-06 this sweep could not see
 # it. The compile sweep had the same hole in the same week, twice over.
 #
-# IT COSTS 158 SECONDS on this container, measured 2026-09-06, which is real
-# beside the eleven counter runs. The alternative is a vein that moves and
-# says so only in CI, on the dimension this file exists to watch.
+# IT COSTS 158 SECONDS on this container to READ, measured 2026-09-06, and
+# `--write` is the slower branch: the regeneration ran past 204 seconds in the
+# same sitting, because it writes every .mem file rather than diffing them.
+# Both are real beside the eleven counter runs, and the alternative is a vein
+# that moves and says so only in CI, on the dimension this file exists to
+# watch. The read figure was the only one measured when this comment was
+# written, and it read as the cost of the step rather than the cost of one of
+# its two branches.
 printf '=== lazy tier (tests/golden/mem/*.mem)\n'
 if [ "$write" -eq 1 ]; then
   if KANSO_REGEN_MEM_GOLDEN=1 cargo test --release --test golden >/dev/null 2>&1; then
