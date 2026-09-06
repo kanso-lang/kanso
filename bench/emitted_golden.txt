@@ -146,7 +146,17 @@
 # reason every other benchmark in emitted_golden_others.txt rises by exactly
 # 134 too. The rest is the decoder's own two fused sites. Banked as the price
 # of jsonbench -1.06% and one allocation per escaped string.
+#
+# 2026-09-06 (a capture-free lambda is a link-time constant): calls 1,847 ->
+# 1,845 and lines 12,716 -> 12,708 in the decoder, and a fall in calls in every
+# program beside it. A lambda that captures nothing used to build its closure
+# through `k_closure_lit` into a mutable cell on first visit; it is three
+# module constants now and the site loads one, so the call goes and the
+# closure's function pointer folds at link time. `lines` falls where a program
+# has few such lambdas and rises where it has several — three constants for one
+# call — which is why basket, escapebench and indexbench go the other way by a
+# handful of lines. Banked.
 defines=185
-calls=1847
+calls=1845
 branches=1203
-lines=12716
+lines=12708

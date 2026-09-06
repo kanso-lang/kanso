@@ -288,16 +288,41 @@
 # 67,883 or 0.0015%. The escape walk between two escapes is one find2 and one
 # copy where it was a byte at a time, and the view the slice would have been
 # is never built.
-jsonbench 1542925378
-encodebench 4421003600
-oneshot 24190898
-basket 35477286
-widebench 54610292
-deepbench 705892821
-escapebench 114584648
-pendbench 605526497
-indexbench 4691237
-scanbench 768876199
-digestbench 76854629
-readbench 4283685
-livebench 4432419027
+#
+# 2026-09-06 (a capture-free lambda is a link-time constant): eleven of the
+# thirteen fall, and the two that do not are the interesting part.
+#
+#   encodebench 4,421,003,600 -> 4,390,892,021   -0.6811%
+#   livebench   4,432,419,027 -> 4,400,131,256   -0.7285%
+#   oneshot        24,190,898 ->     24,109,317  -0.3373%
+#   deepbench     705,892,821 ->    704,511,486  -0.1957%
+#   basket         35,477,286 ->     35,473,609  -0.0104%
+#   scanbench     768,876,199 ->    768,849,900  -0.0034%
+#   pendbench     605,526,497 ->    605,519,153  -7,344
+#   jsonbench   1,542,925,378 ->  1,542,924,950  -428
+#   readbench       4,283,685 ->      4,283,257  -428
+#   widebench      54,610,292 ->     54,609,879  -413
+#   escapebench   114,584,648 ->    114,584,676  +28
+#   indexbench      4,691,237 ->      4,691,265  +28
+#   digestbench    76,854,629 ->     77,175,692  +321,063  +0.4177%
+#
+# The two encode rows carry the change: `k_call2_fast`'s tag and arity tests
+# fold against a constant closure and the indirect call becomes a direct one,
+# which the escape fold pays 11,658,800 times a run. The +28 on escapebench and
+# indexbench is one closure built once instead of a first-visit branch taken
+# once, and digestbench's +321,063 goes with a 192-byte rise in its .text: the
+# direct call changes what LLVM inlines there. Welfare weighs all thirteen and
+# rose, so the trade is taken; the rise is named rather than defended.
+jsonbench 1542924950
+encodebench 4390892021
+oneshot 24109317
+basket 35473609
+widebench 54609879
+deepbench 704511486
+escapebench 114584676
+pendbench 605519153
+indexbench 4691265
+scanbench 768849900
+digestbench 77175692
+readbench 4283257
+livebench 4400131256

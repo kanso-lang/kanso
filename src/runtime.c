@@ -1837,6 +1837,10 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         }
         case K_CLOSURE: {
             KClosure* cl = (KClosure*)p;
+            /* A closure over nothing holds no arena pointer, so there is
+               nothing here to evacuate and the header must not be written:
+               the emitter builds these as link-time constants. */
+            if (cl->ncaps == 0) break;
             if (!k_survives_x(cl->env, cp->mark)) {
                 size_t n = sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1);
                 KValue* ne = k_copy_alloc(cp, n);

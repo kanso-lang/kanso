@@ -1411,6 +1411,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         print_value_wrapper: false,
         caf_cells: Vec::new(),
         closure_cells: Vec::new(),
+        closure_consts: Vec::new(),
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
     };
@@ -1455,6 +1456,12 @@ struct Backend<'a> {
     caf_cells: Vec<String>,
     /// one permanent slot per zero-capture lambda site, built on first visit
     closure_cells: Vec<String>,
+    /// A lambda that captures nothing is one value for the whole run, so it
+    /// is a link-time constant rather than a slot filled on first visit.
+    /// The fold's `%fnp = load ptr, ptr %c` then folds to the wrapper and
+    /// the indirect call through the closure becomes a direct one LLVM can
+    /// inline. (cell, wrapper, arity)
+    closure_consts: Vec<(String, String, usize)>,
     demand: crate::demand::DemandInfo<'a>,
     /// (site evaluator symbol, captured-arg count), indexed by site id.
     thunk_sites: Vec<(String, usize)>,
@@ -1709,11 +1716,24 @@ impl FnEmit {
 /// itself about to go — hence the fixpoint. Only `d_` and `w_` symbols are
 /// candidates: everything else is either the entry, a builder the constant
 /// initialiser calls, or a switch the runtime calls by name.
-fn prune_unnamed(body: &str, entry: &str) -> String {
+/// `cells` pairs a constant closure's cell with the wrapper it points at. The
+/// pointer lives in a module global rather than in any function body, so the
+/// wrapper is named by the cell rather than by a call, and a site that loads
+/// the cell is what keeps it.
+fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
     let mut blocks = ir_defines(body);
     loop {
         let named = |at: usize, sym: &str| {
-            blocks.iter().enumerate().any(|(k, (_, text))| k != at && names_symbol(text, sym))
+            if blocks.iter().enumerate().any(|(k, (_, text))| k != at && names_symbol(text, sym)) {
+                return true;
+            }
+            cells.iter().any(|(cell, w, _)| {
+                w == sym
+                    && blocks
+                        .iter()
+                        .enumerate()
+                        .any(|(k, (_, text))| k != at && names_symbol(text, cell))
+            })
         };
         let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
             // The runtime calls the thunk dispatcher itself, from `k_force`,
@@ -2536,7 +2556,7 @@ impl<'a> Backend<'a> {
         // library's surface is its callers' business, and every definition in
         // it is reachable from outside the module the emitter can see.
         let body = match self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
-            true => prune_unnamed(&self.body, &dsym(crate::ast::ENTRY, 0)),
+            true => prune_unnamed(&self.body, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
             false => self.body.clone(),
         };
         // One inline dispatcher per arity the program actually writes. An
@@ -2579,6 +2599,22 @@ impl<'a> Backend<'a> {
         }
         for cell in &self.closure_cells {
             let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
+        }
+        for (cell, w, arity) in
+            self.closure_consts.iter().filter(|(cell, _, _)| body.contains(&format!("@{cell}\n")))
+        {
+            // K_INT 0 is the env a zero-capture closure never reads; K_CLOSURE
+            // is tag 11. The KClosure layout is the runtime's:
+            // { fn, env, ncaps, arity }.
+            let _ = writeln!(out, "@{cell}_env = internal constant %KValue zeroinitializer");
+            let _ = writeln!(
+                out,
+                "@{cell}_clo = internal constant {{ ptr, ptr, i64, i64 }}                  {{ ptr @{w}, ptr @{cell}_env, i64 0, i64 {arity} }}"
+            );
+            let _ = writeln!(
+                out,
+                "@{cell} = internal constant %KValue                  {{ i64 11, i64 ptrtoint (ptr @{cell}_clo to i64) }}"
+            );
         }
         for (name, bytes) in &self.strings {
             let _ = writeln!(
@@ -4405,13 +4441,10 @@ impl<'a> Backend<'a> {
                 // the site is a load after the first visit.
                 if captures.is_empty() {
                     let cell = format!("{lifted}_cell");
-                    self.closure_cells.push(cell.clone());
-                    let t = f.tmp();
                     // the ccc wrapper, never the tailcc fn: C calls this pointer
-                    f.line(&format!(
-                        "{t} = call %KValue @k_closure_lit(ptr @w_{lifted}, i64 {}, ptr @{cell})",
-                        params.len()
-                    ));
+                    self.closure_consts.push((cell.clone(), format!("w_{lifted}"), params.len()));
+                    let t = f.tmp();
+                    f.line(&format!("{t} = load %KValue, ptr @{cell}"));
                     return Ok(t);
                 }
                 let n = captures.len();
