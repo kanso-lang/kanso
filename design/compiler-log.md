@@ -2749,3 +2749,100 @@ and `compile_peak_bytes` are byte-identical, which is what says the front end
 really did not move. This is the ninth recorded layout-only move of that row.
 
 Welfare **75.36021114125158 -> 75.38438760189786**, banked in the same push.
+
+## 2026-09-06 — THE OBJECTIVE MEASURES ONE RUN PROGRAM
+
+**GAVEL (Clay, 2026-09-06).** "The objective measures ONE consolidated run
+program — retired instructions as run speed, peak as run memory. Build it:
+decode and encode as the bulk, the stress shapes (wide, deep, pending, escape,
+index, digest, scan) at realistic proportion, the mix stated in the program's
+header. Per-phase counters stay as diagnostic goldens; the shelves stop being
+objective inputs. Baseline it, re-set the floor in the same PR as a definition
+change, and rewrite history.jsonl's welfare column once. Retire the
+advertised/guards split and the granted-baseline machinery for run counters;
+close #317 and #319 as moot and remove #319 from the ledger."
+
+**SEARCHED** before filing: the live log's entries of 2026-09-03 (the objective
+rebuild), 2026-09-04 (readbench joins) and 2026-09-05 (livebench joins, and the
+granted-baseline entry that held the clean-prefix change); the archive's
+satiation design; `design/pending-gavels.md`, which carried the granted-baseline
+question as its own entry. Nothing there anticipates one consolidated program.
+
+**THE PROGRAM.** `bench/runbench` runs eight phases in one process and prints
+one line. The mix is measured rather than asserted: each phase was built alone
+with the other seven zeroed, and the count that landed it on its share is the
+one in the source.
+
+    decode  98 rounds of lib/json over large.json  1,045,772,072  34.54%
+    encode  90 rounds over the same document       1,042,585,953  34.43%
+    deep    545 trials of the nested grid            188,771,447   6.23%
+    digest  sha256 over a 15,675-byte slice          152,850,246   5.05%
+    index   690,000 characters walked by index       150,623,773   4.97%
+    escape  3,872 lines through the escaper          149,982,432   4.95%
+    pend    50 records with a field left pending     149,607,747   4.94%
+    split   428 characters through the splitter      147,499,570   4.87%
+                                                   -------------
+    the whole program                              3,043,742,734
+
+Decode and encode carry 68.97% between them. The counts are not round because
+`split` is quadratic in its size — 120 characters cost 11,800,000 and 1,526 cost
+1,870,000,000 — so its share was solved for rather than chosen. The program
+imports `std/json` rather than carrying a frozen copy: the three frozen
+benchmarks keep doing that isolation job as diagnostics, and what the project
+costs to run includes the library it ships.
+
+**THE FLOOR IS NOT COMPARABLE WITH THE ONE BEFORE IT.** 75.38 becomes 51.89.
+The run counters are re-baselined to today's measurement, so the run terms sit
+at parity, while the three compile rows keep the advantage they have
+accumulated since august — most of what is left in the number is compile cost.
+The floor was LOWERED BY HAND to 51.0 and then `--set` wrote the measured
+51.89, which is the only override welfare allows and the one its own comment
+names. A fourth loosening of the ratchet guard was considered and declined:
+three earlier ones were each an escape.
+
+**THE THIRTEEN ARE DIAGNOSTICS NOW, AND STILL GATED.** Every cost golden, every
+`.mem` row and every instruction row stays, and `instructions.sh` walks
+fourteen. What changes is that a move in one of them says WHERE a cost went
+rather than whether the project came out ahead. `tests/every_benchmark_is_in_the
+_objective.rs` asserted the opposite property — every rowed benchmark is
+weighed — so it inverts: the objective weighs exactly one program, and that
+program is built, measured and rowed. Its counter reader used `find` once per
+line, which a second counter written on the same line defeated; the mutation
+proved it green with two benchmarks in the model, and it scans every occurrence
+now.
+
+**151 ROWS OF HISTORY CANNOT BE SCORED.** No row predating today carries
+`run_instructions` or `run_peak_bytes`, because the program they name did not
+exist. 349 of the five hundred are scored on the three compile counters alone,
+at coverage 0.28 or 0.44; the other 151, between 2026-08-13 and 2026-08-24,
+carry none of the five, because the interpolation miscompilation of that
+fortnight took the compile group out of the row. The rescorer died on the first
+of them saying "`*` is not defined for these values" — an empty denominator
+surfacing three functions later, in the rounding. Those rows now get no welfare
+column and `scored_weight` 0.00, which the chart already draws as a gap, and a
+score the previous formula produced is removed rather than left sitting under a
+`scored_by` that names the new one. Nothing is invented for them: the counters
+are still in the file, so a future formula that can read them will.
+
+**THE GRANTED-BASELINE RULE IS RETIRED**, and the question in the ledger goes
+with it. `entering` gave a counter new to the model a baseline of `now *
+standing` so that landing day cost the floor nothing; nine of twenty-one stood
+on it. It was never neutral afterwards — saturation is concave, so a counter
+granted a high standing has almost no headroom and one at parity has a great
+deal — and that difference decided the carry-tier verdict of 2026-09-01: 74.31
+-> 73.75 with the digest baselines granted, 70.14 -> 72.99 with them at parity.
+With the run side one program, nothing joins a benchmark at a time and the rule
+has nobody left to grant to. A counter in the model with no baseline is refused
+now, by name.
+
+The refusal is taken in the arm that decides whether to score at all. The first
+shape returned it from `baseline_of`, and an effect is a value in kanso: the
+complaint came back as the baseline, `score` indexed it, and the program died
+saying "indexing takes a list or string with a 1-based position, or a map with
+a key" — a true sentence about the wrong thing, three functions from the cause.
+
+**OPEN.** Whether the compile rows should re-baseline too, restarting the whole
+index at parity together. It is a one-line change to the floor file and it is
+Clay's, not mine: it decides whether the number's origin is the day the
+objective was last redefined or the accumulated history of the compile side.
+The gavel did not say, and the index reads what it reads either way.

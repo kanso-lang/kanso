@@ -290,7 +290,9 @@ a fallback for, and because the second pair ever written turned out to be two
 binaries. A sixth was filed later the same day: whether a benchmark that enters
 the objective at its dimension's standing enters unimprovable, raised by a
 library change that falls livebench 3.08% and is declined in all four shapes it
-was written in.
+was written in. That sixth is CLOSED AS MOOT by the gavel of 2026-09-06, which
+put the run side on one consolidated program: nothing enters at a dimension's
+standing now, and the granted-baseline rule is retired with the question.
 
 **The rules that carry forward**, each earned twice:
 
