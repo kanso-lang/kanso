@@ -2979,16 +2979,34 @@ and they are kept because kanso#1282's entry recorded them.
 
 ### And nothing on CI could say whether the committed wasm blob reproduces
 
-`docs/kanso.wasm` is a build artifact that is also committed. It hashes
-`be72313e…` on main; two consecutive rebuilds on this container both produce
-`ab452885…`. That cannot be settled here — the container's rustc is four
-releases behind CI's stable, so a difference is as likely to be the toolchain
-as a non-deterministic build, and no job had ever hashed the two on one
-machine.
+`docs/kanso.wasm` is a build artifact that is also committed, and no job had
+ever hashed the committed blob and a rebuild on one machine. The specs job
+already rebuilds it, and the rebuild OVERWRITES the file, so the committed
+hash has to be taken in a step before. It now is, and a step after prints
+both with the runner's rustc version into the run summary.
 
-The specs job already rebuilds the blob, and the rebuild OVERWRITES it, so
-the committed hash has to be taken in a step before. It now is, and a step
-after prints both with the runner's rustc version into the run summary.
+The first reading, on this branch:
+
+    committed  60b9fc8a...   written at 6f8c876e (kanso#1272)
+    rebuilt    5d1566dc...   rustc 1.98.1
+    verdict    DIFFERS
+
+On this container, at rustc 1.94.1, the same source builds to `512d43f4...` --
+a third hash. Touching `src/lib.rs` to force a real recompile and building
+again gives `512d43f4...` a second time, so the build is reproducible within
+one toolchain.
+
+Two figures in the first draft of this entry were wrong, and both are
+corrected above. It gave the committed hash as `be72313e...`, which was never
+this file's hash -- it has read `60b9fc8a...` since kanso#1272, here and on
+the runner. And it offered two consecutive rebuilds as the evidence for
+determinism, which showed nothing at all: with no source change cargo relinks
+nothing and copies the same file back. The forced recompile is the test that
+carries the claim.
+
+Fourteen commits separate the committed blob from HEAD and five of them touch
+`src/`, so the blob is a build of older source than either rebuild. That has
+to be ruled out before the toolchain is suspected of anything.
 
 **It is a measurement and it cannot fail, deliberately.** A gate wants an
 answer to gate on and there is not one yet. A few runs saying the same thing
