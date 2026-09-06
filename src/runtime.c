@@ -541,6 +541,29 @@ static void k_arena_push(size_t need) {
 
 int k_stats_on = -1;
 
+/* The counter switch is read once, before main and before anything a program
+   does can consult it.
+
+   It used to initialise itself lazily on the first allocation, inside
+   k_alloc — which is inlined into every hot caller there is. So every loop
+   that allocated carried a WRITE to this global, and a loop that writes a
+   global cannot have any read of that global hoisted out of it. Every
+   counter check in every hot loop reloaded and re-tested it once an
+   iteration, on release runs where the counters are off and the answer never
+   changes. Setting it here, from a constructor that runs ahead of every entry
+   point this file has, leaves the global written-once and lets the loads
+   hoist.
+
+   It also fixes what the counted run reports. Every counting site tests
+   `k_stats_on > 0`, and -1 fails that test, so everything that happened
+   before the first arena allocation went uncounted — one byte malloc and
+   sixteen bytes of shared string on basket, and thirty-two to forty-eight
+   bytes of shared buffer on three others. Those are the counters moving to
+   what was always true. */
+__attribute__((constructor)) static void k_stats_switch(void) {
+    k_stats_on = getenv("KANSO_COUNTERS") != NULL;
+}
+
 /* The refill path stays out of line; the bump inlines into every hot
    caller. Counters, when enabled, are exact: both paths count. */
 static __attribute__((noinline)) void* k_alloc_refill(size_t n) {
@@ -554,7 +577,6 @@ static __attribute__((noinline)) void* k_alloc_refill(size_t n) {
 static inline __attribute__((always_inline)) void* k_alloc(size_t n) {
     n = (n + 15) & ~(size_t)15;
     if (__builtin_expect(k_stats_on != 0, 0)) {
-        if (k_stats_on < 0) k_stats_on = getenv("KANSO_COUNTERS") != NULL;
         if (k_stats_on) {
             k_stat_allocs++;
             k_stat_alloc_bytes += (long long)n;
@@ -8479,7 +8501,7 @@ int main(int argc, char** argv) {
     /* constants are built once, before any user code runs, so reading one is
        a load rather than a check */
     k_caf_init();
-    if (getenv("KANSO_COUNTERS")) {
+    if (k_stats_on) {
         atexit(k_stats_dump);
         /* Counters print at exit, so a program that has to be killed reports
            nothing at all — which is how a run that takes minutes ends up

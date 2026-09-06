@@ -552,16 +552,22 @@
 # 119,522 -> 119,122, 400 bytes each; oneshot 118,914 -> 118,514, encodebench
 # 116,562 -> 116,402, widebench 121,106 -> 120,946, scanbench 154,530 ->
 # 154,450. Banked.
-jsonbench text=94898
-encodebench text=116402
-oneshot text=118514
-basket text=109074
-widebench text=120946
-deepbench text=72130
-escapebench text=53474
-pendbench text=87538
-indexbench text=56754
-scanbench text=154450
-digestbench text=107218
-readbench text=53298
-livebench text=119122
+#
+# 2026-09-06 (the counter switch is set once): every binary shrinks, 1,263,818
+# bytes to 1,233,770, a fall of 30,048 or 2.38 per cent. The lazy
+# initialisation of `k_stats_on` was inlined into every hot caller along with
+# `k_alloc`, and each copy carried a getenv call and a second test; a
+# constructor sets the switch once and every copy of that goes.
+jsonbench text=91922
+encodebench text=113314
+oneshot text=115442
+basket text=106642
+widebench text=117858
+deepbench text=70354
+escapebench text=52018
+pendbench text=85698
+indexbench text=55106
+scanbench text=152338
+digestbench text=105362
+readbench text=51666
+livebench text=116050

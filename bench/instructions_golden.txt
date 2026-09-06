@@ -266,16 +266,30 @@
 # different glibc, so each is the golden plus the container's own A/B delta,
 # measured on one host from the repo root with both binaries in place. CI's
 # sitting is the record and one red round is expected if a projection misses.
-jsonbench 1564492424
-encodebench 4425477605
-oneshot 24341969
-basket 35510217
-widebench 54690359
-deepbench 708507318
-escapebench 114596730
-pendbench 605537209
-indexbench 4691365
-scanbench 776364842
-digestbench 77353320
-readbench 4288131
-livebench 4436935725
+#
+# 2026-09-06 (the counter switch is set once): ALL THIRTEEN rows fall, the
+# first clean sweep this vein has recorded. `k_stats_on` initialised itself
+# lazily inside `k_alloc`, which is inlined into every hot caller, so every
+# loop that allocated carried a WRITE to that global -- and a loop that writes
+# a global cannot have any read of it hoisted out. Every counter check in
+# every hot loop reloaded and re-tested it once an iteration, on release runs
+# where the answer never changes. A constructor sets it before main instead.
+# Falls run from scanbench at 0.9646 per cent to pendbench at 0.0018.
+#
+# These are PROJECTIONS: the rows are CI's and this container reads a
+# different glibc, so each is the golden plus the container's own A/B delta,
+# measured on one host from the repo root with both binaries in place. CI's
+# sitting is the record.
+jsonbench 1559466178
+encodebench 4421003600
+oneshot 24300109
+basket 35477286
+widebench 54610292
+deepbench 705892821
+escapebench 114584648
+pendbench 605526497
+indexbench 4691237
+scanbench 768876199
+digestbench 76854629
+readbench 4283685
+livebench 4432486910

@@ -5177,3 +5177,69 @@ because the recursion is a mutual cycle. A third thing the join shows is
 smaller and real: the guard reads the index's tag with three compares before it
 compares the byte, and one of the three — the failure test — is provably dead,
 because the tag is a phi over exactly `{int, none}`.
+
+---
+
+## 2026-09-06 (nineteenth) — the counter switch is set once, and every row falls
+
+`k_stats_on` initialised itself on first use, inside `k_alloc`:
+
+    if (k_stats_on != 0) {
+        if (k_stats_on < 0) k_stats_on = getenv("KANSO_COUNTERS") != NULL;
+        ...
+
+`k_alloc` is `always_inline` and it is inlined into every hot caller there is,
+so every loop that allocates carried a WRITE to that global — and a loop that
+writes a global cannot have any read of that global hoisted out of it. Every
+counter check in every hot loop reloaded it and re-tested it once an iteration,
+on release runs where the counters are off and the answer never changes for the
+life of the program. A constructor sets it before main, the lazy line goes, and
+LICM hoists the rest without being told anything.
+
+All thirteen work rows fall. This vein has not recorded a clean sweep before.
+
+    work_scanbench     776,364,842 ->   768,876,199   -7,488,643   -0.9646%
+    work_digestbench    77,353,320 ->    76,854,629     -498,691   -0.6447%
+    work_deepbench     708,507,318 ->   705,892,821   -2,614,497   -0.3690%
+    work_jsonbench   1,564,492,424 -> 1,559,466,178   -5,026,246   -0.3213%
+    work_oneshot        24,341,969 ->    24,300,109      -41,860   -0.1720%
+    work_widebench      54,690,359 ->    54,610,292      -80,067   -0.1464%
+    work_readbench       4,288,131 ->     4,283,685       -4,446   -0.1037%
+    work_encodebench 4,425,477,605 -> 4,421,003,600   -4,474,005   -0.1011%
+    work_livebench   4,436,935,725 -> 4,432,486,910   -4,448,815   -0.1003%
+    work_basket         35,510,217 ->    35,477,286      -32,931   -0.0927%
+    work_escapebench   114,596,730 ->   114,584,648      -12,082   -0.0105%
+    work_indexbench      4,691,365 ->     4,691,237         -128   -0.0027%
+    work_pendbench     605,537,209 ->   605,526,497      -10,712   -0.0018%
+
+Machine code shrinks with it, 1,263,818 bytes to 1,233,770, a fall of 30,048 or
+2.38%, on every one of the thirteen: each inlined copy of `k_alloc` carried a
+getenv call and a second test, and every copy of that goes. The emitted-code
+vein does not move at all, which is the check that this is the runtime rather
+than the compiler: `src/runtime.c` changes what a program links, not what the
+emitter writes.
+
+**It also fixes the counted run.** Every counting site tests `k_stats_on > 0`,
+and -1 fails that test, so anything that ran before the switch turned positive
+was never counted at all — and under the lazy form it stayed at -1 until the
+first inlined `k_alloc` body reached the getenv. Seven counters move, every one
+of them upward, which is the evidence for what they are: basket_allocs 28,169,
+basket_alloc_bytes 4,900,753, basket_bytes_malloc 31, basket_sh_str 622,320,
+pend_sh_buf 32,134,736, escape_sh_buf 96,000 and scan_sh_buf 24,105,200. One
+allocation and one byte malloc at startup on basket, sixteen bytes of shared
+string with them, and thirty-two to forty-eight bytes of shared buffer on the
+other three. Small, and silently missing for as long as the switch has been
+lazy.
+
+`!invariant.load` on the six prelude reads of the switch was tried on top of
+this and is WORSE: jsonbench 1,559,465,765 -> 1,561,061,464 and livebench
++8.4M on the container, with everything else identical. It is dropped. The
+write was the whole blocker; once it is gone LICM hoists without being told,
+and telling it costs something at the sites where the hoist was not the
+cheapest shape.
+
+The thirteen work rows are PROJECTIONS — the golden is CI's and this container
+reads a different glibc — so each is the golden plus the container's own A/B
+delta, measured on one host from the repo root with both binaries in place.
+Every other row here is exact. `src/runtime.c` is `include_str!`'d into the
+compiler, so the compile veins move too and CI is the record for them.
