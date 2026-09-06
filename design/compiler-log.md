@@ -3967,3 +3967,62 @@ cached release runtime object. Nothing to revert.
 by this. The fold's per-lap dispatch, 2.84%, by the toolchain #290 waits on. The
 string arms' 5.82% is `text/append` already inlined and running its ownership
 guards, which kanso#1221 through kanso#1224 are the history of.
+
+## 2026-09-06 — THE DIGITS' LENGTH COMES BACK FROM THE WRITER
+
+**SHIPPED.** `k_render_at` wrote a number's digits into a stack buffer and then
+called `k_str(buf)`, which is `k_str_n(buf, strlen(buf))`. The length was
+already in the writer's hand: `k_itoa` finishes with `w` one past the last
+digit and `render_ryu` with `o`. Both return it now, and the number paths hand
+it to `k_str_n`. The integral-float arm dropped a second scan of its own,
+`while (*o) o++`, for the same reason.
+
+That strlen ran 1,686,801 times in encodebench — once per number in
+`bench/large.json`, four hundred rounds over. 837,601 of them integers through
+`k_itoa`, 849,200 doubles through `render_ryu`.
+
+    jsonbench      1,737,414,667 -> 1,737,413,871         -796   -0.0000%
+    encodebench    4,531,877,717 -> 4,484,267,699  -47,610,018   -1.0506%
+    livebench      4,544,488,605 -> 4,496,878,563  -47,610,042   -1.0476%
+    pendbench        666,098,261 ->   643,666,736  -22,431,525   -3.3676%
+    widebench         55,667,434 ->    55,125,808     -541,626   -0.9730%
+    basket            38,568,710 ->    38,336,500     -232,210   -0.6021%
+    oneshot           25,760,432 ->    25,641,457     -118,975   -0.4619%
+    deepbench        708,508,852 ->   708,508,063         -789   -0.0001%
+    escapebench      114,597,201 ->   114,596,410         -791   -0.0007%
+    scanbench      1,384,644,605 -> 1,384,643,781         -824   -0.0001%
+    readbench      2,038,391,263 -> 2,038,390,422         -841   -0.0000%
+    indexbench         4,691,784 ->     4,691,010         -774   -0.0165%
+    digestbench       77,353,042 ->    77,352,921         -121   -0.0002%
+
+Container readings; the golden carries CI's values plus these deltas, which is
+the projection that has landed to the digit for seven changes running.
+
+**Searched before filing.** `k_str` beside `k_render_at` appears once in the
+log, in kanso#1258's memcpy caller tree, where it is 23,795,613 instructions
+over 1,686,801 calls — the memcpy alone. Its full inclusive cost, 128,745,243
+or 2.84% of encodebench at 76.3 a call, was not recorded, and neither was the
+strlen inside it. Nothing in the archive touches the length.
+
+**The trade is .text, and the first shape of it was twice as expensive.**
+Writing `return k_str_n(buf, n)` at each of the number arms' five return sites
+inlined five `k_str_n` bodies and cost 1,264 bytes a benchmark, 1.311% of the
+`.text` vein. Folding the arms onto one exit — they set `nlen` and `break`, and
+a `default:` returns for every other tag — costs 608 a benchmark, 0.629%, and
+gives up between 0.01 and 0.04 points of the runtime fall. The 2026-09-05
+gavel says `.text` has no welfare term and stays an exact vein of its own, so
+this is a movement to state rather than a number to weigh. The `text` vein
+worsens, deliberately, from 1,251,114 to 1,258,986: **+7,872 bytes across the
+thirteen, bought with 48 million instructions.**
+
+**Welfare 74.5580 -> 74.59, banked in the same commit** with `--set`.
+
+**Watched red, for the right reason.** `k_itoa` returning `w - buf - 1` puts
+seven golden tests into failure and each one names the missing digit:
+`170000000000` for `1700000000000`, `800` for `8000`, `4 ` for `42 2`. The
+corpus can see a wrong length, which is the property that makes the green
+reading worth anything.
+
+Allocation counters do not move — `all_counters.sh` reports all eleven veins
+agreeing. `emitted_code` and `compile_libraries` agree; the three compile
+gates refuse on this container as they always do.
