@@ -2720,3 +2720,32 @@ thread — an `.ll`-level probe on `d_list/fold_flat_5` measured it at livebench
 −1.1854% and encodebench −1.2112% with output byte-identical on both — and it
 needs a clone of the group under a caller-proved set, which this change does not
 build.
+
+## 2026-09-06 — CI'S ROWS FOR THE SWITCH ARM, AND THE 390 THAT ARE LAYOUT
+
+**DONE.** The entry above measured the change on a container whose glibc is
+2.39-0ubuntu8.7 against a golden measured on 2.39-0ubuntu8.8, so it could
+report deltas and not rows. CI measured the rows. **Every delta agrees to the
+instruction, on all thirteen.**
+
+    jsonbench    1,542,924,650 -> 1,526,907,200   -16,017,450   -1.0381%
+    encodebench  4,317,272,013 -> 4,310,952,916    -6,319,097   -0.1464%
+    oneshot         23,904,549 ->     23,797,766      -106,783   -0.4467%
+    basket          35,403,587 ->     35,365,571       -38,016   -0.1074%
+    digestbench     75,582,475 ->     75,565,053       -17,422   -0.0231%
+    livebench    4,318,225,649 -> 4,318,118,863      -106,786   -0.0025%
+    pendbench      605,515,753 ->    605,515,353          -400   -0.0001%
+    scanbench      768,849,900 ->    768,849,780          -120   -0.0000%
+
+widebench, deepbench, escapebench, indexbench and readbench held. That
+agreement is worth having: an A/B on this container measures the same events CI
+does, and only the absolute rows are the runner's.
+
+`compile_instructions` rose 390, 42,061,345 -> 42,061,735, and it is the layout
+vein rather than a decision. `kanso check lib/json` stops before codegen, so an
+emitter change cannot alter anything this row counts — and src/codegen.rs IS the
+compiler, so its bytes and the layout under them move anyway. `compile_allocs`
+and `compile_peak_bytes` are byte-identical, which is what says the front end
+really did not move. This is the ninth recorded layout-only move of that row.
+
+Welfare **75.36021114125158 -> 75.38438760189786**, banked in the same push.
