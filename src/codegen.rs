@@ -2138,6 +2138,31 @@ impl<'a> Backend<'a> {
 
     /// Emit the entry-block reboxes that reconstruct each unboxed `%xi` param as
     /// the KValue the body expects.
+    /// What inference proved about each slot, said out loud at the entry.
+    ///
+    /// The ladder dispatcher has always had this: a bare `Var` parameter
+    /// records its group's set as it binds, so a body indexing that slot
+    /// skips the tag test whose answer the front end already holds. The
+    /// switch dispatcher binds the name straight to `%x{i}` — the switch has
+    /// decided what the value is, so there is no pattern left to emit — and
+    /// recorded nothing, so every group it took over went back to paying the
+    /// test. Three of the decoder's four hot groups are switch-shaped, and
+    /// jsonbench carried 16,017,450 instructions of tag test on that account.
+    ///
+    /// The set keeps its failure bits. A ladder's `Var` arm can drop them
+    /// because the pattern it just emitted checked them off; a switch's
+    /// default arm is reached BY a failing discriminator, so here they stay.
+    ///
+    /// Called from both dispatchers. On the ladder it moves no emitted line
+    /// in today's corpus — every parameter a body indexes there is a bare
+    /// `Var`, which already recorded — and it is called anyway so the two
+    /// dispatchers tell a body the same things.
+    fn record_param_sets(&self, f: &mut FnEmit, name: &str, arity: usize) {
+        for i in 0..arity {
+            f.record(&format!("%x{i}"), self.group_param_set(name, arity, i));
+        }
+    }
+
     fn rebox_params(&self, f: &mut FnEmit, name: &str, arity: usize) {
         for i in 0..arity {
             if self.is_byte_disc(name, arity, i) {
@@ -2980,6 +3005,7 @@ impl<'a> Backend<'a> {
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
+        self.record_param_sets(&mut f, name, arity);
         // any non-discriminator failure means no arm can match: propagate leftmost
         let mut all_ok: Option<String> = None;
         for i in 0..arity {
@@ -3404,6 +3430,7 @@ impl<'a> Backend<'a> {
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
+        self.record_param_sets(&mut f, name, arity);
         // A `%parsed` and a `%KValue` share a `{i64,i64}` layout: reinterpret the
         // parameter's two words as the discriminator KValue once, so the arms can
         // match failures and the propagation loop can hop. On the failure path it
