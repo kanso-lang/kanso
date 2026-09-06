@@ -189,3 +189,35 @@ fn a_release_build_reuses_the_cached_runtime() {
         .collect();
     assert_eq!(stamps, after, "the second release build recompiled the runtime");
 }
+
+const ANDED: &str = "fn pick a b
+  if (a < b and b < 10) \"y\" \"n\"
+
+main = print \"{pick 1 2}\"
+";
+
+/// `a and b` parses to `if a b false`, so a condition is very often another
+/// `if`. Asked as a question it costs nothing; read for a value it builds a
+/// tagged boolean through a phi and the outer `if` calls `k_truthy` to take it
+/// apart. Two int comparisons under an `and` reach the branch directly, so
+/// nothing in `pick` asks the runtime whether anything is true.
+#[test]
+fn an_and_under_an_if_is_asked_in_pieces() {
+    let ir = ir_for(ANDED);
+    let body: String = ir
+        .lines()
+        .skip_while(|l| !(l.starts_with("define") && l.contains("@d_pick_2")))
+        .take_while(|l| !l.starts_with('}'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!body.is_empty(), "pick was not emitted");
+    assert!(
+        !body.contains("@k_truthy"),
+        "an `and` under an `if` went back to building a boolean and asking it: {body}"
+    );
+    assert_eq!(
+        body.matches("icmp slt i64").count(),
+        2,
+        "both comparisons should reach a branch as their own i1: {body}"
+    );
+}

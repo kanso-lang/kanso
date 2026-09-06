@@ -4630,6 +4630,50 @@ impl<'a> Backend<'a> {
         else_label: &str,
         merge: Option<&str>,
     ) -> Result<Cond, String> {
+        // `a and b` parses as `if a b false`, `a or b` as `if a true b` and
+        // `not a` as `if a false true`, so a condition is very often another
+        // `if`. Asked as a question the inner one costs nothing: each arm is
+        // asked the same question the outer `if` asked, and an arm that is the
+        // literal the desugaring wrote is an unconditional branch. Read for a
+        // value instead it builds a tagged boolean through a phi and the outer
+        // `if` takes it apart again — the same family as the comparison above,
+        // and the reason `scan_at`'s digit test measured a sixth of what the
+        // arithmetic predicted: the `if`'s own test fused and the `and` under
+        // it did not. Nothing is duplicated, because both arms branch to the
+        // labels the outer `if` already made.
+        if let Expr::App { head, args, .. } = cond {
+            if args.len() == 3 {
+                if let Expr::Ident(name, _) = &**head {
+                    if name == "if" && f.lookup(name).is_none() {
+                        let inner_then = f.label();
+                        let inner_else = f.label();
+                        let mut failed =
+                            self.emit_cond(f, &args[0], &inner_then, &inner_else, merge)?.failed;
+                        f.start_block(&inner_then);
+                        let yes = self.emit_cond(f, &args[1], then_label, else_label, merge)?;
+                        failed.extend(yes.failed);
+                        f.start_block(&inner_else);
+                        let no = self.emit_cond(f, &args[2], then_label, else_label, merge)?;
+                        failed.extend(no.failed);
+                        return Ok(Cond { failed });
+                    }
+                }
+            }
+        }
+        // The arms that desugaring writes. A constant answers the question
+        // rather than being built and asked.
+        if let Expr::Ident(name, _) = cond {
+            if f.lookup(name).is_none() {
+                if name == "true" {
+                    f.line(&format!("br label %{then_label}"));
+                    return Ok(Cond { failed: Vec::new() });
+                }
+                if name == "false" {
+                    f.line(&format!("br label %{else_label}"));
+                    return Ok(Cond { failed: Vec::new() });
+                }
+            }
+        }
         if let Expr::BinOp { op, lhs, rhs, span } = cond {
             if matches!(*op, "==" | "!=" | "<" | "<=" | ">" | ">=") {
                 let a = self.emit_expr(f, lhs)?;

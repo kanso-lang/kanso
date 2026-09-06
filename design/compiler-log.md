@@ -5069,3 +5069,57 @@ introduced between one commit and the next. Nothing in the tree changed between
 the two numbers. The first was arithmetic on a placeholder and the second is a
 measurement, and the difference between them is the size of the error in the
 placeholder.
+
+---
+
+## 2026-09-06 (seventeenth) — the `and` under an `if` is asked in pieces
+
+The digit test in the (thirteenth) entry measured a sixth of what the
+arithmetic predicted, and that entry said why: the `and` of two comparisons
+still travels as a value, so only the `if`'s own test fuses. That names a gap
+in the emitter rather than a fact about the language, and this closes it.
+
+`a and b` parses to `if a b false`, `a or b` to `if a true b` and `not a` to
+`if a false true`, so a condition is very often another `if`. `emit_cond` had
+no arm for one. It fell through to `emit_expr`, which built the inner `if` as a
+value — a phi over tagged booleans — and then `test_cond_value` called
+`k_truthy` on the phi and branched on the answer. Two comparisons that each
+already knew their answer as an i1 were rebuilt into a tag and taken apart
+again, which is the family the (2026-09-05) comparison change measured at 1.60%
+of encodebench on one site.
+
+`emit_cond` recurses into it now. Each arm of the inner `if` is asked the same
+question the outer one asked, and an arm that is the literal the desugaring
+wrote is an unconditional branch. Nothing is duplicated: both arms branch to
+the labels the outer `if` already made, so the change adds blocks and removes
+instructions.
+
+    work_jsonbench   1,570,704,224 -> 1,564,492,424   -6,211,800   -0.3955%
+    work_oneshot        24,383,381 ->    24,341,969      -41,412   -0.1698%
+    work_livebench   4,436,977,137 -> 4,436,935,725      -41,412   -0.0009%
+    work_scanbench     776,362,839 ->   776,364,842       +2,003   +0.0003%
+
+The other nine work rows hold and no allocation counter moves — all eleven
+veins agree. Every other vein falls with it: the decoder's emitted calls
+1,834 -> 1,832, branches 1,205 -> 1,185 and lines 12,562 -> 12,509; six of the
+twelve `_other` rows fall and none rises; machine code falls on six binaries,
+400 bytes on jsonbench and on livebench. The three compile rows do not move at
+all, which is the check that this is a backend change: `kanso check` stops
+before the backend runs.
+
+work_scanbench 776,364,842 is the one row that pays, and it is 0.0003%. A
+condition whose arms are not constants gains two blocks and a branch where the
+phi used to be, and LLVM does not always fold them back.
+
+The four work rows are PROJECTIONS — the golden is CI's and this container
+reads a different glibc — so each is the golden plus the container's own A/B
+delta, measured on one host from the repo root with both binaries in place.
+Every other row here is exact.
+
+Watched red before it passed, on the old emitter and for the right reason:
+`an_and_under_an_if_is_asked_in_pieces` reported that `pick` still called
+`k_truthy`. `a_condition_made_of_and_is_asked_in_pieces` covers the shapes the
+new arm reaches — two int comparisons, the runtime path a text comparison
+takes, a `<` declared over a record, `not`, `or`, both nestings of the two, an
+`and` in tail position, and a hand-written `if` standing where a condition
+goes — and both engines answer it identically.

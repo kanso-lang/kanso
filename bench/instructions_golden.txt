@@ -253,16 +253,29 @@
 # which opens with its own; the second walk always started on the byte the
 # first had stopped on. The line is gone. Rows are the container's A/B deltas
 # applied to CI's landed values; ten of the thirteen deltas are zero.
-jsonbench 1570704224
+#
+# 2026-09-06 (the `and` under an `if` is asked in pieces): four rows move and
+# nine hold. jsonbench 1,570,704,224 -> 1,564,492,424 (-6,211,800, -0.3955%),
+# oneshot 24,383,381 -> 24,341,969 (-41,412, -0.1698%), livebench
+# 4,436,977,137 -> 4,436,935,725 (-41,412), and scanbench 776,362,839 ->
+# 776,364,842, a RISE of 2,003 or 0.00026% -- the one row that pays, where a
+# condition whose arms are not constants gains two blocks and a branch that
+# LLVM does not always fold back.
+#
+# These four are PROJECTIONS: the row is CI's and this container reads a
+# different glibc, so each is the golden plus the container's own A/B delta,
+# measured on one host from the repo root with both binaries in place. CI's
+# sitting is the record and one red round is expected if a projection misses.
+jsonbench 1564492424
 encodebench 4425477605
-oneshot 24383381
+oneshot 24341969
 basket 35510217
 widebench 54690359
 deepbench 708507318
 escapebench 114596730
 pendbench 605537209
 indexbench 4691365
-scanbench 776362839
+scanbench 776364842
 digestbench 77353320
 readbench 4288131
-livebench 4436977137
+livebench 4436935725

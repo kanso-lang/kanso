@@ -105,15 +105,20 @@
 # livebench each lose one call and two lines, and the other ten hold. Both
 # decode; `array_items` no longer calls `skip_ws` before `parse_value`, which
 # opens with its own. Banked.
-encodebench defines=180 calls=1646 branches=1004 lines=11011
-oneshot defines=183 calls=1827 branches=1194 lines=12491
+#
+# 2026-09-06 (the `and` under an `if` is asked in pieces): six of the twelve
+# fall and none rises. Every `and`, `or` and `not` in a condition stops
+# building a boolean for the outer `if` to take apart, so the programs that
+# write one lose branches and lines. Banked.
+encodebench defines=180 calls=1646 branches=998 lines=10996
+oneshot defines=183 calls=1825 branches=1174 lines=12438
 basket defines=139 calls=1276 branches=781 lines=7799
-widebench defines=196 calls=1855 branches=1098 lines=12021
+widebench defines=196 calls=1855 branches=1092 lines=12006
 deepbench defines=113 calls=841 branches=562 lines=5698
 escapebench defines=48 calls=113 branches=100 lines=1404
 pendbench defines=127 calls=1226 branches=649 lines=6775
-scanbench defines=328 calls=3295 branches=2135 lines=19658
+scanbench defines=328 calls=3289 branches=2122 lines=19605
 indexbench defines=54 calls=153 branches=120 lines=1733
 digestbench defines=188 calls=1578 branches=896 lines=9823
 readbench defines=57 calls=157 branches=133 lines=1946
-livebench defines=184 calls=1851 branches=1208 lines=12608
+livebench defines=184 calls=1849 branches=1188 lines=12555

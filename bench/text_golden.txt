@@ -546,16 +546,22 @@
 # copy of the scanner leaves each of the three binaries that decode.
 # jsonbench 95,346 -> 95,074, oneshot 118,706 -> 118,434, livebench
 # 119,282 -> 119,010. Banked.
-jsonbench text=95298
-encodebench text=116562
-oneshot text=118914
+#
+# 2026-09-06 (the `and` under an `if` is asked in pieces): six binaries lose
+# machine code and seven hold. jsonbench 95,298 -> 94,898 and livebench
+# 119,522 -> 119,122, 400 bytes each; oneshot 118,914 -> 118,514, encodebench
+# 116,562 -> 116,402, widebench 121,106 -> 120,946, scanbench 154,530 ->
+# 154,450. Banked.
+jsonbench text=94898
+encodebench text=116402
+oneshot text=118514
 basket text=109074
-widebench text=121106
+widebench text=120946
 deepbench text=72130
 escapebench text=53474
 pendbench text=87538
 indexbench text=56754
-scanbench text=154530
+scanbench text=154450
 digestbench text=107218
 readbench text=53298
-livebench text=119522
+livebench text=119122

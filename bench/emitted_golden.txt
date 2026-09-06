@@ -131,7 +131,13 @@
 # 2026-09-06 (the array's second walk over the same whitespace): calls 1765 ->
 # 1764 and lines 12049 -> 12047. One `skip_ws` call and its two lines leave
 # `array_items`. Banked.
+#
+# 2026-09-06 (the `and` under an `if` is asked in pieces): calls 1,834 ->
+# 1,832, branches 1,205 -> 1,185 and lines 12,562 -> 12,509; defines hold.
+# `emit_cond` recurses into an `if` standing in a condition, which is what an
+# `and` parses to, so the inner one is asked rather than built as a tagged
+# boolean and taken apart. Twenty branches go with the phis. Banked.
 defines=183
-calls=1834
-branches=1205
-lines=12562
+calls=1832
+branches=1185
+lines=12509
