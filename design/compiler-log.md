@@ -3013,3 +3013,98 @@ answer to gate on and there is not one yet. A few runs saying the same thing
 decide whether this becomes a gate or the blob stops being committed; until
 then a step that turns CI red on a difference nobody has explained would be
 a gate written before its rule.
+
+## 2026-09-06 — THE CLOSURE CALLING CONVENTION, AND A STEP THAT ONLY PRINTED
+
+`preserve_none` is an LLVM 19 calling convention: the callee may clobber every
+register, so it needs no callee-saved prologue. kanso's closure calls are the
+shape it exists for — a call through a function pointer into a body that
+returns straight back. kanso#1287.
+
+### The emitter cannot write the keyword without asking
+
+The two spellings fail in opposite directions. clang 18 hard-errors on
+`preserve_nonecc` in a `.ll` and only warns on `__attribute__((preserve_none))`
+in C, where the warning is a silent no-op. A probe using the C attribute would
+answer yes on clang 18 and then emit nothing, so the probe writes a two-define
+`.ll` and compiles it. The C side is gated behind `K_CLOSCC` with
+`-DKANSO_PRESERVE_NONE` and `-Werror=unknown-attributes`, so the attribute
+cannot be quietly dropped on the runtime's nine closure-pointer sites.
+
+Both halves or neither: an emitter-only version MISCOMPILES. encodebench
+printed `error[runtime]: bytes takes a string` because `k_call2` still used the
+C convention while the emitted define had changed. The spec pins the define and
+the call site moving together for that reason, and dropping the call-site
+keyword fails it by name.
+
+### What it costs and what it buys
+
+CI's sitting, under clang 19. All fourteen work rows move and they split both
+ways:
+
+    digestbench  -6.3265%      readbench    +0.0040%
+    encodebench  -2.7123%      escapebench  +0.0368%
+    livebench    -2.4236%      indexbench   +1.7043%
+    widebench    -2.0954%      basket       +1.7993%
+    runbench     -1.0301%      jsonbench    +2.0807%
+    scanbench    -0.3328%      pendbench    +2.5082%
+    deepbench    -0.3146%
+    oneshot      -0.2474%
+
+The decode pays for the encode. A caller that may clobber every register spills
+what it wanted to keep across the call, and the decode's hot loops hold more
+live state across a closure call than the encode's do. `.text` grows on every
+benchmark, 528 bytes on readbench to 1,088 on basket: the convention removes
+each callee's prologue and pays at the call sites, which outnumber the callees.
+
+compile_instructions rises 42,061,735 -> 42,163,520, 0.2420%. The front end is
+untouched — `kanso check lib/json` stops before codegen — and compile_allocs
+and compile_peak_bytes are byte-identical, which is what says so. It is the
+layout vein and the largest move it has recorded, because the edit is larger
+than the ones before it: src/codegen.rs and src/main.rs are the compiler, and
+src/runtime.c is `include_str!`'d into it.
+
+Welfare 51.89 -> 51.95, and the floor is set.
+
+### THE SPLIT WAS WRONG, AND THE OBJECTIVE SAID SO
+
+The machinery shipped first, alone, so that each half would have one
+attributable effect. That reasoning ignored what judges a merge. With CI on
+clang 18 the probe answers false and the emitter writes the fallback, so the
+machinery alone is a 0.2420% compile cost with every runtime counter
+unchanged. Welfare scored it 51.88 against a floor of 51.89 — a fall, with no
+weights argument available for it. `tests/the_digest_is_priced_on_both_sides`
+caught the committed goldens failing to hold the floor, independently of my
+own arithmetic. Two halves that each fail and together pass are one change.
+
+### AND THE INSTALL DID NOT SELECT ANYTHING
+
+The step that installed clang 19 used `update-alternatives --install
+/usr/bin/clang`. On this image /usr/bin/clang is a package-owned symlink to
+`../lib/llvm-18/bin/clang` rather than an alternatives path, so the symlink
+stayed where it was. The step PRINTED `Ubuntu clang version 18.1.3` and nothing
+read it: the probe answered false, the goldens were regenerated against a
+toolchain nobody had selected, and the round measured nothing.
+
+The lesson is not the mechanism, which is an image detail. It is that a step
+which prints a fact instead of checking it cannot fail, and a check that cannot
+fail is the same defect this log has recorded under other names. The step
+greps for `clang version 19` and exits non-zero otherwise; /usr/local/bin
+precedes /usr/bin, so a symlink there wins without touching the dpkg file.
+
+That round also left a reading worth keeping: every work row rose by EXACTLY
+159 instructions, indexbench's 4.69M and encodebench's 4.31B alike, with
+emitted_code and machine_code byte-identical. A constant offset independent of
+workload is per-process startup rather than anything in a loop, and the run
+before it — same source, same clang 18 — had those rows byte-identical to
+their goldens, so the 159 arrived with the package install. It is NOT
+attributed. The rows it applied to have since been remeasured under clang 19
+and the number is not carried into them.
+
+### The veins now say which compiler measured them
+
+bench/text_golden.txt already carried `measured-on clang=`, moved to 19.1.1.
+bench/instructions_golden.txt gains one beside its glibc line: the emitter
+writes a different module when the probe fails, so those rows became a property
+of the host's clang the day it started probing. A clang-18 host writes the
+fallback and cannot regenerate either file.
