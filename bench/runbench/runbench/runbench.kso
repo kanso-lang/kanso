@@ -36,6 +36,12 @@
 # the one decode that feeds encode, which belong to no phase. Re-measure and
 # rewrite this table whenever a repetition count changes.
 #
+# THE TABLE IS THE CONTAINER'S SITTING, and bench/instructions_golden.txt is
+# CI's: 3,043,743,748 against the 3,043,742,734 above, a difference of 1,014
+# instructions where glibc differs. That is 0.00003% and moves no percentage in
+# the second column, so the shares stand as measured. The golden's row is the
+# one a gate compares; this table is what the shares were derived from.
+#
 # THE COUNTS ARE NOT ROUND, and that is the point. `split` is quadratic in its
 # character count -- 120 characters cost 11.8M and 1,526 cost 1.87 BILLION --
 # so a round number chosen for looks put one shape at 39% of the program on the

@@ -105,8 +105,8 @@ fn a_counter_the_model_weighs_and_nobody_measured_is_refused() {
 #[test]
 fn the_shipped_floor_measures_every_counter_the_model_weighs() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let held = std::fs::read_to_string(root.join("bench/welfare_floor.json"))
-        .expect("the floor reads");
+    let held =
+        std::fs::read_to_string(root.join("bench/welfare_floor.json")).expect("the floor reads");
     let counters = weighed();
     assert!(!counters.is_empty(), "the model named no counters");
     let missing: Vec<&String> =
@@ -119,8 +119,8 @@ fn the_shipped_floor_measures_every_counter_the_model_weighs() {
 #[test]
 fn the_floor_records_no_granted_baselines() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let held = std::fs::read_to_string(root.join("bench/welfare_floor.json"))
-        .expect("the floor reads");
+    let held =
+        std::fs::read_to_string(root.join("bench/welfare_floor.json")).expect("the floor reads");
     assert!(
         !held.contains("\"granted\""),
         "the entering rule is retired; a granted list here would mean it is back"

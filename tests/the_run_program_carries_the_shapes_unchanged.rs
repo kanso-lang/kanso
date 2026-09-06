@@ -5,7 +5,7 @@
 //! objective would be weighing something nobody is watching.
 //!
 //! So the copies are byte-identical to their sources, and this says so.
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -20,10 +20,7 @@ const CARRIED: &[(&str, &str)] = &[
     ("bench/runbench/runbench/deep/bench.kso", "bench/deepbench/deepbench/bench.kso"),
     ("bench/runbench/runbench/pend/bench.kso", "bench/pendbench/pendbench/bench.kso"),
     ("bench/runbench/runbench/escape/mod.kso", "bench/escapebench/escapebench/mod.kso"),
-    (
-        "bench/runbench/runbench/index/indexbench.kso",
-        "bench/indexbench/indexbench/indexbench.kso",
-    ),
+    ("bench/runbench/runbench/index/indexbench.kso", "bench/indexbench/indexbench/indexbench.kso"),
     ("bench/runbench/runbench/split/scanbench.kso", "bench/scanbench/scanbench/scanbench.kso"),
 ];
 

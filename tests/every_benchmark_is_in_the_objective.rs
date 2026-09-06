@@ -128,9 +128,11 @@ fn every_benchmark_the_objective_weighs_is_built_measured_and_rowed() {
     let built = built(&read("scripts/gates/build_benchmarks.sh"));
     let measured = measured(&read("scripts/gates/instructions.sh"));
     let rowed = rowed(&read("bench/instructions_golden.txt"));
-    for vein in [("built by build_benchmarks.sh", &built),
-                 ("measured by instructions.sh", &measured),
-                 ("rowed in bench/instructions_golden.txt", &rowed)] {
+    for vein in [
+        ("built by build_benchmarks.sh", &built),
+        ("measured by instructions.sh", &measured),
+        ("rowed in bench/instructions_golden.txt", &rowed),
+    ] {
         let missing: Vec<_> = weighed.difference(vein.1).collect();
         assert!(
             missing.is_empty(),

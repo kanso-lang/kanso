@@ -355,11 +355,18 @@ scanbench 768849780
 digestbench 75565053
 readbench 4283257
 livebench 4318118863
-# 2026-09-06 (the run program joins): `runbench 3043742734` is a NEW row and
+# 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
-# became diagnostics. This value was counted on the container, whose glibc is
-# 2.39-0ubuntu8.7 against this file's 2.39-0ubuntu8.8, so it is a PLACEHOLDER
-# and CI's own row replaces it in the next round -- exactly the loop the
-# refusal in scripts/gates/host_gate.sh describes.
-runbench 3043742734
+# became diagnostics.
+#
+# The row below is CI's, harvested from the job that refused the container's.
+# The first push carried 3,043,742,734, counted where the program was written:
+# a container whose glibc is 2.39-0ubuntu8.7 against this file's
+# 2.39-0ubuntu8.8. CI read 3,043,743,748, a difference of 1,014 instructions or
+# 0.00003%, and every other row in the same sitting was byte-identical to its
+# golden -- which is the shape host divergence takes here and why host_gate.sh
+# refuses the comparison rather than the measurement. The mix percentages in
+# bench/runbench's header are the container's and move by less than this
+# difference; they are not re-derived.
+runbench 3043743748
