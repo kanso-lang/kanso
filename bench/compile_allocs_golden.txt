@@ -265,4 +265,11 @@
 # pushed the row unchanged and took the red rather than carrying the previous
 # sitting's number in as though it were a reading. CI measured 25,817 on
 # f5f4914d.
-compile_allocs=25817
+#
+# 2026-09-06 (an append of a slice reads the range in place): 25,817 -> 25,899,
+# a rise of 82 or 0.32%, and the same one declaration: `str_run`'s body is
+# names, types and a body for the front end to allocate while it checks. The
+# container reads this row identically to the runner, as #1271's entry
+# established and as CI confirmed for compile_peak_bytes in the same round;
+# CI is the confirmation for this figure too.
+compile_allocs=25899

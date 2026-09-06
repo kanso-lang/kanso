@@ -41,6 +41,6 @@ ten_blocks=1
 ten_frees=1
 sh_str=44704
 sh_rec=96272
-sh_buf=10976
+sh_buf=11008
 sh_map=0
 sh_bytes=0

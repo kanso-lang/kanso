@@ -1,0 +1,9 @@
+middle: abc234
+one: abc0
+all: abc0123456789
+inverted: abc
+below one: abc
+past end: abc
+both zero: abc
+multibyte: abcé
+twice: abc345345

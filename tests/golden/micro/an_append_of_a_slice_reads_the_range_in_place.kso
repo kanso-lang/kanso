@@ -1,0 +1,30 @@
+# `append acc (slice cs a b)` reaches a fused door that copies the range out
+# of `cs` without building the view. Every case the door has to answer the
+# same way the unfused pair did: a middle range, one byte, the whole source,
+# an inverted range, a start below one, an end past the length, a slice onto
+# an empty accumulator, a range that lands inside multibyte text, and two
+# appends threaded through one accumulator.
+import "std/text"
+
+src = text/bytes "0123456789"
+
+wide = text/bytes "héllo"
+
+fn onto cs a z
+  seed = text/bytes "abc"
+  text/utf8 (text/append seed (text/slice cs a z))
+
+fn twice cs a z
+  once = text/append (text/bytes "abc") (text/slice cs a z)
+  text/utf8 (text/append once (text/slice cs a z))
+
+pub play =
+  print "middle: {onto src 3 5}"
+  print "one: {onto src 1 1}"
+  print "all: {onto src 1 10}"
+  print "inverted: {onto src 5 3}"
+  print "below one: {onto src 0 4}"
+  print "past end: {onto src 8 20}"
+  print "both zero: {onto src 0 0}"
+  print "multibyte: {onto wide 2 3}"
+  print "twice: {twice src 4 6}"

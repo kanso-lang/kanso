@@ -106,13 +106,19 @@
 # that survives carries the mark as an argument and has more arms, so the front
 # end has more expressions to visit. Banked as the price of the runtime fall it
 # buys: jsonbench retires 4.14% fewer instructions.
-front_end_rounds=40
+# 2026-09-06 (an append of a slice reads the range in place): rounds 40 -> 42
+# and visits 17,068 -> 17,264, a rise of 196 or 1.15%. lib/json gains one
+# declaration — `str_run`, which holds the position find2 stopped at so the
+# run can be appended in one piece — and a declaration is expressions to visit
+# and two more rounds for the fixpoint to reach it. Banked as the price of the
+# runtime fall it buys.
+front_end_rounds=42
 # 2026-09-06 (the array's second walk over the same whitespace): visits 17,169
 # -> 17,115, a fall of 54, or 0.31%, and rounds hold at 40. Two expressions
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
 # end has that much less to visit. Banked, and it moves the same way as the
 # runtime fall it comes with rather than paying for it.
-front_end_visits=17068
+front_end_visits=17264
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -127,4 +133,9 @@ front_end_visits=17068
 # than reasoned: with the codegen change reverted and lib/json unchanged, the
 # container reads 715,275 and 25,485, the same two numbers as the branch head,
 # to the byte. Banked as the price of a 17.14% fall in the decoder's runtime.
-compile_peak_bytes=722429
+# 2026-09-06 (an append of a slice reads the range in place): 722,429 ->
+# 724,493, a rise of 2,064 or 0.29%, and it is the same declaration: one more
+# body for the front end to hold while it decides. The container reads this
+# row identically to the runner, as #1271's entry established, so the figure
+# here is the container's and CI is the confirmation.
+compile_peak_bytes=724493

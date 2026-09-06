@@ -869,4 +869,18 @@
 # CI confirmed byte-identical, and wrong for this one: `kanso check` not
 # running the backend keeps the DECISIONS identical, and says nothing about
 # where they land.
-compile_instructions=41886863
+#
+# 2026-09-06 (the counter switch is set once): 41,886,863 -> 41,888,129, a RISE
+# of 1,266, or 0.003%. Layout again, and from a file the compiler only carries:
+# src/runtime.c is `include_str!`'d into src/main.rs, so twenty-six lines of C
+# the front end never executes still move the compiler's own bytes. Banked as
+# the price of thirteen work rows falling and 30,048 bytes leaving .text.
+# compile_allocs and compile_peak_bytes are byte-identical, as they were the
+# last two times this row moved on its own.
+#
+# 2026-09-06 (an append of a slice reads the range in place): 41,888,129 ->
+# 42,089,618, a rise of 201,489 or 0.48%. This one is front-end WORK, not
+# layout: lib/json gains a declaration, so there are expressions to visit and
+# two more fixpoint rounds — the same move compile_memory's rounds and visits
+# record. Banked as the price of jsonbench -1.0607%.
+compile_instructions=42089618

@@ -43,4 +43,4 @@ sh_str=0
 sh_rec=0
 sh_buf=0
 sh_map=0
-sh_bytes=0
+sh_bytes=24
