@@ -5231,6 +5231,13 @@ string with them, and thirty-two to forty-eight bytes of shared buffer on the
 other three. Small, and silently missing for as long as the switch has been
 lazy.
 
+The book carries the same correction in two places. `ch10/counters_counters.out`
+and `ch12/fused_counters.out` are counted runs, and both read `sh_buf=0` where
+they now read `sh_buf=32`: `k_buf` adds to `k_stat_sh_buf` BEFORE the `k_alloc`
+that used to flip the switch, so the first buffer a program allocated was the
+one that never got counted. Both samples and both chapter panels are
+regenerated here.
+
 `!invariant.load` on the six prelude reads of the switch was tried on top of
 this and is WORSE: jsonbench 1,559,465,765 -> 1,561,061,464 and livebench
 +8.4M on the container, with everything else identical. It is dropped. The
