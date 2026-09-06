@@ -322,15 +322,15 @@
 # escapebench, pendbench, indexbench, scanbench and readbench hold to the
 # instruction: they have no `length` site the sets prove is bytes.
 jsonbench 1542924650
-encodebench 4389082013
-oneshot 24107540
-basket 35473609
+encodebench 4328660413
+oneshot 23956486
+basket 35403587
 widebench 54609871
-deepbench 704511486
+deepbench 702627486
 escapebench 114584676
-pendbench 605519153
+pendbench 605515753
 indexbench 4691265
 scanbench 768849900
-digestbench 77175689
+digestbench 75582475
 readbench 4283257
-livebench 4399422049
+livebench 4339000449

@@ -898,4 +898,10 @@
 # before it collects the argument sets for `infer::builtin_set`. The emitter
 # writes four IR lines where it wrote one call and still does less work
 # deciding to.
-compile_instructions=42091852
+# 2026-09-06 (the fold reads its length once): 42,091,852 -> 42,117,183, a rise
+# of 25,331 or 0.0602%. lib/*.kso is include_str!'d into the compiler, so a
+# twelve-line library edit is twelve lines the compiler carries and compiles:
+# `list/fold_flat` gained a parameter and lib/list gained a comment, and the
+# front end lexes, parses, infers and checks all of it. Held as the price of
+# seven runtime work rows falling, encodebench by 1.3766%.
+compile_instructions=42117183

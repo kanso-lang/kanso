@@ -142,8 +142,9 @@ front_end_visits=17290
 # of 26. `list/fold_flat` gained a fifth parameter, and `kanso check lib/json`
 # reaches lib/list because lib/json/text.kso imports it: twenty-six more
 # expression visits to decide one more name. rounds hold at 42. The peak row
-# below is the runner's to measure -- this container is rustc=1.94.1 against
-# the golden's 1.98.1 -- and it rose here by 872, or 0.12%, which is the size
-# to expect. Held as the price of seven runtime work rows falling, encodebench
-# by 1.3766%.
-compile_peak_bytes=724493
+# below could not be compared here -- this container is rustc=1.94.1 against
+# the golden's 1.98.1 -- so 725,365 is CI's own reading, 724,493 -> 725,365, a
+# rise of 872 or 0.12%. The container measured 725,365 too, to the byte, which
+# is one more sitting for #1271's finding that the two hosts agree on this row.
+# Held as the price of seven runtime work rows falling, encodebench by 1.3766%.
+compile_peak_bytes=725365

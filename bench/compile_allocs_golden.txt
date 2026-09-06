@@ -272,4 +272,11 @@
 # container reads this row identically to the runner, as #1271's entry
 # established and as CI confirmed for compile_peak_bytes in the same round;
 # CI is the confirmation for this figure too.
-compile_allocs=25899
+#
+# 2026-09-06 (the fold reads its length once): 25,899 -> 25,913, a rise of 14 or
+# 0.05%. One more parameter on `list/fold_flat` is one more name, one more type
+# and one more argument at each of the two call sites for the front end to
+# allocate while it checks. The container is rustc=1.94.1 against this row's
+# 1.98.1 and cannot compare; 25,913 is CI's own reading from the round-one job
+# log. Held as the price of encodebench -1.3766%.
+compile_allocs=25913

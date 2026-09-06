@@ -6019,10 +6019,34 @@ digestbench -368 and scanbench -192. Ten more IR lines in every one of them and
 the bytes go both ways, so which way is downstream of the emitter — the same
 finding digestbench's row made under the capture-free lambda.
 
-The front end pays too. `front_end_visits` 17,264 -> 17,290, twenty-six more
-expression visits for one more name; `front_end_rounds` holds at 42.
-`compile_peak_bytes` rose 872 here, but this container is rustc=1.94.1 against
-the golden's 1.98.1 and the row is CI's to measure.
+The front end pays too, and all four of its rows are CI's own sitting, copied
+out of the round-one job log: `front_end_visits` 17,264 -> 17,290, twenty-six
+more expression visits for one more name; `compile_peak_bytes` 724,493 ->
+725,365, a rise of 872 or 0.12%; `compile_allocs` 25,899 -> 25,913;
+`compile_instructions` 42,091,852 -> 42,117,183, a rise of 25,331 or 0.0602%.
+`front_end_rounds` holds at 42. `lib/*.kso` is `include_str!`'d into the
+compiler, so twelve lines of library edit are twelve lines the compiler carries
+and compiles.
+
+The container read `compile_peak_bytes` as 725,365 too, to the byte, on
+rustc=1.94.1 against the golden's 1.98.1 — one more sitting for #1271's finding
+that the two hosts agree on that row, from a pair of toolchains that have not
+agreed on it before.
+
+**Welfare 75.31169684664573 -> 75.3427479384712**, a rise of 0.031, banked with
+`--set`. The runtime falls buy the compile rises comfortably: runtime satiates
+late and compile early, which is the trade the weights exist to price.
+
+CI's thirteen work rows agree with the container on every sign and on all seven
+magnitudes to the instruction:
+
+    encodebench  4,389,082,013 -> 4,328,660,413   -60,421,600   -1.3766%
+    livebench    4,399,422,049 -> 4,339,000,449   -60,421,600   -1.3734%
+    digestbench     77,175,689 ->     75,582,475    -1,593,214   -2.0644%
+    oneshot         24,107,540 ->     23,956,486      -151,054   -0.6266%
+    deepbench      704,511,486 ->    702,627,486    -1,884,000   -0.2674%
+    basket          35,473,609 ->     35,403,587       -70,022   -0.1974%
+    pendbench      605,519,153 ->    605,515,753        -3,400   -0.0006%
 
 While regenerating that golden: **`scripts/gates/compile_memory.sh` told a
 reader that rounds and visits are welfare terms, and they have not been since
