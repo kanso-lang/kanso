@@ -4109,3 +4109,47 @@ before its green reading means anything about a digit routine.
 
 Welfare 74.59 -> 74.62, banked in the same commit. All eleven allocation veins
 agree.
+
+## 2026-09-06 — K_REC IS 30% OF PENDBENCH, AND THE REUSE ANALYSIS REACHES 100 OF ITS 3,200,900
+
+**ATTRIBUTED (#340), no change.** kanso#1258 took `k_rec` out of encodebench's
+profile entirely — the entry above §54 records that it "does not appear in the
+profile at all" there. It is pendbench's largest function by a wide margin and
+had never been read on that benchmark.
+
+    k_rec   184,084,984 over 3,200,900 calls   57.5 each
+
+28.60% of the 643,666,736 pendbench ran at when this was measured, and 30.39% of
+the 605,691,007 the branch now lands on, because the `k_itoa` change above took
+74,845,459 out from under it.
+
+**Two call sites are all of it**, and they are the same one at two recursion
+depths:
+
+    d_list/next_1     96,026,195 over 1,600,400 calls   60.0 each
+    d_list/next_1'2   88,003,483 over 1,600,000 calls   55.0 each
+    d_pendbench/made_1    28,000 over       500 calls
+    d_list/iter_1         16,000 over       300 calls
+    d_list/fold_3         12,000 over       200 calls
+    k_rec_reuse            6,000 over       100 calls
+
+A lazy list's `next` builds a fresh cursor record every step, 3.2 million of
+them a run.
+
+**The runtime already has the shape that would avoid it and the analysis does
+not reach here.** `k_rec_reuse` writes the new fields over a victim record when
+the victim is a record of the same arity, and `src/codegen.rs` emits it wherever
+`reusable_records` — the linearity analysis, keyed by file and line and column —
+says this construction is the last reader of some record in scope. In pendbench
+it fires **100 times against 3,200,900**, and none of the hundred is in
+`d_list/next_1`.
+
+Whether it *should* reach there is the open question and not a defect on the
+evidence here: a lazy list's previous cursor may still be held by the caller,
+which is what laziness is for, and a reuse that wrote over a live cursor would
+be a miscompilation rather than a slow path. What the numbers establish is the
+size of the prize — 3.2 million constructions at 57.5 instructions, 30% of the
+benchmark — and that the analysis currently answers no to all of them.
+
+**OPEN**, deliberately: the next step is to read `reusable_records` against
+`lib/list`'s `next` arms and find out whether the no is a proof or a gap.
