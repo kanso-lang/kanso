@@ -2929,3 +2929,87 @@ this direction costs a paragraph, and in the other direction a red round.
 whose golden names a glibc this container does not carry. The twelve runtime
 cost veins and the lazy tier all agree, measured after a
 `cargo build --release`.
+
+## 2026-09-06 — TWO GATES THAT COULD NOT SEE WHAT THEY WATCH
+
+**SEARCHED** before filing: the live log's entries on the counter sweep are
+the 2026-09-06 one that added the .mem vein to it and kanso#1282's correction
+of that vein's timing; neither notices what the step's exit status is actually
+reading. The archive's `all_counters.sh` entries are its creation and the
+count corrections. On the wasm blob, kanso#1180 settled that the freshness
+guard stays an mtime comparison and said nothing about reproduction.
+`design/pending-gavels.md` carries neither.
+
+### The sweep blamed the .mem vein for any failure in the golden binary
+
+`cargo test --release --test golden` builds TEN tests and the lazy-tier step
+read the exit status of all ten. One of them reads `tests/golden/mem/*.mem`.
+So a micro-corpus mismatch, a diagnostics mismatch, a strict-mode divergence —
+any of the other nine — printed `counters moved: mem`, which names the one
+vein that had not moved and sends the reader to regenerate a file that is
+already correct.
+
+Reproduced rather than argued: breaking `a_pinned_clock_reads_the_same_in_both_engines`
+and running both invocations on that same tree,
+
+    cargo test --release --test golden                     FAILED
+    cargo test --release --test golden mem_corpus_pins_...  PASSED
+
+The fix names the test. Which test to name is derived rather than written
+down — `KANSO_REGEN_MEM_GOLDEN` is what regenerates the vein, so the test that
+reads it is the test that owns it, and
+`tests/the_sweep_reads_the_mem_vein_alone.rs` asserts exactly one test reads
+that variable and that the sweep names it. Both of its assertions were watched
+red on the unfixed script first, and the first run of the second one went red
+for the wrong reason: the step's own comment says `--test golden` while
+explaining why the name is there, and got counted as a third branch. The spec
+skips comment lines now.
+
+**It is also 47x faster, which was not the point and is the larger effect.**
+The nine other tests include the two micro-corpus runs, and those are where
+the time goes:
+
+    the whole golden binary        158 s
+    the one test that owns the vein  3.35 s
+    the whole twelve-vein sweep    ~200 s -> 51 s
+
+The header comment recording the 158 and the 204-second `--write` figure is
+corrected in place: both numbers were the whole binary rather than this vein,
+and they are kept because kanso#1282's entry recorded them.
+
+### And nothing on CI could say whether the committed wasm blob reproduces
+
+`docs/kanso.wasm` is a build artifact that is also committed, and no job had
+ever hashed the committed blob and a rebuild on one machine. The specs job
+already rebuilds it, and the rebuild OVERWRITES the file, so the committed
+hash has to be taken in a step before. It now is, and a step after prints
+both with the runner's rustc version into the run summary.
+
+The first reading, on this branch:
+
+    committed  60b9fc8a...   written at 6f8c876e (kanso#1272)
+    rebuilt    5d1566dc...   rustc 1.98.1
+    verdict    DIFFERS
+
+On this container, at rustc 1.94.1, the same source builds to `512d43f4...` --
+a third hash. Touching `src/lib.rs` to force a real recompile and building
+again gives `512d43f4...` a second time, so the build is reproducible within
+one toolchain.
+
+Two figures in the first draft of this entry were wrong, and both are
+corrected above. It gave the committed hash as `be72313e...`, which was never
+this file's hash -- it has read `60b9fc8a...` since kanso#1272, here and on
+the runner. And it offered two consecutive rebuilds as the evidence for
+determinism, which showed nothing at all: with no source change cargo relinks
+nothing and copies the same file back. The forced recompile is the test that
+carries the claim.
+
+Fourteen commits separate the committed blob from HEAD and five of them touch
+`src/`, so the blob is a build of older source than either rebuild. That has
+to be ruled out before the toolchain is suspected of anything.
+
+**It is a measurement and it cannot fail, deliberately.** A gate wants an
+answer to gate on and there is not one yet. A few runs saying the same thing
+decide whether this becomes a gate or the blob stops being committed; until
+then a step that turns CI red on a difference nobody has explained would be
+a gate written before its rule.

@@ -78,23 +78,32 @@ done
 # counter change must regenerate, and until 2026-09-06 this sweep could not see
 # it. The compile sweep had the same hole in the same week, twice over.
 #
-# IT COSTS 158 SECONDS on this container to READ, measured 2026-09-06, and
-# `--write` is the slower branch: the regeneration ran past 204 seconds in the
-# same sitting, because it writes every .mem file rather than diffing them.
-# Both are real beside the twelve counter runs, and the alternative is a vein
-# that moves and says so only in CI, on the dimension this file exists to
-# watch. The read figure was the only one measured when this comment was
-# written, and it read as the cost of the step rather than the cost of one of
-# its two branches.
+# IT COST 158 SECONDS to read and past 204 to `--write`, measured 2026-09-06,
+# and both figures were the whole `golden` binary rather than this vein: nine
+# of its ten tests have nothing to do with the .mem files, and the two micro
+# corpus tests are where the time went. Naming the one test that owns the vein
+# takes 3.35 seconds, and the whole sweep now runs in 51 where it ran in about
+# 200. The old numbers are kept here because they are what a reader will find
+# in the log entry that recorded them.
+# NAMED, not the whole binary. `--test golden` builds ten tests and this step
+# reads the exit status of all ten, so ANY of them going red was reported here
+# as "counters moved: mem" -- a diagnosis pointing at the one vein that had not
+# moved. The two micro-corpus tests are also the slow ones: naming this test
+# alone takes 3.35 seconds against 158 for the binary, measured 2026-09-06 on
+# this container. `mem_corpus_pins_native_allocator_counters` is the only test
+# that reads KANSO_REGEN_MEM_GOLDEN, which is why both branches name it and
+# why tests/the_sweep_reads_the_mem_vein_alone.rs derives that rather than
+# trusting this comment.
+mem_test=mem_corpus_pins_native_allocator_counters
 printf '=== lazy tier (tests/golden/mem/*.mem)\n'
 if [ "$write" -eq 1 ]; then
-  if KANSO_REGEN_MEM_GOLDEN=1 cargo test --release --test golden >/dev/null 2>&1; then
+  if KANSO_REGEN_MEM_GOLDEN=1 cargo test --release --test golden "$mem_test" >/dev/null 2>&1; then
     echo "--- regenerated the .mem vein"
   else
     echo "--- the .mem regeneration FAILED; run it directly to read why"
     moved="$moved mem"
   fi
-elif out=$(cargo test --release --test golden 2>&1); then
+elif out=$(cargo test --release --test golden "$mem_test" 2>&1); then
   echo "--- agrees"
 else
   echo "$out" | sed 's/^/    /'
