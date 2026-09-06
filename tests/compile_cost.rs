@@ -6,6 +6,26 @@
 
 use std::fmt::Write as _;
 
+/// Rewrite a golden's data rows and leave every comment line exactly where it
+/// is.
+///
+/// `KANSO_REGEN_COMPILE_GOLDEN=1` used to write the header literal in this
+/// source plus the measured rows, which silently drops whatever a previous
+/// change wrote between them. On 2026-09-06 the dated note b3024fb9 added to
+/// `bench/compile_golden_modules.txt` lasted three hours and vanished on the
+/// next regeneration; it was visible only because `git diff --stat` showed the
+/// file SHRINKING by ten lines when it should have grown.
+/// `scripts/gates/all_counters.sh --write` has always rewritten line for line
+/// and this is the same discipline. The literal header is the fallback for a
+/// golden that does not exist yet.
+fn rewrite_rows(path: &std::path::Path, header: &str, rows: &str) {
+    let stored = std::fs::read_to_string(path).unwrap_or_default();
+    let kept: String =
+        stored.lines().filter(|l| l.starts_with('#')).map(|l| format!("{l}\n")).collect();
+    let head = if kept.is_empty() { header.to_string() } else { kept };
+    std::fs::write(path, format!("{head}{rows}")).expect("golden writes");
+}
+
 fn ir_for(source: &str) -> String {
     let program = kanso::compile("sample.kso", source, false).expect("sample compiles");
     kanso::codegen::emit_ir(&program).expect("sample lowers to IR")
@@ -176,7 +196,7 @@ fn compile_cost_matches_the_golden() {
 # Kept apart from that file because the welfare index sums its rows: a sample
 # added there reads as a regression the size of the sample.
 ";
-        std::fs::write(&module_path, format!("{header}{modules}")).expect("module golden writes");
+        rewrite_rows(&module_path, header, &modules);
     }
     let stored_modules = std::fs::read_to_string(&module_path).unwrap_or_default();
     let expected_modules: String =
@@ -200,7 +220,7 @@ fn compile_cost_matches_the_golden() {
 # regenerate deliberately and record which way it went, and why, in
 # design/compiler-log.md beside the runtime goldens.
 ";
-        std::fs::write(&golden_path, format!("{header}{actual}")).expect("golden writes");
+        rewrite_rows(&golden_path, header, &actual);
         return;
     }
     let stored = std::fs::read_to_string(&golden_path).unwrap_or_default();
@@ -213,4 +233,40 @@ fn compile_cost_matches_the_golden() {
          regenerate with KANSO_REGEN_COMPILE_GOLDEN=1. rounds and visits are \
          what compiling did; lines, calls and branches are what it wrote"
     );
+}
+
+/// Regenerating a golden keeps the notes a previous change left in it.
+///
+/// This enters at the function the regeneration actually calls, on a golden
+/// of its own in a temp directory, because the alternative — setting
+/// `KANSO_REGEN_COMPILE_GOLDEN` and running the suite — rewrites the real
+/// veins. What it pins is the property that was false: a note written between
+/// the header and the rows survives the next regeneration.
+#[test]
+fn regenerating_a_golden_keeps_the_note_the_last_change_left() {
+    let dir = std::env::temp_dir().join(format!("kanso_regen_note_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let path = dir.join("golden.txt");
+    std::fs::write(
+        &path,
+        "# What this vein counts.\n\
+         #\n\
+         # 2026-09-06 (the change that moved it): 1 -> 2, a rise of 1.\n\
+         sample rows=2\n",
+    )
+    .expect("golden writes");
+
+    rewrite_rows(&path, "# What this vein counts.\n", "sample rows=3\n");
+
+    let after = std::fs::read_to_string(&path).expect("golden reads");
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(
+        after.contains("2026-09-06 (the change that moved it): 1 -> 2, a rise of 1."),
+        "the regeneration dropped the note the last change left:\n{after}"
+    );
+    assert!(
+        after.contains("sample rows=3"),
+        "the regeneration did not write the new row:\n{after}"
+    );
+    assert!(!after.contains("sample rows=2"), "the regeneration kept the old row:\n{after}");
 }
