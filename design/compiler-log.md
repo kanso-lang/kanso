@@ -5069,3 +5069,111 @@ introduced between one commit and the next. Nothing in the tree changed between
 the two numbers. The first was arithmetic on a placeholder and the second is a
 measurement, and the difference between them is the size of the error in the
 placeholder.
+
+---
+
+## 2026-09-06 (seventeenth) — the `and` under an `if` is asked in pieces
+
+The digit test in the (thirteenth) entry measured a sixth of what the
+arithmetic predicted, and that entry said why: the `and` of two comparisons
+still travels as a value, so only the `if`'s own test fuses. That names a gap
+in the emitter rather than a fact about the language, and this closes it.
+
+`a and b` parses to `if a b false`, `a or b` to `if a true b` and `not a` to
+`if a false true`, so a condition is very often another `if`. `emit_cond` had
+no arm for one. It fell through to `emit_expr`, which built the inner `if` as a
+value — a phi over tagged booleans — and then `test_cond_value` called
+`k_truthy` on the phi and branched on the answer. Two comparisons that each
+already knew their answer as an i1 were rebuilt into a tag and taken apart
+again, which is the family the (2026-09-05) comparison change measured at 1.60%
+of encodebench on one site.
+
+`emit_cond` recurses into it now. Each arm of the inner `if` is asked the same
+question the outer one asked, and an arm that is the literal the desugaring
+wrote is an unconditional branch. Nothing is duplicated: both arms branch to
+the labels the outer `if` already made, so the change adds blocks and removes
+instructions.
+
+    work_jsonbench   1,570,704,224 -> 1,564,492,424   -6,211,800   -0.3955%
+    work_oneshot        24,383,381 ->    24,341,969      -41,412   -0.1698%
+    work_livebench   4,436,977,137 -> 4,436,935,725      -41,412   -0.0009%
+    work_scanbench     776,362,839 ->   776,364,842       +2,003   +0.0003%
+
+The other nine work rows hold and no allocation counter moves — all eleven
+veins agree. Every other vein falls with it: the decoder's emitted calls
+1,834 -> 1,832, branches 1,205 -> 1,185 and lines 12,562 -> 12,509; six of the
+twelve `_other` rows fall and none rises; machine code falls on six binaries,
+400 bytes on jsonbench and on livebench.
+
+**This entry said the three compile rows do not move at all, and that was wrong
+about one of them.** `compile_allocs` and `compile_peak_bytes` are byte-identical,
+as CI confirmed. `compile_instructions` FELL 42,018,130 -> 41,886,863, a fall of
+131,267 or 0.31%, and it is layout: `kanso check lib/json` stops before the
+backend runs, so no decision this row counts can change, but src/codegen.rs is
+the compiler and the compiler's own bytes move under it. The vein has recorded
+seven layout-only moves before, all from runtime or prelude edits; this is the
+first from the emitter, and the largest. "The backend never runs" keeps the
+decisions identical and says nothing about where they land.
+
+work_scanbench 776,364,842 is the one row that pays, and it is 0.0003%. A
+condition whose arms are not constants gains two blocks and a branch where the
+phi used to be, and LLVM does not always fold them back.
+
+The four work rows are PROJECTIONS — the golden is CI's and this container
+reads a different glibc — so each is the golden plus the container's own A/B
+delta, measured on one host from the repo root with both binaries in place.
+Every other row here is exact.
+
+Watched red before it passed, on the old emitter and for the right reason:
+`an_and_under_an_if_is_asked_in_pieces` reported that `pick` still called
+`k_truthy`. `a_condition_made_of_and_is_asked_in_pieces` covers the shapes the
+new arm reaches — two int comparisons, the runtime path a text comparison
+takes, a `<` declared over a record, `not`, `or`, both nestings of the two, an
+`and` in tail position, and a hand-written `if` standing where a condition
+goes — and both engines answer it identically.
+
+---
+
+## 2026-09-06 (eighteenth) — the index's two bounds compares buy something
+
+`k_index_fast` and `k_b_at_fast` both test a 1-based position with two signed
+compares and an `and`:
+
+    %lo = icmp sgt i64 %i, 0
+    %hi = icmp sle i64 %i, %len
+    %inr = and i1 %lo, %hi
+
+One unsigned compare on the offset answers both. Below 1 the subtraction wraps
+to something enormous and fails the same `ult` that a position past the end
+fails, so `icmp ult (i - 1), len` is exactly equivalent and three instructions
+become two. Built, measured, DECLINED: it is worse on nine of the thirteen
+benchmarks.
+
+    livebench    4,436,935,278 -> 4,526,588,390   +89,653,112   +2.02%
+    encodebench  4,425,477,206 -> 4,502,836,968   +77,359,762   +1.75%
+    digestbench     77,352,921 ->    79,973,742    +2,620,821   +3.39%
+    oneshot         24,341,570 ->    24,594,343      +252,773   +1.04%
+    jsonbench    1,564,492,011 -> 1,568,798,811    +4,306,800   +0.28%
+    scanbench      776,364,429 ->   775,361,412    -1,003,017   -0.13%
+
+The checksum stays 24000, so this is not a correctness difference. What the two
+signed compares buy is a FACT: on the fast path LLVM knows `i >= 1` and
+`i <= len`, and it spends that on the addressing mode — every index in the
+decoder's disassembly reads `movzbl -0x1(%rax,%rbp,1)`, with the `-1` folded
+into the address. The unsigned form proves only `j < len`, so the offset is
+materialised at every use. Two instructions saved at the compare, more than two
+paid everywhere the result is read.
+
+Reverted, and the baseline returns to 1,564,492,011 to the instruction.
+
+The attribution that prompted it is worth keeping. On the decoder after the
+whitespace fold and the `and` change, `obj_key_start_4'2` is 205,282,500
+instructions, 13.12% of jsonbench and second only to `value_for_3'2` at 22.60%,
+and its whole body is six repeats of the indexed-load block at 1,060,050
+executions each. Two structural walls stand behind it, both already recorded:
+the length and the data pointer are RELOADED at every site because calls sit
+between them and may clobber memory, and there is no LLVM loop to hoist out of
+because the recursion is a mutual cycle. A third thing the join shows is
+smaller and real: the guard reads the index's tag with three compares before it
+compares the byte, and one of the three — the failure test — is provably dead,
+because the tag is a phi over exactly `{int, none}`.

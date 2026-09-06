@@ -1,0 +1,58 @@
+# `a and b` parses as `if a b false`, `a or b` as `if a true b` and `not a` as
+# `if a false true`, so a condition is very often another `if` and codegen asks
+# each of its arms the same question rather than reading the inner one for a
+# value. This is every shape that reaches that arm: two int comparisons, the
+# runtime path a text comparison takes, a `<` declared over a record, `not`,
+# `or`, both nestings of the two, an `and` written in tail position, and a
+# hand-written `if` standing where a condition goes. The comparison half is
+# pinned beside this in a_condition_is_asked_rather_than_read.
+type point
+  x
+
+fn < (point a) (point b)
+  a < b
+
+fn chose true
+  "yes"
+
+fn chose false
+  "no"
+
+fn both a b
+  if (a < b and b < 10) "lt-and-small" "otherwise"
+
+fn either a b
+  if (a < b or b < 3) "lt-or-small" "otherwise"
+
+fn denied a b
+  if (not a < b) "not-lt" "lt"
+
+fn nested a b c
+  if (a < b and (b < c or c < 3)) "inner-or" "otherwise"
+
+fn other_nesting a b c
+  if ((a < b or b < 3) and c < 10) "inner-or-first" "otherwise"
+
+fn texts a b
+  if (a == b and b == "x") "same-x" "otherwise"
+
+fn recs a b
+  if (a < b and true) "smaller" "not smaller"
+
+fn tail a b
+  if (a < b and b < 10) (chose true) (chose false)
+
+fn written a b
+  if (if (a < b) true false) "written-lt" "written-ge"
+
+pub play =
+  print "both: {both 1 2} {both 1 20} {both 2 1}"
+  print "either: {either 1 2} {either 9 1} {either 9 5}"
+  print "denied: {denied 1 2} {denied 2 1}"
+  print "nested: {nested 1 2 9} {nested 1 9 2} {nested 5 1 9}"
+  print "other: {other_nesting 1 2 3} {other_nesting 9 1 3}"
+  print "other wide: {other_nesting 1 2 30} {other_nesting 9 5 3}"
+  print "texts: {texts "x" "x"} {texts "y" "y"} {texts "x" "y"}"
+  print "records: {recs (point 1) (point 2)} {recs (point 2) (point 1)}"
+  print "tail: {tail 1 2} {tail 2 1}"
+  print "written: {written 1 2} {written 2 1}"

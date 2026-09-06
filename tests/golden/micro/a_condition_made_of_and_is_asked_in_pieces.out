@@ -1,0 +1,10 @@
+both: lt-and-small otherwise otherwise
+either: lt-or-small lt-or-small otherwise
+denied: lt not-lt
+nested: inner-or inner-or otherwise
+other: inner-or-first inner-or-first
+other wide: otherwise otherwise
+texts: same-x otherwise otherwise
+records: smaller not smaller
+tail: yes no
+written: written-lt written-ge
