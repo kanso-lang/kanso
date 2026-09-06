@@ -66,18 +66,22 @@ section is where its instructions will appear.
   rule exists because a conflict resolution once silently deleted
   Eisel-Lemire from main and nothing noticed.
 - **Counters changed → regenerate every vein in the same PR**: all .mem
-  files, all ELEVEN cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
+  files, all TWELVE cost goldens, `bench/emitted_golden.txt`, the ch10 sample,
   then book panels — and the SIBLINGS, which keep veins of their own. This
   line said "all TEN cost goldens" until 2026-09-05 and there were ten; a
   branch that read it regenerated the .mem vein and the code goldens and
   missed nine, and CI found them a round late. `sh
-  scripts/gates/all_counters.sh` reads every one of the eleven and names every
+  scripts/gates/all_counters.sh` reads every one of the twelve and names every
   vein that moved, and `--write` regenerates them, header intact. Do not
   count them from memory; the count in this sentence was wrong for as long as
   it was written down. It reads the .mem vein too, since 2026-09-06 — that vein
   is read by `tests/golden.rs` rather than by a `*_counters.sh` gate, so the
   derivation the sweep's table is pinned to could not see it, and the sweep ran
-  the eleven and stayed quiet about the one this list names first.
+  the eleven and stayed quiet about the one this list names first. It said
+  ELEVEN until 2026-09-06, when `bench/cost_golden_run.txt` joined with the
+  consolidated run program -- the second time this count went stale, which is
+  why `tests/every_counter_gate_is_in_the_sweep.rs` reads the goldens off disk
+  and compares them to the word written here.
 - **The sweep does NOT read the compile veins, and a library change moves
   them.** `lib/*.kso` is `include_str!`'d into the compiler (`src/lib.rs`), so
   adding a line to lib/json is a line the compiler carries and compiles.
@@ -318,13 +322,13 @@ Only Clay arms, disarms or retimes it.
   otherwise is false reporting. (Auto-merge silently failed to fire on
   green PRs more than once, and stale docs sat live for hours.)
 - **Reading the cost-goldens job takes two sources, and neither alone is it.**
-  Its eighteen counter steps are `continue-on-error`, so the per-step
+  Its nineteen counter steps are `continue-on-error`, so the per-step
   conclusions the API returns say SUCCESS even when the gate failed — on
   kanso#1262 the API reported `how much work` and `compile instructions` green
   while the job's own vein summary said `work:failure` and `compile
   instructions:failure`, and that summary is the step that fails the job. So
   the summary block (`for vein in "emitted:success" ...`) is the authority for
-  those eighteen, AND it omits the trend gate and `page_drift`, whose own
+  those nineteen, AND it omits the trend gate and `page_drift`, whose own
   step conclusions are reliable. Read both. Every other job in the run can be
   read from its steps.
 - **Opening a PR without arming a wake is how one gets abandoned.** In a

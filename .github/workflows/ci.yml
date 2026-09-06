@@ -387,6 +387,16 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/read_counters.sh
+      # The consolidated run program, and since Clay's gavel of 2026-09-06 the
+      # only cost golden welfare reads: its three peaks are the run-memory term
+      # and its work row is the run-speed one. The thirteen steps above it are
+      # diagnostics that say WHERE a move came from, which the single term
+      # cannot. A diagnostic nobody compares is not one, so they all still gate.
+      - name: run program counters
+        id: run
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/run_counters.sh
       # The rows a failing vein wants copied into its golden are printed by
       # the gate that measured them, which is fourteen gates and two callgrind
       # dumps from the end of this job. The log API hands back a tail, so a
@@ -429,6 +439,7 @@ jobs:
                       "digest counters:${{ steps.digest.outcome }}" \
                       "read counters:${{ steps.read.outcome }}" \
                       "scan counters:${{ steps.scan.outcome }}" \
+                      "run program counters:${{ steps.run.outcome }}" \
                       "compiler libraries:${{ steps.libraries.outcome }}"; do
             case "$vein" in
               *:failure)

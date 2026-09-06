@@ -95,9 +95,13 @@ fn a_welfare_that_prints_no_score_is_named_rather_than_indexed() {
     let stage = staged("crash");
     let golden = stage.join("bench/instructions_golden.txt");
     let text = std::fs::read_to_string(&golden).expect("the golden reads");
+    // runbench, because the 2026-09-06 gavel made its row the objective's whole
+    // run-speed term. readbench stood here until then and stopped breaking
+    // welfare the moment it became a diagnostic: the spec's own subject has to
+    // be a row the model actually reads.
     let cut: String =
-        text.lines().filter(|l| !l.starts_with("readbench ")).collect::<Vec<_>>().join("\n");
-    assert_ne!(cut, text, "the golden had no readbench row to remove");
+        text.lines().filter(|l| !l.starts_with("runbench ")).collect::<Vec<_>>().join("\n");
+    assert_ne!(cut, text, "the golden had no runbench row to remove");
     std::fs::write(&golden, cut + "\n").expect("the golden writes");
 
     let (_, said) = recorded(&stage);
@@ -107,7 +111,7 @@ fn a_welfare_that_prints_no_score_is_named_rather_than_indexed() {
         "the refusal should name welfare, and said:\n{said}"
     );
     assert!(
-        said.contains("readbench"),
+        said.contains("runbench"),
         "it should carry what welfare said, which names the counter:\n{said}"
     );
     assert!(

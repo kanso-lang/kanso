@@ -1,13 +1,14 @@
 #!/bin/sh
-# Every counter gate at once, and the nine goldens they read.
+# Every counter gate at once, and the twelve goldens they read.
 #
-# There are nine of them and each is its own file, so following the rule in
-# CLAUDE.md -- "counters changed, regenerate every vein in the same PR" --
-# meant remembering nine filenames and which golden each one writes. A branch
-# that changed how closures are built regenerated the .mem vein, the four code
-# goldens and the wasm blob and missed all nine of these; CI found them, one
-# round late, and the round cost eight minutes for something a container can
-# answer in twenty seconds.
+# Each is its own file, so following the rule in CLAUDE.md -- "counters changed,
+# regenerate every vein in the same PR" -- meant remembering a filename apiece
+# and which golden each one writes. There were nine when this was written; a
+# branch that changed how closures are built regenerated the .mem vein, the four
+# code goldens and the wasm blob and missed all nine, and CI found them one round
+# late, which cost eight minutes for something a container answers in twenty
+# seconds. The count is TWELVE now and it is not written down anywhere but the
+# table below, which is what a spec reads.
 #
 # It does NOT stop at the first divergence. Each vein is an independent
 # dimension of the same run, and the CI job that owns them says why: stopping
@@ -39,7 +40,8 @@ escape:escapebench:bench/cost_golden_escape.txt
 digest:digestbench:bench/cost_golden_digest.txt
 read:readbench:bench/cost_golden_read.txt
 scan:scanbench:bench/cost_golden_scan.txt
-live:livebench:bench/cost_golden_live.txt"
+live:livebench:bench/cost_golden_live.txt
+run:runbench:bench/cost_golden_run.txt"
 
 moved=""
 for row in $veins; do
@@ -79,7 +81,7 @@ done
 # IT COSTS 158 SECONDS on this container to READ, measured 2026-09-06, and
 # `--write` is the slower branch: the regeneration ran past 204 seconds in the
 # same sitting, because it writes every .mem file rather than diffing them.
-# Both are real beside the eleven counter runs, and the alternative is a vein
+# Both are real beside the twelve counter runs, and the alternative is a vein
 # that moves and says so only in CI, on the dimension this file exists to
 # watch. The read figure was the only one measured when this comment was
 # written, and it read as the cost of the step rather than the cost of one of
@@ -100,7 +102,7 @@ else
 fi
 
 if [ -z "$moved" ]; then
-  echo "counters: the eleven cost veins and the lazy tier agree with their goldens"
+  echo "counters: the twelve cost veins and the lazy tier agree with their goldens"
   exit 0
 fi
 echo "counters moved:$moved"
