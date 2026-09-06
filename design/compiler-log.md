@@ -4070,3 +4070,42 @@ reclaims, and shortness is not evidence against it. It also bears on #317,
 which asks whether escapebench pins the beat's cost on every run and its
 benefit on none: encodebench pins both, in a pair of counters the objective
 already weighs.
+
+## 2026-09-06 — K_ITOA TAKES THE PAIR TABLE RYU ALREADY CARRIES
+
+**SHIPPED.** kanso#1260 gave `render_ryu` a two-digit table and a length-first
+walk, and left `k_itoa` filling a 24-byte scratch one digit and one 64-bit
+division at a time, then copying it back reversed. `k_itoa` reads
+`RYU_DIGITS` and `ryu_declen` now and writes straight into place. The table and
+the ladder move up the file to sit above their first user; nothing about them
+changes except that `ryu_declen`'s top three rungs stop being unreachable —
+nineteen digits is a `long long`'s most, so `k_itoa` reaches every one.
+
+`k_itoa` was **74,845,459 instructions in pendbench, 11.63%**, the third
+largest function there behind `k_rec` and `d_list/next_1`; 113,519,777 and
+2.50% in encodebench.
+
+    benchmark      after the strlen change          now      itoa alone    both
+    pendbench              643,666,736      605,691,007      -5.8999%   -9.0688%
+    encodebench          4,484,267,699    4,425,477,206      -1.3110%   -2.3478%
+    livebench            4,496,878,563    4,438,088,070      -1.3074%   -2.3413%
+    basket                    38,336,500       38,028,636    -0.8031%   -1.4003%
+    widebench                 55,125,808       54,689,946    -0.7907%   -1.7559%
+    oneshot                   25,641,457       25,494,372    -0.5736%   -1.0328%
+
+No row rises. The seven not shown fall by their startup offsets.
+
+**The `.text` vein pays 3,536 bytes more than the entry above left it**, and
+1,262,522 against main's 1,251,114 — 11,408 across the thirteen for the two
+changes together. The table itself was already linked; what is new is the
+extraction, once per benchmark.
+
+**Watched red, for the right reason.** Writing the pair backwards —
+`o[0] = RYU_DIGITS[c * 2 + 1]` — turns every rendered integer into its digits
+transposed in pairs, and the corpus names them: `1070000000000` for
+`1700000000000`, `483215` for `482351`, `2349220001867460000` for
+`2432902008176640000`. The golden suite has to be able to see a wrong digit
+before its green reading means anything about a digit routine.
+
+Welfare 74.59 -> 74.62, banked in the same commit. All eleven allocation veins
+agree.

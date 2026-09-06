@@ -2222,24 +2222,78 @@ __attribute__((noreturn, noinline)) static void k_die_ref_arity(KFnref* r, long 
 
 /* Hand-rolled lld formatting: the vfprintf machinery showed up hot in
    the encode profile, and a digit loop beats it several times over. */
+/* Two digits a time, and the length first — shared by `k_itoa` below and by
+   `render_ryu`'s digit extraction further down. Each used to do one 64-bit
+   division per digit into a scratch buffer and then reverse it; a pair table
+   halves the divisions and writes straight into place, which needs the length
+   before the first digit. The ladder climbs from one digit rather than down
+   from twenty because the values that reach it are small: a json document's
+   floats are short, and so are the integers beside them.
+
+   Nineteen digits is a long long's most, and twenty a uint64_t's, so every
+   rung is reachable from `k_itoa` even though `ryu_d2d` never passes more than
+   seventeen. The extraction walks DOWN from the length it is given, and a
+   length one short would write at a negative index rather than truncate. */
+static const char RYU_DIGITS[201] =
+    "0001020304050607080910111213141516171819"
+    "2021222324252627282930313233343536373839"
+    "4041424344454647484950515253545556575859"
+    "6061626364656667686970717273747576777879"
+    "8081828384858687888990919293949596979899";
+
+static inline int ryu_declen(uint64_t v) {
+    if (v < 10ULL) return 1;
+    if (v < 100ULL) return 2;
+    if (v < 1000ULL) return 3;
+    if (v < 10000ULL) return 4;
+    if (v < 100000ULL) return 5;
+    if (v < 1000000ULL) return 6;
+    if (v < 10000000ULL) return 7;
+    if (v < 100000000ULL) return 8;
+    if (v < 1000000000ULL) return 9;
+    if (v < 10000000000ULL) return 10;
+    if (v < 100000000000ULL) return 11;
+    if (v < 1000000000000ULL) return 12;
+    if (v < 10000000000000ULL) return 13;
+    if (v < 100000000000000ULL) return 14;
+    if (v < 1000000000000000ULL) return 15;
+    if (v < 10000000000000000ULL) return 16;
+    if (v < 100000000000000000ULL) return 17;
+    if (v < 1000000000000000000ULL) return 18;
+    if (v < 10000000000000000000ULL) return 19;
+    return 20;
+}
+
 /* Returns the number of digits written, not counting the terminator, so a
    caller that turns the buffer into a string does not walk it again to find
    out how long it is. `k_render_at` did exactly that on every number it
-   rendered: k_str is k_str_n behind a strlen, and the length was already
-   sitting in `w`. */
+   rendered: k_str is k_str_n behind a strlen, and the length was already here.
+
+   Digits come out in pairs, straight into place. This used to fill a scratch
+   buffer least-significant digit first, one division apiece, and then copy it
+   back reversed — two passes over the digits and twice the divisions. */
 static long long k_itoa(char* buf, long long v) {
-    char tmp[24];
-    int n = 0;
-    unsigned long long u = v < 0 ? (unsigned long long)(-(v + 1)) + 1 : (unsigned long long)v;
-    do {
-        tmp[n++] = (char)('0' + (u % 10));
-        u /= 10;
-    } while (u);
     char* w = buf;
     if (v < 0) *w++ = '-';
-    while (n) *w++ = tmp[--n];
-    *w = 0;
-    return (long long)(w - buf);
+    uint64_t u = v < 0 ? (uint64_t)(-(v + 1)) + 1 : (uint64_t)v;
+    char* end = w + ryu_declen(u);
+    char* o = end;
+    while (u >= 100) {
+        uint32_t c = (uint32_t)(u % 100);
+        u /= 100;
+        o -= 2;
+        o[0] = RYU_DIGITS[c * 2];
+        o[1] = RYU_DIGITS[c * 2 + 1];
+    }
+    if (u >= 10) {
+        o -= 2;
+        o[0] = RYU_DIGITS[u * 2];
+        o[1] = RYU_DIGITS[u * 2 + 1];
+    } else {
+        *--o = (char)('0' + (uint32_t)u);
+    }
+    *end = 0;
+    return (long long)(end - buf);
 }
 
 static long long k_ptr(void* p) { return (long long)(intptr_t)p; }
@@ -3460,48 +3514,6 @@ static inline int ryu_pow5factor(uint64_t v) {
 static inline int ryu_multiple_of_pow5(uint64_t v, int p) { return ryu_pow5factor(v) >= p; }
 static inline int ryu_multiple_of_pow2(uint64_t v, int p) {
     return (v & ((1ULL << p) - 1)) == 0;
-}
-
-/* Two digits a time, and the length first. The extraction loop below used to
-   do one 64-bit division per digit into a scratch buffer and then reverse it;
-   a pair table halves the divisions and writes straight into place. The ladder
-   climbs from one digit rather than down from seventeen because a json
-   document's floats are short: on bench/large.json the median shortest form is
-   well under half the 17 digits a double can need. */
-static const char RYU_DIGITS[201] =
-    "0001020304050607080910111213141516171819"
-    "2021222324252627282930313233343536373839"
-    "4041424344454647484950515253545556575859"
-    "6061626364656667686970717273747576777879"
-    "8081828384858687888990919293949596979899";
-
-static inline int ryu_declen(uint64_t v) {
-    if (v < 10ULL) return 1;
-    if (v < 100ULL) return 2;
-    if (v < 1000ULL) return 3;
-    if (v < 10000ULL) return 4;
-    if (v < 100000ULL) return 5;
-    if (v < 1000000ULL) return 6;
-    if (v < 10000000ULL) return 7;
-    if (v < 100000000ULL) return 8;
-    if (v < 1000000000ULL) return 9;
-    if (v < 10000000000ULL) return 10;
-    if (v < 100000000000ULL) return 11;
-    if (v < 1000000000000ULL) return 12;
-    if (v < 10000000000000ULL) return 13;
-    if (v < 100000000000000ULL) return 14;
-    if (v < 1000000000000000ULL) return 15;
-    if (v < 10000000000000000ULL) return 16;
-    if (v < 100000000000000000ULL) return 17;
-    /* A double's shortest form never needs more than seventeen digits, so the
-       three rungs below are unreachable from `ryu_d2d`. They are here because
-       the loop this replaced was total and this is not: the extraction walks
-       DOWN from the length it is given, so a length one short of the value
-       writes at a negative index rather than truncating. Three compares on a
-       path nothing takes buy back that difference. */
-    if (v < 1000000000000000000ULL) return 18;
-    if (v < 10000000000000000000ULL) return 19;
-    return 20;
 }
 
 /* shortest digits + decimal exponent for a positive finite double; returns

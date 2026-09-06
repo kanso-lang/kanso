@@ -224,16 +224,16 @@
 # own pair of builds. The previous change's three predictions landed to the
 # instruction, which is why this one is written the same way; CI's sitting is
 # still the record.
-jsonbench 1737414284
-encodebench 4483900898
-oneshot 25641856
-basket 38336913
-widebench 55126221
-deepbench 708507418
-escapebench 114596809
-pendbench 643667149
-indexbench 4691423
-scanbench 1384644194
+jsonbench 1737414226
+encodebench 4425110405
+oneshot 25494771
+basket 38029049
+widebench 54690359
+deepbench 708507318
+escapebench 114596730
+pendbench 605691420
+indexbench 4691365
+scanbench 1384644173
 digestbench 77353320
-readbench 2038390835
-livebench 4496511810
+readbench 2038390798
+livebench 4437721317
