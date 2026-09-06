@@ -4621,3 +4621,38 @@ instructions a call over 265,950 calls is 9.51% of jsonbench, and one in six
 `string_at_4` entries reaching it says the ASCII path already avoids it most of
 the time. So the prize is what the non-ASCII sixth costs, and whether 13.1
 iterations a call is the string's length or a scan that restarts.
+
+---
+
+## 2026-09-06 (seventh) — THE COMPILE ROW CANNOT BE PROJECTED FROM A CONTAINER A/B, AND TODAY MISSED TWICE
+
+**DONE.** CI counted `compile_instructions=41,462,716` for the change above; the
+entry projected 41,461,827 from a container A/B of 41,879,916 -> 41,881,141.
+The golden holds CI's figure and `docs/compiler.html`'s `data-golden` follows
+it. **The correction is to that one line: `compile_instructions` rises
+41,461,798 -> 41,462,716, by 918.** The direction is unchanged — `src/runtime.c`
+grew and it is `include_str!`'d into the compiler.
+
+**Twice in a row today, and by different amounts.** The memchr change projected
+41,460,229 and CI read 41,460,602, a miss of 373. This one projected 41,461,827
+and CI read 41,462,716, a miss of 889. Both projections came from a container
+A/B measured on a pair of builds, both reproduced on the container to the
+instruction on a second reading, and both were wrong about CI by a few hundred.
+
+**So stop projecting this row.** Every other vein takes a container delta
+faithfully: today all twenty-six runtime rows and all twenty-six `.text` rows
+across two changes came back from CI byte-identical to what the container
+predicted, and nine of thirteen instruction deltas were zero by construction.
+This row does not, and its own header says why — cargo builds are not
+bit-reproducible, a binary whose data and bss differ starts the heap at a
+different break, and that moves how much work malloc does to service an
+identical request sequence. The container's delta measures ITS pair of
+binaries; CI builds a different pair.
+
+A session touching `src/runtime.c` or `lib/` should therefore push once with
+the row unchanged, let the gate fail, and copy CI's value out of the job log —
+one red round that is expected rather than two that are not. The container
+reading is still worth taking, as the check that the row moved in the direction
+the change implies; 373 and 889 are both far below the 5,124 the header records
+for a change of chip, so a projection that misses by thousands is a different
+problem and should be hunted.
