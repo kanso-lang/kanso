@@ -4263,3 +4263,58 @@ embedded text, not the compiler's work.
 
 Welfare reads 74.62 against a floor of 74.62 on CI's numbers, so the floor set
 on the projection stands without a re-set.
+
+## 2026-09-06 — PARSE_VALUE'S 26.98%, AND THE POINTER IT RELOADS 17 MILLION TIMES
+
+**ATTRIBUTED (#343).** The decode's largest function had a function-level figure
+and no instruction-level reading. `d_jsonbench/parse_value_2'2` is 468,780,150
+instructions, **26.98% of jsonbench** and more than double the next function.
+
+Searched first: `parse_value` appears three times in the log and not at all in
+the archive. kanso#1262 explains its growth — it absorbed `scan_at_5`'s
+133,577,400 by inlining and gained 136,356,000 doing it — and the entry-block
+thread (kanso#1245) with `preserve_none` behind it (#290, toolchain-blocked)
+covers its prologue. None of them reads what the 468 million is made of.
+
+Same method as `encode_onto`: callgrind at instruction granularity joined to
+`objdump` over the function's 1,021 instructions. 594 execute and the join
+accounts for all 468,780,150.
+
+**Grouped by execution count, the per-call band is the largest.** 49
+instructions run once per call at 2,713,950 calls — 132,983,550, 28.37% of the
+function and **7.65% of jsonbench**. That band holds the thirteen-instruction
+prologue (six pushes and a 120-byte frame), the entry's first two byte reads,
+and the dispatch on what the byte is.
+
+**The shape that repeats is the non-strict byte index.** `bs[i]` inlines to a
+bounds test, a reload of the buffer's data pointer, the fetch, and a `cmove`
+substituting the past-the-end sentinel:
+
+    test %rbx,%rbx              ; index above zero
+    jle  ...
+    cmp  %rbx,%rsi              ; index within the length
+    jl   ...
+    mov  0x8(%r14),%rcx         ; the data pointer, again
+    movzbl -0x1(%rcx,%rbx,1),%ecx
+    cmove %rdx,%rcx             ; or 0x100, past the end
+
+Twenty-two fetch sites execute **17,041,950** times between them, 0.98% of
+jsonbench. Twenty-three pointer reloads execute **17,359,050** times, 1.00% —
+one per fetch, plus one site that reloads without fetching.
+
+**The length is hoisted and the pointer is not.** `parse_value` loads the byte
+count once at entry and keeps it in `%rsi` for the whole call; it loads
+`0x8(%r14)` afresh at every read. `%r14` never changes, and the buffer it points
+into is the input document, which nothing in the decode appends to.
+
+LLVM is right not to hoist it and `!invariant.load` would be wrong: the `data`
+field of a bytes header is genuinely mutable, because `k_b_append_mut` rewrites
+it when a builder grows, and a callee between two fetches could do exactly that.
+What makes the decode's reads redundant is a fact about this buffer rather than
+about the type — the same distinction that made the closure's `!invariant.load`
+correct where this one would not be.
+
+**So the 1.00% is real and its fix is not one line.** Recorded as the size of
+the prize and the reason the obvious route is closed. What is left unexamined in
+this function is the residual of the per-call band once the prologue is set
+aside, which is #290's ground and blocked on the same toolchain.
