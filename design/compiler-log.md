@@ -6410,3 +6410,47 @@ arm on this side of the charter — how a dispatch group is emitted is not
 something a user meets — so this is the emitter's to answer, not a gavel. The
 narrow inference to build and measure next: a function whose only call site is
 an `if` arm inside the body of a lambda passed to a fold.
+
+---
+
+## 2026-09-06 — THE REGENERATION KEEPS ITS NOTES, AND A SECOND COLD-ARM RULE IS REFUTED
+
+**SHIPPED, the regen half.** The entry above left the property named and
+false: `KANSO_REGEN_COMPILE_GOLDEN=1` wrote a header literal from
+`tests/compile_cost.rs` plus the measured rows, dropping whatever a previous
+change had written between them. `rewrite_rows` keeps every comment line where
+it is and replaces only the data rows, which is what
+`scripts/gates/all_counters.sh --write` has always done; the literal header is
+the fallback for a golden that does not exist yet.
+
+The spec was watched red on the old write first, and failed naming the dropped
+note rather than something incidental. End to end, with the real environment
+variable against the real goldens, `bench/compile_golden.txt` and
+`bench/compile_golden_modules.txt` both come out byte-identical when nothing
+moved — sixteen and thirty comment lines respectively, all still there.
+
+### The narrow cold-arm rule the entry above proposed: REFUTED
+
+That entry ended by naming the inference to build and measure — a function
+whose only call site is an `if` arm inside the body of a lambda passed to a
+fold. Built as a census over `livebench.ll` and measured the same way as the
+first rule, marking what it selects and relinking against a control:
+
+    livebench                                  Ir             delta
+    u_bytes alone                    4,271,590,876   -46,634,400  -1.0799%
+    control                          4,318,225,276
+    every single-caller (72 marked)  4,563,103,685  +244,878,409  +5.6708%
+    the narrow rule (48 marked)      4,415,008,067   +96,782,791  +2.2413%
+
+The narrow rule selects forty-eight, and among them are `encode_list_2`,
+`encode_map_2` and `escape_onto_2` — the last of which the 2026-09-06 entry on
+the merged group already priced alone at +2.5582%. Being reachable from a
+lambda and sitting behind a branch does not make an arm cold: most of the
+decoder is reachable from a lambda, and every `if` has two arms.
+
+**Two rules measured, both worse than doing nothing, and the win is still
+there.** What separates `u_bytes` from the forty-seven others is how often its
+arm is taken, and that is the one thing neither the emitter nor LLVM at `-O3`
+without a profile can see. The next candidate is not another syntactic
+predicate over the emitted module — those are now two for two — but a source of
+frequency: a counted run, or a construct in the language that says it.
