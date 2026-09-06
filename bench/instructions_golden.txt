@@ -313,16 +313,24 @@
 # once, and digestbench's +321,063 goes with a 192-byte rise in its .text: the
 # direct call changes what LLVM inlines there. Welfare weighs all thirteen and
 # rose, so the trade is taken; the rise is named rather than defended.
-jsonbench 1542924950
-encodebench 4390892021
-oneshot 24109317
+#
+# 2026-09-06 (a `length` the sets prove is a header load): six rows FALL and
+# none rises. encodebench 4,390,892,021 -> 4,389,082,013 (-0.0412%), livebench
+# 4,400,131,256 -> 4,399,422,049 (-0.0161%), oneshot 24,109,317 -> 24,107,540
+# (-0.0074%), jsonbench 1,542,924,950 -> 1,542,924,650, widebench 54,609,879 ->
+# 54,609,871, digestbench 77,175,692 -> 77,175,689. basket, deepbench,
+# escapebench, pendbench, indexbench, scanbench and readbench hold to the
+# instruction: they have no `length` site the sets prove is bytes.
+jsonbench 1542924650
+encodebench 4389082013
+oneshot 24107540
 basket 35473609
-widebench 54609879
+widebench 54609871
 deepbench 704511486
 escapebench 114584676
 pendbench 605519153
 indexbench 4691265
 scanbench 768849900
-digestbench 77175692
+digestbench 77175689
 readbench 4283257
-livebench 4400131256
+livebench 4399422049

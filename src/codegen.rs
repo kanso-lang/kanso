@@ -5941,6 +5941,25 @@ impl<'a> Backend<'a> {
             // gated force emits nothing when the set proves it can't be one)
             let emitted: Vec<String> =
                 emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
+            // `length` of a value the sets already prove is bytes is the
+            // header's first field. The twin tests the tag and keeps a call
+            // arm for everything else, and that arm is a block merge: a
+            // later read of the same field cannot be forwarded across it, so
+            // a loop that asks `length coll < i` and then indexes `coll[i]`
+            // loads the length twice and compares it twice.
+            if name == "length" && f.set_of(&emitted[0]) == BYTES {
+                let bp = inline_payload(f, &emitted[0]);
+                let bptr = f.tmp();
+                f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+                let len_ptr = f.tmp();
+                f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+                let len = f.tmp();
+                f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+                let t = f.tmp();
+                f.line(&format!("{t} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {len}, 1"));
+                f.record(&t, infer::builtin_set("length", &[BYTES]));
+                return Ok(t);
+            }
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
             if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "to_bytes") {

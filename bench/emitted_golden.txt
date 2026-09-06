@@ -156,7 +156,15 @@
 # has few such lambdas and rises where it has several — three constants for one
 # call — which is why basket, escapebench and indexbench go the other way by a
 # handful of lines. Banked.
+#
+# 2026-09-06 (a `length` the sets prove is a header load): calls 1,845 ->
+# 1,843 and lines 12,708 -> 12,716. A `length` whose argument the sets already
+# prove is bytes is emitted as the header read itself -- an inttoptr, a
+# getelementptr, a load and an insertvalue -- instead of a call to the twin,
+# which tests the tag and keeps a call arm for everything else. Four lines
+# replace one call at each of the decoder's two such sites. defines and
+# branches hold. Banked.
 defines=185
-calls=1845
+calls=1843
 branches=1203
-lines=12708
+lines=12716
