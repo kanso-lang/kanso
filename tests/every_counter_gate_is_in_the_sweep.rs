@@ -159,3 +159,34 @@ fn the_instructions_count_the_cost_goldens_correctly() {
          is pinned rather than trusted"
     );
 }
+
+/// The sweep runs something that reads the lazy tier.
+///
+/// `tests/golden/mem/*.mem` is the vein CLAUDE.md names FIRST in the list a
+/// counter change must regenerate, and it is read by `tests/golden.rs` rather
+/// than by a `*_counters.sh` gate — so the derivation the veins table is pinned
+/// to cannot see it, and until 2026-09-06 neither could the sweep. The compile
+/// sweep had the same hole twice in the same week: a golden read only by a cargo
+/// test, invisible to both the script's list and the spec replaying it.
+///
+/// This asserts the property rather than the line: the sweep's own text, plus
+/// the source of every `--test` target it runs, has to mention the vein
+/// somewhere.
+#[test]
+fn the_sweep_reads_the_lazy_tier() {
+    let mut body = SWEEP.to_string();
+    for rest in SWEEP.split("--test ").skip(1) {
+        let target = rest.split_whitespace().next().unwrap_or_default();
+        let path = root().join(format!("tests/{target}.rs"));
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            body.push_str(&text);
+        }
+    }
+    assert!(
+        body.contains("golden/mem"),
+        "scripts/gates/all_counters.sh runs nothing that reads tests/golden/mem — \
+         the lazy tier is the first vein CLAUDE.md tells a counter change to \
+         regenerate, and a vein with no reader in the sweep moves and says so \
+         only in CI"
+    );
+}

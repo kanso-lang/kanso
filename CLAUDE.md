@@ -74,7 +74,10 @@ section is where its instructions will appear.
   scripts/gates/all_counters.sh` reads every one of the eleven and names every
   vein that moved, and `--write` regenerates them, header intact. Do not
   count them from memory; the count in this sentence was wrong for as long as
-  it was written down.
+  it was written down. It reads the .mem vein too, since 2026-09-06 — that vein
+  is read by `tests/golden.rs` rather than by a `*_counters.sh` gate, so the
+  derivation the sweep's table is pinned to could not see it, and the sweep ran
+  the eleven and stayed quiet about the one this list names first.
 - **The sweep does NOT read the compile veins, and a library change moves
   them.** `lib/*.kso` is `include_str!`'d into the compiler (`src/lib.rs`), so
   adding a line to lib/json is a line the compiler carries and compiles.
@@ -91,6 +94,26 @@ section is where its instructions will appear.
   when deriving the set from the golden each script reads turned up the sixth;
   `tests/the_compile_sweep_names_every_compile_gate.rs` pins the list in both
   places now, because a list written down is a list that goes stale.
+- **Two compile veins are read by a cargo test, not by a gate script, and the
+  derivation walks past them.** `bench/compile_golden.txt` and
+  `bench/compile_golden_modules.txt` are read only by `tests/compile_cost.rs`,
+  so no file under scripts/gates names them, so neither the `gates="..."` line
+  nor the spec replaying it could see them. On 2026-09-06 a library change moved
+  the modules vein, the sweep said nothing moved, and CI found it a round later.
+  `all_compile.sh` now runs `cargo test --release --test compile_cost` as a step
+  named by hand, and the spec pins the wider property: every compile-side golden
+  on disk is read by something the sweep runs. Regenerate that pair with
+  `KANSO_REGEN_COMPILE_GOLDEN=1 cargo test --test compile_cost`.
+- **The compile sweep reads artifacts it did not build, so it builds them
+  first.** Its gates read `*.ll` and the linked binaries out of the working
+  directory and not one of them produces those files. Until 2026-09-06 the sweep
+  ran the gates straight away against whatever the last build had left behind:
+  on a tree identical to HEAD, with three-minute-old artifacts from a patched
+  worktree, it reported `machine_code` and `emitted_code` MOVED, and rebuilding
+  put both back to AGREED with nothing else changed. That direction costs a
+  round. The other one is silent — artifacts older than the source and the sweep
+  says nothing moved after an edit that moved a vein — which is why the first
+  line of the script is now `build_benchmarks.sh`, pinned by a spec.
 - **`compile_instructions` moves on ANY edit to the compiler's own Rust, and
   "the backend never runs" does not say otherwise.** `kanso check lib/json`
   stops before codegen, so an emitter change cannot alter a decision that row
@@ -105,7 +128,8 @@ section is where its instructions will appear.
   reason. In a worktree whose compiler was built first, `kanso build` succeeded
   with `lib/json/text.kso` holding outright syntax garbage. `all_counters.sh`
   begins with `cargo build --release`, which is why the sweep is safe and a
-  bare `kanso build` is not. kq keeps
+  bare `kanso build` is not; `all_compile.sh` reaches the same build through
+  `build_benchmarks.sh`. kq keeps
   FIVE, and reading a short list of them is how a pin goes stale: allocation
   counters in `bench/cost_golden.txt`, `bench/cost_golden_decode.txt` and
   `bench/cost_golden_escapes.txt`, RETIRED INSTRUCTIONS in
