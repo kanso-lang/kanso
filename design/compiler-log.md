@@ -4194,3 +4194,33 @@ unexamined rather than examined and declined.
 what `callers_hand_over` answers for `list/next`. The measurement to take first
 is whether the eleven arms' incoming cursors are handed over, because a no there
 closes the thread at no cost.
+
+## 2026-09-06 — THE CURSOR IS NOT HANDED OVER, SO THE 30% CLOSES AT NO COST
+
+**CLOSED (#342).** The thread above ends where it was designed to end cheaply.
+Before extending `sole_finished_record` to destructured parameters, ask the
+other half of its condition about `list/next` and see whether the answer is
+already no.
+
+A temporary `KANSO_REUSE_PROBE` in `reusable_records` — never committed —
+printing `Analysis`'s two questions for every group whose name ends in `next`:
+
+    PROBE list/next/1  escapes_as_value=false  hand_over_p0=false  params=["Ctor/other"]
+
+`next` is never mentioned as a value, so the analysis has every one of its call
+sites to look at, and having looked at them it says some caller does not hand
+its cursor over uniquely. That is the answer a lazy list should give: a caller
+holds a cursor and asks it for more later, which is what the structure is for,
+and a reuse that wrote over a held cursor would be a miscompilation.
+
+**So the 3,200,900 constructions are refused twice over**, and only the first
+refusal was the one-line skip. Extending the analysis to destructured
+parameters would change nothing here: `sole_finished_record` requires both
+`here == everywhere` and `callers_hand_over`, and the second is already false.
+The 30.39% is not reachable this way.
+
+The gap the entry above found is still a gap — a destructured parameter is
+skipped before the question is asked, so some other arm somewhere may be losing
+a reuse it would qualify for. What is settled is that `list/next` is not one of
+them, and that pendbench's largest function is doing work the objective has no
+cheaper way to buy.
