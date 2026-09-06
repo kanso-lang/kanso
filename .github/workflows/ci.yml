@@ -258,6 +258,22 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      # preserve_none is an LLVM 19 calling convention, and the emitter probes
+      # for it rather than assuming it: on clang 18 the probe fails and the
+      # emitter writes the fallback. So without this install the binaries this
+      # job measures are DIFFERENT binaries from the ones its goldens pin, and
+      # bench/emitted_golden.txt plus the .text rows would describe the
+      # runner's clang rather than this repository's source.
+      #
+      # --no-install-recommends is required: a plain install pulls llvm-19-dev,
+      # whose 32-bit dependencies (libc6-i386, libxml2-dev) 404 on this image.
+      - name: clang 19, for the closure calling convention
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang-19
+          sudo update-alternatives --install /usr/bin/clang clang \
+            /usr/bin/clang-19 100
+          clang --version
       - name: build the benchmarks
         run: sh scripts/gates/build_benchmarks.sh
       # Each vein reports even when a sibling is red. They measure independent
