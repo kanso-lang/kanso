@@ -1,0 +1,43 @@
+# THE RUN PROGRAM'S PHASES, EACH AGAINST THE BENCHMARK COUNTER THAT PREDATES IT.
+#
+# `<phase> <history counter> <share>`, one phase a line. The share is the
+# phase's per cent of runbench, copied from the table in
+# bench/runbench/runbench/runbench.kso's header; the counter is the name the
+# per-benchmark row carried in perf-history before the 2026-09-06 gavel made
+# runbench the objective's whole run-speed term.
+#
+# WHY THIS FILE EXISTS. The gavel replaced twenty-five per-benchmark counters
+# with runbench's two, and the baseline for those two was set to the reading of
+# the day they arrived. Every runtime win the project had banked stopped being
+# visible to the objective: welfare read 75.50 the push before and 51.89 the
+# push after, on a commit where the compiler did not move. Reconstructing what
+# runbench WOULD have counted at a historical row needs a link from each phase
+# to a counter that row actually carries, and that link is here rather than
+# derived, because the repetition counts were chosen to land each phase on its
+# share and no arithmetic recovers the mapping from the numbers alone.
+#
+# THE SCALE DOES NOT CARRY ACROSS, only the direction. runbench decodes 98
+# rounds where jsonbench decodes its own count, and it imports std/json where
+# jsonbench, encodebench and widebench each freeze a copy of lib/json. So a
+# phase's counter says how that work MOVED between two commits, and the shares
+# below say how much runbench cares. A plain sum of the eight counters is a
+# different objective from the one the gavel ruled: encodebench carries 53.16%
+# of such a sum against runbench's 34.43%, and indexbench 0.06% against 4.97%,
+# which is enough to hide kanso#1172's 488x from the reconstructed line
+# entirely.
+#
+# WHAT IS NOT HERE. widebench, livebench, readbench, oneshot and basket have no
+# phase: runbench does not do their work. They keep every golden they had and
+# say where a move came from, which is the job the gavel left them.
+#
+# tests/the_phase_map_matches_the_run_programs_header.rs replays the share
+# column against runbench's own header table, so the two cannot drift. Re-measure
+# the header whenever a repetition count changes and this file follows it.
+decode decode_instructions 34.54
+encode encode_instructions 34.43
+deep deep_instructions 6.23
+digest digest_instructions 5.05
+index index_instructions 4.97
+escape escape_instructions 4.95
+pend pending_instructions 4.94
+split scan_instructions 4.87
