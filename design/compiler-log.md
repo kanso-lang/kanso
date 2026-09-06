@@ -4026,3 +4026,47 @@ reading worth anything.
 Allocation counters do not move — `all_counters.sh` reports all eleven veins
 agreeing. `emitted_code` and `compile_libraries` agree; the three compile
 gates refuse on this container as they always do.
+
+## 2026-09-06 — THE BEAT IS 7.35% OF ENCODEBENCH AND BUYS 176x
+
+**ANSWERED (#339).** The three beat functions are 333.1 million instructions in
+encodebench, every one of them called from `encode_onto`:
+
+    k_beat_pop   147,721,600 over 2,204,800 calls   67.0 each
+    k_beat_iter  119,241,649 over 4,968,400 calls   24.0 each
+    k_beat_push   66,144,000 over 2,204,800 calls   30.0 each
+
+7.35% of the benchmark, and nothing had priced it here. `k_beat_iter` appears
+in the log once, at 3.08% of livebench and 28.65% of escapebench (kanso#1259);
+`k_beat_pop` and `k_beat_push` appear in the archive only as mechanism, never
+with an encodebench figure. All three names searched in
+`design/compiler-log.md` and `design/log/compiler-log-archive.md` before filing.
+
+**The loops are `encode_items_3` and `encode_pairs_3`** — JSON's array walk and
+its object walk, bracketed inside `encode_list_2` and `encode_map_2`, which LLVM
+inlines bodily into `encode_onto`. 2,204,800 brackets over 4,968,400 iterations
+is **2.25 laps a bracket**: large.json's arrays and objects are small, and each
+one pays 97 instructions of push and pop to rewind about twice.
+
+That ratio is the reason to look. The answer is that the bracket earns it many
+times over. Priced with a temporary `KANSO_NO_BEAT_PROBE` that makes
+`beat_loops` return nothing — never committed, the tree is back where it was,
+and all eleven counter veins agree:
+
+                          with the beat          without
+    instructions          4,484,267,699    4,131,433,533   -352,834,166  -7.87%
+    arena_peak_bytes          4,194,304      737,148,928           176x
+    arena_blocks                      4              703
+    beat_iters                5,032,401                1
+
+**The beat costs 7.87% of encodebench's work and holds the peak arena to four
+megabytes where the same program without it reaches seven hundred and
+thirty-seven.** Every bracket the analysis placed came out under the probe; the
+single `k_beat_push` left in the module is `d_Entry_0`'s, which codegen emits
+for the program itself rather than for a loop.
+
+This is #316's finding again on a second benchmark. A short loop's beat still
+reclaims, and shortness is not evidence against it. It also bears on #317,
+which asks whether escapebench pins the beat's cost on every run and its
+benefit on none: encodebench pins both, in a pair of counters the objective
+already weighs.
