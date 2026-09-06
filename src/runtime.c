@@ -3681,9 +3681,11 @@ static long long render_ryu(double d, char* buf) {
     char* o = buf;
     if (x < -4 || x >= p) {
         *o++ = dig[0];
+        *o++ = '.';
         if (k > 1) {
-            *o++ = '.';
             for (int i = 1; i < k; i++) *o++ = dig[i];
+        } else {
+            *o++ = '0';
         }
         *o++ = 'e';
         int ex = x;
