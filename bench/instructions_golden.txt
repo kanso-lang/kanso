@@ -224,16 +224,38 @@
 # own pair of builds. The previous change's three predictions landed to the
 # instruction, which is why this one is written the same way; CI's sitting is
 # still the record.
+#
+# 2026-09-06 (split scans with memchr): FOUR rows fall and NINE hold exactly
+# still. Nothing rises. k_b_split called memcmp at every byte position, twice
+# over the string -- once to count the pieces and once to cut them -- so a
+# 188,698-byte document split on a "\n" it does not contain cost 75,479,200
+# calls at ten instructions each. A match can only start where the separator's
+# first byte is, so memchr covers the ground and memcmp runs only at the
+# candidates it hands back.
+#
+#   readbench    2,038,390,798 ->    45,883,331  -1,992,507,467  -97.7490%
+#   scanbench    1,384,644,173 ->   774,357,155    -610,287,018  -44.0754%
+#   basket          38,029,049 ->    35,508,390      -2,520,659   -6.6282%
+#   pendbench      605,691,420 ->   605,536,009        -155,411   -0.0257%
+#
+# The nine that hold call split nowhere, and that they are EXACTLY still is
+# the check that the four falls are the change rather than the weather. The
+# same four are the only .text rows that move, each by the 384 bytes of the
+# new helper, because the other nine binaries never link it.
+#
+# The rows are the container's own A/B deltas applied to CI's landed values.
+# Nine of the thirteen deltas are zero, so there is little in this projection
+# to go wrong; CI's sitting is still the record.
 jsonbench 1737414226
 encodebench 4425477605
 oneshot 25494771
-basket 38029049
+basket 35510217
 widebench 54690359
 deepbench 708507318
 escapebench 114596730
-pendbench 605691420
+pendbench 605537209
 indexbench 4691365
-scanbench 1384644173
+scanbench 776362839
 digestbench 77353320
-readbench 2038390798
+readbench 4288131
 livebench 4438088517

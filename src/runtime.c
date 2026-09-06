@@ -6576,6 +6576,22 @@ KValue k_b_chars(KValue sv) {
    search needs no codepoint arithmetic to stay on boundaries. The scan this
    replaced asked `length` and `slice` at every position, both of which count
    codepoints from the start, so splitting a hundred kilobytes cost seconds. */
+/* The first position at or after `from` where sep occurs, or -1. A match can
+   only start where sep's first byte is, so memchr covers the ground and memcmp
+   runs only at the candidates it returns. The loop this replaced called memcmp
+   at every position: readbench split 188,698 bytes on "\n" that the bytes never
+   contain and paid 75,479,200 calls at ten instructions each to learn it. */
+static long k_split_find(const char* d, long len, const char* sep, long seplen, long from) {
+    while (from + seplen <= len) {
+        const char* p = memchr(d + from, sep[0], (size_t)(len - seplen - from + 1));
+        if (!p) return -1;
+        long at = (long)(p - d);
+        if (seplen == 1 || memcmp(d + at, sep, (size_t)seplen) == 0) return at;
+        from = at + 1;
+    }
+    return -1;
+}
+
 KValue k_b_split(KValue sv, KValue sepv) {
     if (!k_not_failure(sv)) return sv;
     if (!k_not_failure(sepv)) return sepv;
@@ -6584,25 +6600,46 @@ KValue k_b_split(KValue sv, KValue sepv) {
     KStr* sep = k_as_str(sepv);
     if (sep->len <= 0) k_die("split needs a separator");
     long count = 1;
-    for (long i = 0; i + sep->len <= s->len; ) {
-        if (memcmp(s->data + i, sep->data, (size_t)sep->len) == 0) {
-            count++;
-            i += sep->len;
-        } else {
-            i++;
-        }
+    for (long i = 0; ; ) {
+        long at = k_split_find(s->data, s->len, sep->data, sep->len, i);
+        if (at < 0) break;
+        count++;
+        i = at + sep->len;
+    }
+    /* No separator anywhere, so the one piece is the whole string. A KStr's
+       data and len are written once at construction -- only its `cap` moves
+       after, and that is the memoised codepoint count, which two holders would
+       compute alike -- so the piece can be the input value rather than a copy
+       of it. readbench splits 188,698 bytes holding no separator two hundred
+       times, and the copy this drops was 82.66% of what the benchmark had left.
+
+       Taken here rather than as a test on the last piece below. Written that
+       way, `sv` stayed live to the tail and spilled: scanbench makes 501,500
+       split calls, four of which reach this case, and every one of them paid
+       twelve instructions for the liveness. Returning early leaves the loop
+       below reading exactly what it read before. */
+    if (count == 1) {
+        KValue* one = k_buf(1);
+        one[0] = sv;
+        return k_list_own(one, 1);
     }
     KValue* items = k_buf(count);
     long at = 0, from = 0, n = 0;
-    while (at + sep->len <= s->len) {
-        if (memcmp(s->data + at, sep->data, (size_t)sep->len) == 0) {
-            items[n++] = k_str_n(s->data + from, at - from);
-            at += sep->len;
-            from = at;
-        } else {
-            at++;
-        }
+    for (;;) {
+        long hit = k_split_find(s->data, s->len, sep->data, sep->len, at);
+        if (hit < 0) break;
+        items[n++] = k_str_n(s->data + from, hit - from);
+        at = hit + sep->len;
+        from = at;
     }
+    /* `from` is past a separator's end after any match, so from == 0 says the
+       string held none and this last piece is the whole of it. A KStr's data
+       and len are written once at construction -- only its `cap` moves after,
+       and that is the memoised codepoint count, which two holders would
+       compute alike -- so the piece can be the input value rather than a copy
+       of it. readbench splits 188,698 bytes that hold no separator two hundred
+       times, and the copy it no longer makes was 82.66% of what the benchmark
+       had left. */
     items[n++] = k_str_n(s->data + from, s->len - from);
     return k_list_own(items, n);
 }

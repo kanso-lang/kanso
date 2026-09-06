@@ -1,7 +1,12 @@
 import "std/text"
 
 # Every occurrence ends a piece and an empty piece is a piece, which is what
-# makes split and join inverses. The last two lines are that law both ways.
+# makes split and join inverses. Lines seven and eight are that law both ways.
+#
+# The last three lines are the separator's first byte where the separator is
+# not. Until 2026-09-06 nothing in the corpus had one: the multi-byte cases
+# above put the first byte only where the whole separator was, so a scan that
+# took a matching first byte for a match passed all ten.
 pub play =
   print "{text/split "a,b,c" ","}"
   >> print "{text/split "a,,b" ","}"
@@ -13,3 +18,6 @@ pub play =
   >> print "{text/split (text/join ["a" "b"] "-") "-"}"
   >> print "{text/split "héllo→wörld" "→"}"
   >> print "{text/split "a→→b→→c" "→→"}"
+  >> print "{text/split "a:b::c" "::"}"
+  >> print "{text/split "→x→→y" "→→"}"
+  >> print "{text/split "a→→" "→→"}"
