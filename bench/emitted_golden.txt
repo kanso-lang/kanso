@@ -131,7 +131,7 @@
 # 2026-09-06 (the array's second walk over the same whitespace): calls 1765 ->
 # 1764 and lines 12049 -> 12047. One `skip_ws` call and its two lines leave
 # `array_items`. Banked.
-defines=184
-calls=1835
-branches=1207
-lines=12588
+defines=183
+calls=1834
+branches=1205
+lines=12562

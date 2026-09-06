@@ -546,9 +546,9 @@
 # copy of the scanner leaves each of the three binaries that decode.
 # jsonbench 95,346 -> 95,074, oneshot 118,706 -> 118,434, livebench
 # 119,282 -> 119,010. Banked.
-jsonbench text=95346
+jsonbench text=95298
 encodebench text=116562
-oneshot text=118962
+oneshot text=118914
 basket text=109074
 widebench text=121106
 deepbench text=72130
@@ -558,4 +558,4 @@ indexbench text=56754
 scanbench text=154530
 digestbench text=107218
 readbench text=53298
-livebench text=119570
+livebench text=119522

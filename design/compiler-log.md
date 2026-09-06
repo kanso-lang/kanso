@@ -4920,3 +4920,54 @@ rather than a number, and it passes — but three pieces of prose disagreed with
 the data beside them, which is the shape CLAUDE.md's own "all TEN cost goldens"
 correction was about. All three now say 28, and CLAUDE.md's sentence names the
 counters and points at the file rather than listing them from memory.
+
+---
+
+## 2026-09-06 (thirteenth) — the digit test travelled as a tag
+
+`scan_at` ended in
+
+    digit_step cs start p marked (47 < c and c < 58)
+
+and `digit_step` had `true` and `false` arms. So a comparison the emitter fuses
+into a branch when an `if` consumes it was instead materialised as a tagged
+boolean, passed as an argument, and taken apart by the callee's dispatch. In
+the merged `value_for_3'2` that reads, per digit:
+
+    2b9e  add    $0xffffffffffffffd0,%r10
+    2ba2  cmp    $0xa,%r10
+    2ba6  mov    $0x3,%edi
+    2bab  sbb    $0x0,%rdi
+    2baf  cmp    $0x2,%rdi
+    2bb3  jne    2c30
+
+Three of those six build the tag and test it, at 4,640,700 executions.
+
+Writing the test as an `if` inside `scan_at` and deleting `digit_step`:
+
+    jsonbench   1,573,203,261 -> 1,570,703,811   -2,499,450   -0.1589%
+    oneshot        24,399,645 ->    24,382,982      -16,663   -0.0683%
+    livebench   4,436,993,353 -> 4,436,976,690      -16,663   -0.0004%
+
+**A sixth of the arithmetic prediction, and the reason is worth having.** Three
+instructions at 4,640,700 executions is 13,922,100, and the row moves 2,499,450.
+The `and` of two comparisons still travels as a value — only the last step, the
+`if`'s own test, fuses. So the emitter's `Cond` machinery reaches a comparison
+under an `if` and not a comparison under an `and` under an `if`, and the 2026-09-04
+entry's 1.60% figure for this family is the ceiling rather than the take.
+
+Every other vein falls with it, which is the unusual part: compile_instructions
+−101,081 on the container, front-end visits 17,092 -> 17,068, the decoder's
+emitted defines/calls/branches/lines all down, and `.text` −48 bytes on each of
+the three decoding binaries. Two arms leave the library and nothing replaces
+them. Welfare 75.32 -> 75.33.
+
+The branch's ten worsened counters against main, by the gate's keys and the
+values they land on: compile_instructions 42,022,241 (a projection; CI's
+sitting corrects it), emitted_defines 183, emitted_calls 1,834,
+emitted_branches 1,205, emitted_lines 12,562; emitted_other_defines 1,797,
+emitted_other_calls 15,818, emitted_other_branches 9,880, emitted_other_lines
+102,967; and text 1,265,418. The three entries above have the reasons: six
+guarded whitespace arms and three helper functions are code the inlined
+`skip_ws` was not, and the digit test's `if` gives a little of it back. Against
+that the decode retires 166,710,002 fewer instructions, oneshot 1,111,390 fewer.
