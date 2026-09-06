@@ -1,22 +1,40 @@
-# A double that is a whole number renders with `.0` after it, and the digits
-# are the integer's digits: under 1e15 the cast to an integer is exact.
-# Negative zero is the one value that cast loses, and it keeps its sign. Past
-# 1e15, and for anything with a fraction, the shortest round-trip form takes
-# over and the exponent form appears.
+# A double that is a whole number renders with `.0` after it, in every form it
+# can take. Under 1e15 the cast to an integer is exact and the digits are the
+# integer's digits; past 1e15, and for anything with a fraction, the shortest
+# round-trip form takes over and the exponent form appears. The point survives
+# that change: `1e+15` is written `1.0e+15`.
+#
+# RULED 2026-09-06 by Clay. Until then this file was named for a rule it did
+# not hold: line 3 of its golden read `1e+15 -1e+15`, a whole float with no
+# point, and the header above explained the exception in passing rather than
+# treating it as one. Negative zero is the one value the integer cast loses,
+# and it keeps its sign.
+#
+# The four shapes are a mantissa of one significant digit against several,
+# times the fixed form against the exponent form, because the point is written
+# by a different line of the renderer in each. The single-digit exponent case
+# is the one that was wrong: with nothing after the leading digit there was no
+# fractional part to write, and the branch wrote none.
 #
 # Pinned because the whole-number branch stopped calling `%.1f`, which is
 # glibc's multiprecision formatter and was 11.0% of the wide benchmark. Every
-# byte below is one the change had to leave alone.
+# byte below is one that change had to leave alone.
 whole = "{0.0} {-0.0} {1.0} {-1.0} {42.0} {-42.0}"
 
 wide_whole = "{100000000000000.0} {-100000000000000.0} {999999999999999.0}"
 
 past_the_cast = "{1000000000000000.0} {-1000000000000000.0}"
 
+past_the_cast_wide = "{1500000000000000.0} {-1500000000000000.0}"
+
 fractions = "{0.5} {-0.5} {1.5} {0.0000001} {3.0 / 2.0} {4.0 / 2.0}"
+
+small_exponents = "{0.00000015} {-0.00000015}"
 
 signs = "{0.0 - 0.0} {0.0 * -1.0} {-0.0 + -0.0}"
 
-lines = "{whole}\n{wide_whole}\n{past_the_cast}\n{fractions}\n{signs}"
+lines = "{whole}\n{wide_whole}\n{past_the_cast}\n{past_the_cast_wide}"
 
-pub play = print lines
+more = "{fractions}\n{small_exponents}\n{signs}"
+
+pub play = print "{lines}\n{more}"

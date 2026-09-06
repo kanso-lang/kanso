@@ -2854,3 +2854,67 @@ index at parity together. It is a one-line change to the floor file and it is
 Clay's, not mine: it decides whether the number's origin is the day the
 objective was last redefined or the accumulated history of the compile side.
 The gavel did not say, and the index reads what it reads either way.
+
+## 2026-09-06 — A WHOLE FLOAT KEEPS ITS POINT IN THE EXPONENT FORM TOO
+
+**GAVEL (Clay, 2026-09-06), one of five side rulings that day: "whole floats
+keep their point."**
+
+**SEARCHED** before filing: the live log carries no entry on float rendering
+since the negative-render fix of 2026-09-05 (`c072c8b5`); the archive's float
+entries are the ryū landing, the digit-pair table and the shortest-round-trip
+work, none of which touches the exponent branch's fractional part;
+`design/pending-gavels.md` carried nothing on it.
+
+**WHERE IT WAS.** `render_ryu` in src/runtime.c and `render_float` in
+src/eval.rs are the two renderers, and there is no third — the wasm engine is
+eval.rs compiled to wasm, and a grep of src/ for the guard, for `render_float`
+and for `render_ryu` finds these two. Both wrote the leading digit and then a
+fractional part only `if k > 1`, so a mantissa of one significant digit reached
+the exponent form with nothing after it:
+
+    before   1e+20   1.5e+20   1e-07   1.5e-07   3.0   -1e+20
+    after    1.0e+20 1.5e+20   1.0e-07 1.5e-07   3.0   -1.0e+20
+
+The fixed branch already kept the point. Two lines, one per engine, and the
+interpreter and a `--release` native build agree byte for byte on every value
+above.
+
+**THE FIXTURE WAS NAMED FOR THE RULE AND DID NOT HOLD IT.**
+`tests/golden/micro/a_whole_float_keeps_its_point.kso` has existed since the
+`%.1f` removal, and line 3 of its golden read `1e+15 -1e+15` — a whole float
+with no point, in the file that claims whole floats keep theirs. Its header
+explained the exception in passing rather than treating it as one. So the
+ruling had a home in the corpus before it had a fix, and what the change owed
+was a wider fixture rather than a new one: the four shapes are a mantissa of
+one significant digit against several, times the fixed form against the
+exponent form, because a different line of the renderer writes the point in
+each. The multi-digit cases are what say the point is not written twice.
+
+**THE BLAST RADIUS IS TWO GOLDENS, AND THE FIRST READING SAID ONE.**
+`micro_corpus_agrees_across_engines` asserts inside a loop, so it panics on the
+first fixture that disagrees and never reaches the rest; taking that one name
+as the count is reading a stop as a total. Grepping every stored golden for an
+exponent-form float with a single significant digit — `(^|[^0-9.])[0-9]e[+-]`,
+which catches any mantissa rather than just 1 — finds
+`a_negative_double_renders_behind_its_sign` and
+`a_whole_float_keeps_its_point`, and nothing else in tests/, docs/, lib/,
+bench/ or scripts/. No book panel, no page, no library test.
+
+**NO COUNTER MOVES.** `all_counters.sh` prints no divergence for any of the
+twelve cost veins, and `kanso test` on lib/expect, lib/json, lib/list and
+lib/path passes unchanged — so nothing in the shipped library renders a
+single-digit exponent float and the json encoder's output for the benchmark
+corpus is byte-identical. That is the surprising half: a change to float
+rendering that the decode and encode goldens cannot see.
+
+**THE COMPILE VEIN MOVES AND THIS HOST CANNOT READ IT.** src/eval.rs is the
+compiler's own Rust, so `compile_instructions` moves on its bytes and the
+layout under them whether or not the decision it counts changed — the rule in
+CLAUDE.md, which has seven layout-only moves recorded before this one.
+`all_compile.sh`
+reports `machine_code`, `emitted_code`, `compile_libraries` and `compile_cost`
+AGREED and REFUSES the three counters whose golden names a glibc this
+container does not carry, so what that row reads is CI's to say in this PR
+rather than something projected from here. The twelve runtime cost veins and the lazy tier all
+agree here, measured after a `cargo build --release`.

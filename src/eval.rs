@@ -3953,7 +3953,7 @@ fn render_float(x: f64) -> String {
     let p = k.max(15);
     let sign = if neg { "-" } else { "" };
     if x10 < -4 || x10 >= p {
-        let tail = if k > 1 { format!(".{}", &digits[1..]) } else { String::new() };
+        let tail = if k > 1 { format!(".{}", &digits[1..]) } else { ".0".to_string() };
         let esign = if x10 < 0 { '-' } else { '+' };
         return format!("{sign}{}{tail}e{esign}{:02}", &digits[..1], x10.abs());
     }
