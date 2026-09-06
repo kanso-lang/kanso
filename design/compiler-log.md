@@ -3136,17 +3136,30 @@ tests/a_golden_may_name_more_than_one_fact.rs pins that alongside the two
 repairs, and asks the gate what this host is rather than deriving it a second
 time. Four of its five were red first, each with the message CI printed.
 
-### The published numbers, walked rather than recalled
+### The published numbers, and the one the sweep missed
 
 The checklist in CLAUDE.md, every surface: compiler.html's decode board, the
 lazy scoreboard, the recipe block, the compile-speed note, index.html's landing
-panel, about.html's prose. Nothing moves. The board and the panel are
-ms/decode and peak memory, and the release rule holds those to a sitting on an
-idle box; every instruction figure on the page names the sitting that measured
-it and is a record rather than a tracker. What this change moved -- fourteen
-work rows, fourteen .text rows, one compile row -- lives in the veins, and the
-counters the page does quote (`el_parses` at 318450, the four arena blocks) are
-pinned in cost goldens that came back green.
+panel, about.html's prose. The board and the panel are ms/decode and peak
+memory, and the release rule holds those to a sitting on an idle box; every
+per-benchmark instruction figure on the page names the sitting that measured it
+and is a record rather than a tracker.
+
+That sweep concluded nothing moves, and it was wrong. §31 quotes
+`compile.compile_instructions` in a `data-golden` span -- a figure that TRACKS
+the golden rather than recording a sitting -- and this change moved that row, so
+the page read 42,061,735 against a golden of 42,163,520. `golden_prose` caught
+it on the first run of the welfare job, which is the first run this PR got,
+because welfare waits on cost-goldens and cost-goldens had been red until the
+trend gate was priced.
+
+The lesson is the one CLAUDE.md already states and the sweep still failed:
+walking a list of PAGES is not walking a list of NUMBERS. A `data-golden` span
+is not a dated record and cannot be reasoned about as one; the gate reads them
+all and is the only thing that should be trusted to. What the veins carry --
+fourteen work rows, fourteen .text rows, one compile row -- is unchanged by
+this, and the counters the page quotes as records (`el_parses` at 318450, the
+four arena blocks) sit in cost goldens that came back green.
 
 ### The seven rows that worsened, each with the value it landed on
 
