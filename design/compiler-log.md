@@ -2791,6 +2791,14 @@ imports `std/json` rather than carrying a frozen copy: the three frozen
 benchmarks keep doing that isolation job as diagnostics, and what the project
 costs to run includes the library it ships.
 
+That table is the container's sitting. `bench/instructions_golden.txt` carries
+CI's, **3,043,743,748** — 1,014 instructions apart, 0.00003%, where glibc
+differs — and in the same sitting every other row was byte-identical to its
+golden, which is the shape host divergence takes here. The difference moves no
+percentage in the second column, so the shares stand as measured, and welfare's
+baseline moved with the golden rather than with the table: the ratio stays one
+and the floor does not move.
+
 **THE FLOOR IS NOT COMPARABLE WITH THE ONE BEFORE IT.** 75.38 becomes 51.89.
 The run counters are re-baselined to today's measurement, so the run terms sit
 at parity, while the three compile rows keep the advantage they have
