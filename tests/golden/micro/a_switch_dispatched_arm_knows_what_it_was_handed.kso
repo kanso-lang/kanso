@@ -1,0 +1,39 @@
+# A group whose arms name byte values compiles to a switch rather than a
+# cascade of tests, which is how kanso's json decoder is written and how `scan`
+# is written here. The switch picks the arm and binds the arm's names straight
+# to the slots it was called with, so there is no pattern left to emit — and
+# with no pattern, nothing told the body what inference had proved about those
+# slots. `cs[p + 1]` in the last arm paid a tag test on `cs` every lap for a
+# question the front end had already answered.
+#
+# `first` is why the answer has to be the union over a whole group: its one
+# slot holds bytes on one call, a list on the next and a string on the third,
+# so its set is all three and the tag test stays. `ladder` is the shape that
+# never lost it — a bare name in a group with no switch in it.
+import "std/text"
+
+fn scan _ 46 _ acc
+  acc
+
+fn scan _ 59 _ acc
+  acc + 1
+
+fn scan _ none _ acc
+  acc + 1000
+
+fn scan cs c p acc
+  scan cs cs[p + 1] (p + 1) (acc + c)
+
+fn ladder bs i
+  bs[i]!
+
+fn first thing
+  thing[1]!
+
+pub play =
+  bs = text/bytes "abc.de"
+  print "stops at a byte: {scan bs bs[1]! 1 0}"
+  >> print "stops at the other one: {scan (text/bytes "ab;c") 97 1 0}"
+  >> print "runs off the end: {scan (text/bytes "xy") 120 1 0}"
+  >> print "ladder: {ladder bs 1} {ladder bs 4}"
+  >> print "union: {first bs} {first [7 8 9]} {first "hi"}"

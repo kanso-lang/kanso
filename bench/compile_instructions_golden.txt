@@ -913,4 +913,12 @@
 # And src/codegen.rs is the compiler: its own bytes and the layout under
 # them move with any edit, here the `append_mut_int` twin and its
 # selection site. Banked.
-compile_instructions=42061345
+# 2026-09-06 (a switch arm was never told what it had been handed):
+# 42,061,345 -> 42,061,735, a RISE of 390 or 0.0009%. The front end is
+# untouched -- `kanso check lib/json` stops before codegen, so no decision
+# this row counts was changed. src/codegen.rs IS the compiler, and its own
+# bytes and the layout under them move with any edit to it. That is the
+# layout vein this file has recorded eight times now, and 390 instructions
+# is the smallest of them. compile_allocs and compile_peak_bytes are
+# byte-identical, which is what says the front end really did not move.
+compile_instructions=42061735

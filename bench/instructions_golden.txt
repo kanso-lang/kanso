@@ -329,16 +329,29 @@
 # the runtime tag check; and lib/json/text.kso's seven escape arms share one
 # esc_pair body. The ten other rows hold to the digit -- these are the encode
 # paths. CI's rows on 31537922.
-jsonbench 1542924650
-encodebench 4317272013
-oneshot 23904549
-basket 35403587
+# 2026-09-06 (a switch arm was never told what it had been handed): eight rows
+# fall and five hold. jsonbench 1,542,924,650 -> 1,526,907,200, a FALL of
+# 1.0381%; encodebench 4,317,272,013 -> 4,310,952,916, 0.1464%; oneshot
+# 23,904,549 -> 23,797,766, 0.4467%; basket 35,403,587 -> 35,365,571, 0.1074%;
+# digestbench 75,582,475 -> 75,565,053, 0.0231%; livebench 4,318,225,649 ->
+# 4,318,118,863, 0.0025%; pendbench 605,515,753 -> 605,515,353, 400
+# instructions; scanbench 768,849,900 -> 768,849,780, 120. widebench,
+# deepbench, escapebench, indexbench and readbench are unchanged to the
+# instruction. The switch dispatcher records what inference proved about each
+# slot now, as the ladder always has, so an index into a proven-bytes slot
+# skips its tag test. Every delta above was reproduced on a container whose
+# glibc differs from this golden's -- the absolute rows could not be taken
+# there, and the deltas agreed to the instruction on all thirteen.
+jsonbench 1526907200
+encodebench 4310952916
+oneshot 23797766
+basket 35365571
 widebench 54609871
 deepbench 702627486
 escapebench 114584676
-pendbench 605515753
+pendbench 605515353
 indexbench 4691265
-scanbench 768849900
-digestbench 75582475
+scanbench 768849780
+digestbench 75565053
 readbench 4283257
-livebench 4318225649
+livebench 4318118863

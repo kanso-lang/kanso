@@ -2642,3 +2642,110 @@ arm is taken, and that is the one thing neither the emitter nor LLVM at `-O3`
 without a profile can see. The next candidate is not another syntactic
 predicate over the emitted module — those are now two for two — but a source of
 frequency: a counted run, or a construct in the language that says it.
+
+## 2026-09-06 — A SWITCH ARM WAS NEVER TOLD WHAT IT HAD BEEN HANDED
+
+**DONE.** A dispatcher's parameters carry what inference proved about them, so a
+body indexing one of those slots can skip the tag test whose answer the front
+end already holds. The ladder dispatcher has always done this: a bare `Var`
+parameter records its group's set as `emit_pattern_known` binds it. The switch
+dispatcher — a group whose arms name byte values or tags, which is how the json
+decoder is written — binds the arm's names straight to `%x{i}` and recorded
+nothing, because the switch has already decided what the value is and there is
+no pattern left to emit. Every group the switch took over went back to paying
+the test.
+
+`record_param_sets` says it at the entry, from both dispatchers. On the same
+host, control against change:
+
+    jsonbench     1,542,924,237 -> 1,526,906,787   -16,017,450   -1.0381%
+    encodebench   4,317,271,614 -> 4,310,952,517    -6,319,097   -0.1464%
+    oneshot          23,904,150 ->     23,797,367      -106,783   -0.4467%
+    basket           35,403,174 ->     35,365,158       -38,016   -0.1074%
+    digestbench      75,582,076 ->     75,564,654       -17,422   -0.0231%
+    livebench     4,318,225,236 -> 4,318,118,450      -106,786   -0.0025%
+    pendbench       605,515,340 ->    605,514,940          -400   -0.0001%
+    scanbench       768,849,487 ->    768,849,367          -120   -0.0000%
+
+widebench, deepbench, escapebench, indexbench and readbench are unchanged to the
+instruction. Nothing rises.
+
+The whole jsonbench fall is four functions, and they sum to the total exactly:
+
+    obj_key_start'2   205,282,500 -> 198,630,750    -6,651,750
+    array_step'2      119,421,450 -> 113,421,600    -5,999,850
+    str_run             122,966,100 -> 120,913,200    -2,052,900
+    obj_key_start        37,622,100 ->  36,408,600    -1,213,500
+    array_step            2,483,550 ->   2,384,100       -99,450
+
+Each of those groups indexes `cs` — `cs[n]`, `cs[p]`, `cs[p + 1]` — inside an
+arm the switch selected, and `cs` is bytes at every call the group has.
+
+THE GAP DATES FROM THE SWITCH ITSELF (kanso#1266, 2026-09-04). It cost decode
+1.04% for two days with every allocation counter and every `.mem` row
+byte-identical, which is the shape of regression the emitted and `.text` veins
+exist to catch — and neither caught it either, because the switch was a fall on
+both when it landed and the lost narrowing was inside that fall.
+
+The fixture is
+`tests/golden/micro/a_switch_dispatched_arm_knows_what_it_was_handed.kso`. It
+took three attempts to write one that reaches the change, and the two failures
+are the finding restated: a program whose group is a ladder emits
+byte-identical IR before and after, and so does a group with one int arm and a
+`none` arm, because `switch_shape` wants two int arms or one against a bare
+generic tail. The fixture that works has arms on 46 and 59, a `none` arm, and a
+generic arm that reads `cs[p + 1]` — and its `d_probe/scan_4` loses the tag test
+in the diff. It carries `first` beside it, whose one slot holds bytes on one
+call, a list on the next and a string on the third: the group's set is all three
+and the test stays, which is what makes the narrowing sound.
+
+The first mutation of this change did not fail, and that was information. Forcing
+the recorded set to `BYTES` for every parameter changed no emitted line in the
+probe, because `emit_pattern_known`'s `Var` arm overwrote it a moment later with
+the correct set. That is the fact that sent the search to the switch.
+
+VEINS. Every allocation counter and every `.mem` row agrees — `all_counters.sh`
+reads clean. `.text` falls on ten of thirteen programs (jsonbench 93,138 ->
+92,370, livebench 116,610 -> 115,778, digestbench 105,170 -> 104,546) and holds
+on the other three. The emitted goldens fall on nine. `compile_cost`,
+`compile_libraries` and the module vein agree. `bench/instructions_golden.txt`
+is NOT regenerated here: this container is glibc 2.39-0ubuntu8.7 against the
+golden's 2.39-0ubuntu8.8, so `host_gate.sh` refuses the comparison and the rows
+above are a same-host A/B rather than a sitting the golden can take. CI measures
+them and they get copied in from the job log.
+
+**OPEN.** The narrowing is still per-group, so a slot whose group sees three
+shapes pays the test even where a caller proved one. That is the specialisation
+thread — an `.ll`-level probe on `d_list/fold_flat_5` measured it at livebench
+−1.1854% and encodebench −1.2112% with output byte-identical on both — and it
+needs a clone of the group under a caller-proved set, which this change does not
+build.
+
+## 2026-09-06 — CI'S ROWS FOR THE SWITCH ARM, AND THE 390 THAT ARE LAYOUT
+
+**DONE.** The entry above measured the change on a container whose glibc is
+2.39-0ubuntu8.7 against a golden measured on 2.39-0ubuntu8.8, so it could
+report deltas and not rows. CI measured the rows. **Every delta agrees to the
+instruction, on all thirteen.**
+
+    jsonbench    1,542,924,650 -> 1,526,907,200   -16,017,450   -1.0381%
+    encodebench  4,317,272,013 -> 4,310,952,916    -6,319,097   -0.1464%
+    oneshot         23,904,549 ->     23,797,766      -106,783   -0.4467%
+    basket          35,403,587 ->     35,365,571       -38,016   -0.1074%
+    digestbench     75,582,475 ->     75,565,053       -17,422   -0.0231%
+    livebench    4,318,225,649 -> 4,318,118,863      -106,786   -0.0025%
+    pendbench      605,515,753 ->    605,515,353          -400   -0.0001%
+    scanbench      768,849,900 ->    768,849,780          -120   -0.0000%
+
+widebench, deepbench, escapebench, indexbench and readbench held. That
+agreement is worth having: an A/B on this container measures the same events CI
+does, and only the absolute rows are the runner's.
+
+`compile_instructions` rose 390, 42,061,345 -> 42,061,735, and it is the layout
+vein rather than a decision. `kanso check lib/json` stops before codegen, so an
+emitter change cannot alter anything this row counts — and src/codegen.rs IS the
+compiler, so its bytes and the layout under them move anyway. `compile_allocs`
+and `compile_peak_bytes` are byte-identical, which is what says the front end
+really did not move. This is the ninth recorded layout-only move of that row.
+
+Welfare **75.36021114125158 -> 75.38438760189786**, banked in the same push.
