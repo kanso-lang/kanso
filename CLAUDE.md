@@ -118,8 +118,8 @@ section is where its instructions will appear.
   round. The other one is silent — artifacts older than the source and the sweep
   says nothing moved after an edit that moved a vein — which is why the first
   line of the script is now `build_benchmarks.sh`, pinned by a spec.
-- **`compile_instructions` moves on ANY edit to the compiler's own Rust, and
-  "the backend never runs" does not say otherwise.** `kanso check lib/json`
+- **`compile_instructions` USUALLY moves on an edit to the compiler's own Rust,
+  and "the backend never runs" does not say otherwise.** `kanso check lib/json`
   stops before codegen, so an emitter change cannot alter a decision that row
   counts — and src/codegen.rs IS the compiler, so its bytes and the layout
   under them move anyway. On 2026-09-06 an `emit_cond` change moved it 131,267
@@ -127,7 +127,13 @@ section is where its instructions will appear.
   byte-identical, and a commit, a log entry and a PR body all claimed the three
   rows could not move. The other two really cannot; this one is a layout vein
   and has recorded seven layout-only moves before, from runtime and prelude
-  edits. Project it from CI or take the red round.
+  edits. It said ANY until 2026-09-06, when a two-line float-rendering edit in
+  src/eval.rs — each line replacing a conditional tail with an unconditional
+  one — left the row byte-identical at 42,061,735 on CI (kanso#1285). The prior
+  is a good one and the seven moves are real; a change small enough to leave
+  the layout alone leaves this row alone with it. Either way, project it from
+  CI or take the red round: never write down that it cannot move, and never
+  write down that it did before CI has said so.
 - **A library edit needs `cargo build` before it takes effect**, for the same
   reason. In a worktree whose compiler was built first, `kanso build` succeeded
   with `lib/json/text.kso` holding outright syntax garbage. `all_counters.sh`

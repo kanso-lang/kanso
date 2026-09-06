@@ -2908,13 +2908,24 @@ single-digit exponent float and the json encoder's output for the benchmark
 corpus is byte-identical. That is the surprising half: a change to float
 rendering that the decode and encode goldens cannot see.
 
-**THE COMPILE VEIN MOVES AND THIS HOST CANNOT READ IT.** src/eval.rs is the
-compiler's own Rust, so `compile_instructions` moves on its bytes and the
-layout under them whether or not the decision it counts changed — the rule in
-CLAUDE.md, which has seven layout-only moves recorded before this one.
-`all_compile.sh`
-reports `machine_code`, `emitted_code`, `compile_libraries` and `compile_cost`
-AGREED and REFUSES the three counters whose golden names a glibc this
-container does not carry, so what that row reads is CI's to say in this PR
-rather than something projected from here. The twelve runtime cost veins and the lazy tier all
-agree here, measured after a `cargo build --release`.
+**THE COMPILE VEIN DID NOT MOVE, AND I SAID IT WOULD.** This paragraph first
+read that `compile_instructions` moves because src/eval.rs is the compiler's
+own Rust — CLAUDE.md's rule, with seven layout-only moves recorded behind it —
+and that CI would have to hand over the new number. CI measured 42,061,735,
+which is the golden to the instruction. `compile_allocs` and
+`compile_peak_bytes` held too, and all nineteen veins read `success` in the
+cost-goldens job's own summary block.
+
+So the rule as written is too strong. A two-line edit inside one function,
+each line replacing a conditional tail with an unconditional one, left the
+front end's retired-instruction count byte-identical. The seven earlier moves
+are real and the prior is a good one; what this shows is that it is a prior
+rather than a law, and that a change small enough to leave the layout alone
+leaves this row alone with it. Project it from CI either way — being wrong in
+this direction costs a paragraph, and in the other direction a red round.
+
+`all_compile.sh` here reports `machine_code`, `emitted_code`,
+`compile_libraries` and `compile_cost` AGREED and REFUSES the three counters
+whose golden names a glibc this container does not carry. The twelve runtime
+cost veins and the lazy tier all agree, measured after a
+`cargo build --release`.
