@@ -164,7 +164,17 @@
 # which tests the tag and keeps a call arm for everything else. Four lines
 # replace one call at each of the decoder's two such sites. defines and
 # branches hold. Banked.
+#
+# 2026-09-06 (the fold reads its length once): calls 1,843 -> 1,845, branches
+# 1,203 -> 1,204, lines 12,716 -> 12,726. `list/fold_flat` takes a fifth
+# parameter now -- the length its caller has already read -- so its declaration
+# and the two edges of its tail cycle each carry one more argument. Every
+# program that imports std/list moves by the same +2 calls, +1 branch, +10
+# lines, and the decoder is one of them: it compiles lib/list because lib/json
+# imports it, and its instruction count does not move by one, because it never
+# calls the fold. escapebench, indexbench and readbench do not import std/list
+# and are byte-identical. Banked as the price of encodebench -1.3766%.
 defines=185
-calls=1843
-branches=1203
-lines=12716
+calls=1845
+branches=1204
+lines=12726

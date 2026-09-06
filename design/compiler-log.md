@@ -1291,6 +1291,15 @@ test — and its failure becomes one more arm of the `if`'s phi. Both `if` sites
 go through it: the value form, where a failing condition joins the merge, and
 the tail form, where it returns.
 
+`lib/list/list_test.kso` had no spec for `fold` at all — it was exercised only
+through `transform_keys` and `group_by`. It has five now, and all five were
+watched red before they were kept. Against `(length coll - 1)` at the entry,
+four of them fail returning the wrong accumulation and `test_fold_counts_empty`
+correctly still passes, since a length of -1 still terminates at zero; against
+`(length coll + 1)`, all five fail with `err "missing index N"`; against a
+`fold_flat` that indexes `coll[len - i + 1]!`, only `test_fold_visits_in_order`
+fails, which is what the other four are deliberately blind to.
+
 ### What it costs
 
 No allocation counter moves; all ten cost goldens are byte-identical. Emitted
@@ -5910,3 +5919,129 @@ collected in the EMITTER with one fold, or not at all. It also sharpens the
 caution for that work: a specialisation that clones a fold has to be watched at
 its CALLERS, because this cost landed two levels up from the edit and the
 instruction row alone would have said only "+7.74%, unexplained".
+
+---
+
+## 2026-09-06 (twenty-sixth) — the fold reads its length once, and the guard is three instructions shorter
+
+The twenty-fourth entry ended by naming what it had not done: `coll` is passed
+unchanged to every self-call of `list/fold_flat`, so its length cannot change
+across the tail cycle, and an emitter that knew that would stop re-deriving it.
+This does that by hand, in the library, to price it:
+
+    pub fn fold coll init f
+      fold_flat coll init f 1 (length coll)
+
+    fn fold_flat coll acc f i len
+      if (len < i) acc (fold_flat coll (f acc coll[i]!) f (i + 1) len)
+
+Seven of the thirteen work rows fall, six hold, none rises. Container numbers;
+CI's sitting is the one the goldens hold.
+
+    encodebench  4,389,081,554 -> 4,328,659,954   -60,421,600   -1.3766%
+    livebench    4,399,421,576 -> 4,338,999,976   -60,421,600   -1.3734%
+    digestbench     77,175,230 ->     75,582,016    -1,593,214   -2.0644%
+    oneshot         24,107,081 ->     23,956,027      -151,054   -0.6266%
+    deepbench      704,512,368 ->    702,628,368    -1,884,000   -0.2674%
+    basket          35,473,136 ->     35,403,114       -70,022   -0.1974%
+    pendbench      605,518,680 ->    605,515,280        -3,400   -0.0006%
+
+jsonbench, escapebench, indexbench, scanbench, readbench and widebench are
+identical to the instruction. The decoder compiles lib/list — lib/json/text.kso
+imports it — and never calls the fold.
+
+**The beat was checked before anything else.** #1277 wrote a mechanism out of
+`src/beat.rs` and `KANSO_BEAT_REPORT=1` refuted both halves of it, so the
+report runs first now. Its diff against the base is one line:
+
+    - list/fold_flat/4: grow-only: another group tail-calls it ...
+    + list/fold_flat/5: grow-only: another group tail-calls it ...
+
+Same verdict, one more parameter in the name. `json/encode_items/3` and
+`json/encode_pairs/3` — the two that lost their beats in #1277 and cost 7.74%
+— keep them here, and every allocation counter in all eleven cost goldens is
+byte-identical.
+
+### Where the 60,421,600 are
+
+Two binaries built from the same tree, run under callgrind. Every function in
+the binary is identical in retired instructions except `encode_onto`, which
+falls 1,711,836,829 -> 1,651,415,229: exactly the whole delta. Every call
+count is identical too — `w_klam17` 11,658,800, `k_b_length` 400,
+`k_beat_iter` 5,032,000.
+
+`--dump-instr=yes` puts the rest on two addresses. The loop guard, at the back
+edge, executed 12,368,000 times:
+
+    base                              hoisted
+    cmpq  $0xd,0x40(%rsp)             cmp  0x20(%rsp),%r14
+    jne   62e7                        jg   6272
+    mov   (%r15),%rcx
+    cmp   %r14,%rcx
+    jge   6310
+
+Five instructions become two. Those five are `k_b_length_fast` inlined: a tag
+test, a header load, and the comparison the fold asked for. 3 x 12,368,000 =
+-37,104,000.
+
+The loop body, executed 11,658,800 times, goes from 28 instructions to 26. The
+two that leave are both
+
+    lea  0x238ba(%rip),%r10   # klam17_cell_clo
+
+— the base re-materialises the closure's address on each arm of every
+iteration, and the hoisted loop holds it in `%rbx` for the whole fold.
+2 x 11,658,800 = -23,317,600. The two together are -60,421,600, the measured
+number, with nothing left over.
+
+**The hypothesis this replaced was wrong, and worth writing down.** I expected
+the win to be GVN forwarding the second load once the twin's call arm stopped
+merging blocks between them — the mechanism the twenty-fourth entry described.
+It is not. `k_b_length` is called 400 times in both binaries, so the call arm
+never ran and there was no merge to defeat; the loop simply stopped asking for
+the length. Reading the addresses took ten minutes, and without them the guess
+would have been written here as the mechanism.
+
+### What it costs
+
+`fold_flat` carries a fifth parameter, so its declaration and both edges of its
+tail cycle each take one more argument, and every program that imports std/list
+pays the same ten IR lines. The trend gate wants each named with where it
+landed: `emitted_calls` 1,843 -> 1,845, `emitted_branches` 1,203 -> 1,204,
+`emitted_lines` 12,716 -> 12,726, `emitted_other_calls` 15,814 -> 15,832,
+`emitted_other_branches` 9,981 -> 9,990, `emitted_other_lines` 104,532 ->
+104,622. escapebench, indexbench and readbench do not import std/list and hold
+to the line; `defines` holds everywhere.
+
+`text` FALLS, 1,233,434 -> 1,233,354, and the rows inside it disagree: five
+fall, two rise, six hold, with pendbench +864 and deepbench +144 against
+digestbench -368 and scanbench -192. Ten more IR lines in every one of them and
+the bytes go both ways, so which way is downstream of the emitter — the same
+finding digestbench's row made under the capture-free lambda.
+
+The front end pays too. `front_end_visits` 17,264 -> 17,290, twenty-six more
+expression visits for one more name; `front_end_rounds` holds at 42.
+`compile_peak_bytes` rose 872 here, but this container is rustc=1.94.1 against
+the golden's 1.98.1 and the row is CI's to measure.
+
+While regenerating that golden: **`scripts/gates/compile_memory.sh` told a
+reader that rounds and visits are welfare terms, and they have not been since
+the 2026-09-03 rebuild.** `bench/objective_sources.txt` weighs
+`compile_instructions`, `compile_allocs` and `compile_peak_bytes` and nothing
+else about the front end. The message is corrected to say what those two rows
+actually are: counters of the compiler's own algorithm, the same on every host,
+which is why they are checked everywhere and the peak row is not. This is the
+same stale-prose family as the CLAUDE.md sentence corrected earlier today,
+which named fixpoint rounds and expression visits as objective terms for three
+days after they stopped being any.
+
+### What is still on the table
+
+52 of the 754 declarations under lib/ are self-recursive, and this is one hand
+edit of one of them. An invariance analysis in the emitter would reach the rest
+— `obj_key_start`, `skip_ws`, `encode_items`, `encode_pairs` among them —
+without a fifth parameter anywhere, since the hoist would happen in the emitter
+rather than in the text of the library. Two constraints found while looking: the predicate has to
+key on the dispatch GROUP rather than one arm, and self-calls miss mutual
+cycles, of which `bounded_flat -> bounded_more -> bounded_step` in
+lib/list/list.kso is one. `src/linear.rs:811` is the precedent to copy.

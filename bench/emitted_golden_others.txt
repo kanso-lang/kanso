@@ -127,15 +127,22 @@
 # digestbench -1 +4. Four IR lines replace one call to the twin. The other
 # seven programs are byte-identical; defines and branches hold everywhere.
 # Banked.
-encodebench defines=181 calls=1644 branches=1011 lines=11130
-oneshot defines=185 calls=1836 branches=1192 lines=12645
-basket defines=140 calls=1270 branches=794 lines=7940
-widebench defines=197 calls=1853 branches=1105 lines=12140
-deepbench defines=114 calls=840 branches=575 lines=5827
+#
+# 2026-09-06 (the fold reads its length once): nine of the twelve rise by the
+# same +2 calls, +1 branch, +10 lines -- `list/fold_flat` carries a fifth
+# parameter, so its declaration and both edges of its tail cycle each take one
+# more argument. escapebench, indexbench and readbench do not import std/list
+# and hold to the line. defines hold everywhere. Banked as the price of
+# encodebench -1.3766% and six other work rows falling.
+encodebench defines=181 calls=1646 branches=1012 lines=11140
+oneshot defines=185 calls=1838 branches=1193 lines=12655
+basket defines=140 calls=1272 branches=795 lines=7950
+widebench defines=197 calls=1855 branches=1106 lines=12150
+deepbench defines=114 calls=842 branches=576 lines=5837
 escapebench defines=49 calls=114 branches=113 lines=1539
-pendbench defines=128 calls=1223 branches=662 lines=6908
-scanbench defines=329 calls=3285 branches=2135 lines=19739
+pendbench defines=128 calls=1225 branches=663 lines=6918
+scanbench defines=329 calls=3287 branches=2136 lines=19749
 indexbench defines=55 calls=154 branches=133 lines=1868
-digestbench defines=189 calls=1577 branches=909 lines=9954
+digestbench defines=189 calls=1579 branches=910 lines=9964
 readbench defines=58 calls=158 branches=146 lines=2080
-livebench defines=186 calls=1860 branches=1206 lines=12762
+livebench defines=186 calls=1862 branches=1207 lines=12772
