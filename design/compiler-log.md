@@ -4224,3 +4224,42 @@ skipped before the question is asked, so some other arm somewhere may be losing
 a reuse it would qualify for. What is settled is that `list/next` is not one of
 them, and that pendbench's largest function is doing work the objective has no
 cheaper way to buy.
+
+## 2026-09-06 — CI'S NUMBERS, AND THE PROJECTION MISSED THE TWO ROWS THAT SHARE A PROGRAM
+
+**The goldens now hold CI's readings rather than the container's projection.**
+Both changes above were measured here and written in as CI's previous values
+plus the container's deltas, which is the method that had landed to the digit
+for seven changes running. On this branch it landed for eleven rows of thirteen
+and missed twice, by the same amount both times.
+
+    row            projected          CI              miss
+    encodebench    4,425,110,405   4,425,477,605   +367,200
+    livebench      4,437,721,317   4,438,088,517   +367,200
+    the other 11   exact
+
+encodebench and livebench are the same program — livebench runs encodebench's
+against the shipped library instead of the frozen copy — so a single cause
+shows up twice at identical size. The same pair missed by the same 367,200 on
+the previous head, so it is a property of that program on these two hosts and
+not of either change.
+
+`scripts/gates/dispatch.sh` exists to answer whether silicon accounts for a
+moved row, and it cannot answer here: `differs` returns 2 for want of a recorded
+block, and there is no `bench/dispatch.txt` because that was resolved
+deliberately — a recorded block would have blinded the ratchet. This run printed
+`cpu family 0x19 model 0x1`. What the numbers support is that the container's
+deltas are reliable for eleven of these thirteen programs and unreliable for the
+encode program on this pair of hosts; what would settle the mechanism is a
+sitting of that one program on both, which is not this change's to take.
+
+**`compile_instructions` moves from 41,461,538 to 41,461,798**, a rise of 260,
+and `docs/compiler.html`'s `data-golden` follows it. This is the gate's own case
+(1), which its failure text spells out: `src/runtime.c` is `include_str!`'d into
+the compiler, so a runtime edit moves this row with the front end untouched.
+Worth recording that the intermediate head measured +6,169 and the `k_itoa`
+commit brought it back to +260 — the row tracks the size and shape of the
+embedded text, not the compiler's work.
+
+Welfare reads 74.62 against a floor of 74.62 on CI's numbers, so the floor set
+on the projection stands without a re-set.

@@ -225,7 +225,7 @@
 # instruction, which is why this one is written the same way; CI's sitting is
 # still the record.
 jsonbench 1737414226
-encodebench 4425110405
+encodebench 4425477605
 oneshot 25494771
 basket 38029049
 widebench 54690359
@@ -236,4 +236,4 @@ indexbench 4691365
 scanbench 1384644173
 digestbench 77353320
 readbench 2038390798
-livebench 4437721317
+livebench 4438088517
