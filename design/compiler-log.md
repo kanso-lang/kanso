@@ -5103,9 +5103,17 @@ The other nine work rows hold and no allocation counter moves — all eleven
 veins agree. Every other vein falls with it: the decoder's emitted calls
 1,834 -> 1,832, branches 1,205 -> 1,185 and lines 12,562 -> 12,509; six of the
 twelve `_other` rows fall and none rises; machine code falls on six binaries,
-400 bytes on jsonbench and on livebench. The three compile rows do not move at
-all, which is the check that this is a backend change: `kanso check` stops
-before the backend runs.
+400 bytes on jsonbench and on livebench.
+
+**This entry said the three compile rows do not move at all, and that was wrong
+about one of them.** `compile_allocs` and `compile_peak_bytes` are byte-identical,
+as CI confirmed. `compile_instructions` FELL 42,018,130 -> 41,886,863, a fall of
+131,267 or 0.31%, and it is layout: `kanso check lib/json` stops before the
+backend runs, so no decision this row counts can change, but src/codegen.rs is
+the compiler and the compiler's own bytes move under it. The vein has recorded
+seven layout-only moves before, all from runtime or prelude edits; this is the
+first from the emitter, and the largest. "The backend never runs" keeps the
+decisions identical and says nothing about where they land.
 
 work_scanbench 776,364,842 is the one row that pays, and it is 0.0003%. A
 condition whose arms are not constants gains two blocks and a branch where the

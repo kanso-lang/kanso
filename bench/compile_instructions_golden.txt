@@ -854,4 +854,19 @@
 # say "the first row of bench/compile_instructions_by_cpu.txt as always" read
 # against a table that no longer exists; they are left as written, because the
 # sittings they record happened.
-compile_instructions=42018130
+#
+# 2026-09-06 (the `and` under an `if` is asked in pieces): 42,018,130 ->
+# 41,886,863, a FALL of 131,267, or 0.31%. It is LAYOUT, not front-end work.
+# `kanso check lib/json` stops before the backend runs, so an `emit_cond`
+# change cannot alter a single decision this row counts — but src/codegen.rs
+# is the compiler, and the compiler's own bytes and the layout under them move
+# with it. This vein has recorded a layout-only move seven times before, from
+# runtime and prelude edits; this is the first from the emitter itself, and it
+# is the largest.
+#
+# The branch's log entry and commit message both said the compile rows do not
+# move at all. That was right for compile_allocs and compile_peak_bytes, which
+# CI confirmed byte-identical, and wrong for this one: `kanso check` not
+# running the backend keeps the DECISIONS identical, and says nothing about
+# where they land.
+compile_instructions=41886863
