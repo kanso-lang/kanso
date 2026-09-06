@@ -355,3 +355,11 @@ scanbench 768849780
 digestbench 75565053
 readbench 4283257
 livebench 4318118863
+# 2026-09-06 (the run program joins): `runbench 3043742734` is a NEW row and
+# nothing regressed to make it appear. It is the program Clay's gavel that day
+# made the objective's whole run-speed term, and the thirteen rows above it
+# became diagnostics. This value was counted on the container, whose glibc is
+# 2.39-0ubuntu8.7 against this file's 2.39-0ubuntu8.8, so it is a PLACEHOLDER
+# and CI's own row replaces it in the next round -- exactly the loop the
+# refusal in scripts/gates/host_gate.sh describes.
+runbench 3043742734

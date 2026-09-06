@@ -610,3 +610,4 @@ scanbench text=151474
 digestbench text=104546
 readbench text=51458
 livebench text=115778
+runbench text=239842

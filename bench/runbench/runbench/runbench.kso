@@ -1,0 +1,101 @@
+# THE RUN PROGRAM. One binary, one instruction count, one peak.
+#
+# Welfare's runtime side used to be twenty-five counters across thirteen
+# programs, each normalised against its own baseline and averaged. That shape
+# priced a shape guard and a real workload the same way per counter, and it made
+# the objective's runtime half an argument about which shelf a benchmark sat on.
+# Ruled 2026-09-06: one consolidated program, its retired instructions are run
+# speed and its peak bytes are run memory. The per-phase benchmarks all survive
+# as diagnostic goldens -- they say WHERE a move came from, and this says
+# whether the project came out ahead.
+#
+# THE MIX. Decode and encode are the bulk, because that is the work the language
+# exists for and the claim the front page makes. The stress shapes are here at
+# the proportion a program actually meets them: incidental beside the parse, and
+# large enough that a pathology in one of them shows.
+#
+#   decode  98 rounds of lib/json over large.json  1,045,772,072  34.54%
+#   encode  90 rounds over the same document        1,042,585,953  34.43%
+#   deep    545 trials of the nested grid             188,771,447   6.23%
+#   digest  sha256 over a 15,675-byte slice           152,850,246   5.05%
+#   index   690,000 characters walked by index        150,623,773   4.97%
+#   escape  3,872 lines through the escaper           149,982,432   4.95%
+#   pend    50 records with a field left pending      149,607,747   4.94%
+#   split   428 characters through the splitter       147,499,570   4.87%
+#                                                   -------------  ------
+#   the whole program                              3,043,742,734
+#
+# Decode and encode carry 68.97% between them. The six shapes carry 4.87% to
+# 6.23% each, near enough one another that no single pathology can hide behind
+# another's noise, and small enough that none of them outweighs the parse.
+#
+# EVERY FIGURE ABOVE WAS MEASURED, not chosen. Each phase was built alone with
+# the other seven set to zero, and its column is that build's total minus the
+# empty program's 11,941,844. The eight columns sum to 3,027,693,240 against a
+# whole-program 3,043,742,734: the 16,049,494 difference is the file read and
+# the one decode that feeds encode, which belong to no phase. Re-measure and
+# rewrite this table whenever a repetition count changes.
+#
+# THE COUNTS ARE NOT ROUND, and that is the point. `split` is quadratic in its
+# character count -- 120 characters cost 11.8M and 1,526 cost 1.87 BILLION --
+# so a round number chosen for looks put one shape at 39% of the program on the
+# first sitting. Each count here is the one that landed its phase on its share.
+#
+# THE LIBRARY IS THE ONE THAT SHIPS. jsonbench, encodebench and widebench each
+# carry a frozen copy of lib/json, deliberately, so a move in their rows is the
+# compiler's rather than the library's -- and those three keep doing that job as
+# diagnostics. This program imports std/json, because what the project costs to
+# run includes the library it ships, and a decode the objective cannot see is a
+# decode nobody is paid to improve.
+import "./deep"
+import "./escape"
+import "./index"
+import "./pend"
+import "./split"
+import "std/io"
+import "std/json"
+import "std/sha256"
+import "std/text"
+
+decode_rounds = 98
+
+encode_rounds = 90
+
+deep_trials = 545
+
+pend_cards = 50
+
+escape_lines = 3872
+
+index_chars = 690000
+
+split_chars = 428
+
+digest_bytes = 15675
+
+fn decoded _ 0 sofar
+  sofar
+
+fn decoded raw n sofar
+  decoded raw (n - 1) (sofar + length (json/decode raw))
+
+fn encoded _ 0 sofar
+  sofar
+
+fn encoded doc n sofar
+  encoded doc (n - 1) (sofar + length (json/encode doc))
+
+fn digested raw n
+  length (sha256/hex (text/bytes (text/slice raw 1 n)))
+
+fn tally raw doc a b
+  bulk = decoded raw decode_rounds 0 + encoded doc encode_rounds 0
+  shapes = a + b + escape/total escape_lines + index/total index_chars
+  bulk + shapes + split/total split_chars + digested raw digest_bytes
+
+fn shaped raw doc a
+  pend/total pend_cards . (b -> io/write "runbench {tally raw doc a b}\n")
+
+pub fn run raw
+  doc = json/decode raw
+  deep/total deep_trials . (a -> shaped raw doc a)

@@ -76,3 +76,5 @@ indexbench.ll
 /readbench
 /counters_read.txt
 /livebench
+/runbench
+run_counters.txt

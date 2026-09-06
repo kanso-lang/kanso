@@ -1,0 +1,55 @@
+# The lazy tier's presence in the corpus: every other benchmark reads zero
+# on all six thunk counters, so a strictness change that quietly erased the
+# tier would move nothing. Records built under an io-bind loop keep a
+# pending field, and the field stays a thunk because it is passed through a
+# dispatch that stores it in one clause and drops it in the other — demand
+# through a runtime value is what no analysis can prove. A value-dependent
+# walk at the end forces half of them; the rest are alive at exit.
+import "std/io"
+import "std/list"
+import "std/text"
+
+type card
+  label
+  weight
+
+fn churn n
+  digits = list/to_list (list/map (list/take list/naturals n) (i -> "{i}"))
+  length (text/join digits " ")
+
+fn keep 0 _ bulk i
+  card "even {i}" (bulk + i)
+
+fn keep _ tag bulk i
+  card tag (bulk + i)
+
+fn made i
+  sides = text/split "north south east west" " "
+  parts = list/to_list (list/map sides (s -> "{s}{i}"))
+  bulk = churn 4000
+  tag = "{list/first parts} holds {bulk}"
+  keep (i - i / 2 * 2) tag bulk i
+
+fn built 0 acc
+  acc
+
+fn built n acc
+  io/write "" . (_ -> gathered n acc)
+
+fn gathered n acc
+  built (n - 1) (push acc (made n))
+
+fn pick false _
+  0
+
+fn pick true chosen
+  chosen
+
+fn worth e
+  pick (e.weight - e.weight / 7 * 7 == 3) (length e.label) + e.weight
+
+fn spent cards
+  list/sum (list/to_list (list/map cards (e -> worth e)))
+
+pub fn total n
+  built n [] . (cards -> spent cards)

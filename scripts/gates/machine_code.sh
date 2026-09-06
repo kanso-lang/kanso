@@ -35,7 +35,7 @@ size --format=sysv ./jsonbench >/dev/null 2>&1 || {
 # to be left out; tests/every_benchmark_is_in_the_objective.rs derives the list
 # from this loop now, so a fourth cannot be forgotten quietly.
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
-         indexbench scanbench digestbench readbench livebench; do
+         indexbench scanbench digestbench readbench livebench runbench; do
   printf '%s text=%s\n' "$b" "$(size --format=sysv ./$b | awk '/^\.text/{print $2}')"
 done > text.txt
 # Measured, and on a host the golden does not name that is as far as this goes.
