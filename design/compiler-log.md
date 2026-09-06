@@ -3108,3 +3108,42 @@ bench/instructions_golden.txt gains one beside its glibc line: the emitter
 writes a different module when the probe fails, so those rows became a property
 of the host's clang the day it started probing. A clang-18 host writes the
 fallback and cannot regenerate either file.
+
+### And the second line broke the gate that reads it
+
+The instructions vein became the first golden in the tree to name two facts,
+and the gate refused a runner that matched both. `measured_on.sh` collects the
+lines with `sed -p`, so `want` came back newline-joined, while `have` is built
+by a loop that joins with spaces; the two are compared as one string. Its own
+header has documented the two-line form since it was written -- nothing had
+ever used it. The error printed the two strings looking identical, because the
+only difference was the whitespace between them.
+
+The same expression cost the machine-code vein a round for a second reason.
+The pattern was a plain prefix strip, so any comment line opening with the
+phrase became fact data, and these goldens carry dated notes in prose. A note
+reading "measured-on moves to clang 19.1.1 with these rows" -- mine, written in
+the commit above -- asked the host about a fact called `moves` and exited 2
+before measuring anything.
+
+Both reds landed on a run whose work rows were byte-identical to the goldens,
+which is worth saying plainly: the cost-goldens job named two veins and neither
+number had moved. A measured-on line is now one or more `key=value` fields and
+nothing else, joined with a space however many lines carry them. A line SHAPED
+like a fact list still reaches the case that refuses one it cannot read, so a
+`clnag=19.1.1` typo is caught rather than dropped;
+tests/a_golden_may_name_more_than_one_fact.rs pins that alongside the two
+repairs, and asks the gate what this host is rather than deriving it a second
+time. Four of its five were red first, each with the message CI printed.
+
+### The published numbers, walked rather than recalled
+
+The checklist in CLAUDE.md, every surface: compiler.html's decode board, the
+lazy scoreboard, the recipe block, the compile-speed note, index.html's landing
+panel, about.html's prose. Nothing moves. The board and the panel are
+ms/decode and peak memory, and the release rule holds those to a sitting on an
+idle box; every instruction figure on the page names the sitting that measured
+it and is a record rather than a tracker. What this change moved -- fourteen
+work rows, fourteen .text rows, one compile row -- lives in the veins, and the
+counters the page does quote (`el_parses` at 318450, the four arena blocks) are
+pinned in cost goldens that came back green.

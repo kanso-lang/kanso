@@ -20,6 +20,14 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Cargo runs these in parallel and every one of them probes the host first,
+/// so a staging directory named after the fixture alone is shared: one test
+/// removed the directory while another was writing its golden into it, and the
+/// failure read `NotFound` rather than anything about a measured-on line. One
+/// directory per call.
+static NTH: AtomicUsize = AtomicUsize::new(0);
 
 struct Answer {
     code: i32,
@@ -28,7 +36,8 @@ struct Answer {
 
 fn ask(name: &str, golden_body: &str) -> Answer {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let stage: PathBuf = std::env::temp_dir().join(format!("kanso-measured-on-{name}"));
+    let nth = NTH.fetch_add(1, Ordering::Relaxed);
+    let stage: PathBuf = std::env::temp_dir().join(format!("kanso-measured-on-{name}-{nth}"));
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).expect("a staging directory");
     let golden_at = stage.join("golden.txt");
@@ -67,8 +76,10 @@ fn this_host() -> (String, String) {
 #[test]
 fn two_measured_on_lines_are_two_facts_not_one_string() {
     let (glibc, clang) = this_host();
-    let answer =
-        ask("two-lines", &format!("# measured-on {glibc}\n# measured-on {clang}\nsome_counter=1\n"));
+    let answer = ask(
+        "two-lines",
+        &format!("# measured-on {glibc}\n# measured-on {clang}\nsome_counter=1\n"),
+    );
     assert_eq!(
         answer.code, 0,
         "this host names both facts, so it compares. The gate's own header \
