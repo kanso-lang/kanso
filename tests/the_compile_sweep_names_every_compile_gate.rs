@@ -123,3 +123,96 @@ fn the_instructions_name_every_compile_gate() {
          {missing:?} — that list was short for as long as it was written down"
     );
 }
+
+/// And every compile-side GOLDEN is reachable from the sweep — which the test
+/// above does not say, because it derives from gate SCRIPTS and a golden read
+/// by a cargo test names no script at all.
+///
+/// That gap was not hypothetical. `bench/compile_golden_modules.txt` is read by
+/// `tests/compile_cost.rs` and by nothing under `scripts/gates`, so on
+/// 2026-09-06 a library change moved it, `all_compile.sh` reported every gate
+/// AGREED, and CI failed twice on the one target the sweep could not see. The
+/// property above was true the whole time. It was the wrong property: a sweep
+/// is covering when every golden has a reader in it, not when every reader that
+/// happens to be a script is listed.
+fn compile_goldens_on_disk() -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for entry in std::fs::read_dir(root().join("bench")).expect("the bench directory reads") {
+        let path = entry.expect("a directory entry reads").path();
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        // the runtime side is `all_counters.sh`'s, and `every_counter_gate_is_in_the_sweep.rs`
+        // carries this same property for it
+        if name.starts_with("cost_golden") || name == "instructions_golden.txt" {
+            continue;
+        }
+        if (name.starts_with("compile_") && name.contains("golden"))
+            || name == "text_golden.txt"
+            || name.starts_with("emitted_golden")
+        {
+            out.insert(name.to_string());
+        }
+    }
+    out
+}
+
+/// Everything the sweep actually runs, as text: the gate scripts it names, plus
+/// the body of any cargo test it invokes with `--test`.
+fn what_the_sweep_reads() -> String {
+    let mut body = String::new();
+    for gate in named() {
+        let path = root().join(format!("scripts/gates/{gate}.sh"));
+        body.push_str(&std::fs::read_to_string(&path).expect("a named gate reads"));
+    }
+    for rest in SWEEP.split("--test ").skip(1) {
+        let target = rest.split_whitespace().next().unwrap_or_default();
+        let path = root().join(format!("tests/{target}.rs"));
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            body.push_str(&text);
+        }
+    }
+    body
+}
+
+#[test]
+fn every_compile_golden_has_a_reader_in_the_sweep() {
+    let read = what_the_sweep_reads();
+    let orphans: Vec<_> = compile_goldens_on_disk()
+        .into_iter()
+        .filter(|g| !read.contains(g.as_str()))
+        .collect();
+    assert!(
+        orphans.is_empty(),
+        "the compile sweep runs nothing that reads {orphans:?} — a golden with no \
+         reader in the sweep is a vein that moves and says so only in CI"
+    );
+}
+
+/// The gates read `*.ll` and the linked binaries out of the working directory,
+/// and not one of them produces those files — so the sweep has to, before it
+/// runs any of them.
+///
+/// Getting this wrong is quiet. On 2026-09-06 the sweep read artifacts three
+/// minutes stale and reported `machine_code` and `emitted_code` MOVED on a tree
+/// identical to HEAD. That direction wastes a round. The same staleness the
+/// other way — artifacts older than the source — is a sweep that says nothing
+/// moved after an edit that moved a vein, and a session trusting it pushes and
+/// finds out from CI.
+#[test]
+fn the_sweep_builds_the_artifacts_before_it_reads_them() {
+    let built = SWEEP
+        .find("scripts/gates/build_benchmarks.sh")
+        .expect(
+            "the sweep runs scripts/gates/build_benchmarks.sh — the gates read \
+             *.ll and the linked binaries out of the working directory and none \
+             of them produces those files",
+        );
+    let read = SWEEP
+        .find("\"scripts/gates/$g.sh\"")
+        .expect("the sweep runs each named gate by path");
+    assert!(
+        built < read,
+        "the sweep runs a gate at byte {read} before building at byte {built} — \
+         a gate reaching a stale artifact reports the last build's veins, and \
+         the silent direction of that is a sweep that says nothing moved"
+    );
+}

@@ -6122,3 +6122,108 @@ lib/list/list.kso is one. `src/linear.rs:811` is the precedent to copy. Whether
 it is worth building at all now turns on the break-even above: the shapes it can
 help are the ones already entered through a wrapper, where the per-entry cost is
 paid before the pass arrives.
+
+## 2026-09-06 (twenty-seventh) — three veins a sweep could not see, and one it could not have graded
+
+Both sweeps derive their lists from the gate SCRIPTS on disk, so a golden read
+by a cargo TEST is outside the derivation and outside the spec that replays it.
+Three goldens are in that position. `all_compile.sh` gave a wrong answer twice
+today, once for that reason and once for a different one, and the runtime sweep
+has had the same blind spot the whole time in the vein CLAUDE.md names first.
+
+### The golden with no gate script
+
+The sweep derives its list from the scripts under `scripts/gates` that name a
+compile-side golden, and `tests/the_compile_sweep_names_every_compile_gate.rs`
+replays that derivation, so a gate added later is a red spec rather than a vein
+nobody sweeps. Two goldens sit outside the derivation entirely:
+`bench/compile_golden.txt` and `bench/compile_golden_modules.txt` are read by
+`tests/compile_cost.rs`, and no file under scripts/gates names either one. The
+twenty-sixth entry's library change moved the modules vein — lines 5,176 →
+5,186, calls 753 → 755, branches 430 → 431, visits 2,403 → 2,409 — the sweep
+reported nothing had moved, and the specs job went red a round later.
+
+Enumeration settles which goldens are affected: of the nine compile-side
+goldens on disk, exactly two have no reader among the gate scripts, and they
+are that pair.
+
+`all_compile.sh` now runs `cargo test --release --test compile_cost` as a step
+named by hand, with a comment saying why it cannot be derived like the others.
+The spec widens from "every compile-side gate script is swept" to "every
+compile-side golden on disk is read by something the sweep runs" — a property
+of the tree rather than of the script's own list. Watched red first, naming
+`["compile_golden.txt", "compile_golden_modules.txt"]`.
+
+The new step's red is not hypothetical. `--test compile_cost` is the one target
+that failed on rounds two and three of #1278, on linux and on macos arm both,
+which is how the missing vein was found at all — the step runs exactly that
+target, so a moved pair turns the sweep MOVED for the same reason CI turned red.
+
+### The artifacts nobody built
+
+The widened sweep then reported `machine_code` and `emitted_code` MOVED on a
+tree byte-identical to HEAD: +1 define, +1 call, +3 branches and +46 lines on
+all twelve programs at once. A uniform move across programs with nothing in
+common points at the runtime preamble every one of them carries.
+
+The gates read `*.ll` and the linked binaries out of the working directory, and
+not one of them produces those files. The `.ll` files were timestamped 12:01,
+written while `src/codegen.rs` still held an unshipped `k_b_append_mut_int`
+twin; the revert landed at 12:03. The +46 lines were that twin. Running
+`build_benchmarks.sh` and re-running both gates gave AGREED with nothing else
+changed.
+
+Reading artifacts newer than the source costs a round. Reading artifacts older
+than the source is silent — the sweep says nothing moved after an edit that
+moved a vein, which is the failure the script was written to prevent.
+`all_counters.sh` opens with `cargo build --release` for exactly this reason,
+and CLAUDE.md already carried the rule for a bare `kanso build`; the compile
+sweep had never had it. `build_benchmarks.sh` is now its first line, pinned by a
+spec watched red in both halves: absent, and present but after the gates.
+
+### What the sweep reads now
+
+    machine_code           AGREED
+    emitted_code           AGREED
+    compile_memory         REFUSED
+    compile_allocs         REFUSED
+    compile_instructions   REFUSED
+    compile_libraries      AGREED
+    compile_cost           AGREED
+
+Seven readers over the nine compile-side goldens. The three refusals are the
+host gate: this container is glibc 2.39-0ubuntu8.7 and rustc 1.94.1 against the
+goldens' 8.8 and 1.98.1, and CI measures those three.
+
+### The vein the runtime sweep never read
+
+`all_counters.sh` has the same derivation and the same blind spot.
+`tests/golden/mem/*.mem` — fifty-six goldens, the lazy tier — is read by
+`tests/golden.rs`, so there is no `*_counters.sh` gate naming it and the veins
+table pinned to that derivation could not carry a row for it. CLAUDE.md names
+the .mem vein FIRST in the list a counter change must regenerate, and the sweep
+that exists to run that list has never read it.
+
+It runs it now, as a step named by hand, with `KANSO_REGEN_MEM_GOLDEN=1` under
+`--write`. The spec asserts the property rather than the line: the sweep's own
+text, plus the source of every `--test` target it runs, has to mention the vein.
+Watched red first.
+
+The step costs 158 seconds on this container. That is real beside the eleven
+counter runs, and it buys the one dimension the file is named for.
+
+### The one that looked like a fourth hole and is not
+
+`bench/instructions_golden.txt` is read by `scripts/gates/instructions.sh` and
+by neither sweep: `all_counters.sh` derives its table from `*_counters.sh`
+scripts and that gate is not one, and it holds runtime rows so it has no place
+in the compile sweep. The difference from the pair above is that a container
+cannot grade it either way — `host_gate.sh` refuses it here, because the rows
+are retired instructions and this glibc and rustc are not the goldens'. CI runs
+the gate directly and its rows are copied out of the job log. A sweep row for it
+could print REFUSED and nothing else, so it stays where it is.
+
+No counter moved in this change. It touches `scripts/gates/all_compile.sh`,
+`scripts/gates/all_counters.sh`,
+`tests/the_compile_sweep_names_every_compile_gate.rs`,
+`tests/every_counter_gate_is_in_the_sweep.rs`, CLAUDE.md and this file.

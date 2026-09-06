@@ -69,8 +69,33 @@ for row in $veins; do
   rm -f "$got" "$want"
 done
 
+# NOT A ROW IN THE TABLE ABOVE, and it cannot be one: the lazy tier's goldens
+# are `tests/golden/mem/*.mem`, read by `tests/golden.rs`, so there is no
+# `*_counters.sh` gate naming them and the derivation the table is pinned to
+# walks straight past. CLAUDE.md names the .mem vein FIRST in the list a
+# counter change must regenerate, and until 2026-09-06 this sweep could not see
+# it. The compile sweep had the same hole in the same week, twice over.
+#
+# IT COSTS 158 SECONDS on this container, measured 2026-09-06, which is real
+# beside the eleven counter runs. The alternative is a vein that moves and
+# says so only in CI, on the dimension this file exists to watch.
+printf '=== lazy tier (tests/golden/mem/*.mem)\n'
+if [ "$write" -eq 1 ]; then
+  if KANSO_REGEN_MEM_GOLDEN=1 cargo test --release --test golden >/dev/null 2>&1; then
+    echo "--- regenerated the .mem vein"
+  else
+    echo "--- the .mem regeneration FAILED; run it directly to read why"
+    moved="$moved mem"
+  fi
+elif out=$(cargo test --release --test golden 2>&1); then
+  echo "--- agrees"
+else
+  echo "$out" | sed 's/^/    /'
+  moved="$moved mem"
+fi
+
 if [ -z "$moved" ]; then
-  echo "counters: all eleven veins agree with their goldens"
+  echo "counters: the eleven cost veins and the lazy tier agree with their goldens"
   exit 0
 fi
 echo "counters moved:$moved"
