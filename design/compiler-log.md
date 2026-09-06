@@ -6379,8 +6379,34 @@ The twenty-sixth entry carries the same ~60 on the encode-pair decline's two
 figures (livebench +9,900,860, oneshot +24,812). Percentages are unaffected to
 four decimals, and both readings were declines either way.
 
-### What is still open
+### What is still open, now with a number on it
 
 28 of the escape lambda's 61 instructions a byte are frame and dispatch, about
-7.5% of encodebench, and change 2 collects 0.0948% of it. The prior art runs
-both ways: #197 shipped this shape for −3.06%, #338 declined it at +2.5582%.
+7.5% of encodebench, and change 2 collects 0.0948% of it. The rest is reachable
+and was measured today, at the `.ll` level against controls built the same way:
+
+    noinline on u_bytes        Ir                   delta
+    encodebench     4,317,271,654 -> 4,230,851,654   -2.0017%
+    livebench       4,318,225,276 -> 4,271,590,876   -1.0799%
+    oneshot            23,904,190 ->    23,787,604   -0.4877%
+
+`u_bytes` writes `\u00XX` for a control byte and does not run once on any of
+these inputs. It costs anyway: LLVM inlines a single-caller internal function
+unconditionally, because doing so is free in code size, and the 27 lines it
+folds into the fold's lambda push that lambda from four callee-saved registers
+to six. The whole livebench delta is `w_klam17` alone, 708,178,000 ->
+661,543,600 over 11,658,800 calls: four instructions a byte, two pushes and two
+pops, paid by every plain byte in every string.
+
+**The obvious rule is refuted.** Marking all seventy-two single-call-site user
+functions in livebench `noinline` costs **+5.67%** — 4,318,225,276 ->
+4,563,103,685. So "one caller" is not the discriminator, and neither is size:
+`u_bytes` is 27 IR lines, smaller than fifty of the seventy-two.
+
+The discriminator is that the arm is cold, which the compiler has no way to
+know. The record already settled whose question that is: the archive's
+2026-09-02 entry, restated in the 2026-09-05 sitting, keeps an inferred cold
+arm on this side of the charter — how a dispatch group is emitted is not
+something a user meets — so this is the emitter's to answer, not a gavel. The
+narrow inference to build and measure next: a function whose only call site is
+an `if` arm inside the body of a lambda passed to a fold.
