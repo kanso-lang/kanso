@@ -9,12 +9,22 @@ fn array_delim _ 93 p acc
 fn array_delim _ none p _
   fail p "unexpected end of input"
 
-fn array_delim _ c p _
+# Whitespace is the arm before the error rather than a scan the caller runs
+# first. `skip_ws` used to walk to the next non-blank byte and hand back only
+# the position, so the caller loaded that byte a second time to dispatch on
+# it. One dispatch on one loaded byte does both jobs.
+fn array_delim cs c p acc
+  blank = ws? c
+  if blank (array_delim cs cs[p + 1] (p + 1) acc) (array_bad c p)
+
+fn array_bad c p
   fail p "expected `,` or `]`, found `{text/utf8 [c]}`"
 
+# No skip here: `parse_value` opens with its own `skip_ws`, and this one ran
+# on the same position first, so the second walk always found the byte the
+# first had stopped on. jsonbench's arrays paid it once an element.
 fn array_items cs p acc
-  p2 = skip_ws cs p
-  array_step cs (parse_value cs p2) acc
+  array_step cs (parse_value cs p) acc
 
 fn array_open _ 93 p
   parsed (p + 1) []
@@ -22,13 +32,12 @@ fn array_open _ 93 p
 fn array_open _ none p
   fail p "unexpected end of input"
 
-fn array_open cs _ p
-  array_items cs p []
+fn array_open cs c p
+  blank = ws? c
+  if blank (array_open cs cs[p + 1] (p + 1)) (array_items cs p [])
 
 fn array_step cs (parsed p v) acc
-  acc2 = push acc v
-  p2 = skip_ws cs p
-  array_delim cs cs[p2] p2 acc2
+  array_delim cs cs[p] p (push acc v)
 
 fn bad_value_char c p
   fail p "unexpected character `{text/utf8 [c]}`"
@@ -45,12 +54,15 @@ fn obj_delim _ 125 p acc
 fn obj_delim _ none p _
   fail p "unexpected end of input"
 
-fn obj_delim _ c p _
+fn obj_delim cs c p acc
+  blank = ws? c
+  if blank (obj_delim cs cs[p + 1] (p + 1) acc) (obj_bad c p)
+
+fn obj_bad c p
   fail p "expected `,` or `}`, found `{text/utf8 [c]}`"
 
 fn obj_items cs p acc
-  p2 = skip_ws cs p
-  obj_key_start cs cs[p2] p2 acc
+  obj_key_start cs cs[p] p acc
 
 fn obj_key cs (parsed p k) acc
   p2 = skip_ws cs p
@@ -62,7 +74,11 @@ fn obj_key_start cs 34 p acc
 fn obj_key_start _ none p _
   fail p "unexpected end of input"
 
-fn obj_key_start _ _ p _
+fn obj_key_start cs c p acc
+  blank = ws? c
+  if blank (obj_key_start cs cs[p + 1] (p + 1) acc) (key_bad p)
+
+fn key_bad p
   fail p "expected a string key"
 
 fn obj_open _ 125 p
@@ -71,28 +87,24 @@ fn obj_open _ 125 p
 fn obj_open _ none p
   fail p "unexpected end of input"
 
-fn obj_open cs _ p
-  obj_items cs p {}
+fn obj_open cs c p
+  blank = ws? c
+  if blank (obj_open cs cs[p + 1] (p + 1)) (obj_items cs p {})
 
 fn obj_value cs (parsed p v) k acc
-  acc2 = put acc k v
-  p2 = skip_ws cs p
-  obj_delim cs cs[p2] p2 acc2
+  obj_delim cs cs[p] p (put acc k v)
 
 fn parse_array cs p
-  p2 = skip_ws cs p
-  array_open cs cs[p2] p2
+  array_open cs cs[p] p
 
 fn parse_number cs p
   scan cs p p false
 
 fn parse_object cs p
-  p2 = skip_ws cs p
-  obj_open cs cs[p2] p2
+  obj_open cs cs[p] p
 
 fn parse_value cs p
-  p2 = skip_ws cs p
-  value_for cs[p2] cs p2
+  value_for cs[p] cs p
 
 # value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace
 fn value_for 34 cs p
@@ -121,7 +133,11 @@ fn value_for none _ p
 
 fn value_for c cs p
   numeric = number_start? c
-  if numeric (parse_number cs p) (bad_value_char c p)
+  if numeric (parse_number cs p) (value_blank c cs p)
+
+fn value_blank c cs p
+  blank = ws? c
+  if blank (value_for cs[p + 1] cs (p + 1)) (bad_value_char c p)
 
 # The first byte chose the arm, so what is left is the tail of one known
 # keyword, compared where it sits. Slicing it out built a byte string to throw

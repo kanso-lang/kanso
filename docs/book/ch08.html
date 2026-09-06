@@ -303,7 +303,8 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>) <span class="t">true</span>
 
 <span class="k">fn</span> <span class="f">_scan_at</span> cs c start p marked
-  <span class="f">_digit_step</span> cs start p marked (<span class="n">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">58</span>)
+  digit <span class="o">=</span> <span class="n">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">58</span>
+  <span class="f">if</span> digit (<span class="f">_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>) marked) (<span class="f">_number_done</span> cs start p marked)
 
 <span class="k">fn</span> <span class="f">_number_done</span> cs start p <span class="t">true</span>
   <span class="f">parsed</span> p (<span class="f">_number_ok</span> start (<span class="f">to_float</span> (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))

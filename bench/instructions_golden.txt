@@ -246,9 +246,16 @@
 # The rows are the container's own A/B deltas applied to CI's landed values.
 # Nine of the thirteen deltas are zero, so there is little in this projection
 # to go wrong; CI's sitting is still the record.
-jsonbench 1737414226
+#
+# 2026-09-06 (the array's second walk over the same whitespace): jsonbench
+# -2.2503%, oneshot -1.0223%, livebench -0.0059%, and the other ten hold
+# exactly. `array_items` opened with `skip_ws` and then called `parse_value`,
+# which opens with its own; the second walk always started on the byte the
+# first had stopped on. The line is gone. Rows are the container's A/B deltas
+# applied to CI's landed values; ten of the thirteen deltas are zero.
+jsonbench 1570704224
 encodebench 4425477605
-oneshot 25494771
+oneshot 24383381
 basket 35510217
 widebench 54690359
 deepbench 708507318
@@ -258,4 +265,4 @@ indexbench 4691365
 scanbench 776362839
 digestbench 77353320
 readbench 4288131
-livebench 4438088517
+livebench 4436977137

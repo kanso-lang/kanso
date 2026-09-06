@@ -253,4 +253,16 @@
 # inference, provenance and the advisories and stops, so the backend never
 # runs. Held: with the codegen change reverted and lib/json unchanged, the
 # container reads 25,485 and 715,275 — the same two numbers, to the byte.
-compile_allocs=25490
+#
+# 2026-09-06 (the array's whitespace, the folded arms, the digit test): 25,490
+# -> 25,817, a RISE of 327, or 1.28%. Banked as the price of the decode's
+# 9.60% fall. Six guarded whitespace arms and three helper declarations enter
+# lib/json where an inlined `skip_ws` used to be, and the digit test's two arms
+# leave it; the front end allocates for the declarations it checks.
+#
+# Nothing projected this row. It refuses on a container — rustc 1.94.1 against
+# the runner's 1.98.1 — and a refusal exits before measuring, so the branch
+# pushed the row unchanged and took the red rather than carrying the previous
+# sitting's number in as though it were a reading. CI measured 25,817 on
+# f5f4914d.
+compile_allocs=25817

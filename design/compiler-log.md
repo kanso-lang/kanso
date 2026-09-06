@@ -4656,3 +4656,416 @@ reading is still worth taking, as the check that the row moved in the direction
 the change implies; 373 and 889 are both far below the 5,124 the header records
 for a change of chip, so a projection that misses by thousands is a different
 problem and should be hunted.
+
+---
+
+## 2026-09-06 (eighth) — obj_key_start's 170 ARE EIGHTEEN STRETCHES, SO THERE IS NO ARM TO LIFT
+
+**CLOSED.** The 2026-09-06 (fifth) entry recorded that 170 of
+`obj_key_start_4'2`'s instructions execute on every one of its 1,188,150 calls
+— 86.25% of the function, 11.62% of jsonbench — and left the question of
+whether that is one arm or the sum of a dispatch. Measured on the same
+instruction-level join: **eighteen disjoint stretches**, none of them adjacent.
+
+    0x3f80  30    0x407f  15    0x40dd   3    0x41b2  21
+    0x4240   4    0x4263   2    0x4276  12    0x42d4   3
+    0x4340   7    0x466a   8    0x46a2   3    0x46d2   5
+    0x46ee   4    0x4726  18    0x4792   4    0x47ae   2
+    0x47c1  16    0x4a16  13
+
+Every call threads all eighteen, and between them sit the instructions that
+execute at other frequencies. So the 170 is not a straight-line body that a
+specialisation could lift out whole; it is the always-taken skeleton of a
+branchy one, and the 31.95% of the function that is `cmp`, `jne`, `je` and
+`test` is that skeleton's shape rather than a prologue.
+
+**What that rules out.** Outlining "the arm" has no arm to outline; the fifth
+entry's suggestion to compare against `parse_value`'s 49-instruction per-call
+band does not carry, because that band IS contiguous and this one is not. A
+repair here has to remove branches or the work they guard, one stretch at a
+time, and each stretch is between 2 and 30 instructions — so the largest single
+prize in the function is 30 instructions a call, 35,644,500, 2.05% of
+jsonbench.
+
+The next entry's `str_char_4` is the better target on this evidence: 621.3
+instructions a call against this function's 197.1, and a loop rather than a
+skeleton.
+
+---
+
+## 2026-09-06 (ninth) — str_char's 42 instructions a byte, and why nothing hoists them
+
+`d_jsonbench/str_char_4` is 165,240,450 instructions, 9.51% of jsonbench. It is
+entered 265,950 times — once per escaped string per iteration, 1,773 × 150 —
+and everything inside is the walk of that string's tail.
+
+**What the input is.** `bench/large.json` holds 10,475 string literals of
+77,732 bytes; 1,773 of them contain a backslash, and 26,019 bytes lie at or
+after each one's first backslash. That tail is what `string_at` hands to
+`str_chars`, and it is dense: 4,562 escapes and 6,335 clean runs between them
+averaging 2.67 bytes, 2,802 of those runs empty because two escapes are
+adjacent. The 2026-09-01 entry declined the escaped-tail run-scan at +1.16%
+without knowing this; the census is why it lost, and it retires the idea rather
+than leaving it to be tried again. There is nothing to scan.
+
+**Where the 42 go.** Joined instruction by instruction against the callgrind
+profile, the literal-byte path is 12 in the indexed load (two bounds tests, the
+input string's `len` and `data`, and the tag round trip through the 0x100
+sentinel), 6 in the three arm compares, and 24 in the inlined
+`k_b_append_mut_byte`: the accumulator's tag, the `k_stats_on` read, `cap` and
+its absolute value in three instructions, `len`, `data`, the frontier word at
+`data - 8`, then the store and two length writes. The escape path is 49 —
+the same, plus a jump table and one of four 23-instruction arms.
+
+**The ceiling.** Every guard in the byte arm was deleted and the program
+measured, which is not shippable and answers the only question worth asking:
+
+    jsonbench   1,737,413,813 → 1,698,791,213   −38,622,600   −2.223%
+
+Twelve instructions an append across 3,218,550 appends. That is the whole of
+what the guard set can ever be worth.
+
+**Three attempts on the reloads, none of which moved a byte.** The header
+loads repeat every iteration because the byte store may alias them.
+
+1. `!alias.scope` on the store and the frontier word, `!noalias` on
+   `k_stats_on` and the three header loads — a true claim: a bytes buffer's
+   data is a separate allocation from the KBytes that names it. Byte-identical
+   machine code.
+2. The reason turned out to be that there is **no loop**. The emitter writes
+   tail recursion as `musttail call tailcc`, and TailCallElim is forbidden to
+   touch a `musttail` call — except for a SELF call, which it does convert:
+   `d_list/fold_go_3`, `d_list/next_1` and `d_jsonbench/skip_ws_2` all carry a
+   `tailrecurse` block with a back edge after `opt -O3`. A MUTUAL cycle gets
+   nothing, and `str_char_4` ↔ `str_chars_3` ↔ `str_escape_4` is mutual. So are
+   jsonbench's four other most expensive functions. The loop in the machine
+   code is the backend's jump past the prologue, and no IR pass ever saw it.
+3. `alwaysinline` on the two forwarders collapses the cycle: `str_char_4` then
+   carries `tailrecurse` and a real back edge. It is worth −950,250, −0.055%.
+   With the metadata of (1) added on top, the count is identical to the digit —
+   1,736,463,563 either way. A loop was necessary and is not sufficient: the
+   loop body still contains the calls the fast arms fall back to
+   (`k_b_append_mut`, `k_b_at`, `k_b_utf8`), and LICM hoists to a preheader,
+   which needs the load invariant over every path rather than the hot one.
+
+**And the musttail is right.** Rewriting all 125 of them as plain
+`tail call tailcc` — which would let TailCallElim at the self-recursive ones
+freely — costs 1,737,413,813 → 1,854,484,765, +6.74%, output byte-identical.
+LLVM's answer without the guarantee is a real frame.
+
+**What this corrects.** `call_twin`'s comment in src/codegen.rs says its ten
+callable tests "are loop-invariant and LICM can hoist them out of the loop
+TailCallElim makes of the recursion". That holds for a self-recursive fold and
+not for a mutual cycle, and the 2026-09-05 (fourth) entry attributed the
+byte-identical `!invariant.load` result to dereferenceability when the simpler
+reading is available for any mutual caller: LICM had no loop to work in.
+
+**Closed.** The remaining safe money in `str_char` is the three instructions
+that take `|cap|`, 9,655,650 or 0.56% of jsonbench, and it costs a change to
+how KBytes records its allocation regime. Not taken.
+
+---
+
+## 2026-09-06 (tenth) — the array walked the same whitespace twice
+
+`array_items` in lib/json/value.kso opened with `p2 = skip_ws cs p` and then
+called `parse_value cs p2`. `parse_value` opens with `skip_ws` of its own, so
+the second walk always began on the byte the first had stopped on and found it
+not to be whitespace. One line, deleted:
+
+    jsonbench   1,737,413,813 -> 1,698,318,413   -39,095,400   -2.2503%
+    oneshot        25,494,372 ->    25,233,736      -260,636   -1.0223%
+    livebench   4,438,088,070 -> 4,437,827,434      -260,636   -0.0059%
+
+The other ten rows are byte-identical, which is the check that the fall is this
+change and not the weather. livebench moves by the same 260,636 as oneshot
+because both decode once; jsonbench decodes 150 times.
+
+**Why it is worth 2.25% for one line.** `array_items` is called once per array
+element, and both `skip_ws` copies are inlined into their callers, so each
+element paid a bounds-checked byte read, a four-way whitespace test and the
+tagged round trip through the 0x100 sentinel to learn what the caller before it
+had already learned. bench/large.json's arrays hold 410,550 elements over 150
+iterations.
+
+**The rest of the family was checked and is not redundant.** Seven other sites
+write `p2 = skip_ws cs p`, and every one of them reads `cs[p2]` afterwards or
+compares p2 against the length: `array_step`, `obj_items`, `obj_key`,
+`obj_value`, `parse_array`, `parse_object` and `finish`. `parse_value`'s own
+skip is the one that does the work. This was the only duplicate.
+
+**Behaviour is identical, including on failures.** Under the old code an error
+inside the element was reported at parse_value's p2; under the new code
+parse_value computes the same p2 from p. The 23 json tests pass, and so does
+the full suite (36 test binaries, 0 failures) once docs/kanso.wasm is rebuilt —
+lib/*.kso is `include_str!`'d into the compiler, so the wasm blob carries this
+change and had to be regenerated with it.
+
+**The veins.** No allocation counter moves: all eleven runtime cost goldens
+agree, because this removes instructions rather than allocations. Three that do
+move, all falls, all banked in this change: `.text` -272 bytes on each of the
+three decoding binaries, the emitted code one call and two lines lighter, and
+the front end's visits on lib/json 17,169 -> 17,115. Welfare 75.17 -> 75.21.
+
+**Where it came from.** Looking for the second read of an already-loaded byte
+in `array_step`'s instruction-level profile — 13 instructions at 1,429,650
+executions, 1.07% of jsonbench — and finding a whole redundant scan one frame
+up instead. The `cs[p2]` re-read the search started from is still there and is
+still 1.07%; it needs `skip_ws` to hand back the byte it stopped on, which is a
+larger change and is not in this one.
+
+---
+
+## 2026-09-06 (eleventh) — whitespace becomes the arm before the error
+
+The entry above removed one redundant `skip_ws`. Seven remained, and every one
+was followed by a dispatch on `cs[p2]` — the byte the scan had just loaded and
+thrown away. In `array_step`'s instruction-level profile that second read is 13
+instructions at 1,429,650 executions, 1.07% of jsonbench on its own.
+
+The dispatch tables already exist. Whitespace becomes the arm before the error
+in each of them, and the caller hands its byte straight in:
+
+    fn array_step cs (parsed p v) acc
+      array_delim cs cs[p] p (push acc v)
+
+    fn array_delim cs c p acc
+      blank = ws? c
+      if blank (array_delim cs cs[p + 1] (p + 1) acc) (array_bad c p)
+
+Six sites convert: `array_step`→`array_delim`, `obj_items`→`obj_key_start`,
+`obj_value`→`obj_delim`, `parse_array`→`array_open`, `parse_object`→`obj_open`,
+`parse_value`→`value_for`. Two do not: `obj_key` feeds `expect_char`, which has
+no `cs` to advance with, and `finish` compares the position against the length.
+
+    jsonbench   1,698,318,413 -> 1,573,203,261   -125,115,152   -7.3670%
+    oneshot        25,233,736 ->    24,399,645       -834,091   -3.3055%
+    livebench   4,437,827,434 -> 4,436,993,353       -834,091   -0.0188%
+
+The other ten rows are byte-identical.
+
+**Almost none of that is whitespace.** bench/large.json is 188,698 bytes and
+holds 2,238 blanks, 1.19%, all of them spaces inside string values that the
+decoder never dispatches on. The fall is the layer: a `skip_ws` call per token
+that loaded a byte, tested it against four literals, wrapped the answer in a
+tag and handed back only the position, and a caller that then loaded the same
+byte again.
+
+**The four-arm form was built first and the objective declined it.** Writing
+whitespace as literal arms — `fn array_delim cs 9 p acc` and three more per
+site, 24 in all — reads better and measures further: jsonbench −8.5219%,
+oneshot −3.8237%. It costs 1,109 more front-end visits, 1,409 more emitted
+lines and 6.42% more compile instructions (container A/B, 41,831,743 ->
+44,515,270), and welfare comes out at **75.19 against a floor of 75.21**. A
+fall is a fall: the shape went. The guarded form is one arm and one binding per
+site plus three small helpers for the error messages, keeps 86% of the runtime
+win, and costs 1.70% of compile instructions (41,831,743 -> 42,543,278) —
+welfare 75.32.
+
+That comparison is the useful part. Two spellings of one idea, identical in
+behaviour, and the objective separates them: the difference is entirely how
+much source the front end has to read.
+
+**The veins.** No allocation counter moves. `.text` RISES on the three decoding
+binaries — jsonbench 95,074 -> 95,346, oneshot 118,434 -> 118,962, livebench
+119,010 -> 119,570 — because the helpers and the `ws?` call sites are code the
+`skip_ws` inline copies were not; welfare weighs no machine-code size term
+(ruled 2026-09-05), so that is a movement to state. Emitted code rises: the
+decoder's calls 1,764 -> 1,835, branches 1,150 -> 1,207, lines 12,047 ->
+12,588. Front-end visits FALL, 17,115 -> 17,092, because the eight `p2 = ...`
+bindings that leave are about what the guards cost.
+
+**CI's rows for the entry above, and three projections in this one.** CI read
+the array_items change's compile veins and all three moved: compile_instructions
+41,462,716 -> **41,411,787**, a fall of 50,929, and compile_peak_bytes 715,275
+-> **714,995**, a fall of 280. compile_allocs moved too and its value is further
+back in the job log than the API hands back. So this change carries
+compile_instructions at 42,123,322 — CI's 41,411,787 plus the container's own
+A/B delta of 711,535 — compile_peak_bytes at CI's 714,995 with no delta for
+this change, and compile_allocs unchanged. Both of the latter two gates refuse
+on this container (rustc 1.94.1 against the runner's 1.98.1) and cannot be
+measured here at all. One red round is expected and CI's sitting is the record.
+
+The nine counters that worsen, by the gate's own keys and the values they land
+on: emitted_defines 184, emitted_calls 1,835, emitted_branches 1,207,
+emitted_lines 12,588; emitted_other_defines 1,799, emitted_other_calls 15,820,
+emitted_other_branches 9,884, emitted_other_lines 103,019; and text 1,265,562.
+All nine are the same thing said nine ways — six guarded arms, three helper
+functions and eleven `ws?` call sites are code the inlined `skip_ws` was not.
+They buy 125,115,152 instructions off the decode, and welfare weighs none of
+them.
+
+---
+
+## 2026-09-06 (twelfth) — the objective's own count was one behind, in three files
+
+CLAUDE.md said `scripts/welfare.kso` weighs "decode allocations and arena
+blocks, encode allocations and arena blocks, fixpoint rounds, expression visits
+and emitted lines". The path has a directory in it, and none of those last three
+has been a term since the 2026-09-03 rebuild. What the objective actually weighs
+is twenty-eight counters: an instruction row for each of the thirteen
+benchmarks, twelve memory rows, and `compile_instructions`, `compile_allocs`
+and `compile_peak_bytes`.
+
+The cost of the stale sentence is in the entry above. Building the four-arm
+whitespace fold, I read the emitted-lines rise of 4.5% as a welfare term and
+spent a round working out why the number went the other way; the objective
+cannot see that vein at all, and the fall came entirely from
+`compile_instructions`.
+
+`bench/objective_sources.txt` and the spec that replays it both said 27, and
+the file has held 28 since livebench joined on 2026-09-05. Nothing was
+unchecked — `tests/the_objective_reads_what_the_gate_watches.rs` reads the file
+rather than a number, and it passes — but three pieces of prose disagreed with
+the data beside them, which is the shape CLAUDE.md's own "all TEN cost goldens"
+correction was about. All three now say 28, and CLAUDE.md's sentence names the
+counters and points at the file rather than listing them from memory.
+
+---
+
+## 2026-09-06 (thirteenth) — the digit test travelled as a tag
+
+`scan_at` ended in
+
+    digit_step cs start p marked (47 < c and c < 58)
+
+and `digit_step` had `true` and `false` arms. So a comparison the emitter fuses
+into a branch when an `if` consumes it was instead materialised as a tagged
+boolean, passed as an argument, and taken apart by the callee's dispatch. In
+the merged `value_for_3'2` that reads, per digit:
+
+    2b9e  add    $0xffffffffffffffd0,%r10
+    2ba2  cmp    $0xa,%r10
+    2ba6  mov    $0x3,%edi
+    2bab  sbb    $0x0,%rdi
+    2baf  cmp    $0x2,%rdi
+    2bb3  jne    2c30
+
+Three of those six build the tag and test it, at 4,640,700 executions.
+
+Writing the test as an `if` inside `scan_at` and deleting `digit_step`:
+
+    jsonbench   1,573,203,261 -> 1,570,703,811   -2,499,450   -0.1589%
+    oneshot        24,399,645 ->    24,382,982      -16,663   -0.0683%
+    livebench   4,436,993,353 -> 4,436,976,690      -16,663   -0.0004%
+
+**A sixth of the arithmetic prediction, and the reason is worth having.** Three
+instructions at 4,640,700 executions is 13,922,100, and the row moves 2,499,450.
+The `and` of two comparisons still travels as a value — only the last step, the
+`if`'s own test, fuses. So the emitter's `Cond` machinery reaches a comparison
+under an `if` and not a comparison under an `and` under an `if`, and the 2026-09-04
+entry's 1.60% figure for this family is the ceiling rather than the take.
+
+Every other vein falls with it, which is the unusual part: compile_instructions
+−101,081 on the container, front-end visits 17,092 -> 17,068, the decoder's
+emitted defines/calls/branches/lines all down, and `.text` −48 bytes on each of
+the three decoding binaries. Two arms leave the library and nothing replaces
+them. Welfare 75.32 -> 75.33.
+
+The branch's ten worsened counters against main, by the gate's keys and the
+values they land on: compile_instructions 42,022,241 (a projection; CI's
+sitting corrects it), emitted_defines 183, emitted_calls 1,834,
+emitted_branches 1,205, emitted_lines 12,562; emitted_other_defines 1,797,
+emitted_other_calls 15,818, emitted_other_branches 9,880, emitted_other_lines
+102,967; and text 1,265,418. The three entries above have the reasons: six
+guarded whitespace arms and three helper functions are code the inlined
+`skip_ws` was not, and the digit test's `if` gives a little of it back. Against
+that the decode retires 166,710,002 fewer instructions, oneshot 1,111,390 fewer.
+
+---
+
+## 2026-09-06 (fourteenth) — the ratchet caught its own mutation going stale
+
+`a_decoder_that_answers_a_wrong_checksum` patched `acc2 = push acc v` in
+`array_step`, and that binding went in the eleventh entry above when the
+function stopped calling `skip_ws` and started handing its byte straight to
+`array_delim`. The ratchet's `applies_all` reported it on the same branch that
+caused it:
+
+    ratchet: 1 mutations no longer apply
+      STALE json decoder end-to-end (native, 150 decodes)
+
+The push is an argument now and the mutation doubles it there. Watched red on
+the new source before it was taken as fixed: the mutated decoder answers
+checksum 48000 against the 24000 it owes, which is the doubling the mutation's
+own comment predicts, and `scripts/gates/native_checksum.sh` exits 1 on it and 0
+restored.
+
+`applies_all` reads a worktree of HEAD rather than the working tree, so the fix
+has to be committed before the ratchet can see it. A session that edits the
+mutation and re-runs from the working tree gets the same STALE line and has no
+way to tell whether the edit was wrong.
+
+---
+
+## 2026-09-06 (fifteenth) — CI's compile rows, and the floor I set on a guess
+
+CI measured the branch and every projection landed exactly except the compile
+veins. All thirteen work rows, all four emitted rows, all twelve emitted-other
+rows and all thirteen `.text` rows came back byte-identical to the container's
+own A/B deltas applied to CI's previous sitting — twenty-nine rows, no misses.
+The three that could not be projected:
+
+    compile_instructions   42,022,241 -> 42,018,130   -4,111    projected, out by 4,111
+    compile_peak_bytes        714,995 ->   722,429   +7,434    NOT PROJECTED AT ALL
+    compile_allocs                  ?                          not yet read
+
+`compile_peak_bytes` is the one that matters. Both it and `compile_allocs`
+refuse on this container — rustc 1.94.1 against the runner's 1.98.1 — and a
+refusal exits before measuring, so the eleventh entry above carried CI's value
+for the PREVIOUS commit with no delta for its own change. The whitespace fold's
+six guarded arms and three helper functions are declarations the front end
+holds while it checks, and they cost 7,434 bytes, 1.04%.
+
+**So the floors of 75.32 and 75.33 were set on numbers nobody had measured.**
+With CI's two, the branch head reads **75.30**. That is still a rise against
+main's 75.17 — the decode is 9.6% cheaper and the objective takes the trade —
+but it is 0.03 below a floor I wrote from a projection, and the floor has to
+come down to what was measured rather than the change being excused past it.
+That is a re-basing of a number that was never a reading, not an accommodation:
+the weights are untouched and the runtime rows are exactly what was claimed.
+
+The floor is not moved in this commit, because `compile_allocs` is still
+unread and 75.30 is provisional in the same way 75.33 was. CI's next sitting
+gives it, and the floor is set once on three measured rows.
+
+**What to do differently.** A vein that refuses on the container is a vein with
+no projection, and carrying the previous commit's value into a golden reads as
+a measurement when it is a placeholder. The eleventh entry said so and set the
+floor anyway. Push with the row unchanged, take the red, and set the floor from
+CI — the same rule the 2026-09-06 (seventh) entry wrote for
+`compile_instructions`, which applies with more force here because this row
+cannot even be A/B'd.
+
+---
+
+## 2026-09-06 (sixteenth) — the last compile row, and the floor set on three readings
+
+`compile_allocs` came back from CI on f5f4914d: 25,490 -> 25,817, a rise of
+327, or 1.28%. That is the third and last of the compile veins, and it closes
+the entry above. All three, as measured:
+
+    compile_instructions   41,462,716 -> 42,018,130   +555,414   +1.34%
+    compile_peak_bytes          714,995 ->    722,429     +7,434   +1.04%
+    compile_allocs               25,490 ->     25,817       +327   +1.28%
+
+The three move together and by about the same fraction, which is what a change
+that adds declarations to lib/json should look like: six guarded whitespace
+arms and three helper functions enter the library where an inlined `skip_ws`
+used to be, and the digit test's two arms leave it. Against that the decoder
+retires 166,709,589 fewer instructions a run, 9.5952%.
+
+The branch reads **75.27**, and the floor is now that number. It was 75.33,
+and 75.33 was not a reading — the eleventh and thirteenth entries set it from
+projections for two rows that cannot be projected at all. `--set` refuses to
+lower the objective, and refuses correctly: it cannot tell a re-basing from an
+excuse. So the floor was lowered by hand, which is what the flag's own refusal
+tells you to do, and this entry is the sentence a reviewer reads beside the
+diff. The weights are untouched. Against main's 75.1655 the branch is a rise of
+0.108.
+
+Worth keeping separate: 75.33 -> 75.27 is not a regression this branch
+introduced between one commit and the next. Nothing in the tree changed between
+the two numbers. The first was arithmetic on a placeholder and the second is a
+measurement, and the difference between them is the size of the error in the
+placeholder.

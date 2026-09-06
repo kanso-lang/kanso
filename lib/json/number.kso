@@ -29,13 +29,8 @@ fn scan_at cs none start p marked
   number_done cs start p marked
 
 fn scan_at cs c start p marked
-  digit_step cs start p marked (47 < c and c < 58)
-
-fn digit_step cs start p marked true
-  scan cs start (p + 1) marked
-
-fn digit_step cs start p marked false
-  number_done cs start p marked
+  digit = 47 < c and c < 58
+  if digit (scan cs start (p + 1) marked) (number_done cs start p marked)
 
 fn number_done cs start p true
   parsed p (number_ok start (text/to_float (text/slice cs start (p - 1))))
