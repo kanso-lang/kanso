@@ -3417,3 +3417,17 @@ failure scan, an arena bump and a copy of two or three fields. Moving the
 nullary-record arm -- the marker cache, 203,049 of the calls -- out of line
 to shrink the frame measured +1,827,441: the call cost the marker arm more
 than the frame cost the rest. Reverted.
+
+### The buffer's size class, answered by the trailing zeros
+
+`k_buf` is 1,431,562 calls a run on runbench, and `k_buf_class` inside it
+answered which free list a capacity belongs to by doubling from four until
+it reached the capacity: 1,255,865 rounds of a six-instruction loop, 5.6 a
+call, eleven for a capacity of 8,192 and five for the decoder's arrays at
+64. The classes are `4 << c`, so the trailing zeros of a power of two say
+the class in one instruction, and a test for a power of two says whether
+there is one. runbench 2,634,857,220 -> 2,621,939,707, −12,917,513,
+−0.4903%, the same bytes out; `k_buf` 51,214,420 -> 40,157,120, and
+`buf_reuse`, `allocs` and `alloc_bytes` print the same, so the classes
+answered are the classes that were. The ratchet row `buf_class_loop` puts
+the doubling loop back and asks the work vein.

@@ -528,6 +528,14 @@ map_lit_copy = row
   (breaking "an_empty_map_literal_copied_through_a_call")
   benches
 
+buf_class_loop = row
+  "a buffer's size class found by doubling up to it"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_size_class_found_by_doubling")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -969,7 +977,7 @@ rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast push_walk]
 
 rows_b1f = text/concat rows_b1e [scalar_words slice_words render_words]
 
-rows_b1g = text/concat rows_b1f [map_lit_copy]
+rows_b1g = text/concat rows_b1f [map_lit_copy buf_class_loop]
 
 rows_b = text/concat rows_b1g [compile_mem compile_mem_host]
 
