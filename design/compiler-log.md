@@ -20,83 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (twelfth) — the objective's own count was one behind, in three files
-
-CLAUDE.md said `scripts/welfare.kso` weighs "decode allocations and arena
-blocks, encode allocations and arena blocks, fixpoint rounds, expression visits
-and emitted lines". The path has a directory in it, and none of those last three
-has been a term since the 2026-09-03 rebuild. What the objective actually weighs
-is twenty-eight counters: an instruction row for each of the thirteen
-benchmarks, twelve memory rows, and `compile_instructions`, `compile_allocs`
-and `compile_peak_bytes`.
-
-The cost of the stale sentence is in the entry above. Building the four-arm
-whitespace fold, I read the emitted-lines rise of 4.5% as a welfare term and
-spent a round working out why the number went the other way; the objective
-cannot see that vein at all, and the fall came entirely from
-`compile_instructions`.
-
-`bench/objective_sources.txt` and the spec that replays it both said 27, and
-the file has held 28 since livebench joined on 2026-09-05. Nothing was
-unchecked — `tests/the_objective_reads_what_the_gate_watches.rs` reads the file
-rather than a number, and it passes — but three pieces of prose disagreed with
-the data beside them, which is the shape CLAUDE.md's own "all TEN cost goldens"
-correction was about. All three now say 28, and CLAUDE.md's sentence names the
-counters and points at the file rather than listing them from memory.
-
----
-
-## 2026-09-06 (thirteenth) — the digit test travelled as a tag
-
-`scan_at` ended in
-
-    digit_step cs start p marked (47 < c and c < 58)
-
-and `digit_step` had `true` and `false` arms. So a comparison the emitter fuses
-into a branch when an `if` consumes it was instead materialised as a tagged
-boolean, passed as an argument, and taken apart by the callee's dispatch. In
-the merged `value_for_3'2` that reads, per digit:
-
-    2b9e  add    $0xffffffffffffffd0,%r10
-    2ba2  cmp    $0xa,%r10
-    2ba6  mov    $0x3,%edi
-    2bab  sbb    $0x0,%rdi
-    2baf  cmp    $0x2,%rdi
-    2bb3  jne    2c30
-
-Three of those six build the tag and test it, at 4,640,700 executions.
-
-Writing the test as an `if` inside `scan_at` and deleting `digit_step`:
-
-    jsonbench   1,573,203,261 -> 1,570,703,811   -2,499,450   -0.1589%
-    oneshot        24,399,645 ->    24,382,982      -16,663   -0.0683%
-    livebench   4,436,993,353 -> 4,436,976,690      -16,663   -0.0004%
-
-**A sixth of the arithmetic prediction, and the reason is worth having.** Three
-instructions at 4,640,700 executions is 13,922,100, and the row moves 2,499,450.
-The `and` of two comparisons still travels as a value — only the last step, the
-`if`'s own test, fuses. So the emitter's `Cond` machinery reaches a comparison
-under an `if` and not a comparison under an `and` under an `if`, and the 2026-09-04
-entry's 1.60% figure for this family is the ceiling rather than the take.
-
-Every other vein falls with it, which is the unusual part: compile_instructions
-−101,081 on the container, front-end visits 17,092 -> 17,068, the decoder's
-emitted defines/calls/branches/lines all down, and `.text` −48 bytes on each of
-the three decoding binaries. Two arms leave the library and nothing replaces
-them. Welfare 75.32 -> 75.33.
-
-The branch's ten worsened counters against main, by the gate's keys and the
-values they land on: compile_instructions 42,022,241 (a projection; CI's
-sitting corrects it), emitted_defines 183, emitted_calls 1,834,
-emitted_branches 1,205, emitted_lines 12,562; emitted_other_defines 1,797,
-emitted_other_calls 15,818, emitted_other_branches 9,880, emitted_other_lines
-102,967; and text 1,265,418. The three entries above have the reasons: six
-guarded whitespace arms and three helper functions are code the inlined
-`skip_ws` was not, and the digit test's `if` gives a little of it back. Against
-that the decode retires 166,710,002 fewer instructions, oneshot 1,111,390 fewer.
-
----
-
 ## 2026-09-06 (fourteenth) — the ratchet caught its own mutation going stale
 
 `a_decoder_that_answers_a_wrong_checksum` patched `acc2 = push acc v` in
@@ -3724,3 +3647,150 @@ row falls with k_alloc's second branch gone from every inlined site:
 `text` 1,459,900 -> 1,449,644, runbench 241,810 -> 241,682, indexbench
 55,378 -> 53,954 the largest single fall at -1,424. Welfare on CI's rows
 65.84, held with `--set`.
+
+## 2026-09-07 — THE SIZING WALK CALLED ON EVERY IMMEDIATE
+
+**Search.** `k_copy_size`, `k_worth_sizing`, `sizing walk`, `k_ptrmap_at`
+in the log, the archive and design/*.md. The deepbench entry that added
+`k_worth_sizing` to the list arm is the nearest: it named the list arm and
+stopped there. Nothing on the closure, description or subtype arms, and
+nothing on the seen-map's call.
+
+**Where it was.** The bind chain sizes its continuation on every step, so
+the step can choose between leaving it, staging it through the carry pair
+and flooring the region under it. On the run program that is 52,368 walks
+a run, 60,216,283 instructions inclusive, 2.45% of the whole, for a
+continuation of six or seven nodes each. The walk's self cost read 93
+instructions a node, and the instruction-level profile put the first
+fourteen of them in front of a test that sent the caller straight back:
+the closure, description and subtype arms recursed on every slot they
+held, and a capture or a description's slot is an int or a string as
+often as a pointer. 510,001 slots visited, 176,113 of them immediates,
+each paying the frame's seven pushes and seven pops to learn it was not
+heap. The list arm has asked `k_worth_sizing` before the call since
+deepbench; the record arm too; the other three had never been given the
+question.
+
+The second cost was the seen-map. `k_copy_seen_check` asks `k_ptrmap_at`
+once a node, 346,000 times a run, and the probe is a multiply, a mask
+and a compare behind a call: 11,449,834 instructions in the callee's own
+name, 33 an ask.
+
+**What changed.** The closure, description and subtype arms ask
+`k_worth_sizing` before recursing, the test the list and record arms
+already make. `k_ptrmap_probe` and `k_ptrmap_at` are `always_inline`, at
+all six of their sites: the seen-map, the interior-survives memo and the
+copy map's four.
+
+    runbench   2,453,160,233 -> 2,446,395,268   -6,764,965   -0.2758%
+
+on the container with clang 19, the same bytes out. `k_copy_size`'s
+recursion 338,862 calls -> 216,337; `k_ptrmap_at` 11,449,834 -> 0, its
+body landing in `k_copy_size` (+4,411,000 self across the two names) and
+`k_deep_copy` (+99,380). The chain step's walk 60,216,283 -> 54,045,408
+inclusive. No counter moves: the walk answers the same sizes, since an
+immediate always sized at zero, and `all_counters.sh` agrees with every
+golden.
+
+The other rows move with the seen-map's call, and two of them move
+more than the run program does, because the walk is a larger share of
+what they do:
+
+    deepbench    647,494,319 ->   599,236,632  -48,257,687   -7.4530%
+    widebench     50,368,545 ->    49,141,296   -1,227,249   -2.4365%
+    pendbench    598,281,250 ->   598,210,956      -70,294   -0.0117%
+    basket        33,931,564 ->    33,935,458       +3,894   +0.0115%
+
+deepbench folds over lists of ints under a beat, and its sizing walk
+asks the seen-map 2.35 million times a run: `k_ptrmap_at` 77,636,945 ->
+0 there, `k_copy_size` +27,665,576 absorbing the probe. The walk is
+still 230,739,478 instructions of deepbench's 599 million, and that is
+the next thing to read. `work_basket` lands on 33,935,458, +3,894, the
+inlined probe's bytes at the copy map's four sites on a program whose
+walks are few. Every other row moves under 0.05%.
+
+**What is left in the walk.** 216,337 nodes at about 140 instructions
+inclusive each: the frame, the budget and carry tests, the seen-map's
+probe, `k_survives_x` at 36 a call, and the list arm's sixteen-instruction
+slot loop over 498,400 items of which 39,731 were worth the call. The
+survives ask is the largest of those and is already one walk of the
+chain since kanso#1296. The walk is a cost the chain step pays for the
+choice it makes; making the choice without the walk is a different
+design and is not this entry's.
+
+Ratchet row `size_walk` puts the unconditional calls and the out-of-line
+probe back and asks the work vein, the only witness a walk that answers
+the same sizes leaves. Dry-run against the tree before it was committed.
+
+**CI's sitting.** The runner's rows differ from the container's by a few
+instructions and the goldens carry the runner's: `work_runbench`
+2,446,394,810, `work_deepbench` 599,235,221, `work_widebench`
+49,141,298, and the one rising row `work_basket` lands on 33,935,460,
++3,894 on main's 33,931,566, priced above. `compile_instructions` falls
+851 to 19,315,957, the runtime string's bytes moving under the compiler.
+The `.text` vein rises for the first time in this run of entries: `text`
+1,449,644 -> 1,463,756, +14,112, and it is 1,008 bytes on every one of the
+fourteen binaries, jsonbench 93,010 -> 94,018 to runbench 241,682 ->
+242,690. That is the probe's body at its six sites, five of them copies
+the walk's own inlining did not need; the 2026-09-05 ruling keeps machine
+code out of welfare and in its own exact vein, so the kilobyte is
+recorded here and weighed nowhere. Welfare on CI's rows 65.86, held.
+
+## 2026-09-07 — A CHAIN STEP THAT SIZES ONLY WHEN THE REGION HAS DRIFTED, DECLINED FOR NOW
+
+**Search.** `chain step`, `k_arena_at_carry`, `drift`, `leave`, `retired two
+carries later` in the log, the archive and design/*.md. The entry that
+introduced the leave branch added the drift test beside a size test and
+called both load-bearing, the size test "excluding the shape that carries
+a large value forward, which must keep being evacuated or the size walk
+re-reads it every step". Nothing since has asked what the leave would cost
+without the size test in front of it.
+
+**The measurement.** The sizing walk that the entry above trimmed still
+runs on every chain step, and on deepbench it is 381,213,741 instructions
+inclusive, 63.6% of the program, to learn what the previous step's walk
+learnt. Asking the drift test first, and leaving without a walk while the
+region has not drifted a quarter megabyte past the last staged top:
+
+    deepbench    599,236,632 ->   211,925,873  -387,310,759  -64.6342%
+    widebench     49,141,296 ->    36,468,436   -12,672,860  -25.7887%
+    runbench   2,446,395,268 -> 2,393,553,867   -52,841,401   -2.1600%
+    pendbench    598,210,956 ->   596,853,570    -1,357,386   -0.2269%
+
+on the container with clang 19, the same bytes out on all fourteen
+benchmarks, every allocation, peak and evacuation counter in the twelve
+veins byte-identical, and only the walk's own `survive_slots` moving. It
+is the largest single move the run program has had, and it does not ship
+today, for two reasons that are the same reason.
+
+**Why not.** The carry pair retires a buffer two stages after it was
+filled, and the tenure tier promotes a value the walk finds inside the
+previous stage's buffer, "lived a lap". Both were written when a stage was
+a step, and both assume it. Under the drift policy the fixture
+`an_inner_beat_opens_its_tenure_in_the_block_outside`, which exists to pin
+the inner-beat block carve of kanso#1294 by reading `ten_blocks=3`, reads
+`ten_blocks=0`: its inner chain of 400 steps drifts eighty kilobytes a lap
+and stages once, so nothing it holds lives a lap and nothing is promoted.
+Lengthening its laps to 3,000 and 6,000 elements gave 28 stages and still
+no promotion. And a second variant, which measured the drift from the
+rewound top instead of the pre-stage top so that a stage is never followed
+by a second one a step later, segfaulted in `k_deep_copy` under
+`k_repair_interior` eight frames down `k_beat_iter_carry` while running
+`scripts/trend_gate`: a repaired node's interior read out of a buffer the
+stage had begun to reuse. The variant that measured from the pre-stage
+top ran the same program clean, and the difference between them is that
+the first accidentally stages twice at the start of every chain, which
+promotes what the chain holds into tenure before the buffers turn over.
+That is luck, not a design, and the crash is the shape the tenure
+fixture's comment warned about.
+
+**What would make it ship.** The prize is real and the policy is right in
+outline; the retirement rule under it is not. Either a stage that follows
+a drift copies out of both carry buffers before it reuses either, or
+whatever a repaired node holds in a carry buffer is promoted at the stage
+that repairs it rather than the one after. Both are changes to the carry,
+priced by the .mem vein and the run program's peak, and the inner-beat
+fixture must reach tenure again under whichever ships, with its numbers
+rewritten. Recorded here so the measurement is not made twice; the
+variant runtimes and the mutation for the row are in the session's
+scratch, and the entry that ships it will carry them.
