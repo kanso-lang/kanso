@@ -3196,3 +3196,90 @@ which left the library with the fold. It now hands a clean string to
 `escape_rest` at position 1 — the first byte through `esc_byte`, a second scan,
 the rest as a slice — so the program answers the same bytes and `find2_calls`
 rises by one per clean string. The row's name in ratchet.kso says so.
+
+## 2026-09-07 — A CLUSTER REWINDS ONCE A TRIP
+
+A beat cluster of several groups — a mutual tail cycle the analysis has
+licensed to rewind the arena between iterations — rewound on every internal
+tail edge. `escape_at -> escape_next -> escape_found -> escape_more ->
+escape_at`, the cycle "The scan, iterated" (above) put into lib/json, is four
+groups, so every found byte paid four rewinds; one frees everything the trip
+allocated, and `k_beat_iter` is 24 instructions a call on the empty fast path.
+The entry above measured the beat's share at 52.7M of that change's 104.5M.
+
+### What it does
+
+`beat_loops` hands codegen a set of rewinding edges. A self-loop rewinds on
+its one edge, as before. A cluster of several members rewinds on the back
+edges of a depth-first walk over its internal tail graph, roots in name order:
+every cycle in a directed graph crosses at least one back edge of any
+depth-first walk, so every trip round any cycle still rewinds, and a simple
+cycle rewinds once. Codegen's plain-rewind arm consults the set; the carry arm
+is untouched, and a cluster with a carried member keeps every edge, because
+the carry protocol was not measured under fewer rewinds and this entry does
+not claim it. `back_edges` has a unit test: a four-cycle closes on one edge,
+two cycles sharing a member on two.
+
+On runbench's emitted code the plain rewind sites go from sixteen to ten: the
+escape cycle's four become one (`escape_more -> escape_at`), `escape/many ->
+more` and `regexp/ending_flag`, `regexp/digits` drop theirs, each cycle keeping
+the other direction.
+
+### What it measures
+
+    runbench   2,910,317,247 -> 2,879,430,792   -30,886,455   -1.0613%
+
+on the container, clang 19; the same bytes out. Every counter but `beat_iters`
+is byte-identical — allocations, arena and held peaks, evacuations — which is
+the claim: the rewinds that left were freeing nothing the next one would not.
+`beat_iters` per program, from the veins `all_counters.sh --write` rewrote:
+
+| program | before | after |
+|---|---|---|
+| runbench | 4,172,996 | 2,937,383 |
+| livebench | 11,622,401 | 6,148,001 |
+| oneshot | 29,056 | 15,370 |
+| escapebench | 1,206,001 | 1,203,000 |
+| basket | 114,020 | 114,007 |
+| `a_cluster_entered_by_a_tail_call_sweeps` | 400,001 | 200,001 |
+| `a_pushed_call_keeps_the_sweep` | 241,201 | 240,600 |
+| `an_escaped_list_gives_its_buffer_back` | 2,001 | 1,800 |
+| `beat_cycle` | 400 | 200 |
+| `builder_transient` | 2,680 | 1,360 |
+
+Nine of the fourteen benchmarks and most of the corpus do not move: their
+loops are self-loops, which rewind exactly as they did.
+
+The emitted code loses a call line per dropped site: the decoder 1,254 ->
+1,251 calls, runbench 6,111 -> 6,105, and the `.text` of six programs falls
+by 32 to 80 bytes on this host. `compile_instructions` moves with the compiler's
+own bytes and CI says by how much.
+
+Priced with the container's row laid over CI's (2,879,431,446 projected):
+**welfare 57.03 -> 57.10, +0.07**, all of it the run term; `--set` with CI's
+rows.
+
+### The spec, and the mutation
+
+`tests/golden/mem/a_cycle_of_four_rewinds_once_a_trip.kso` is a four-group
+cycle appending to a builder 100,000 times. The compiler before this change
+counts `beat_iters=400001` on it — watched — and this one `100000`, and the
+.mem golden pins the latter. The ratchet row `every_edge` applies
+`a_cluster_rewinds_on_every_edge_again`, which chains every internal edge back
+onto the back-edge set; the mem vein reads it through that fixture and four
+others.
+
+### The measurement that was not one
+
+The first cut of this change mis-spliced `beat_loops` and dropped the tail of
+the function — the demotable entries, the carry-beat self-loops, and the rule
+that keeps imported groups out of the carry tier. That build licensed
+lib/sha256's clusters as carried beats, which the rule forbids, and runbench
+ran 15.9 billion instructions, 77% of them in `k_slots_survive` under the
+digest's evacuations. For twenty minutes that read as "back edges break the
+carry protocol", and a comment saying so was written into the source before
+the site list of the original emitter — no rewinds in sha256 at all — showed
+the cause. The comment is gone; the carry-cluster rule that survives is the
+unmeasured, conservative one. A profile that changes by 5x on a change that
+should move one counter is the change being wrong, and the first check is the
+emitted site list, which takes a minute.

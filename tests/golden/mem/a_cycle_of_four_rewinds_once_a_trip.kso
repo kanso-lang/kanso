@@ -1,0 +1,28 @@
+import "std/text"
+
+# Four groups in one tail cycle, each handing the next a builder it appends
+# to and an integer; the cycle allocates a fresh string every trip and reads
+# it once. Every group qualifies, so the cycle is a beat cluster, and the
+# question is how many times a trip rewinds. Until 2026-09-07 the emitter
+# rewound on every internal tail edge, four times a trip, though one rewind
+# frees everything a trip allocated. It rewinds on the walk's back edges now:
+# beat_iters below is one a trip, plus the entry.
+fn first acc n
+  second acc n (n <= 0)
+
+fn second acc _ true
+  acc
+
+fn second acc n false
+  third (text/append acc "k{n % 17}") n
+
+fn third acc n
+  fourth acc (n - 1)
+
+fn fourth acc n
+  first acc n
+
+fn walked n
+  length (text/utf8 (first (text/bytes "") n))
+
+pub play = print "{walked 100000}"

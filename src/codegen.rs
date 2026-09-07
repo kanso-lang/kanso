@@ -4826,7 +4826,10 @@ impl<'a> Backend<'a> {
                             None => {
                                 // everything this iteration allocated is
                                 // dead; rewind to the entry mark
-                                f.line("call void @k_beat_iter()");
+                                let edge = ((f.group.clone(), f.arity), (name.to_string(), n));
+                                if self.beat.rewind.contains(&edge) {
+                                    f.line("call void @k_beat_iter()");
+                                }
                             }
                         }
                     }

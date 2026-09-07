@@ -658,6 +658,19 @@ beat_mark = row
   (breaking "the_beat_mark_check_fires_at_every_push")
   release
 
+# A cluster of several members rewinds on the back edges of a walk over its
+# tail graph since 2026-09-07, once a trip; before that on every internal
+# edge, which runbench's four-member escape cycle paid 1.06% of the program
+# for. The mutation puts every edge back. beat_iters is pinned by every .mem
+# golden in the corpus, and the four-member fixture pins one a trip exactly.
+every_edge = row
+  "a cluster rewinding on every internal tail edge again"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_cluster_rewinds_on_every_edge_again")
+  release
+
 behaviour = row
   "a legal call answered differently at an edge, with nothing complaining"
   true
@@ -846,7 +859,7 @@ rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
 rows_c1c0 = text/concat rows_c1b [rendering negative_sign small_record]
 
-rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark]
+rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark every_edge]
 
 rows_c1c = text/concat rows_c1c1 [behaviour]
 

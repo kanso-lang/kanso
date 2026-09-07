@@ -42,6 +42,8 @@ struct Cluster {
     members: Vec<Group>,
     carried: HashMap<Group, Vec<usize>>,
     entries: Vec<(Group, Group)>,
+    /// The tail edges between members, in declaration order.
+    internal: Vec<(Group, Group)>,
 }
 
 const SCALAR: Set = INT | FLOAT | BOOL;
@@ -104,6 +106,14 @@ pub struct Beats {
     /// Carry-beat groups: the self-tail argument positions evacuated through
     /// the carry buffers at each rewind.
     pub carried: HashMap<Group, Vec<usize>>,
+    /// The tail edges that rewind. A self-loop rewinds on its one edge. A
+    /// cluster of several members rewinds on the back edges of a depth-first
+    /// walk over its internal tail graph: every cycle through the cluster
+    /// crosses at least one of them, so every trip round any cycle rewinds,
+    /// and a trip that crosses four members rewinds once rather than four
+    /// times. Measured on runbench, whose escape cycle has four members:
+    /// rewinding on every internal edge cost 1.06% of the program.
+    pub rewind: HashSet<(Group, Group)>,
 }
 
 impl Beats {
@@ -127,9 +137,21 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
         }
     }
     let mut demoted = HashSet::default();
+    let mut cluster_edges: Vec<(usize, Vec<(Group, Group)>)> = Vec::new();
+    let mut rewind: HashSet<(Group, Group)> = HashSet::default();
     for cluster in eligible_clusters(program, inference, mut_sites, &chains) {
-        for member in cluster.members {
-            ids.insert(member, next);
+        for member in &cluster.members {
+            ids.insert(member.clone(), next);
+        }
+        // A cluster with a carried member evacuates at its carried edges and
+        // rewinds plainly at the rest; the carry protocol was not measured
+        // under fewer rewinds, so such a cluster keeps every edge as before.
+        if cluster.carried.is_empty() {
+            cluster_edges.push((next, cluster.internal));
+        } else {
+            for e in cluster.internal {
+                rewind.insert(e);
+            }
         }
         next += 1;
         for (group, positions) in cluster.carried {
@@ -188,7 +210,21 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // name with a clone still needs the entry demoted, or the loop's
     // rewinds run against a mark nobody pushed.
     demoted.retain(|(_, callee)| ids.contains_key(callee));
-    Beats { ids, demoted, carried }
+
+    // The rewinding edges, read off the ids that survived: a self-loop's one
+    // edge, every internal edge of a cluster with a carried member, and the
+    // back edges of the rest.
+    for (g, id) in &ids {
+        if !cluster_edges.iter().any(|(cid, _)| cid == id) {
+            rewind.insert((g.clone(), g.clone()));
+        }
+    }
+    for (_, edges) in &cluster_edges {
+        for e in back_edges(edges) {
+            rewind.insert(e);
+        }
+    }
+    Beats { ids, demoted, carried, rewind }
 }
 
 /// Self-loops whose only defect is a tail entry, where every entering group
@@ -560,6 +596,11 @@ fn eligible_clusters(
                     .into_iter()
                     .map(|(from, to)| (groups[from].clone(), groups[to].clone()))
                     .collect(),
+                internal: edges
+                    .iter()
+                    .filter(|(from, to, _, _)| members.contains(from) && members.contains(to))
+                    .map(|(from, to, _, _)| (groups[*from].clone(), groups[*to].clone()))
+                    .collect(),
             });
         }
     }
@@ -781,6 +822,48 @@ fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
 /// Every self-recursive group's verdict, one line each, sorted — printed by
 /// the toolchain under KANSO_BEAT_REPORT so a real workload can be measured
 /// before the next rung is built.
+/// The back edges of a depth-first walk over a cluster's internal tail graph,
+/// roots taken in name order so the answer is the same on every host. An edge
+/// into a member still on the walk's stack closes a cycle, and every cycle in
+/// the graph closes on at least one such edge.
+fn back_edges(edges: &[(Group, Group)]) -> Vec<(Group, Group)> {
+    let mut nodes: Vec<&Group> = edges.iter().flat_map(|(a, b)| [a, b]).collect();
+    nodes.sort();
+    nodes.dedup();
+    let mut out: Vec<(Group, Group)> = Vec::new();
+    let mut done: HashSet<&Group> = HashSet::default();
+    let mut on_stack: HashSet<&Group> = HashSet::default();
+    fn walk<'a>(
+        node: &'a Group,
+        edges: &'a [(Group, Group)],
+        done: &mut HashSet<&'a Group>,
+        on_stack: &mut HashSet<&'a Group>,
+        out: &mut Vec<(Group, Group)>,
+    ) {
+        done.insert(node);
+        on_stack.insert(node);
+        for (from, to) in edges {
+            if from != node {
+                continue;
+            }
+            if on_stack.contains(to) {
+                out.push((from.clone(), to.clone()));
+            } else if !done.contains(to) {
+                walk(to, edges, done, on_stack, out);
+            }
+        }
+        on_stack.remove(node);
+    }
+    for node in nodes {
+        if !done.contains(node) {
+            walk(node, edges, &mut done, &mut on_stack, &mut out);
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 pub fn report(
     program: &Program,
     inference: &infer::Inference,
@@ -2012,5 +2095,24 @@ mod tests {
             "only the byte-builder encoders and the escaper may rewind; scanners \
              threading records or lists stay on the grow-only arena"
         );
+    }
+
+    #[test]
+    fn a_cycle_rewinds_on_one_edge_and_two_cycles_on_two() {
+        // Every cycle in a cluster's internal tail graph closes on a back
+        // edge of the walk, and a simple cycle closes on exactly one, so a
+        // trip round it rewinds once however many members it crosses. Two
+        // cycles sharing a member close on two.
+        use super::back_edges;
+        let g = |n: &str| (n.to_string(), 2);
+        let four = vec![(g("a"), g("b")), (g("b"), g("c")), (g("c"), g("d")), (g("d"), g("a"))];
+        assert_eq!(back_edges(&four), vec![(g("d"), g("a"))]);
+        let figure_eight = vec![
+            (g("a"), g("b")),
+            (g("b"), g("a")),
+            (g("a"), g("c")),
+            (g("c"), g("a")),
+        ];
+        assert_eq!(back_edges(&figure_eight), vec![(g("b"), g("a")), (g("c"), g("a"))]);
     }
 }
