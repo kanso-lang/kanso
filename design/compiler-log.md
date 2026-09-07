@@ -3544,11 +3544,14 @@ same way, regenerated.
 
 Ratchet row `freeze_all` puts the knot-only rule back and asks the work vein.
 The golden corpora agree on both engines after the fix above; the wasm
-backend keeps its own rule (`wasm_backend.rs`, "the constant this body
-computes, where it is a constant") and diverges from the oracle in count on
-an effectful constant the way native did until today, which is a thread and
-not this entry's. CI's work rows and welfare `--set` follow in the next
-round.
+backend keeps its own rule (`const_cell` answers only a knotted name) and
+still rebuilds every other constant at each mention. That is a cost and not
+a divergence: an effect in a constant's body is a value until it is
+presented to IO, so `stamp = print "built"` mentioned twice renders
+`<io><io>` on both engines and prints nothing, and a wasm program says the
+same bytes either way. Aligning wasm is a thread for the wasm engine's own
+sake, not this entry's. CI's work rows and welfare `--set` follow in the
+next round.
 
 ### Every counter this moved, with the value it landed on
 
