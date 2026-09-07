@@ -431,8 +431,6 @@ static long long k_stat_blocks = 0;
 static long long k_stat_perm_allocs = 0;
 static long long k_stat_beat_iters = 0;
 static long long k_stat_evac_bytes = 0;
-static const char* k_arena_at_carry = NULL;
-static const void* k_blocks_at_carry = NULL;
 static long long k_stat_evac_allocs = 0;
 /* What DECIDING costs, where evac_allocs and evac_bytes count what copying
    costs. k_slots_survive reads a node's whole immediate interior on every ask
@@ -952,7 +950,14 @@ static long long k_ptr(void* p);
 #define K_CARRY_MAX 8
 
 typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;
-typedef struct { KCarryBuf from; KCarryBuf to; int used_flag; } KCarry;
+/* at_arena and at_blocks record where the arena stood at this depth's last
+   stage, so a chain step can tell how far its region has drifted since;
+   they were one pair of globals shared by every depth until 2026-09-07, and
+   an inner chain read the outer chain's last stage as its own. */
+typedef struct {
+    KCarryBuf from; KCarryBuf to; int used_flag;
+    const char* at_arena; const void* at_blocks;
+} KCarry;
 static KCarry k_carries[K_BEAT_MAX];
 static KValue k_carry_slots[K_CARRY_MAX];
 /* Slots the compiler proved hold a string builder this cycle owns. The copy
@@ -1407,7 +1412,17 @@ static int k_copy_seen_check(const void* p) {
     return 0;
 }
 
-typedef struct { KCarryBuf* buf; KMark* mark; int to_arena; int in_ten; } KCopy;
+/* deep: the walk may not prune at a survivor whose immediate interior
+   survives. Sharing a whole subtree is sound only while nothing inside it
+   points at storage about to be retired, and the copy-out at a carried pop
+   retires the depth's carry pair. One level down is all k_interior_survives
+   can see, so a node two levels down holding a carry pointer was left for
+   the caller's next stage to repair -- which was the next chain step until
+   a step could leave. Set at that one call site; the walk is the pop's, not
+   the step's. */
+typedef struct {
+    KCarryBuf* buf; KMark* mark; int to_arena; int in_ten; int deep;
+} KCopy;
 
 static void* k_copy_alloc(KCopy* cp, size_t n) {
     n = (n + 15) & ~(size_t)15;
@@ -1770,7 +1785,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
     if (k_carry_holds((const void*)(intptr_t)v.payload)) cp->in_ten = 1;
     void* p = (void*)(intptr_t)v.payload;
     if (k_survives_x(p, cp->mark)) {
-        if (k_interior_survives(v, p, cp->mark)) return v;
+        if (!cp->deep && k_interior_survives(v, p, cp->mark)) return v;
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == p) {
             k_stat_carry_dedup++;
@@ -2078,7 +2093,7 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
         k_beat_rewind(&k_beat_stack[d]);
     } else {
         if (c->used_flag) {
-            KCopy cp = { NULL, NULL, 1, 0 };
+            KCopy cp = { NULL, NULL, 1, 0, 1 };
             k_ptrmap_begin(&k_copy_map);
             k_copy_map_live = 0;
             r = k_deep_copy(r, &cp);
@@ -5289,6 +5304,9 @@ static KValue k_exec(KDesc* d) {
                costs constant C stack. the final result goes through the
                pop, which copies a heap survivor out of the buffers. */
             k_beat_push();
+            /* A chain's first step always sizes and stages: its depth's
+               last stage, if any, was another chain's. */
+            k_carries[k_beat_depth - 1].at_arena = NULL;
             KValue cur;
             cur.tag = K_DESC;
             cur.payload = k_ptr(d);
@@ -5301,6 +5319,28 @@ static KValue k_exec(KDesc* d) {
                 KValue next = k_worded_step(dd->dtag, yielded, dd->y);
                 if (next.tag != K_DESC) {
                     return k_beat_pop(next);
+                }
+                /* A step whose region has not drifted far since the last
+                   stage leaves its value where it is, and it decides that
+                   before sizing anything. The walk used to run every step,
+                   and the leave was taken only for a value it measured at
+                   4 KB or under: deepbench's 384,000 steps each walked a
+                   closure over a short list at a thousand instructions to
+                   learn what the previous step had learnt, 64% of the
+                   program. What the size test protected against was a
+                   large value re-walked every step; a step that does not
+                   walk cannot re-walk. The drift test alone keeps the mark
+                   inside its block and the garbage under a quarter
+                   megabyte past the last staged top, and the stage that
+                   ends a drift sizes and copies whatever the steps since
+                   left, small or large: the same choices as before, made
+                   once a drift instead of once a step. */
+                KCarry* kc = &k_carries[k_beat_depth - 1];
+                if (kc->at_blocks == (const void*)k_blocks
+                    && kc->at_arena
+                    && (size_t)(k_arena - kc->at_arena) < (size_t)(1 << 18)) {
+                    cur = next;
+                    continue;
                 }
                 /* a large survivor — a continuation holding a decoded
                    document, say — would ride the carry pair on every step
@@ -5324,34 +5364,24 @@ static KValue k_exec(KDesc* d) {
                     k_viewreg_migrate(k_beat_depth);
                     k_permreg_migrate(k_beat_depth);
                     k_beat_push();
-                    cur = next;
-                } else if (nsz <= 4096
-                           && k_blocks_at_carry == (const void*)k_blocks
-                           && k_arena_at_carry
-                           && (size_t)(k_arena - k_arena_at_carry) < (size_t)(1 << 18)) {
-                    /* A step whose live value is small enough to be cheaper to
-                       leave than to stage, in a region that has not drifted far
-                       enough to matter. Staging costs a size walk, a copy and a
-                       rewind at every step; a chain of small steps pays that
-                       hundreds of thousands of times for a value of a few
-                       hundred bytes.
-
-                       Both tests are load-bearing and for different reasons.
-                       The size test excludes the shape that carries a large
-                       value forward, which must keep being evacuated or the
-                       size walk re-reads it every step. The drift test keeps
-                       the beat mark inside its block: the mark advances
-                       whenever the copy walk repairs an interior, a rewind can
-                       only return the arena to the mark, and a mark that
-                       crosses a block leaves everything behind it stranded. */
+                    k_carries[k_beat_depth - 1].at_arena = NULL;
                     cur = next;
                 } else {
-                    k_arena_at_carry = k_arena;
-                    k_blocks_at_carry = (const void*)k_blocks;
+                    /* The drift test above already said no, so a value that
+                       is not floored is staged: copied out through the
+                       carry pair, the region rewound to the mark, and the
+                       next drift measured from here. The mark advances
+                       whenever the copy walk repairs an interior, a rewind
+                       can only return the arena to the mark, and a mark
+                       that crosses a block leaves everything behind it
+                       stranded, which is what the drift test's block
+                       comparison guards. */
                     k_carry_reset();
                     k_carry_stage(next);
                     k_beat_iter_carry();
                     cur = k_carry_take(0);
+                    kc->at_arena = k_arena;
+                    kc->at_blocks = (const void*)k_blocks;
                 }
             }
         }
