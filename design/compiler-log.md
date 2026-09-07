@@ -3933,5 +3933,14 @@ the emitter is not taking the `push_mut` path there and the written slot is
 not reachable from the outer node at all. Both conditions have to hold at
 once and no shape yet holds both, which is a fair reason to suspect the
 hazard needs the emitter to prove a uniqueness it does not prove here. That
-is what the next sitting should settle, and it is a question about the
-emitter rather than about the runtime.
+is settled by `src/linear.rs` without another sitting: a push is marked in
+place only when its list argument traces back to a fresh `[]` through a chain
+in which every step is moved and never aliased, and an index expression is not
+one of those. So the write that would put a carry pointer two levels down
+cannot be an in-place write on a node reached by an index.
+
+That is not a proof the hazard is unreachable. `k_set_field`, `k_map_replace`
+and `k_b_put_mut` write into nodes reached other ways, and the argument covers
+`push` only. It is a reason the corpus is quiet and a reason the other six
+sites are where to look. The latch watches all seven either way, which is the
+point of latching rather than reasoning.
