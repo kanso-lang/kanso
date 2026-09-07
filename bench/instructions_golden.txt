@@ -378,19 +378,19 @@
 # The container measured the same direction on its own pair of builds, and its
 # absolute rows cannot be taken here: it is clang 18.1.3 and would write the
 # fallback module. CI's sitting is the record.
-jsonbench 1485161449
-encodebench 4058895905
-oneshot 21745451
+jsonbench 1487045449
+encodebench 4058633349
+oneshot 21758011
 basket 34698417
-widebench 36463282
+widebench 36127282
 deepbench 389214232
 escapebench 85558105
 pendbench 596612948
 indexbench 3265868
-scanbench 729804590
+scanbench 730307092
 digestbench 10420391
 readbench 4287134
-livebench 3596062732
+livebench 3596075294
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -405,4 +405,4 @@ livebench 3596062732
 # refuses the comparison rather than the measurement. The mix percentages in
 # bench/runbench's header are the container's and move by less than this
 # difference; they are not re-derived.
-runbench 2400271058
+runbench 2398991511

@@ -4103,6 +4103,24 @@ The number is the same to the instruction with the 24 unsound folds in and
 with them out, so none of them sat on a path a benchmark runs — the whole
 fall is the 27 that survive the guard.
 
+CI's fourteen work rows, against main. Three fall and four rise, and the four
+are named here because the trend gate is right to ask: `work_jsonbench`
+lands on **1,487,045,449** (+0.1269%), `work_scanbench` on **730,307,092**
+(+0.0689%), `work_oneshot` on **21,758,011** (+0.0578%) and `work_livebench` on
+**3,596,075,294** (+0.0003%). Against `work_runbench` 2,398,991,511
+(−0.0533%), `work_encodebench` 4,058,633,349 (−0.0065%) and `work_widebench`
+36,127,282 (−0.9215%).
+
+The four rises are not attributed per row and this entry does not pretend they
+are. What is known: every one of the thirteen emitted rows FALLS, these four
+included, so the compiler is writing less code for them and the rise is
+downstream of what it wrote — the same reshuffle class the wide version showed
+at ten times the size, where re-parenting and inlining moved millions between
+functions for a net of thousands. jsonbench rising 0.1269% while runbench falls
+0.0533% on a change whose 27 sites include nine in the json decoder is the
+sharpest form of that: the same code, the two benchmarks disagreeing on sign.
+The objective weighs runbench, and runbench falls.
+
 All twelve cost veins and the lazy tier are byte-identical — removing a tag
 test allocates nothing — and every one of the thirteen emitted rows falls.
 Welfare floor 66.00009186328253 -> 66.00389069855446.
