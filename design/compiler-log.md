@@ -4171,3 +4171,59 @@ a growth are that allocation and its copy. This is the shape the 2026-08-29 entr
 found in `push_mut_slow`: count the objects born before concluding one is
 growing.
 
+
+## 2026-09-07 (third) — the two hot functions have no loop in them
+
+Searched the log, the archive and design/ first: the 2026-09-07 (second) entry maps
+these two functions at the call level and the 2026-09-06 entries attribute
+`parse_value` and the escape scan, but nothing has asked what the instructions
+inside them do.
+
+Callgrind again, this time with `--dump-instr=yes`, which prices every machine
+instruction separately rather than every function.
+
+    d_json/encode_onto_2'2   654 slots   133.1 a call   median 0.11   max 1.00
+    d_json/value_for_3'2     519 slots   138.3 a call   median 0.12   max 1.83
+
+**Not one instruction in `encode_onto` runs twice for a single call.** All 654 of
+its slots execute at most once, and the median slot runs on eleven per cent of
+calls, because different values take different arms. The function is a straight
+line: an entry guard, a tag switch, one arm. `value_for` has a shallow loop —
+thirty-two of its slots run more than once and the busiest runs 1.83 times — and
+nothing hotter than that.
+
+So the 133 instructions a call are not a loop anybody forgot to hoist out of, and
+there is no instruction to remove: reducing them means emitting fewer
+instructions on the path a call takes, which is the dispatch or the arms getting
+smaller, not a peephole.
+
+That closes the four readings the (second) entry records. Each was a hunt for
+concentrated waste — a duplicated test, an unfolded fallback, a scan called too
+often, a splat on the wrong side of a guard — inside functions that by
+construction have none, and each cost nothing or cost more.
+
+**Where the 133 go.** Bucketing the slots by how often each runs per call
+separates the fixed path from the arms:
+
+    encode_onto    27 slots   27.0 a call   20.3%   runs on ~every call
+                  488 slots  101.9 a call   76.6%   runs on 10-40% of calls
+                  139 slots    4.2 a call    3.1%   runs on under 10%
+
+    value_for      17 slots   17.0 a call   12.3%   runs on ~every call
+                  457 slots   65.2 a call   47.2%   runs on 10-40% of calls
+
+The guard and the tag switch are twenty-seven instructions in the encoder and
+seventeen in the decoder. Everything else is an arm, and an arm is the work the
+function exists to do — an append, an escape, a render. So the group dispatch is
+a fifth of the encoder and an eighth of the decoder, and removing all of it
+would be worth 2.7% and 1.2% of runbench respectively, before asking which of
+those instructions are load-bearing. The calling convention is not where the
+cost is either.
+
+`encode_onto`'s self total reads 316,832,879 in both dumps, to the instruction,
+which is what makes this one trustworthy: the binary still carried the reverted
+guard from the (second) entry, and that guard moves `k_b_find2_below_raw` and
+nothing else. `value_for`'s total is 247,645,629 here against 233,409,627 there,
+because callgrind splits its two instances differently under `--dump-instr`, so
+its shape is reported above and its total is not.
+
