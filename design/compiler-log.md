@@ -3151,7 +3151,11 @@ on the container with clang 19, the same bytes out. `k_ten_holds` is
 10,920,518 now. `ten_blocks` and `ten_frees` in `bench/cost_golden_run.txt`
 read 55 -> 6; no other counter in the twelve veins or the lazy tier moves,
 and widebench and scanbench, which tenure at one depth with nothing outside
-it, still read one block each.
+it, still read one block each. The trend gate reads the pair as
+`run_ten_blocks` 55 -> 6, improved, and `run_ten_frees` 55 -> 6, worsened,
+because a free is a thing to want more of when the blocks are held fixed;
+here the blocks fell with them, and `run_ten_frees` lands on 6 because six
+blocks were opened and all six were freed, where fifty-five had been.
 
 ### What a program that kept its own blocks would lose
 
