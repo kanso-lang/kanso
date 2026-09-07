@@ -3908,12 +3908,23 @@ mechanism and the counters, not a program that faults on demand. The guard
 stays: that a hazard is unreachable today is not that it is unreachable, and
 #1300 is the reason to believe it is not.
 
-**OPEN — nothing in the tree faults without the walk.** The fixture latches
-and its counters move, but its bytes out are the same, and the trend gate no
-longer reproduces #1300's segfault (see the correction above). Four fixture
-shapes were tried; the one that dangles wants the node holding the carry
-pointer to be pruned at AND the buffer reused before the read, and the reduced
-programs read it back first. The ratchet row `pop_deep` is live on the
-counters, which is what the gate needs. A program that actually faults is
-worth another sitting, and until there is one the walk rests on the mechanism
-and on #1300's record.
+**OPEN — nothing in the tree faults without the walk**, and the reason the
+four reduced shapes could not is worth writing down, because it narrows what a
+faulting program has to look like. `k_interior_survives` does not stop at the
+node: for a list it asks `k_survives_x(l->items, m)` AND
+`k_slots_survive(l->items, l->len, m)`. So a node that holds a carry pointer
+in one of its own slots is never pruned at -- that slot does not survive, and
+the walk descends and repairs it. The hazard needs the pointer TWO levels
+down, behind a survivor whose every immediate slot survives, which is the
+sentence #1300's fix was written from and which I had been reading as "one
+level" when writing fixtures.
+
+Getting there from kanso source is the hard part. An in-place push returns a
+new header and leaves the old one's length behind, so a write two levels down
+is invisible to a reader holding the outer node unless the emitter proved
+uniqueness and took the `push_mut` path that moves `len` in place. The four
+shapes each failed one of those two conditions: `t1` and the trend-gate shape
+put the pointer in the outer node's own slot, and `t2` and `t3` put a freshly
+allocated node in between, which sits above the mark and so does not survive
+either. A fifth shape wants a pre-existing inner list, reached through a
+pre-existing outer one, written through `push_mut`. That is the next sitting.
