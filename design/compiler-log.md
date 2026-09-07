@@ -4171,3 +4171,41 @@ a growth are that allocation and its copy. This is the shape the 2026-08-29 entr
 found in `push_mut_slow`: count the objects born before concluding one is
 growing.
 
+
+## 2026-09-07 (third) — the two hot functions have no loop in them
+
+Searched the log, the archive and design/ first: the 2026-09-07 (second) entry maps
+these two functions at the call level and the 2026-09-06 entries attribute
+`parse_value` and the escape scan, but nothing has asked what the instructions
+inside them do.
+
+Callgrind again, this time with `--dump-instr=yes`, which prices every machine
+instruction separately rather than every function.
+
+    d_json/encode_onto_2'2   654 slots   133.1 a call   median 0.11   max 1.00
+    d_json/value_for_3'2     519 slots   138.3 a call   median 0.12   max 1.83
+
+**Not one instruction in `encode_onto` runs twice for a single call.** All 654 of
+its slots execute at most once, and the median slot runs on eleven per cent of
+calls, because different values take different arms. The function is a straight
+line: an entry guard, a tag switch, one arm. `value_for` has a shallow loop —
+thirty-two of its slots run more than once and the busiest runs 1.83 times — and
+nothing hotter than that.
+
+So the 133 instructions a call are not a loop anybody forgot to hoist out of, and
+there is no instruction to remove: reducing them means emitting fewer
+instructions on the path a call takes, which is the dispatch or the arms getting
+smaller, not a peephole.
+
+That closes the four readings the (second) entry records. Each was a hunt for
+concentrated waste — a duplicated test, an unfolded fallback, a scan called too
+often, a splat on the wrong side of a guard — inside functions that by
+construction have none, and each cost nothing or cost more.
+
+`encode_onto`'s self total reads 316,832,879 in both dumps, to the instruction,
+which is what makes this one trustworthy: the binary still carried the reverted
+guard from the (second) entry, and that guard moves `k_b_find2_below_raw` and
+nothing else. `value_for`'s total is 247,645,629 here against 233,409,627 there,
+because callgrind splits its two instances differently under `--dump-instr`, so
+its shape is reported above and its total is not.
+
