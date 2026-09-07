@@ -3166,3 +3166,26 @@ byte at a time — no fold, no import, every parameter in use, so the mutated
 package compiles (checked on a copy). The live vein reads it through
 `append_fast`. `an_encoder_that_walks_a_clean_string` greps the `escape_split`
 line, which did not move.
+
+### CI's rows, and the floor
+
+The runner counted the iterated shape on 2026-09-07: `work_runbench`
+2,910,317,901 (the container read 2,910,317,247, 654 low, as it was on the
+skip), `work_livebench` 3,984,010,329, `work_oneshot` 23,182,078, and
+`work_jsonbench` 1,558,677,818 -> 1,561,185,741 — the decoder imports lib/json
+and its layout moved with the library. `compile_instructions` 42,594,953 ->
+19,335,435 (the container's box read 19,580,079), `compile_allocs` 26,018 ->
+11,613, `compile_peak_bytes` 749,443 -> 375,222, both to the byte what the
+container read. `.text` for the three programs importing lib/json: oneshot
+115,986 -> 103,906, livebench 116,530 -> 104,450, runbench 240,386 -> 240,882.
+
+**Welfare 51.95 -> 57.03, +5.07, and the floor is set there** with the
+reason naming the workload. The run term's share is about 0.5; the rest is
+the three compile rows, which is the question in the ledger.
+
+The ratchet's first round on the iterated shape went UNBUILT on
+`an_encoder_that_walks_a_clean_string`: its patch still named `escape_able`,
+which left the library with the fold. It now hands a clean string to
+`escape_rest` at position 1 — the first byte through `esc_byte`, a second scan,
+the rest as a slice — so the program answers the same bytes and `find2_calls`
+rises by one per clean string. The row's name in ratchet.kso says so.

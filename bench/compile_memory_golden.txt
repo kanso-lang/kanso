@@ -161,4 +161,4 @@ front_end_visits=9884
 # 17,264, which the row above already records. This container is
 # rustc=1.94.1 against the golden's 1.98.1 and refuses to compare, so
 # 724,798 is CI's own reading from the round-one job log on 31537922.
-compile_peak_bytes=724798
+compile_peak_bytes=375222
