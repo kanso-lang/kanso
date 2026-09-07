@@ -902,7 +902,9 @@ rows_b1e1 = text/concat rows_b1e0 [host_measures]
 
 rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
-rows_b1e = text/concat rows_b1e2 [ten_walk one_char_memo length_memo length_fold]
+rows_b1e3 = text/concat rows_b1e2 [ten_walk one_char_memo length_memo]
+
+rows_b1e = text/concat rows_b1e3 [length_fold]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 

@@ -3326,6 +3326,32 @@ the six samples asks a string's length. `compile_instructions` 19,315,995 ->
 The ratchet gains `length_fold`, which writes the two compares back and asks
 the work vein. Welfare 57.25 -> 57.44, held.
 
+CI's second sitting, with both repairs in, main -> the branch:
+
+    work_runbench     2,816,922,887 -> 2,736,141,165 -  80,781,722  −2.8677%
+    work_scanbench      766,291,267 ->   737,694,496 -  28,596,771  −3.7318%
+    work_indexbench       4,771,217 ->     3,999,487 -     771,730 −16.1747%
+    work_widebench       53,465,568 ->    53,095,410 -     370,158  −0.6923%
+    work_encodebench  4,194,027,086 -> 4,206,674,765 +  12,647,679  +0.3016%
+    work_digestbench     70,784,439 ->    71,338,042 +     553,603  +0.7821%
+    work_deepbench      690,817,043 ->   691,249,951 +     432,908  +0.0627%
+    work_livebench    3,743,207,118 -> 3,743,461,197 +     254,079  +0.0068%
+    work_pendbench      620,687,423 ->   620,751,169 +      63,746  +0.0103%
+    work_basket          35,737,604 ->    35,752,074 +      14,470  +0.0405%
+    work_oneshot         22,579,660 ->    22,580,295 +         635  +0.0028%
+    work_jsonbench    1,561,185,741 -> 1,561,186,047 +         306  +0.0000%
+    work_readbench        4,283,427 ->     4,283,433 +           6  +0.0001%
+    work_escapebench     85,754,925 ->    85,754,928 +           3  +0.0000%
+
+The runner agrees with the container to within a thousand on every row that
+moved: deepbench's 12,368,066 is 432,908, livebench's 28,467,163 is 254,079,
+and encodebench keeps its 12,647,679 of register allocation. digestbench's
+553,603 and basket's 14,470 are the same allocator noise at a smaller scale,
+and the six rows under a thousand are layout. `text` reads 1,451,772 ->
+1,451,346 after the two repairs, every one of the fourteen binaries a few
+hundred bytes smaller than main; `compile_instructions` 19,315,995 ->
+19,319,033, layout again. Welfare 57.44 -> 57.45, held.
+
 **Declined on the way: a settled top-of-stack mark for `k_beat_iter`.** The
 iteration entry recomputes the depth to find its mark; a pointer kept settled
 at push, pop and the five other sites that move the depth would save that.
