@@ -3878,6 +3878,28 @@ Separating the two halves needed a third binary with the machinery present and
 2.44%; pruning bought deepbench 4.97% and runbench 2,734,052. Those are the
 numbers the shapes above were chosen against.
 
+**CI's sitting, which is the one that counts.** The container A/B above was
+right about the direction and shy about the size. On CI, against main:
+`work_deepbench` 410,388,149 -> **389,214,232** (−5.1595%),
+`work_runbench` 2,418,520,678 -> **2,414,841,737** (−0.1521%) and
+`work_pendbench` 602,145,183 -> **598,215,444** (−0.6526%). runbench is the
+objective's whole run-speed term and it falls further on CI than in the
+container; pendbench, which the container read as a 0.15% riser, falls here.
+Welfare 65.95 -> **65.96**, held with `--set` in this PR.
+
+Nine work rows rise and one of them is not small. `work_basket` 34,010,143 ->
+**34,698,417** (+2.02%) is the prune's own cost showing up where the prune
+helps most: basket's `evac_bytes` fell 55,104 -> 192, so the walk that used to
+copy those bytes now asks `k_slots_survive` about them instead, and asking is
+what the row counts. The other eight are the ask on paths that never latch --
+`work_encodebench` 4,058,895,905 (+0.0002%), `work_livebench` 3,596,062,732
+(+0.0001%), `work_scanbench` 729,804,590 (+0.0006%), `work_widebench`
+36,463,282 (+0.0066%), `work_jsonbench` 1,485,161,449 (+0.0118%),
+`work_oneshot` 21,745,451 (+0.0135%), `work_indexbench` 3,265,868 (+0.2193%)
+and `work_digestbench` 10,745,219 (+0.2429%). `text` 1,465,084 -> **1,474,076**
+is the seven inlined asks and the two new runtime functions; every one of the
+fourteen binaries grew, none by more than a kilobyte.
+
 **Counters.** The prune shares where it used to copy, so the evacuation
 counters fall: basket `evac_bytes` 55,104 → 192 and `evac_allocs` 5 → 3,
 `string_builder_shape` 4,096 → 80, `builder_counts_once` 6,096 → 80, allocs
