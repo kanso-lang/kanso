@@ -4158,3 +4158,16 @@ LLVM already sinks the splats into the loop's preheader, which the rotated guard
 protects, so the premise was wrong: the splats were not on the short string's
 path, and the second compare is pure cost. Reverted.
 
+**A fourth reading, and it is arithmetic rather than a defect.** `k_b_append_range`
+is entered 176,697 times and every one of them falls through to
+`k_b_append_grow`: its fast path fires zero times. That reads as a buffer being
+regrown, because 1,953 growths a round is a hundred times what one 185 KB output
+buffer doubling from the floor would need. It is not. The caller is
+`d_json/string_at_4` at 175,527 calls, 1,791.1 a decode round against the 1,773
+strings in large.json that hold a character needing an escape — a ratio of
+1.0102. One append per escaped string, into an accumulator that has no buffer
+yet, and a first append allocates whatever path it takes. The 272.6 instructions
+a growth are that allocation and its copy. This is the shape the 2026-08-29 entry
+found in `push_mut_slow`: count the objects born before concluding one is
+growing.
+
