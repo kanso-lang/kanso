@@ -50071,3 +50071,39 @@ for a change of chip, so a projection that misses by thousands is a different
 problem and should be hunted.
 
 ---
+
+## 2026-09-06 (eighth) — obj_key_start's 170 ARE EIGHTEEN STRETCHES, SO THERE IS NO ARM TO LIFT
+
+**CLOSED.** The 2026-09-06 (fifth) entry recorded that 170 of
+`obj_key_start_4'2`'s instructions execute on every one of its 1,188,150 calls
+— 86.25% of the function, 11.62% of jsonbench — and left the question of
+whether that is one arm or the sum of a dispatch. Measured on the same
+instruction-level join: **eighteen disjoint stretches**, none of them adjacent.
+
+    0x3f80  30    0x407f  15    0x40dd   3    0x41b2  21
+    0x4240   4    0x4263   2    0x4276  12    0x42d4   3
+    0x4340   7    0x466a   8    0x46a2   3    0x46d2   5
+    0x46ee   4    0x4726  18    0x4792   4    0x47ae   2
+    0x47c1  16    0x4a16  13
+
+Every call threads all eighteen, and between them sit the instructions that
+execute at other frequencies. So the 170 is not a straight-line body that a
+specialisation could lift out whole; it is the always-taken skeleton of a
+branchy one, and the 31.95% of the function that is `cmp`, `jne`, `je` and
+`test` is that skeleton's shape rather than a prologue.
+
+**What that rules out.** Outlining "the arm" has no arm to outline; the fifth
+entry's suggestion to compare against `parse_value`'s 49-instruction per-call
+band does not carry, because that band IS contiguous and this one is not. A
+repair here has to remove branches or the work they guard, one stretch at a
+time, and each stretch is between 2 and 30 instructions — so the largest single
+prize in the function is 30 instructions a call, 35,644,500, 2.05% of
+jsonbench.
+
+The next entry's `str_char_4` is the better target on this evidence: 621.3
+instructions a call against this function's 197.1, and a loop rather than a
+skeleton.
+
+---
+
+---

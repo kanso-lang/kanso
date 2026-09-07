@@ -33,4 +33,4 @@
 # 5,247, branches 434 -> 436; calls, defines, rounds and visits hold. The same
 # +15 lines and +2 branches every row of compile_golden.txt moved by, for the
 # same reason: the twin's two new arms arrive through the preamble.
-module lines=5247 calls=756 branches=436 defines=99 rounds=6 visits=2409
+module lines=5270 calls=759 branches=437 defines=100 rounds=6 visits=2409

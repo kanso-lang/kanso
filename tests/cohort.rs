@@ -18,7 +18,10 @@ use std::process::Command;
 /// copies the decoded string twice, into the side buffer and back. A program
 /// whose source is a plain `io/stdin` on both arms — always a string, so
 /// always licensed — reads `cohort_frees=1` with `evac_bytes=400144`, which
-/// is the decode's alone.
+/// is the decode's alone. Since 2026-09-07 every constant freezes, and the
+/// freeze's copies are evacuations too: the pin carries 272 bytes of frozen
+/// constants over the 400,496 the two cohorts copy, watched red at the old
+/// value the day the widening landed.
 ///
 /// The input is written here rather than committed, because what this needs
 /// is a large text with a small tree and that runs to a megabyte — six times
@@ -47,7 +50,7 @@ fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(stdout, "held 200000\n", "stdout mismatch: {stderr}");
     assert!(stderr.contains("cohort_frees=2"), "a cohort never fired: {stderr}");
-    assert!(stderr.contains("evac_bytes=400496"), "the decode's cohort kept its region: {stderr}");
+    assert!(stderr.contains("evac_bytes=400768"), "the decode's cohort kept its region: {stderr}");
     assert!(output.status.success());
 }
 

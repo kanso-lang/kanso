@@ -560,6 +560,14 @@ data_beside = row
   (breaking "a_string_s_storage_walked_again_behind_its_header")
   benches
 
+freeze_all = row
+  "a constant computed by a call rebuilt at every mention"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_constant_computed_by_a_call_rebuilt_at_every_mention")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -1005,7 +1013,9 @@ rows_b1g = text/concat rows_b1f [map_lit_copy buf_class_loop char_word]
 
 rows_b1h = text/concat rows_b1g [walk_once data_beside]
 
-rows_b = text/concat rows_b1h [compile_mem compile_mem_host]
+rows_b1i = text/concat rows_b1h [freeze_all]
+
+rows_b = text/concat rows_b1i [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

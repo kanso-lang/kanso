@@ -57,20 +57,31 @@ fn peak_bytes(n: u64) -> u64 {
         .unwrap_or_else(|| panic!("no arena_peak_bytes in:\n{said}"))
 }
 
-/// Twice the message, twice the arena — to the byte. A streaming hash would
+/// Twice the message, more than twice the arena. A streaming hash would
 /// read the same number twice here, and when one does this assertion is the
 /// thing to delete.
+///
+/// Until 2026-09-07 the pins were 7,340,032 at 1,024 bytes and 14,680,064 at
+/// 2,048, exactly linear, and seven kilobytes of arena a message byte. That
+/// was the round table: sha256's sixty-four constants were joined from eleven
+/// literal lists at every `rounds[at]`, sixty-four times a block, and the
+/// garbage of rebuilding them was the peak. Every constant is built once now,
+/// and what is left is the hash's own retention -- the schedule and the
+/// working words of every block, still held to the end -- which reads
+/// 1,048,576 at both old sizes because that is one arena block, the floor
+/// nothing smaller can show. The sizes below sit above the floor. The peak
+/// is no longer an exact doubling because the arena grows by whole blocks,
+/// but it grows with the message, which is the defect this spec is about.
 #[test]
 fn a_hash_holds_every_block_it_has_read() {
-    let short = peak_bytes(1024);
-    let long = peak_bytes(2048);
+    let short = peak_bytes(65_536);
+    let long = peak_bytes(131_072);
 
-    assert_eq!(short, 7_340_032, "the 1,024-byte peak moved");
-    assert_eq!(long, 14_680_064, "the 2,048-byte peak moved");
-    assert_eq!(
-        long,
-        short * 2,
-        "the peak stopped being linear in the message: {short} at 1,024 bytes \
-         and {long} at 2,048"
+    assert_eq!(short, 17_825_808, "the 65,536-byte peak moved");
+    assert_eq!(long, 40_894_496, "the 131,072-byte peak moved");
+    assert!(
+        long > short,
+        "the peak stopped growing with the message: {short} at 65,536 bytes \
+         and {long} at 131,072"
     );
 }
