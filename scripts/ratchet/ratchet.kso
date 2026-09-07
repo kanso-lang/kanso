@@ -318,6 +318,17 @@ emitted_others = row
   (breaking "emitted_others_moved")
   benchmarks
 
+# The integer remainder inlines for a proven pair since 2026-09-07; the
+# mutation sends every remainder back to the runtime, and the emitted goldens
+# read the calls that come back.
+remainder = row
+  "every remainder a call to the runtime again"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_remainder_calls_the_runtime_again")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -658,6 +669,31 @@ beat_mark = row
   (breaking "the_beat_mark_check_fires_at_every_push")
   release
 
+# A cluster of several members rewinds on the back edges of a walk over its
+# tail graph since 2026-09-07, once a trip; before that on every internal
+# edge, which runbench's four-member escape cycle paid 1.06% of the program
+# for. The mutation puts every edge back. beat_iters is pinned by every .mem
+# golden in the corpus, and the four-member fixture pins one a trip exactly.
+every_edge = row
+  "a cluster rewinding on every internal tail edge again"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_cluster_rewinds_on_every_edge_again")
+  release
+
+# A cycle that only appends into a proven-unique builder allocates nothing in
+# the arena, and since 2026-09-07 the classifier sees that and leaves it
+# unbracketed. The mutation makes every append read as an allocation again;
+# the fixture that allocates nothing pins beat_iters at zero.
+pure_cycle = row
+  "a cycle that allocates nothing bracketed and rewound again"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_pure_cycle_bracketed_again")
+  release
+
 behaviour = row
   "a legal call answered differently at an edge, with nothing complaining"
   true
@@ -818,7 +854,9 @@ rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
 
 rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
-rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
+rows_b1r = text/concat rows_b1 [emitted_code emitted_others remainder]
+
+rows_b1b = text/concat rows_b1r [machine_code]
 
 rows_b1c = text/concat rows_b1b [instructions_host text_host]
 
@@ -846,7 +884,7 @@ rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
 rows_c1c0 = text/concat rows_c1b [rendering negative_sign small_record]
 
-rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark]
+rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark every_edge pure_cycle]
 
 rows_c1c = text/concat rows_c1c1 [behaviour]
 

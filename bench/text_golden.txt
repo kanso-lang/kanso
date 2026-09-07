@@ -608,15 +608,15 @@
 # clang-18 host writes the fallback module and cannot regenerate this file.
 jsonbench text=92914
 encodebench text=113026
-oneshot text=103906
-basket text=106898
-widebench text=118018
-deepbench text=70738
-escapebench text=52386
-pendbench text=87026
+oneshot text=103218
+basket text=106770
+widebench text=117970
+deepbench text=70498
+escapebench text=52130
+pendbench text=86322
 indexbench text=55490
-scanbench text=152178
+scanbench text=152210
 digestbench text=105442
 readbench text=51986
-livebench text=104450
-runbench text=240882
+livebench text=103762
+runbench text=240034

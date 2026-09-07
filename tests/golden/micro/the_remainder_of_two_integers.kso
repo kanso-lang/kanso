@@ -1,0 +1,33 @@
+# The remainder and the quotient of two integers the inference has proved are
+# one instruction each on native since 2026-09-07, with two divisors sent to
+# the runtime as before: zero, whose failure is a value the handler can ask
+# for by name, and minus one, whose quotient overflows when the dividend is
+# the least integer. The remainder's sign follows the dividend and the
+# quotient truncates toward zero, on every engine.
+fn rem a b
+  a % b
+
+fn quo a b
+  a / b
+
+fn told f:divide_by_zero
+  "specifically: {f}"
+
+fn told f:math_failure
+  "some math failure: {f}"
+
+fn told n
+  "a number: {n}"
+
+least = 0 - 9223372036854775807 - 1
+
+pub play =
+  print "{rem 7 3} {rem (0 - 7) 3} {rem 7 (0 - 3)} {rem (0 - 7) (0 - 3)}"
+  >> print "{rem 6 3} {rem 5 5} {rem 0 4}"
+  >> print "{rem least (0 - 1)}"
+  >> print "{rem 9223372036854775807 2} {rem least 7}"
+  >> print (told (rem 10 0))
+  >> print "the reason reads as text: {rem 7 0}"
+  >> print "{quo 7 2} {quo (0 - 7) 2} {quo 7 (0 - 2)} {quo (0 - 7) (0 - 2)}"
+  >> print "{quo 9223372036854775807 (0 - 1)} {quo least 7} {quo 0 4}"
+  >> print (told (quo 10 0))

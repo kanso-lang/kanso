@@ -1,0 +1,32 @@
+import "std/text"
+
+# Four groups in one tail cycle that appends into a byte builder and reads
+# the input bytes, and allocates nothing in the arena: an append onto a
+# builder the linearity analysis proved unique grows its storage outside the
+# arena, a slice under such an append is the emitter's fused copy, and
+# find2_below answers an integer. A rewind here would free nothing, and the
+# entry's push and pop would bracket nothing. beat_iters below is zero: the
+# cycle is not a beat, and the arena's one block is the input.
+fn scan acc bs p len
+  found acc bs p len (text/find2_below bs p 120 121 32)
+
+fn found acc bs p len n
+  run (text/append acc (text/slice bs p (n - 1))) bs n len
+
+fn run acc bs n len
+  if (len < n) acc (mark acc bs n len)
+
+fn mark acc bs n len
+  scan (text/append (text/append acc 92) bs[n]!) bs (n + 1) len
+
+fn escaped bs
+  text/utf8 (scan (text/bytes "") bs 1 (length bs))
+
+# the input is built the same way, and that loop is not a beat either
+fn grown acc 0
+  acc
+
+fn grown acc n
+  grown (text/append acc "abxcdy") (n - 1)
+
+pub play = print "{length (escaped (grown (text/bytes "") 20000))}"

@@ -4826,7 +4826,10 @@ impl<'a> Backend<'a> {
                             None => {
                                 // everything this iteration allocated is
                                 // dead; rewind to the entry mark
-                                f.line("call void @k_beat_iter()");
+                                let edge = ((f.group.clone(), f.arity), (name.to_string(), n));
+                                if self.beat.rewind.contains(&edge) {
+                                    f.line("call void @k_beat_iter()");
+                                }
                             }
                         }
                     }
@@ -5175,13 +5178,50 @@ impl<'a> Backend<'a> {
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT);
             return Ok(t);
         }
+        let pure_int = f.set_of(a) == INT && f.set_of(b) == INT;
+        if (op == "%" || op == "/") && pure_int {
+            // Two integers the inference has proved: the remainder or the
+            // quotient is one instruction, and the two divisors it cannot
+            // take — zero, whose failure the runtime words, and minus one,
+            // whose quotient overflows at INT64_MIN and traps on x86 — go to
+            // the call as before. runbench asked k_mod 2,565,677 times, 43
+            // million instructions inside the call, every one of them an
+            // integer pair.
+            let pa = inline_payload(f, a);
+            let pb = inline_payload(f, b);
+            let zero = f.tmp();
+            f.line(&format!("{zero} = icmp eq i64 {pb}, 0"));
+            let minus = f.tmp();
+            f.line(&format!("{minus} = icmp eq i64 {pb}, -1"));
+            let edge = f.tmp();
+            f.line(&format!("{edge} = or i1 {zero}, {minus}"));
+            let fast = f.label();
+            let slow = f.label();
+            let merge = f.label();
+            f.line(&format!("br i1 {edge}, label %{slow}, label %{fast}"));
+            f.start_block(&fast);
+            let r = f.tmp();
+            let insn = if op == "%" { "srem" } else { "sdiv" };
+            f.line(&format!("{r} = {insn} i64 {pa}, {pb}"));
+            let fv = f.tmp();
+            f.line(&format!("{fv} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {r}, 1"));
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&slow);
+            let sv = f.tmp();
+            f.line(&format!("{sv} = {slow_call}"));
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&merge);
+            let t = f.tmp();
+            f.line(&format!("{t} = phi %KValue [ {fv}, %{fast} ], [ {sv}, %{slow} ]"));
+            f.record(&t, INT | ERR);
+            return Ok(t);
+        }
         if op == "/" || op == "%" {
             let t = f.tmp();
             f.line(&format!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR);
             return Ok(t);
         }
-        let pure_int = f.set_of(a) == INT && f.set_of(b) == INT;
         if pure_int {
             let pa = inline_payload(f, a);
             let pb = inline_payload(f, b);

@@ -3196,3 +3196,243 @@ which left the library with the fold. It now hands a clean string to
 `escape_rest` at position 1 — the first byte through `esc_byte`, a second scan,
 the rest as a slice — so the program answers the same bytes and `find2_calls`
 rises by one per clean string. The row's name in ratchet.kso says so.
+
+## 2026-09-07 — A CLUSTER REWINDS ONCE A TRIP
+
+A beat cluster of several groups — a mutual tail cycle the analysis has
+licensed to rewind the arena between iterations — rewound on every internal
+tail edge. `escape_at -> escape_next -> escape_found -> escape_more ->
+escape_at`, the cycle "The scan, iterated" (above) put into lib/json, is four
+groups, so every found byte paid four rewinds; one frees everything the trip
+allocated, and `k_beat_iter` is 24 instructions a call on the empty fast path.
+The entry above measured the beat's share at 52.7M of that change's 104.5M.
+
+### What it does
+
+`beat_loops` hands codegen a set of rewinding edges. A self-loop rewinds on
+its one edge, as before. A cluster of several members rewinds on the back
+edges of a depth-first walk over its internal tail graph, roots in name order:
+every cycle in a directed graph crosses at least one back edge of any
+depth-first walk, so every trip round any cycle still rewinds, and a simple
+cycle rewinds once. Codegen's plain-rewind arm consults the set; the carry arm
+is untouched, and a cluster with a carried member keeps every edge, because
+the carry protocol was not measured under fewer rewinds and this entry does
+not claim it. `back_edges` has a unit test: a four-cycle closes on one edge,
+two cycles sharing a member on two.
+
+On runbench's emitted code the plain rewind sites go from sixteen to ten: the
+escape cycle's four become one (`escape_more -> escape_at`), `escape/many ->
+more` and `regexp/ending_flag`, `regexp/digits` drop theirs, each cycle keeping
+the other direction.
+
+### What it measures
+
+    runbench   2,910,317,247 -> 2,879,430,792   -30,886,455   -1.0613%
+
+on the container, clang 19; the same bytes out. Every counter but `beat_iters`
+is byte-identical — allocations, arena and held peaks, evacuations — which is
+the claim: the rewinds that left were freeing nothing the next one would not.
+`beat_iters` per program, from the veins `all_counters.sh --write` rewrote:
+
+| program | before | after |
+|---|---|---|
+| runbench | 4,172,996 | 2,937,383 |
+| livebench | 11,622,401 | 6,148,001 |
+| oneshot | 29,056 | 15,370 |
+| escapebench | 1,206,001 | 1,203,000 |
+| basket | 114,020 | 114,007 |
+| `a_cluster_entered_by_a_tail_call_sweeps` | 400,001 | 200,001 |
+| `a_pushed_call_keeps_the_sweep` | 241,201 | 240,600 |
+| `an_escaped_list_gives_its_buffer_back` | 2,001 | 1,800 |
+| `beat_cycle` | 400 | 200 |
+| `builder_transient` | 2,680 | 1,360 |
+
+Nine of the fourteen benchmarks and most of the corpus do not move: their
+loops are self-loops, which rewind exactly as they did.
+
+The emitted code loses a call line per dropped site: the decoder 1,254 ->
+1,251 calls, runbench 6,111 -> 6,105, and the `.text` of six programs falls
+by 32 to 80 bytes on this host. `compile_instructions` moves with the compiler's
+own bytes and CI says by how much.
+
+Priced with the container's row laid over CI's (2,879,431,446 projected):
+**welfare 57.03 -> 57.10, +0.07**, all of it the run term; `--set` with CI's
+rows.
+
+### The spec, and the mutation
+
+`tests/golden/mem/a_cycle_of_four_rewinds_once_a_trip.kso` is a four-group
+cycle appending to a builder 100,000 times. The compiler before this change
+counts `beat_iters=400001` on it — watched — and this one `100000`, and the
+.mem golden pins the latter. The ratchet row `every_edge` applies
+`a_cluster_rewinds_on_every_edge_again`, which chains every internal edge back
+onto the back-edge set; the mem vein reads it through that fixture and four
+others.
+
+### The measurement that was not one
+
+The first cut of this change mis-spliced `beat_loops` and dropped the tail of
+the function — the demotable entries, the carry-beat self-loops, and the rule
+that keeps imported groups out of the carry tier. That build licensed
+lib/sha256's clusters as carried beats, which the rule forbids, and runbench
+ran 15.9 billion instructions, 77% of them in `k_slots_survive` under the
+digest's evacuations. For twenty minutes that read as "back edges break the
+carry protocol", and a comment saying so was written into the source before
+the site list of the original emitter — no rewinds in sha256 at all — showed
+the cause. The comment is gone; the carry-cluster rule that survives is the
+unmeasured, conservative one. A profile that changes by 5x on a change that
+should move one counter is the change being wrong, and the first check is the
+emitted site list, which takes a minute.
+
+## 2026-09-07 — A CYCLE THAT ALLOCATES NOTHING IS NOT A BEAT
+
+The entry above took the escape cycle's four rewinds a trip down to one. The
+one that stayed frees nothing: every trip appends into the encoder's builder,
+whose storage is malloc'd, slices the input under those appends, which the
+emitter fuses into the same copy, and asks `find2_below` for an integer.
+Nothing lands in the arena, and the bracket around the cycle — a push and a
+pop per escaping string, 655,650 of them in runbench — brackets nothing.
+Skipping the cycle by name measured the ceiling first: runbench 2,879,430,792
+-> 2,855,405,382, -0.8341%, every memory counter unchanged.
+
+### Why the classifier thought it allocated
+
+`alloc_groups` decides which groups allocate, and a cluster with no allocating
+member is left unbracketed (`Verdict::PureLoop` has existed for exactly this).
+A builtin reached through its std wrapper arrives in the tree spelled
+`builtin_append`, `builtin_bytes`, `builtin_find2_below`, and those spellings
+are on neither of the classifier's lists and are not program functions, so
+`expr_allocates` took each for a closure value whose body it could not see.
+`json/esc_pair` seeded as allocating on `builtin_append`, `escape_next` on
+`builtin_find2_below`, `escape_onto` on `builtin_bytes`. `text/slice`, when it
+was spelled that way, was on the allocating list by name.
+
+### What it does now
+
+Three things, each the size of a sentence. A head is looked up by its bare
+builtin name — the `builtin_` prefix and any module path stripped — so the
+lists say what they were written to say. `find2_below` joins the pure list;
+it returns an integer. And an `append` at a site the linearity analysis
+proved unique (`MutSites`, keyed by source position, the same set the chain
+test reads) is asked only about what it appends: its target is the builder,
+whose growth is outside the arena, and a `slice` nested as its argument is the
+fused copy, so only the slice's own arguments are asked about. Pushes and
+puts are not admitted: a list or map grown in place still takes its next
+buffer from the arena.
+
+With that the escaper's cycle has no allocating member, and `beat_loops` does
+not license it. The entry from `escape_rest` stops being a demoted plain call
+and is a tail call again.
+
+### What it measures
+
+    runbench   2,879,430,792 -> 2,855,405,382   -24,025,410   -0.8341%
+
+the ceiling exactly, on the container with clang 19; the same bytes out.
+`beat_iters` 2,937,383 -> 2,686,373 and nothing else moves.
+
+### The spec, and the mutation
+
+`tests/golden/mem/a_cycle_that_allocates_nothing_needs_no_bracket.kso` is a
+four-group cycle that scans bytes with `find2_below`, appends the run before
+each hit as a fused slice and the hit as two bytes, over 120,000 bytes built
+by a loop of the same kind. The compiler before this change counts
+`beat_iters=60001` on it — 20,000 for the loop that builds the input, 40,000
+for the cycle, one for the entry — watched; this one counts `0`, with `allocs`
+and the arena's one block identical, and the .mem golden pins the zero. The
+ratchet row `pure_cycle` applies `a_pure_cycle_bracketed_again`, which makes
+the in-place test never hold; the mem vein reads it through that fixture and
+every other beat golden.
+
+### What else moved
+
+Nothing but `beat_iters`, in three cost goldens and two .mem fixtures, and no
+peak anywhere: runbench 2,937,383 -> 2,686,373, livebench 6,148,001 ->
+5,032,401, oneshot 15,370 -> 12,581; `append_in_place` and
+`append_of_a_slice_boxes_nothing` 40 -> 0, each a loop that only appends in
+place and had been rewinding forty times for nothing. Every other beat in the
+corpus allocates and keeps its bracket.
+
+Priced with the container's row laid over CI's (2,855,406,036 projected):
+**welfare 57.10 -> 57.16, +0.06** on top of the entry above, all of it the run
+term; `--set` with CI's rows.
+
+The emitted code loses the bracket's calls: the decoder 1,251 -> 1,248, runbench
+6,105 -> 6,102, widebench 1,843 -> 1,832 — a loop of widebench's that only
+appends in place lost a bracket it never counted through — and `.text` falls
+by 32 to 96 bytes on six programs here. `compile_instructions` is CI's.
+
+One spec pinned a bracket this takes off: `tests/cohort.rs` read
+`beat_iters=150000` on `cohort_kept.kso`, whose growing loop appends a
+sixteen-byte literal in place into a builder. Its growth is malloc'd, so the
+rewind freed nothing, and with the bracket gone every other counter the
+fixture prints — allocs, alloc_bytes, arena_peak_bytes, held_peak_bytes,
+append_grow, bytes_malloc, bytes_freed — is byte-identical. The pin reads
+zero now, with the reason beside it, so a classifier that brackets the loop
+again is red. Four CI rounds went by with the specs job red on that one
+line before it was read: the cost-goldens job is the one this kind of
+change usually moves, and it was the only one being read.
+
+## 2026-09-07 — THE REMAINDER AND THE QUOTIENT OF TWO INTEGERS ARE ONE INSTRUCTION EACH
+
+`%` always went through `k_mod`, whatever the inference knew about its
+operands, and runbench asked it 2,565,677 times: 1,548,800 from the escape
+phase's indexing, 451,638 from the decoder's `str_run`, the rest from the hex
+arms and the phase drivers. Every one was an integer pair. The call is 43
+million instructions of self cost, about seventeen a call, before the argument
+boxing around it. `/` went through `k_div` the same way.
+
+`emit_binop_builtin` has had an integer fast path for `+ - *` and the six
+comparisons since the tag switch; `/` and `%` were routed to the call above
+it. On a pair the inference has proved integer they are `srem` and `sdiv` now,
+with two divisors sent to the call as before: zero, whose failure is the value
+`a_division_by_zero_is_a_value` shows a handler asking for by name, and minus
+one, whose quotient overflows at the least integer — `k_div` dies there,
+`k_mod` answers zero. Two compares and a branch decide it.
+
+    runbench   2,855,405,382 -> 2,816,922,233   -38,483,149   -1.3477%
+
+on the container with clang 19, the same bytes out, and no counter moves at
+all — the change is instructions and nothing else. The remainder is
+38,068,669 of it and the quotient 414,480: runbench divides little. Six sites
+in its emitted code, one per source spelling that survives inlining.
+
+`tests/golden/micro/the_remainder_of_two_integers.kso` pins the remainder's
+sign on all four quadrants, the least integer against minus one and against
+seven, the largest against two, the quotient's truncation on all four
+quadrants, and the zero divisor for both operators, as a handler's match and
+as text, on every engine; the interpreter and native agreed before the golden
+was written. The ratchet row `remainder` sends every remainder and quotient
+back to the runtime and the emitted goldens read the calls that return.
+
+Priced with the container's row laid over CI's (2,816,922,887 projected):
+about +0.09 on the run term.
+
+The emitted code trades a call line for the instruction at each site: the
+decoder 1,248 -> 1,247 calls, runbench 6,102 -> 6,096, and `.text` moves by a
+few bytes either way on six programs here. `compile_instructions` is CI's.
+
+### CI's rows, and the floor
+
+The runner counted runbench at 2,816,922,887 for the three changes together,
+654 above the container's 2,816,922,233, the offset every reading since the
+consolidated run program has shown. The other work rows that moved: oneshot
+23,182,078 -> 22,579,660, basket 36,001,898 -> 35,737,604, deepbench
+700,416,944 -> 690,817,043, escapebench 114,626,851 -> 85,754,925 (the bracket
+that came off its non-allocating loop), pendbench 620,703,023 -> 620,687,423,
+livebench 3,984,010,329 -> 3,743,207,118. `.text` falls on eight programs and
+rises 32 bytes on scanbench. `compile_instructions` 19,335,435 -> 19,315,995,
+a fall of 19,440 with `compile_allocs` and `compile_peak_bytes` byte-identical:
+the layout row, moved by the emitter's two new arms and the beat's walk. The
+first round was red on rustfmt alone; the second on the three veins above.
+
+The emitted counters the trend gate reads move with the srem/sdiv arms: each
+of the six sites trades one call line for two compares, two branches and a
+phi, so `emitted_branches` 814 -> 820, `emitted_lines` 9,215 -> 9,237,
+`emitted_other_branches` 12,623 -> 12,671, `emitted_other_lines`
+132,436 -> 132,622, while `emitted_calls` 1,254 -> 1,248 and
+`emitted_other_calls` 20,699 -> 20,661. Lines the compiler writes that the
+processor runs as one instruction each; the work rows above are what they
+cost.
+
+**welfare 57.03 -> 57.25**, all of it the run term, held with `--set`.

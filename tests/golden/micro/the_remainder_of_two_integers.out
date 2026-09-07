@@ -1,0 +1,9 @@
+1 -1 1 -1
+0 0 0
+0
+1 -1
+specifically: modulo by zero
+the reason reads as text: modulo by zero
+3 -3 -3 3
+-9223372036854775807 -1317624576693539401 0
+specifically: division by zero
