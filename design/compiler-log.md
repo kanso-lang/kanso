@@ -3696,3 +3696,27 @@ watches is still there. `tests/cohort.rs` pinned `evac_bytes=400496` for two
 cohorts' copies and carries 400,768 now: the freeze's copies are evacuations
 too, 272 bytes of frozen constants over the same two cohorts. Welfare 57.80
 -> 64.05 on the container's sitting, held with `--set`; CI's rows re-set it.
+
+### CI's sitting for the freeze, and the rows that rose with it
+
+CI's rows for kanso#1295 at aa46fa86: runbench 2,602,519,654 ->
+2,490,112,330 (−4.3191%) and digestbench 67,957,547 -> 10,775,912
+(−84.14%), the round table's rebuild gone from both. Welfare 64.05 ->
+64.36, held with `--set`. Eleven work rows rose by small amounts and the
+trend gate names each: `work_pendbench` landed on 608,937,924 (+3,365,047,
++0.56%), `work_encodebench` on 4,075,264,719 (+2,284,936), `work_livebench`
+on 3,610,815,239 (+924,424), `work_widebench` on 51,944,211 (+294,528),
+`work_deepbench` on 686,441,869 (+149,998), `work_escapebench` on
+85,495,224 (+49,293), `work_basket` on 34,236,107 (+34,632), `work_oneshot`
+on 21,864,579 (+21,030), `work_scanbench` on 736,173,290 (+5,060),
+`work_readbench` on 4,288,146 (+4,668), `work_jsonbench` on 1,497,268,731
+(+4,538) and `work_indexbench` on 3,732,426 (+3,720). Two costs are in
+those numbers and the next entry prices them apart: `k_survives_x` walks
+the chain from its head for every ask now, where a program with tenure off
+walked from the mark's block, and it scans the frozen ranges for a pointer
+in no block; and a frozen value reached from a carried value is a survivor
+the sizing walk still repairs through, element by element, when nothing
+inside a frozen buffer can ever need repair. pendbench's 629 KB constant is
+the case that shows it, and it is the next change. The text vein rose
+10,400 bytes summed, `text` landing on 1,449,180, one `_build` symbol and
+its cache per constant; `compile_instructions` fell to 19,316,501.
