@@ -3484,7 +3484,7 @@ survive either, and the K_STR arm asked the walk again of them anyway. It
 asks only of storage that lives elsewhere now -- a slice's, a builder's
 -- and the K_BYTES arm the same. runbench 2,606,982,659 -> 2,602,519,000,
 −4,463,659, −0.1712%; together −10,105,701, −0.3868%, and against main
-−4.8835%. `k_copy_size` 54,253,637 self -> 41,602,877. No counter in the
+−4.8836%. `k_copy_size` 54,253,637 self -> 41,602,877. No counter in the
 twelve veins or the lazy tier moves. Ratchet rows `walk_once` (runbench
 2,609,054,586 with the second walk back, +6,535,586) and `data_beside`
 (2,606,982,659 with the string's bytes walked again, +4,463,659), each
@@ -3496,3 +3496,20 @@ walk's 509,985 entries were immediates returning zero through six
 callee-saved pushes, and the wrapper measured runbench +1,777,234,
 +0.0680%: the guard at seventeen call sites, most of them already guarded
 by the loops that make them, cost more than the frames it spared.
+
+### CI's sitting for the ten, and the two rows that rose
+
+CI's rows for kanso#1294 at 3ebac68e: runbench 2,736,141,165 ->
+2,602,519,654, −4.8836%, and every other work row fell with it,
+encodebench −3.18%, livebench −3.57%, jsonbench −4.09%. The text vein fell
+11,600 bytes summed over the fourteen binaries. Welfare 57.45 -> 57.80,
+held with `--set`. Two rows rose and the trend gate names them:
+`compile_instructions` landed on 19,319,117, +84 over 19,319,033, the
+runtime's bytes moving under the compiler that carries them (§48 says why
+that row moves on an edit to the compiler's own text); and `work_readbench`
+landed on 4,283,478, +45 over 4,283,433, the read program's one trip
+through the sizing walk and the beat pop paying for flags it never sets.
+Forty-five instructions on a four-million row is the price of the ten
+elsewhere, and the sum is what the objective weighs. The page gained §55
+for the campaign, which is the entry page_drift was owed at six entries
+against a budget of three.
