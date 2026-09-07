@@ -3181,7 +3181,9 @@ container read. `.text` for the three programs importing lib/json: oneshot
 
 **Welfare 51.95 -> 57.03, +5.07, and the floor is set there** with the
 reason naming the workload. The run term's share is about 0.5; the rest is
-the three compile rows, which is the question in the ledger.
+the three compile rows, which is the question in the ledger. The compiler page
+quotes those three rows through `data-golden`, and the prose gate held the
+welfare job red until the page said the new numbers and why they moved.
 
 The ratchet's first round on the iterated shape went UNBUILT on
 `an_encoder_that_walks_a_clean_string`: its patch still named `escape_able`,
