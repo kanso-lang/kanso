@@ -20,40 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (eighth) — obj_key_start's 170 ARE EIGHTEEN STRETCHES, SO THERE IS NO ARM TO LIFT
-
-**CLOSED.** The 2026-09-06 (fifth) entry recorded that 170 of
-`obj_key_start_4'2`'s instructions execute on every one of its 1,188,150 calls
-— 86.25% of the function, 11.62% of jsonbench — and left the question of
-whether that is one arm or the sum of a dispatch. Measured on the same
-instruction-level join: **eighteen disjoint stretches**, none of them adjacent.
-
-    0x3f80  30    0x407f  15    0x40dd   3    0x41b2  21
-    0x4240   4    0x4263   2    0x4276  12    0x42d4   3
-    0x4340   7    0x466a   8    0x46a2   3    0x46d2   5
-    0x46ee   4    0x4726  18    0x4792   4    0x47ae   2
-    0x47c1  16    0x4a16  13
-
-Every call threads all eighteen, and between them sit the instructions that
-execute at other frequencies. So the 170 is not a straight-line body that a
-specialisation could lift out whole; it is the always-taken skeleton of a
-branchy one, and the 31.95% of the function that is `cmp`, `jne`, `je` and
-`test` is that skeleton's shape rather than a prologue.
-
-**What that rules out.** Outlining "the arm" has no arm to outline; the fifth
-entry's suggestion to compare against `parse_value`'s 49-instruction per-call
-band does not carry, because that band IS contiguous and this one is not. A
-repair here has to remove branches or the work they guard, one stretch at a
-time, and each stretch is between 2 and 30 instructions — so the largest single
-prize in the function is 30 instructions a call, 35,644,500, 2.05% of
-jsonbench.
-
-The next entry's `str_char_4` is the better target on this evidence: 621.3
-instructions a call against this function's 197.1, and a loop rather than a
-skeleton.
-
----
-
 ## 2026-09-06 (ninth) — str_char's 42 instructions a byte, and why nothing hoists them
 
 `d_jsonbench/str_char_4` is 165,240,450 instructions, 9.51% of jsonbench. It is
@@ -3513,3 +3479,244 @@ Forty-five instructions on a four-million row is the price of the ten
 elsewhere, and the sum is what the objective weighs. The page gained §55
 for the campaign, which is the entry page_drift was owed at six entries
 against a budget of three.
+## 2026-09-07 — EVERY CONSTANT IS BUILT ONCE ON NATIVE, AS THE INTERPRETER ALREADY DOES
+
+**DONE.** A zero-argument definition is a constant, and the interpreter has
+computed every one of them once, behind a knot cell, since the knot work of
+2026-08 (`eval_ident` sends every constant through `knotted`). Native froze
+only a constant whose body was a literal -- an int, a string of literal
+parts, a list or map of literals -- and a knotted one; every other constant
+was an ordinary nullary function, recomputed at every mention. The archive's
+2026-08-30 entry saw this ("any module-scope constant computed by a call is
+rebuilt per use, language wide") and left it for a gavel on one ground: a
+frozen constant was then built before main by `k_caf_init`, so a body that
+could fail would have failed earlier than the interpreter fails it. The
+2026-08-23 ruling took that ground away -- a cell is filled on first demand
+now -- and the gavel was never filed in the ledger, so the question stood
+answered by the oracle and nobody had written it down.
+
+Found by profile. runbench's digest phase is sha256, whose sixty-four round
+constants are eleven literal lists (six to a line, for the width limit)
+joined by `text/concat` into `rounds`; `compress` reads `rounds[at]` once a
+round, and each read rebuilt the table: ten concats, sixty-four pushes
+through `list/to_list`, 16,000 times a run. `k_b_concat` alone was 26.6M
+instructions of runbench, and every one of them built a table whose value
+never changes.
+
+`is_constant_body` answers yes for every zero-argument definition now. The
+one case the widening broke was the corpus's own: `x = [x]` reached through
+`play = err x` rendered `[[<cycle>]]` on native against the interpreter's
+`[<cycle>]`, because freezing `play` copied `x`'s already-frozen list into a
+second buffer and the cycle came back to the first. A frozen buffer is
+immortal, so `k_caf_freeze` registers each one and `k_survives_x` answers
+yes for a pointer inside any of them; the copier keeps the identity, the
+fixture prints `[<cycle>]` on both engines again, and a beat that carries a
+reference to a constant no longer copies the constant into its carry buffer
+either (it did, for every literal constant, since the day they froze).
+
+On the container with clang 19, the same bytes out of every benchmark:
+
+    runbench   2,602,519,000 -> 2,487,359,798   −115,159,202   −4.4249%
+
+and the allocation veins, which the work vein cannot see, move further:
+runbench `allocs` 8,027,805 -> 7,659,778, `alloc_bytes` 602,780,749 ->
+503,456,077, `arena_peak_bytes` 156,045,008 -> 57,478,864 (−63.2%),
+`arena_blocks` 148 -> 54, `push_mut_fast` 1,937,322 -> 961,383 and
+`sh_buf` 219,712,208 -> 123,205,712, the sixty-four pushes a round gone;
+digestbench `allocs` 213,707 -> 23,841 and `arena_peak_bytes` 54,525,952 ->
+3,145,728, its `push_mut_fast` 514,511 -> 10,956. Every benchmark's
+`perm_allocs` rises by one to eight -- a `KCarryBuf` header per constant
+frozen -- and `evac_allocs`/`evac_bytes` by the constants' own copies, the
+mechanism's stated price; `carry_dedup` 2 -> 3 and 70 -> 71 where a constant
+is reached twice in one freeze. pendbench's `bytes_malloc` 133 -> 0 and
+`perm_live_bytes` 629,328 -> 0: its bytes constant was malloc'd at every
+mention and lives in one frozen buffer now, which the freeze counts as
+`evac_bytes` rather than as permanent live bytes. The lazy tier moves the
+same way on the fixtures whose `play` is a constant with a value, which is
+most of them: a copy of the result at the end, once.
+
+The compile veins move with the emitted code, since every constant now
+carries a `_build` symbol and a cache in front of it: `emitted_code` rises,
+the decoder 139 -> 141 defines and 9,252 -> 9,297 lines, runbench 581 -> 591
+defines and 34,773 -> 34,979 lines, the same shape on every program; that is
+the cache's price and the work vein is what it buys. `compile_cost` moves the
+same way, regenerated.
+
+Ratchet row `freeze_all` puts the knot-only rule back and asks the work vein.
+The golden corpora agree on both engines after the fix above; the wasm
+backend keeps its own rule (`const_cell` answers only a knotted name) and
+still rebuilds every other constant at each mention. That is a cost and not
+a divergence: an effect in a constant's body is a value until it is
+presented to IO, so `stamp = print "built"` mentioned twice renders
+`<io><io>` on both engines and prints nothing, and a wasm program says the
+same bytes either way. Aligning wasm is a thread for the wasm engine's own
+sake, not this entry's. CI's work rows and welfare `--set` follow in the
+next round.
+
+### Every counter this moved, with the value it landed on
+
+The trend gate wants each key by name. Outside the lazy tier:
+
+  run_buf_reuse 56,651
+  run_evac_allocs 15,994
+  run_evac_bytes 8,587,152
+  run_perm_allocs 91
+  run_push_mut_fast 961,383
+  evac_allocs 24
+  evac_bytes 784
+  perm_allocs 5
+  encode_evac_allocs 38
+  encode_evac_bytes 1,248
+  encode_perm_allocs 11
+  oneshot_evac_allocs 24
+  oneshot_evac_bytes 768
+  oneshot_perm_allocs 9
+  basket_evac_allocs 3
+  basket_evac_bytes 192
+  basket_perm_allocs 26
+  branches 387
+  calls 235
+  defines 204
+  lines 6,098
+  module_branches 437
+  module_calls 759
+  module_defines 100
+  module_lines 5,270
+  pend_evac_allocs 2,673
+  pend_perm_allocs 17
+  pend_sh_buf 32,542,640
+  emitted_branches 824
+  emitted_calls 1,254
+  emitted_defines 141
+  emitted_lines 9,297
+  emitted_other_branches 12,731
+  emitted_other_calls 20,763
+  emitted_other_defines 2,343
+  emitted_other_lines 133,570
+  escape_evac_allocs 3
+  escape_evac_bytes 80
+  escape_perm_allocs 2
+  scan_evac_allocs 41
+  scan_evac_bytes 8,976
+  scan_perm_allocs 51
+  wide_evac_allocs 265
+  wide_evac_bytes 520,352
+  wide_perm_allocs 7
+  digest_buf_reuse 131
+  digest_evac_allocs 58
+  digest_evac_bytes 4,528
+  digest_perm_allocs 38
+  digest_push_mut_fast 10,956
+  read_evac_allocs 24
+  read_evac_bytes 752
+  read_perm_allocs 4
+  live_evac_allocs 32
+  live_evac_bytes 944
+  live_perm_allocs 8
+
+and in the lazy tier, one fixture a line -- a frozen constant costs a
+permanent header and the copy of its value, and a fixture whose `play` is a
+constant with a value pays that copy once at the end:
+
+  a_builder_handed_on_is_still_a_builder_evac_allocs 3, a_builder_handed_on_is_still_a_builder_evac_bytes 160, a_builder_handed_on_is_still_a_builder_perm_allocs 4, a_builder_handed_on_is_still_a_builder_survive_slots 4
+  a_cluster_entered_by_a_tail_call_sweeps_evac_allocs 3, a_cluster_entered_by_a_tail_call_sweeps_evac_bytes 80, a_cluster_entered_by_a_tail_call_sweeps_perm_allocs 13, a_cluster_entered_by_a_tail_call_sweeps_survive_slots 4
+  a_cycle_of_four_rewinds_once_a_trip_evac_allocs 3, a_cycle_of_four_rewinds_once_a_trip_evac_bytes 80, a_cycle_of_four_rewinds_once_a_trip_perm_allocs 14, a_cycle_of_four_rewinds_once_a_trip_survive_slots 4
+  a_cycle_that_allocates_nothing_needs_no_bracket_evac_allocs 3, a_cycle_that_allocates_nothing_needs_no_bracket_evac_bytes 80, a_cycle_that_allocates_nothing_needs_no_bracket_perm_allocs 4, a_cycle_that_allocates_nothing_needs_no_bracket_survive_slots 4
+  a_digest_holds_every_block_it_walked_buf_reuse 3, a_digest_holds_every_block_it_walked_evac_allocs 39, a_digest_holds_every_block_it_walked_evac_bytes 3,920, a_digest_holds_every_block_it_walked_perm_allocs 39, a_digest_holds_every_block_it_walked_survive_slots 4
+  a_digest_holds_every_block_it_walked_push_mut_fast 124
+  a_loop_invariant_capture_is_copied_every_rewind_evac_allocs 22, a_loop_invariant_capture_is_copied_every_rewind_evac_bytes 16,624, a_loop_invariant_capture_is_copied_every_rewind_perm_allocs 4, a_loop_invariant_capture_is_copied_every_rewind_survive_slots 504
+  a_map_walk_builds_no_scratch_pair_perm_allocs 11, a_map_walk_builds_no_scratch_pair_survive_slots 32,004
+  a_map_walk_builds_no_scratch_pair_ten_frees 0
+  a_pushed_call_keeps_the_sweep_evac_allocs 3, a_pushed_call_keeps_the_sweep_evac_bytes 80, a_pushed_call_keeps_the_sweep_perm_allocs 2, a_pushed_call_keeps_the_sweep_survive_slots 4
+  a_repaired_node_below_the_mark_holds_tenure_evac_allocs 3,685, a_repaired_node_below_the_mark_holds_tenure_perm_allocs 19, a_repaired_node_below_the_mark_holds_tenure_sh_buf 2,490,256, a_repaired_node_below_the_mark_holds_tenure_survive_slots 408
+  a_repaired_node_below_the_mark_holds_tenure_bytes_freed 0
+  a_transient_maps_view_is_freed_evac_allocs 7, a_transient_maps_view_is_freed_evac_bytes 192, a_transient_maps_view_is_freed_perm_allocs 5, a_transient_maps_view_is_freed_survive_slots 4
+  an_accumulator_loop_reclaims_its_garbage_evac_allocs 3, an_accumulator_loop_reclaims_its_garbage_evac_bytes 80, an_accumulator_loop_reclaims_its_garbage_perm_allocs 14, an_accumulator_loop_reclaims_its_garbage_survive_slots 4
+  an_escaped_list_gives_its_buffer_back_evac_allocs 3, an_escaped_list_gives_its_buffer_back_evac_bytes 80, an_escaped_list_gives_its_buffer_back_perm_allocs 2, an_escaped_list_gives_its_buffer_back_survive_slots 4
+  an_inner_beat_opens_its_tenure_in_the_block_outside_evac_allocs 62,144, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_bytes 33,957,408, an_inner_beat_opens_its_tenure_in_the_block_outside_perm_allocs 19, an_inner_beat_opens_its_tenure_in_the_block_outside_survive_slots 4,009
+  an_unasked_equality_stays_a_cell_evac_allocs 3, an_unasked_equality_stays_a_cell_evac_bytes 80, an_unasked_equality_stays_a_cell_perm_allocs 4, an_unasked_equality_stays_a_cell_survive_slots 4
+  an_undemanded_knot_allocates_nothing_evac_allocs 3, an_undemanded_knot_allocates_nothing_evac_bytes 80, an_undemanded_knot_allocates_nothing_perm_allocs 3, an_undemanded_knot_allocates_nothing_survive_slots 4
+  append_in_place_evac_allocs 3, append_in_place_evac_bytes 160, append_in_place_perm_allocs 4, append_in_place_survive_slots 4
+  append_of_a_slice_boxes_nothing_evac_allocs 5, append_of_a_slice_boxes_nothing_evac_bytes 240, append_of_a_slice_boxes_nothing_perm_allocs 5, append_of_a_slice_boxes_nothing_survive_slots 4
+  beat_builder_evac_allocs 3, beat_builder_evac_bytes 80, beat_builder_perm_allocs 14, beat_builder_survive_slots 4
+  beat_cycle_evac_allocs 3, beat_cycle_evac_bytes 80, beat_cycle_perm_allocs 14, beat_cycle_survive_slots 4
+  build_cycle.imported_evac_allocs 10, build_cycle.imported_evac_bytes 368, build_cycle.imported_perm_allocs 9, build_cycle.imported_survive_slots 12
+  builder_counts_once_evac_allocs 3, builder_counts_once_evac_bytes 80, builder_counts_once_perm_allocs 4, builder_counts_once_survive_slots 4
+  builder_guard_evac_allocs 3, builder_guard_evac_bytes 112, builder_guard_perm_allocs 11, builder_guard_survive_slots 4
+  builder_reclaim_evac_allocs 3, builder_reclaim_evac_bytes 80, builder_reclaim_perm_allocs 15, builder_reclaim_survive_slots 4
+  builder_transient_evac_allocs 3, builder_transient_evac_bytes 80, builder_transient_perm_allocs 5, builder_transient_survive_slots 4
+  early_exit_evac_allocs 3, early_exit_evac_bytes 80, early_exit_perm_allocs 3, early_exit_survive_slots 4
+  effect_push_shape_evac_allocs 20, effect_push_shape_evac_bytes 672, effect_push_shape_perm_allocs 6, effect_push_shape_survive_slots 6
+  fold_push_shape_evac_allocs 3, fold_push_shape_evac_bytes 96, fold_push_shape_perm_allocs 6, fold_push_shape_survive_slots 4
+  force_path_evac_allocs 3, force_path_evac_bytes 80, force_path_perm_allocs 3, force_path_survive_slots 4
+  fresh_builder_evac_allocs 3, fresh_builder_evac_bytes 80, fresh_builder_perm_allocs 13, fresh_builder_survive_slots 4
+  fresh_cycle_evac_allocs 3, fresh_cycle_evac_bytes 80, fresh_cycle_perm_allocs 13, fresh_cycle_survive_slots 4
+  fused_map_shape_evac_allocs 3, fused_map_shape_evac_bytes 96, fused_map_shape_perm_allocs 6, fused_map_shape_survive_slots 4
+  fused_reducer_evac_allocs 3, fused_reducer_evac_bytes 80, fused_reducer_perm_allocs 3, fused_reducer_survive_slots 4
+  fused_select_shape_evac_allocs 3, fused_select_shape_evac_bytes 96, fused_select_shape_perm_allocs 5, fused_select_shape_survive_slots 4
+  fused_tally_evac_allocs 3, fused_tally_evac_bytes 80, fused_tally_perm_allocs 7, fused_tally_survive_slots 4
+  growing_map_evac_allocs 3, growing_map_evac_bytes 80, growing_map_perm_allocs 13, growing_map_survive_slots 4
+  lazy_verdict_is_per_arm_evac_allocs 7, lazy_verdict_is_per_arm_evac_bytes 208, lazy_verdict_is_per_arm_perm_allocs 5, lazy_verdict_is_per_arm_survive_slots 4
+  many_cells_evac_allocs 3, many_cells_evac_bytes 80, many_cells_perm_allocs 3, many_cells_survive_slots 4
+  map_put_evac_allocs 3, map_put_evac_bytes 80, map_put_perm_allocs 12, map_put_survive_slots 4
+  piped_reducer_evac_allocs 3, piped_reducer_evac_bytes 80, piped_reducer_perm_allocs 3, piped_reducer_survive_slots 4
+  readwrite_map_evac_allocs 3, readwrite_map_evac_bytes 80, readwrite_map_perm_allocs 13, readwrite_map_survive_slots 4
+  record_fields_evac_allocs 3, record_fields_evac_bytes 80, record_fields_perm_allocs 2, record_fields_survive_slots 4
+  record_reuse_shape_evac_allocs 3, record_reuse_shape_evac_bytes 80, record_reuse_shape_perm_allocs 5, record_reuse_shape_survive_slots 16,006
+  repeated_key_shape_evac_allocs 3, repeated_key_shape_evac_bytes 96, repeated_key_shape_perm_allocs 16, repeated_key_shape_survive_slots 4
+  returned_thunk_evac_allocs 3, returned_thunk_evac_bytes 96, returned_thunk_perm_allocs 3, returned_thunk_survive_slots 4
+  reuse_guard_evac_allocs 3, reuse_guard_evac_bytes 112, reuse_guard_perm_allocs 12, reuse_guard_survive_slots 4
+  shared_twice_evac_allocs 3, shared_twice_evac_bytes 80, shared_twice_perm_allocs 3, shared_twice_survive_slots 4
+  skip_shape_evac_allocs 3, skip_shape_evac_bytes 96, skip_shape_perm_allocs 5, skip_shape_survive_slots 4
+  skip_unused_evac_allocs 3, skip_unused_evac_bytes 80, skip_unused_perm_allocs 4, skip_unused_survive_slots 4
+  skipped_err_evac_allocs 3, skipped_err_evac_bytes 80, skipped_err_perm_allocs 4, skipped_err_survive_slots 4
+  sort_shape_evac_allocs 3, sort_shape_evac_bytes 80, sort_shape_perm_allocs 3, sort_shape_survive_slots 4
+  stream_fold_evac_allocs 3, stream_fold_evac_bytes 80, stream_fold_perm_allocs 3, stream_fold_survive_slots 4
+  stream_write_evac_allocs 12, stream_write_evac_bytes 480, stream_write_perm_allocs 15, stream_write_survive_slots 4
+  string_builder_shape_evac_allocs 3, string_builder_shape_evac_bytes 80, string_builder_shape_perm_allocs 5, string_builder_shape_survive_slots 4
+  string_headers_evac_allocs 3, string_headers_evac_bytes 80, string_headers_perm_allocs 4, string_headers_survive_slots 4
+  take_shape_evac_allocs 3, take_shape_evac_bytes 96, take_shape_perm_allocs 5, take_shape_survive_slots 4
+  tally_shape_evac_allocs 3, tally_shape_evac_bytes 96, tally_shape_perm_allocs 4, tally_shape_survive_slots 4
+  the_length_of_an_indexed_character_needs_no_scan_evac_allocs 47, the_length_of_an_indexed_character_needs_no_scan_evac_bytes 62,160, the_length_of_an_indexed_character_needs_no_scan_perm_allocs 7, the_length_of_an_indexed_character_needs_no_scan_survive_slots 4
+  the_same_capture_built_below_the_mark_is_shared_evac_allocs 14, the_same_capture_built_below_the_mark_is_shared_evac_bytes 8,416, the_same_capture_built_below_the_mark_is_shared_perm_allocs 4, the_same_capture_built_below_the_mark_is_shared_survive_slots 504
+  unsafe_wrap_evac_allocs 3, unsafe_wrap_evac_bytes 80, unsafe_wrap_perm_allocs 4, unsafe_wrap_survive_slots 4
+
+### Three specs pinned the rebuilt table without knowing it
+
+`tests/sha256_peak.rs` pinned 7,340,032 arena bytes for a 1,024-byte hash
+and exactly twice that for 2,048 -- seven kilobytes of arena a message byte,
+which was the round table's garbage and not the hash's retention. Both
+sizes read 1,048,576 now, one arena block, the floor nothing smaller can
+show; the spec measures 65,536 and 131,072 bytes instead, pinned at
+17,825,808 and 40,894,496, and asserts growth rather than an exact doubling,
+because the arena grows by whole blocks. `tests/a_program_is_not_its_directory.rs`
+pinned the peak under `lib/` at 27,262,976 for the same reason and reads
+2,097,152 now, still not the 1,048,576 it reads elsewhere, so the defect it
+watches is still there. `tests/cohort.rs` pinned `evac_bytes=400496` for two
+cohorts' copies and carries 400,768 now: the freeze's copies are evacuations
+too, 272 bytes of frozen constants over the same two cohorts. Welfare 57.80
+-> 64.05 on the container's sitting, held with `--set`; CI's rows re-set it.
+
+### CI's sitting for the freeze, and the rows that rose with it
+
+CI's rows for kanso#1295 at aa46fa86: runbench 2,602,519,654 ->
+2,490,112,330 (−4.3191%) and digestbench 67,957,547 -> 10,775,912
+(−84.14%), the round table's rebuild gone from both. Welfare 64.05 ->
+64.36, held with `--set`. Eleven work rows rose by small amounts and the
+trend gate names each: `work_pendbench` landed on 608,937,924 (+3,365,047,
++0.56%), `work_encodebench` on 4,075,264,719 (+2,284,936), `work_livebench`
+on 3,610,815,239 (+924,424), `work_widebench` on 51,944,211 (+294,528),
+`work_deepbench` on 686,441,869 (+149,998), `work_escapebench` on
+85,495,224 (+49,293), `work_basket` on 34,236,107 (+34,632), `work_oneshot`
+on 21,864,579 (+21,030), `work_scanbench` on 736,173,290 (+5,060),
+`work_readbench` on 4,288,146 (+4,668), `work_jsonbench` on 1,497,268,731
+(+4,538) and `work_indexbench` on 3,732,426 (+3,720). Two costs are in
+those numbers and the next entry prices them apart: `k_survives_x` walks
+the chain from its head for every ask now, where a program with tenure off
+walked from the mark's block, and it scans the frozen ranges for a pointer
+in no block; and a frozen value reached from a carried value is a survivor
+the sizing walk still repairs through, element by element, when nothing
+inside a frozen buffer can ever need repair. pendbench's 629 KB constant is
+the case that shows it, and it is the next change. The text vein rose
+10,400 bytes summed, `text` landing on 1,449,180, one `_build` symbol and
+its cache per constant; `compile_instructions` fell to 19,316,501.

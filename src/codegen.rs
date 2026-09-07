@@ -3382,31 +3382,24 @@ impl<'a> Backend<'a> {
         self.emit_dispatcher_as(&dsym(name, arity), name, arity, decls)
     }
 
-    /// A zero-argument definition whose body is a literal is a constant, so it
-    /// is worth building once. The body emits unchanged under a build symbol
-    /// and the real symbol becomes a cache in front of it.
-    /// A knotted constant must be frozen whether or not its body is a literal:
-    /// unfrozen, the real symbol recomputes its body, so a mention inside that
-    /// body re-enters the builder and the recursion has no floor. Frozen, the
-    /// mention is a load from a cell that `k_caf_init` fills once before main,
-    /// which is what makes the cycle finite.
-    fn is_constant_body(&self, decl: &FnDecl) -> bool {
-        if self.knotted.contains(&decl.name) {
-            return true;
-        }
-        fn literal(expr: &Expr) -> bool {
-            match expr {
-                Expr::Int(..) | Expr::Float(..) => true,
-                Expr::Str(parts, _) => parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))),
-                Expr::List(items, _) => items.iter().all(literal),
-                Expr::MapLit(pairs, _) => pairs.iter().all(|(k, v)| literal(k) && literal(v)),
-                _ => false,
-            }
-        }
-        match decl.body.as_slice() {
-            [Stmt::Expr(expr)] => literal(expr),
-            _ => false,
-        }
+    /// A zero-argument definition is a constant, and a constant is built once:
+    /// the body emits unchanged under a build symbol and the real symbol
+    /// becomes a cache in front of it, filled on first demand. Until
+    /// 2026-09-07 only a body that was a literal froze, and every other
+    /// constant -- a table concatenated from literals, a map built by a call
+    /// -- was recomputed at every mention: sha256's sixty-four round
+    /// constants were concatenated from eleven literal lists 16,000 times a
+    /// run on runbench. The interpreter computes every constant once behind a
+    /// knot cell, so recomputing was a divergence from the oracle in cost,
+    /// and for a body with an effect in count as well. The literal rule dated
+    /// from when the cells were filled before main, where a body that could
+    /// fail would have failed early; a freeze on first demand fails exactly
+    /// where the interpreter does.
+    /// A knotted constant is the case that cannot be left unfrozen whatever
+    /// the rule: unfrozen, the real symbol recomputes its body, so a mention
+    /// inside that body re-enters the builder and the recursion has no floor.
+    fn is_constant_body(&self, _decl: &FnDecl) -> bool {
+        true
     }
 
     fn emit_frozen_constant(&mut self, name: &str, decls: &[&FnDecl]) -> Result<(), String> {

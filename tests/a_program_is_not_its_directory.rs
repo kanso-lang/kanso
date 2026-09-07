@@ -78,7 +78,7 @@ fn the_directory_a_package_sits_in_changes_its_memory() {
     let in_lib = peak_under("lib");
     let elsewhere = peak_under("elsewhere");
 
-    assert_eq!(in_lib, 27_262_976, "the peak under lib/ moved");
+    assert_eq!(in_lib, 2_097_152, "the peak under lib/ moved");
     assert_eq!(elsewhere, 1_048_576, "the peak outside lib/ moved");
     assert_ne!(
         in_lib, elsewhere,

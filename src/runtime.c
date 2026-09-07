@@ -1074,11 +1074,45 @@ static int k_where(const void* p, KMark* m) {
     return K_WHERE_OUTSIDE;
 }
 
+/* The buffers frozen constants live in. A frozen value is immortal, so a
+   walk that meets one has nothing to copy and nothing to size: without this
+   every beat that carried a reference to a constant copied the constant into
+   its carry buffer, and a constant frozen out of another constant's value was
+   copied a second time, which broke the identity a knot's cycle returns to
+   -- `x = [x]` reached through `err x` rendered as `[[<cycle>]]` on native
+   where the interpreter, holding one list, says `[<cycle>]`. Registered by
+   k_caf_freeze; a handful of ranges, walked only for a pointer in no arena
+   block and no tenure block. */
+static const char** k_frozen_lo = NULL;
+static const char** k_frozen_hi = NULL;
+static int k_frozen_n = 0;
+static int k_frozen_cap = 0;
+
+static void k_frozen_note(const char* lo, size_t n) {
+    if (k_frozen_n == k_frozen_cap) {
+        k_frozen_cap = k_frozen_cap ? 2 * k_frozen_cap : 16;
+        k_frozen_lo = realloc(k_frozen_lo, sizeof(const char*) * (size_t)k_frozen_cap);
+        k_frozen_hi = realloc(k_frozen_hi, sizeof(const char*) * (size_t)k_frozen_cap);
+        if (!k_frozen_lo || !k_frozen_hi) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    k_frozen_lo[k_frozen_n] = lo;
+    k_frozen_hi[k_frozen_n] = lo + n;
+    k_frozen_n++;
+}
+
+static __attribute__((noinline)) int k_frozen_holds(const void* p) {
+    const char* q = (const char*)p;
+    for (int i = 0; i < k_frozen_n; i++)
+        if (q >= k_frozen_lo[i] && q < k_frozen_hi[i]) return 1;
+    return 0;
+}
+
 static int k_survives_x(const void* p, KMark* m) {
-    if (!m || !k_ten_any) return k_survives(p, m);
+    if (!m) return k_survives(p, NULL) || (k_frozen_n && k_frozen_holds(p));
     int w = k_where(p, m);
     if (w == K_WHERE_BELOW) return 1;
-    return w == K_WHERE_OUTSIDE && k_ten_holds_outside(p);
+    if (w != K_WHERE_OUTSIDE) return 0;
+    return (k_ten_any && k_ten_holds_outside(p)) || (k_frozen_n && k_frozen_holds(p));
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
@@ -2239,6 +2273,7 @@ KValue k_caf_freeze(KValue v) {
     if (!buf->data) { fputs("out of memory\n", stderr); exit(1); }
     buf->cap = need ? need : 16;
     buf->used = 0;
+    k_frozen_note(buf->data, buf->cap);
     KCopy cp = { buf, &none, 0, 0 };
     k_ptrmap_begin(&k_copy_map);
     k_copy_map_live = 0;

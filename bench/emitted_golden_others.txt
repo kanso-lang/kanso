@@ -135,16 +135,16 @@
 # and hold to the line. defines hold everywhere. Banked as the price of
 # encodebench -1.3766% and six other work rows falling.
 # 2026-09-06 (the proven-tags append, and the escape arms folded into esc_pair): every program gains the k_b_append_mut_int twin the emitter now writes into the preamble -- +1 define, +1 call, +3 branches, +46 lines. The two here that import lib/json, oneshot and livebench, gain esc_pair on top of it: +2 defines, +1 call, +5 branches, +75 lines. The other ten hold to the twin alone.
-encodebench defines=182 calls=1640 branches=1010 lines=11157
-oneshot defines=139 calls=1241 branches=811 lines=9181
-basket defines=141 calls=1270 branches=803 lines=8026
-widebench defines=198 calls=1832 branches=1098 lines=12120
-deepbench defines=115 calls=843 branches=584 lines=5912
-escapebench defines=50 calls=114 branches=121 lines=1613
-pendbench defines=129 calls=1218 branches=674 lines=6999
-scanbench defines=330 calls=3283 branches=2117 lines=19722
-indexbench defines=56 calls=155 branches=138 lines=1929
-digestbench defines=189 calls=1539 branches=907 lines=9946
-readbench defines=59 calls=159 branches=151 lines=2141
-livebench defines=140 calls=1265 branches=825 lines=9298
-runbench defines=581 calls=6102 branches=3458 lines=34773
+encodebench defines=184 calls=1646 branches=1012 lines=11203
+oneshot defines=141 calls=1247 branches=813 lines=9226
+basket defines=142 calls=1273 branches=804 lines=8051
+widebench defines=200 calls=1838 branches=1100 lines=12169
+deepbench defines=116 calls=846 branches=585 lines=5938
+escapebench defines=51 calls=117 branches=122 lines=1636
+pendbench defines=131 calls=1224 branches=676 lines=7044
+scanbench defines=333 calls=3292 branches=2120 lines=19788
+indexbench defines=57 calls=158 branches=139 lines=1952
+digestbench defines=195 calls=1557 branches=913 lines=10072
+readbench defines=60 calls=162 branches=152 lines=2169
+livebench defines=142 calls=1271 branches=827 lines=9343
+runbench defines=591 calls=6132 branches=3468 lines=34979
