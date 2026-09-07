@@ -8,13 +8,14 @@
 # way in and, for the memory terms, also sums: `peak_of` adds the arena,
 # held and perm peaks, so a `*_peak_bytes` term is a derived quantity and no
 # row anywhere carries its value. A join on values was measured before this
-# file was written and cannot work — of the 28 counters, six have no row
-# holding their number at all and two match several at once (2,097,152 is
-# `arena_peak_bytes` in four goldens).
+# file was written and cannot work — of the five counters, one has no row
+# holding its number at all (`run_peak_bytes` is a sum of three) and the
+# arena peak matches several goldens at once (2,097,152 is
+# `arena_peak_bytes` in four of them).
 #
 # tests/the_objective_reads_what_the_gate_watches.rs replays this file: it
 # sums each counter's keys out of the goldens the trend gate walks and
-# asserts the total is what `welfare --counters` prints, for all 28 and no
+# asserts the total is what `welfare --counters` prints, for all five and no
 # others. A rename on either side, a pool added to `peak_of`, or a counter
 # joining the objective turns that spec red rather than quietly unlinking a
 # term.
@@ -23,9 +24,12 @@
 # counter's welfare baseline moved in the same diff is a re-basing, and a
 # re-basing is neither better nor worse.
 #
-# 2026-09-06: the count in the two lines above said 27 and the file has held 28
-# since livebench joined on 2026-09-05. The spec replays the file rather than a
-# number, so nothing was ever unchecked; the prose was.
+# 2026-09-06: the count in the two lines above said 27 and the file had held 28
+# since livebench joined on 2026-09-05. 2026-09-07: it said 28 and the file has
+# held five since the gavel below cut the runtime side to one program the day
+# before. Both times the spec replays the file rather than a number, so nothing
+# was ever unchecked; the prose was, twice, and CLAUDE.md carried the second
+# one on into a session that computed a trade over the wrong model.
 
 # 2026-09-06: the run counters became two. Clay's gavel made welfare's runtime
 # side ONE consolidated program -- bench/runbench -- so the twenty-five rows

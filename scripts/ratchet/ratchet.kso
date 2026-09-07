@@ -624,6 +624,18 @@ chain_drift = row
   (breaking "a_chain_step_that_sizes_its_continuation_every_step")
   benches
 
+# The emitted-code vein is the one that sees this, because what the set
+# removes is a call: `k_force_fast` in front of every `if` over a comparison.
+# The allocation counters cannot -- forcing a value that is not a thunk
+# allocates nothing -- and that is the dimension #1064 built this gate for.
+thunk_set = row
+  "a comparison the emitter could not prove is not a thunk"
+  false
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_comparison_that_might_be_a_thunk")
+  benches
+
 pop_deep = row
   "a carried pop that prunes at a survivor"
   true
@@ -1083,7 +1095,7 @@ rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
 
 rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
 
-rows_b1l = text/concat rows_b1k [size_walk chain_drift pop_deep]
+rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set pop_deep]
 
 rows_b = text/concat rows_b1l [compile_mem compile_mem_host]
 

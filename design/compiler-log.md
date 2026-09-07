@@ -3966,3 +3966,103 @@ and `k_b_put_mut` write into nodes reached other ways, and the argument covers
 `push` only. It is a reason the corpus is quiet and a reason the other six
 sites are where to look. The latch watches all seven either way, which is the
 point of latching rather than reasoning.
+
+## 2026-09-07 — a comparison the emitter could not prove is not a thunk
+
+**The defect.** `emit_binop_builtin` ends by merging two arms into a phi: the
+inlined fast path, and the call the slow path makes. For `+`, `-` and `*` that
+call is `k_add`, `k_sub` or `k_mul`; for the six comparisons it is `k_cmp`.
+The phi was returned with no `f.record` on it, and `set_of` answers
+`unwrap_or(TOP)` for a name it has never seen. TOP carries THUNK, so
+`maybe_force` emitted a `k_force_fast` in front of every `if` whose condition
+was one of those phis — a force on a value that is a boolean by construction.
+
+Both arms are known. `k_cmp` answers `k_bool` or the failure it was handed.
+`k_add` and its two siblings answer an int, a float or that same failure, and
+`k_die` on anything else. The fast arms are the `select` between the two
+constant tags and the `insertvalue` of an int. So the phi's set is
+`BOOL | ERR` for a comparison and `INT | FLOAT | ERR` for the three
+arithmetic ops, with the operands' failure bits carried through the way the
+`/` and `%` line above it already carries them. Recording that is the whole
+change.
+
+**What it cost.** runbench 2,414,841,906 -> 2,400,271,241, −0.6034%, same
+output checksum. `k_force_fast` in runbench's emitted code 557 calls -> 451;
+runbench's lines 34,979 -> 34,873, pendbench −15 calls, digestbench −25,
+jsonbench byte-identical because its comparisons were already proved pure-int.
+`kanso check lib/json` moves 6 instructions on this container, and
+`compile_allocs`, `compile_peak_bytes`, `compile_rounds` and `compile_visits`
+are byte-identical. Projected welfare 65.96 -> 66.00, held with `--set`.
+
+**Where it was found.** `value_for` is 258,970,635 instructions, 10.72% of
+runbench, over 1,791,306 calls — 144.6 a call, spread across 522 addresses
+with the top fifty accounting for half. It is not the arm ladder. Forty-one
+per cent of it is the number scan: `scan` and `scan_at` inline into it, and
+the per-byte loop runs 3.48 million times for 417,483 numbers at about 32
+instructions a byte. Two of those instructions are `cmp $0xe` and its branch,
+which is the inlined thunk test — tag 14 is `K_THUNK`, not a failure tag, and
+the operand is a `select` of 2 and 3.
+
+**Three shapes measured and not shipped.**
+
+The overflow checks, priced as a ceiling and never a candidate: replacing
+every `llvm.sadd/ssub/smul.with.overflow.i64` and its `k_die` trap block with
+a plain `nsw` op reads runbench 2,414,841,906 -> 2,382,274,700, −1.3486%.
+That is the entire checked-arithmetic budget of the run program, and the
+overflow death is defined, message-pinned behaviour, so the number is a
+measurement rather than a proposal.
+
+Ten digit arms on `scan_at`, one for each of 48 through 57. Five sparse cases
+over a 59-slot span lower to a compare ladder, where fifteen lower to a jump
+table: runbench 2,414,841,906 -> 2,380,504,534, −1.4219%, `value_for`
+258,970,635 -> 224,633,376, same checksum — more than the whole ceiling above.
+**The objective declines it: welfare 65.96 -> 65.86.** Priced one term at a
+time against the floor, runtime pays +0.10 and the three compile terms take
+0.21 back: `compile_instructions` −0.09 (20,135,321 -> 21,018,953 here),
+`compile_allocs` −0.05 (11,613 -> 12,029), `compile_peak_bytes` −0.07
+(375,222 -> 388,852). Front-end visits 9,884 -> 10,308 and emitted lines +96.
+This is the pending question in design/pending-gavels.md with a number on it:
+the compile term's workload is lib/json itself, so thirty lines added to the
+library are measured as a 4.4% compile regression on the very lines they add,
+while a program that imports lib/json compiles them once and decodes numbers
+forever. Recorded here rather than argued; the weights are Clay's.
+
+The same reordering written to cost less library text — the digit range asked
+in `scan` before the dispatch, with `scan_at` keeping the five rare bytes —
+reads −0.2914%, a fifth of the arms. The extra hop costs what the table saves.
+
+**Two earlier guesses at `value_for`, both wrong.** Whitespace written as arms
+measured +0.1216%. And the emitter does write a real `switch i64` for
+integer-literal arms; the "compare chain" the first reading assumed is LLVM's
+lowering of a sparse switch, not the emitter's shape.
+
+**CI's rows.** runbench 2,414,841,737 -> 2,400,271,058 (-0.6034%, agreeing
+with the container's reading to four figures), pendbench 598,215,444 ->
+596,612,948 (-0.2679%), digestbench 10,745,219 -> 10,420,391 (-3.0230%). The
+`.text` vein falls with them: runbench 243,858 -> 241,714, pendbench 86,914 ->
+86,610, digestbench 106,562 -> 105,634. `compile_instructions` is 19,317,662,
+unchanged. Every other row in both veins holds. Floor 65.96 -> 66.00.
+
+**A second instance of the same defect, found and not shipped.** A float
+literal is emitted as a call to `k_float` and its result carried no set
+either, so it read as TOP the same way -- and `k_float` answers a float and
+nothing else. Recording it changes runbench by zero, and changes no
+emitted-code row of any of the fourteen programs. Nothing in the corpus can
+see it, so nothing pins it, and a change no golden can fail is not one to
+carry. It is written down here so the next float-heavy program in the corpus
+finds it already diagnosed. The other unrecorded `%KValue` in the sweep is
+`k_env_get`, and TOP is right there: a captured name really can be a thunk.
+
+**And the instruction file was wrong about the objective, which is how the
+digit arms were mispriced by hand before `welfare` was run.** CLAUDE.md said
+the score weighs twenty-eight counters — an instruction row per benchmark and
+twelve memory rows — which was the shape before the 2026-09-06 gavel cut the
+runtime side to one consolidated program. It weighs five:
+`run_instructions`, `run_peak_bytes`, and the three compile rows.
+`bench/objective_sources.txt` had the same count in its header while its own
+later note recorded the change. Arithmetic over the old model gave the digit
+arms a net rise of about +0.04; the real run gave −0.10, because the three
+compile terms carry a full point of weight between them against run speed's
+two, and all three moved the same way. Both files corrected, and the paragraph
+in CLAUDE.md now says to run `welfare --counters` rather than trust the
+sentence — it has been wrong twice in two days.

@@ -365,19 +365,27 @@ Only Clay arms, disarms or retimes it.
 
 - **One scalar covers runtime and compile cost together**, because the
   per-counter goldens cannot see a trade. `scripts/welfare/welfare.kso` weighs
-  TWENTY-EIGHT counters into a single score: an instruction row for each of the
-  thirteen benchmarks, twelve memory rows (peak bytes and arena blocks, by
-  benchmark), and three compile rows — `compile_instructions`, `compile_allocs`
-  and `compile_peak_bytes`. `bench/objective_sources.txt` is the list, and
+  FIVE counters into a single score: `run_instructions`, `run_peak_bytes` (the
+  arena, held and permanent peaks summed by `peak_of`), `compile_instructions`,
+  `compile_allocs` and `compile_peak_bytes`.
+  `bench/objective_sources.txt` is the list — seven `<counter> <gate key>`
+  pairs for those five — and
   `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
-  is checkable rather than remembered. **This sentence named the wrong terms
-  until 2026-09-06**: it said fixpoint rounds, expression visits and emitted
-  lines, none of which the objective has weighed since the 2026-09-03 rebuild,
-  and a session reading it spent a round expecting a 4.5% rise in emitted lines
-  to cost welfare when the objective cannot see that vein at all. **It is an
+  is checkable rather than remembered. **This sentence has now been wrong
+  twice.** Until 2026-09-06 it said fixpoint rounds, expression visits and
+  emitted lines, none of which the objective has weighed since the 2026-09-03
+  rebuild, and a session spent a round expecting a 4.5% rise in emitted lines
+  to cost welfare when the objective cannot see that vein at all. Until
+  2026-09-07 it then said TWENTY-EIGHT, an instruction row per benchmark and
+  twelve memory rows — the shape before Clay's 2026-09-06 gavel made the
+  runtime side one consolidated program, which turned twenty-five rows into
+  five. A session reading that hand-computed a trade over the wrong model, got
+  its sign wrong, and only the real `welfare` run caught it. Run
+  `kanso run scripts/welfare -- --counters`; it prints the list in five lines.
+  **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its
-  moves mean anything. It currently reads about 75. Every
+  moves mean anything. It reads 66.00 as of 2026-09-07. Every
   term is deterministic, so the number moves only when somebody changes the
   compiler. CI fails when it drops.
 - **The sum is the objective; the terms are diagnostics.** A term getting worse
