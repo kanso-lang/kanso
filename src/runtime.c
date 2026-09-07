@@ -1048,9 +1048,37 @@ static int k_above_mark(const void* p, KMark* m) {
     return 0;
 }
 
+/* Where a pointer stands against a mark, in one walk of the chain: below it
+   (the arena keeps it), above it (the rewind takes it), or in no block at all
+   (malloc'd, or a tenure block's). k_survives and k_above_mark each answered
+   one of those questions with a walk of their own, and the sizing walk asked
+   both of every node it sized, 330,000 times a run on runbench. */
+enum { K_WHERE_OUTSIDE = 0, K_WHERE_BELOW = 1, K_WHERE_ABOVE = 2 };
+
+static int k_ten_holds_outside(const void* p);
+
+static int k_where(const void* p, KMark* m) {
+    const char* q = (const char*)p;
+    int below = 0;
+    for (KBlock* b = k_blocks; b; b = b->next) {
+        const char* start = (const char*)(b + 1);
+        const char* end = start + b->cap;
+        if (b == m->block) {
+            if (q >= start && q < m->ptr) return K_WHERE_BELOW;
+            if (q >= m->ptr && q < end) return K_WHERE_ABOVE;
+            below = 1;
+            continue;
+        }
+        if (q >= start && q < end) return below ? K_WHERE_BELOW : K_WHERE_ABOVE;
+    }
+    return K_WHERE_OUTSIDE;
+}
+
 static int k_survives_x(const void* p, KMark* m) {
-    if (k_survives(p, m)) return 1;
-    return k_ten_any && m && k_ten_holds(p, m);
+    if (!m || !k_ten_any) return k_survives(p, m);
+    int w = k_where(p, m);
+    if (w == K_WHERE_BELOW) return 1;
+    return w == K_WHERE_OUTSIDE && k_ten_holds_outside(p);
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
@@ -1152,8 +1180,14 @@ static int k_ten_on = 0;
    anyway. That is 634,925 instructions spent to save 16,080 short walks, so
    the memo went. */
 static __attribute__((noinline)) int k_ten_holds(const void* p, KMark* m) {
-    const char* q = (const char*)p;
     if (k_above_mark(p, m)) return 0;
+    return k_ten_holds_outside(p);
+}
+
+/* The tenure half of k_ten_holds, for a caller that already knows the
+   pointer is in no arena block. */
+static __attribute__((noinline)) int k_ten_holds_outside(const void* p) {
+    const char* q = (const char*)p;
     unsigned long long held = k_ten_mask;
     if (k_beat_depth < K_BEAT_MAX) held &= (1ull << k_beat_depth) - 1;
     for (; held; held &= held - 1)
@@ -1479,13 +1513,19 @@ static size_t k_copy_size(KValue v, KMark* m) {
         case K_STR: {
             KStr* s = (KStr*)p;
             n += k_copy_size_ptr(s, sizeof(KStr), m);
-            if (!k_survives_x(s->data, m)) n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
+            /* Storage that follows its header lies where the header does,
+               and the header was just found not to survive; only a string
+               whose bytes live elsewhere -- a slice's, a builder's -- needs
+               the walk asked again of its data. */
+            if (s->data == (char*)(s + 1) || !k_survives_x(s->data, m))
+                n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
             break;
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             n += k_copy_size_ptr(b, sizeof(KBytes), m);
-            if (!k_survives_x(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
+            if (b->data == (const unsigned char*)(b + 1) || !k_survives_x(b->data, m))
+                n += k_copy_size_ptr(b->data, (size_t)b->len, m);
             break;
         }
         case K_LIST: {

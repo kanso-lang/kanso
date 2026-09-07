@@ -3462,3 +3462,37 @@ rounded up to sixteen. runbench 2,621,939,707 -> 2,612,624,701,
 memcpy 5,977,361 lighter. No counter in the twelve veins or the lazy tier
 moves; the ratchet row `char_word` sends every wide character back
 through the call.
+
+### A survivor asked two walks of the chain
+
+The sizing walk that decides whether a trip's result is worth copying
+asks of every node whether the arena keeps it and, when it does not,
+whether a tenure block holds it. `k_survives` walked the block chain to
+answer the first, and `k_ten_holds` walked it again through
+`k_above_mark` to rule a pointer above the mark out before it read the
+tenure blocks: 661,528 chain steps for 333,873 asks, and a second call
+with its own frame for 323,356 of them. `k_where` walks the chain once and
+says below, above or outside, and `k_survives_x` reads the tenure blocks
+only for outside; `k_ten_holds` keeps the two-step shape for the callers
+that still want it. runbench 2,612,624,701 -> 2,606,982,659, −5,642,042,
+−0.2160%, the same bytes out; `k_ten_holds_outside` is asked 122,915
+times where `k_ten_holds` was asked 270,781.
+
+A string built by `k_str_alloc` keeps its bytes right after its header, so
+a header the walk has just found not to survive has bytes that do not
+survive either, and the K_STR arm asked the walk again of them anyway. It
+asks only of storage that lives elsewhere now -- a slice's, a builder's
+-- and the K_BYTES arm the same. runbench 2,606,982,659 -> 2,602,519,000,
+−4,463,659, −0.1712%; together −10,105,701, −0.3868%, and against main
+−4.8835%. `k_copy_size` 54,253,637 self -> 41,602,877. No counter in the
+twelve veins or the lazy tier moves. Ratchet rows `walk_once` (runbench
+2,609,054,586 with the second walk back, +6,535,586) and `data_beside`
+(2,606,982,659 with the string's bytes walked again, +4,463,659), each
+watched.
+
+Declined on the way: deciding an immediate's zero before the walk's frame,
+by an inline wrapper over `k_worth_sizing` at every call. 176,112 of the
+walk's 509,985 entries were immediates returning zero through six
+callee-saved pushes, and the wrapper measured runbench +1,777,234,
++0.0680%: the guard at seventeen call sites, most of them already guarded
+by the loops that make them, cost more than the frames it spared.
