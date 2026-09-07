@@ -7,10 +7,13 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one** -- the welfare history's
+only indexes it. **Blocking right now: two** -- the welfare history's
 baseline after the one-program gavel, four sub-questions each carrying a
 one-word recommendation (filed 2026-09-07; the push of 2026-09-06 named
-them and the ledger did not). Before it, the compile row's drift was the
+them and the ledger did not), and the compile term's workload, after
+kanso#1291 dropped lib/json's only std/list import and the compile rows
+halved with the compiler unchanged (filed 2026-09-07, recommendation: a
+fixed corpus). Before it, the compile row's drift was the
 last blocking entry, and Clay finished it on 2026-09-05: one row, one value.
 The pinned pair and the per-chip key are retired, every move is attributed to
 the change under test and handled by the ordinary ratchet, and consistency is

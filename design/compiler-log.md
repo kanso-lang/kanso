@@ -3062,3 +3062,107 @@ other way — the found arm back to `escape_able acc bs`, walking the run again
 falls by the slices, so `live_counters` reads it. The gutted `escape_rest`
 arm was the first shape and does not compile: an arm with an unused parameter
 is refused, and a build that never runs is UNBUILT rather than red.
+
+### The scan, iterated: no byte of an escaping string is walked one at a time
+
+The skip above stops at the first escape and hands the suffix to the fold.
+The 2026-09-06 (ninth) entry's census said what that suffix looks like on
+`bench/large.json`: 4,562 escapes with 6,335 clean runs between them averaging
+2.67 bytes, 2,802 of them empty. It declined the run-scan on the DECODE side
+with that census. The encode side was built anyway, because the arithmetic is
+different there: a fold step costs 66 instructions a byte (2026-09-06, fourth),
+and one `find2_below` call plus one fused slice-append is a fixed price per run
+however long the run is.
+
+`escape_rest` now appends the prefix, escapes the byte at `n`, and calls
+`find2_below` again from `n + 1`; each clean run it finds leaves as `append acc
+(slice bs p (m - 1))`, which the emitter fuses on a unique builder, and the next
+found byte escapes. The fold, its lambda, and the suffix slice are gone, and so
+is `import "std/list"` — the fold was lib/json's only use of it.
+
+    runbench   2,962,077,059 -> 2,910,317,247   -51,759,812   -1.7474%
+
+on the same container and toolchain; from before the skip, 3,012,388,061 ->
+2,910,317,247, -3.3884%. The program prints `runbench 46013475` and the
+twenty-three specs pass. In the profile the lambda `w_klam38` (116,468,280) is
+gone and `d_list/fold_3` falls 119,754,344 -> 43,707,584 (the folds that
+remain are other phases'); `escape_run` is 30,822,840 new and
+`k_b_find2_below_raw` rises 60,993,810 -> 84,989,250, which is the 410,580
+extra scans. **The beat took 52.7M of the 104.5M the fold gave back**:
+`k_beat_iter` 64,497,420 -> 100,083,420, `k_beat_pop` 39,072,410 ->
+51,359,300, `k_beat_push` 15,017,844 -> 19,804,944, and `beat_iters` 2,690,246
+-> 4,172,996. The escape cycle is a beat cluster and every found byte is an
+iteration of it where the fold spun once per string. That is the next thing to
+look at on this path and it is not this change.
+
+Counters, against the skip's goldens (`all_counters.sh --write`; the .mem vein
+did not move). `allocs` and `sh_bytes` return to their pre-skip values because
+the suffix slice was the only allocation the skip added; `find2_calls` is the
+scans; `append_fast` falls by the bytes no fold walks:
+
+| counter | skip | iterated |
+|---|---|---|
+| `run_allocs` | 8,157,315 | 8,027,805 |
+| `run_alloc_bytes` | 606,924,889 | 602,780,749 |
+| `run_beat_iters` | 2,690,246 | 4,172,996 |
+| `run_find2_calls` | 2,606,940 | 3,017,520 |
+| `run_append_fast` | 10,036,593 | 8,834,013 |
+| `run_sh_bytes` | 39,971,040 | 36,862,800 |
+| `live_allocs` | 9,808,703 | 9,233,103 |
+| `live_alloc_bytes` | 733,699,712 | 715,281,312 |
+| `live_beat_iters` | 5,032,401 | 11,622,401 |
+| `live_find2_calls` | 4,206,810 | 6,031,610 |
+| `live_append_fast` | 39,823,297 | 34,478,497 |
+| `live_sh_bytes` | 114,527,784 | 100,713,384 |
+| `oneshot_allocs` | 61,527 | 60,088 |
+| `oneshot_alloc_bytes` | 4,082,630 | 4,036,584 |
+| `oneshot_beat_iters` | 12,581 | 29,056 |
+| `oneshot_find2_calls` | 27,285 | 31,847 |
+| `oneshot_append_fast` | 110,428 | 97,066 |
+| `oneshot_sh_bytes` | 429,744 | 395,208 |
+
+### The compile veins halve, and the compiler had nothing to do with it
+
+`kanso check lib/json` compiles lib/json and everything it imports. With the
+fold gone, lib/json imports std/text and nothing else, and std/list — 492 lines,
+the largest module in std — leaves the closure. Every compile vein reads it:
+
+- `compile_instructions`, in the gate's own box (lib without its `*_test.kso`
+  files, the gate's tunables): 42,632,518 before the skip on this host against
+  CI's 42,594,953 for the skip, and **19,580,079** iterated. The container and
+  the runner agree on this row to 0.1%, so CI's should land near 19.56M.
+- `compile_allocs` 25,862 -> 11,613 and `compile_peak_bytes` 724,798 -> 375,222
+  on this host; CI read 26,018 and 749,443 for the skip.
+- `front_end_rounds` 42 -> 35, `front_end_visits` 17,560 -> 9,884.
+- The emitted code of every program importing lib/json: the decoder
+  189/1,864/1,217/12,886 -> 139/1,254/814/9,215 (defines/calls/branches/lines),
+  oneshot 189/1,857/1,206/12,815 -> 139/1,247/803/9,144, livebench
+  190/1,881/1,220/12,932 -> 140/1,271/817/9,261. runbench imports std/list for
+  its own phases and rises 579/6,062/3,417/34,452 -> 581/6,111/3,438/34,683,
+  which is the escape cycle's arms.
+
+Priced with the container's rows laid over CI's: **welfare 51.95 -> 55.55**,
+with `compile_peak_bytes` still at the skip's row; the peak's fall adds about
+half a point more. The compile term carries 0.32 on a 0.5 curve and its ratio
+goes 1.34 -> 2.9, which is where nearly all of it comes from; the run term's
+further fall is worth about 0.5.
+
+The number is real by the objective's definition and it measures the workload
+shrinking, not the compiler getting faster. A later change that gives lib/json
+a reason to import std/list again would read as a four-point fall and have to
+argue its way past the floor. Whether the compile term's workload should be
+lib/json's import closure, which a library edit can halve, or a fixed corpus
+that only the compiler moves, is Clay's, and it is filed in
+design/pending-gavels.md ("The compile term's workload"). Until he rules the
+standing rule holds — a rise is held — so `--set` goes in with CI's rows and
+the entry says which part is the workload.
+
+### The mutation, again
+
+`a_clean_run_walked_byte_by_byte` grepped for the `escape_split` line and
+patched the found arm back to `escape_able`, which no longer exists. It now
+greps `escape_run`'s one line and rewrites it as a self-call appending one
+byte at a time — no fold, no import, every parameter in use, so the mutated
+package compiles (checked on a copy). The live vein reads it through
+`append_fast`. `an_encoder_that_walks_a_clean_string` greps the `escape_split`
+line, which did not move.

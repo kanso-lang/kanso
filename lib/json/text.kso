@@ -1,4 +1,3 @@
-import "std/list"
 import "std/text"
 
 # escape appends onto the byte builder: int arms compile to a jump
@@ -34,18 +33,27 @@ fn esc_byte acc 92
 fn esc_byte acc b
   if (b < 32) (u_bytes acc b) (text/append acc b)
 
-# most strings escape clean: one scan proves it and the whole string
-# appends in a single copy
-fn escape_able acc bs
-  list/fold bs acc (a b -> esc_byte a b)
-
 # when the scan did find something, every byte in front of it is proved clean
-# too: that run leaves in one copy and the fold starts where the scan stopped
-fn escape_rest acc bs 1 _
-  escape_able acc bs
-
+# too: that run leaves in one copy, the found byte escapes, and the scan
+# resumes behind it. no byte is ever walked one at a time
 fn escape_rest acc bs n len
-  escape_able (text/append acc (text/slice bs 1 (n - 1))) (text/slice bs n len)
+  escape_at (escape_run acc bs 1 n) bs n len
+
+# the clean run from p up to the found position, appended in one copy
+fn escape_run acc bs p n
+  if (p < n) (text/append acc (text/slice bs p (n - 1))) acc
+
+fn escape_at acc bs n len
+  escape_next (esc_byte acc bs[n]!) bs (n + 1) len
+
+fn escape_next acc bs p len
+  escape_found acc bs p len (text/find2_below bs p 34 92 32)
+
+fn escape_found acc bs p len m
+  escape_more (escape_run acc bs p m) bs m len
+
+fn escape_more acc bs m len
+  if (len < m) acc (escape_at acc bs m len)
 
 fn escape_split acc s bs n len
   if (len < n) (text/append acc s) (escape_rest acc bs n len)
