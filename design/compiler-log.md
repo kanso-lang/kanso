@@ -3395,3 +3395,18 @@ nothing about it.
 The profile's remaining calls for a handful of bytes: `k_b_at` 345,000 for
 one character, declined above; `k_map_lit` 273,339 for an object's pairs;
 `render_ryu` 191,070 inside the float rendering.
+
+### The map literal, and a record's marker arm
+
+The same profile named `k_map_lit`: 273,339 calls, every one the empty
+literal the decoder opens an object with, and every one copying its no
+pairs through glibc's memcpy at thirteen instructions. The split `k_rec`
+and `k_mklist` make, at two pairs: runbench 2,638,957,305 -> 2,634,857,220,
+−4,100,085, −0.1554%, the same bytes out, and the ratchet row
+`map_lit_copy` sends the literal back through the call.
+
+`k_rec` itself is 1,003,448 calls at 52, five callee-saved pushes around a
+failure scan, an arena bump and a copy of two or three fields. Moving the
+nullary-record arm -- the marker cache, 203,049 of the calls -- out of line
+to shrink the frame measured +1,827,441: the call cost the marker arm more
+than the frame cost the rest. Reverted.

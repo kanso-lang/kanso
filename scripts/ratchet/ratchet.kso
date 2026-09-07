@@ -520,6 +520,14 @@ render_words = row
   (breaking "a_rendered_number_copied_through_a_call")
   benches
 
+map_lit_copy = row
+  "an empty map literal's no pairs copied through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_empty_map_literal_copied_through_a_call")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -961,7 +969,9 @@ rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast push_walk]
 
 rows_b1f = text/concat rows_b1e [scalar_words slice_words render_words]
 
-rows_b = text/concat rows_b1f [compile_mem compile_mem_host]
+rows_b1g = text/concat rows_b1f [map_lit_copy]
+
+rows_b = text/concat rows_b1g [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
