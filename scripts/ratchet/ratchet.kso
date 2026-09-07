@@ -608,6 +608,14 @@ alloc_gate = row
   (breaking "an_allocation_counter_gated_by_two_branches")
   benches
 
+size_walk = row
+  "a sizing walk that calls on every immediate"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_sizing_walk_that_calls_on_every_immediate")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -1059,7 +1067,9 @@ rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
 
 rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
 
-rows_b = text/concat rows_b1k [compile_mem compile_mem_host]
+rows_b1l = text/concat rows_b1k [size_walk]
+
+rows_b = text/concat rows_b1l [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

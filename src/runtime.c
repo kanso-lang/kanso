@@ -1166,7 +1166,11 @@ static void k_ptrmap_begin(KPtrMap* t) {
     t->gen++;
 }
 
-static size_t k_ptrmap_probe(KPtrMap* t, const void* key) {
+/* Inlined at its six sites: the sizing walk asks the seen-map once a node,
+   340,000 times on the run program, and the call around a hash, a mask and
+   a compare was a third of the ask. */
+static inline __attribute__((always_inline))
+size_t k_ptrmap_probe(KPtrMap* t, const void* key) {
     size_t i = ((uintptr_t)key >> 4) * 0x9E3779B97F4A7C15ULL & (t->cap - 1);
     while (t->slots[i].gen == t->gen && t->slots[i].key != key)
         i = (i + 1) & (t->cap - 1);
@@ -1187,7 +1191,8 @@ static void k_ptrmap_grow(KPtrMap* t) {
     free(old);
 }
 
-static KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
+static inline __attribute__((always_inline))
+KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
     if (*live * 10 >= t->cap * 7) { k_ptrmap_grow(t); }
     size_t i = k_ptrmap_probe(t, key);
     return &t->slots[i];
@@ -1594,7 +1599,7 @@ static size_t k_copy_size(KValue v, KMark* m) {
         case K_SUB: {
             KSub* sb = (KSub*)p;
             n += k_copy_size_ptr(sb, sizeof(KSub), m);
-            n += k_copy_size(sb->inner, m);
+            if (k_worth_sizing(sb->inner)) n += k_copy_size(sb->inner, m);
             break;
         }
         case K_REC: {
@@ -1609,14 +1614,23 @@ static size_t k_copy_size(KValue v, KMark* m) {
             KClosure* cl = (KClosure*)p;
             n += k_copy_size_ptr(cl, sizeof(KClosure), m);
             n += k_copy_size_ptr(cl->env, sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1), m);
-            for (long long i = 0; i < cl->ncaps; i++) n += k_copy_size(((KValue*)cl->env)[i], m);
+            /* A capture or a description's slot is an int or a string as
+               often as a pointer, and the chain step sizes its continuation
+               every lap: 176,113 of the 510,001 slots the walk visited on
+               the run program were immediates, each paying a call whose
+               first test sent it back. The list arm has asked first since
+               deepbench; the closure, description and subtype arms ask
+               now. */
+            for (long long i = 0; i < cl->ncaps; i++)
+                if (k_worth_sizing(((KValue*)cl->env)[i]))
+                    n += k_copy_size(((KValue*)cl->env)[i], m);
             break;
         }
         case K_DESC: {
             KDesc* d = (KDesc*)p;
             n += k_copy_size_ptr(d, sizeof(KDesc), m);
-            n += k_copy_size(d->x, m);
-            n += k_copy_size(d->y, m);
+            if (k_worth_sizing(d->x)) n += k_copy_size(d->x, m);
+            if (k_worth_sizing(d->y)) n += k_copy_size(d->y, m);
             break;
         }
         case K_ERR: {

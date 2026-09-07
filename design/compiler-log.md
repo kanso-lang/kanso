@@ -20,32 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (twelfth) — the objective's own count was one behind, in three files
-
-CLAUDE.md said `scripts/welfare.kso` weighs "decode allocations and arena
-blocks, encode allocations and arena blocks, fixpoint rounds, expression visits
-and emitted lines". The path has a directory in it, and none of those last three
-has been a term since the 2026-09-03 rebuild. What the objective actually weighs
-is twenty-eight counters: an instruction row for each of the thirteen
-benchmarks, twelve memory rows, and `compile_instructions`, `compile_allocs`
-and `compile_peak_bytes`.
-
-The cost of the stale sentence is in the entry above. Building the four-arm
-whitespace fold, I read the emitted-lines rise of 4.5% as a welfare term and
-spent a round working out why the number went the other way; the objective
-cannot see that vein at all, and the fall came entirely from
-`compile_instructions`.
-
-`bench/objective_sources.txt` and the spec that replays it both said 27, and
-the file has held 28 since livebench joined on 2026-09-05. Nothing was
-unchecked — `tests/the_objective_reads_what_the_gate_watches.rs` reads the file
-rather than a number, and it passes — but three pieces of prose disagreed with
-the data beside them, which is the shape CLAUDE.md's own "all TEN cost goldens"
-correction was about. All three now say 28, and CLAUDE.md's sentence names the
-counters and points at the file rather than listing them from memory.
-
----
-
 ## 2026-09-06 (thirteenth) — the digit test travelled as a tag
 
 `scan_at` ended in
@@ -3724,3 +3698,77 @@ row falls with k_alloc's second branch gone from every inlined site:
 `text` 1,459,900 -> 1,449,644, runbench 241,810 -> 241,682, indexbench
 55,378 -> 53,954 the largest single fall at -1,424. Welfare on CI's rows
 65.84, held with `--set`.
+
+## 2026-09-07 — THE SIZING WALK CALLED ON EVERY IMMEDIATE
+
+**Search.** `k_copy_size`, `k_worth_sizing`, `sizing walk`, `k_ptrmap_at`
+in the log, the archive and design/*.md. The deepbench entry that added
+`k_worth_sizing` to the list arm is the nearest: it named the list arm and
+stopped there. Nothing on the closure, description or subtype arms, and
+nothing on the seen-map's call.
+
+**Where it was.** The bind chain sizes its continuation on every step, so
+the step can choose between leaving it, staging it through the carry pair
+and flooring the region under it. On the run program that is 52,368 walks
+a run, 60,216,283 instructions inclusive, 2.45% of the whole, for a
+continuation of six or seven nodes each. The walk's self cost read 93
+instructions a node, and the instruction-level profile put the first
+fourteen of them in front of a test that sent the caller straight back:
+the closure, description and subtype arms recursed on every slot they
+held, and a capture or a description's slot is an int or a string as
+often as a pointer. 510,001 slots visited, 176,113 of them immediates,
+each paying the frame's seven pushes and seven pops to learn it was not
+heap. The list arm has asked `k_worth_sizing` before the call since
+deepbench; the record arm too; the other three had never been given the
+question.
+
+The second cost was the seen-map. `k_copy_seen_check` asks `k_ptrmap_at`
+once a node, 346,000 times a run, and the probe is a multiply, a mask
+and a compare behind a call: 11,449,834 instructions in the callee's own
+name, 33 an ask.
+
+**What changed.** The closure, description and subtype arms ask
+`k_worth_sizing` before recursing, the test the list and record arms
+already make. `k_ptrmap_probe` and `k_ptrmap_at` are `always_inline`, at
+all six of their sites: the seen-map, the interior-survives memo and the
+copy map's four.
+
+    runbench   2,453,160,233 -> 2,446,395,268   -6,764,965   -0.2758%
+
+on the container with clang 19, the same bytes out. `k_copy_size`'s
+recursion 338,862 calls -> 216,337; `k_ptrmap_at` 11,449,834 -> 0, its
+body landing in `k_copy_size` (+4,411,000 self across the two names) and
+`k_deep_copy` (+99,380). The chain step's walk 60,216,283 -> 54,045,408
+inclusive. No counter moves: the walk answers the same sizes, since an
+immediate always sized at zero, and `all_counters.sh` agrees with every
+golden.
+
+The other rows move with the seen-map's call, and two of them move
+more than the run program does, because the walk is a larger share of
+what they do:
+
+    deepbench    647,494,319 ->   599,236,632  -48,257,687   -7.4530%
+    widebench     50,368,545 ->    49,141,296   -1,227,249   -2.4365%
+    pendbench    598,281,250 ->   598,210,956      -70,294   -0.0117%
+    basket        33,931,564 ->    33,935,458       +3,894   +0.0115%
+
+deepbench folds over lists of ints under a beat, and its sizing walk
+asks the seen-map 2.35 million times a run: `k_ptrmap_at` 77,636,945 ->
+0 there, `k_copy_size` +27,665,576 absorbing the probe. The walk is
+still 230,739,478 instructions of deepbench's 599 million, and that is
+the next thing to read. `work_basket` lands on 33,935,458, +3,894, the
+inlined probe's bytes at the copy map's four sites on a program whose
+walks are few. Every other row moves under 0.05%.
+
+**What is left in the walk.** 216,337 nodes at about 140 instructions
+inclusive each: the frame, the budget and carry tests, the seen-map's
+probe, `k_survives_x` at 36 a call, and the list arm's sixteen-instruction
+slot loop over 498,400 items of which 39,731 were worth the call. The
+survives ask is the largest of those and is already one walk of the
+chain since kanso#1296. The walk is a cost the chain step pays for the
+choice it makes; making the choice without the walk is a different
+design and is not this entry's.
+
+Ratchet row `size_walk` puts the unconditional calls and the out-of-line
+probe back and asks the work vein, the only witness a walk that answers
+the same sizes leaves. Dry-run against the tree before it was committed.
