@@ -49996,3 +49996,43 @@ should establish first whether the 170 is one arm or the sum of a dispatch over
 several, because those want different repairs.
 
 ---
+
+## 2026-09-06 (sixth) — THE DECODE'S CALL CHAIN, PRICED PER CALL: str_char IS 621 INSTRUCTIONS
+
+**DONE.** Attribution only. The three functions under `obj_key_start` in
+jsonbench's profile, each of which had a share and no per-call number. Searched
+first: `str_char_4` appears once in this file and once in the archive,
+`array_step` twice and once, and none of the five gives a call count or a
+per-call cost.
+
+    function                        Ir      share      calls   a call
+    parse_value_2'2         468,780,150    26.98%  2,713,950     49*
+    obj_key_start_4'2       234,197,700    13.48%  1,188,150    197.1
+    str_char_4              165,240,450     9.51%    265,950    621.3
+    array_step_3'2          135,270,450     7.79%    410,550    329.5
+    string_at_4             101,214,154     5.83%  1,571,250     64.4
+
+    * parse_value's 49 is its per-call BAND from the 2026-09-06 entry, not its
+      whole per-call cost; the other four are the function total over its calls.
+
+**The chain is `parse_value` -> `obj_key_start` -> `string_at_4` ->
+`str_char_4`, and it narrows sharply.** `string_at_4` is entered 1,188,150
+times from `obj_key_start` — once per call, exactly — plus 317,100 from
+`parse_value` and 66,000 from the non-recursive `obj_key_start`. Of its
+1,571,250 entries only **265,950 reach `str_char_4`**, one in six.
+
+**`str_char_4` is the most expensive per call in the decode, by a factor of
+three over `obj_key_start`.** 724 instructions in the function, 213 execute,
+and the join accounts for all 165,240,450. Unlike `obj_key_start` it is a loop:
+its bands run at 3,484,500, 3,218,550, 2,800,200, 2,534,250, 684,300 and
+265,950, so 13.1 inner iterations for every call. `cmp`, `je`, `jne` and `test`
+together are 41.24% of it — a higher branch share than any other function
+measured today — and it calls `k_b_utf8` for 55,519,500 of its inclusive cost.
+
+**Recorded as where to look next, with the reason it is not obvious.** 621
+instructions a call over 265,950 calls is 9.51% of jsonbench, and one in six
+`string_at_4` entries reaching it says the ASCII path already avoids it most of
+the time. So the prize is what the non-ASCII sixth costs, and whether 13.1
+iterations a call is the string's length or a scan that restarts.
+
+---

@@ -20,46 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (sixth) — THE DECODE'S CALL CHAIN, PRICED PER CALL: str_char IS 621 INSTRUCTIONS
-
-**DONE.** Attribution only. The three functions under `obj_key_start` in
-jsonbench's profile, each of which had a share and no per-call number. Searched
-first: `str_char_4` appears once in this file and once in the archive,
-`array_step` twice and once, and none of the five gives a call count or a
-per-call cost.
-
-    function                        Ir      share      calls   a call
-    parse_value_2'2         468,780,150    26.98%  2,713,950     49*
-    obj_key_start_4'2       234,197,700    13.48%  1,188,150    197.1
-    str_char_4              165,240,450     9.51%    265,950    621.3
-    array_step_3'2          135,270,450     7.79%    410,550    329.5
-    string_at_4             101,214,154     5.83%  1,571,250     64.4
-
-    * parse_value's 49 is its per-call BAND from the 2026-09-06 entry, not its
-      whole per-call cost; the other four are the function total over its calls.
-
-**The chain is `parse_value` -> `obj_key_start` -> `string_at_4` ->
-`str_char_4`, and it narrows sharply.** `string_at_4` is entered 1,188,150
-times from `obj_key_start` — once per call, exactly — plus 317,100 from
-`parse_value` and 66,000 from the non-recursive `obj_key_start`. Of its
-1,571,250 entries only **265,950 reach `str_char_4`**, one in six.
-
-**`str_char_4` is the most expensive per call in the decode, by a factor of
-three over `obj_key_start`.** 724 instructions in the function, 213 execute,
-and the join accounts for all 165,240,450. Unlike `obj_key_start` it is a loop:
-its bands run at 3,484,500, 3,218,550, 2,800,200, 2,534,250, 684,300 and
-265,950, so 13.1 inner iterations for every call. `cmp`, `je`, `jne` and `test`
-together are 41.24% of it — a higher branch share than any other function
-measured today — and it calls `k_b_utf8` for 55,519,500 of its inclusive cost.
-
-**Recorded as where to look next, with the reason it is not obvious.** 621
-instructions a call over 265,950 calls is 9.51% of jsonbench, and one in six
-`string_at_4` entries reaching it says the ASCII path already avoids it most of
-the time. So the prize is what the non-ASCII sixth costs, and whether 13.1
-iterations a call is the string's length or a scan that restarts.
-
----
-
 ## 2026-09-06 (seventh) — THE COMPILE ROW CANNOT BE PROJECTED FROM A CONTAINER A/B, AND TODAY MISSED TWICE
 
 **DONE.** CI counted `compile_instructions=41,462,716` for the change above; the
@@ -3382,3 +3342,36 @@ closes both word arms and asks the work vein.
 instructions a wide character through an if-else ladder on the lead byte,
 4.6 million over the run. A 256-entry table keyed on the lead byte would
 give the width and the continuation range in one load. Not measured.
+
+---
+
+## 2026-09-07 — A TOKEN SLICE OF FOUR TO SEVEN BYTES COPIED THROUGH A CALL
+
+`k_b_utf8_slice_raw` on runbench: 861,498 calls, 57,102,905 instructions
+self and a memcpy call each, 12,893,364 inside glibc. It is `utf8` over a
+slice of bytes, the decoder's way of making a token into a string, and the
+arm is already short -- a clamp, the ascii test, the arena bump, the copy --
+so what was left was the copy: 840,807 of the slices are four to seven
+bytes, a key or a short value or a number's digits, and glibc's memcpy
+spends fifteen instructions choosing how to move five bytes.
+
+### Two overlapping words
+
+A slice of four to seven bytes is copied as two four-byte words, the second
+ending at the last byte, the shape `k_all_ascii` reads its short runs by.
+Under four bytes and eight or over go through `k_str_n` as before; the
+single-byte ascii slice still comes from the cache.
+
+    runbench   2,665,704,368 -> 2,649,866,050   −15,838,318   −0.5942%
+
+on the container with clang 19, the same bytes out; memcpy's self fell
+12,612,105 and the arm's own 3,226,213, the call's argument moves and the
+return. No counter in the twelve veins or the lazy tier moves;
+`all_counters.sh` agrees with every golden. The ratchet row `slice_words`
+sends every slice back through the call and asks the work vein.
+
+The same profile names the calls glibc still takes for a handful of bytes:
+`k_render_at` 579,291 for a number's digits into its string, `k_b_at`
+345,000 for one character (declined in the push entry above, and the
+reason holds), `k_map_lit` 273,339 for an object's pairs, `render_ryu`
+191,070 inside the float rendering. The render's is next.
