@@ -626,11 +626,11 @@ chain_drift = row
 
 pop_deep = row
   "a carried pop that prunes at a survivor"
-  false
-  "sh scripts/gates/instructions.sh"
-  "cost goldens (deterministic ratchet, no clocks)"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
   (breaking "a_carried_pop_that_prunes_at_a_survivor")
-  benches
+  release
 
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"

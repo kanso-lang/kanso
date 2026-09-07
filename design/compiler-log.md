@@ -20,47 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (fifteenth) — CI's compile rows, and the floor I set on a guess
-
-CI measured the branch and every projection landed exactly except the compile
-veins. All thirteen work rows, all four emitted rows, all twelve emitted-other
-rows and all thirteen `.text` rows came back byte-identical to the container's
-own A/B deltas applied to CI's previous sitting — twenty-nine rows, no misses.
-The three that could not be projected:
-
-    compile_instructions   42,022,241 -> 42,018,130   -4,111    projected, out by 4,111
-    compile_peak_bytes        714,995 ->   722,429   +7,434    NOT PROJECTED AT ALL
-    compile_allocs                  ?                          not yet read
-
-`compile_peak_bytes` is the one that matters. Both it and `compile_allocs`
-refuse on this container — rustc 1.94.1 against the runner's 1.98.1 — and a
-refusal exits before measuring, so the eleventh entry above carried CI's value
-for the PREVIOUS commit with no delta for its own change. The whitespace fold's
-six guarded arms and three helper functions are declarations the front end
-holds while it checks, and they cost 7,434 bytes, 1.04%.
-
-**So the floors of 75.32 and 75.33 were set on numbers nobody had measured.**
-With CI's two, the branch head reads **75.30**. That is still a rise against
-main's 75.17 — the decode is 9.6% cheaper and the objective takes the trade —
-but it is 0.03 below a floor I wrote from a projection, and the floor has to
-come down to what was measured rather than the change being excused past it.
-That is a re-basing of a number that was never a reading, not an accommodation:
-the weights are untouched and the runtime rows are exactly what was claimed.
-
-The floor is not moved in this commit, because `compile_allocs` is still
-unread and 75.30 is provisional in the same way 75.33 was. CI's next sitting
-gives it, and the floor is set once on three measured rows.
-
-**What to do differently.** A vein that refuses on the container is a vein with
-no projection, and carrying the previous commit's value into a golden reads as
-a measurement when it is a placeholder. The eleventh entry said so and set the
-floor anyway. Push with the row unchanged, take the red, and set the floor from
-CI — the same rule the 2026-09-06 (seventh) entry wrote for
-`compile_instructions`, which applies with more force here because this row
-cannot even be A/B'd.
-
----
-
 ## 2026-09-06 (sixteenth) — the last compile row, and the floor set on three readings
 
 `compile_allocs` came back from CI on f5f4914d: 25,490 -> 25,817, a rise of
@@ -3862,3 +3821,87 @@ The lazy tier moves in two ways. Four fixtures were not edited and their
 counters moved from the policy alone; two were rewritten to keep reaching
 tenure and their counters are a different program's. Both are re-based
 here: a_builder_handed_on_is_still_a_builder_alloc_bytes 294, a_builder_handed_on_is_still_a_builder_allocs 5, a_builder_handed_on_is_still_a_builder_evac_allocs 4, a_builder_handed_on_is_still_a_builder_evac_bytes 256, a_loop_invariant_capture_is_copied_every_rewind_ten_frees 0, a_repaired_node_below_the_mark_holds_tenure_alloc_bytes 7,078,880, a_repaired_node_below_the_mark_holds_tenure_allocs 100,914, a_repaired_node_below_the_mark_holds_tenure_push_mut_slow 1,604, a_repaired_node_below_the_mark_holds_tenure_sh_rec 4,025,872, a_repaired_node_below_the_mark_holds_tenure_sh_str 1,721,504, an_inner_beat_opens_its_tenure_in_the_block_outside_allocs 514,502, an_inner_beat_opens_its_tenure_in_the_block_outside_push_mut_slow 6,020, an_inner_beat_opens_its_tenure_in_the_block_outside_sh_rec 20,129,168, an_inner_beat_opens_its_tenure_in_the_block_outside_sh_str 8,606,752, builder_counts_once_alloc_bytes 28,606, builder_counts_once_allocs 12, builder_counts_once_evac_allocs 4, builder_counts_once_evac_bytes 6,096, builder_counts_once_str_scan_bytes 6,015, builder_counts_once_str_scans 3, effect_push_shape_alloc_bytes 3,264, effect_push_shape_allocs 83, effect_push_shape_beat_iters 5, effect_push_shape_evac_allocs 50, effect_push_shape_evac_bytes 1,696, string_builder_shape_alloc_bytes 12,295, string_builder_shape_allocs 12, string_builder_shape_evac_allocs 4, string_builder_shape_evac_bytes 4,096, string_builder_shape_str_scan_bytes 4,001, string_builder_shape_str_scans 3.
+
+---
+
+## 2026-09-07 — the pop's copy-out prunes again, and the write sites say when it may not
+
+**DONE.** kanso#1300 made the copy-out at a carried pop walk deep at every
+pop, because a carry pointer could sit two levels down where
+`k_interior_survives` cannot see it. That cost 4.97% of deepbench and bought
+correctness on one program. This entry buys the 4.97% back without giving up
+the correctness.
+
+The route such a pointer takes is single. The copy machinery decides what to
+share and what to copy; nothing it decided to share can acquire a new pointer
+except through a write that goes around it, and there are exactly eight of
+those — `k_set_field`, `k_map_replace`, `k_b_put_mut`, `k_b_put`,
+`k_b_entries`, `k_b_push_into_proven`, `k_b_push_mut`, `k_b_join`. Seven are
+instrumented; `k_b_entries` is not, because the record it writes into is
+freshly allocated and therefore above every mark.
+
+So `k_carry_written` latches the first time one of the seven stores a pointer
+that lands in a live carry buffer, and the copy-out reads that latch as its
+`deep` flag. The latch never clears, so the walk is only ever turned ON later
+than #1300 turned it on — the change cannot make a program that was correct
+incorrect.
+
+Asking has to be nearly free, and getting there took three shapes:
+
+- A bounding box over every carry buffer ever malloc'd, plus the exact walk
+  for what it admits. **pendbench +2.43%.** The box grows to span whatever the
+  allocator handed out between two distant buffers, so nearly every write asks
+  the exact question.
+- The same box over the LIVE buffers only, recomputed at the two places the
+  set changes (the sizing malloc, the cohort free). **pendbench unchanged.**
+  The box was not the cost.
+- The profile said where it was: `k_b_join` +3,617,214 and `k_b_push`
+  +579,391 on runbench. `join` forces every element and asked in front of the
+  thunk test, so it asked once per element on a path that mostly writes back
+  the bits already there. Behind the test it asks only when a force actually
+  replaced a thunk. The whole ask is now one unsigned compare
+  (`(uintptr_t)payload - base < span`), and a span of zero means both "no
+  buffer is live" and "already latched".
+
+**Container sitting, interleaved, both binaries run from the repo root:**
+
+| row | main | this | delta |
+|---|---|---|---|
+| deepbench | 413,732,754 | 395,091,117 | **−4.5054%** |
+| runbench | 2,400,141,224 | 2,398,016,752 | **−0.0885%** |
+| pendbench | 588,668,860 | 589,537,053 | +0.1475% |
+| jsonbench | 1,452,183,939 | 1,452,700,824 | +0.0356% |
+| widebench | 37,430,544 | 37,432,922 | +0.0064% |
+
+Separating the two halves needed a third binary with the machinery present and
+`deep` pinned to 1: asking cost deepbench 0.62%, runbench 0.18%, pendbench
+2.44%; pruning bought deepbench 4.97% and runbench 2,734,052. Those are the
+numbers the shapes above were chosen against.
+
+**Counters.** The prune shares where it used to copy, so the evacuation
+counters fall: basket `evac_bytes` 55,104 → 192 and `evac_allocs` 5 → 3,
+`string_builder_shape` 4,096 → 80, `builder_counts_once` 6,096 → 80, allocs
+falling with them. `survive_slots` RISES in all seven places that count it, because
+`k_slots_survive` is what the prune asks and a walk that does not prune never
+asks it: `run_survive_slots` 61,752 -> 159,393, `pend_survive_slots` 157,611
+-> 157,811, `encode_survive_slots` 129,871 -> 129,873, `live_survive_slots`
+129,871 -> 129,873, `basket_survive_slots` 16,000 -> 16,002,
+`record_reuse_shape_survive_slots` 16,004 -> 16,006 and
+`effect_push_shape_survive_slots` 4 -> 15. Both directions are the same change and the runbench row falls
+anyway.
+
+**The spec.** `tests/golden/mem/a_carried_value_written_into_an_older_node`
+is the shape reduced to a page: `xs` is copied into the carry every lap, and
+each step pushes one of its elements into storage made before the bind, so a
+node the walk would share holds a pointer into the buffer the pop retires. It
+latches at `k_b_push`'s frontier write, which is where `scripts/trend_gate`
+latches too. Watched red first: under the mutation the fixture reads
+`survive_slots=807` and `carry_dedup=17` against `407` and `416`.
+
+**OPEN — the fixture latches but does not segfault**, and the crash witness is
+still `scripts/trend_gate` unreduced. Four shapes were tried; the one that
+dangles wants the node holding the carry pointer to be pruned at AND the
+buffer reused before the read, and the reduced programs read it back first.
+The ratchet row `pop_deep` is live on the counters either way, which is what
+the gate needs; a program that actually faults would be better and is worth
+another sitting.

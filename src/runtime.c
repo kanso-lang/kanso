@@ -1269,6 +1269,73 @@ static int k_carry_holds(const void* p) {
     return q >= k_from_lo && q < k_from_hi;
 }
 
+/* A carry pointer can reach an arena node without the copy machinery ever
+   seeing it: the program writes one in place, through `set`, a map insert or
+   a list push, into a node that was already there. Those writes are the only
+   such path, and the pop's copy-out cannot find what they leave behind by
+   walking the result -- it prunes at a survivor whose immediate interior
+   survives, and the pointer sits one level deeper. So that copy-out stopped
+   pruning, and pruning is worth 4.97% of deepbench.
+
+   The writes can say instead. `k_carry_written` latches the first time one of
+   them stores a pointer into a live carry buffer, and the copy-out prunes
+   while it is clear: before that write there is nothing for the deep walk to
+   find, and after it the walk is exactly what shipped. The latch never
+   clears, so this only ever turns the walk ON later than it was on before.
+
+   Asking has to be nearly free, because seven of the hottest paths in the
+   runtime ask it. One unsigned compare against a span answers three questions
+   at once: a span of zero means no carry buffer is live OR the latch is
+   already set, and a pointer outside the span is outside every buffer. What
+   the span admits goes to `k_note_exact`, which walks the live pairs; the
+   span is a bounding box and holds whatever the allocator put between them.
+   Measured with the exact question asked, the benchmark corpus latches
+   nowhere and the trend gate -- the program whose crash found this -- latches
+   on 1,634 writes. */
+static uintptr_t k_cbox_base = 0;
+static size_t k_cbox_span = 0;
+static int k_carry_written = 0;
+
+/* The box is over the buffers that are LIVE, not over every one ever
+   malloc'd, and it is recomputed at the two places the set changes: the
+   sizing malloc and the cohort free. */
+static void k_cbox_refresh(void) {
+    const char* lo = NULL;
+    const char* hi = NULL;
+    for (long long d = 0; d < K_BEAT_MAX; d++) {
+        KCarry* c = &k_carries[d];
+        KCarryBuf* bufs[2] = { &c->from, &c->to };
+        for (int i = 0; i < 2; i++) {
+            if (!bufs[i]->data) continue;
+            if (!lo || bufs[i]->data < lo) lo = bufs[i]->data;
+            if (bufs[i]->data + bufs[i]->cap > hi) hi = bufs[i]->data + bufs[i]->cap;
+        }
+    }
+    k_cbox_base = (uintptr_t)lo;
+    k_cbox_span = k_carry_written ? 0 : (size_t)(hi - lo);
+}
+
+static void k_note_exact(KValue written) {
+    const char* q = (const char*)(intptr_t)written.payload;
+    for (long long d = 0; d < K_BEAT_MAX; d++) {
+        KCarryBuf* f = &k_carries[d].from;
+        KCarryBuf* t = &k_carries[d].to;
+        if ((f->data && q >= f->data && q < f->data + f->cap)
+            || (t->data && q >= t->data && q < t->data + t->cap)) {
+            k_carry_written = 1;
+            k_cbox_span = 0;
+            return;
+        }
+    }
+}
+
+static inline __attribute__((always_inline))
+void k_note_if_carried(KValue written) {
+    if (!k_is_heap(written.tag)) return;
+    if ((uintptr_t)written.payload - k_cbox_base < k_cbox_span)
+        k_note_exact(written);
+}
+
 static void k_from_window(int on) {
     k_from_lo = NULL;
     k_from_hi = NULL;
@@ -1418,8 +1485,12 @@ static int k_copy_seen_check(const void* p) {
    retires the depth's carry pair. One level down is all k_interior_survives
    can see, so a node two levels down holding a carry pointer was left for
    the caller's next stage to repair -- which was the next chain step until
-   a step could leave. Set at that one call site; the walk is the pop's, not
-   the step's. */
+   a step could leave.
+   Set at that one call site, and set there from `k_carry_written`: the only
+   way such a pointer reaches such a node is an in-place write, and the seven
+   write sites latch that flag when they make one. Until they do there is
+   nothing below for the walk to find, and pruning is worth 4.97% of
+   deepbench. */
 typedef struct {
     KCarryBuf* buf; KMark* mark; int to_arena; int in_ten; int deep;
 } KCopy;
@@ -2093,7 +2164,7 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
         k_beat_rewind(&k_beat_stack[d]);
     } else {
         if (c->used_flag) {
-            KCopy cp = { NULL, NULL, 1, 0, 1 };
+            KCopy cp = { NULL, NULL, 1, 0, k_carry_written };
             k_ptrmap_begin(&k_copy_map);
             k_copy_map_live = 0;
             r = k_deep_copy(r, &cp);
@@ -2204,6 +2275,7 @@ KValue k_cohort_pop(KValue r) {
         free(done->to.data);
         done->from = (KCarryBuf){ NULL, 0, 0 };
         done->to = (KCarryBuf){ NULL, 0, 0 };
+        k_cbox_refresh();
     }
     k_spare_release(2);
     return r;
@@ -2266,6 +2338,7 @@ void k_beat_iter_carry(void) {
         c->to.data = malloc(need ? need : 16);
         if (!c->to.data) { fputs("out of memory\n", stderr); exit(1); }
         c->to.cap = need ? need : 16;
+        k_cbox_refresh();
     }
     c->to.used = 0;
     KCopy cp = { &c->to, m, 0, 0 };
@@ -3065,6 +3138,7 @@ KValue k_set_field(KValue target, const char* name, KValue v) {
     for (long long i = 0; i < r->nfields; i++) {
         if (!strcmp(k_type_field_name(r->type_id, i), name)) {
             r->fields[i] = v;
+            k_note_if_carried(v);
             KValue none; none.tag = K_NONE; none.payload = 0; return none;
         }
     }
@@ -6221,6 +6295,7 @@ static int k_map_replace(KMap* m, KValue key, KValue val) {
     for (long long i = m->len - 1; i >= 0; i--) {
         if (k_key_cmp(m->pairs[i * 2], key) == 0) {
             m->pairs[i * 2 + 1] = val;
+            k_note_if_carried(val);
             return 1;
         }
     }
@@ -6275,6 +6350,8 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     if (buf->used == m->len * 2 && m->len * 2 + 2 <= k_buf_cap(buf)) {
         m->pairs[m->len * 2] = key;
         m->pairs[m->len * 2 + 1] = val;
+        k_note_if_carried(key);
+        k_note_if_carried(val);
         buf->used += 2;
         m->len++;
         k_stat_put_mut_fast++;
@@ -6328,6 +6405,8 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
            the key unsorted and any duplicate to be resolved on read */
         m->pairs[m->len * 2] = key;
         m->pairs[m->len * 2 + 1] = val;
+        k_note_if_carried(key);
+        k_note_if_carried(val);
         buf->used += 2;
         out->len = m->len + 1;
         out->pairs = m->pairs;
@@ -7168,6 +7247,7 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {
         /* this list is the frontier of its buffer: claim the next slot */
         l->items[l->len] = item;
+        k_note_if_carried(item);
         buf->used++;
         if (mutate) {
             l->len++;
@@ -7259,6 +7339,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
             else k_stat_push_mut_slow++;
         }
         l->items[l->len] = item;
+        k_note_if_carried(item);
         buf->used++;
         l->len++;
         return lv;
@@ -7914,7 +7995,14 @@ KValue k_b_join(KValue lv, KValue sep) {
            answer is written back, because the copying loop below reads the
            slot again. Forcing twice would run the computation twice, and
            k_alloc for the output buffer runs between the two passes. */
-        l->items[i] = k_force(l->items[i]);
+        if (l->items[i].tag == K_THUNK) {
+            /* Only a force that replaced a thunk puts a pointer in the slot
+               that was not there before; a slot already forced is written
+               back with the bits it held. Asking behind the thunk test costs
+               runbench nothing, and asking in front of it cost 3,617,214. */
+            l->items[i] = k_force(l->items[i]);
+            k_note_if_carried(l->items[i]);
+        }
         if (!k_not_failure(l->items[i])) return l->items[i];
         if (l->items[i].tag != K_STR) k_die("join takes a list of strings");
         total += k_as_str(l->items[i])->len;

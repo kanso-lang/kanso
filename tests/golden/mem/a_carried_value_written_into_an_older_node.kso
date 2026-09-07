@@ -1,0 +1,50 @@
+# An in-place write puts a carry pointer somewhere the copy walk does not
+# look.
+#
+# `xs` is built inside the bind, so every lap copies it into the carry buffer
+# and its elements live there. `keep` was made before the bind, so its storage
+# is below the mark and a push writes into that storage in place -- and what it
+# writes is `acc[1]`, an element that came out of the carry. A node the walk
+# would share now holds a pointer into a buffer the pop is about to retire.
+#
+# That is the only way such a pointer gets there: nothing else writes into a
+# node the copy machinery has already decided it can share. So the seven
+# in-place write sites say when it happens, and the pop's copy-out walks
+# deep only after one of them has. Without the latch the copy-out prunes on
+# every pop, which is what this fixture's counters catch: `survive_slots` and
+# `carry_dedup` both move.
+#
+# The program that found the hazard is scripts/trend_gate, which segfaults
+# under an unconditional prune. This is the shape reduced to a page; it does
+# not segfault, because the pointer it leaves behind is read back before the
+# buffer is reused.
+import "std/io"
+import "std/list"
+
+fn wide n
+  fat = (i -> "element {i} with enough bytes in it to be worth a copy")
+  list/to_list (list/map (list/take list/naturals n) fat)
+
+fn gathered n xs acc keep
+  stepped (n - 1) xs (push acc xs[n]!) (push keep acc[1]!)
+
+fn stepped 0 _ _ keep
+  keep
+
+# Each step allocates a list it discards, so the region drifts and the chain
+# stages. Without the drift a chain of small steps never carries at all.
+fn stepped n xs acc keep
+  drift = length (wide 40)
+  io/write "" . (_ -> gathered (n + 40 - drift) xs acc keep)
+
+fn loaded acc keep
+  xs = wide 400
+  stepped (length xs) xs (push acc xs[1]!) keep
+
+fn read_back out
+  io/write "kept {length out}\n"
+
+fn begin acc0 keep0
+  io/write "" . (_ -> loaded acc0 keep0) . read_back
+
+pub play = begin [] []
