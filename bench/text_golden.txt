@@ -606,17 +606,17 @@
 #
 # The measured-on line at the top moves to clang 19.1.1 with these rows. A
 # clang-18 host writes the fallback module and cannot regenerate this file.
-jsonbench text=92962
-encodebench text=112754
-oneshot text=103730
-basket text=107362
-widebench text=118242
-deepbench text=69474
+jsonbench text=93986
+encodebench text=113778
+oneshot text=104754
+basket text=108386
+widebench text=119266
+deepbench text=69746
 escapebench text=50818
-pendbench text=85778
-indexbench text=54530
-scanbench text=152610
-digestbench text=104914
+pendbench text=86050
+indexbench text=55378
+scanbench text=153442
+digestbench text=105746
 readbench text=51442
-livebench text=104274
-runbench text=240786
+livebench text=105298
+runbench text=241810

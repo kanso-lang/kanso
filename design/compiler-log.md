@@ -3728,5 +3728,18 @@ other counter moves. Welfare 64.38 -> 65.80, the run peak's fall paying most
 of it, held with `--set`.
 Ratchet rows `wide_char_cache`, `ascii_four_blocks` and `slice_count_words`
 each put one of the three back and ask the work vein. The utf-8 harness
-passes 45,189,025 cases with 0 mismatches against the reference. CI's
-rows and `--set` follow in the next round.
+passes 45,189,025 cases with 0 mismatches against the reference.
+
+CI's sitting at ded9a059 agrees with the container's to within twelve
+instructions on every row but two: `work_runbench` lands on 2,466,455,728,
+-0.6911% against CI's own row for kanso#1296, and `work_deepbench` on
+647,637,793, the layout again. The seven rows that land two instructions
+over the container's reading are `work_jsonbench` on 1,497,268,440,
+`work_widebench` on 50,448,588, `work_pendbench` on 604,694,571,
+`work_indexbench` on 3,255,312, `work_scanbench` on 736,173,218,
+`work_readbench` on 4,287,855 and `work_livebench` on 3,607,309,612, where
+glibc differs. The cache's lookup, the outlined refusal and the cursor's
+new arm are a kilobyte of machine code a program that indexes text and
+272 bytes for one that does not: `text` lands on 1,459,900, +10,224 summed
+over the fourteen; `compile_instructions` falls to 19,316,149. The floor is
+re-set on CI's rows.
