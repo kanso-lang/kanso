@@ -3183,7 +3183,12 @@ container read. `.text` for the three programs importing lib/json: oneshot
 reason naming the workload. The run term's share is about 0.5; the rest is
 the three compile rows, which is the question in the ledger. The compiler page
 quotes those three rows through `data-golden`, and the prose gate held the
-welfare job red until the page said the new numbers and why they moved.
+welfare job red until the page said the new numbers and why they moved. The
+specs job was red beside it: `json_decode_loops_stay_conservative` pins which
+lib/json groups the beat analysis licenses, and the escaper's four-group cycle
+now qualifies — it threads the encoder's byte builder by identity, the
+licence the encoders hold. The pin lists it. Its rewinds free nothing, and
+the classifier that could see that is the change after the next.
 
 The ratchet's first round on the iterated shape went UNBUILT on
 `an_encoder_that_walks_a_clean_string`: its patch still named `escape_able`,

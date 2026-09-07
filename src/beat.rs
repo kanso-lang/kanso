@@ -1993,11 +1993,24 @@ mod tests {
         let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
         let mut licensed: Vec<(String, usize)> = loops.ids.into_keys().collect();
         licensed.sort();
+        // The escaper's four-group cycle joined on 2026-09-07: it threads the
+        // encoder's byte builder by identity and reads the input bytes, which
+        // is the same licence the encoders hold. Its rewinds free nothing —
+        // an in-place append grows outside the arena — and the allocation
+        // classifier does not see that yet, so it is bracketed for now.
+        let g = |n: &str, a: usize| (n.to_string(), a);
         assert_eq!(
             licensed,
-            vec![("encode_items".to_string(), 3), ("encode_pairs".to_string(), 3)],
-            "only the byte-builder encoders may rewind; scanners threading \
-             records or lists stay on the grow-only arena"
+            vec![
+                g("encode_items", 3),
+                g("encode_pairs", 3),
+                g("escape_at", 4),
+                g("escape_found", 5),
+                g("escape_more", 4),
+                g("escape_next", 4),
+            ],
+            "only the byte-builder encoders and the escaper may rewind; scanners \
+             threading records or lists stay on the grow-only arena"
         );
     }
 }
