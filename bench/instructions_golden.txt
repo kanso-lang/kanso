@@ -385,10 +385,10 @@ basket 34698417
 widebench 36463282
 deepbench 389214232
 escapebench 85558105
-pendbench 598215444
+pendbench 596612948
 indexbench 3265868
 scanbench 729804590
-digestbench 10745219
+digestbench 10420391
 readbench 4287134
 livebench 3596062732
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
@@ -405,4 +405,4 @@ livebench 3596062732
 # refuses the comparison rather than the measurement. The mix percentages in
 # bench/runbench's header are the container's and move by less than this
 # difference; they are not re-derived.
-runbench 2414841737
+runbench 2400271058

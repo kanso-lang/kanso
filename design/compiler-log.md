@@ -4035,3 +4035,20 @@ reads −0.2914%, a fifth of the arms. The extra hop costs what the table saves.
 measured +0.1216%. And the emitter does write a real `switch i64` for
 integer-literal arms; the "compare chain" the first reading assumed is LLVM's
 lowering of a sparse switch, not the emitter's shape.
+
+**CI's rows.** runbench 2,414,841,737 -> 2,400,271,058 (-0.6034%, agreeing
+with the container's reading to four figures), pendbench 598,215,444 ->
+596,612,948 (-0.2679%), digestbench 10,745,219 -> 10,420,391 (-3.0230%). The
+`.text` vein falls with them: runbench 243,858 -> 241,714, pendbench 86,914 ->
+86,610, digestbench 106,562 -> 105,634. `compile_instructions` is 19,317,662,
+unchanged. Every other row in both veins holds. Floor 65.96 -> 66.00.
+
+**A second instance of the same defect, found and not shipped.** A float
+literal is emitted as a call to `k_float` and its result carried no set
+either, so it read as TOP the same way -- and `k_float` answers a float and
+nothing else. Recording it changes runbench by zero, and changes no
+emitted-code row of any of the fourteen programs. Nothing in the corpus can
+see it, so nothing pins it, and a change no golden can fail is not one to
+carry. It is written down here so the next float-heavy program in the corpus
+finds it already diagnosed. The other unrecorded `%KValue` in the sweep is
+`k_env_get`, and TOP is right there: a captured name really can be a thunk.
