@@ -20,57 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (thirteenth) — the digit test travelled as a tag
-
-`scan_at` ended in
-
-    digit_step cs start p marked (47 < c and c < 58)
-
-and `digit_step` had `true` and `false` arms. So a comparison the emitter fuses
-into a branch when an `if` consumes it was instead materialised as a tagged
-boolean, passed as an argument, and taken apart by the callee's dispatch. In
-the merged `value_for_3'2` that reads, per digit:
-
-    2b9e  add    $0xffffffffffffffd0,%r10
-    2ba2  cmp    $0xa,%r10
-    2ba6  mov    $0x3,%edi
-    2bab  sbb    $0x0,%rdi
-    2baf  cmp    $0x2,%rdi
-    2bb3  jne    2c30
-
-Three of those six build the tag and test it, at 4,640,700 executions.
-
-Writing the test as an `if` inside `scan_at` and deleting `digit_step`:
-
-    jsonbench   1,573,203,261 -> 1,570,703,811   -2,499,450   -0.1589%
-    oneshot        24,399,645 ->    24,382,982      -16,663   -0.0683%
-    livebench   4,436,993,353 -> 4,436,976,690      -16,663   -0.0004%
-
-**A sixth of the arithmetic prediction, and the reason is worth having.** Three
-instructions at 4,640,700 executions is 13,922,100, and the row moves 2,499,450.
-The `and` of two comparisons still travels as a value — only the last step, the
-`if`'s own test, fuses. So the emitter's `Cond` machinery reaches a comparison
-under an `if` and not a comparison under an `and` under an `if`, and the 2026-09-04
-entry's 1.60% figure for this family is the ceiling rather than the take.
-
-Every other vein falls with it, which is the unusual part: compile_instructions
-−101,081 on the container, front-end visits 17,092 -> 17,068, the decoder's
-emitted defines/calls/branches/lines all down, and `.text` −48 bytes on each of
-the three decoding binaries. Two arms leave the library and nothing replaces
-them. Welfare 75.32 -> 75.33.
-
-The branch's ten worsened counters against main, by the gate's keys and the
-values they land on: compile_instructions 42,022,241 (a projection; CI's
-sitting corrects it), emitted_defines 183, emitted_calls 1,834,
-emitted_branches 1,205, emitted_lines 12,562; emitted_other_defines 1,797,
-emitted_other_calls 15,818, emitted_other_branches 9,880, emitted_other_lines
-102,967; and text 1,265,418. The three entries above have the reasons: six
-guarded whitespace arms and three helper functions are code the inlined
-`skip_ws` was not, and the digit test's `if` gives a little of it back. Against
-that the decode retires 166,710,002 fewer instructions, oneshot 1,111,390 fewer.
-
----
-
 ## 2026-09-06 (fourteenth) — the ratchet caught its own mutation going stale
 
 `a_decoder_that_answers_a_wrong_checksum` patched `acc2 = push acc v` in
@@ -3786,3 +3735,62 @@ fourteen binaries, jsonbench 93,010 -> 94,018 to runbench 241,682 ->
 the walk's own inlining did not need; the 2026-09-05 ruling keeps machine
 code out of welfare and in its own exact vein, so the kilobyte is
 recorded here and weighed nowhere. Welfare on CI's rows 65.86, held.
+
+## 2026-09-07 — A CHAIN STEP THAT SIZES ONLY WHEN THE REGION HAS DRIFTED, DECLINED FOR NOW
+
+**Search.** `chain step`, `k_arena_at_carry`, `drift`, `leave`, `retired two
+carries later` in the log, the archive and design/*.md. The entry that
+introduced the leave branch added the drift test beside a size test and
+called both load-bearing, the size test "excluding the shape that carries
+a large value forward, which must keep being evacuated or the size walk
+re-reads it every step". Nothing since has asked what the leave would cost
+without the size test in front of it.
+
+**The measurement.** The sizing walk that the entry above trimmed still
+runs on every chain step, and on deepbench it is 381,213,741 instructions
+inclusive, 63.6% of the program, to learn what the previous step's walk
+learnt. Asking the drift test first, and leaving without a walk while the
+region has not drifted a quarter megabyte past the last staged top:
+
+    deepbench    599,236,632 ->   211,925,873  -387,310,759  -64.6342%
+    widebench     49,141,296 ->    36,468,436   -12,672,860  -25.7887%
+    runbench   2,446,395,268 -> 2,393,553,867   -52,841,401   -2.1600%
+    pendbench    598,210,956 ->   596,853,570    -1,357,386   -0.2269%
+
+on the container with clang 19, the same bytes out on all fourteen
+benchmarks, every allocation, peak and evacuation counter in the twelve
+veins byte-identical, and only the walk's own `survive_slots` moving. It
+is the largest single move the run program has had, and it does not ship
+today, for two reasons that are the same reason.
+
+**Why not.** The carry pair retires a buffer two stages after it was
+filled, and the tenure tier promotes a value the walk finds inside the
+previous stage's buffer, "lived a lap". Both were written when a stage was
+a step, and both assume it. Under the drift policy the fixture
+`an_inner_beat_opens_its_tenure_in_the_block_outside`, which exists to pin
+the inner-beat block carve of kanso#1294 by reading `ten_blocks=3`, reads
+`ten_blocks=0`: its inner chain of 400 steps drifts eighty kilobytes a lap
+and stages once, so nothing it holds lives a lap and nothing is promoted.
+Lengthening its laps to 3,000 and 6,000 elements gave 28 stages and still
+no promotion. And a second variant, which measured the drift from the
+rewound top instead of the pre-stage top so that a stage is never followed
+by a second one a step later, segfaulted in `k_deep_copy` under
+`k_repair_interior` eight frames down `k_beat_iter_carry` while running
+`scripts/trend_gate`: a repaired node's interior read out of a buffer the
+stage had begun to reuse. The variant that measured from the pre-stage
+top ran the same program clean, and the difference between them is that
+the first accidentally stages twice at the start of every chain, which
+promotes what the chain holds into tenure before the buffers turn over.
+That is luck, not a design, and the crash is the shape the tenure
+fixture's comment warned about.
+
+**What would make it ship.** The prize is real and the policy is right in
+outline; the retirement rule under it is not. Either a stage that follows
+a drift copies out of both carry buffers before it reuses either, or
+whatever a repaired node holds in a carry buffer is promoted at the stage
+that repairs it rather than the one after. Both are changes to the carry,
+priced by the .mem vein and the run program's peak, and the inner-beat
+fixture must reach tenure again under whichever ships, with its numbers
+rewritten. Recorded here so the measurement is not made twice; the
+variant runtimes and the mutation for the row are in the session's
+scratch, and the entry that ships it will carry them.
