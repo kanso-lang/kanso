@@ -3358,3 +3358,17 @@ at push, pop and the five other sites that move the depth would save that.
 Built and measured: runbench 2,739,572,213 -> 2,748,365,853, +0.3210%. The
 rewind recomputes the depth for `k_reg_any` regardless, and seven settle
 sites cost push and pop more than the iteration saved. Reverted.
+
+### The ratchet's modulo row went blind at kanso#1292
+
+This PR's third round turned the ratchet job red on a row it did not write:
+`numeric`, whose mutation `native_floors_a_negative_modulo` patched the
+runtime's `k_mod` to floor, reported BLIND -- the numeric differential stayed
+green with the floor in place. kanso#1292 made the emitter write two proved
+integers' remainder as one `srem` and send only the zero and minus-one
+divisors to the call, so the runtime arm the mutation patched stopped
+answering any case the sweep writes, and nothing noticed until this branch
+touched src/runtime.c and the touched-rows check selected the row. The
+mutation now patches the emitter, `srem` to `urem`, and the sweep reads
+`print (-1 % 2147483648)` as 2147483647 on native against the oracle's -1:
+watched red on the container before this round was pushed.
