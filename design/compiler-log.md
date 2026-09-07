@@ -20,87 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (eleventh) — whitespace becomes the arm before the error
-
-The entry above removed one redundant `skip_ws`. Seven remained, and every one
-was followed by a dispatch on `cs[p2]` — the byte the scan had just loaded and
-thrown away. In `array_step`'s instruction-level profile that second read is 13
-instructions at 1,429,650 executions, 1.07% of jsonbench on its own.
-
-The dispatch tables already exist. Whitespace becomes the arm before the error
-in each of them, and the caller hands its byte straight in:
-
-    fn array_step cs (parsed p v) acc
-      array_delim cs cs[p] p (push acc v)
-
-    fn array_delim cs c p acc
-      blank = ws? c
-      if blank (array_delim cs cs[p + 1] (p + 1) acc) (array_bad c p)
-
-Six sites convert: `array_step`→`array_delim`, `obj_items`→`obj_key_start`,
-`obj_value`→`obj_delim`, `parse_array`→`array_open`, `parse_object`→`obj_open`,
-`parse_value`→`value_for`. Two do not: `obj_key` feeds `expect_char`, which has
-no `cs` to advance with, and `finish` compares the position against the length.
-
-    jsonbench   1,698,318,413 -> 1,573,203,261   -125,115,152   -7.3670%
-    oneshot        25,233,736 ->    24,399,645       -834,091   -3.3055%
-    livebench   4,437,827,434 -> 4,436,993,353       -834,091   -0.0188%
-
-The other ten rows are byte-identical.
-
-**Almost none of that is whitespace.** bench/large.json is 188,698 bytes and
-holds 2,238 blanks, 1.19%, all of them spaces inside string values that the
-decoder never dispatches on. The fall is the layer: a `skip_ws` call per token
-that loaded a byte, tested it against four literals, wrapped the answer in a
-tag and handed back only the position, and a caller that then loaded the same
-byte again.
-
-**The four-arm form was built first and the objective declined it.** Writing
-whitespace as literal arms — `fn array_delim cs 9 p acc` and three more per
-site, 24 in all — reads better and measures further: jsonbench −8.5219%,
-oneshot −3.8237%. It costs 1,109 more front-end visits, 1,409 more emitted
-lines and 6.42% more compile instructions (container A/B, 41,831,743 ->
-44,515,270), and welfare comes out at **75.19 against a floor of 75.21**. A
-fall is a fall: the shape went. The guarded form is one arm and one binding per
-site plus three small helpers for the error messages, keeps 86% of the runtime
-win, and costs 1.70% of compile instructions (41,831,743 -> 42,543,278) —
-welfare 75.32.
-
-That comparison is the useful part. Two spellings of one idea, identical in
-behaviour, and the objective separates them: the difference is entirely how
-much source the front end has to read.
-
-**The veins.** No allocation counter moves. `.text` RISES on the three decoding
-binaries — jsonbench 95,074 -> 95,346, oneshot 118,434 -> 118,962, livebench
-119,010 -> 119,570 — because the helpers and the `ws?` call sites are code the
-`skip_ws` inline copies were not; welfare weighs no machine-code size term
-(ruled 2026-09-05), so that is a movement to state. Emitted code rises: the
-decoder's calls 1,764 -> 1,835, branches 1,150 -> 1,207, lines 12,047 ->
-12,588. Front-end visits FALL, 17,115 -> 17,092, because the eight `p2 = ...`
-bindings that leave are about what the guards cost.
-
-**CI's rows for the entry above, and three projections in this one.** CI read
-the array_items change's compile veins and all three moved: compile_instructions
-41,462,716 -> **41,411,787**, a fall of 50,929, and compile_peak_bytes 715,275
--> **714,995**, a fall of 280. compile_allocs moved too and its value is further
-back in the job log than the API hands back. So this change carries
-compile_instructions at 42,123,322 — CI's 41,411,787 plus the container's own
-A/B delta of 711,535 — compile_peak_bytes at CI's 714,995 with no delta for
-this change, and compile_allocs unchanged. Both of the latter two gates refuse
-on this container (rustc 1.94.1 against the runner's 1.98.1) and cannot be
-measured here at all. One red round is expected and CI's sitting is the record.
-
-The nine counters that worsen, by the gate's own keys and the values they land
-on: emitted_defines 184, emitted_calls 1,835, emitted_branches 1,207,
-emitted_lines 12,588; emitted_other_defines 1,799, emitted_other_calls 15,820,
-emitted_other_branches 9,884, emitted_other_lines 103,019; and text 1,265,562.
-All nine are the same thing said nine ways — six guarded arms, three helper
-functions and eleven `ws?` call sites are code the inlined `skip_ws` was not.
-They buy 125,115,152 instructions off the decode, and welfare weighs none of
-them.
-
----
-
 ## 2026-09-06 (twelfth) — the objective's own count was one behind, in three files
 
 CLAUDE.md said `scripts/welfare.kso` weighs "decode allocations and arena
@@ -3743,3 +3662,50 @@ new arm are a kilobyte of machine code a program that indexes text and
 272 bytes for one that does not: `text` lands on 1,459,900, +10,224 summed
 over the fourteen; `compile_instructions` falls to 19,316,149. The floor is
 re-set on CI's rows.
+
+## 2026-09-07 — THE ALLOCATION COUNTER'S GATE IS ONE BRANCH
+
+**DONE.** k_alloc inlines into every hot caller, and the test in front of
+its two counters was written as `!= 0` around a second `if (k_stats_on)`,
+a shape left from the days the switch initialised itself lazily and held
+-1 until the first allocation. Clang compiled the pair to a compare and
+two branches -- one for the positive switch, one for the negative it has
+not held since the constructor began setting it before main -- at every
+inlined allocation: 7.3 million a run on the run program, 4.7 million on
+jsonbench. The gate makes the same `> 0` test every other counting site
+makes now, one compare and one branch, and the counters it guards count
+exactly as before, since both shapes fire on 1 and not on 0.
+
+    runbench     2,466,455,728 ->  2,453,160,233   -13,295,495   -0.5391%
+    jsonbench    1,497,268,440 ->  1,484,987,475   -12,280,965   -0.8202%
+    encodebench  4,070,190,332 ->  4,058,910,167   -11,280,165   -0.2771%
+    livebench    3,607,309,612 ->  3,596,079,568   -11,230,044   -0.3113%
+    pendbench      604,694,571 ->    598,281,250    -6,413,321   -1.0606%
+    scanbench      736,173,218 ->    729,801,588    -6,371,630   -0.8655%
+    basket          34,124,077 ->     33,931,564      -192,513   -0.5642%
+    deepbench      647,637,793 ->    647,494,319      -143,474   -0.0222%
+    oneshot         21,836,575 ->     21,743,437       -93,138   -0.4265%
+    widebench       50,448,588 ->     50,368,545       -80,043   -0.1587%
+    digestbench     10,775,462 ->     10,721,075       -54,387   -0.5047%
+    readbench        4,287,855 ->      4,288,040          +185   +0.0043%
+    indexbench       3,255,312 ->      3,260,259        +4,947   +0.1520%
+    escapebench     85,495,194 ->     85,558,220       +63,026   +0.0737%
+
+against CI's rows for kanso#1297. Three rows rise: `work_escapebench`
+lands on 85,558,220, +63,026, `work_indexbench` on 3,260,259, +4,947,
+and `work_readbench` on 4,288,040, +185. Those three allocate little
+where they spend, and what moved for them is the inlining below rather
+than the gate: k_buf's body landing inside k_b_push_grow and its
+neighbours costs escapebench's push path a few instructions a call.
+
+on the container with clang 19, the same bytes out, and every counter
+byte-identical: the counted run takes the same branch it always did.
+`all_counters.sh` agrees with every golden. Welfare 65.80 -> 65.84,
+held with `--set`. The run program's fall is
+1.8 instructions an allocation rather than one, and the profile says why:
+with k_alloc a branch smaller, clang inlined k_buf and k_list_lit into
+their callers -- 34,157,401 and 9,379,099 instructions of self cost gone
+from the two names, their callers absorbing less than that -- and
+k_render_at fell 2,317,164, k_b_utf8_slice_raw 923,571, k_rec 800,350. Ratchet row `alloc_gate` puts the two-branch
+gate back and asks the work vein; dry-run against the tree before it was
+committed. CI's rows and `--set` follow in the next round.

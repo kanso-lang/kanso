@@ -50234,3 +50234,86 @@ larger change and is not in this one.
 ---
 
 ---
+
+## 2026-09-06 (eleventh) — whitespace becomes the arm before the error
+
+The entry above removed one redundant `skip_ws`. Seven remained, and every one
+was followed by a dispatch on `cs[p2]` — the byte the scan had just loaded and
+thrown away. In `array_step`'s instruction-level profile that second read is 13
+instructions at 1,429,650 executions, 1.07% of jsonbench on its own.
+
+The dispatch tables already exist. Whitespace becomes the arm before the error
+in each of them, and the caller hands its byte straight in:
+
+    fn array_step cs (parsed p v) acc
+      array_delim cs cs[p] p (push acc v)
+
+    fn array_delim cs c p acc
+      blank = ws? c
+      if blank (array_delim cs cs[p + 1] (p + 1) acc) (array_bad c p)
+
+Six sites convert: `array_step`→`array_delim`, `obj_items`→`obj_key_start`,
+`obj_value`→`obj_delim`, `parse_array`→`array_open`, `parse_object`→`obj_open`,
+`parse_value`→`value_for`. Two do not: `obj_key` feeds `expect_char`, which has
+no `cs` to advance with, and `finish` compares the position against the length.
+
+    jsonbench   1,698,318,413 -> 1,573,203,261   -125,115,152   -7.3670%
+    oneshot        25,233,736 ->    24,399,645       -834,091   -3.3055%
+    livebench   4,437,827,434 -> 4,436,993,353       -834,091   -0.0188%
+
+The other ten rows are byte-identical.
+
+**Almost none of that is whitespace.** bench/large.json is 188,698 bytes and
+holds 2,238 blanks, 1.19%, all of them spaces inside string values that the
+decoder never dispatches on. The fall is the layer: a `skip_ws` call per token
+that loaded a byte, tested it against four literals, wrapped the answer in a
+tag and handed back only the position, and a caller that then loaded the same
+byte again.
+
+**The four-arm form was built first and the objective declined it.** Writing
+whitespace as literal arms — `fn array_delim cs 9 p acc` and three more per
+site, 24 in all — reads better and measures further: jsonbench −8.5219%,
+oneshot −3.8237%. It costs 1,109 more front-end visits, 1,409 more emitted
+lines and 6.42% more compile instructions (container A/B, 41,831,743 ->
+44,515,270), and welfare comes out at **75.19 against a floor of 75.21**. A
+fall is a fall: the shape went. The guarded form is one arm and one binding per
+site plus three small helpers for the error messages, keeps 86% of the runtime
+win, and costs 1.70% of compile instructions (41,831,743 -> 42,543,278) —
+welfare 75.32.
+
+That comparison is the useful part. Two spellings of one idea, identical in
+behaviour, and the objective separates them: the difference is entirely how
+much source the front end has to read.
+
+**The veins.** No allocation counter moves. `.text` RISES on the three decoding
+binaries — jsonbench 95,074 -> 95,346, oneshot 118,434 -> 118,962, livebench
+119,010 -> 119,570 — because the helpers and the `ws?` call sites are code the
+`skip_ws` inline copies were not; welfare weighs no machine-code size term
+(ruled 2026-09-05), so that is a movement to state. Emitted code rises: the
+decoder's calls 1,764 -> 1,835, branches 1,150 -> 1,207, lines 12,047 ->
+12,588. Front-end visits FALL, 17,115 -> 17,092, because the eight `p2 = ...`
+bindings that leave are about what the guards cost.
+
+**CI's rows for the entry above, and three projections in this one.** CI read
+the array_items change's compile veins and all three moved: compile_instructions
+41,462,716 -> **41,411,787**, a fall of 50,929, and compile_peak_bytes 715,275
+-> **714,995**, a fall of 280. compile_allocs moved too and its value is further
+back in the job log than the API hands back. So this change carries
+compile_instructions at 42,123,322 — CI's 41,411,787 plus the container's own
+A/B delta of 711,535 — compile_peak_bytes at CI's 714,995 with no delta for
+this change, and compile_allocs unchanged. Both of the latter two gates refuse
+on this container (rustc 1.94.1 against the runner's 1.98.1) and cannot be
+measured here at all. One red round is expected and CI's sitting is the record.
+
+The nine counters that worsen, by the gate's own keys and the values they land
+on: emitted_defines 184, emitted_calls 1,835, emitted_branches 1,207,
+emitted_lines 12,588; emitted_other_defines 1,799, emitted_other_calls 15,820,
+emitted_other_branches 9,884, emitted_other_lines 103,019; and text 1,265,562.
+All nine are the same thing said nine ways — six guarded arms, three helper
+functions and eleven `ws?` call sites are code the inlined `skip_ws` was not.
+They buy 125,115,152 instructions off the decode, and welfare weighs none of
+them.
+
+---
+
+---

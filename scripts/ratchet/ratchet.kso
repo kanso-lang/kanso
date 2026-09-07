@@ -600,6 +600,14 @@ slice_count_words = row
   (breaking "a_slice_stepped_a_character_at_a_time_between_its_positions")
   benches
 
+alloc_gate = row
+  "an allocation counter gated by two branches"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_allocation_counter_gated_by_two_branches")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -1049,7 +1057,7 @@ rows_b1i = text/concat rows_b1h [freeze_all mark_block_first]
 
 rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
 
-rows_b1k = text/concat rows_b1j [slice_count_words]
+rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
 
 rows_b = text/concat rows_b1k [compile_mem compile_mem_host]
 
