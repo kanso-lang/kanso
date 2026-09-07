@@ -20,52 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (fifth) — obj_key_start IS 197 INSTRUCTIONS A CALL, AND 170 OF THEM RUN EVERY TIME
-
-**DONE.** Attribution only — no code changes. `d_jsonbench/obj_key_start_4'2`
-is 234,197,700 instructions, **13.48% of jsonbench** and the second largest
-function there after `parse_value`.
-
-Searched first: it has a function-level figure in
-`log/compiler-log-archive.md` (281,591,550, 9.71%, alongside a note that
-`value_for` is called 1,188,150 times from it) and three mentions in this file,
-the largest a fall of 77,361,900 from the dispatch relaxation. None of the four
-says what the remaining instructions are.
-
-Callgrind at instruction granularity joined to objdump over the function's 647
-instructions; 221 execute and the join accounts for all 234,197,700.
-
-**1,188,150 calls, 197.1 instructions each.** The striking thing is how little
-of it is a loop: **170 instructions execute at exactly the call count**,
-201,985,500, which is 86.25% of the function and 11.62% of jsonbench. Only four
-bands run at any other frequency, the largest 17 instructions at 788,400.
-
-By opcode, over the whole function:
-
-    mov      69,204,750  29.55%
-    cmp      38,020,800  16.23%
-    jne      16,634,100   7.10%
-    xor      13,069,650   5.58%
-    je       11,881,500   5.07%
-    test      8,317,050   3.55%
-    movzbl    8,317,050   3.55%
-    push      7,128,900   3.04%
-    pop       7,128,900   3.04%
-
-`cmp`, `jne`, `je` and `test` together are 31.95%: this is a straight-line body
-that tests and branches rather than one that computes. `movzbl` at 3.55% is the
-byte reads — 7 a call, against `parse_value`'s 22 sites at a much lower
-frequency.
-
-**Recorded as the shape, not as a repair.** A 170-instruction straight-line
-prologue-to-return body on a function entered 1,188,150 times is where a
-specialisation would pay, and the same measurement says what to compare against:
-`parse_value` is 49 instructions in its own per-call band. Whoever takes this
-should establish first whether the 170 is one arm or the sum of a dispatch over
-several, because those want different repairs.
-
----
-
 ## 2026-09-06 (sixth) — THE DECODE'S CALL CHAIN, PRICED PER CALL: str_char IS 621 INSTRUCTIONS
 
 **DONE.** Attribution only. The three functions under `obj_key_start` in
@@ -3389,3 +3343,42 @@ against the 5,865,000 the memcpy calls had cost. The loop's bound is a
 variable where the copies above have a constant, and a variable-count byte
 loop is dearer than the call it replaced. Reverted before the sweep; the
 k_b_at attribution in the length entry stands as written.
+
+---
+
+## 2026-09-07 — A SHORT UTF-8 RUN VALIDATED A BYTE AT A TIME AROUND ITS WIDE CHARACTERS
+
+`k_utf8_bad_scalar` on runbench: 134,442 calls, 25,621,497 instructions, 190
+a run. It is the arm for a run of thirty-two bytes or fewer that carries a
+byte with the high bit set -- the door's ascii predicate has already turned
+away every run that carries none -- and it walked the grammar a byte at a
+time, ascii included: 938,619 loop iterations for 232,551 wide characters,
+117,018 of them two bytes and 115,533 three. The ascii around the characters
+was 706,068 of the iterations, and each was a load, a test and a branch back.
+
+### A word at a time, and the tail as the last word
+
+The ascii arm reads eight bytes as one word, as `k_all_ascii` does. A clean
+word is eight bytes in three instructions; a word with a high bit in it says
+where, by counting trailing zeros, and the walk lands on that byte rather
+than testing its way there. Runbench's strings are short, so after the words
+came a tail of up to seven bytes and 444,609 single steps: the tail reads the
+run's last word, overlapping bytes already walked, with those bytes shifted
+out. A run under eight bytes still steps.
+
+    words   runbench   2,674,319,744 -> 2,667,323,216   −6,996,528   −0.2616%
+    tail    runbench   2,667,323,216 -> 2,665,704,368   −1,618,848   −0.0607%
+
+on the container with clang 19, the same bytes out; `k_utf8_bad_scalar` is
+17,006,121. The differential harness under `scripts/utf8_differential`, which
+extracts the arm's text from the source and runs it against an independent
+scalar decoder, passed 45,189,025 cases and 8,346,016 counts with 0
+mismatches after each step. No counter in the twelve veins or the lazy tier
+moves -- `utf8_bytes` counts bytes handed in, not steps -- and
+`all_counters.sh` agrees with every golden. The ratchet row `scalar_words`
+closes both word arms and asks the work vein.
+
+**OPEN.** What is left in the arm is the grammar itself, twenty or so
+instructions a wide character through an if-else ladder on the lead byte,
+4.6 million over the run. A 256-entry table keyed on the lead byte would
+give the width and the continuation range in one load. Not measured.

@@ -49950,3 +49950,49 @@ dimension's standing — which is the standing question in #319. Whoever takes
 this should read that entry in `design/pending-gavels.md` first.
 
 ---
+
+## 2026-09-06 (fifth) — obj_key_start IS 197 INSTRUCTIONS A CALL, AND 170 OF THEM RUN EVERY TIME
+
+**DONE.** Attribution only — no code changes. `d_jsonbench/obj_key_start_4'2`
+is 234,197,700 instructions, **13.48% of jsonbench** and the second largest
+function there after `parse_value`.
+
+Searched first: it has a function-level figure in
+`log/compiler-log-archive.md` (281,591,550, 9.71%, alongside a note that
+`value_for` is called 1,188,150 times from it) and three mentions in this file,
+the largest a fall of 77,361,900 from the dispatch relaxation. None of the four
+says what the remaining instructions are.
+
+Callgrind at instruction granularity joined to objdump over the function's 647
+instructions; 221 execute and the join accounts for all 234,197,700.
+
+**1,188,150 calls, 197.1 instructions each.** The striking thing is how little
+of it is a loop: **170 instructions execute at exactly the call count**,
+201,985,500, which is 86.25% of the function and 11.62% of jsonbench. Only four
+bands run at any other frequency, the largest 17 instructions at 788,400.
+
+By opcode, over the whole function:
+
+    mov      69,204,750  29.55%
+    cmp      38,020,800  16.23%
+    jne      16,634,100   7.10%
+    xor      13,069,650   5.58%
+    je       11,881,500   5.07%
+    test      8,317,050   3.55%
+    movzbl    8,317,050   3.55%
+    push      7,128,900   3.04%
+    pop       7,128,900   3.04%
+
+`cmp`, `jne`, `je` and `test` together are 31.95%: this is a straight-line body
+that tests and branches rather than one that computes. `movzbl` at 3.55% is the
+byte reads — 7 a call, against `parse_value`'s 22 sites at a much lower
+frequency.
+
+**Recorded as the shape, not as a repair.** A 170-instruction straight-line
+prologue-to-return body on a function entered 1,188,150 times is where a
+specialisation would pay, and the same measurement says what to compare against:
+`parse_value` is 49 instructions in its own per-call band. Whoever takes this
+should establish first whether the 170 is one arm or the sum of a dispatch over
+several, because those want different repairs.
+
+---
