@@ -4112,3 +4112,62 @@ after 414,247 instructions: `cached_runtime_object` keys on the closure
 convention and the newest object on this box was built under the other one, so
 a hand-link picks the wrong half and the two halves disagree about registers.
 Let `kanso build` do the linking.
+
+## 2026-09-07 (second) — the splats were never on the short string's path
+
+Searched the log, the archive and design/ before filing: `find2_below` appears in
+the 2026-09-05 and 2026-09-06 entries (the shim, the word-at-a-time tail declined
+at +2.2879%) and neither asks this question.
+
+**A map of runbench on merged main.** Callgrind, clang 19.1.1, run from the repo
+root; the whole program reads 2,399,081,635 against the golden's 2,398,991,511
+on CI. Self instructions, calls, and instructions a call:
+
+    d_json/encode_onto_2'2      316,832,879   2,380,860    133.1   13.33%
+    d_json/value_for_3'2        233,409,627   1,791,207    130.3    9.82%
+    d_json/obj_key_start_4'2    141,361,011     229,779    615.2    5.95%
+    render_ryu                   90,045,360     191,070    471.3    3.79%
+    k_b_find2_below_raw          84,989,250   1,353,330     62.8    3.58%
+
+Two emitted functions carry 23.15% between them at about 130 self instructions a
+call, and encode_onto's figure includes escape_onto, which the linker folded into
+it. That is where the remaining runtime cost sits.
+
+**Three readings of the emitted code that cost nothing, checked rather than
+assumed.** The dispatcher's propagate block asks `k_not_failure` again on a value
+the entry branch has already proved is a failure, and the block under it is dead;
+`k_not_failure` is `alwaysinline` and pure, so LLVM common-subexpressions both and
+folds the branch. The list and map arms of `encode_onto` compare a length against
+zero and emit the `k_cmp` fallback beside the inline test, which reads as a set
+the emitter never recorded for `k_b_length_fast` — but `encode_onto_2'2` does not
+call `k_cmp` anywhere in the profile, because LLVM folds that arm too. And the
+escape scan's call count is not waste: large.json holds 10,475 strings averaging
+6.6 bytes of which 1,773 need an escape, so 1,353,330 calls over ninety rounds is
+1.44 a string, one for a clean string and two for an escaped one.
+
+**The shape that was built and declined.** `k_b_find2_below_raw` builds three
+`_mm_set1_epi8` splats before a loop whose guard is `i + 16 <= len`, and a 6.6-byte
+string never enters that loop. Guarding the whole vector block on `len - i >= 16`
+so a short string cannot reach the splats:
+
+    runbench   2,399,081,635 -> 2,405,273,995   +6,192,360   +0.258%
+
+attributed to the instruction: `k_b_find2_below_raw` 84,989,250 -> 91,181,610,
+every other row byte-identical, 4.58 instructions a call over 1,353,330 calls.
+LLVM already sinks the splats into the loop's preheader, which the rotated guard
+protects, so the premise was wrong: the splats were not on the short string's
+path, and the second compare is pure cost. Reverted.
+
+**A fourth reading, and it is arithmetic rather than a defect.** `k_b_append_range`
+is entered 176,697 times and every one of them falls through to
+`k_b_append_grow`: its fast path fires zero times. That reads as a buffer being
+regrown, because 1,953 growths a round is a hundred times what one 185 KB output
+buffer doubling from the floor would need. It is not. The caller is
+`d_json/string_at_4` at 175,527 calls, 1,791.1 a decode round against the 1,773
+strings in large.json that hold a character needing an escape — a ratio of
+1.0102. One append per escaped string, into an accumulator that has no buffer
+yet, and a first append allocates whatever path it takes. The 272.6 instructions
+a growth are that allocation and its copy. This is the shape the 2026-08-29 entry
+found in `push_mut_slow`: count the objects born before concluding one is
+growing.
+
