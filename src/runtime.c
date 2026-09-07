@@ -1031,9 +1031,28 @@ static int k_still_live(const void* p) {
    is shared. */
 static int k_ten_holds(const void* p);
 
+/* Is p in the arena above the mark -- storage the rewind reclaims? Such a
+   pointer cannot be tenured, since tenure blocks are malloc'd, so the walk of
+   the tenure blocks is skipped for the one kind of pointer the sizing walk
+   asks about most: a node the loop built this lap. The blocks newer than the
+   mark's are visited from the head of the chain, and the mark's own block
+   from the mark's pointer to its end. */
+static int k_above_mark(const void* p, KMark* m) {
+    const char* q = (const char*)p;
+    for (KBlock* b = k_blocks; b; b = b->next) {
+        const char* start = (const char*)(b + 1);
+        const char* end = start + b->cap;
+        if (b == m->block) return q >= m->ptr && q < end;
+        if (q >= start && q < end) return 1;
+    }
+    return 0;
+}
+
 static int k_survives_x(const void* p, KMark* m) {
     if (k_survives(p, m)) return 1;
-    return k_ten_any && m && k_ten_holds(p);
+    if (!k_ten_any || !m) return 0;
+    if (k_above_mark(p, m)) return 0;
+    return k_ten_holds(p);
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
@@ -1103,6 +1122,8 @@ static KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
 
 typedef struct KTenBlock { struct KTenBlock* next; size_t cap; size_t used; char* data; } KTenBlock;
 static KTenBlock* k_ten_blocks[K_BEAT_MAX];
+/* One bit per depth that holds a block. */
+static unsigned long long k_ten_mask = 0;
 static size_t k_ten_bytes[K_BEAT_MAX];
 /* Past this a program stops tenuring and behaves as it did before, so no loop
    can grow without bound on storage that is only freed at the pop. */
@@ -1134,8 +1155,10 @@ static int k_ten_on = 0;
    the memo went. */
 static __attribute__((noinline)) int k_ten_holds(const void* p) {
     const char* q = (const char*)p;
-    for (long long d = 0; d < k_beat_depth && d < K_BEAT_MAX; d++)
-        for (KTenBlock* b = k_ten_blocks[d]; b; b = b->next)
+    unsigned long long held = k_ten_mask;
+    if (k_beat_depth < K_BEAT_MAX) held &= (1ull << k_beat_depth) - 1;
+    for (; held; held &= held - 1)
+        for (KTenBlock* b = k_ten_blocks[__builtin_ctzll(held)]; b; b = b->next)
             if (q >= b->data && q < b->data + b->used) return 1;
     return 0;
 }
@@ -1187,6 +1210,7 @@ static void* k_ten_alloc(size_t n) {
         nb->used = 0;
         nb->next = k_ten_blocks[d];
         k_ten_blocks[d] = nb;
+        k_ten_mask |= 1ull << d;
         b = nb;
         if (__builtin_expect(k_stats_on > 0, 0)) k_stat_ten_blocks++;
     }
@@ -1243,6 +1267,7 @@ static void k_ten_hand_up(long long d) {
     k_ten_bytes[d - 1] += k_ten_bytes[d];
     k_ten_blocks[d] = NULL;
     k_ten_bytes[d] = 0;
+    k_ten_mask = (k_ten_mask & ~(1ull << d)) | (1ull << (d - 1));
 }
 
 static void k_ten_release(long long d) {
@@ -1261,8 +1286,8 @@ static void k_ten_release(long long d) {
     }
     k_ten_blocks[d] = NULL;
     k_ten_bytes[d] = 0;
-    k_ten_any = 0;
-    for (long long i = 0; i < K_BEAT_MAX; i++) if (k_ten_blocks[i]) k_ten_any = 1;
+    k_ten_mask &= ~(1ull << d);
+    k_ten_any = k_ten_mask != 0;
 }
 
 static size_t k_copy_seen_live;
