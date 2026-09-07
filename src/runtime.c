@@ -6733,7 +6733,13 @@ KValue k_b_at(KValue container, KValue index) {
         if (want < 1) return k_none();
         long at = k_str_seek(s, want);
         if (at < 0) return k_none();
-        return k_str_n(s->data + at, k_cp_len((unsigned char)s->data[at]));
+        KValue one = k_str_n(s->data + at, k_cp_len((unsigned char)s->data[at]));
+        /* One character by construction, so its count is known without a
+           scan: `length s[i]` asked k_utf8_chars to walk the bytes of every
+           multi-byte character it was handed, 345,220 times on runbench. */
+        KStr* os = k_as_str(one);
+        if (os->cap == 0) os->cap = -2;
+        return one;
     }
     if (container.tag == K_BYTES && index.tag == K_INT) {
         KBytes* b = k_as_bytes(container);

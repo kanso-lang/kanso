@@ -570,13 +570,28 @@ define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
   %is_list = icmp eq i64 %tag, 9
   %is_bytes = icmp eq i64 %tag, 13
   %fastable = or i1 %is_list, %is_bytes
-  br i1 %fastable, label %list, label %slow
+  br i1 %fastable, label %list, label %str
 list:
   %p = extractvalue %KValue %v, 1
   %lp = inttoptr i64 %p to ptr
   %len = load i64, ptr %lp
   %r = insertvalue %KValue { i64 0, i64 undef }, i64 %len, 1
   ret %KValue %r
+str:
+  %is_str = icmp eq i64 %tag, 6
+  br i1 %is_str, label %memo, label %slow
+memo:
+  %sp = extractvalue %KValue %v, 1
+  %sptr = inttoptr i64 %sp to ptr
+  %cp = getelementptr i8, ptr %sptr, i64 12
+  %cap = load i32, ptr %cp
+  %known = icmp slt i32 %cap, 0
+  br i1 %known, label %count, label %slow
+count:
+  %ncap = xor i32 %cap, -1
+  %n = sext i32 %ncap to i64
+  %rs = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
+  ret %KValue %rs
 slow:
   %f = call %KValue @k_b_length(%KValue %v)
   ret %KValue %f
