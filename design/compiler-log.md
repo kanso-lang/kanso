@@ -3772,3 +3772,17 @@ design and is not this entry's.
 Ratchet row `size_walk` puts the unconditional calls and the out-of-line
 probe back and asks the work vein, the only witness a walk that answers
 the same sizes leaves. Dry-run against the tree before it was committed.
+
+**CI's sitting.** The runner's rows differ from the container's by a few
+instructions and the goldens carry the runner's: `work_runbench`
+2,446,394,810, `work_deepbench` 599,235,221, `work_widebench`
+49,141,298, and the one rising row `work_basket` lands on 33,935,460,
++3,894 on main's 33,931,566, priced above. `compile_instructions` falls
+851 to 19,315,957, the runtime string's bytes moving under the compiler.
+The `.text` vein rises for the first time in this run of entries: `text`
+1,449,644 -> 1,463,756, +14,112, and it is 1,008 bytes on every one of the
+fourteen binaries, jsonbench 93,010 -> 94,018 to runbench 241,682 ->
+242,690. That is the probe's body at its six sites, five of them copies
+the walk's own inlining did not need; the 2026-09-05 ruling keeps machine
+code out of welfare and in its own exact vein, so the kilobyte is
+recorded here and weighed nowhere. Welfare on CI's rows 65.86, held.
