@@ -382,8 +382,8 @@ jsonbench 1484986560
 encodebench 4058886681
 oneshot 21742508
 basket 33935460
-widebench 49141298
-deepbench 599235221
+widebench 36460868
+deepbench 410388147
 escapebench 85558104
 pendbench 598210959
 indexbench 3258693
@@ -405,4 +405,4 @@ livebench 3596056269
 # refuses the comparison rather than the measurement. The mix percentages in
 # bench/runbench's header are the container's and move by less than this
 # difference; they are not re-derived.
-runbench 2446394810
+runbench 2418520807

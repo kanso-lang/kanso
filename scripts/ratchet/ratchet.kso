@@ -616,6 +616,22 @@ size_walk = row
   (breaking "a_sizing_walk_that_calls_on_every_immediate")
   benches
 
+chain_drift = row
+  "a chain step that sizes its continuation every step"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_chain_step_that_sizes_its_continuation_every_step")
+  benches
+
+pop_deep = row
+  "a carried pop that prunes at a survivor"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_carried_pop_that_prunes_at_a_survivor")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -1067,7 +1083,7 @@ rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
 
 rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
 
-rows_b1l = text/concat rows_b1k [size_walk]
+rows_b1l = text/concat rows_b1k [size_walk chain_drift pop_deep]
 
 rows_b = text/concat rows_b1l [compile_mem compile_mem_host]
 

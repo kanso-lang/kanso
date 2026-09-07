@@ -20,30 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (fourteenth) — the ratchet caught its own mutation going stale
-
-`a_decoder_that_answers_a_wrong_checksum` patched `acc2 = push acc v` in
-`array_step`, and that binding went in the eleventh entry above when the
-function stopped calling `skip_ws` and started handing its byte straight to
-`array_delim`. The ratchet's `applies_all` reported it on the same branch that
-caused it:
-
-    ratchet: 1 mutations no longer apply
-      STALE json decoder end-to-end (native, 150 decodes)
-
-The push is an argument now and the mutation doubles it there. Watched red on
-the new source before it was taken as fixed: the mutated decoder answers
-checksum 48000 against the 24000 it owes, which is the doubling the mutation's
-own comment predicts, and `scripts/gates/native_checksum.sh` exits 1 on it and 0
-restored.
-
-`applies_all` reads a worktree of HEAD rather than the working tree, so the fix
-has to be committed before the ratchet can see it. A session that edits the
-mutation and re-runs from the working tree gets the same STALE line and has no
-way to tell whether the edit was wrong.
-
----
-
 ## 2026-09-06 (fifteenth) — CI's compile rows, and the floor I set on a guess
 
 CI measured the branch and every projection landed exactly except the compile
@@ -3794,3 +3770,68 @@ fixture must reach tenure again under whichever ships, with its numbers
 rewritten. Recorded here so the measurement is not made twice; the
 variant runtimes and the mutation for the row are in the session's
 scratch, and the entry that ships it will carry them.
+
+## 2026-09-07 — A CHAIN STEP SIZED ITS CONTINUATION EVERY STEP, AND THE POP THAT RETIRED THE CARRY PRUNED
+
+**Search.** `chain step`, `k_arena_at_carry`, `drift`, `leave`, `nsz`,
+`prune`, `k_interior_survives` in the log, the archive and design/*.md. The
+nearest entry is yesterday's, which measured this policy and declined it:
+"the carry pair's two-stage retirement and the tenure tier's lived-a-lap
+promotion both assume a stage is a step", with a segfault it could not
+explain. This entry explains it and ships the policy.
+
+**Where it was.** The bind chain sizes its continuation on every step to
+choose between flooring the region under a large value, leaving a small one
+where it is while the region has not drifted, and staging everything else
+through the carry pair. The walk ran before the choice, every step.
+deepbench's continuation is a closure over a list of eight ints, and its
+384,833 steps each walked it at about a thousand instructions to learn what
+the previous step's walk had learnt.
+
+**What changed, and what it exposed.** The drift test is asked first, so a
+step whose region has not drifted a quarter megabyte past the last staged
+top leaves without walking. That alone segfaulted the trend gate, and the
+cause is a rule that was true only because a stage happened every step: the
+copy-out at a carried pop PRUNES at any survivor whose immediate interior
+survives. One level down is all `k_interior_survives` can see, so an arena
+node two levels down holding a pointer into the depth's carry buffer was
+never repaired at the pop — it was repaired by the caller's next stage,
+which used to be the next step. Let the chain leave for a few hundred steps
+and the buffer is grown, freed and reused underneath that pointer first.
+
+Two narrower repairs were built and both are wrong. Forcing a stage after
+any inner pop that copied out of a carry fixes the crash and costs
+deepbench 893,347,801 against 599,236,632, because it forces a stage
+everywhere the baseline could leave. Holding the grown buffer to the pop
+rather than freeing it still segfaults, because the from/to swap overwrites
+a buffer as well as freeing it. What ships is the walk: at that one call
+site the copy-out does not prune, so it descends and repairs a carry
+pointer at any depth.
+
+    deepbench    599,236,632 ->   410,388,147  -188,848,485  -31.5152%
+    widebench     49,141,296 ->    36,460,868   -12,680,428  -25.8039%
+    runbench   2,446,395,268 -> 2,418,520,807   -27,874,461   -1.1394%
+
+on the container with clang 19, the same bytes out on all three. The
+evacuation counters RISE, which is the deep walk paying for itself: the run
+program's `evac_allocs` 15,994 -> 74,551 and `evac_bytes` 8,587,152 ->
+10,578,112, pendbench's 2,673 -> 3,201 and 498,320 -> 723,248, and
+basket's 3 -> 5. Against them widebench's arena peak falls 3,145,728 ->
+2,097,152 and its `arena_blocks` 3 -> 2, and the run program's
+`perm_live_bytes` 43,584 -> 0 with `perm_peak_bytes` 53,856 -> 10,272.
+Welfare weighs the trade and reads 65.86 -> 65.95, held with `--set`.
+
+**Both tenure fixtures had to be rewritten to keep seeing anything.** A
+chain of small steps with no garbage never drifts, so it never stages,
+never carries and never promotes — and promotion is what
+`a_repaired_node_below_the_mark_holds_tenure` and
+`an_inner_beat_opens_its_tenure_in_the_block_outside` exist to pin. Under
+the new policy both read `ten_blocks=0`, which is a fixture proving
+nothing. Each now allocates a list per step that it discards, demanded by
+arithmetic that leaves the index unchanged, and they are back to
+`ten_blocks=1` and `ten_blocks=3` with the same bytes out. A fixture that
+goes blind is repaired in the change that blinded it.
+
+Ratchet rows `chain_drift` (every step sizes again) and `pop_deep` (the
+pop prunes again); both dry-run against the tree before they were
+committed, one line each. Welfare 65.86 -> 65.95, held.

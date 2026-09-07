@@ -35,8 +35,15 @@ fn gathered n xs acc
 fn stepped 0 _ acc
   acc
 
+# Each step allocates a list it discards. A chain step leaves its value
+# where it is while the region has not drifted far since the last stage, so
+# without garbage to drift a chain of small steps never stages, never
+# carries, and never promotes -- and this fixture's whole subject is what
+# the promotion does. `drift` is demanded by the arithmetic, which is what
+# makes the list real; `n + 40 - drift` is `n`.
 fn stepped n xs acc
-  io/write "" . (_ -> gathered n xs acc)
+  drift = length (wide 40)
+  io/write "" . (_ -> gathered (n + 40 - drift) xs acc)
 
 fn loaded acc
   xs = wide 400
