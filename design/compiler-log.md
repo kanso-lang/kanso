@@ -4052,3 +4052,17 @@ see it, so nothing pins it, and a change no golden can fail is not one to
 carry. It is written down here so the next float-heavy program in the corpus
 finds it already diagnosed. The other unrecorded `%KValue` in the sweep is
 `k_env_get`, and TOP is right there: a captured name really can be a thunk.
+
+**And the instruction file was wrong about the objective, which is how the
+digit arms were mispriced by hand before `welfare` was run.** CLAUDE.md said
+the score weighs twenty-eight counters — an instruction row per benchmark and
+twelve memory rows — which was the shape before the 2026-09-06 gavel cut the
+runtime side to one consolidated program. It weighs five:
+`run_instructions`, `run_peak_bytes`, and the three compile rows.
+`bench/objective_sources.txt` had the same count in its header while its own
+later note recorded the change. Arithmetic over the old model gave the digit
+arms a net rise of about +0.04; the real run gave −0.10, because the three
+compile terms carry a full point of weight between them against run speed's
+two, and all three moved the same way. Both files corrected, and the paragraph
+in CLAUDE.md now says to run `welfare --counters` rather than trust the
+sentence — it has been wrong twice in two days.
