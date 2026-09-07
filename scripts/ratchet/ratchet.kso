@@ -576,6 +576,30 @@ mark_block_first = row
   (breaking "a_survivor_s_block_asked_after_every_newer_one")
   benches
 
+wide_char_cache = row
+  "a wide character built in the arena at every index"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_wide_character_built_in_the_arena_at_every_index")
+  benches
+
+ascii_four_blocks = row
+  "four ascii blocks validated one at a time"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "four_ascii_blocks_validated_one_at_a_time")
+  benches
+
+slice_count_words = row
+  "a slice stepped a character at a time between its positions"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_slice_stepped_a_character_at_a_time_between_its_positions")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -1023,7 +1047,11 @@ rows_b1h = text/concat rows_b1g [walk_once data_beside]
 
 rows_b1i = text/concat rows_b1h [freeze_all mark_block_first]
 
-rows_b = text/concat rows_b1i [compile_mem compile_mem_host]
+rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
+
+rows_b1k = text/concat rows_b1j [slice_count_words]
+
+rows_b = text/concat rows_b1k [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

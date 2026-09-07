@@ -6679,6 +6679,18 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
     for (long long blk = 0; blk < nblocks; blk++) {
         uint8_t buf[16];
         uint8x16_t cur;
+        /* Four blocks of ascii at once; the sse arm below says why. */
+        while (i + 64 <= len && vmaxvq_u8(prev) < 0x80) {
+            uint8x16_t a = vld1q_u8((const uint8_t*)data + i);
+            uint8x16_t b = vld1q_u8((const uint8_t*)data + i + 16);
+            uint8x16_t c = vld1q_u8((const uint8_t*)data + i + 32);
+            uint8x16_t d = vld1q_u8((const uint8_t*)data + i + 48);
+            if (vmaxvq_u8(vorrq_u8(vorrq_u8(a, b), vorrq_u8(c, d))) >= 0x80) break;
+            prev = d;
+            i += 64;
+            blk += 4;
+        }
+        if (blk >= nblocks) break;
         if (i + 16 <= len) {
             cur = vld1q_u8((const uint8_t*)data + i);
         } else {
@@ -6750,6 +6762,23 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
     for (long long blk = 0; blk < nblocks; blk++) {
         unsigned char tail[16];
         __m128i cur;
+        /* Four blocks of ascii at once, one mask for the four: an encoder's
+           output is ascii but for the strings it copied through, and the
+           block loop below paid its twelve instructions on every sixteen of
+           them. The previous block must be ascii too, since a sequence that
+           started in it needs the classification the skipped blocks would
+           not run. */
+        while (i + 64 <= len && !_mm_movemask_epi8(prev)) {
+            __m128i a = _mm_loadu_si128((const __m128i*)(data + i));
+            __m128i b = _mm_loadu_si128((const __m128i*)(data + i + 16));
+            __m128i c = _mm_loadu_si128((const __m128i*)(data + i + 32));
+            __m128i d = _mm_loadu_si128((const __m128i*)(data + i + 48));
+            if (_mm_movemask_epi8(_mm_or_si128(_mm_or_si128(a, b), _mm_or_si128(c, d)))) break;
+            prev = d;
+            i += 64;
+            blk += 4;
+        }
+        if (blk >= nblocks) break;
         if (i + 16 <= len) {
             cur = _mm_loadu_si128((const __m128i*)(data + i));
         } else {
@@ -6924,6 +6953,24 @@ KValue k_b_is_desc(KValue v) {
     return k_bool(v.tag == K_DESC);
 }
 
+static KValue k_wide_cache[256];
+static uint32_t k_wide_key[256];
+static unsigned char k_wide_ready[256];
+
+/* `at` is what the builtin is called; indexing is what the reader wrote.
+   Out of line because its message buffer is the largest thing in k_b_at's
+   frame: with it inline every index paid a 280-byte frame and six saved
+   registers to reach a character the cursor already stood next to. */
+static __attribute__((noinline, cold)) void k_die_index(KValue container) {
+    const char* hint = k_lazy_hint(container);
+    char said[256];
+    snprintf(said, sizeof said,
+             "indexing takes a list or string with a 1-based position, or a map "
+             "with a key%s",
+             hint ? hint : "");
+    k_die(said);
+}
+
 KValue k_b_at(KValue container, KValue index) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(index)) return index;
@@ -6958,6 +7005,30 @@ KValue k_b_at(KValue container, KValue index) {
            multi-byte character it was handed, 345,220 times on runbench. */
         uint32_t q;
         memcpy(&q, s->data + at, 4);
+        /* The same character comes back from the same permanent string, the
+           way an ascii one does from k_str_n's cache: a walk over text by
+           index meets the same few characters at every step, and building
+           each one in the arena was an allocation and a hundred instructions
+           a step. The cache is direct-mapped over the character's own bytes
+           and never evicts -- a slot that already holds another character
+           sends this one down the arena path -- so the permanent storage it
+           can hold is bounded by its width, whatever the text does. */
+        uint32_t key = q & (0xffffffffu >> (8 * (4 - w)));
+        unsigned slot = (unsigned)((key * 2654435761u) >> 24);
+        if (k_wide_key[slot] == key && k_wide_ready[slot]) return k_wide_cache[slot];
+        if (!k_wide_ready[slot]) {
+            KStr* ps = k_alloc_perm(sizeof(KStr));
+            ps->len = w;
+            ps->cap = -2;
+            ps->data = malloc(5);
+            memcpy(ps->data, &q, 4);
+            ps->data[w] = 0;
+            KValue pv; pv.tag = K_STR; pv.payload = k_ptr(ps);
+            k_wide_cache[slot] = pv;
+            k_wide_key[slot] = key;
+            k_wide_ready[slot] = 1;
+            return pv;
+        }
         KStr* os = k_str_alloc(w);
         memcpy(os->data, &q, 4);
         os->data[w] = 0;
@@ -6984,16 +7055,7 @@ KValue k_b_at(KValue container, KValue index) {
         }
         return k_none();
     }
-    /* `at` is what the builtin is called; indexing is what the reader wrote */
-    {
-        const char* hint = k_lazy_hint(container);
-        char said[256];
-        snprintf(said, sizeof said,
-                 "indexing takes a list or string with a 1-based position, or a map "
-                 "with a key%s",
-                 hint ? hint : "");
-        k_die(said);
-    }
+    k_die_index(container);
     return k_none();
 }
 
@@ -7250,6 +7312,17 @@ static long k_str_seek(KStr* s, long long from) {
     long at = 0;
     long long seen = 1;
     if (s == k_seek_str && s->cap != 0 && k_seek_byte < s->len) {
+        /* A walk by index asks for the character after the one it just
+           read, at every step: the cursor's own character or the next
+           answers without the general walk below and its bookkeeping. */
+        if (from == k_seek_char) return k_seek_byte;
+        if (from == k_seek_char + 1) {
+            long nat = k_seek_byte + k_cp_len((unsigned char)s->data[k_seek_byte]);
+            if (nat >= s->len) return -1;
+            k_seek_char = from;
+            k_seek_byte = nat;
+            return nat;
+        }
         at = k_seek_byte;
         seen = k_seek_char;
         /* Behind the cursor, step back to it rather than to the front: the
@@ -7668,6 +7741,27 @@ KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
 
+/* Count characters a word at a time from `*at`, which is on a character
+   boundary with `*seen` characters before it, and stop short of the
+   character numbered `next`, so the caller's character loop still lands on
+   it. A word's characters are its bytes less its continuation bytes; a
+   character cut by the word's end is given back, and `*at` stays on a
+   boundary. */
+static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
+    while (*at + 8 <= s->len) {
+        unsigned long long w;
+        memcpy(&w, s->data + *at, sizeof w);
+        long long leads = 8 - __builtin_popcountll(w & ~(w << 1) & 0x8080808080808080ULL);
+        if (*seen + leads >= next) break;
+        long nat = *at + 8;
+        while (((unsigned char)s->data[nat] & 0xC0) == 0x80) nat--;
+        if (nat == *at) break;
+        if (nat < *at + 8) leads--;
+        *seen += leads;
+        *at = nat;
+    }
+}
+
 KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(fromv)) return fromv;
@@ -7725,9 +7819,24 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
                 seen--;
             }
         }
+        /* Between the two positions the walk is looking for, the bytes are
+           only counted, and a distance of ten characters or more is counted
+           a word at a time: the index phase's subject is 1.4 MB of two- and
+           four-byte characters, sliced once from the front, and the
+           character loop below took fourteen instructions a character over
+           it. A short slice -- the matcher's, a few characters at a time --
+           never enters the skip, so it pays nothing for it. */
+        if (from - seen > 9) k_slice_skip(s, &at, &seen, from);
         while (at <= s->len) {
             seen++;
-            if (seen == from) start = at;
+            if (seen == from) {
+                start = at;
+                if (to + 1 - seen > 9 && at < s->len) {
+                    at += k_cp_len((unsigned char)s->data[at]);
+                    k_slice_skip(s, &at, &seen, to + 1);
+                    continue;
+                }
+            }
             if (seen == to + 1) { end = at; break; }
             if (at == s->len) break;
             at += k_cp_len((unsigned char)s->data[at]);

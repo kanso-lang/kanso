@@ -50182,3 +50182,55 @@ how KBytes records its allocation regime. Not taken.
 ---
 
 ---
+
+## 2026-09-06 (tenth) — the array walked the same whitespace twice
+
+`array_items` in lib/json/value.kso opened with `p2 = skip_ws cs p` and then
+called `parse_value cs p2`. `parse_value` opens with `skip_ws` of its own, so
+the second walk always began on the byte the first had stopped on and found it
+not to be whitespace. One line, deleted:
+
+    jsonbench   1,737,413,813 -> 1,698,318,413   -39,095,400   -2.2503%
+    oneshot        25,494,372 ->    25,233,736      -260,636   -1.0223%
+    livebench   4,438,088,070 -> 4,437,827,434      -260,636   -0.0059%
+
+The other ten rows are byte-identical, which is the check that the fall is this
+change and not the weather. livebench moves by the same 260,636 as oneshot
+because both decode once; jsonbench decodes 150 times.
+
+**Why it is worth 2.25% for one line.** `array_items` is called once per array
+element, and both `skip_ws` copies are inlined into their callers, so each
+element paid a bounds-checked byte read, a four-way whitespace test and the
+tagged round trip through the 0x100 sentinel to learn what the caller before it
+had already learned. bench/large.json's arrays hold 410,550 elements over 150
+iterations.
+
+**The rest of the family was checked and is not redundant.** Seven other sites
+write `p2 = skip_ws cs p`, and every one of them reads `cs[p2]` afterwards or
+compares p2 against the length: `array_step`, `obj_items`, `obj_key`,
+`obj_value`, `parse_array`, `parse_object` and `finish`. `parse_value`'s own
+skip is the one that does the work. This was the only duplicate.
+
+**Behaviour is identical, including on failures.** Under the old code an error
+inside the element was reported at parse_value's p2; under the new code
+parse_value computes the same p2 from p. The 23 json tests pass, and so does
+the full suite (36 test binaries, 0 failures) once docs/kanso.wasm is rebuilt —
+lib/*.kso is `include_str!`'d into the compiler, so the wasm blob carries this
+change and had to be regenerated with it.
+
+**The veins.** No allocation counter moves: all eleven runtime cost goldens
+agree, because this removes instructions rather than allocations. Three that do
+move, all falls, all banked in this change: `.text` -272 bytes on each of the
+three decoding binaries, the emitted code one call and two lines lighter, and
+the front end's visits on lib/json 17,169 -> 17,115. Welfare 75.17 -> 75.21.
+
+**Where it came from.** Looking for the second read of an already-loaded byte
+in `array_step`'s instruction-level profile — 13 instructions at 1,429,650
+executions, 1.07% of jsonbench — and finding a whole redundant scan one frame
+up instead. The `cs[p2]` re-read the search started from is still there and is
+still 1.07%; it needs `skip_ws` to hand back the byte it stopped on, which is a
+larger change and is not in this one.
+
+---
+
+---

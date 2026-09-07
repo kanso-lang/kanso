@@ -20,56 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (tenth) — the array walked the same whitespace twice
-
-`array_items` in lib/json/value.kso opened with `p2 = skip_ws cs p` and then
-called `parse_value cs p2`. `parse_value` opens with `skip_ws` of its own, so
-the second walk always began on the byte the first had stopped on and found it
-not to be whitespace. One line, deleted:
-
-    jsonbench   1,737,413,813 -> 1,698,318,413   -39,095,400   -2.2503%
-    oneshot        25,494,372 ->    25,233,736      -260,636   -1.0223%
-    livebench   4,438,088,070 -> 4,437,827,434      -260,636   -0.0059%
-
-The other ten rows are byte-identical, which is the check that the fall is this
-change and not the weather. livebench moves by the same 260,636 as oneshot
-because both decode once; jsonbench decodes 150 times.
-
-**Why it is worth 2.25% for one line.** `array_items` is called once per array
-element, and both `skip_ws` copies are inlined into their callers, so each
-element paid a bounds-checked byte read, a four-way whitespace test and the
-tagged round trip through the 0x100 sentinel to learn what the caller before it
-had already learned. bench/large.json's arrays hold 410,550 elements over 150
-iterations.
-
-**The rest of the family was checked and is not redundant.** Seven other sites
-write `p2 = skip_ws cs p`, and every one of them reads `cs[p2]` afterwards or
-compares p2 against the length: `array_step`, `obj_items`, `obj_key`,
-`obj_value`, `parse_array`, `parse_object` and `finish`. `parse_value`'s own
-skip is the one that does the work. This was the only duplicate.
-
-**Behaviour is identical, including on failures.** Under the old code an error
-inside the element was reported at parse_value's p2; under the new code
-parse_value computes the same p2 from p. The 23 json tests pass, and so does
-the full suite (36 test binaries, 0 failures) once docs/kanso.wasm is rebuilt —
-lib/*.kso is `include_str!`'d into the compiler, so the wasm blob carries this
-change and had to be regenerated with it.
-
-**The veins.** No allocation counter moves: all eleven runtime cost goldens
-agree, because this removes instructions rather than allocations. Three that do
-move, all falls, all banked in this change: `.text` -272 bytes on each of the
-three decoding binaries, the emitted code one call and two lines lighter, and
-the front end's visits on lib/json 17,169 -> 17,115. Welfare 75.17 -> 75.21.
-
-**Where it came from.** Looking for the second read of an already-loaded byte
-in `array_step`'s instruction-level profile — 13 instructions at 1,429,650
-executions, 1.07% of jsonbench — and finding a whole redundant scan one frame
-up instead. The `cs[p2]` re-read the search started from is still there and is
-still 1.07%; it needs `skip_ws` to hand back the byte it stopped on, which is a
-larger change and is not in this one.
-
----
-
 ## 2026-09-06 (eleventh) — whitespace becomes the arm before the error
 
 The entry above removed one redundant `skip_ws`. Seven remained, and every one
@@ -3710,3 +3660,73 @@ runtime the compiler carries. The floor is re-set on CI's rows. Ratchet row `mar
 puts the walk from the head back -- the mutant is byte-for-byte main's
 `k_where` -- and asks the work vein; dry-run red before it was committed.
 CI's rows and `--set` follow in the next round.
+
+## 2026-09-07 — THREE MORE SHORTCUTS ON THE RUN PROGRAM'S TEXT PHASES
+
+**DONE.** After kanso#1296 the run program's profile has no runtime function
+above three per cent that is not the decoder's or the encoder's own body,
+so this entry takes three of the text phases' costs together, each with
+its row and its mutation.
+
+**A wide character built in the arena at every index.** `s[i]` on text
+hands back one character, and an ascii one has come from k_str_n's cache
+of interned singles for a long time; a character of two, three or four
+bytes was built in the arena every time, 690,000 times a run on the index
+phase, whose subject is the six characters of `aé😀b€z` doubled to 1.4 MB.
+k_b_at keeps a direct-mapped cache of 256 permanent strings now, keyed on
+the character's own bytes, never evicting -- a slot another character
+already holds sends this one down the arena path, so the permanent storage
+is bounded by the width whatever the text does. The index refusal's message
+buffer came out of line at the same time, since it was the largest thing in
+the function's frame, and the cursor answers the next character directly:
+a walk by index asks for the one after the one it just read at every step,
+and the general walk's bookkeeping was most of what the step paid.
+`allocs` on the run program 7,659,778 -> 7,314,778, one fewer per wide
+character read, `alloc_bytes` 503,456,077 -> 492,416,077, and with the
+index phase no longer filling blocks with one-character strings
+`arena_blocks` 54 -> 43 and `arena_peak_bytes` 57,478,864 -> 45,944,528;
+`run_perm_allocs` lands on 94 from 91, the three characters cached, and
+`sh_str` on 54,603,840. The lazy tier's fixture for the indexed character's
+length reads the same way: `the_length_of_an_indexed_character_needs_no_scan_allocs`
+2,045 -> 45, `the_length_of_an_indexed_character_needs_no_scan_alloc_bytes`
+109,936 -> 45,936, `the_length_of_an_indexed_character_needs_no_scan_perm_allocs`
+landing on 10 from 7 and `the_length_of_an_indexed_character_needs_no_scan_sh_str`
+on 8,064. k_b_at 106 -> 92 instructions a call.
+
+**Four ascii blocks validated one at a time.** The wide utf-8 pass tests
+each sixteen-byte block for ascii before it classifies it, twelve
+instructions to learn that sixteen bytes of an encoder's output need
+nothing. Four blocks now go through one test with one mask when the
+previous block was ascii too. The gain is smaller than the shape suggests:
+large.json's strings carry enough wide characters that most sixty-four-byte
+windows hold one, and the pass falls back to the block loop for them.
+
+**A slice stepped a character at a time between its positions.** text/slice
+of multibyte text walked from the front to each of the two character
+positions it needs, one k_cp_len step per character: the index phase's
+subject slice walked 690,000 characters that way, 14 instructions each.
+The bytes between the positions are counted a word at a time now, by the
+continuation bytes in each eight, and the walk stops one word short of
+either position so the character loop still lands on it. A character cut
+by a word's end is given back to the loop.
+
+    runbench     2,483,620,655 ->  2,466,456,226   -17,164,429   -0.6911%
+    indexbench       3,732,366 ->      3,255,310      -477,056   -12.7816%
+    encodebench  4,072,255,532 ->  4,070,190,344    -2,065,188   -0.0507%
+    livebench    3,609,374,812 ->  3,607,309,610    -2,065,202   -0.0572%
+    oneshot         21,841,738 ->     21,836,587        -5,151   -0.0236%
+
+against CI's rows for kanso#1296; the other nine rows move by under a
+hundred, the layout. `work_deepbench` lands on 647,639,361, +1,568 -- it
+slices nothing and indexes nothing, so that is the runtime's bytes shifting
+under it -- and `work_digestbench` on 10,775,541, +79, `work_basket` on
+34,124,089, +12, `work_escapebench` on 85,495,206, +12.
+
+on the container with clang 19, the same bytes out. `all_counters.sh`
+regenerated the run vein and the one .mem fixture for the allocations; no
+other counter moves. Welfare 64.38 -> 65.80, the run peak's fall paying most
+of it, held with `--set`.
+Ratchet rows `wide_char_cache`, `ascii_four_blocks` and `slice_count_words`
+each put one of the three back and ask the work vein. The utf-8 harness
+passes 45,189,025 cases with 0 mismatches against the reference. CI's
+rows and `--set` follow in the next round.
