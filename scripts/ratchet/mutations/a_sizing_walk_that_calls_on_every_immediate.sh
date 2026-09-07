@@ -16,15 +16,7 @@ sed -i 's|^                if (k_worth_sizing(((KValue\*)cl->env)\[i\]))$|      
 sed -i 's|^            if (k_worth_sizing(d->x)) n += k_copy_size(d->x, m);$|            n += k_copy_size(d->x, m);|' src/runtime.c
 sed -i 's|^            if (k_worth_sizing(d->y)) n += k_copy_size(d->y, m);$|            n += k_copy_size(d->y, m);|' src/runtime.c
 sed -i 's|^            if (k_worth_sizing(sb->inner)) n += k_copy_size(sb->inner, m);$|            n += k_copy_size(sb->inner, m);|' src/runtime.c
-python3 - <<'PY'
-p='src/runtime.c'; s=open(p).read()
-for fn in ('size_t k_ptrmap_probe(KPtrMap* t, const void* key) {',
-           'KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {'):
-    a='static inline __attribute__((always_inline))\n'+fn
-    assert s.count(a)==1, fn
-    s=s.replace(a,'static '+fn)
-open(p,'w').write(s)
-PY
+sed -i '/^static inline __attribute__((always_inline))$/{N;s|^static inline __attribute__((always_inline))\nsize_t k_ptrmap_probe(|static size_t k_ptrmap_probe(|;s|^static inline __attribute__((always_inline))\nKPtrSlot\* k_ptrmap_at(|static KPtrSlot* k_ptrmap_at(|}' src/runtime.c
 grep -qF '                if (1)' src/runtime.c
 grep -qF 'static size_t k_ptrmap_probe(KPtrMap* t, const void* key) {' src/runtime.c
 ! grep -qF 'if (k_worth_sizing(d->x))' src/runtime.c
