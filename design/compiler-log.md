@@ -4156,4 +4156,11 @@ version of this question that named `word_4` and answers it no. What is left is
 the real one: the 690-site version removes 623 tag tests and runs 3,683,016
 instructions more, and nothing yet says where. The next thing to try is
 callgrind with `--separate-callers=2` on both builds, which distinguishes a
-function that got slower from one that merely got renamed. Nobody has run it.
+function that got slower from one that merely got renamed. It has not been run:
+the first attempt hand-linked the two `.ll` files against the newest cached
+runtime object and both binaries died with `bytes takes a string` after 414,247
+instructions. `cached_runtime_object` keys on the closure convention, and the
+newest object on this box was built under the other one — so a hand-link picks
+the wrong half and the two halves disagree about registers, which is the exact
+hazard the comment at that function warns about. Build both compilers and let
+`kanso build` link them, then copy both binaries into one directory.
