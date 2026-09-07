@@ -939,4 +939,4 @@
 #
 # Installing clang 19 does not move this row again: the compiler binary is
 # built by cargo, and clang compiles only the runtime and the emitted IR.
-compile_instructions=19317662
+compile_instructions=19315772

@@ -7,9 +7,14 @@
 # forcing a value that is not a thunk returns it -- so the checksum gate stays
 # green; what moves is the emitted code, because those calls come back. This
 # row is what keeps the set.
+#
+# TOP contains ERR as well, so this row also takes out the fold the sibling
+# row below it watches. That is why the sibling exists: it puts ERR back and
+# nothing else, so a set that stops proving the value is a boolean is caught
+# separately from a set that stops proving it is not a thunk.
 set -e
-old='                _ => (f.set_of(a) \& FAIL) | (f.set_of(b) \& FAIL) | infer::BOOL | ERR,'
-grep -qF '                _ => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::BOOL | ERR,' \
+old='                _ => (f.set_of(a) \& FAIL) | (f.set_of(b) \& FAIL) | infer::BOOL,'
+grep -qF '                _ => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::BOOL,' \
   src/codegen.rs || {
   echo "the comparison phi's recorded set changed shape; this needs rewriting" >&2
   exit 1

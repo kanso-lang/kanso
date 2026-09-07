@@ -4066,3 +4066,144 @@ compile terms carry a full point of weight between them against run speed's
 two, and all three moved the same way. Both files corrected, and the paragraph
 in CLAUDE.md now says to run `welfare --counters` rather than trust the
 sentence — it has been wrong twice in two days.
+
+---
+
+## 2026-09-07 — a boolean is not a failure, and the wider version of that is slower
+
+**DONE.** `inline_not_failure` folds to `true` when the emitter has proved the
+value is a boolean. That is what an `if` over a comparison hands it, and it is
+27 of runbench's 1,223 tag tests. The comparison phi's recorded set drops the
+ERR it was carrying unconditionally since kanso#1302, which makes 2 of those
+27 available: `k_cmp` returns a failure only when handed one, and every other
+arm below its failure test answers `k_bool`. `k_add`, `k_sub` and `k_mul`
+are the same shape, so the arithmetic arm drops it too; `k_div` and `k_mod`
+really do mint one, for division by zero, and their arm keeps it.
+
+**An empty set is not a proof, and the first draft read it as one.**
+`group_param_set` answers 0 for a parameter the inference reached no shapes
+for, and 0 satisfies every `& mask == 0` test written about it — so
+`set & !BOOL == 0` held for a value nothing was known about. The dispatcher's
+propagate block, which hops the failing argument out of a call, then read
+`true` for every argument and fell through to `no overload of X matches these
+arguments`. `a_construction_merges_its_failures` lost its third line on native
+while the interpreter kept it, and the micro corpus caught it. The fold now
+requires a non-empty set, and the propagate block asks with a twin that never
+folds — that block is reached BECAUSE a value is outside the set recorded
+for it, so a set cannot speak there at all. Both are needed: the first is the
+general rule, the second the one site where even a true set is the wrong
+question.
+
+On clang 19.1.1 in a container, which reproduces CI's runbench row to 189
+instructions (2,400,271,247 against the golden's 2,400,271,058):
+
+    runbench   2,400,271,247 -> 2,398,991,700   -1,279,547   -0.0533%
+
+The number is the same to the instruction with the 24 unsound folds in and
+with them out, so none of them sat on a path a benchmark runs — the whole
+fall is the 27 that survive the guard.
+
+CI's fourteen work rows, against main. Three fall and four rise, and the four
+are named here because the trend gate is right to ask: `work_jsonbench`
+lands on **1,487,045,449** (+0.1269%), `work_scanbench` on **730,307,092**
+(+0.0689%), `work_oneshot` on **21,758,011** (+0.0578%) and `work_livebench` on
+**3,596,075,294** (+0.0003%). Against `work_runbench` 2,398,991,511
+(−0.0533%), `work_encodebench` 4,058,633,349 (−0.0065%) and `work_widebench`
+36,127,282 (−0.9215%).
+
+The four rises are not attributed per row and this entry does not pretend they
+are. What is known: every one of the thirteen emitted rows FALLS, these four
+included, so the compiler is writing less code for them and the rise is
+downstream of what it wrote — the same reshuffle class the wide version showed
+at ten times the size, where re-parenting and inlining moved millions between
+functions for a net of thousands. jsonbench rising 0.1269% while runbench falls
+0.0533% on a change whose 27 sites include nine in the json decoder is the
+sharpest form of that: the same code, the two benchmarks disagreeing on sign.
+The objective weighs runbench, and runbench falls.
+
+All twelve cost veins and the lazy tier are byte-identical — removing a tag
+test allocates nothing — and every one of the thirteen emitted rows falls.
+Welfare floor 66.00009186328253 -> 66.00389069855446.
+
+**REVERTED — the same fold on every ERR-free set.** ERR is outside every
+ERR-free set, not only outside BOOL, so `set & ERR == 0` is sound too and
+removes 690 of the 1,223. It is slower:
+
+    runbench   2,400,271,247 -> 2,403,954,263   +3,683,016   +0.1534%
+
+and welfare 66.00 -> 65.99, so the objective declines it. That build carried
+the empty-set defect too, so its 690 sites are an upper bound on what a sound
+version of the same idea removes — and it lost anyway, which is what makes
+the decline safe to record. The decode side does
+what #384 predicted — `obj_key_start` 138,744,540 -> 133,023,429, −4.12% — and
+the total rises anyway. Measured on clang 18.1.3 first (+0.1169%) and the sign
+held on 19.
+
+**WHY it rises is not established, and the first answer written here was
+wrong.** It said `d_json/word_4` stopped being inlined into `value_for` and
+appeared as 9,900,000 on its own. `word_4` is `musttail`-called from three
+sites, so it cannot be inlined at any threshold: marking it `noinline` by hand
+in the IR and relinking gives a byte-identical binary. Its 0 -> 9,900,000 is
+the linker folding it with an identical twin in one build and not the other,
+which moves where callgrind files the cost and not what the cost is. The rows
+that remain are `encode_onto` and `entry_onto`, and `--separate-callers=2` says
+those are real. See the entry below.
+
+**This bounds #384.** That thread put the failure-tag compares at 40,778,277
+executions across runbench, 1.50%, and read a cannot-fail analysis as having a
+ceiling near 3% once their branches went with them. The ceiling is real and it
+is not reachable by folding every one of them: the 690-site version is the
+whole of that idea and it loses. What is left of #384 is the 27 sites here and
+whatever a per-site rule could find, which is a different and much smaller
+piece of work than the thread described.
+
+**Two ratchet rows, not one.** `a_comparison_that_might_be_a_failure` takes
+the fold's mask from BOOL to nothing; `a_comparison_that_might_be_a_thunk`
+already sends the phi's whole set to TOP, which takes the fold out and puts
+`k_force_fast` back on top of that. runbench's `calls` over the two halves:
+6026 with neither, 6026 with the tighter phi alone, 6001 with the fold alone,
+5999 with both. The fold is 25 of the 27 and the phi is the other 2; nothing
+else in the emitter reads that bit, so the tighter set buys nothing by itself.
+An earlier draft of this paragraph read 20 for the second cell — it was
+measuring a mutation that left the empty-set folds standing.
+
+**CLOSED — the encoder pays, and it is the recursive pair.**
+`--separate-callers=2` on both builds, each measured as `./runbench` from the
+repo root so the exec path is the same: shipped 2,398,991,700, wide
+2,403,950,554, +4,958,854.
+
+Almost every large row in the flat profile is re-parenting. `d_escape/more_4`
+is inlined into `d_runbench/tally_4` in the wide build, so everything under it
+moves up one level: `more_4'tally_4'w_klam39` 65,309,063 -> 0 against
+`tally_4'w_klam39'k_worded_step` 20,716,576 -> 86,045,501, a net 19,862.
+`k_beat_iter` under the two parents nets 2,388, sha256's `compress_4` −2,051,
+`k_b_push_grow` exactly 0. `word_4` appears at 9,900,000 across its two caller
+chains and the decode functions it re-parents from fall 10,380,150 — a net
+480,150 in the change's favour, not the 9.9M rise the flat profile showed.
+
+What survives is four rows and they are all the encoder:
+
+    encode_onto'2 under entry_onto        +3,360,690
+    entry_onto'2 under encode_onto        +3,816,180
+    entry_onto under encode_onto/tally     +698,760
+    d_thunk_eval under k_force_slow        +764,400
+
+8,640,030 of rise, in a mutually recursive pair and in the slow force behind
+it. That is where the wide fold's cost is. Removing a tag test from a function
+that calls itself through another changes what LLVM can prove across the cycle,
+and the last row says some of what it stops proving is that a value is already
+forced. The narrow rule does not go near it, and that is checked rather
+than assumed: an `eprintln` on the fold, keyed on an environment variable and
+run over `kanso build bench/runbench --release`, names all 27 sites. Thirteen
+are in regexp, nine in the json decoder (`value_for`, `obj_key_start`,
+`skip_ws`, `scan`, `obj_open`, `obj_delim`, `array_open`, `array_delim`,
+`value_blank`), two in list, and none in `encode_onto` or `entry_onto`. So the
+narrow rule avoids the recursive pair by not reaching it, and whether it would
+survive reaching it is still unknown.
+
+The first attempt at this probe hand-linked the two `.ll` files against the
+newest cached runtime object and both binaries died with `bytes takes a string`
+after 414,247 instructions: `cached_runtime_object` keys on the closure
+convention and the newest object on this box was built under the other one, so
+a hand-link picks the wrong half and the two halves disagree about registers.
+Let `kanso build` do the linking.

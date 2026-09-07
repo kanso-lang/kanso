@@ -2012,6 +2012,23 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
 /// Calls the alwaysinline twin rather than restating its tag test, so the
 /// emitter cannot drift from the definition it inlines.
 fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
+    let set = f.set_of(value);
+    // An EMPTY set is not a proof. `group_param_set` answers 0 for a parameter
+    // the inference reached no shapes for, and 0 satisfies every `& mask == 0`
+    // test written about it -- so the first draft of this fold read "nothing is
+    // known" as "proved to be a boolean" and turned the hop below into `true`.
+    // A group whose argument is a failure then dispatched instead of hopping
+    // and died on `no overload matches these arguments`. The micro corpus
+    // caught it: a_construction_merges_its_failures lost its third line.
+    if set != 0 && set & !infer::BOOL == 0 {
+        return "true".to_string();
+    }
+    not_failure_test(f, value)
+}
+
+/// The same test with no fold, for the one place a set cannot speak: a block
+/// reached BECAUSE a value is outside the set recorded for it.
+fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
     let r = f.tmp();
     f.line(&format!("{r} = call i64 @k_not_failure(%KValue {value})"));
     let ok = f.tmp();
@@ -3082,7 +3099,12 @@ impl<'a> Backend<'a> {
             f.line(&format!("br i1 {ok}, label %{dispatch}, label %{propagate}"));
             f.start_block(&propagate);
             for i in 0..arity {
-                let good = inline_not_failure(&mut f, &format!("%x{i}"));
+                // NOT the folding twin. This block runs only when one of the
+                // arguments IS a failure, which is exactly the case the
+                // parameter sets say cannot happen -- they describe what the
+                // arms accept, and a caller is free to hand over something
+                // else. Asking here is the whole point of the block.
+                let good = not_failure_test(&mut f, &format!("%x{i}"));
                 let next = f.label();
                 let ret_it = f.label();
                 f.line(&format!("br i1 {good}, label %{next}, label %{ret_it}"));
@@ -5361,8 +5383,8 @@ impl<'a> Backend<'a> {
         f.record(
             &t,
             match op {
-                "+" | "-" | "*" => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR,
-                _ => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::BOOL | ERR,
+                "+" | "-" | "*" => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT,
+                _ => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::BOOL,
             },
         );
         Ok(t)

@@ -636,6 +636,19 @@ thunk_set = row
   (breaking "a_comparison_that_might_be_a_thunk")
   benches
 
+# The same vein, one bit apart. ERR is outside BOOL, so putting it back stops
+# `inline_not_failure` proving the value is a boolean and the tag test is
+# written again -- 51 of them in runbench. Two rows rather than one because
+# the thunk row mutates to TOP, which takes out both facts at once and could
+# not tell a reader which of them had gone.
+failure_set = row
+  "a comparison the emitter could not prove is not a failure"
+  false
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_comparison_that_might_be_a_failure")
+  benches
+
 pop_deep = row
   "a carried pop that prunes at a survivor"
   true
@@ -1095,9 +1108,11 @@ rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
 
 rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
 
-rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set pop_deep]
+rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
 
-rows_b = text/concat rows_b1l [compile_mem compile_mem_host]
+rows_b1m = text/concat rows_b1l [pop_deep]
+
+rows_b = text/concat rows_b1m [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

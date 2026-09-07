@@ -23,6 +23,6 @@
 # falling 0.3591% on the container; the log entry carries the figures.
 recursion lines=1222 calls=46 branches=78 defines=41 rounds=4 visits=45
 dispatch lines=1214 calls=49 branches=77 defines=41 rounds=2 visits=13
-guards lines=1211 calls=47 branches=78 defines=41 rounds=2 visits=25
+guards lines=1207 calls=45 branches=78 defines=41 rounds=2 visits=25
 records lines=1263 calls=52 branches=81 defines=41 rounds=2 visits=20
 build_block lines=1188 calls=41 branches=73 defines=40 rounds=2 visits=12
