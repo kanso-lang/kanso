@@ -20,41 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (seventh) — THE COMPILE ROW CANNOT BE PROJECTED FROM A CONTAINER A/B, AND TODAY MISSED TWICE
-
-**DONE.** CI counted `compile_instructions=41,462,716` for the change above; the
-entry projected 41,461,827 from a container A/B of 41,879,916 -> 41,881,141.
-The golden holds CI's figure and `docs/compiler.html`'s `data-golden` follows
-it. **The correction is to that one line: `compile_instructions` rises
-41,461,798 -> 41,462,716, by 918.** The direction is unchanged — `src/runtime.c`
-grew and it is `include_str!`'d into the compiler.
-
-**Twice in a row today, and by different amounts.** The memchr change projected
-41,460,229 and CI read 41,460,602, a miss of 373. This one projected 41,461,827
-and CI read 41,462,716, a miss of 889. Both projections came from a container
-A/B measured on a pair of builds, both reproduced on the container to the
-instruction on a second reading, and both were wrong about CI by a few hundred.
-
-**So stop projecting this row.** Every other vein takes a container delta
-faithfully: today all twenty-six runtime rows and all twenty-six `.text` rows
-across two changes came back from CI byte-identical to what the container
-predicted, and nine of thirteen instruction deltas were zero by construction.
-This row does not, and its own header says why — cargo builds are not
-bit-reproducible, a binary whose data and bss differ starts the heap at a
-different break, and that moves how much work malloc does to service an
-identical request sequence. The container's delta measures ITS pair of
-binaries; CI builds a different pair.
-
-A session touching `src/runtime.c` or `lib/` should therefore push once with
-the row unchanged, let the gate fail, and copy CI's value out of the job log —
-one red round that is expected rather than two that are not. The container
-reading is still worth taking, as the check that the row moved in the direction
-the change implies; 373 and 889 are both far below the 5,124 the header records
-for a change of chip, so a projection that misses by thousands is a different
-problem and should be hunted.
-
----
-
 ## 2026-09-06 (eighth) — obj_key_start's 170 ARE EIGHTEEN STRETCHES, SO THERE IS NO ARM TO LIFT
 
 **CLOSED.** The 2026-09-06 (fifth) entry recorded that 170 of
@@ -3375,3 +3340,58 @@ The same profile names the calls glibc still takes for a handful of bytes:
 345,000 for one character (declined in the push entry above, and the
 reason holds), `k_map_lit` 273,339 for an object's pairs, `render_ryu`
 191,070 inside the float rendering. The render's is next.
+
+---
+
+## 2026-09-07 — A RENDERED NUMBER'S DIGITS COPIED THROUGH A CALL
+
+`k_render_at` on runbench: 579,981 calls, 45,299,443 instructions self and
+a memcpy call each, 8,499,478 inside glibc. A number renders its digits into
+a sixty-four-byte stack buffer and then builds the string from them through
+`k_str_n`, whose copy is glibc's memcpy: fifteen instructions to choose how
+to move a handful of digits, then the move.
+
+### Sixteen, eight, and the call for what is left
+
+The digits go over as one sixteen-byte copy, eight more past fifteen, and
+the call for anything past twenty-three -- which a rendering does not
+reach, a double's shortest round-trip form being at most twenty-four bytes
+and an integer's at most twenty. Both sides have the room: the buffer is
+sixty-four bytes, so the reads past the length are inside it, and `k_alloc`
+rounds a string's storage up to sixteen, so sixteen bytes fit a string of
+fifteen or fewer and twenty-four fit one of sixteen or more. A word loop
+bounded by the length was tried first and cost twelve a call against the
+call's fifteen; the fixed copies cost five. A one-digit number still comes
+from the ascii cache through `k_str_n`, as it did: the first cut of this
+allocated it, and the sweep said so -- `allocs`, `sh_str` and
+`perm_allocs` moved on basket, pend, scan, run and the lazy tier, the
+last one downward because the cache's own permanent cells were never made.
+
+    loop    runbench   2,649,866,050 -> 2,648,129,405    −1,736,645   −0.0655%
+    fixed   runbench   2,649,866,050 -> 2,638,957,305   −10,908,745   −0.4117%
+
+on the container with clang 19, the same bytes out; `k_render_at` is
+42,890,176. Seventeen renderings at the edges -- the largest and smallest
+doubles, a denormal, both ends of the integer range, negative zero, a
+twenty-digit whole, a repeating fraction -- print the same bytes on native
+before and after, the longest twenty-three. No counter in the twelve veins
+or the lazy tier moves; `all_counters.sh` agrees with every golden. The
+ratchet row `render_words` makes the first copy exact, which sends every
+rendering back through the call, and asks the work vein.
+
+### What the edge probe found instead
+
+The probe's first value overflowed on the oracle, and the oracle panicked:
+`render_float` in src/eval.rs asks Rust's `{:e}` for the digits and expects
+an `e` in the answer, and `inf` has none. Native renders the same value as
+`1.797693134862316e+308` -- the largest double's digits for a value that is
+not a double's -- and `inf - inf` as `2.696539702293474e+308`. Neither
+engine has an answer for an infinite or nan float, no golden prints one,
+and this log, the archive and the ledger have never mentioned the case.
+What `"{x}"` says for such an x is a language surface, so it is filed in
+design/pending-gavels.md rather than decided here; the copy above changes
+nothing about it.
+
+The profile's remaining calls for a handful of bytes: `k_b_at` 345,000 for
+one character, declined above; `k_map_lit` 273,339 for an object's pairs;
+`render_ryu` 191,070 inside the float rendering.

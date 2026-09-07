@@ -146,6 +146,42 @@ change that re-imports std/list into lib/json reads as a four-point fall.
 the floor with CI's rows and its log entry says which part is the workload,
 so the ruling can undo exactly that much.
 
+### An infinite or nan float has no rendering on either engine
+
+**Cited: this log, design/log/compiler-log-archive.md, this ledger and
+every design/*.md, searched 2026-09-07 for infinity, inf and nan in the
+rendering sense: nothing. The 2026-09-05 whole-float ruling (kanso#1285)
+and the %g rule `render_float` in src/eval.rs mirrors -- exponent form at
+X < -4 or X >= max(15, digits) -- speak only to finite values; the
+whole-number arm tests `is_finite` and the arm after it does not.**
+
+Found while probing the number renderer's copy at its edges. Ten
+multiplications of 1e10 overflow a double, and rendering the result:
+
+    t = 10000000000.0
+    h = t * t * t * t * t * t * t * t * t * t
+    print "{h * h * h * h}"
+
+The interpreter panics -- `render_float` asks Rust's `{:e}` for the digits
+and expects an `e` in the answer, and `inf` has none (src/eval.rs:3949,
+"LowerExp has an e"). Native prints `1.797693134862316e+308`, the largest
+double's digits for a value that is not a double's; for `inf - inf`, which
+is nan, it prints `2.696539702293474e+308`. No golden in the corpus prints
+either, so the differential law has never been asked. Both engines are
+wrong, and the oracle's wrong is a crash, but what `"{x}"` should say for
+such an x is a surface the user meets, which is why it is here and not
+fixed.
+
+**RECOMMENDATION.** C's spelling, which is also what the %g rule the
+renderer already mirrors produces: `inf`, `-inf`, `nan`. Rust's `Display`
+for f64 prints the same three, so the oracle would say it with one arm and
+native with one branch in front of ryu. The alternative worth naming is
+JavaScript's `Infinity` and `NaN`, which no other rule in the renderer
+descends from. Whether `json/encode` may emit such a value at all is a
+question for that library, and is not asked here; a differential fixture
+over the three values, on all three engines, ships with whichever spelling
+is ruled.
+
 ## Open, not blocking
 
 

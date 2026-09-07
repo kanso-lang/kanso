@@ -4059,8 +4059,22 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_CLOSURE: case K_FNREF: return k_str("<fn>");
         default: return k_str("<value>");
     }
-    /* The one exit the number arms take. Every other tag returned above. */
-    return k_str_n(buf, nlen);
+    /* The one exit the number arms take. Every other tag returned above.
+       The digits go over as sixteen bytes, eight more past fifteen, and the
+       call for anything past twenty-three, which a number's rendering does
+       not reach: buf is sixty-four bytes, so the reads past nlen are inside
+       it, and k_alloc rounds a string's storage up to sixteen, so sixteen
+       bytes fit a string of fifteen or fewer and twenty-four fit one of
+       sixteen or more. glibc's memcpy took fifteen instructions to move a
+       number's digits, 579,291 times a run on runbench, and a word loop
+       bounded by nlen took twelve. */
+    if (nlen == 1) return k_str_n(buf, 1);   /* a digit is in the cache */
+    KStr* s = k_str_alloc(nlen);
+    memcpy(s->data, buf, 16);
+    if (nlen > 15) memcpy(s->data + 16, buf + 16, 8);
+    if (nlen > 23) memcpy(s->data + 24, buf + 24, (size_t)(nlen - 24));
+    s->data[nlen] = 0;
+    KValue out; out.tag = K_STR; out.payload = k_ptr(s); return out;
 }
 
 static long long k_bytes_eq_list(KBytes* b, KList* l) {
