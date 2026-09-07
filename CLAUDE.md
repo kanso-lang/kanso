@@ -241,6 +241,17 @@ either merged, or blocked on a decision already sent to Clay, or blocked on a
 measurement already running with a monitor on it, AND no other task on the list
 can start. That is rare. Assume it is not the case.
 
+**And a stop, legitimate or not, is announced with a `PushNotification`
+before the turn ends.** Clay, 2026-09-07, verbatim: "if you stop working you
+need to urgently notify me." On 2026-09-07 at 00:27 UTC a session ended its
+turn with three merges landed, one question filed to the ledger and a wake
+armed for the nightly, reported all of it in the reply, and pushed nothing —
+so he learned the stream had gone quiet by finding it quiet. The push says
+that work has stopped, why, and what the next wake is; it goes out whether
+the stop is the rare legitimate one or a failure of the naming test, because
+in both cases he wants to know now. The reply is not the notification: he is
+not reading the reply at the moment it lands.
+
 The `/loop` is a last resort that restarts the work after a stop. It is not a
 schedule to hand work to, and needing it means something already went wrong.
 Only Clay arms, disarms or retimes it.
