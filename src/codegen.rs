@@ -567,9 +567,9 @@ miss:
 }
 define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
-  %is_list = icmp eq i64 %tag, 9
-  %is_bytes = icmp eq i64 %tag, 13
-  %fastable = or i1 %is_list, %is_bytes
+  ; list (9) or bytes (13) in one compare; three compares on %tag lower as a chain
+  %t4 = or i64 %tag, 4
+  %fastable = icmp eq i64 %t4, 13
   br i1 %fastable, label %list, label %str
 list:
   %p = extractvalue %KValue %v, 1

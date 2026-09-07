@@ -3246,3 +3246,89 @@ the call.
 
 Together with the tenure walk above, the container reads runbench
 2,816,922,233 -> 2,739,572,213, −2.746%, on clang 19, the same bytes out.
+
+### On CI, and two rises that were code shape
+
+CI's first sitting of the pair, main -> the branch, on the runner:
+
+    work_runbench     2,816,922,887 -> 2,739,482,932 -  77,439,955  −2.7491%
+    work_indexbench       4,771,217 ->     3,919,315 -     851,902 −17.8550%
+    work_scanbench      766,291,267 ->   739,196,984 -  27,094,283  −3.5358%
+    work_widebench       53,465,568 ->    52,982,106 -     483,462  −0.9042%
+    work_deepbench      690,817,043 ->   703,185,109 +  12,368,066  +1.7904%
+    work_livebench    3,743,207,118 -> 3,771,674,281 +  28,467,163  +0.7605%
+    work_encodebench  4,194,027,086 -> 4,208,546,793 +  14,519,707  +0.3462%
+    work_digestbench     70,784,439 ->    71,305,273 +     520,834  +0.7358%
+    work_oneshot         22,579,660 ->    22,671,583 +      91,923  +0.4071%
+    work_basket          35,737,604 ->    35,791,600 +      53,996  +0.1511%
+    work_pendbench      620,687,423 ->   620,868,615 +     181,192  +0.0292%
+    work_escapebench     85,754,925 ->    85,763,927 +       9,002  +0.0105%
+    work_jsonbench    1,561,185,741 -> 1,561,186,402 +         661  +0.0000%
+    work_readbench        4,283,427 ->     4,284,088 +         661  +0.0154%
+
+The four falls are the change. Ten rows rose, three of them by ten million
+or more, and neither change has a path those programs take: deepbench,
+encodebench and livebench hold no tenure block at all (`ten_blocks=0` on all
+three), so the arena check never runs, and every `length` they ask is a
+list's, so the twin's string arm is never entered. The container reproduces
+both large rises to the instruction — deepbench 690,908,520 -> 703,276,586,
+encodebench 4,194,027,170 -> 4,208,546,905 — and the per-address profile says
+what they are.
+
+**deepbench is register pressure.** `k_copy_size` and its recursion went
+388,937,919 -> 400,869,541 over the same 384,835 calls, and the disassembly
+shows why: with `k_above_mark` inlined through `k_survives_x` into the sizing
+walk, the function grew 3,706 -> 4,431 bytes, its prologue went from twenty
+instructions to twenty-four — four more spills, on all 2,777,846 entries —
+and the hot path reloads a block pointer it used to keep in a register. The
+walk itself never ran. The repair is to put the arena check inside the
+outlined `k_ten_holds(p, m)`, behind the same `k_ten_any && m` test that
+outlined the tenure walk before, so the sizing walk's own code is what it was.
+deepbench 691,251,495 on the container, 342,975 above main; runbench
+2,739,492,779 against 2,739,482,932 with the check inline, a wash.
+
+**encodebench is a lost fold.** `encode_onto` gained 15,586,000, and the
+histogram of its instructions by execution count puts all of it on two paths:
+four instructions more on one taken 3,344,400 times and two more on one taken
+1,104,400 times. The first is `length es < i` in the pair loop. On main the
+twin's "list or bytes" test is two compares that instcombine folds to one,
+`(tag | 4) == 13`, and the loop keeps the folded value in a stack slot: two
+instructions. With the string arm's third compare on the same `%tag`,
+SimplifyCFG gathers the three into a switch first and lowers the switch as a
+chain — six instructions — and the fold never happens. The twin now writes
+the fold out, `%t4 = or i64 %tag, 4` and one compare, and a compare on a
+different value is not a case of that switch. The pair loop is back to two
+instructions, and runbench falls a further 3,342,208 for the same reason, to
+2,736,140,571 on the container: −2.8681% against main's 2,816,922,233 for
+the pair.
+
+What is left of encodebench after that is 4,206,674,837, +12,647,667 over
+main, and it is not a path: the histogram shows one instruction more on three
+paths (taken 11,658,800, 4,190,000 and 3,480,800 times) and two fewer on a
+fourth (2,792,000), a spilled value reloaded in the escape loop. The twin's
+two new blocks inline at every `length` in the function and the register
+allocator makes different choices around them. Held as the price of the memo:
+runbench is the row the objective weighs and it falls; encodebench is a
+diagnostic, and this is where its 0.30% went. livebench, the same program on
+the shipped library, reads 3,743,461,255 with both repairs, 254,137 over
+main's 3,743,207,118: the allocator lays the shipped encoder out differently,
+and its 28,467,163 was the two repaired shapes and nothing else.
+
+**The other veins.** `text` 1,451,772 -> 1,474,748 across the fourteen
+binaries, 976 to 2,944 bytes each: the twin's string and count arms inline at
+every `length`, and `k_ten_holds` carries the arena walk. `lines` 5,918 ->
+5,993 and `branches` 372 -> 382 over the five compile samples, `module_lines`
+5,232 -> 5,247 and `module_branches` 434 -> 436: the twin's fifteen lines and
+two branches arrive through the preamble every program carries, and none of
+the six samples asks a string's length. `compile_instructions` 19,315,995 ->
+19,317,810, 1,815 of layout, the compiler's own bytes having moved.
+
+The ratchet gains `length_fold`, which writes the two compares back and asks
+the work vein. Welfare 57.25 -> 57.44, held.
+
+**Declined on the way: a settled top-of-stack mark for `k_beat_iter`.** The
+iteration entry recomputes the depth to find its mark; a pointer kept settled
+at push, pop and the five other sites that move the depth would save that.
+Built and measured: runbench 2,739,572,213 -> 2,748,365,853, +0.3210%. The
+rewind recomputes the depth for `k_reg_any` regardless, and seven settle
+sites cost push and pop more than the iteration saved. Reverted.

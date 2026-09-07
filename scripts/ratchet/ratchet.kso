@@ -459,6 +459,14 @@ length_memo = row
   (breaking "a_string_length_that_leaves_the_twin")
   benches
 
+length_fold = row
+  "a length twin that asks list-or-bytes as three compares, not one"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_length_twin_that_compares_three_times")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -894,7 +902,7 @@ rows_b1e1 = text/concat rows_b1e0 [host_measures]
 
 rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
-rows_b1e = text/concat rows_b1e2 [ten_walk one_char_memo length_memo]
+rows_b1e = text/concat rows_b1e2 [ten_walk one_char_memo length_memo length_fold]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 

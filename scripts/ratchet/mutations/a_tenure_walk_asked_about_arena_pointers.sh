@@ -7,7 +7,10 @@
 # 1,600-byte tenure blocks up to the loop outside it, and every one of 375,922
 # asks walked all forty-nine: 224 instructions an ask, 2.99% of the program.
 # The short-circuit answers those asks from the arena chain, one or two blocks
-# from the head. This mutation puts the walk back in front of it.
+# from the head. It lives inside the outlined k_ten_holds, not in k_survives_x:
+# inlined there it cost k_copy_size four spilled registers on every call and
+# deepbench 12,368,066 instructions on a path where no tenure block exists.
+# This mutation puts the walk back in front of it.
 #
 # No counter can see this. The blocks are the same, the hand-ups are the same,
 # ten_blocks and ten_frees read 55 either way, and the emitted code is the
@@ -16,7 +19,7 @@
 # landed, and it goes back up when this runs.
 set -e
 grep -q '^    if (k_above_mark(p, m)) return 0;$' src/runtime.c || {
-  echo "k_survives_x's above-mark short-circuit changed shape; rewrite this" >&2
+  echo "k_ten_holds's above-mark short-circuit changed shape; rewrite this" >&2
   exit 1
 }
 sed -i 's|^    if (k_above_mark(p, m)) return 0;$|    if (0 \&\& k_above_mark(p, m)) return 0;|' \

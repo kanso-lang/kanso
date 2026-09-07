@@ -995,7 +995,7 @@ static long long k_carry_n = 0;
    Tenured storage is released immediately after that walk, so there it must
    be copied, and the test is skipped. */
 static int k_ten_any = 0;
-static int k_ten_holds(const void* p);
+static int k_ten_holds(const void* p, KMark* m);
 
 static int k_survives(const void* p, KMark* m) {
     const char* q = (const char*)p;
@@ -1029,7 +1029,7 @@ static int k_still_live(const void* p) {
    below the mark wants anyway. k_born_this_beat is the one that would be
    wrong — answering yes there licenses growing a tenured list in place, and it
    is shared. */
-static int k_ten_holds(const void* p);
+static int k_ten_holds(const void* p, KMark* m);
 
 /* Is p in the arena above the mark -- storage the rewind reclaims? Such a
    pointer cannot be tenured, since tenure blocks are malloc'd, so the walk of
@@ -1050,9 +1050,7 @@ static int k_above_mark(const void* p, KMark* m) {
 
 static int k_survives_x(const void* p, KMark* m) {
     if (k_survives(p, m)) return 1;
-    if (!k_ten_any || !m) return 0;
-    if (k_above_mark(p, m)) return 0;
-    return k_ten_holds(p);
+    return k_ten_any && m && k_ten_holds(p, m);
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
@@ -1153,8 +1151,9 @@ static int k_ten_on = 0;
    costs the other 80,416 a load and two compares before they walk two blocks
    anyway. That is 634,925 instructions spent to save 16,080 short walks, so
    the memo went. */
-static __attribute__((noinline)) int k_ten_holds(const void* p) {
+static __attribute__((noinline)) int k_ten_holds(const void* p, KMark* m) {
     const char* q = (const char*)p;
+    if (k_above_mark(p, m)) return 0;
     unsigned long long held = k_ten_mask;
     if (k_beat_depth < K_BEAT_MAX) held &= (1ull << k_beat_depth) - 1;
     for (; held; held &= held - 1)
