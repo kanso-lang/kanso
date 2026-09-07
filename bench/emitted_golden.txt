@@ -175,7 +175,7 @@
 # calls the fold. escapebench, indexbench and readbench do not import std/list
 # and are byte-identical. Banked as the price of encodebench -1.3766%.
 # 2026-09-06 (the proven-tags append, and the escape arms folded into esc_pair): the decoder carries BOTH changes -- the twin in the preamble and esc_pair from lib/json -- so defines 185 -> 187, calls 1,845 -> 1,846, branches 1,204 -> 1,209, lines 12,726 -> 12,801.
-defines=187
-calls=1843
-branches=1206
-lines=12777
+defines=139
+calls=1254
+branches=814
+lines=9215

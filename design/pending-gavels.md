@@ -108,6 +108,44 @@ and the index reads what it reads either way. Each answer is a one-line
 change to the floor file; the reconstruction and the rescore follow
 the answers, and nothing moves until they are recorded.
 
+### The compile term's workload is whatever lib/json imports, and a library edit halved it
+
+**Cited:** the 2026-09-03 rebuild of the objective (three compile rows over
+`kanso check lib/json`, `bench/objective_sources.txt`), the 2026-09-06 gavel
+(one run program), and the log's 2026-09-07 entry "The scan, iterated"
+(kanso#1291). Searched the log, the archive and design/ for a ruling on WHAT
+the compile term compiles: none. The rows were pinned to lib/json when the
+term was built because it was the one real library, and nothing said what
+happens when lib/json's imports change.
+
+**What happened.** lib/json's escape fold was its only use of std/list. The
+iterated scan retired the fold, the import went with it, and `kanso check
+lib/json` now compiles half the code it did: `compile_instructions` ~42.6M
+-> ~19.6M, `compile_allocs` 25,862 -> 11,613, `compile_peak_bytes` 724,798 ->
+375,222 on the container, welfare 51.95 -> about 56. The compiler is
+byte-identical. By the objective's definition the rise is real; by what the
+term is for — how fast the compiler is — it measures nothing, and a later
+change that re-imports std/list into lib/json reads as a four-point fall.
+
+**Options.**
+
+- (a) As is. The term prices what lib/json costs to check, a library edit
+  is allowed to move it, the floor rises to ~56 now and the re-import
+  argues later. Recommendation: no.
+- (b) A fixed corpus. The three compile gates and welfare check a package
+  that names its imports once — lib/json plus every std module the
+  benchmarks import (list, text, testing) — so a dropped import moves the
+  rows by the import's own compile cost and nothing else, and a bare
+  library edit reads as what it is. Rebased once, with its own --set, and
+  the history chart marks the day. Recommendation: **yes**.
+- (c) As (a), with this rise recorded as a re-basing in the welfare history
+  rather than a gain. Cheaper than (b) and leaves the next import change
+  to make the same argument. Recommendation: no.
+
+**Until ruled:** the standing rule applies (a rise is held). kanso#1291 sets
+the floor with CI's rows and its log entry says which part is the workload,
+so the ruling can undo exactly that much.
+
 ## Open, not blocking
 
 
