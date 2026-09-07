@@ -3708,4 +3708,19 @@ their callers -- 34,157,401 and 9,379,099 instructions of self cost gone
 from the two names, their callers absorbing less than that -- and
 k_render_at fell 2,317,164, k_b_utf8_slice_raw 923,571, k_rec 800,350. Ratchet row `alloc_gate` puts the two-branch
 gate back and asks the work vein; dry-run against the tree before it was
-committed. CI's rows and `--set` follow in the next round.
+committed.
+
+**CI's sitting.** The runner's rows differ from the container's by the
+usual few instructions, and the goldens carry the runner's: `work_runbench`
+2,453,159,735, `work_jsonbench` 1,484,987,477, `work_encodebench`
+4,058,910,155, `work_pendbench` 598,281,252, `work_deepbench` 647,492,751.
+The three rising rows land on `work_escapebench` 85,558,208 (+63,014),
+`work_indexbench` 3,260,261 (+4,949) and `work_readbench` 4,288,042
+(+187), priced above. `compile_instructions` lands on 19,316,808, +659
+on 19,316,149: a two-line change to a function the runtime inlines
+everywhere, and the compiler carries the runtime as a string, so the
+row moves with the bytes of that string and nothing else. Every `.text`
+row falls with k_alloc's second branch gone from every inlined site:
+`text` 1,459,900 -> 1,449,644, runbench 241,810 -> 241,682, indexbench
+55,378 -> 53,954 the largest single fall at -1,424. Welfare on CI's rows
+65.84, held with `--set`.
