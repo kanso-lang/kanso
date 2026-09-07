@@ -435,6 +435,30 @@ inline_pin = row
   (breaking "an_inline_pin_the_inliner_undoes")
   benches
 
+ten_walk = row
+  "a tenure walk asked about pointers the arena still holds"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tenure_walk_asked_about_arena_pointers")
+  benches
+
+one_char_memo = row
+  "an indexed character scanned for a length the index already knew"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_indexed_character_scanned_for_its_length")
+  release
+
+length_memo = row
+  "a string length that leaves the twin for a memo the header holds"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_length_that_leaves_the_twin")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -868,7 +892,9 @@ rows_b1e0 = text/concat rows_b1d2 [compile_ir_one_value]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 
-rows_b1e = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
+rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
+
+rows_b1e = text/concat rows_b1e2 [ten_walk one_char_memo length_memo]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 

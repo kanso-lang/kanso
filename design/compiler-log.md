@@ -20,304 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 — K_REC IS 30% OF PENDBENCH, AND THE REUSE ANALYSIS REACHES 100 OF ITS 3,200,900
-
-**ATTRIBUTED (#340), no change.** kanso#1258 took `k_rec` out of encodebench's
-profile entirely — the entry above §54 records that it "does not appear in the
-profile at all" there. It is pendbench's largest function by a wide margin and
-had never been read on that benchmark.
-
-    k_rec   184,084,984 over 3,200,900 calls   57.5 each
-
-28.60% of the 643,666,736 pendbench ran at when this was measured, and 30.39% of
-the 605,691,007 the branch now lands on, because the `k_itoa` change above took
-74,845,459 out from under it.
-
-**Two call sites are all of it**, and they are the same one at two recursion
-depths:
-
-    d_list/next_1     96,026,195 over 1,600,400 calls   60.0 each
-    d_list/next_1'2   88,003,483 over 1,600,000 calls   55.0 each
-    d_pendbench/made_1    28,000 over       500 calls
-    d_list/iter_1         16,000 over       300 calls
-    d_list/fold_3         12,000 over       200 calls
-    k_rec_reuse            6,000 over       100 calls
-
-A lazy list's `next` builds a fresh cursor record every step, 3.2 million of
-them a run.
-
-**The runtime already has the shape that would avoid it and the analysis does
-not reach here.** `k_rec_reuse` writes the new fields over a victim record when
-the victim is a record of the same arity, and `src/codegen.rs` emits it wherever
-`reusable_records` — the linearity analysis, keyed by file and line and column —
-says this construction is the last reader of some record in scope. In pendbench
-it fires **100 times against 3,200,900**, and none of the hundred is in
-`d_list/next_1`.
-
-Whether it *should* reach there is the open question and not a defect on the
-evidence here: a lazy list's previous cursor may still be held by the caller,
-which is what laziness is for, and a reuse that wrote over a live cursor would
-be a miscompilation rather than a slow path. What the numbers establish is the
-size of the prize — 3.2 million constructions at 57.5 instructions, 30% of the
-benchmark — and that the analysis currently answers no to all of them.
-
-**OPEN**, deliberately: the next step is to read `reusable_records` against
-`lib/list`'s `next` arms and find out whether the no is a proof or a gap.
-
-## 2026-09-06 — THE REUSE ANALYSIS NEVER ASKS ABOUT A DESTRUCTURED PARAMETER
-
-**ANSWERED (#341).** The entry above left open whether `reusable_records`
-refusing all 3,200,900 of pendbench's record constructions is a proof about
-liveness or a gap. It is a gap, and a one-line one.
-
-`sole_finished_record` in `src/linear.rs:811` opens its loop over the arm's
-parameters with
-
-    let Pattern::Var(name, _) = pattern else { continue };
-
-so a parameter that is destructured rather than named is skipped before any
-question about it is asked. Every `next` arm in `lib/list/list.kso` destructures:
-`(cursor at source)`, `(bounded at stop source)`, `(capped left source)`,
-`(counting at)`, `(cycled at source)`, `(grown seed stretch)`,
-`(mapped shape source)`, `(paired left right)`, `(repeated value)`,
-`(sifted keep source test)`, `(skipped burn source)`. Eleven arms, no bare
-parameter among them, so the analysis produces no candidate for any of them —
-whatever the liveness would have said.
-
-The construction it would have to reason about is the one the arm writes as its
-own step: `onward = cursor (at + 1) source` reads `at` and `source` out of the
-cursor that arrived and builds another of the same width. That is the shape
-`k_rec_reuse` exists for, and the shape the doc comment on `reusable_records`
-describes — `shift (n - 1) (point (p.x + 1) p.y)`, with `p` finished by the time
-the constructor runs — with the parameter destructured at the door instead of
-read through a name.
-
-**This is a finding, not a licence.** Being skipped is not the same as being
-safe: whether the arriving cursor is finished still turns on
-`callers_hand_over`, and a lazy list exists so that a caller can hold a cursor
-and ask it for more later. Writing over one a caller still holds would be a
-miscompilation, which is the failure mode this analysis is built to avoid. What
-is established is that the question has never been put — the 30.39% is
-unexamined rather than examined and declined.
-
-**OPEN**: extend `sole_finished_record` to destructured parameters and find out
-what `callers_hand_over` answers for `list/next`. The measurement to take first
-is whether the eleven arms' incoming cursors are handed over, because a no there
-closes the thread at no cost.
-
-## 2026-09-06 — THE CURSOR IS NOT HANDED OVER, SO THE 30% CLOSES AT NO COST
-
-**CLOSED (#342).** The thread above ends where it was designed to end cheaply.
-Before extending `sole_finished_record` to destructured parameters, ask the
-other half of its condition about `list/next` and see whether the answer is
-already no.
-
-A temporary `KANSO_REUSE_PROBE` in `reusable_records` — never committed —
-printing `Analysis`'s two questions for every group whose name ends in `next`:
-
-    PROBE list/next/1  escapes_as_value=false  hand_over_p0=false  params=["Ctor/other"]
-
-`next` is never mentioned as a value, so the analysis has every one of its call
-sites to look at, and having looked at them it says some caller does not hand
-its cursor over uniquely. That is the answer a lazy list should give: a caller
-holds a cursor and asks it for more later, which is what the structure is for,
-and a reuse that wrote over a held cursor would be a miscompilation.
-
-**So the 3,200,900 constructions are refused twice over**, and only the first
-refusal was the one-line skip. Extending the analysis to destructured
-parameters would change nothing here: `sole_finished_record` requires both
-`here == everywhere` and `callers_hand_over`, and the second is already false.
-The 30.39% is not reachable this way.
-
-The gap the entry above found is still a gap — a destructured parameter is
-skipped before the question is asked, so some other arm somewhere may be losing
-a reuse it would qualify for. What is settled is that `list/next` is not one of
-them, and that pendbench's largest function is doing work the objective has no
-cheaper way to buy.
-
-## 2026-09-06 — CI'S NUMBERS, AND THE PROJECTION MISSED THE TWO ROWS THAT SHARE A PROGRAM
-
-**The goldens now hold CI's readings rather than the container's projection.**
-Both changes above were measured here and written in as CI's previous values
-plus the container's deltas, which is the method that had landed to the digit
-for seven changes running. On this branch it landed for eleven rows of thirteen
-and missed twice, by the same amount both times.
-
-    row            projected          CI              miss
-    encodebench    4,425,110,405   4,425,477,605   +367,200
-    livebench      4,437,721,317   4,438,088,517   +367,200
-    the other 11   exact
-
-encodebench and livebench are the same program — livebench runs encodebench's
-against the shipped library instead of the frozen copy — so a single cause
-shows up twice at identical size. The same pair missed by the same 367,200 on
-the previous head, so it is a property of that program on these two hosts and
-not of either change.
-
-`scripts/gates/dispatch.sh` exists to answer whether silicon accounts for a
-moved row, and it cannot answer here: `differs` returns 2 for want of a recorded
-block, and there is no `bench/dispatch.txt` because that was resolved
-deliberately — a recorded block would have blinded the ratchet. This run printed
-`cpu family 0x19 model 0x1`. What the numbers support is that the container's
-deltas are reliable for eleven of these thirteen programs and unreliable for the
-encode program on this pair of hosts; what would settle the mechanism is a
-sitting of that one program on both, which is not this change's to take.
-
-**`compile_instructions` moves from 41,461,538 to 41,461,798**, a rise of 260,
-and `docs/compiler.html`'s `data-golden` follows it. This is the gate's own case
-(1), which its failure text spells out: `src/runtime.c` is `include_str!`'d into
-the compiler, so a runtime edit moves this row with the front end untouched.
-Worth recording that the intermediate head measured +6,169 and the `k_itoa`
-commit brought it back to +260 — the row tracks the size and shape of the
-embedded text, not the compiler's work.
-
-Welfare reads 74.62 against a floor of 74.62 on CI's numbers, so the floor set
-on the projection stands without a re-set.
-
-## 2026-09-06 — PARSE_VALUE'S 26.98%, AND THE POINTER IT RELOADS 17 MILLION TIMES
-
-**ATTRIBUTED (#343).** The decode's largest function had a function-level figure
-and no instruction-level reading. `d_jsonbench/parse_value_2'2` is 468,780,150
-instructions, **26.98% of jsonbench** and more than double the next function.
-
-Searched first: `parse_value` appears three times in the log and not at all in
-the archive. kanso#1262 explains its growth — it absorbed `scan_at_5`'s
-133,577,400 by inlining and gained 136,356,000 doing it — and the entry-block
-thread (kanso#1245) with `preserve_none` behind it (#290, toolchain-blocked)
-covers its prologue. None of them reads what the 468 million is made of.
-
-Same method as `encode_onto`: callgrind at instruction granularity joined to
-`objdump` over the function's 1,021 instructions. 594 execute and the join
-accounts for all 468,780,150.
-
-**Grouped by execution count, the per-call band is the largest.** 49
-instructions run once per call at 2,713,950 calls — 132,983,550, 28.37% of the
-function and **7.65% of jsonbench**. That band holds the thirteen-instruction
-prologue (six pushes and a 120-byte frame), the entry's first two byte reads,
-and the dispatch on what the byte is.
-
-**The shape that repeats is the non-strict byte index.** `bs[i]` inlines to a
-bounds test, a reload of the buffer's data pointer, the fetch, and a `cmove`
-substituting the past-the-end sentinel:
-
-    test %rbx,%rbx              ; index above zero
-    jle  ...
-    cmp  %rbx,%rsi              ; index within the length
-    jl   ...
-    mov  0x8(%r14),%rcx         ; the data pointer, again
-    movzbl -0x1(%rcx,%rbx,1),%ecx
-    cmove %rdx,%rcx             ; or 0x100, past the end
-
-Twenty-two fetch sites execute **17,041,950** times between them, 0.98% of
-jsonbench. Twenty-three pointer reloads execute **17,359,050** times, 1.00% —
-one per fetch, plus one site that reloads without fetching.
-
-**The length is hoisted and the pointer is not.** `parse_value` loads the byte
-count once at entry and keeps it in `%rsi` for the whole call; it loads
-`0x8(%r14)` afresh at every read. `%r14` never changes, and the buffer it points
-into is the input document, which nothing in the decode appends to.
-
-LLVM is right not to hoist it and `!invariant.load` would be wrong: the `data`
-field of a bytes header is genuinely mutable, because `k_b_append_mut` rewrites
-it when a builder grows, and a callee between two fetches could do exactly that.
-What makes the decode's reads redundant is a fact about this buffer rather than
-about the type — the same distinction that made the closure's `!invariant.load`
-correct where this one would not be.
-
-**So the 1.00% is real and its fix is not one line.** Recorded as the size of
-the prize and the reason the obvious route is closed. What is left unexamined in
-this function is the residual of the per-call band once the prologue is set
-aside, which is #290's ground and blocked on the same toolchain.
-
----
-
-## 2026-09-06 — SPLIT ASKED MEMCMP PER BYTE POSITION: readbench −97.7490%, scanbench −44.0754%, welfare 75.16
-
-**DONE.** Searched first, as the filing gate requires: `readbench` and
-`scanbench` appear in this file and in `log/compiler-log-archive.md` only as
-rows that moved — thirty-odd mentions between them, every one a benchmark
-total. Neither has ever had a function-level reading, and `d_readbench` and
-`d_scanbench` return nothing in either file. `k_b_split` appears nowhere in
-this file and nowhere in the archive.
-
-**Two functions are 98.13% of readbench.** Callgrind on the merged main
-compiler, 2,038,390,385 instructions:
-
-    k_b_split              1,245,429,204   61.10%
-    __memcmp_avx2_movbe      754,792,000   37.03%
-
-The benchmark reads `bench/large.json` — 188,698 bytes with no newline in
-them — and splits it on `"\n"` two hundred times. `k_b_split` walked the bytes
-twice, once to count the pieces and once to cut them, and called `memcmp` at
-every position of both walks: **75,479,200 calls**, which is 200 rounds by two
-walks by 188,698 positions, at exactly 10.0 instructions a call. The function's
-own 1,245,429,204 is 16.5 instructions a position on top. Fifty-three
-instructions of input byte to learn that a one-byte separator is not there.
-
-**A match can only start where the separator's first byte is.** `memchr`
-covers the ground in one vectorised pass and `memcmp` runs only at the
-candidates it hands back; a one-byte separator skips the `memcmp` entirely.
-Both walks call one helper, so the counting pass and the cutting pass cannot
-drift apart again.
-
-    row            before             after            delta        pct
-    readbench   2,038,390,798     45,883,331   -1,992,507,467  -97.7490%
-    scanbench   1,384,644,173    774,357,155     -610,287,018  -44.0754%
-    basket         38,029,049     35,508,390       -2,520,659   -6.6282%
-    pendbench     605,691,420    605,536,009         -155,411   -0.0257%
-
-Nothing rises. The other nine rows are byte-identical on the container's own
-A/B, which is what says the four falls are the change: those nine programs
-call split nowhere, so a change confined to split cannot reach them.
-
-**scanbench was not the target and is the second largest win here.** It was one
-of the two benchmarks named in the previous entry's list of programs with no
-attribution at all, and it turns out to share readbench's defect without
-sharing its shape.
-
-**The `text` vein worsens, deliberately, from 1,262,522 to 1,264,058.** The
-four binaries that call split each gain the 384 bytes of `k_split_find`; the
-other nine never link it and are unchanged. 1,536 bytes for 2.6 billion
-instructions.
-
-**`compile_instructions` falls 41,461,798 -> 41,460,229, by 1,569.** The gate's
-own case (1): `src/runtime.c` is `include_str!`'d into the compiler, so editing
-the runtime moves what the compiler carries and compiles. Measured twice on the
-container, 41,881,485 -> 41,879,916 both times, the second reading identical to
-the first.
-
-**No allocation counter moves.** All eleven veins agree with their goldens
-untouched, which is the expected shape: the change removes instructions, not
-allocations.
-
-**Watched red twice, for two different reasons, and the second found a hole in
-the corpus.**
-
-The memchr span off by one — searching `len - seplen - from` bytes rather than
-one more — misses a separator sitting at the last position it can occupy, and
-the fixture says so in four cases: `"ab\n"` splits into one piece instead of
-two, `"ab"` on `"ab"` into one instead of two.
-
-Taking a matching first byte for a match without verifying the rest gives
-`"a:b::c"` on `"::"` three pieces instead of two, and `"→x→→y"` on `"→→"` a
-piece cut mid-codepoint. **The shipped corpus passed that mutation.**
-`tests/golden/micro/text_split.kso` had three multi-byte separator cases and in
-every one the separator's first byte occurred only where the whole separator
-did, so nothing in it could tell a first-byte match from a real one. Three
-cases were added that can, and the mutation reddens them on both engines
-against the interpreter's answers.
-
-**OPEN — the two walks are still two walks.** The counting pass exists to size
-the buffer, and it now costs a memchr sweep rather than a memcmp per byte, so
-it is cheap enough that removing it was not measured. A growable buffer or a
-recorded position list would halve the remaining scan. Not attempted here.
-
-**OPEN — `k_b_chars` and `k_b_at` are the neighbours with the same shape.**
-`k_b_chars` walks a string twice to count codepoints and then to cut them.
-Nobody has priced either at the instruction level.
-
----
-
 ## 2026-09-06 (later) — CI'S COMPILE ROW IS 373 ABOVE THE CONTAINER'S PROJECTION
 
 **DONE.** The entry above projected `compile_instructions` at 41,460,229, from a
@@ -3436,3 +3138,111 @@ processor runs as one instruction each; the work rows above are what they
 cost.
 
 **welfare 57.03 -> 57.25**, all of it the run term, held with `--set`.
+
+## 2026-09-07 — THE TENURE WALK WAS ASKED ABOUT POINTERS THE ARENA STILL HELD
+
+`k_ten_holds` was 2.99% of runbench: 84,272,512 instructions over 375,922
+asks, 224 an ask, all of them from the sizing walk `k_copy_size` makes before
+an evacuation. The function walks every beat depth below the current one and
+every tenure block at each, and answers whether a pointer was promoted by an
+earlier lap. Two things made it expensive, and the first one I built for was
+the smaller.
+
+### The depths
+
+Most of the sixty-four depths hold nothing, and the walk visited each. A
+bitmask of the depths that hold a block, kept at the three places the table
+changes — the alloc, the hand-up, the release — lets the walk visit the set
+bits only, and the release computes `k_ten_any` from the mask instead of
+re-walking the table. runbench 2,816,922,233 -> 2,801,388,617, −0.5515%. Too
+little: the function was still 182 an ask.
+
+### The blocks
+
+A print at the hand-up and the release said why. runbench's inner loop
+tenures 1,600 bytes a run and finishes with a heap value, so its block is
+handed up to the loop outside rather than freed — forty-nine times — and the
+outer depth ends the phase holding forty-nine blocks of 256 KiB with 1,600
+bytes in each. Every ask walked all forty-nine, and the asks miss: the
+pointer the sizing walk asks about is a node the loop built this lap, sitting
+in the arena above the mark, which no tenure block can hold because tenure
+blocks are malloc'd. So `k_survives_x` now asks that first — is the pointer in
+the arena chain between the head block and the mark's block — and answers no
+without touching the tenure blocks when it is. The chain above the mark is one
+or two blocks.
+
+    runbench   2,816,922,233 -> 2,762,899,581   −54,022,652   −1.9178%
+
+on the container with clang 19, both changes together, the same bytes out.
+`k_ten_holds` is 22,125,975 now, 110,420 asks, the ones for pointers that are
+not in the arena at all: the carry buffer's, the tenured ones, the hits.
+
+No counter moves. `ten_blocks` and `ten_frees` read 55 either way, the twelve
+veins and the lazy tier agree with their goldens, and the emitted code is the
+compiler's. The work vein is the only witness, as it was for the inline pins,
+and the ratchet row `ten_walk` puts the tenure walk back in front of the
+arena check so that vein goes red.
+
+### A thread left open
+
+Forty-nine 256 KiB blocks for 78 KB of tenured bytes is address space rather
+than pages, and no counter reads it, so it is not a regression by the
+project's own measures. It is still forty-nine mallocs and frees a phase for
+a block that could hold three hundred laps of tenure. A hand-up that appended
+the child's bytes into the parent's block cannot be written — the carried
+values hold pointers into the child's block — but a hand-up that kept the
+child's block as the parent's head, and an inner loop that opened its tenure
+in a block the parent already has room in, might. Not measured.
+
+## 2026-09-07 — THE LENGTH OF AN INDEXED CHARACTER, ANSWERED WITHOUT A SCAN
+
+runbench's index phase reads a string one character at a time and asks each
+one's length: `acc + length s[i]`, 690,000 times. `k_b_length` was 51,794,417
+instructions, 1.87%, and the per-address profile said where: 345,220 of its
+875,119 calls scanned. `s[i]` hands back a fresh string of one character, and
+the count memo a string keeps in its header was empty on every one of them,
+so `length` walked the character's bytes — one to four — through
+`k_utf8_chars`, with its wide-loop prologue, its tail loop and its two
+statistics increments around it. The other 529,898 calls read a memo, then
+paid the call, the jump table and the six pushed and popped registers to get
+to it.
+
+### The index knows the count
+
+A one-character string has one character. `k_b_at`'s string arm writes the
+memo before it hands the string back — one store, on the path that already
+built the header. The ascii cache's strings get it once; a multi-byte
+character's fresh string gets it every time.
+
+    runbench   2,762,899,581 -> 2,749,444,509   −13,455,072   −0.4870%
+
+`str_scans` on runbench 345,257 -> 254 and `str_scan_bytes` 23,679,615 ->
+22,644,612 in `bench/cost_golden_run.txt`; no other vein moves, since no
+other benchmark reads text a character at a time. The fixture
+`the_length_of_an_indexed_character_needs_no_scan` walks 4,000 characters of
+a six-character alphabet, three of them multi-byte, and pins `str_scans=12`:
+the subject's own count, the doublings that built it, and the ascii cache's
+first sight of its three ascii bytes. The old runtime counts 2,015 on it —
+one more per multi-byte position — watched red. The ratchet row `one_char_memo` writes the memo as "not
+counted" and the mem corpus goes red on that row.
+
+### The twin reads the memo
+
+`k_b_length_fast`, the twin the emitter inlines at every `length`, answered
+lists and bytes from their headers and sent everything else to C. A string
+whose header holds a count is the same shape: a tag compare, a load of the
+`cap` field, a sign test and a complement. The C entry keeps the scan and
+its counters, so nothing a golden reads is skipped.
+
+    runbench   2,749,444,509 -> 2,739,572,213    −9,872,296   −0.3591%
+
+The emitted goldens move by the twin's definition: `emitted_lines` 9,237 ->
+9,252 and `emitted_branches` 820 -> 822 on the decoder, `emitted_other_lines`
+132,622 -> 132,817 and `emitted_other_branches` 12,671 -> 12,697 across the
+thirteen, fifteen lines and two branches each, with `emitted_calls` and
+`emitted_other_calls` unchanged. No counter moves. The work vein is the
+witness, and the ratchet row `length_memo` sends every string back through
+the call.
+
+Together with the tenure walk above, the container reads runbench
+2,816,922,233 -> 2,739,572,213, −2.746%, on clang 19, the same bytes out.
