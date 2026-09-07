@@ -3697,7 +3697,16 @@ under several newer ones, so every ask walked those first. pendbench and
 encodebench are under their pre-freeze rows now, 605,572,877 and
 4,072,979,783. `all_counters.sh` agrees with every golden: no counter
 moves, so the work vein is the witness. Welfare 64.36 -> 64.38 on the
-container's rows, held with `--set`. Ratchet row `mark_block_first`
+container's rows, held with `--set`.
+
+CI's sitting at acf1d8b4 agrees with the container's to within twelve
+instructions on every row but two: `work_runbench` lands on 2,483,620,655,
+which against CI's own freeze row of 2,490,112,330 is -6,491,675, -0.2607%,
+and `work_deepbench` on 647,637,793. The reordered walk is thirty-two more
+bytes of machine code a program, forty-eight where a third block comes
+into it: `text` lands on 1,449,676, +496 summed over the fourteen, and
+`compile_instructions` on 19,316,936, +435, the layout vein moving with the
+runtime the compiler carries. The floor is re-set on CI's rows. Ratchet row `mark_block_first`
 puts the walk from the head back -- the mutant is byte-for-byte main's
 `k_where` -- and asks the work vein; dry-run red before it was committed.
 CI's rows and `--set` follow in the next round.
