@@ -3121,6 +3121,9 @@ touched src/runtime.c and the touched-rows check selected the row. The
 mutation now patches the emitter, `srem` to `urem`, and the sweep reads
 `print (-1 % 2147483648)` as 2147483647 on native against the oracle's -1:
 watched red on the container before this round was pushed.
+
+---
+
 ## 2026-09-07 — AN INNER BEAT OPENS ITS TENURE IN THE BLOCK OUTSIDE
 
 The thread the tenure-walk entry left open. runbench's inner loop tenures
