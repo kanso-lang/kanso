@@ -4128,10 +4128,8 @@ sites, so it cannot be inlined at any threshold: marking it `noinline` by hand
 in the IR and relinking gives a byte-identical binary. Its 0 -> 9,900,000 is
 the linker folding it with an identical twin in one build and not the other,
 which moves where callgrind files the cost and not what the cost is. The rows
-that remain unexplained are `encode_onto` +3,689,460 and `entry_onto`
-+3,816,180, and those may be attribution too — the total is the measurement,
-the per-function split is a reading, and one row of that reading has now been
-shown to be an artifact.
+that remain are `encode_onto` and `entry_onto`, and `--separate-callers=2` says
+those are real. See the entry below.
 
 **This bounds #384.** That thread put the failure-tag compares at 40,778,277
 executions across runbench, 1.50%, and read a cannot-fail analysis as having a
@@ -4151,16 +4149,38 @@ else in the emitter reads that bit, so the tighter set buys nothing by itself.
 An earlier draft of this paragraph read 20 for the second cell — it was
 measuring a mutation that left the empty-set folds standing.
 
-**OPEN — why the encoder pays.** The `noinline` probe above answers the
-version of this question that named `word_4` and answers it no. What is left is
-the real one: the 690-site version removes 623 tag tests and runs 3,683,016
-instructions more, and nothing yet says where. The next thing to try is
-callgrind with `--separate-callers=2` on both builds, which distinguishes a
-function that got slower from one that merely got renamed. It has not been run:
-the first attempt hand-linked the two `.ll` files against the newest cached
-runtime object and both binaries died with `bytes takes a string` after 414,247
-instructions. `cached_runtime_object` keys on the closure convention, and the
-newest object on this box was built under the other one — so a hand-link picks
-the wrong half and the two halves disagree about registers, which is the exact
-hazard the comment at that function warns about. Build both compilers and let
-`kanso build` link them, then copy both binaries into one directory.
+**CLOSED — the encoder pays, and it is the recursive pair.**
+`--separate-callers=2` on both builds, each measured as `./runbench` from the
+repo root so the exec path is the same: shipped 2,398,991,700, wide
+2,403,950,554, +4,958,854.
+
+Almost every large row in the flat profile is re-parenting. `d_escape/more_4`
+is inlined into `d_runbench/tally_4` in the wide build, so everything under it
+moves up one level: `more_4'tally_4'w_klam39` 65,309,063 -> 0 against
+`tally_4'w_klam39'k_worded_step` 20,716,576 -> 86,045,501, a net 19,862.
+`k_beat_iter` under the two parents nets 2,388, sha256's `compress_4` −2,051,
+`k_b_push_grow` exactly 0. `word_4` appears at 9,900,000 across its two caller
+chains and the decode functions it re-parents from fall 10,380,150 — a net
+480,150 in the change's favour, not the 9.9M rise the flat profile showed.
+
+What survives is four rows and they are all the encoder:
+
+    encode_onto'2 under entry_onto        +3,360,690
+    entry_onto'2 under encode_onto        +3,816,180
+    entry_onto under encode_onto/tally     +698,760
+    d_thunk_eval under k_force_slow        +764,400
+
+8,640,030 of rise, in a mutually recursive pair and in the slow force behind
+it. That is where the wide fold's cost is. Removing a tag test from a function
+that calls itself through another changes what LLVM can prove across the cycle,
+and the last row says some of what it stops proving is that a value is already
+forced. Whether the narrow rule avoids this by luck or by construction is not
+answered here — the narrow rule touches 27 sites and none of them is in that
+pair.
+
+The first attempt at this probe hand-linked the two `.ll` files against the
+newest cached runtime object and both binaries died with `bytes takes a string`
+after 414,247 instructions: `cached_runtime_object` keys on the closure
+convention and the newest object on this box was built under the other one, so
+a hand-link picks the wrong half and the two halves disagree about registers.
+Let `kanso build` do the linking.
