@@ -6854,12 +6854,30 @@ KValue k_b_at(KValue container, KValue index) {
         if (want < 1) return k_none();
         long at = k_str_seek(s, want);
         if (at < 0) return k_none();
-        KValue one = k_str_n(s->data + at, k_cp_len((unsigned char)s->data[at]));
-        /* One character by construction, so its count is known without a
+        long w = k_cp_len((unsigned char)s->data[at]);
+        if (w == 1) {
+            /* an ascii character comes from the cache through k_str_n */
+            KValue one = k_str_n(s->data + at, 1);
+            KStr* os = k_as_str(one);
+            if (os->cap == 0) os->cap = -2;
+            return one;
+        }
+        /* A wide character is two, three or four bytes, and it goes over as
+           four: the read past it stops at the string's own terminator at
+           worst, since at + w <= len, and the write lands inside storage
+           k_alloc rounded up to sixteen. glibc's memcpy took seventeen
+           instructions to choose how to move three bytes, 345,000 times a
+           run on runbench; a byte loop bounded by w cost more than the call.
+           One character by construction, so its count is known without a
            scan: `length s[i]` asked k_utf8_chars to walk the bytes of every
            multi-byte character it was handed, 345,220 times on runbench. */
-        KStr* os = k_as_str(one);
-        if (os->cap == 0) os->cap = -2;
+        uint32_t q;
+        memcpy(&q, s->data + at, 4);
+        KStr* os = k_str_alloc(w);
+        memcpy(os->data, &q, 4);
+        os->data[w] = 0;
+        os->cap = -2;
+        KValue one; one.tag = K_STR; one.payload = k_ptr(os);
         return one;
     }
     if (container.tag == K_BYTES && index.tag == K_INT) {

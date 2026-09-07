@@ -3431,3 +3431,34 @@ there is one. runbench 2,634,857,220 -> 2,621,939,707, −12,917,513,
 `buf_reuse`, `allocs` and `alloc_bytes` print the same, so the classes
 answered are the classes that were. The ratchet row `buf_class_loop` puts
 the doubling loop back and asks the work vein.
+
+### The two-byte scan's tail, a word at a time: declined
+
+`k_b_find2_below_raw` is the escape scan's search for a quote, a backslash
+or a control byte: 1,353,330 calls on runbench, 84,989,250 instructions,
+and 1,207,350 of the calls never fill a sixteen-byte vector, so the byte
+loop after it walked 5,504,670 bytes at ten instructions each. A word at a
+time for that tail, the trick the utf-8 arm uses, with the two equalities
+and the floor folded into one mask: runbench 2,621,939,707 ->
+2,681,926,147, +59,986,440, +2.2879%, and the scan itself 84,989,250 ->
+140,449,770. A run between escapes is a few bytes and often one, and the
+mask's setup -- three splats, two xors, three subtractions and the shift
+for the tail -- costs more than the bytes it would have walked. Reverted;
+the vector loop keeps the long runs and the byte loop the short ones.
+
+
+### An indexed wide character, copied as one word
+
+`k_b_at` on a string is 690,000 calls a run on runbench, 76,518,176
+instructions self, and for the 345,000 that land on a wide character --
+two, three or four bytes -- it built the string through `k_str_n`'s memcpy,
+seventeen instructions for glibc to choose how to move three bytes. The
+push entry above declined a byte loop bounded by the width, +805,016. The
+character goes over as one four-byte word now, and both sides have the
+room: `at + w <= len`, so a four-byte read from `at` reaches the string's
+own terminator at worst, and the write lands inside storage `k_alloc`
+rounded up to sixteen. runbench 2,621,939,707 -> 2,612,624,701,
+−9,315,066, −0.3553%, the same bytes out; `k_b_at` 73,068,170, glibc's
+memcpy 5,977,361 lighter. No counter in the twelve veins or the lazy tier
+moves; the ratchet row `char_word` sends every wide character back
+through the call.
