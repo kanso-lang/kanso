@@ -3926,5 +3926,12 @@ uniqueness and took the `push_mut` path that moves `len` in place. The four
 shapes each failed one of those two conditions: `t1` and the trend-gate shape
 put the pointer in the outer node's own slot, and `t2` and `t3` put a freshly
 allocated node in between, which sits above the mark and so does not survive
-either. A fifth shape wants a pre-existing inner list, reached through a
-pre-existing outer one, written through `push_mut`. That is the next sitting.
+either. A fifth shape was written and run: a pre-existing inner list reached through a
+pre-existing outer one, `push outer[1]! x` each lap with `outer` threaded
+unchanged. It reads back `held 0` -- the outer node never sees the growth, so
+the emitter is not taking the `push_mut` path there and the written slot is
+not reachable from the outer node at all. Both conditions have to hold at
+once and no shape yet holds both, which is a fair reason to suspect the
+hazard needs the emitter to prove a uniqueness it does not prove here. That
+is what the next sitting should settle, and it is a question about the
+emitter rather than about the runtime.
