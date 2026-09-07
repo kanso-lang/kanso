@@ -467,6 +467,19 @@ length_fold = row
   (breaking "a_length_twin_that_compares_three_times")
   benches
 
+# The run program's counters had no row until 2026-09-07, for the reason the
+# read_counters paragraph gives: runbench joined on 2026-09-06 and nothing
+# proved its gate could go red. This row is that proof, and its defect is the
+# tenure block sharing that took runbench's phase from forty-nine blocks to
+# one.
+ten_open = row
+  "an inner beat that opens its own tenure block beside one with room"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_child_beat_that_opens_its_own_tenure_block")
+  benchmarks
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -904,7 +917,7 @@ rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
 rows_b1e3 = text/concat rows_b1e2 [ten_walk one_char_memo length_memo]
 
-rows_b1e = text/concat rows_b1e3 [length_fold]
+rows_b1e = text/concat rows_b1e3 [length_fold ten_open]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 

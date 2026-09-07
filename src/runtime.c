@@ -1192,6 +1192,24 @@ static void k_from_window(int on) {
 static void* k_ten_alloc(size_t n) {
     long long d = k_beat_depth - 1;
     KTenBlock* b = k_ten_blocks[d];
+    if (!b && d > 0) {
+        /* A beat that has no block yet opens its tenure in the block the
+           depth outside already holds, when that block has room. An inner
+           loop whose result is heap hands its block up at every pop, and
+           runbench's did forty-nine times a phase: forty-nine 256 KiB blocks
+           in the outer depth for 78 KB of tenured bytes, every one walked by
+           every ask. Bytes carved here are accounted to the outer depth and
+           freed with it, which is where a handed-up block's bytes went
+           anyway; the licence check is the outer depth's too. */
+        KTenBlock* pb = k_ten_blocks[d - 1];
+        if (pb && pb->cap - pb->used >= n && k_ten_bytes[d - 1] <= K_TEN_CAP) {
+            void* out = pb->data + pb->used;
+            pb->used += n;
+            k_ten_bytes[d - 1] += n;
+            k_ten_any = 1;
+            return out;
+        }
+    }
     if (!b || b->cap - b->used < n) {
         /* Each block is twice the one before it. That is what keeps the list
            short enough for k_ten_holds to walk: K_TEN_CAP is 64 MiB, so

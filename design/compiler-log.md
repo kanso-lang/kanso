@@ -20,34 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (later) — CI'S COMPILE ROW IS 373 ABOVE THE CONTAINER'S PROJECTION
-
-**DONE.** The entry above projected `compile_instructions` at 41,460,229, from a
-container A/B that read 41,881,485 -> 41,879,916 twice over. CI counted
-**41,460,602**, so its own delta from 41,461,798 is 1,196 rather than 1,569.
-CI's sitting is the record and the golden holds 41,460,602;
-`docs/compiler.html`'s `data-golden` follows it. **The correction is to that
-one line of the entry above: `compile_instructions` falls 41,461,798 ->
-41,460,602, by 1,196.** The direction and the reason are unchanged — this row
-moves because `src/runtime.c` is `include_str!`'d into the compiler.
-
-**Everything else in that entry landed to the digit.** All thirteen work rows
-and all thirteen `.text` rows came back from CI byte-identical to the
-projection, including readbench 45,883,331 and scanbench 774,357,155. Nine of
-the thirteen instruction deltas were zero, which is why: only the four
-benchmarks that call split could move, and their deltas were measured on the
-container against a binary built the same way.
-
-**Why this row is the one that misses.** Its own header says so: cargo builds
-are not bit-reproducible, and a binary whose data and bss differ starts the
-heap at a different break, which moves how much work malloc does to service an
-identical request sequence. 373 instructions is that, and it is a fifth of the
-5,124 the header records for a change of chip. The runtime rows do not have
-this exposure because they are counted on programs the compiler emitted rather
-than on the compiler itself.
-
----
-
 ## 2026-09-06 (third) — SPLIT HANDS BACK THE INPUT WHEN IT FINDS NO SEPARATOR: readbench −90.6543%, welfare 75.17
 
 **DONE.** Continues the first entry of today, whose OPEN thread asked what was
@@ -3372,3 +3344,50 @@ touched src/runtime.c and the touched-rows check selected the row. The
 mutation now patches the emitter, `srem` to `urem`, and the sweep reads
 `print (-1 % 2147483648)` as 2147483647 on native against the oracle's -1:
 watched red on the container before this round was pushed.
+## 2026-09-07 — AN INNER BEAT OPENS ITS TENURE IN THE BLOCK OUTSIDE
+
+The thread the tenure-walk entry left open. runbench's inner loop tenures
+1,600 bytes a run and ends with a heap value, so its 256 KiB block is handed
+up to the depth outside at every pop rather than freed, and the outer depth
+ended the phase holding forty-nine blocks for 78 KB. The above-mark check
+stopped the sizing walk from asking those blocks about arena pointers; the
+asks that are not arena pointers — the carry buffer's, the tenured ones, the
+hits — still walked all forty-nine, 22,125,975 instructions over 110,420 asks.
+
+### One block, not one a lap
+
+`k_ten_alloc`, asked by a beat that holds no block yet, now looks at the
+depth outside first: when that depth's head block has room for the request
+and its bytes are under the licence, the bytes are carved from it. They are
+accounted to the outer depth and freed with it, which is where a handed-up
+block's bytes went anyway; the inner beat never owns a block, so its pop has
+nothing to hand up and nothing to free. The first lap still opens a block —
+the outer depth has none until the first hand-up — and every lap after that
+lands in it.
+
+    runbench   2,736,140,571 -> 2,717,267,333   −18,873,238   −0.6898%
+
+on the container with clang 19, the same bytes out. `k_ten_holds` is
+10,920,518 now. `ten_blocks` and `ten_frees` in `bench/cost_golden_run.txt`
+read 55 -> 6; no other counter in the twelve veins or the lazy tier moves,
+and widebench and scanbench, which tenure at one depth with nothing outside
+it, still read one block each.
+
+### What a program that kept its own blocks would lose
+
+A beat whose result is not heap frees its block at the pop. With the sharing,
+its bytes sit in the outer block until the outer depth pops — a few kilobytes
+of garbage a lap in a block that would otherwise have been mapped and
+unmapped a lap. The licence check on the outer depth's bytes bounds it the
+way `K_TEN_CAP` bounds any depth, and the outer depth's own asks answer yes
+for those bytes exactly as they did when the block was handed up whole.
+
+The fixture `an_inner_beat_opens_its_tenure_in_the_block_outside` runs the
+repaired-node fixture's inner loop under five laps of an outer one and pins
+`ten_blocks=3`: the laps tenure 363,552 bytes over 7,336 requests, a 256 KiB
+block fills every two laps and change, and the third opens for the last
+sixteen bytes of the run. The runtime before it read 5, one a lap and each
+five-sixths empty, watched red with every other counter identical. The
+ratchet row `ten_open` makes every inner beat open its own block again and
+asks the run program's counters — the first row that gate has had since
+runbench joined on 2026-09-06.

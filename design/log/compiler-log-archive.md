@@ -49820,3 +49820,31 @@ recorded position list would halve the remaining scan. Not attempted here.
 Nobody has priced either at the instruction level.
 
 ---
+
+## 2026-09-06 (later) — CI'S COMPILE ROW IS 373 ABOVE THE CONTAINER'S PROJECTION
+
+**DONE.** The entry above projected `compile_instructions` at 41,460,229, from a
+container A/B that read 41,881,485 -> 41,879,916 twice over. CI counted
+**41,460,602**, so its own delta from 41,461,798 is 1,196 rather than 1,569.
+CI's sitting is the record and the golden holds 41,460,602;
+`docs/compiler.html`'s `data-golden` follows it. **The correction is to that
+one line of the entry above: `compile_instructions` falls 41,461,798 ->
+41,460,602, by 1,196.** The direction and the reason are unchanged — this row
+moves because `src/runtime.c` is `include_str!`'d into the compiler.
+
+**Everything else in that entry landed to the digit.** All thirteen work rows
+and all thirteen `.text` rows came back from CI byte-identical to the
+projection, including readbench 45,883,331 and scanbench 774,357,155. Nine of
+the thirteen instruction deltas were zero, which is why: only the four
+benchmarks that call split could move, and their deltas were measured on the
+container against a binary built the same way.
+
+**Why this row is the one that misses.** Its own header says so: cargo builds
+are not bit-reproducible, and a binary whose data and bss differ starts the
+heap at a different break, which moves how much work malloc does to service an
+identical request sequence. 373 instructions is that, and it is a fifth of the
+5,124 the header records for a change of chip. The runtime rows do not have
+this exposure because they are counted on programs the compiler emitted rather
+than on the compiler itself.
+
+---
