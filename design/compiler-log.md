@@ -3415,4 +3415,13 @@ a fall of 19,440 with `compile_allocs` and `compile_peak_bytes` byte-identical:
 the layout row, moved by the emitter's two new arms and the beat's walk. The
 first round was red on rustfmt alone; the second on the three veins above.
 
+The emitted counters the trend gate reads move with the srem/sdiv arms: each
+of the six sites trades one call line for two compares, two branches and a
+phi, so `emitted_branches` 814 -> 820, `emitted_lines` 9,215 -> 9,237,
+`emitted_other_branches` 12,623 -> 12,671, `emitted_other_lines`
+132,436 -> 132,622, while `emitted_calls` 1,254 -> 1,248 and
+`emitted_other_calls` 20,699 -> 20,661. Lines the compiler writes that the
+processor runs as one instruction each; the work rows above are what they
+cost.
+
 **welfare 57.03 -> 57.25**, all of it the run term, held with `--set`.
