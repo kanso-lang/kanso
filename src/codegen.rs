@@ -5350,6 +5350,21 @@ impl<'a> Backend<'a> {
         f.line(&format!(
             "{t} = phi %KValue [ {fast_value}, %{fast_from} ], [ {sv}, %{slow_from} ]"
         ));
+        // This phi carried no set until 2026-09-07, so every reader of it took
+        // the default, which is TOP, which contains THUNK -- and an `if` over a
+        // comparison then emitted `k_force_fast` on a value that is a boolean
+        // by construction. Both arms are known: the fast one is the select or
+        // the insertvalue written just above, and the slow one is `k_cmp`,
+        // which answers `k_bool` or the failure it was handed, or `k_add` and
+        // its two siblings, which answer an int, a float or that same failure.
+        // None of the six can answer a thunk.
+        f.record(
+            &t,
+            match op {
+                "+" | "-" | "*" => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR,
+                _ => (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | infer::BOOL | ERR,
+            },
+        );
         Ok(t)
     }
 

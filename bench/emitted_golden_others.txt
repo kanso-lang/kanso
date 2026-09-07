@@ -141,10 +141,10 @@ basket defines=142 calls=1273 branches=804 lines=8051
 widebench defines=200 calls=1838 branches=1100 lines=12169
 deepbench defines=116 calls=846 branches=585 lines=5938
 escapebench defines=51 calls=117 branches=122 lines=1636
-pendbench defines=131 calls=1224 branches=676 lines=7044
+pendbench defines=131 calls=1209 branches=676 lines=7029
 scanbench defines=333 calls=3292 branches=2120 lines=19788
 indexbench defines=57 calls=158 branches=139 lines=1952
-digestbench defines=195 calls=1557 branches=913 lines=10072
+digestbench defines=195 calls=1532 branches=913 lines=10047
 readbench defines=60 calls=162 branches=152 lines=2169
 livebench defines=142 calls=1271 branches=827 lines=9343
-runbench defines=591 calls=6132 branches=3468 lines=34979
+runbench defines=591 calls=6026 branches=3468 lines=34873
