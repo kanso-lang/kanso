@@ -20,67 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (twenty-first) — the blank byte walks the whole ladder, and splitting the function does not split the loop
-
-`d_jsonbench/value_for_3'2` is 353,650,950 instructions on the merged decoder,
-22.92% of jsonbench, over 2,713,950 calls. Twenty-seven of its 489
-instructions — the loop at 0x2bb0-0x2c25 — run MORE than once a call:
-125,707,350 instructions, **8.1473% of the benchmark** and 35.55% of the
-function. The loop head runs 5,276,700 times, 1.94 a call.
-
-It is the whitespace skip. bench/large.json is pretty-printed, so nearly every
-value is preceded by a blank byte, and a blank byte is what `value_for` decides
-LAST:
-
-    2bb0  cmp  $0x4,%rdi          ; is the byte `none`
-    2bb8  lea  -0x2b(%r11),%rdi   ; the jump table's range starts at 43
-    2bbc  cmp  $0x1a,%rdi
-    2bc0  ja   2bcb               ; 9, 10, 13 and 32 all miss it
-    2bcb  cmp  $0x65,%r11
-    2bd1  cmp  $0x100,%r11
-    2bde  add  $-0x30,%r11        ; number_start?
-    2be2  cmp  $0xa,%r11
-    2bef  cmp  $0x2,%rdi          ; ws?
-    2bf5  inc  %rcx               ; and only now, advance one byte
-
-The four blank bytes sit below the table's range, so each one falls through the
-table, both fallback compares and the digit test before `ws?` answers. `array_delim`
-above keeps whitespace as its last arm for a reason the entry beside it gives —
-one dispatch on one loaded byte does two jobs — and that reasoning is right for
-a three-arm ladder. This one is nine.
-
-### Two shapes, both declined
-
-**Split the run out into its own function.** `value_blank` hands a blank byte
-to a `value_run` that tests `ws?` and nothing else, and only the byte that ends
-the run enters the ladder:
-
-    fn value_run cs c p
-      blank = ws? c
-      if blank (value_run cs cs[p + 1] (p + 1)) (value_for c cs p)
-
-The loop is **byte-identical** afterwards: the same 27 instructions, the same
-125,707,350, the head still at 5,276,700. `value_run` and `value_for` are
-mutually tail-recursive, so the emitter puts them in one cluster and the two
-kanso functions share one emitted loop — the split cannot reach the machine
-code. jsonbench reads 1,542,924,905 -> 1,540,668,605, and that −0.1462% is
-`obj_key_start` and `array_step` moving under a different inlining, not the
-loop. It costs 110 emitted lines in every module, front_end_visits 17,264 ->
-17,318, and the compile veins with them.
-
-**Make the four blank bytes arms of the dispatch.** Written as `fn value_for 9`,
-`10`, `13` and `32`, they are entries in the jump table rather than a test
-after it, and the table's range opens from 43..69 to 9..123. That is **worse by
-0.5853%**: 1,542,924,905 -> 1,551,955,655, with `value_for` itself 353,650,950
--> 362,681,550. A table of 115 entries costs every byte that reaches it more
-than the ladder cost the blanks, and the blanks are 1.94 a call against the one
-real value.
-
-So the 8.15% is not reachable by rearranging the library. What is left is a
-builtin that answers "the first byte here that is not one of these four" in one
-call, the way `find2` answers the quote-or-backslash question for the string
-scan. That is a new primitive for one caller, and it is a separate question.
-
 ## 2026-09-06 (twenty-second) — the scalar validator's ascii bytes are too few to skip
 
 `k_utf8_bad_scalar` is 38,820,450 instructions on the merged decoder, 2.52% of
@@ -3968,3 +3907,57 @@ profile from here should read this first: the instruction-level hunt is spent,
 and five separate readings that looked like waste this session cost nothing or
 cost more.
 
+
+## 2026-09-07 (fifth) — the front end is flat too, and one of its leads is an artefact of the profiler's environment
+
+Three of welfare's five counters are compile-side and nothing had profiled the
+compiler this session. Callgrind on `kanso check lib/json` reads 22,655,866
+against the golden's `compile_instructions=19,315,772`; the difference is
+startup, which the golden drops by anchoring at the `kanso::main` frame.
+
+The top function carries 3.79%, and it is `hashbrown::HashMap::insert`. Summing
+every function's self cost and bucketing it — the buckets add to 100.00%, which
+is the check that the classifier double-counted nothing:
+
+    kanso's own passes        12,088,671   53.36%
+    hash tables                3,785,557   16.71%
+    malloc/free                3,255,203   14.37%
+    rust std/core              1,909,920    8.43%
+    libc mem/str                 893,767    3.94%
+    ld.so, getenv, tunables      722,748    3.19%
+
+So a third of the compile is the data structures rather than the passes. The
+part of that which looks removable is rehashing: `reserve_rehash` and the
+allocation under it come to 955,430, 4.22% of the process and about 5% of the
+counted vein, over 1,470 rehashes. Pre-sizing the maps would take most of it.
+
+It is not one change. Attributed to the owning compiler frame, the 4.22% spreads
+over twenty-odd call sites and the largest is `compile_module_loaded` at 0.68%,
+with `check_file_shadow` at 0.39% and `advisory::name_types` at 0.34% behind it.
+Twenty `with_capacity` edits are also twenty guesses at a final size, and 2026-08
+already measured six of them (the filtered collects) at 4,514 instructions.
+
+**The lead that is not there.** `getenv` reads 120,235 instructions in that
+profile, 0.53%, and the callers are `phase::watched` — which asks the
+environment for `KANSO_PHASES` on every phase entry — and `infer::infer`, which
+asks once per fixpoint round. A cached `OnceLock` is three lines and obviously
+correct, and it is worth almost nothing, because `scripts/gates/compile_instructions.sh`
+measures under `env -i PATH=/usr/bin:/bin GLIBC_TUNABLES=...`. glibc's `getenv`
+walks `environ` linearly, so its cost is a property of the shell that launched
+the profiler. Under the gate's two-variable environment the same run spends
+14,317 instructions there, 0.06%. A profile taken in a normal shell overstates
+this by a factor of eight, and anything else that reads the environment in a
+loop will read the same way.
+
+The allocator holds no surprise either: 13,081 `malloc` and 13,085 `free` at
+124 instructions an operation, which is ordinary glibc, and the 11,613 the
+`compile_allocs` golden pins is that count with startup removed.
+
+What a compile-side win is worth, for whoever picks this up: `compile_instructions`
+sits at r = 2.9284 against its baseline, saturating at 0.854, and it shares the
+compile-speed term's 0.32 weight with `compile_allocs`. A 3% cut moves the score
+0.06. That is the same order as several compile changes that have shipped, so it
+is not nothing, and it does say what the twenty edits would have to buy.
+
+Read beside the (fourth) entry above, the two halves of the objective now say
+the same thing. Neither side has a hot loop left in it.

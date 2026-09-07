@@ -50860,3 +50860,64 @@ reads a different glibc — so each is the golden plus the container's own A/B
 delta, measured on one host from the repo root with both binaries in place.
 Every other row here is exact. `src/runtime.c` is `include_str!`'d into the
 compiler, so the compile veins move too and CI is the record for them.
+
+## 2026-09-06 (twenty-first) — the blank byte walks the whole ladder, and splitting the function does not split the loop
+
+`d_jsonbench/value_for_3'2` is 353,650,950 instructions on the merged decoder,
+22.92% of jsonbench, over 2,713,950 calls. Twenty-seven of its 489
+instructions — the loop at 0x2bb0-0x2c25 — run MORE than once a call:
+125,707,350 instructions, **8.1473% of the benchmark** and 35.55% of the
+function. The loop head runs 5,276,700 times, 1.94 a call.
+
+It is the whitespace skip. bench/large.json is pretty-printed, so nearly every
+value is preceded by a blank byte, and a blank byte is what `value_for` decides
+LAST:
+
+    2bb0  cmp  $0x4,%rdi          ; is the byte `none`
+    2bb8  lea  -0x2b(%r11),%rdi   ; the jump table's range starts at 43
+    2bbc  cmp  $0x1a,%rdi
+    2bc0  ja   2bcb               ; 9, 10, 13 and 32 all miss it
+    2bcb  cmp  $0x65,%r11
+    2bd1  cmp  $0x100,%r11
+    2bde  add  $-0x30,%r11        ; number_start?
+    2be2  cmp  $0xa,%r11
+    2bef  cmp  $0x2,%rdi          ; ws?
+    2bf5  inc  %rcx               ; and only now, advance one byte
+
+The four blank bytes sit below the table's range, so each one falls through the
+table, both fallback compares and the digit test before `ws?` answers. `array_delim`
+above keeps whitespace as its last arm for a reason the entry beside it gives —
+one dispatch on one loaded byte does two jobs — and that reasoning is right for
+a three-arm ladder. This one is nine.
+
+### Two shapes, both declined
+
+**Split the run out into its own function.** `value_blank` hands a blank byte
+to a `value_run` that tests `ws?` and nothing else, and only the byte that ends
+the run enters the ladder:
+
+    fn value_run cs c p
+      blank = ws? c
+      if blank (value_run cs cs[p + 1] (p + 1)) (value_for c cs p)
+
+The loop is **byte-identical** afterwards: the same 27 instructions, the same
+125,707,350, the head still at 5,276,700. `value_run` and `value_for` are
+mutually tail-recursive, so the emitter puts them in one cluster and the two
+kanso functions share one emitted loop — the split cannot reach the machine
+code. jsonbench reads 1,542,924,905 -> 1,540,668,605, and that −0.1462% is
+`obj_key_start` and `array_step` moving under a different inlining, not the
+loop. It costs 110 emitted lines in every module, front_end_visits 17,264 ->
+17,318, and the compile veins with them.
+
+**Make the four blank bytes arms of the dispatch.** Written as `fn value_for 9`,
+`10`, `13` and `32`, they are entries in the jump table rather than a test
+after it, and the table's range opens from 43..69 to 9..123. That is **worse by
+0.5853%**: 1,542,924,905 -> 1,551,955,655, with `value_for` itself 353,650,950
+-> 362,681,550. A table of 115 entries costs every byte that reaches it more
+than the ladder cost the blanks, and the blanks are 1.94 a call against the one
+real value.
+
+So the 8.15% is not reachable by rearranging the library. What is left is a
+builtin that answers "the first byte here that is not one of these four" in one
+call, the way `find2` answers the quote-or-backslash question for the string
+scan. That is a new primitive for one caller, and it is a separate question.
