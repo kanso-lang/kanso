@@ -3362,6 +3362,17 @@ The emitted code loses the bracket's calls: the decoder 1,251 -> 1,248, runbench
 appends in place lost a bracket it never counted through — and `.text` falls
 by 32 to 96 bytes on six programs here. `compile_instructions` is CI's.
 
+One spec pinned a bracket this takes off: `tests/cohort.rs` read
+`beat_iters=150000` on `cohort_kept.kso`, whose growing loop appends a
+sixteen-byte literal in place into a builder. Its growth is malloc'd, so the
+rewind freed nothing, and with the bracket gone every other counter the
+fixture prints — allocs, alloc_bytes, arena_peak_bytes, held_peak_bytes,
+append_grow, bytes_malloc, bytes_freed — is byte-identical. The pin reads
+zero now, with the reason beside it, so a classifier that brackets the loop
+again is red. Four CI rounds went by with the specs job red on that one
+line before it was read: the cost-goldens job is the one this kind of
+change usually moves, and it was the only one being read.
+
 ## 2026-09-07 — THE REMAINDER AND THE QUOTIENT OF TWO INTEGERS ARE ONE INSTRUCTION EACH
 
 `%` always went through `k_mod`, whatever the inference knew about its

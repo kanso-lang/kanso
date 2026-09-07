@@ -55,7 +55,9 @@ fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
 /// trips the block threshold, and the guard keeps the region because the
 /// string is the growth. Watched red twice: guard disabled reads
 /// cohort_frees=2 (the wasted copy), license narrowed reads
-/// cohort_kept=0 (the wrap never lands).
+/// cohort_kept=0 (the wrap never lands). The beat_iters pin was watched red
+/// the other way, on 2026-09-07: the bracket came off the growing loop and
+/// the old pin of 150000 went red on CI before this one replaced it.
 #[test]
 fn a_result_heavy_cohort_is_kept_not_copied() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/cohort");
@@ -74,12 +76,18 @@ fn a_result_heavy_cohort_is_kept_not_copied() {
     // An internal verdict, asserted deliberately: for this fixture the peak is
     // the same whether a cohort fires or not, so the counters are the only
     // signal the kernels are still there — which is what makes them worth
-    // pinning, and what makes them wrong to read as a cost. The loop's own
-    // beat bracket reclaims the per-iteration garbage, so no cohort has
-    // anything left to free; the firing-cohort kernel is pinned by the
-    // bound-pipe test above. Measured: arena and held peaks are byte-equal
-    // with and without the free.
+    // pinning, and what makes them wrong to read as a cost. The firing-cohort
+    // kernel is pinned by the bound-pipe test above. Measured: arena and held
+    // peaks are byte-equal with and without the free.
+    //
+    // The growing loop is not a beat. Until 2026-09-07 it was bracketed and
+    // read beat_iters=150000; it appends in place into a builder whose growth
+    // is malloc'd, so nothing of its lands in the arena and a rewind freed
+    // nothing. The classifier says so now, and every other counter here —
+    // allocs, alloc_bytes, arena_peak_bytes, held_peak_bytes, append_grow,
+    // bytes_malloc, bytes_freed — is byte-identical either way. The pin stays
+    // at zero so that a classifier which starts bracketing it again is red.
     assert!(stderr.contains("cohort_frees=0"), "free count moved: {stderr}");
-    assert!(stderr.contains("beat_iters=150000"), "the loop lost its bracket: {stderr}");
+    assert!(stderr.contains("beat_iters=0"), "the loop is bracketed again: {stderr}");
     assert!(output.status.success());
 }
