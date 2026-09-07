@@ -1209,10 +1209,10 @@ fn expr_allocates(
                 // unique; a slice under the append is the emitter's fused
                 // copy, so only what the slice itself reads is asked about
                 let arg = match &args[1] {
-                    Expr::App { head: h, args: inner, .. }
-                        if matches!(h.as_ref(), Expr::Ident(n, _) if bare_builtin(n) == "slice") =>
-                    {
-                        inner.iter().any(|a| expr_allocates(a, fn_names, allocating, seed_pass, site))
+                    Expr::App { head: h, args: inner, .. } if matches!(h.as_ref(), Expr::Ident(n, _) if bare_builtin(n) == "slice") => {
+                        inner
+                            .iter()
+                            .any(|a| expr_allocates(a, fn_names, allocating, seed_pass, site))
                     }
                     other => expr_allocates(other, fn_names, allocating, seed_pass, site),
                 };
@@ -1248,9 +1248,9 @@ fn expr_allocates(
         Expr::Guard { cond, early, rest, .. } => {
             expr_allocates(cond, fn_names, allocating, seed_pass, site)
                 || expr_allocates(early, fn_names, allocating, seed_pass, site)
-                || rest
-                    .iter()
-                    .any(|s| expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass, site))
+                || rest.iter().any(|s| {
+                    expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass, site)
+                })
         }
         Expr::Seq(a, b, _) => {
             expr_allocates(a, fn_names, allocating, seed_pass, site)
@@ -2151,12 +2151,8 @@ mod tests {
         let g = |n: &str| (n.to_string(), 2);
         let four = vec![(g("a"), g("b")), (g("b"), g("c")), (g("c"), g("d")), (g("d"), g("a"))];
         assert_eq!(back_edges(&four), vec![(g("d"), g("a"))]);
-        let figure_eight = vec![
-            (g("a"), g("b")),
-            (g("b"), g("a")),
-            (g("a"), g("c")),
-            (g("c"), g("a")),
-        ];
+        let figure_eight =
+            vec![(g("a"), g("b")), (g("b"), g("a")), (g("a"), g("c")), (g("c"), g("a"))];
         assert_eq!(back_edges(&figure_eight), vec![(g("b"), g("a")), (g("c"), g("a"))]);
     }
 
