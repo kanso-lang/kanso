@@ -1,0 +1,25 @@
+import "std/text"
+
+# `s[i]` hands back one character, and the count of one character is one by
+# construction, so the index writes the count memo that `length` would
+# otherwise scan for. Until 2026-09-07 every multi-byte character handed out
+# was scanned once by `length s[i]` -- str_scans counted one per non-ascii
+# position of the subject, 2,003 of the 4,000 here. Now it counts the
+# subject's own scan, the doublings that built it, and the ascii cache's
+# first sight of each of its three ascii bytes.
+fn walk s i n acc
+  if (i > n) acc (walk s (i + 1) n (acc + length s[i]))
+
+fn doubled s n
+  wider s n (length s < n)
+
+fn wider s _ false
+  s
+
+fn wider s n true
+  doubled (text/join [s s] "") n
+
+fn subject n
+  text/slice (doubled "aé😀b€z" n) 1 n
+
+pub play = print "{walk (subject 4000) 1 4000 0}"

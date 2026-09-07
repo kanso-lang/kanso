@@ -14,8 +14,15 @@
 # k_b_append_mut_int twin arriving through the preamble the emitter writes for
 # every program, not through any library. (A dated note here is at risk until
 # the regen stops stripping them; the log entry carries the same figures.)
-recursion lines=1186 calls=43 branches=75 defines=40 rounds=4 visits=45
-dispatch lines=1178 calls=46 branches=74 defines=40 rounds=2 visits=13
-guards lines=1175 calls=44 branches=75 defines=40 rounds=2 visits=25
-records lines=1227 calls=49 branches=78 defines=40 rounds=2 visits=20
-build_block lines=1152 calls=38 branches=70 defines=39 rounds=2 visits=12
+#
+# 2026-09-07 (the length twin reads a string's count memo): all five samples
+# move by the same +15 lines and +2 branches; calls, defines, rounds and
+# visits hold. The twin k_b_length_fast gained a string arm and a count arm,
+# and it sits in the preamble every program carries, so five samples that
+# import nothing move by exactly its definition. Held as the price of runbench
+# falling 0.3591% on the container; the log entry carries the figures.
+recursion lines=1201 calls=43 branches=77 defines=40 rounds=4 visits=45
+dispatch lines=1193 calls=46 branches=76 defines=40 rounds=2 visits=13
+guards lines=1190 calls=44 branches=77 defines=40 rounds=2 visits=25
+records lines=1242 calls=49 branches=80 defines=40 rounds=2 visits=20
+build_block lines=1167 calls=38 branches=72 defines=39 rounds=2 visits=12
