@@ -4174,9 +4174,14 @@ What survives is four rows and they are all the encoder:
 it. That is where the wide fold's cost is. Removing a tag test from a function
 that calls itself through another changes what LLVM can prove across the cycle,
 and the last row says some of what it stops proving is that a value is already
-forced. Whether the narrow rule avoids this by luck or by construction is not
-answered here — the narrow rule touches 27 sites and none of them is in that
-pair.
+forced. The narrow rule does not go near it, and that is checked rather
+than assumed: an `eprintln` on the fold, keyed on an environment variable and
+run over `kanso build bench/runbench --release`, names all 27 sites. Thirteen
+are in regexp, nine in the json decoder (`value_for`, `obj_key_start`,
+`skip_ws`, `scan`, `obj_open`, `obj_delim`, `array_open`, `array_delim`,
+`value_blank`), two in list, and none in `encode_onto` or `entry_onto`. So the
+narrow rule avoids the recursive pair by not reaching it, and whether it would
+survive reaching it is still unknown.
 
 The first attempt at this probe hand-linked the two `.ll` files against the
 newest cached runtime object and both binaries died with `bytes takes a string`
