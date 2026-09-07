@@ -50107,3 +50107,78 @@ skeleton.
 ---
 
 ---
+
+## 2026-09-06 (ninth) — str_char's 42 instructions a byte, and why nothing hoists them
+
+`d_jsonbench/str_char_4` is 165,240,450 instructions, 9.51% of jsonbench. It is
+entered 265,950 times — once per escaped string per iteration, 1,773 × 150 —
+and everything inside is the walk of that string's tail.
+
+**What the input is.** `bench/large.json` holds 10,475 string literals of
+77,732 bytes; 1,773 of them contain a backslash, and 26,019 bytes lie at or
+after each one's first backslash. That tail is what `string_at` hands to
+`str_chars`, and it is dense: 4,562 escapes and 6,335 clean runs between them
+averaging 2.67 bytes, 2,802 of those runs empty because two escapes are
+adjacent. The 2026-09-01 entry declined the escaped-tail run-scan at +1.16%
+without knowing this; the census is why it lost, and it retires the idea rather
+than leaving it to be tried again. There is nothing to scan.
+
+**Where the 42 go.** Joined instruction by instruction against the callgrind
+profile, the literal-byte path is 12 in the indexed load (two bounds tests, the
+input string's `len` and `data`, and the tag round trip through the 0x100
+sentinel), 6 in the three arm compares, and 24 in the inlined
+`k_b_append_mut_byte`: the accumulator's tag, the `k_stats_on` read, `cap` and
+its absolute value in three instructions, `len`, `data`, the frontier word at
+`data - 8`, then the store and two length writes. The escape path is 49 —
+the same, plus a jump table and one of four 23-instruction arms.
+
+**The ceiling.** Every guard in the byte arm was deleted and the program
+measured, which is not shippable and answers the only question worth asking:
+
+    jsonbench   1,737,413,813 → 1,698,791,213   −38,622,600   −2.223%
+
+Twelve instructions an append across 3,218,550 appends. That is the whole of
+what the guard set can ever be worth.
+
+**Three attempts on the reloads, none of which moved a byte.** The header
+loads repeat every iteration because the byte store may alias them.
+
+1. `!alias.scope` on the store and the frontier word, `!noalias` on
+   `k_stats_on` and the three header loads — a true claim: a bytes buffer's
+   data is a separate allocation from the KBytes that names it. Byte-identical
+   machine code.
+2. The reason turned out to be that there is **no loop**. The emitter writes
+   tail recursion as `musttail call tailcc`, and TailCallElim is forbidden to
+   touch a `musttail` call — except for a SELF call, which it does convert:
+   `d_list/fold_go_3`, `d_list/next_1` and `d_jsonbench/skip_ws_2` all carry a
+   `tailrecurse` block with a back edge after `opt -O3`. A MUTUAL cycle gets
+   nothing, and `str_char_4` ↔ `str_chars_3` ↔ `str_escape_4` is mutual. So are
+   jsonbench's four other most expensive functions. The loop in the machine
+   code is the backend's jump past the prologue, and no IR pass ever saw it.
+3. `alwaysinline` on the two forwarders collapses the cycle: `str_char_4` then
+   carries `tailrecurse` and a real back edge. It is worth −950,250, −0.055%.
+   With the metadata of (1) added on top, the count is identical to the digit —
+   1,736,463,563 either way. A loop was necessary and is not sufficient: the
+   loop body still contains the calls the fast arms fall back to
+   (`k_b_append_mut`, `k_b_at`, `k_b_utf8`), and LICM hoists to a preheader,
+   which needs the load invariant over every path rather than the hot one.
+
+**And the musttail is right.** Rewriting all 125 of them as plain
+`tail call tailcc` — which would let TailCallElim at the self-recursive ones
+freely — costs 1,737,413,813 → 1,854,484,765, +6.74%, output byte-identical.
+LLVM's answer without the guarantee is a real frame.
+
+**What this corrects.** `call_twin`'s comment in src/codegen.rs says its ten
+callable tests "are loop-invariant and LICM can hoist them out of the loop
+TailCallElim makes of the recursion". That holds for a self-recursive fold and
+not for a mutual cycle, and the 2026-09-05 (fourth) entry attributed the
+byte-identical `!invariant.load` result to dereferenceability when the simpler
+reading is available for any mutual caller: LICM had no loop to work in.
+
+**Closed.** The remaining safe money in `str_char` is the three instructions
+that take `|cap|`, 9,655,650 or 0.56% of jsonbench, and it costs a change to
+how KBytes records its allocation regime. Not taken.
+
+---
+
+---
