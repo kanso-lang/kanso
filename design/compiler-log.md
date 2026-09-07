@@ -20,43 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (fourth) — k_b_chars IS 504 INSTRUCTIONS; k_b_at IS 44.51% OF indexbench
-
-**CLOSED and ATTRIBUTED.** The entry above left `k_b_chars` and `k_b_at` open
-as neighbours of `k_b_split` with the same double-walk shape, and said neither
-had ever been priced. Searched first: `k_b_chars` and `k_b_at` appear in
-neither `design/compiler-log.md` nor `log/compiler-log-archive.md` at the
-function level; `k_b_at` is the function kanso#1172 and kanso#1173 gave the
-seek cursor, and those entries name the cursor rather than the function's
-share.
-
-**`k_b_chars` is 504 instructions in the whole corpus.** It is reached by one
-benchmark, scanbench, on one call. Its double walk — once to count the
-codepoints and once to cut them — is the shape `k_b_split` had, and removing it
-would be worth 0.00% of anything the objective weighs. CLOSED by measurement
-without building.
-
-**`k_b_at` is the one worth a number.**
-
-    benchmark     calls      Ir        a call   share
-    indexbench   20,000   2,088,089    104.4   44.51%
-    basket       12,000   2,553,876    212.8    7.19%
-
-They are two different paths through one function. indexbench's is the string
-index: 10,000 of its 20,000 calls reach `__memcpy_avx_unaligned_erms`, which is
-the fresh one-codepoint string each index returns. basket's is the map index:
-12,000 calls to `k_map_sorted` and 20,467 to `__memcmp_avx2_movbe`, 1.7 key
-comparisons a lookup over a small sorted array.
-
-**Recorded as size, not as a plan.** indexbench is 4,690,952 instructions in
-total, the smallest row in the corpus, so all of `k_b_at` there is 2.09 million
-against the 41.6 million the entry above banked on readbench. `index_instructions`
-is also one of the granted baselines — it entered the objective at its
-dimension's standing — which is the standing question in #319. Whoever takes
-this should read that entry in `design/pending-gavels.md` first.
-
----
-
 ## 2026-09-06 (fifth) — obj_key_start IS 197 INSTRUCTIONS A CALL, AND 170 OF THEM RUN EVERY TIME
 
 **DONE.** Attribution only — no code changes. `d_jsonbench/obj_key_start_4'2`
@@ -3372,3 +3335,57 @@ instructions because two of them index by depth from a global base, and a
 per-depth record holding the carry flag, the registry summary and the block
 head would make them one load each. `k_beat_rewind` reads two of the same
 fields, so the record would pay twice.
+
+---
+
+## 2026-09-07 — A PUSH OFF THE FRONTIER WALKED THE CHAIN TWICE TO PLACE ITS HEADER
+
+`k_b_push_into_proven` on runbench: 362,602 calls, 43,992,462 instructions
+self, 121 a call, and 300,063 of the calls grew. The decoder opens an array
+with the empty literal, whose buffer holds one slot, and the second push
+outgrows it: 214,000 growths a run from a one-slot buffer, 291,742 of the
+growths arriving from the in-place push, which had already asked the
+frontier question and found the answer no. Each growth then asked
+`k_outlives_beat` whether the header predates the beat, and that walked the
+block chain twice -- 550,142 loop iterations for 276,218 asks -- to learn
+that a header born a few bytes below the bump pointer is in the head block.
+After it, glibc's memcpy was called to move the one element, twenty-five
+instructions to move sixteen bytes, and the frame around all of it was sized
+by the refusal's 128-byte message buffer.
+
+### Four small things, one push
+
+- `k_outlives_beat` answers from the head block without a walk, the test
+  `k_born_this_beat` already makes: a header there predates the beat exactly
+  when the innermost mark sits in the same block above it. The walks remain
+  for a header anywhere else.
+- The growth moves into `k_b_push_grow`, which the in-place push calls
+  directly once its own frontier test has failed; the general push reaches
+  it the same way after its own. Neither re-asks what the other answered.
+- The refusal, "push takes a list and a value", is out of line and cold, so
+  its buffer no longer sizes the frontier arm's frame.
+- A list of four elements or fewer is copied by a loop, the split `k_rec`
+  made on 2026-09-05; so is the list literal's payload in `k_mklist`, 316,478
+  calls a run of which the empty literal is most, and a closure's captures
+  in `k_closure`, 243,978. Thirteen to sixteen instructions each for memcpy
+  to learn it had nothing, or one thing, to move.
+
+    runbench   2,692,921,601 -> 2,674,319,744   −18,601,857   −0.6908%
+
+on the container with clang 19, the same bytes out. Against main, with the
+tenure-block and pop entries above it: 2,736,140,571 -> 2,674,319,744,
+−2.2594%. No counter in the twelve veins or the lazy tier moves;
+`all_counters.sh` agrees with every golden. The ratchet row `push_walk` sends
+every header back through the two walks and asks the work vein, the only
+witness a walk that reaches the same answer leaves.
+
+### The one that lost
+
+`k_b_at` builds a one-character string 345,000 times a run for the
+multi-byte half of its calls, two to four bytes through `k_str_n`'s memcpy
+at seventeen instructions a call. A byte loop in its place, with the count
+memo written directly: `k_b_at` 76,518,176 -> 83,188,192, +6,670,016,
+against the 5,865,000 the memcpy calls had cost. The loop's bound is a
+variable where the copies above have a constant, and a variable-count byte
+loop is dearer than the call it replaced. Reverted before the sweep; the
+k_b_at attribution in the length entry stands as written.

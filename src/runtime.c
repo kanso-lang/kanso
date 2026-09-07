@@ -5644,9 +5644,20 @@ static KValue* k_buf_perm(long long cap) {
 
 /* Does this header predate the beat it is being appended in? Then it is the
    loop's accumulator, not one of its transients. */
-static int k_outlives_beat(const void* p) {
+static inline int k_outlives_beat(const void* p) {
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return 0;
     KMark* inner = &k_beat_stack[k_beat_depth - 1];
+    /* The head block answers without a walk, as k_born_this_beat's does: a
+       header there is in the live chain, and it predates the beat exactly
+       when the mark sits in the same block above it. The decoder's arrays
+       outgrow their literal's one slot on the second push, 214,000 times a
+       run, and every one walked the chain twice to learn the header was born
+       a few bytes below the bump pointer. */
+    if (k_blocks) {
+        const char* q = (const char*)p;
+        if (q >= (const char*)(k_blocks + 1) && q < k_arena)
+            return k_blocks == inner->block && q < (const char*)inner->ptr;
+    }
     return k_survives(p, NULL) && k_survives(p, inner);
 }
 
@@ -5710,7 +5721,14 @@ static KValue k_list_own(KValue* items, long long n) {
 
 static KValue k_mklist(long long n, KValue* items) {
     KValue* buf = k_buf(n ? n : 1);
-    memcpy(buf, items, sizeof(KValue) * n);
+    /* The empty literal is the common one -- the decoder opens 272,000 of
+       them a run -- and glibc's memcpy costs thirteen instructions to learn
+       it has nothing to move. The same split k_rec makes. */
+    if (n <= 4) {
+        for (long long i = 0; i < n; i++) buf[i] = items[i];
+    } else {
+        memcpy(buf, items, sizeof(KValue) * n);
+    }
     return k_list_own(buf, n);
 }
 
@@ -5721,7 +5739,11 @@ KValue k_list_lit(long long n, KValue* items) {
 KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
     KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
-    memcpy(env, caps, sizeof(KValue) * ncaps);
+    if (ncaps <= 4) {
+        for (long long i = 0; i < ncaps; i++) env[i] = caps[i];
+    } else {
+        memcpy(env, caps, sizeof(KValue) * ncaps);
+    }
     c->fn = fn; c->env = env; c->ncaps = ncaps; c->arity = arity;
     KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
 }
@@ -6852,14 +6874,20 @@ static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
     return k_b_push_into_proven(lv, item, mutate, 0);
 }
 
+/* The refusal, out of line: its 128-byte message buffer sized the frame of
+   every push that took the frontier slot. */
+__attribute__((noreturn, noinline, cold)) static void k_die_push_takes(KValue lv) {
+    const char* hint = k_lazy_hint(lv);
+    char said[128];
+    snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
+    k_die(said);
+}
+
+static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate);
+
 static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int proven) {
     if (!k_not_failure(lv)) return lv;
-    if (lv.tag != K_LIST) {
-        const char* hint = k_lazy_hint(lv);
-        char said[128];
-        snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
-        k_die(said);
-    }
+    if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
     if (mutate && !proven && !k_born_this_beat(l)) mutate = 0;
     KBuf* buf = k_buf_of(l->items);
@@ -6876,6 +6904,14 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
         out->items = l->items;
         KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
     }
+    return k_b_push_grow(lv, l, item, mutate);
+}
+
+/* A push that is not on its buffer's frontier: new storage, the elements
+   copied over, the item after them. Reached from the general push once the
+   frontier test has failed, and from the in-place push directly, which has
+   already asked the same question and does not ask it twice. */
+static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
     long long cap = 4;
     while (cap < (l->len + 1)) cap <<= 1;
     cap <<= 1;
@@ -6885,7 +6921,14 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
        exactly what should free it. */
     int perm = mutate && k_outlives_beat(l);
     KValue* items = perm ? k_buf_perm(cap) : k_buf(cap);
-    memcpy(items, l->items, sizeof(KValue) * l->len);
+    /* A list outgrows its literal's one slot far more often than it outgrows
+       anything larger, and glibc's memcpy costs twenty-five instructions to
+       move sixteen bytes. The same split k_rec makes. */
+    if (l->len <= 4) {
+        for (long long i = 0; i < l->len; i++) items[i] = l->items[i];
+    } else {
+        memcpy(items, l->items, sizeof(KValue) * l->len);
+    }
     items[l->len] = item;
     k_buf_of(items)->used = l->len + 1;
     if (mutate) {
@@ -6933,12 +6976,7 @@ KValue k_b_push(KValue lv, KValue item) { return k_b_push_into(lv, item, 0); }
    change. They cost nothing when nobody is counting. */
 KValue k_b_push_mut(KValue lv, KValue item) {
     if (!k_not_failure(lv)) return lv;
-    if (lv.tag != K_LIST) {
-        const char* hint = k_lazy_hint(lv);
-        char said[128];
-        snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
-        k_die(said);
-    }
+    if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {
@@ -6952,7 +6990,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
         return lv;
     }
     if (__builtin_expect(k_stats_on > 0, 0)) k_stat_push_mut_slow++;
-    return k_b_push_into_proven(lv, item, 1, 1);
+    return k_b_push_grow(lv, l, item, 1);
 }
 
 /* A lazy sequence refused by a structural operation: the reader is one call

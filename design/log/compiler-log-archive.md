@@ -49913,3 +49913,40 @@ last piece the whole input, and the corpus names it in nine cases at once:
 the fix in place.
 
 ---
+
+## 2026-09-06 (fourth) — k_b_chars IS 504 INSTRUCTIONS; k_b_at IS 44.51% OF indexbench
+
+**CLOSED and ATTRIBUTED.** The entry above left `k_b_chars` and `k_b_at` open
+as neighbours of `k_b_split` with the same double-walk shape, and said neither
+had ever been priced. Searched first: `k_b_chars` and `k_b_at` appear in
+neither `design/compiler-log.md` nor `log/compiler-log-archive.md` at the
+function level; `k_b_at` is the function kanso#1172 and kanso#1173 gave the
+seek cursor, and those entries name the cursor rather than the function's
+share.
+
+**`k_b_chars` is 504 instructions in the whole corpus.** It is reached by one
+benchmark, scanbench, on one call. Its double walk — once to count the
+codepoints and once to cut them — is the shape `k_b_split` had, and removing it
+would be worth 0.00% of anything the objective weighs. CLOSED by measurement
+without building.
+
+**`k_b_at` is the one worth a number.**
+
+    benchmark     calls      Ir        a call   share
+    indexbench   20,000   2,088,089    104.4   44.51%
+    basket       12,000   2,553,876    212.8    7.19%
+
+They are two different paths through one function. indexbench's is the string
+index: 10,000 of its 20,000 calls reach `__memcpy_avx_unaligned_erms`, which is
+the fresh one-codepoint string each index returns. basket's is the map index:
+12,000 calls to `k_map_sorted` and 20,467 to `__memcmp_avx2_movbe`, 1.7 key
+comparisons a lookup over a small sorted array.
+
+**Recorded as size, not as a plan.** indexbench is 4,690,952 instructions in
+total, the smallest row in the corpus, so all of `k_b_at` there is 2.09 million
+against the 41.6 million the entry above banked on readbench. `index_instructions`
+is also one of the granted baselines — it entered the objective at its
+dimension's standing — which is the standing question in #319. Whoever takes
+this should read that entry in `design/pending-gavels.md` first.
+
+---

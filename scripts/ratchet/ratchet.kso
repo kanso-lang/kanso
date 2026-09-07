@@ -488,6 +488,14 @@ pop_fast = row
   (breaking "a_pop_with_nothing_to_do_that_does_it_anyway")
   benches
 
+push_walk = row
+  "a push off the frontier that walks the chain to place its header"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_push_off_the_frontier_that_walks_the_chain_twice")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -925,7 +933,7 @@ rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
 rows_b1e3 = text/concat rows_b1e2 [ten_walk one_char_memo length_memo]
 
-rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast]
+rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast push_walk]
 
 rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
 
