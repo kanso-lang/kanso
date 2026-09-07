@@ -3400,3 +3400,19 @@ about +0.09 on the run term.
 The emitted code trades a call line for the instruction at each site: the
 decoder 1,248 -> 1,247 calls, runbench 6,102 -> 6,096, and `.text` moves by a
 few bytes either way on six programs here. `compile_instructions` is CI's.
+
+### CI's rows, and the floor
+
+The runner counted runbench at 2,816,922,887 for the three changes together,
+654 above the container's 2,816,922,233, the offset every reading since the
+consolidated run program has shown. The other work rows that moved: oneshot
+23,182,078 -> 22,579,660, basket 36,001,898 -> 35,737,604, deepbench
+700,416,944 -> 690,817,043, escapebench 114,626,851 -> 85,754,925 (the bracket
+that came off its non-allocating loop), pendbench 620,703,023 -> 620,687,423,
+livebench 3,984,010,329 -> 3,743,207,118. `.text` falls on eight programs and
+rises 32 bytes on scanbench. `compile_instructions` 19,335,435 -> 19,315,995,
+a fall of 19,440 with `compile_allocs` and `compile_peak_bytes` byte-identical:
+the layout row, moved by the emitter's two new arms and the beat's walk. The
+first round was red on rustfmt alone; the second on the three veins above.
+
+**welfare 57.03 -> 57.25**, all of it the run term, held with `--set`.

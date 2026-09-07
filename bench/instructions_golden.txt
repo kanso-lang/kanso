@@ -380,17 +380,17 @@
 # fallback module. CI's sitting is the record.
 jsonbench 1561185741
 encodebench 4194027086
-oneshot 23182078
-basket 36001898
+oneshot 22579660
+basket 35737604
 widebench 53465568
-deepbench 700416944
-escapebench 114626851
-pendbench 620703023
+deepbench 690817043
+escapebench 85754925
+pendbench 620687423
 indexbench 4771217
 scanbench 766291267
 digestbench 70784439
 readbench 4283427
-livebench 3984010329
+livebench 3743207118
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -405,4 +405,4 @@ livebench 3984010329
 # refuses the comparison rather than the measurement. The mix percentages in
 # bench/runbench's header are the container's and move by less than this
 # difference; they are not re-derived.
-runbench 2910317901
+runbench 2816922887
