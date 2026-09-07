@@ -4066,3 +4066,84 @@ compile terms carry a full point of weight between them against run speed's
 two, and all three moved the same way. Both files corrected, and the paragraph
 in CLAUDE.md now says to run `welfare --counters` rather than trust the
 sentence — it has been wrong twice in two days.
+
+---
+
+## 2026-09-07 — a boolean is not a failure, and the wider version of that is slower
+
+**DONE.** `inline_not_failure` folds to `true` when the emitter has proved the
+value is a boolean. That is what an `if` over a comparison hands it, and it is
+27 of runbench's 1,223 tag tests. The comparison phi's recorded set drops the
+ERR it was carrying unconditionally since kanso#1302, which makes 2 of those
+27 available: `k_cmp` returns a failure only when handed one, and every other
+arm below its failure test answers `k_bool`. `k_add`, `k_sub` and `k_mul`
+are the same shape, so the arithmetic arm drops it too; `k_div` and `k_mod`
+really do mint one, for division by zero, and their arm keeps it.
+
+**An empty set is not a proof, and the first draft read it as one.**
+`group_param_set` answers 0 for a parameter the inference reached no shapes
+for, and 0 satisfies every `& mask == 0` test written about it — so
+`set & !BOOL == 0` held for a value nothing was known about. The dispatcher's
+propagate block, which hops the failing argument out of a call, then read
+`true` for every argument and fell through to `no overload of X matches these
+arguments`. `a_construction_merges_its_failures` lost its third line on native
+while the interpreter kept it, and the micro corpus caught it. The fold now
+requires a non-empty set, and the propagate block asks with a twin that never
+folds — that block is reached BECAUSE a value is outside the set recorded
+for it, so a set cannot speak there at all. Both are needed: the first is the
+general rule, the second the one site where even a true set is the wrong
+question.
+
+On clang 19.1.1 in a container, which reproduces CI's runbench row to 189
+instructions (2,400,271,247 against the golden's 2,400,271,058):
+
+    runbench   2,400,271,247 -> 2,398,991,700   -1,279,547   -0.0533%
+
+The number is the same to the instruction with the 24 unsound folds in and
+with them out, so none of them sat on a path a benchmark runs — the whole
+fall is the 27 that survive the guard.
+
+All twelve cost veins and the lazy tier are byte-identical — removing a tag
+test allocates nothing — and every one of the thirteen emitted rows falls.
+Welfare floor 66.00009186328253 -> 66.00389069855446.
+
+**REVERTED — the same fold on every ERR-free set.** ERR is outside every
+ERR-free set, not only outside BOOL, so `set & ERR == 0` is sound too and
+removes 690 of the 1,223. It is slower:
+
+    runbench   2,400,271,247 -> 2,403,954,263   +3,683,016   +0.1534%
+
+and welfare 66.00 -> 65.99, so the objective declines it. That build carried
+the empty-set defect too, so its 690 sites are an upper bound on what a sound
+version of the same idea removes — and it lost anyway, which is what makes
+the decline safe to record. The decode side does
+what #384 predicted — `obj_key_start` 138,744,540 -> 133,023,429, −4.12% — and
+the encoder more than pays it back. `d_json/word_4` stops being inlined into
+`value_for` and appears as 9,900,000 on its own; `encode_onto` rises 3,689,460
+and `entry_onto` 3,816,180. Removing the branch removes what followed from it,
+and what followed from it was `tag != 5` holding on the arm below. Measured on
+clang 18.1.3 first (+0.1169%) and the sign held on 19.
+
+**This bounds #384.** That thread put the failure-tag compares at 40,778,277
+executions across runbench, 1.50%, and read a cannot-fail analysis as having a
+ceiling near 3% once their branches went with them. The ceiling is real and it
+is not reachable by folding every one of them: the 690-site version is the
+whole of that idea and it loses. What is left of #384 is the 27 sites here and
+whatever a per-site rule could find, which is a different and much smaller
+piece of work than the thread described.
+
+**Two ratchet rows, not one.** `a_comparison_that_might_be_a_failure` takes
+the fold's mask from BOOL to nothing; `a_comparison_that_might_be_a_thunk`
+already sends the phi's whole set to TOP, which takes the fold out and puts
+`k_force_fast` back on top of that. runbench's `calls` over the two halves:
+6026 with neither, 6026 with the tighter phi alone, 6001 with the fold alone,
+5999 with both. The fold is 25 of the 27 and the phi is the other 2; nothing
+else in the emitter reads that bit, so the tighter set buys nothing by itself.
+An earlier draft of this paragraph read 20 for the second cell — it was
+measuring a mutation that left the empty-set folds standing.
+
+**OPEN — why the encoder pays.** The 690-site version's cost is an inlining
+and specialisation reshuffle, not extra work anybody wrote, and the mechanism
+above is a reading rather than a measurement. If it is right, the same fold
+behind a `noinline` on `word_4` would land the decode win without the encode
+loss, and that is checkable. Nobody has checked it.
