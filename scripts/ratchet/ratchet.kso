@@ -467,6 +467,99 @@ length_fold = row
   (breaking "a_length_twin_that_compares_three_times")
   benches
 
+# The run program's counters had no row until 2026-09-07, for the reason the
+# read_counters paragraph gives: runbench joined on 2026-09-06 and nothing
+# proved its gate could go red. This row is that proof, and its defect is the
+# tenure block sharing that took runbench's phase from forty-nine blocks to
+# one.
+ten_open = row
+  "an inner beat that opens its own tenure block beside one with room"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_child_beat_that_opens_its_own_tenure_block")
+  benchmarks
+
+pop_fast = row
+  "a beat pop with nothing to migrate that pays the migrates' frame"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_pop_with_nothing_to_do_that_does_it_anyway")
+  benches
+
+push_walk = row
+  "a push off the frontier that walks the chain to place its header"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_push_off_the_frontier_that_walks_the_chain_twice")
+  benches
+
+scalar_words = row
+  "a short utf-8 run validated a byte at a time around its wide characters"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_run_validated_a_byte_at_a_time")
+  benches
+
+slice_words = row
+  "a token slice of four to seven bytes copied through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_token_slice_copied_through_a_call")
+  benches
+
+render_words = row
+  "a rendered number's digits copied through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_rendered_number_copied_through_a_call")
+  benches
+
+map_lit_copy = row
+  "an empty map literal's no pairs copied through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_empty_map_literal_copied_through_a_call")
+  benches
+
+buf_class_loop = row
+  "a buffer's size class found by doubling up to it"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_size_class_found_by_doubling")
+  benches
+
+char_word = row
+  "an indexed wide character copied through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_wide_character_copied_through_a_call")
+  benches
+
+walk_once = row
+  "a survivor asked two walks of the chain"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_survivor_asked_two_walks_of_the_chain")
+  benches
+
+data_beside = row
+  "a string's storage walked again behind its header"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_string_s_storage_walked_again_behind_its_header")
+  benches
+
 compile_mem = row
   "a front end holding bytes the golden does not claim it holds"
   false
@@ -904,9 +997,15 @@ rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
 rows_b1e3 = text/concat rows_b1e2 [ten_walk one_char_memo length_memo]
 
-rows_b1e = text/concat rows_b1e3 [length_fold]
+rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast push_walk]
 
-rows_b = text/concat rows_b1e [compile_mem compile_mem_host]
+rows_b1f = text/concat rows_b1e [scalar_words slice_words render_words]
+
+rows_b1g = text/concat rows_b1f [map_lit_copy buf_class_loop char_word]
+
+rows_b1h = text/concat rows_b1g [walk_once data_beside]
+
+rows_b = text/concat rows_b1h [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

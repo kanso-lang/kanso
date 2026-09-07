@@ -1,0 +1,41 @@
+import "std/io"
+import "std/list"
+
+# An inner loop whose result is a heap value hands its tenure block to the
+# depth outside at every pop. Run under an outer loop, that was one 256 KiB
+# block a lap, each five-sixths empty, and every ask of k_ten_holds walked
+# all of them. Since 2026-09-07 an inner beat that has no block yet opens its
+# tenure in the outer depth's block instead, while that block has room. Five
+# laps here tenure 363,552 bytes over 7,336 requests: a block fills every two
+# laps and change, so ten_blocks reads 3 where the runtime before read 5, one
+# a lap, with every other counter identical.
+fn wide n
+  fat = (i -> "element {i} with enough bytes in it to be worth promoting")
+  list/to_list (list/map (list/take list/naturals n) fat)
+
+fn gathered n xs acc
+  stepped (n - 1) xs (push acc xs[n]!)
+
+fn stepped 0 _ acc
+  acc
+
+fn stepped n xs acc
+  io/write "" . (_ -> gathered n xs acc)
+
+fn loaded acc
+  xs = wide 400
+  stepped (length xs) xs acc
+
+fn laps 0 acc
+  acc
+
+fn laps n acc
+  loaded acc . (next -> laps (n - 1) next)
+
+fn read_back out
+  io/write "kept {length out}, first {out[1]!}, last {out[2000]!}\n"
+
+fn begin acc0
+  io/write "" . (_ -> laps 5 acc0) . read_back
+
+pub play = begin []

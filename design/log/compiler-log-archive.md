@@ -49820,3 +49820,254 @@ recorded position list would halve the remaining scan. Not attempted here.
 Nobody has priced either at the instruction level.
 
 ---
+
+## 2026-09-06 (later) — CI'S COMPILE ROW IS 373 ABOVE THE CONTAINER'S PROJECTION
+
+**DONE.** The entry above projected `compile_instructions` at 41,460,229, from a
+container A/B that read 41,881,485 -> 41,879,916 twice over. CI counted
+**41,460,602**, so its own delta from 41,461,798 is 1,196 rather than 1,569.
+CI's sitting is the record and the golden holds 41,460,602;
+`docs/compiler.html`'s `data-golden` follows it. **The correction is to that
+one line of the entry above: `compile_instructions` falls 41,461,798 ->
+41,460,602, by 1,196.** The direction and the reason are unchanged — this row
+moves because `src/runtime.c` is `include_str!`'d into the compiler.
+
+**Everything else in that entry landed to the digit.** All thirteen work rows
+and all thirteen `.text` rows came back from CI byte-identical to the
+projection, including readbench 45,883,331 and scanbench 774,357,155. Nine of
+the thirteen instruction deltas were zero, which is why: only the four
+benchmarks that call split could move, and their deltas were measured on the
+container against a binary built the same way.
+
+**Why this row is the one that misses.** Its own header says so: cargo builds
+are not bit-reproducible, and a binary whose data and bss differ starts the
+heap at a different break, which moves how much work malloc does to service an
+identical request sequence. 373 instructions is that, and it is a fifth of the
+5,124 the header records for a change of chip. The runtime rows do not have
+this exposure because they are counted on programs the compiler emitted rather
+than on the compiler itself.
+
+---
+
+## 2026-09-06 (third) — SPLIT HANDS BACK THE INPUT WHEN IT FINDS NO SEPARATOR: readbench −90.6543%, welfare 75.17
+
+**DONE.** Continues the first entry of today, whose OPEN thread asked what was
+left in readbench once the memcmp-per-position went. Searched again as the
+filing gate requires: this file's only mentions of `k_b_split` are today's two
+entries, `log/compiler-log-archive.md` has none, and neither file anywhere
+discusses handing a split's input back as its own piece.
+
+**With the scan fixed, readbench is 82.66% one memcpy.** 45,882,918
+instructions, of which `__memcpy_avx_unaligned_erms` is 37,928,498 and
+`__memchr_avx2` 7,684,400 — 400 memchr calls, two per round, one per walk, at
+19,211 instructions for 188,698 bytes. The copy is the 200 rounds copying the
+whole document to return the single piece, because the separator is not in it.
+
+**A KStr's `data` and `len` are written once at construction.** The only
+in-place write to one anywhere in the runtime is `k_str_chars` memoising the
+codepoint count into `cap`, and two holders of one string would compute that
+alike. So when the count loop finds nothing, the one piece can be the input
+value.
+
+    row            before             after            delta        pct
+    readbench      45,883,331      4,288,131      -41,595,200  -90.6543%
+    scanbench     774,357,155    776,362,839       +2,005,684   +0.2590%
+    basket         35,508,390     35,510,217           +1,827   +0.0051%
+    pendbench     605,536,009    605,537,209           +1,200   +0.0002%
+
+`read_allocs` 615 -> 415, exactly the two hundred copies; `read_alloc_bytes`
+37,942,816 -> 198,816 and `read_sh_str` 37,932,784 -> 188,784. `scan_allocs`
+falls by 4 and `scan_sh_str` by 128, which is scanbench's four splits that find
+nothing.
+
+**THE THREE ROWS THAT RISE ARE THE SHAPE OF THE TEST, and the first shape cost
+three times as much.** Written as a test on the last piece — `from == 0 ? sv :
+k_str_n(...)` — `sv` stayed live to the tail and spilled: scanbench makes
+501,500 split calls and paid **twelve instructions on every one**, 6,017,840 in
+total, for a path four of them take. Taken as an early return before the buffer
+is sized, the loop below reads exactly what it read before and the cost is four
+instructions a call. The call counts are identical across all three builds, so
+this is the test and the branch, not work.
+
+The early return also skips the second walk for that case, which is why
+readbench lands at 4,288,131 rather than the 8,138,118 the first shape read.
+That closes the first entry's OPEN thread about the two walks for the only
+input where the second one was free to remove.
+
+**The `text` vein worsens, deliberately, from 1,264,058 to 1,265,018** — 240
+bytes on each of the four binaries that call split. **`compile_instructions`
+rises 41,460,602 -> 41,461,827**, which is `src/runtime.c` growing by the
+comment and the block, `include_str!`'d into the compiler. That row is
+PROJECTED from a container A/B of 41,879,916 -> 41,881,141; the entry above
+this one records CI reading 373 off the container's last projection of it, so
+CI's sitting corrects this if it differs.
+
+**Welfare 75.16 -> 75.17, `--set` in this PR.** The objective takes the trade:
+readbench's dimension is nearly saturated, so most of a 90% fall scores
+nothing, and scanbench's 0.259% is a real loss against it. The sum still rises.
+
+**Watched red.** Returning `sv` whether or not a separator was found makes the
+last piece the whole input, and the corpus names it in nine cases at once:
+`"a,b,c"` on `","` answers `["a" "b" "a,b,c"]`, `"a/b/c"` joined back reads
+`a/b/a/b/c`. Both engines agree with the interpreter on all thirteen cases with
+the fix in place.
+
+---
+
+## 2026-09-06 (fourth) — k_b_chars IS 504 INSTRUCTIONS; k_b_at IS 44.51% OF indexbench
+
+**CLOSED and ATTRIBUTED.** The entry above left `k_b_chars` and `k_b_at` open
+as neighbours of `k_b_split` with the same double-walk shape, and said neither
+had ever been priced. Searched first: `k_b_chars` and `k_b_at` appear in
+neither `design/compiler-log.md` nor `log/compiler-log-archive.md` at the
+function level; `k_b_at` is the function kanso#1172 and kanso#1173 gave the
+seek cursor, and those entries name the cursor rather than the function's
+share.
+
+**`k_b_chars` is 504 instructions in the whole corpus.** It is reached by one
+benchmark, scanbench, on one call. Its double walk — once to count the
+codepoints and once to cut them — is the shape `k_b_split` had, and removing it
+would be worth 0.00% of anything the objective weighs. CLOSED by measurement
+without building.
+
+**`k_b_at` is the one worth a number.**
+
+    benchmark     calls      Ir        a call   share
+    indexbench   20,000   2,088,089    104.4   44.51%
+    basket       12,000   2,553,876    212.8    7.19%
+
+They are two different paths through one function. indexbench's is the string
+index: 10,000 of its 20,000 calls reach `__memcpy_avx_unaligned_erms`, which is
+the fresh one-codepoint string each index returns. basket's is the map index:
+12,000 calls to `k_map_sorted` and 20,467 to `__memcmp_avx2_movbe`, 1.7 key
+comparisons a lookup over a small sorted array.
+
+**Recorded as size, not as a plan.** indexbench is 4,690,952 instructions in
+total, the smallest row in the corpus, so all of `k_b_at` there is 2.09 million
+against the 41.6 million the entry above banked on readbench. `index_instructions`
+is also one of the granted baselines — it entered the objective at its
+dimension's standing — which is the standing question in #319. Whoever takes
+this should read that entry in `design/pending-gavels.md` first.
+
+---
+
+## 2026-09-06 (fifth) — obj_key_start IS 197 INSTRUCTIONS A CALL, AND 170 OF THEM RUN EVERY TIME
+
+**DONE.** Attribution only — no code changes. `d_jsonbench/obj_key_start_4'2`
+is 234,197,700 instructions, **13.48% of jsonbench** and the second largest
+function there after `parse_value`.
+
+Searched first: it has a function-level figure in
+`log/compiler-log-archive.md` (281,591,550, 9.71%, alongside a note that
+`value_for` is called 1,188,150 times from it) and three mentions in this file,
+the largest a fall of 77,361,900 from the dispatch relaxation. None of the four
+says what the remaining instructions are.
+
+Callgrind at instruction granularity joined to objdump over the function's 647
+instructions; 221 execute and the join accounts for all 234,197,700.
+
+**1,188,150 calls, 197.1 instructions each.** The striking thing is how little
+of it is a loop: **170 instructions execute at exactly the call count**,
+201,985,500, which is 86.25% of the function and 11.62% of jsonbench. Only four
+bands run at any other frequency, the largest 17 instructions at 788,400.
+
+By opcode, over the whole function:
+
+    mov      69,204,750  29.55%
+    cmp      38,020,800  16.23%
+    jne      16,634,100   7.10%
+    xor      13,069,650   5.58%
+    je       11,881,500   5.07%
+    test      8,317,050   3.55%
+    movzbl    8,317,050   3.55%
+    push      7,128,900   3.04%
+    pop       7,128,900   3.04%
+
+`cmp`, `jne`, `je` and `test` together are 31.95%: this is a straight-line body
+that tests and branches rather than one that computes. `movzbl` at 3.55% is the
+byte reads — 7 a call, against `parse_value`'s 22 sites at a much lower
+frequency.
+
+**Recorded as the shape, not as a repair.** A 170-instruction straight-line
+prologue-to-return body on a function entered 1,188,150 times is where a
+specialisation would pay, and the same measurement says what to compare against:
+`parse_value` is 49 instructions in its own per-call band. Whoever takes this
+should establish first whether the 170 is one arm or the sum of a dispatch over
+several, because those want different repairs.
+
+---
+
+## 2026-09-06 (sixth) — THE DECODE'S CALL CHAIN, PRICED PER CALL: str_char IS 621 INSTRUCTIONS
+
+**DONE.** Attribution only. The three functions under `obj_key_start` in
+jsonbench's profile, each of which had a share and no per-call number. Searched
+first: `str_char_4` appears once in this file and once in the archive,
+`array_step` twice and once, and none of the five gives a call count or a
+per-call cost.
+
+    function                        Ir      share      calls   a call
+    parse_value_2'2         468,780,150    26.98%  2,713,950     49*
+    obj_key_start_4'2       234,197,700    13.48%  1,188,150    197.1
+    str_char_4              165,240,450     9.51%    265,950    621.3
+    array_step_3'2          135,270,450     7.79%    410,550    329.5
+    string_at_4             101,214,154     5.83%  1,571,250     64.4
+
+    * parse_value's 49 is its per-call BAND from the 2026-09-06 entry, not its
+      whole per-call cost; the other four are the function total over its calls.
+
+**The chain is `parse_value` -> `obj_key_start` -> `string_at_4` ->
+`str_char_4`, and it narrows sharply.** `string_at_4` is entered 1,188,150
+times from `obj_key_start` — once per call, exactly — plus 317,100 from
+`parse_value` and 66,000 from the non-recursive `obj_key_start`. Of its
+1,571,250 entries only **265,950 reach `str_char_4`**, one in six.
+
+**`str_char_4` is the most expensive per call in the decode, by a factor of
+three over `obj_key_start`.** 724 instructions in the function, 213 execute,
+and the join accounts for all 165,240,450. Unlike `obj_key_start` it is a loop:
+its bands run at 3,484,500, 3,218,550, 2,800,200, 2,534,250, 684,300 and
+265,950, so 13.1 inner iterations for every call. `cmp`, `je`, `jne` and `test`
+together are 41.24% of it — a higher branch share than any other function
+measured today — and it calls `k_b_utf8` for 55,519,500 of its inclusive cost.
+
+**Recorded as where to look next, with the reason it is not obvious.** 621
+instructions a call over 265,950 calls is 9.51% of jsonbench, and one in six
+`string_at_4` entries reaching it says the ASCII path already avoids it most of
+the time. So the prize is what the non-ASCII sixth costs, and whether 13.1
+iterations a call is the string's length or a scan that restarts.
+
+---
+
+## 2026-09-06 (seventh) — THE COMPILE ROW CANNOT BE PROJECTED FROM A CONTAINER A/B, AND TODAY MISSED TWICE
+
+**DONE.** CI counted `compile_instructions=41,462,716` for the change above; the
+entry projected 41,461,827 from a container A/B of 41,879,916 -> 41,881,141.
+The golden holds CI's figure and `docs/compiler.html`'s `data-golden` follows
+it. **The correction is to that one line: `compile_instructions` rises
+41,461,798 -> 41,462,716, by 918.** The direction is unchanged — `src/runtime.c`
+grew and it is `include_str!`'d into the compiler.
+
+**Twice in a row today, and by different amounts.** The memchr change projected
+41,460,229 and CI read 41,460,602, a miss of 373. This one projected 41,461,827
+and CI read 41,462,716, a miss of 889. Both projections came from a container
+A/B measured on a pair of builds, both reproduced on the container to the
+instruction on a second reading, and both were wrong about CI by a few hundred.
+
+**So stop projecting this row.** Every other vein takes a container delta
+faithfully: today all twenty-six runtime rows and all twenty-six `.text` rows
+across two changes came back from CI byte-identical to what the container
+predicted, and nine of thirteen instruction deltas were zero by construction.
+This row does not, and its own header says why — cargo builds are not
+bit-reproducible, a binary whose data and bss differ starts the heap at a
+different break, and that moves how much work malloc does to service an
+identical request sequence. The container's delta measures ITS pair of
+binaries; CI builds a different pair.
+
+A session touching `src/runtime.c` or `lib/` should therefore push once with
+the row unchanged, let the gate fail, and copy CI's value out of the job log —
+one red round that is expected rather than two that are not. The container
+reading is still worth taking, as the check that the row moved in the direction
+the change implies; 373 and 889 are both far below the 5,124 the header records
+for a change of chip, so a projection that misses by thousands is a different
+problem and should be hunted.
+
+---

@@ -20,257 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (later) — CI'S COMPILE ROW IS 373 ABOVE THE CONTAINER'S PROJECTION
-
-**DONE.** The entry above projected `compile_instructions` at 41,460,229, from a
-container A/B that read 41,881,485 -> 41,879,916 twice over. CI counted
-**41,460,602**, so its own delta from 41,461,798 is 1,196 rather than 1,569.
-CI's sitting is the record and the golden holds 41,460,602;
-`docs/compiler.html`'s `data-golden` follows it. **The correction is to that
-one line of the entry above: `compile_instructions` falls 41,461,798 ->
-41,460,602, by 1,196.** The direction and the reason are unchanged — this row
-moves because `src/runtime.c` is `include_str!`'d into the compiler.
-
-**Everything else in that entry landed to the digit.** All thirteen work rows
-and all thirteen `.text` rows came back from CI byte-identical to the
-projection, including readbench 45,883,331 and scanbench 774,357,155. Nine of
-the thirteen instruction deltas were zero, which is why: only the four
-benchmarks that call split could move, and their deltas were measured on the
-container against a binary built the same way.
-
-**Why this row is the one that misses.** Its own header says so: cargo builds
-are not bit-reproducible, and a binary whose data and bss differ starts the
-heap at a different break, which moves how much work malloc does to service an
-identical request sequence. 373 instructions is that, and it is a fifth of the
-5,124 the header records for a change of chip. The runtime rows do not have
-this exposure because they are counted on programs the compiler emitted rather
-than on the compiler itself.
-
----
-
-## 2026-09-06 (third) — SPLIT HANDS BACK THE INPUT WHEN IT FINDS NO SEPARATOR: readbench −90.6543%, welfare 75.17
-
-**DONE.** Continues the first entry of today, whose OPEN thread asked what was
-left in readbench once the memcmp-per-position went. Searched again as the
-filing gate requires: this file's only mentions of `k_b_split` are today's two
-entries, `log/compiler-log-archive.md` has none, and neither file anywhere
-discusses handing a split's input back as its own piece.
-
-**With the scan fixed, readbench is 82.66% one memcpy.** 45,882,918
-instructions, of which `__memcpy_avx_unaligned_erms` is 37,928,498 and
-`__memchr_avx2` 7,684,400 — 400 memchr calls, two per round, one per walk, at
-19,211 instructions for 188,698 bytes. The copy is the 200 rounds copying the
-whole document to return the single piece, because the separator is not in it.
-
-**A KStr's `data` and `len` are written once at construction.** The only
-in-place write to one anywhere in the runtime is `k_str_chars` memoising the
-codepoint count into `cap`, and two holders of one string would compute that
-alike. So when the count loop finds nothing, the one piece can be the input
-value.
-
-    row            before             after            delta        pct
-    readbench      45,883,331      4,288,131      -41,595,200  -90.6543%
-    scanbench     774,357,155    776,362,839       +2,005,684   +0.2590%
-    basket         35,508,390     35,510,217           +1,827   +0.0051%
-    pendbench     605,536,009    605,537,209           +1,200   +0.0002%
-
-`read_allocs` 615 -> 415, exactly the two hundred copies; `read_alloc_bytes`
-37,942,816 -> 198,816 and `read_sh_str` 37,932,784 -> 188,784. `scan_allocs`
-falls by 4 and `scan_sh_str` by 128, which is scanbench's four splits that find
-nothing.
-
-**THE THREE ROWS THAT RISE ARE THE SHAPE OF THE TEST, and the first shape cost
-three times as much.** Written as a test on the last piece — `from == 0 ? sv :
-k_str_n(...)` — `sv` stayed live to the tail and spilled: scanbench makes
-501,500 split calls and paid **twelve instructions on every one**, 6,017,840 in
-total, for a path four of them take. Taken as an early return before the buffer
-is sized, the loop below reads exactly what it read before and the cost is four
-instructions a call. The call counts are identical across all three builds, so
-this is the test and the branch, not work.
-
-The early return also skips the second walk for that case, which is why
-readbench lands at 4,288,131 rather than the 8,138,118 the first shape read.
-That closes the first entry's OPEN thread about the two walks for the only
-input where the second one was free to remove.
-
-**The `text` vein worsens, deliberately, from 1,264,058 to 1,265,018** — 240
-bytes on each of the four binaries that call split. **`compile_instructions`
-rises 41,460,602 -> 41,461,827**, which is `src/runtime.c` growing by the
-comment and the block, `include_str!`'d into the compiler. That row is
-PROJECTED from a container A/B of 41,879,916 -> 41,881,141; the entry above
-this one records CI reading 373 off the container's last projection of it, so
-CI's sitting corrects this if it differs.
-
-**Welfare 75.16 -> 75.17, `--set` in this PR.** The objective takes the trade:
-readbench's dimension is nearly saturated, so most of a 90% fall scores
-nothing, and scanbench's 0.259% is a real loss against it. The sum still rises.
-
-**Watched red.** Returning `sv` whether or not a separator was found makes the
-last piece the whole input, and the corpus names it in nine cases at once:
-`"a,b,c"` on `","` answers `["a" "b" "a,b,c"]`, `"a/b/c"` joined back reads
-`a/b/a/b/c`. Both engines agree with the interpreter on all thirteen cases with
-the fix in place.
-
----
-
-## 2026-09-06 (fourth) — k_b_chars IS 504 INSTRUCTIONS; k_b_at IS 44.51% OF indexbench
-
-**CLOSED and ATTRIBUTED.** The entry above left `k_b_chars` and `k_b_at` open
-as neighbours of `k_b_split` with the same double-walk shape, and said neither
-had ever been priced. Searched first: `k_b_chars` and `k_b_at` appear in
-neither `design/compiler-log.md` nor `log/compiler-log-archive.md` at the
-function level; `k_b_at` is the function kanso#1172 and kanso#1173 gave the
-seek cursor, and those entries name the cursor rather than the function's
-share.
-
-**`k_b_chars` is 504 instructions in the whole corpus.** It is reached by one
-benchmark, scanbench, on one call. Its double walk — once to count the
-codepoints and once to cut them — is the shape `k_b_split` had, and removing it
-would be worth 0.00% of anything the objective weighs. CLOSED by measurement
-without building.
-
-**`k_b_at` is the one worth a number.**
-
-    benchmark     calls      Ir        a call   share
-    indexbench   20,000   2,088,089    104.4   44.51%
-    basket       12,000   2,553,876    212.8    7.19%
-
-They are two different paths through one function. indexbench's is the string
-index: 10,000 of its 20,000 calls reach `__memcpy_avx_unaligned_erms`, which is
-the fresh one-codepoint string each index returns. basket's is the map index:
-12,000 calls to `k_map_sorted` and 20,467 to `__memcmp_avx2_movbe`, 1.7 key
-comparisons a lookup over a small sorted array.
-
-**Recorded as size, not as a plan.** indexbench is 4,690,952 instructions in
-total, the smallest row in the corpus, so all of `k_b_at` there is 2.09 million
-against the 41.6 million the entry above banked on readbench. `index_instructions`
-is also one of the granted baselines — it entered the objective at its
-dimension's standing — which is the standing question in #319. Whoever takes
-this should read that entry in `design/pending-gavels.md` first.
-
----
-
-## 2026-09-06 (fifth) — obj_key_start IS 197 INSTRUCTIONS A CALL, AND 170 OF THEM RUN EVERY TIME
-
-**DONE.** Attribution only — no code changes. `d_jsonbench/obj_key_start_4'2`
-is 234,197,700 instructions, **13.48% of jsonbench** and the second largest
-function there after `parse_value`.
-
-Searched first: it has a function-level figure in
-`log/compiler-log-archive.md` (281,591,550, 9.71%, alongside a note that
-`value_for` is called 1,188,150 times from it) and three mentions in this file,
-the largest a fall of 77,361,900 from the dispatch relaxation. None of the four
-says what the remaining instructions are.
-
-Callgrind at instruction granularity joined to objdump over the function's 647
-instructions; 221 execute and the join accounts for all 234,197,700.
-
-**1,188,150 calls, 197.1 instructions each.** The striking thing is how little
-of it is a loop: **170 instructions execute at exactly the call count**,
-201,985,500, which is 86.25% of the function and 11.62% of jsonbench. Only four
-bands run at any other frequency, the largest 17 instructions at 788,400.
-
-By opcode, over the whole function:
-
-    mov      69,204,750  29.55%
-    cmp      38,020,800  16.23%
-    jne      16,634,100   7.10%
-    xor      13,069,650   5.58%
-    je       11,881,500   5.07%
-    test      8,317,050   3.55%
-    movzbl    8,317,050   3.55%
-    push      7,128,900   3.04%
-    pop       7,128,900   3.04%
-
-`cmp`, `jne`, `je` and `test` together are 31.95%: this is a straight-line body
-that tests and branches rather than one that computes. `movzbl` at 3.55% is the
-byte reads — 7 a call, against `parse_value`'s 22 sites at a much lower
-frequency.
-
-**Recorded as the shape, not as a repair.** A 170-instruction straight-line
-prologue-to-return body on a function entered 1,188,150 times is where a
-specialisation would pay, and the same measurement says what to compare against:
-`parse_value` is 49 instructions in its own per-call band. Whoever takes this
-should establish first whether the 170 is one arm or the sum of a dispatch over
-several, because those want different repairs.
-
----
-
-## 2026-09-06 (sixth) — THE DECODE'S CALL CHAIN, PRICED PER CALL: str_char IS 621 INSTRUCTIONS
-
-**DONE.** Attribution only. The three functions under `obj_key_start` in
-jsonbench's profile, each of which had a share and no per-call number. Searched
-first: `str_char_4` appears once in this file and once in the archive,
-`array_step` twice and once, and none of the five gives a call count or a
-per-call cost.
-
-    function                        Ir      share      calls   a call
-    parse_value_2'2         468,780,150    26.98%  2,713,950     49*
-    obj_key_start_4'2       234,197,700    13.48%  1,188,150    197.1
-    str_char_4              165,240,450     9.51%    265,950    621.3
-    array_step_3'2          135,270,450     7.79%    410,550    329.5
-    string_at_4             101,214,154     5.83%  1,571,250     64.4
-
-    * parse_value's 49 is its per-call BAND from the 2026-09-06 entry, not its
-      whole per-call cost; the other four are the function total over its calls.
-
-**The chain is `parse_value` -> `obj_key_start` -> `string_at_4` ->
-`str_char_4`, and it narrows sharply.** `string_at_4` is entered 1,188,150
-times from `obj_key_start` — once per call, exactly — plus 317,100 from
-`parse_value` and 66,000 from the non-recursive `obj_key_start`. Of its
-1,571,250 entries only **265,950 reach `str_char_4`**, one in six.
-
-**`str_char_4` is the most expensive per call in the decode, by a factor of
-three over `obj_key_start`.** 724 instructions in the function, 213 execute,
-and the join accounts for all 165,240,450. Unlike `obj_key_start` it is a loop:
-its bands run at 3,484,500, 3,218,550, 2,800,200, 2,534,250, 684,300 and
-265,950, so 13.1 inner iterations for every call. `cmp`, `je`, `jne` and `test`
-together are 41.24% of it — a higher branch share than any other function
-measured today — and it calls `k_b_utf8` for 55,519,500 of its inclusive cost.
-
-**Recorded as where to look next, with the reason it is not obvious.** 621
-instructions a call over 265,950 calls is 9.51% of jsonbench, and one in six
-`string_at_4` entries reaching it says the ASCII path already avoids it most of
-the time. So the prize is what the non-ASCII sixth costs, and whether 13.1
-iterations a call is the string's length or a scan that restarts.
-
----
-
-## 2026-09-06 (seventh) — THE COMPILE ROW CANNOT BE PROJECTED FROM A CONTAINER A/B, AND TODAY MISSED TWICE
-
-**DONE.** CI counted `compile_instructions=41,462,716` for the change above; the
-entry projected 41,461,827 from a container A/B of 41,879,916 -> 41,881,141.
-The golden holds CI's figure and `docs/compiler.html`'s `data-golden` follows
-it. **The correction is to that one line: `compile_instructions` rises
-41,461,798 -> 41,462,716, by 918.** The direction is unchanged — `src/runtime.c`
-grew and it is `include_str!`'d into the compiler.
-
-**Twice in a row today, and by different amounts.** The memchr change projected
-41,460,229 and CI read 41,460,602, a miss of 373. This one projected 41,461,827
-and CI read 41,462,716, a miss of 889. Both projections came from a container
-A/B measured on a pair of builds, both reproduced on the container to the
-instruction on a second reading, and both were wrong about CI by a few hundred.
-
-**So stop projecting this row.** Every other vein takes a container delta
-faithfully: today all twenty-six runtime rows and all twenty-six `.text` rows
-across two changes came back from CI byte-identical to what the container
-predicted, and nine of thirteen instruction deltas were zero by construction.
-This row does not, and its own header says why — cargo builds are not
-bit-reproducible, a binary whose data and bss differ starts the heap at a
-different break, and that moves how much work malloc does to service an
-identical request sequence. The container's delta measures ITS pair of
-binaries; CI builds a different pair.
-
-A session touching `src/runtime.c` or `lib/` should therefore push once with
-the row unchanged, let the gate fail, and copy CI's value out of the job log —
-one red round that is expected rather than two that are not. The container
-reading is still worth taking, as the check that the row moved in the direction
-the change implies; 373 and 889 are both far below the 5,124 the header records
-for a change of chip, so a projection that misses by thousands is a different
-problem and should be hunted.
-
----
-
 ## 2026-09-06 (eighth) — obj_key_start's 170 ARE EIGHTEEN STRETCHES, SO THERE IS NO ARM TO LIFT
 
 **CLOSED.** The 2026-09-06 (fifth) entry recorded that 170 of
@@ -3372,3 +3121,395 @@ touched src/runtime.c and the touched-rows check selected the row. The
 mutation now patches the emitter, `srem` to `urem`, and the sweep reads
 `print (-1 % 2147483648)` as 2147483647 on native against the oracle's -1:
 watched red on the container before this round was pushed.
+
+---
+
+## 2026-09-07 — AN INNER BEAT OPENS ITS TENURE IN THE BLOCK OUTSIDE
+
+The thread the tenure-walk entry left open. runbench's inner loop tenures
+1,600 bytes a run and ends with a heap value, so its 256 KiB block is handed
+up to the depth outside at every pop rather than freed, and the outer depth
+ended the phase holding forty-nine blocks for 78 KB. The above-mark check
+stopped the sizing walk from asking those blocks about arena pointers; the
+asks that are not arena pointers — the carry buffer's, the tenured ones, the
+hits — still walked all forty-nine, 22,125,975 instructions over 110,420 asks.
+
+### One block, not one a lap
+
+`k_ten_alloc`, asked by a beat that holds no block yet, now looks at the
+depth outside first: when that depth's head block has room for the request
+and its bytes are under the licence, the bytes are carved from it. They are
+accounted to the outer depth and freed with it, which is where a handed-up
+block's bytes went anyway; the inner beat never owns a block, so its pop has
+nothing to hand up and nothing to free. The first lap still opens a block —
+the outer depth has none until the first hand-up — and every lap after that
+lands in it.
+
+    runbench   2,736,140,571 -> 2,717,267,333   −18,873,238   −0.6898%
+
+on the container with clang 19, the same bytes out. `k_ten_holds` is
+10,920,518 now. `ten_blocks` and `ten_frees` in `bench/cost_golden_run.txt`
+read 55 -> 6; no other counter in the twelve veins or the lazy tier moves,
+and widebench and scanbench, which tenure at one depth with nothing outside
+it, still read one block each. The trend gate reads the pair as
+`run_ten_blocks` 55 -> 6, improved, and `run_ten_frees` 55 -> 6, worsened,
+because a free is a thing to want more of when the blocks are held fixed;
+here the blocks fell with them, and `run_ten_frees` lands on 6 because six
+blocks were opened and all six were freed, where fifty-five had been.
+
+### What a program that kept its own blocks would lose
+
+A beat whose result is not heap frees its block at the pop. With the sharing,
+its bytes sit in the outer block until the outer depth pops — a few kilobytes
+of garbage a lap in a block that would otherwise have been mapped and
+unmapped a lap. The licence check on the outer depth's bytes bounds it the
+way `K_TEN_CAP` bounds any depth, and the outer depth's own asks answer yes
+for those bytes exactly as they did when the block was handed up whole.
+
+The fixture `an_inner_beat_opens_its_tenure_in_the_block_outside` runs the
+repaired-node fixture's inner loop under five laps of an outer one and pins
+`ten_blocks=3`: the laps tenure 363,552 bytes over 7,336 requests, a 256 KiB
+block fills every two laps and change, and the third opens for the last
+sixteen bytes of the run. The runtime before it read 5, one a lap and each
+five-sixths empty, watched red with every other counter identical. The
+ratchet row `ten_open` makes every inner beat open its own block again and
+asks the run program's counters — the first row that gate has had since
+runbench joined on 2026-09-06.
+
+---
+
+## 2026-09-07 — A BEAT POP WITH NOTHING TO DO
+
+`k_beat_pop` on runbench: 507,685 pops, 36,026,319 instructions, 71 a pop.
+Its rewind twin got a fast path on 2026-09-05 — `k_beat_rewind` tests the
+dirty flag, the depth's registry summary and the mark's block and takes the
+arena back in four stores — and the heap-result pop kept its full frame.
+That pop deep-copies a carried result, migrates the three registries and
+hands the depth's tenure blocks up, and on runbench 507,678 of the 507,685
+carry nothing, have nothing registered and hold no tenure block: the copy
+was skipped by its flag, the three migrates each found an empty registry
+and wrote three zeros over zeros, and `k_ten_hand_up` returned at its first
+line. What every one of them paid was the frame those calls need — six
+callee-saved pushes and pops around four tests that all said no.
+
+### The four tests, then the frame
+
+The pop's work moves out of line into `k_beat_pop_slow`, the split the
+rewind made; `k_beat_pop` itself tests the result's tag, the carry flag,
+`k_reg_any[d]` and `k_ten_blocks[d]` and returns the result when all four
+are clear. `k_reg_any` is the summary the rewind already trusts: every add
+to the chunk, view and permanent registries sets its bit, every migrate or
+flush clears it, and the chunk spill count travels with the chunk bit, so a
+clear summary is a proof that the three migrates would have done nothing.
+A pop with a tenure block still hands it up, and a carried result is still
+copied, on the slow side.
+
+    runbench   2,717,267,333 -> 2,692,922,207   −24,345,126   −0.8959%
+
+on the container with clang 19, the same bytes out (md5 e8e74ccb…). The
+pop is 14,517,216 now, 28.6 an execution, and the seven that take the slow
+side are the ones with a block to hand up. No counter in the twelve veins or
+the lazy tier moves: `arena_blocks`, `beat_iters`, `evac_allocs`,
+`survive_slots`, `ten_blocks` and `ten_frees` print the same run to run, and
+`all_counters.sh` agrees with every golden. The ratchet row `pop_fast` puts
+the frame back under every pop and asks the work vein, which is the only
+witness this change has: a pop that does nothing leaves no counter behind.
+
+**OPEN.** The seven slow pops are runbench's outer laps, and each pays the
+hand-up plus the frame; nothing to take there. The four tests are 28
+instructions because two of them index by depth from a global base, and a
+per-depth record holding the carry flag, the registry summary and the block
+head would make them one load each. `k_beat_rewind` reads two of the same
+fields, so the record would pay twice.
+
+---
+
+## 2026-09-07 — A PUSH OFF THE FRONTIER WALKED THE CHAIN TWICE TO PLACE ITS HEADER
+
+`k_b_push_into_proven` on runbench: 362,602 calls, 43,992,462 instructions
+self, 121 a call, and 300,063 of the calls grew. The decoder opens an array
+with the empty literal, whose buffer holds one slot, and the second push
+outgrows it: 214,000 growths a run from a one-slot buffer, 291,742 of the
+growths arriving from the in-place push, which had already asked the
+frontier question and found the answer no. Each growth then asked
+`k_outlives_beat` whether the header predates the beat, and that walked the
+block chain twice -- 550,142 loop iterations for 276,218 asks -- to learn
+that a header born a few bytes below the bump pointer is in the head block.
+After it, glibc's memcpy was called to move the one element, twenty-five
+instructions to move sixteen bytes, and the frame around all of it was sized
+by the refusal's 128-byte message buffer.
+
+### Four small things, one push
+
+- `k_outlives_beat` answers from the head block without a walk, the test
+  `k_born_this_beat` already makes: a header there predates the beat exactly
+  when the innermost mark sits in the same block above it. The walks remain
+  for a header anywhere else.
+- The growth moves into `k_b_push_grow`, which the in-place push calls
+  directly once its own frontier test has failed; the general push reaches
+  it the same way after its own. Neither re-asks what the other answered.
+- The refusal, "push takes a list and a value", is out of line and cold, so
+  its buffer no longer sizes the frontier arm's frame.
+- A list of four elements or fewer is copied by a loop, the split `k_rec`
+  made on 2026-09-05; so is the list literal's payload in `k_mklist`, 316,478
+  calls a run of which the empty literal is most, and a closure's captures
+  in `k_closure`, 243,978. Thirteen to sixteen instructions each for memcpy
+  to learn it had nothing, or one thing, to move.
+
+    runbench   2,692,921,601 -> 2,674,319,744   −18,601,857   −0.6908%
+
+on the container with clang 19, the same bytes out. Against main, with the
+tenure-block and pop entries above it: 2,736,140,571 -> 2,674,319,744,
+−2.2594%. No counter in the twelve veins or the lazy tier moves;
+`all_counters.sh` agrees with every golden. The ratchet row `push_walk` sends
+every header back through the two walks and asks the work vein, the only
+witness a walk that reaches the same answer leaves.
+
+### The one that lost
+
+`k_b_at` builds a one-character string 345,000 times a run for the
+multi-byte half of its calls, two to four bytes through `k_str_n`'s memcpy
+at seventeen instructions a call. A byte loop in its place, with the count
+memo written directly: `k_b_at` 76,518,176 -> 83,188,192, +6,670,016,
+against the 5,865,000 the memcpy calls had cost. The loop's bound is a
+variable where the copies above have a constant, and a variable-count byte
+loop is dearer than the call it replaced. Reverted before the sweep; the
+k_b_at attribution in the length entry stands as written.
+
+---
+
+## 2026-09-07 — A SHORT UTF-8 RUN VALIDATED A BYTE AT A TIME AROUND ITS WIDE CHARACTERS
+
+`k_utf8_bad_scalar` on runbench: 134,442 calls, 25,621,497 instructions, 190
+a run. It is the arm for a run of thirty-two bytes or fewer that carries a
+byte with the high bit set -- the door's ascii predicate has already turned
+away every run that carries none -- and it walked the grammar a byte at a
+time, ascii included: 938,619 loop iterations for 232,551 wide characters,
+117,018 of them two bytes and 115,533 three. The ascii around the characters
+was 706,068 of the iterations, and each was a load, a test and a branch back.
+
+### A word at a time, and the tail as the last word
+
+The ascii arm reads eight bytes as one word, as `k_all_ascii` does. A clean
+word is eight bytes in three instructions; a word with a high bit in it says
+where, by counting trailing zeros, and the walk lands on that byte rather
+than testing its way there. Runbench's strings are short, so after the words
+came a tail of up to seven bytes and 444,609 single steps: the tail reads the
+run's last word, overlapping bytes already walked, with those bytes shifted
+out. A run under eight bytes still steps.
+
+    words   runbench   2,674,319,744 -> 2,667,323,216   −6,996,528   −0.2616%
+    tail    runbench   2,667,323,216 -> 2,665,704,368   −1,618,848   −0.0607%
+
+on the container with clang 19, the same bytes out; `k_utf8_bad_scalar` is
+17,006,121. The differential harness under `scripts/utf8_differential`, which
+extracts the arm's text from the source and runs it against an independent
+scalar decoder, passed 45,189,025 cases and 8,346,016 counts with 0
+mismatches after each step. No counter in the twelve veins or the lazy tier
+moves -- `utf8_bytes` counts bytes handed in, not steps -- and
+`all_counters.sh` agrees with every golden. The ratchet row `scalar_words`
+closes both word arms and asks the work vein.
+
+**OPEN.** What is left in the arm is the grammar itself, twenty or so
+instructions a wide character through an if-else ladder on the lead byte,
+4.6 million over the run. A 256-entry table keyed on the lead byte would
+give the width and the continuation range in one load. Not measured.
+
+---
+
+## 2026-09-07 — A TOKEN SLICE OF FOUR TO SEVEN BYTES COPIED THROUGH A CALL
+
+`k_b_utf8_slice_raw` on runbench: 861,498 calls, 57,102,905 instructions
+self and a memcpy call each, 12,893,364 inside glibc. It is `utf8` over a
+slice of bytes, the decoder's way of making a token into a string, and the
+arm is already short -- a clamp, the ascii test, the arena bump, the copy --
+so what was left was the copy: 840,807 of the slices are four to seven
+bytes, a key or a short value or a number's digits, and glibc's memcpy
+spends fifteen instructions choosing how to move five bytes.
+
+### Two overlapping words
+
+A slice of four to seven bytes is copied as two four-byte words, the second
+ending at the last byte, the shape `k_all_ascii` reads its short runs by.
+Under four bytes and eight or over go through `k_str_n` as before; the
+single-byte ascii slice still comes from the cache.
+
+    runbench   2,665,704,368 -> 2,649,866,050   −15,838,318   −0.5942%
+
+on the container with clang 19, the same bytes out; memcpy's self fell
+12,612,105 and the arm's own 3,226,213, the call's argument moves and the
+return. No counter in the twelve veins or the lazy tier moves;
+`all_counters.sh` agrees with every golden. The ratchet row `slice_words`
+sends every slice back through the call and asks the work vein.
+
+The same profile names the calls glibc still takes for a handful of bytes:
+`k_render_at` 579,291 for a number's digits into its string, `k_b_at`
+345,000 for one character (declined in the push entry above, and the
+reason holds), `k_map_lit` 273,339 for an object's pairs, `render_ryu`
+191,070 inside the float rendering. The render's is next.
+
+---
+
+## 2026-09-07 — A RENDERED NUMBER'S DIGITS COPIED THROUGH A CALL
+
+`k_render_at` on runbench: 579,981 calls, 45,299,443 instructions self and
+a memcpy call each, 8,499,478 inside glibc. A number renders its digits into
+a sixty-four-byte stack buffer and then builds the string from them through
+`k_str_n`, whose copy is glibc's memcpy: fifteen instructions to choose how
+to move a handful of digits, then the move.
+
+### Sixteen, eight, and the call for what is left
+
+The digits go over as one sixteen-byte copy, eight more past fifteen, and
+the call for anything past twenty-three -- which a rendering does not
+reach, a double's shortest round-trip form being at most twenty-four bytes
+and an integer's at most twenty. Both sides have the room: the buffer is
+sixty-four bytes, so the reads past the length are inside it, and `k_alloc`
+rounds a string's storage up to sixteen, so sixteen bytes fit a string of
+fifteen or fewer and twenty-four fit one of sixteen or more. A word loop
+bounded by the length was tried first and cost twelve a call against the
+call's fifteen; the fixed copies cost five. A one-digit number still comes
+from the ascii cache through `k_str_n`, as it did: the first cut of this
+allocated it, and the sweep said so -- `allocs`, `sh_str` and
+`perm_allocs` moved on basket, pend, scan, run and the lazy tier, the
+last one downward because the cache's own permanent cells were never made.
+
+    loop    runbench   2,649,866,050 -> 2,648,129,405    −1,736,645   −0.0655%
+    fixed   runbench   2,649,866,050 -> 2,638,957,305   −10,908,745   −0.4117%
+
+on the container with clang 19, the same bytes out; `k_render_at` is
+42,890,176. Seventeen renderings at the edges -- the largest and smallest
+doubles, a denormal, both ends of the integer range, negative zero, a
+twenty-digit whole, a repeating fraction -- print the same bytes on native
+before and after, the longest twenty-three. No counter in the twelve veins
+or the lazy tier moves; `all_counters.sh` agrees with every golden. The
+ratchet row `render_words` makes the first copy exact, which sends every
+rendering back through the call, and asks the work vein.
+
+### What the edge probe found instead
+
+The probe's first value overflowed on the oracle, and the oracle panicked:
+`render_float` in src/eval.rs asks Rust's `{:e}` for the digits and expects
+an `e` in the answer, and `inf` has none. Native renders the same value as
+`1.797693134862316e+308` -- the largest double's digits for a value that is
+not a double's -- and `inf - inf` as `2.696539702293474e+308`. Neither
+engine has an answer for an infinite or nan float, no golden prints one,
+and this log, the archive and the ledger have never mentioned the case.
+What `"{x}"` says for such an x is a language surface, so it is filed in
+design/pending-gavels.md rather than decided here; the copy above changes
+nothing about it.
+
+The profile's remaining calls for a handful of bytes: `k_b_at` 345,000 for
+one character, declined above; `k_map_lit` 273,339 for an object's pairs;
+`render_ryu` 191,070 inside the float rendering.
+
+### The map literal, and a record's marker arm
+
+The same profile named `k_map_lit`: 273,339 calls, every one the empty
+literal the decoder opens an object with, and every one copying its no
+pairs through glibc's memcpy at thirteen instructions. The split `k_rec`
+and `k_mklist` make, at two pairs: runbench 2,638,957,305 -> 2,634,857,220,
+−4,100,085, −0.1554%, the same bytes out, and the ratchet row
+`map_lit_copy` sends the literal back through the call.
+
+`k_rec` itself is 1,003,448 calls at 52, five callee-saved pushes around a
+failure scan, an arena bump and a copy of two or three fields. Moving the
+nullary-record arm -- the marker cache, 203,049 of the calls -- out of line
+to shrink the frame measured +1,827,441: the call cost the marker arm more
+than the frame cost the rest. Reverted.
+
+### The buffer's size class, answered by the trailing zeros
+
+`k_buf` is 1,431,562 calls a run on runbench, and `k_buf_class` inside it
+answered which free list a capacity belongs to by doubling from four until
+it reached the capacity: 1,255,865 rounds of a six-instruction loop, 5.6 a
+call, eleven for a capacity of 8,192 and five for the decoder's arrays at
+64. The classes are `4 << c`, so the trailing zeros of a power of two say
+the class in one instruction, and a test for a power of two says whether
+there is one. runbench 2,634,857,220 -> 2,621,939,707, −12,917,513,
+−0.4903%, the same bytes out; `k_buf` 51,214,420 -> 40,157,120, and
+`buf_reuse`, `allocs` and `alloc_bytes` print the same, so the classes
+answered are the classes that were. The ratchet row `buf_class_loop` puts
+the doubling loop back and asks the work vein.
+
+### The two-byte scan's tail, a word at a time: declined
+
+`k_b_find2_below_raw` is the escape scan's search for a quote, a backslash
+or a control byte: 1,353,330 calls on runbench, 84,989,250 instructions,
+and 1,207,350 of the calls never fill a sixteen-byte vector, so the byte
+loop after it walked 5,504,670 bytes at ten instructions each. A word at a
+time for that tail, the trick the utf-8 arm uses, with the two equalities
+and the floor folded into one mask: runbench 2,621,939,707 ->
+2,681,926,147, +59,986,440, +2.2879%, and the scan itself 84,989,250 ->
+140,449,770. A run between escapes is a few bytes and often one, and the
+mask's setup -- three splats, two xors, three subtractions and the shift
+for the tail -- costs more than the bytes it would have walked. Reverted;
+the vector loop keeps the long runs and the byte loop the short ones.
+
+
+### An indexed wide character, copied as one word
+
+`k_b_at` on a string is 690,000 calls a run on runbench, 76,518,176
+instructions self, and for the 345,000 that land on a wide character --
+two, three or four bytes -- it built the string through `k_str_n`'s memcpy,
+seventeen instructions for glibc to choose how to move three bytes. The
+push entry above declined a byte loop bounded by the width, +805,016. The
+character goes over as one four-byte word now, and both sides have the
+room: `at + w <= len`, so a four-byte read from `at` reaches the string's
+own terminator at worst, and the write lands inside storage `k_alloc`
+rounded up to sixteen. runbench 2,621,939,707 -> 2,612,624,701,
+−9,315,066, −0.3553%, the same bytes out; `k_b_at` 73,068,170, glibc's
+memcpy 5,977,361 lighter. No counter in the twelve veins or the lazy tier
+moves; the ratchet row `char_word` sends every wide character back
+through the call.
+
+### A survivor asked two walks of the chain
+
+The sizing walk that decides whether a trip's result is worth copying
+asks of every node whether the arena keeps it and, when it does not,
+whether a tenure block holds it. `k_survives` walked the block chain to
+answer the first, and `k_ten_holds` walked it again through
+`k_above_mark` to rule a pointer above the mark out before it read the
+tenure blocks: 661,528 chain steps for 333,873 asks, and a second call
+with its own frame for 323,356 of them. `k_where` walks the chain once and
+says below, above or outside, and `k_survives_x` reads the tenure blocks
+only for outside; `k_ten_holds` keeps the two-step shape for the callers
+that still want it. runbench 2,612,624,701 -> 2,606,982,659, −5,642,042,
+−0.2160%, the same bytes out; `k_ten_holds_outside` is asked 122,915
+times where `k_ten_holds` was asked 270,781.
+
+A string built by `k_str_alloc` keeps its bytes right after its header, so
+a header the walk has just found not to survive has bytes that do not
+survive either, and the K_STR arm asked the walk again of them anyway. It
+asks only of storage that lives elsewhere now -- a slice's, a builder's
+-- and the K_BYTES arm the same. runbench 2,606,982,659 -> 2,602,519,000,
+−4,463,659, −0.1712%; together −10,105,701, −0.3868%, and against main
+−4.8836%. `k_copy_size` 54,253,637 self -> 41,602,877. No counter in the
+twelve veins or the lazy tier moves. Ratchet rows `walk_once` (runbench
+2,609,054,586 with the second walk back, +6,535,586) and `data_beside`
+(2,606,982,659 with the string's bytes walked again, +4,463,659), each
+watched.
+
+Declined on the way: deciding an immediate's zero before the walk's frame,
+by an inline wrapper over `k_worth_sizing` at every call. 176,112 of the
+walk's 509,985 entries were immediates returning zero through six
+callee-saved pushes, and the wrapper measured runbench +1,777,234,
++0.0680%: the guard at seventeen call sites, most of them already guarded
+by the loops that make them, cost more than the frames it spared.
+
+### CI's sitting for the ten, and the two rows that rose
+
+CI's rows for kanso#1294 at 3ebac68e: runbench 2,736,141,165 ->
+2,602,519,654, −4.8836%, and every other work row fell with it,
+encodebench −3.18%, livebench −3.57%, jsonbench −4.09%. The text vein fell
+11,600 bytes summed over the fourteen binaries. Welfare 57.45 -> 57.80,
+held with `--set`. Two rows rose and the trend gate names them:
+`compile_instructions` landed on 19,319,117, +84 over 19,319,033, the
+runtime's bytes moving under the compiler that carries them (§48 says why
+that row moves on an edit to the compiler's own text); and `work_readbench`
+landed on 4,283,478, +45 over 4,283,433, the read program's one trip
+through the sizing walk and the beat pop paying for flags it never sets.
+Forty-five instructions on a four-million row is the price of the ten
+elsewhere, and the sum is what the objective weighs. The page gained §55
+for the campaign, which is the entry page_drift was owed at six entries
+against a budget of three.

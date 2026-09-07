@@ -1048,9 +1048,37 @@ static int k_above_mark(const void* p, KMark* m) {
     return 0;
 }
 
+/* Where a pointer stands against a mark, in one walk of the chain: below it
+   (the arena keeps it), above it (the rewind takes it), or in no block at all
+   (malloc'd, or a tenure block's). k_survives and k_above_mark each answered
+   one of those questions with a walk of their own, and the sizing walk asked
+   both of every node it sized, 330,000 times a run on runbench. */
+enum { K_WHERE_OUTSIDE = 0, K_WHERE_BELOW = 1, K_WHERE_ABOVE = 2 };
+
+static int k_ten_holds_outside(const void* p);
+
+static int k_where(const void* p, KMark* m) {
+    const char* q = (const char*)p;
+    int below = 0;
+    for (KBlock* b = k_blocks; b; b = b->next) {
+        const char* start = (const char*)(b + 1);
+        const char* end = start + b->cap;
+        if (b == m->block) {
+            if (q >= start && q < m->ptr) return K_WHERE_BELOW;
+            if (q >= m->ptr && q < end) return K_WHERE_ABOVE;
+            below = 1;
+            continue;
+        }
+        if (q >= start && q < end) return below ? K_WHERE_BELOW : K_WHERE_ABOVE;
+    }
+    return K_WHERE_OUTSIDE;
+}
+
 static int k_survives_x(const void* p, KMark* m) {
-    if (k_survives(p, m)) return 1;
-    return k_ten_any && m && k_ten_holds(p, m);
+    if (!m || !k_ten_any) return k_survives(p, m);
+    int w = k_where(p, m);
+    if (w == K_WHERE_BELOW) return 1;
+    return w == K_WHERE_OUTSIDE && k_ten_holds_outside(p);
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
@@ -1152,8 +1180,14 @@ static int k_ten_on = 0;
    anyway. That is 634,925 instructions spent to save 16,080 short walks, so
    the memo went. */
 static __attribute__((noinline)) int k_ten_holds(const void* p, KMark* m) {
-    const char* q = (const char*)p;
     if (k_above_mark(p, m)) return 0;
+    return k_ten_holds_outside(p);
+}
+
+/* The tenure half of k_ten_holds, for a caller that already knows the
+   pointer is in no arena block. */
+static __attribute__((noinline)) int k_ten_holds_outside(const void* p) {
+    const char* q = (const char*)p;
     unsigned long long held = k_ten_mask;
     if (k_beat_depth < K_BEAT_MAX) held &= (1ull << k_beat_depth) - 1;
     for (; held; held &= held - 1)
@@ -1192,6 +1226,24 @@ static void k_from_window(int on) {
 static void* k_ten_alloc(size_t n) {
     long long d = k_beat_depth - 1;
     KTenBlock* b = k_ten_blocks[d];
+    if (!b && d > 0) {
+        /* A beat that has no block yet opens its tenure in the block the
+           depth outside already holds, when that block has room. An inner
+           loop whose result is heap hands its block up at every pop, and
+           runbench's did forty-nine times a phase: forty-nine 256 KiB blocks
+           in the outer depth for 78 KB of tenured bytes, every one walked by
+           every ask. Bytes carved here are accounted to the outer depth and
+           freed with it, which is where a handed-up block's bytes went
+           anyway; the licence check is the outer depth's too. */
+        KTenBlock* pb = k_ten_blocks[d - 1];
+        if (pb && pb->cap - pb->used >= n && k_ten_bytes[d - 1] <= K_TEN_CAP) {
+            void* out = pb->data + pb->used;
+            pb->used += n;
+            k_ten_bytes[d - 1] += n;
+            k_ten_any = 1;
+            return out;
+        }
+    }
     if (!b || b->cap - b->used < n) {
         /* Each block is twice the one before it. That is what keeps the list
            short enough for k_ten_holds to walk: K_TEN_CAP is 64 MiB, so
@@ -1461,13 +1513,19 @@ static size_t k_copy_size(KValue v, KMark* m) {
         case K_STR: {
             KStr* s = (KStr*)p;
             n += k_copy_size_ptr(s, sizeof(KStr), m);
-            if (!k_survives_x(s->data, m)) n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
+            /* Storage that follows its header lies where the header does,
+               and the header was just found not to survive; only a string
+               whose bytes live elsewhere -- a slice's, a builder's -- needs
+               the walk asked again of its data. */
+            if (s->data == (char*)(s + 1) || !k_survives_x(s->data, m))
+                n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
             break;
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             n += k_copy_size_ptr(b, sizeof(KBytes), m);
-            if (!k_survives_x(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
+            if (b->data == (const unsigned char*)(b + 1) || !k_survives_x(b->data, m))
+                n += k_copy_size_ptr(b->data, (size_t)b->len, m);
             break;
         }
         case K_LIST: {
@@ -1947,28 +2005,48 @@ static int k_memo_outlives(KValue result) {
     return k_survives((const void*)(intptr_t)result.payload, inner);
 }
 
+/* The pop's work, for a pop that has some. Kept out of line so the pop that
+   has none -- a heap result with nothing carried, nothing registered and no
+   tenure block at its depth, which is 507,678 of runbench's 507,685 -- pays
+   its four tests and returns without the six callee-saved pushes the copy
+   and the migrates below need. The same split the rewind made. */
+static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
+                                                        int rewound) {
+    KCarry* c = &k_carries[d];
+    if (rewound) {
+        k_beat_rewind(&k_beat_stack[d]);
+    } else {
+        if (c->used_flag) {
+            KCopy cp = { NULL, NULL, 1, 0 };
+            k_ptrmap_begin(&k_copy_map);
+            k_copy_map_live = 0;
+            r = k_deep_copy(r, &cp);
+        }
+        k_chunkreg_migrate((int)d);
+        k_viewreg_migrate((int)d);
+        k_permreg_migrate((int)d);
+    }
+    if (rewound) k_ten_release(d);
+    else k_ten_hand_up(d);
+    c->used_flag = 0;
+    return r;
+}
+
 KValue k_beat_pop(KValue r) {
     if (k_beat_depth > 0) {
         k_beat_depth--;
-        if (k_beat_depth < K_BEAT_MAX) {
-            KCarry* c = &k_carries[k_beat_depth];
+        long long d = k_beat_depth;
+        if (d < K_BEAT_MAX) {
             int rewound = !k_is_heap(r.tag) && r.tag != K_THUNK;
-            if (rewound) {
-                k_beat_rewind(&k_beat_stack[k_beat_depth]);
-            } else {
-                if (c->used_flag) {
-                    KCopy cp = { NULL, NULL, 1, 0 };
-                    k_ptrmap_begin(&k_copy_map);
-                    k_copy_map_live = 0;
-                    r = k_deep_copy(r, &cp);
-                }
-                k_chunkreg_migrate(k_beat_depth);
-                k_viewreg_migrate(k_beat_depth);
-                k_permreg_migrate(k_beat_depth);
+            /* k_reg_any[d] summarises the three registries: every add sets
+               its bit and every migrate or flush clears it, and the chunk
+               spill count travels with the chunk bit. An empty migrate wrote
+               three zeros over zeros. */
+            if (!rewound && !k_carries[d].used_flag && !k_reg_any[d]
+                && !k_ten_blocks[d]) {
+                return r;
             }
-            if (rewound) k_ten_release(k_beat_depth);
-            else k_ten_hand_up(k_beat_depth);
-            c->used_flag = 0;
+            return k_beat_pop_slow(r, d, rewound);
         }
     }
     return r;
@@ -4021,8 +4099,22 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_CLOSURE: case K_FNREF: return k_str("<fn>");
         default: return k_str("<value>");
     }
-    /* The one exit the number arms take. Every other tag returned above. */
-    return k_str_n(buf, nlen);
+    /* The one exit the number arms take. Every other tag returned above.
+       The digits go over as sixteen bytes, eight more past fifteen, and the
+       call for anything past twenty-three, which a number's rendering does
+       not reach: buf is sixty-four bytes, so the reads past nlen are inside
+       it, and k_alloc rounds a string's storage up to sixteen, so sixteen
+       bytes fit a string of fifteen or fewer and twenty-four fit one of
+       sixteen or more. glibc's memcpy took fifteen instructions to move a
+       number's digits, 579,291 times a run on runbench, and a word loop
+       bounded by nlen took twelve. */
+    if (nlen == 1) return k_str_n(buf, 1);   /* a digit is in the cache */
+    KStr* s = k_str_alloc(nlen);
+    memcpy(s->data, buf, 16);
+    if (nlen > 15) memcpy(s->data + 16, buf + 16, 8);
+    if (nlen > 23) memcpy(s->data + 24, buf + 24, (size_t)(nlen - 24));
+    s->data[nlen] = 0;
+    KValue out; out.tag = K_STR; out.payload = k_ptr(s); return out;
 }
 
 static long long k_bytes_eq_list(KBytes* b, KList* l) {
@@ -5537,13 +5629,14 @@ static KBuf* k_buf_free[K_BUF_CLASSES];
 static KBuf* k_buf_of(KValue* items);
 
 static int k_buf_class(long long cap) {
-    int c = 0;
-    long long size = 4;
-    while (size < cap && c < K_BUF_CLASSES - 1) {
-        size <<= 1;
-        c++;
-    }
-    return size == cap ? c : -1;
+    /* The classes are 4 << c for c below K_BUF_CLASSES, and anything else
+       is -1. This was a doubling loop, up to eleven rounds to answer for a
+       capacity of 8,192 and five for the decoder's arrays at 64; the trailing
+       zeros say the same thing in one instruction. 1,431,562 asks a run on
+       runbench, 5.6 rounds each. */
+    if (cap < 4 || cap > (4LL << (K_BUF_CLASSES - 1)) || (cap & (cap - 1)))
+        return -1;
+    return __builtin_ctzll((unsigned long long)cap) - 2;
 }
 
 /* How many slots a buffer holds, whatever regime it was allocated in.
@@ -5606,9 +5699,20 @@ static KValue* k_buf_perm(long long cap) {
 
 /* Does this header predate the beat it is being appended in? Then it is the
    loop's accumulator, not one of its transients. */
-static int k_outlives_beat(const void* p) {
+static inline int k_outlives_beat(const void* p) {
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return 0;
     KMark* inner = &k_beat_stack[k_beat_depth - 1];
+    /* The head block answers without a walk, as k_born_this_beat's does: a
+       header there is in the live chain, and it predates the beat exactly
+       when the mark sits in the same block above it. The decoder's arrays
+       outgrow their literal's one slot on the second push, 214,000 times a
+       run, and every one walked the chain twice to learn the header was born
+       a few bytes below the bump pointer. */
+    if (k_blocks) {
+        const char* q = (const char*)p;
+        if (q >= (const char*)(k_blocks + 1) && q < k_arena)
+            return k_blocks == inner->block && q < (const char*)inner->ptr;
+    }
     return k_survives(p, NULL) && k_survives(p, inner);
 }
 
@@ -5672,7 +5776,14 @@ static KValue k_list_own(KValue* items, long long n) {
 
 static KValue k_mklist(long long n, KValue* items) {
     KValue* buf = k_buf(n ? n : 1);
-    memcpy(buf, items, sizeof(KValue) * n);
+    /* The empty literal is the common one -- the decoder opens 272,000 of
+       them a run -- and glibc's memcpy costs thirteen instructions to learn
+       it has nothing to move. The same split k_rec makes. */
+    if (n <= 4) {
+        for (long long i = 0; i < n; i++) buf[i] = items[i];
+    } else {
+        memcpy(buf, items, sizeof(KValue) * n);
+    }
     return k_list_own(buf, n);
 }
 
@@ -5683,7 +5794,11 @@ KValue k_list_lit(long long n, KValue* items) {
 KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
     KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
-    memcpy(env, caps, sizeof(KValue) * ncaps);
+    if (ncaps <= 4) {
+        for (long long i = 0; i < ncaps; i++) env[i] = caps[i];
+    } else {
+        memcpy(env, caps, sizeof(KValue) * ncaps);
+    }
     c->fn = fn; c->env = env; c->ncaps = ncaps; c->arity = arity;
     KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
 }
@@ -5938,7 +6053,14 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
        built without a reallocation. A literal with keys in it is a finished
        value and gets exactly the room it needs. */
     m->pairs = k_buf(n ? 2 * n : 8);
-    memcpy(m->pairs, flat_pairs, sizeof(KValue) * 2 * n);
+    /* The empty literal is the common one -- the decoder opens 273,000 of
+       them a run -- and glibc's memcpy costs thirteen instructions to learn
+       it has nothing to move. The same split k_rec and k_mklist make. */
+    if (n <= 2) {
+        for (long long i = 0; i < 2 * n; i++) m->pairs[i] = flat_pairs[i];
+    } else {
+        memcpy(m->pairs, flat_pairs, sizeof(KValue) * 2 * n);
+    }
     k_buf_of(m->pairs)->used = 2 * n;
     m->len = n;
     m->sorted = NULL;
@@ -6305,29 +6427,56 @@ static int k_all_ascii(const char* data, long long len) {
 static KValue k_utf8_bad_scalar(const char* data, long long len, const char* origin) {
     long long i = 0;
     while (i < len) {
-        long long block_end = i + 16 <= len ? i + 16 : len;
-        while (i < block_end) {
-            unsigned char b0 = (unsigned char)data[i];
-            if (b0 < 0x80) { i += 1; continue; }
-            long w;
-            unsigned lo = 0x80, hi = 0xBF;
-            if (b0 >= 0xC2 && b0 <= 0xDF) { w = 2; }
-            else if (b0 == 0xE0) { w = 3; lo = 0xA0; }
-            else if (b0 >= 0xE1 && b0 <= 0xEC) { w = 3; }
-            else if (b0 == 0xED) { w = 3; hi = 0x9F; }
-            else if (b0 >= 0xEE && b0 <= 0xEF) { w = 3; }
-            else if (b0 == 0xF0) { w = 4; lo = 0x90; }
-            else if (b0 >= 0xF1 && b0 <= 0xF3) { w = 4; }
-            else if (b0 == 0xF4) { w = 4; hi = 0x8F; }
-            else return k_err(k_str("invalid utf-8"), origin);
-            if (i + w > len) return k_err(k_str("invalid utf-8"), origin);
-            unsigned char b1 = (unsigned char)data[i + 1];
-            if (b1 < lo || b1 > hi) return k_err(k_str("invalid utf-8"), origin);
-            for (long j = 2; j < w; j++) {
-                if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
+        unsigned char b0 = (unsigned char)data[i];
+        if (b0 < 0x80) {
+            /* A run reaches here holding at least one byte with the high bit
+               set, and the ascii around it is still most of the bytes. A
+               word at a time, as the door's predicate reads: a clean word
+               is eight bytes in three instructions, and a word with a high
+               bit in it says where, so the walk lands on that byte rather
+               than testing its way there. The byte-at-a-time walk cost 190
+               instructions a run on runbench's 134,442 short strings. */
+            unsigned long long w, high;
+            if (i + 8 <= len) {
+                memcpy(&w, data + i, sizeof w);
+                high = w & 0x8080808080808080ULL;
+                if (!high) { i += 8; continue; }
+                i += __builtin_ctzll(high) >> 3;
+                continue;
             }
-            i += w;
+            if (len >= 8) {
+                /* The tail, read as the run's last word with the bytes
+                   already walked shifted out, the overlap k_all_ascii
+                   makes. Runbench's short strings spent 444,609 single
+                   steps here for 261,459 whole words. */
+                long long back = len - 8;
+                memcpy(&w, data + back, sizeof w);
+                high = (w & 0x8080808080808080ULL) >> ((i - back) * 8);
+                if (!high) { i = len; continue; }
+                i += __builtin_ctzll(high) >> 3;
+                continue;
+            }
+            i += 1;
+            continue;
         }
+        long w;
+        unsigned lo = 0x80, hi = 0xBF;
+        if (b0 >= 0xC2 && b0 <= 0xDF) { w = 2; }
+        else if (b0 == 0xE0) { w = 3; lo = 0xA0; }
+        else if (b0 >= 0xE1 && b0 <= 0xEC) { w = 3; }
+        else if (b0 == 0xED) { w = 3; hi = 0x9F; }
+        else if (b0 >= 0xEE && b0 <= 0xEF) { w = 3; }
+        else if (b0 == 0xF0) { w = 4; lo = 0x90; }
+        else if (b0 >= 0xF1 && b0 <= 0xF3) { w = 4; }
+        else if (b0 == 0xF4) { w = 4; hi = 0x8F; }
+        else return k_err(k_str("invalid utf-8"), origin);
+        if (i + w > len) return k_err(k_str("invalid utf-8"), origin);
+        unsigned char b1 = (unsigned char)data[i + 1];
+        if (b1 < lo || b1 > hi) return k_err(k_str("invalid utf-8"), origin);
+        for (long j = 2; j < w; j++) {
+            if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
+        }
+        i += w;
     }
     return k_none();
 }
@@ -6382,6 +6531,19 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
     }
     KValue bad = k_utf8_bad(data, len, origin);
     if (bad.tag == K_ERR) return bad;
+    if (len >= 4 && len < 8) {
+        /* The decoder's tokens: 840,807 of runbench's 861,498 slices are
+           four to seven bytes, and glibc's memcpy spends fifteen
+           instructions choosing how to move them. Two overlapping words. */
+        KStr* s = k_str_alloc(len);
+        uint32_t a, b;
+        memcpy(&a, data, 4);
+        memcpy(&b, data + len - 4, 4);
+        memcpy(s->data, &a, 4);
+        memcpy(s->data + len - 4, &b, 4);
+        s->data[len] = 0;
+        KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
+    }
     return k_str_n(data, len);
 }
 
@@ -6732,12 +6894,30 @@ KValue k_b_at(KValue container, KValue index) {
         if (want < 1) return k_none();
         long at = k_str_seek(s, want);
         if (at < 0) return k_none();
-        KValue one = k_str_n(s->data + at, k_cp_len((unsigned char)s->data[at]));
-        /* One character by construction, so its count is known without a
+        long w = k_cp_len((unsigned char)s->data[at]);
+        if (w == 1) {
+            /* an ascii character comes from the cache through k_str_n */
+            KValue one = k_str_n(s->data + at, 1);
+            KStr* os = k_as_str(one);
+            if (os->cap == 0) os->cap = -2;
+            return one;
+        }
+        /* A wide character is two, three or four bytes, and it goes over as
+           four: the read past it stops at the string's own terminator at
+           worst, since at + w <= len, and the write lands inside storage
+           k_alloc rounded up to sixteen. glibc's memcpy took seventeen
+           instructions to choose how to move three bytes, 345,000 times a
+           run on runbench; a byte loop bounded by w cost more than the call.
+           One character by construction, so its count is known without a
            scan: `length s[i]` asked k_utf8_chars to walk the bytes of every
            multi-byte character it was handed, 345,220 times on runbench. */
-        KStr* os = k_as_str(one);
-        if (os->cap == 0) os->cap = -2;
+        uint32_t q;
+        memcpy(&q, s->data + at, 4);
+        KStr* os = k_str_alloc(w);
+        memcpy(os->data, &q, 4);
+        os->data[w] = 0;
+        os->cap = -2;
+        KValue one; one.tag = K_STR; one.payload = k_ptr(os);
         return one;
     }
     if (container.tag == K_BYTES && index.tag == K_INT) {
@@ -6814,14 +6994,20 @@ static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
     return k_b_push_into_proven(lv, item, mutate, 0);
 }
 
+/* The refusal, out of line: its 128-byte message buffer sized the frame of
+   every push that took the frontier slot. */
+__attribute__((noreturn, noinline, cold)) static void k_die_push_takes(KValue lv) {
+    const char* hint = k_lazy_hint(lv);
+    char said[128];
+    snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
+    k_die(said);
+}
+
+static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate);
+
 static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int proven) {
     if (!k_not_failure(lv)) return lv;
-    if (lv.tag != K_LIST) {
-        const char* hint = k_lazy_hint(lv);
-        char said[128];
-        snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
-        k_die(said);
-    }
+    if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
     if (mutate && !proven && !k_born_this_beat(l)) mutate = 0;
     KBuf* buf = k_buf_of(l->items);
@@ -6838,6 +7024,14 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
         out->items = l->items;
         KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
     }
+    return k_b_push_grow(lv, l, item, mutate);
+}
+
+/* A push that is not on its buffer's frontier: new storage, the elements
+   copied over, the item after them. Reached from the general push once the
+   frontier test has failed, and from the in-place push directly, which has
+   already asked the same question and does not ask it twice. */
+static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
     long long cap = 4;
     while (cap < (l->len + 1)) cap <<= 1;
     cap <<= 1;
@@ -6847,7 +7041,14 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
        exactly what should free it. */
     int perm = mutate && k_outlives_beat(l);
     KValue* items = perm ? k_buf_perm(cap) : k_buf(cap);
-    memcpy(items, l->items, sizeof(KValue) * l->len);
+    /* A list outgrows its literal's one slot far more often than it outgrows
+       anything larger, and glibc's memcpy costs twenty-five instructions to
+       move sixteen bytes. The same split k_rec makes. */
+    if (l->len <= 4) {
+        for (long long i = 0; i < l->len; i++) items[i] = l->items[i];
+    } else {
+        memcpy(items, l->items, sizeof(KValue) * l->len);
+    }
     items[l->len] = item;
     k_buf_of(items)->used = l->len + 1;
     if (mutate) {
@@ -6895,12 +7096,7 @@ KValue k_b_push(KValue lv, KValue item) { return k_b_push_into(lv, item, 0); }
    change. They cost nothing when nobody is counting. */
 KValue k_b_push_mut(KValue lv, KValue item) {
     if (!k_not_failure(lv)) return lv;
-    if (lv.tag != K_LIST) {
-        const char* hint = k_lazy_hint(lv);
-        char said[128];
-        snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
-        k_die(said);
-    }
+    if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {
@@ -6914,7 +7110,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
         return lv;
     }
     if (__builtin_expect(k_stats_on > 0, 0)) k_stat_push_mut_slow++;
-    return k_b_push_into_proven(lv, item, 1, 1);
+    return k_b_push_grow(lv, l, item, 1);
 }
 
 /* A lazy sequence refused by a structural operation: the reader is one call
