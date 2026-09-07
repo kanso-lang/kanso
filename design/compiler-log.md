@@ -20,79 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (ninth) — str_char's 42 instructions a byte, and why nothing hoists them
-
-`d_jsonbench/str_char_4` is 165,240,450 instructions, 9.51% of jsonbench. It is
-entered 265,950 times — once per escaped string per iteration, 1,773 × 150 —
-and everything inside is the walk of that string's tail.
-
-**What the input is.** `bench/large.json` holds 10,475 string literals of
-77,732 bytes; 1,773 of them contain a backslash, and 26,019 bytes lie at or
-after each one's first backslash. That tail is what `string_at` hands to
-`str_chars`, and it is dense: 4,562 escapes and 6,335 clean runs between them
-averaging 2.67 bytes, 2,802 of those runs empty because two escapes are
-adjacent. The 2026-09-01 entry declined the escaped-tail run-scan at +1.16%
-without knowing this; the census is why it lost, and it retires the idea rather
-than leaving it to be tried again. There is nothing to scan.
-
-**Where the 42 go.** Joined instruction by instruction against the callgrind
-profile, the literal-byte path is 12 in the indexed load (two bounds tests, the
-input string's `len` and `data`, and the tag round trip through the 0x100
-sentinel), 6 in the three arm compares, and 24 in the inlined
-`k_b_append_mut_byte`: the accumulator's tag, the `k_stats_on` read, `cap` and
-its absolute value in three instructions, `len`, `data`, the frontier word at
-`data - 8`, then the store and two length writes. The escape path is 49 —
-the same, plus a jump table and one of four 23-instruction arms.
-
-**The ceiling.** Every guard in the byte arm was deleted and the program
-measured, which is not shippable and answers the only question worth asking:
-
-    jsonbench   1,737,413,813 → 1,698,791,213   −38,622,600   −2.223%
-
-Twelve instructions an append across 3,218,550 appends. That is the whole of
-what the guard set can ever be worth.
-
-**Three attempts on the reloads, none of which moved a byte.** The header
-loads repeat every iteration because the byte store may alias them.
-
-1. `!alias.scope` on the store and the frontier word, `!noalias` on
-   `k_stats_on` and the three header loads — a true claim: a bytes buffer's
-   data is a separate allocation from the KBytes that names it. Byte-identical
-   machine code.
-2. The reason turned out to be that there is **no loop**. The emitter writes
-   tail recursion as `musttail call tailcc`, and TailCallElim is forbidden to
-   touch a `musttail` call — except for a SELF call, which it does convert:
-   `d_list/fold_go_3`, `d_list/next_1` and `d_jsonbench/skip_ws_2` all carry a
-   `tailrecurse` block with a back edge after `opt -O3`. A MUTUAL cycle gets
-   nothing, and `str_char_4` ↔ `str_chars_3` ↔ `str_escape_4` is mutual. So are
-   jsonbench's four other most expensive functions. The loop in the machine
-   code is the backend's jump past the prologue, and no IR pass ever saw it.
-3. `alwaysinline` on the two forwarders collapses the cycle: `str_char_4` then
-   carries `tailrecurse` and a real back edge. It is worth −950,250, −0.055%.
-   With the metadata of (1) added on top, the count is identical to the digit —
-   1,736,463,563 either way. A loop was necessary and is not sufficient: the
-   loop body still contains the calls the fast arms fall back to
-   (`k_b_append_mut`, `k_b_at`, `k_b_utf8`), and LICM hoists to a preheader,
-   which needs the load invariant over every path rather than the hot one.
-
-**And the musttail is right.** Rewriting all 125 of them as plain
-`tail call tailcc` — which would let TailCallElim at the self-recursive ones
-freely — costs 1,737,413,813 → 1,854,484,765, +6.74%, output byte-identical.
-LLVM's answer without the guarantee is a real frame.
-
-**What this corrects.** `call_twin`'s comment in src/codegen.rs says its ten
-callable tests "are loop-invariant and LICM can hoist them out of the loop
-TailCallElim makes of the recursion". That holds for a self-recursive fold and
-not for a mutual cycle, and the 2026-09-05 (fourth) entry attributed the
-byte-identical `!invariant.load` result to dereferenceability when the simpler
-reading is available for any mutual caller: LICM had no loop to work in.
-
-**Closed.** The remaining safe money in `str_char` is the three instructions
-that take `|cap|`, 9,655,650 or 0.56% of jsonbench, and it costs a change to
-how KBytes records its allocation regime. Not taken.
-
----
-
 ## 2026-09-06 (tenth) — the array walked the same whitespace twice
 
 `array_items` in lib/json/value.kso opened with `p2 = skip_ws cs p` and then
@@ -3720,3 +3647,57 @@ inside a frozen buffer can ever need repair. pendbench's 629 KB constant is
 the case that shows it, and it is the next change. The text vein rose
 10,400 bytes summed, `text` landing on 1,449,180, one `_build` symbol and
 its cache per constant; `compile_instructions` fell to 19,316,501.
+
+## 2026-09-07 — A SURVIVOR'S BLOCK ASKED AFTER EVERY NEWER ONE
+
+**DONE.** kanso#1295's CI sitting left eleven small work rows up, and the
+previous entry named two costs for them. One of the two was wrong, and the
+profile that would have said so was already on disk: `k_frozen_holds` is
+asked 1,804 times in the whole of pendbench, 52,182 instructions. Nothing
+reached from a carried value there is frozen, and the walk that entry
+blamed on "pendbench's 629 KB constant" is the ordinary carry of the
+accumulator list, which has cost the same since the list existed; the
+`perm_live_bytes` the number came from were `text/join`'s malloc'd
+builders. The other cost was the whole rise, and the first repair of it was
+the wrong one too. Putting the tenure-off shortcut back in `k_survives_x`
+-- `k_survives` from the mark's block, then the frozen ranges -- took
+pendbench to 605,900,745 and encodebench to 4,073,121,388 and moved
+runbench 2,487,359,798 -> 2,490,296,277, +2,936,479: `k_survives` walks the
+older blocks for a node above the mark and finds nothing, and runbench's
+chain is fifty-four blocks long at its peak.
+
+Neither walk was the right one. `k_where` started at the head of the chain
+and reached the mark's own block only after every block newer than it, and
+`k_survives` started at the mark's block and walked every block older than
+it for a node that was never there. The node the sizing walk asks about is
+almost always in the mark's block: above the mark if the loop built it this
+lap, below if the lap before left it. `k_where` asks that block first now,
+then the newer blocks from the head down to it, then the older ones, and
+answers outside only after all three. A mark with no block, which is how
+the freeze copies everything, finds every arena node above as before.
+
+    pendbench     608,937,982 ->   604,694,569    -4,243,413   -0.6968%
+    encodebench 4,075,264,731 -> 4,072,255,544    -3,009,187   -0.0738%
+    runbench    2,487,359,798 -> 2,483,621,153    -3,738,645   -0.1503%
+    deepbench     686,441,869 ->   647,639,361   -38,802,508   -5.6527%
+    widebench      51,944,211 ->    50,448,586    -1,495,625   -2.8793%
+    livebench   3,610,815,239 -> 3,609,374,810    -1,440,429   -0.0399%
+    basket         34,236,107 ->    34,124,075      -112,032   -0.3272%
+    oneshot        21,864,579 ->    21,841,750       -22,829   -0.1044%
+
+on the container with clang 19, the same bytes out; the six rows the
+freeze had not moved shift by under 500 each, the container's sitting
+against CI's: `work_jsonbench` lands on 1,497,268,438, `work_escapebench`
+on 85,495,206, `work_indexbench` on 3,732,364, `work_scanbench` on
+736,173,216, `work_readbench` on 4,287,853 and `work_digestbench` on
+10,775,474. deepbench is the largest
+by far and was never in the freeze's list: its fold over lists of ints
+sizes a long list of survivors every pop, and the beat's block sits
+under several newer ones, so every ask walked those first. pendbench and
+encodebench are under their pre-freeze rows now, 605,572,877 and
+4,072,979,783. `all_counters.sh` agrees with every golden: no counter
+moves, so the work vein is the witness. Welfare 64.36 -> 64.38 on the
+container's rows, held with `--set`. Ratchet row `mark_block_first`
+puts the walk from the head back -- the mutant is byte-for-byte main's
+`k_where` -- and asks the work vein; dry-run red before it was committed.
+CI's rows and `--set` follow in the next round.
