@@ -39,8 +39,19 @@ fn esc_byte acc b
 fn escape_able acc bs
   list/fold bs acc (a b -> esc_byte a b)
 
+# when the scan did find something, every byte in front of it is proved clean
+# too: that run leaves in one copy and the fold starts where the scan stopped
+fn escape_rest acc bs 1 _
+  escape_able acc bs
+
+fn escape_rest acc bs n len
+  escape_able (text/append acc (text/slice bs 1 (n - 1))) (text/slice bs n len)
+
+fn escape_split acc s bs n len
+  if (len < n) (text/append acc s) (escape_rest acc bs n len)
+
 fn escape_clean acc s bs n
-  if (length bs < n) (text/append acc s) (escape_able acc bs)
+  escape_split acc s bs n (length bs)
 
 pub fn escape_onto acc s
   bs = text/bytes s

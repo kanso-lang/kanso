@@ -268,6 +268,18 @@ live_counters = row
   (breaking "an_encoder_that_walks_a_clean_string")
   benchmarks
 
+# The skip in front of a string's first escape landed on 2026-09-07 as a
+# library change, and this row is what keeps it: the same vein reads the run
+# being walked again, because the fold's own counter moves by exactly the
+# bytes it walks.
+clean_run = row
+  "the proved-clean run walked byte by byte again"
+  true
+  (gating "live_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_clean_run_walked_byte_by_byte")
+  benchmarks
+
 # The compile row stopped counting process startup on 2026-09-04, because that
 # half moves with binary layout and not with the compiler. What it can still
 # hide is a new dependency, whose startup cost was measured at 32,090, so this
@@ -804,7 +816,7 @@ rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
 rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
 
-rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters])
+rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
 rows_b1b = text/concat rows_b1 [emitted_code emitted_others machine_code]
 

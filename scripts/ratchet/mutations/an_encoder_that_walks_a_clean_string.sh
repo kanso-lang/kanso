@@ -15,11 +15,11 @@
 # a mutation that simply deleted the fast path did not compile, and a build that
 # never runs is UNBUILT rather than red.
 set -e
-grep -q '^  if (length bs < n) (text/append acc s) (escape_able acc bs)$' \
+grep -q '^  if (len < n) (text/append acc s) (escape_rest acc bs n len)$' \
   lib/json/text.kso || {
   echo "lib/json's escape fast path changed shape; this needs rewriting" >&2
   exit 1
 }
-sed -i 's|^  if (length bs < n) (text/append acc s) (escape_able acc bs)$|  if (length bs < n) (escape_able acc (text/bytes s)) (escape_able acc bs)|' \
+sed -i 's|^  if (len < n) (text/append acc s) (escape_rest acc bs n len)$|  if (len < n) (escape_able acc (text/bytes s)) (escape_rest acc bs n len)|' \
   lib/json/text.kso
 grep -q 'escape_able acc (text/bytes s)' lib/json/text.kso

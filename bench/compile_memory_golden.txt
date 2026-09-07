@@ -118,7 +118,7 @@ front_end_rounds=42
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
 # end has that much less to visit. Banked, and it moves the same way as the
 # runtime fall it comes with rather than paying for it.
-front_end_visits=17264
+front_end_visits=17560
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
