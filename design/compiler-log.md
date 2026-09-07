@@ -3283,3 +3283,120 @@ the cause. The comment is gone; the carry-cluster rule that survives is the
 unmeasured, conservative one. A profile that changes by 5x on a change that
 should move one counter is the change being wrong, and the first check is the
 emitted site list, which takes a minute.
+
+## 2026-09-07 — A CYCLE THAT ALLOCATES NOTHING IS NOT A BEAT
+
+The entry above took the escape cycle's four rewinds a trip down to one. The
+one that stayed frees nothing: every trip appends into the encoder's builder,
+whose storage is malloc'd, slices the input under those appends, which the
+emitter fuses into the same copy, and asks `find2_below` for an integer.
+Nothing lands in the arena, and the bracket around the cycle — a push and a
+pop per escaping string, 655,650 of them in runbench — brackets nothing.
+Skipping the cycle by name measured the ceiling first: runbench 2,879,430,792
+-> 2,855,405,382, -0.8341%, every memory counter unchanged.
+
+### Why the classifier thought it allocated
+
+`alloc_groups` decides which groups allocate, and a cluster with no allocating
+member is left unbracketed (`Verdict::PureLoop` has existed for exactly this).
+A builtin reached through its std wrapper arrives in the tree spelled
+`builtin_append`, `builtin_bytes`, `builtin_find2_below`, and those spellings
+are on neither of the classifier's lists and are not program functions, so
+`expr_allocates` took each for a closure value whose body it could not see.
+`json/esc_pair` seeded as allocating on `builtin_append`, `escape_next` on
+`builtin_find2_below`, `escape_onto` on `builtin_bytes`. `text/slice`, when it
+was spelled that way, was on the allocating list by name.
+
+### What it does now
+
+Three things, each the size of a sentence. A head is looked up by its bare
+builtin name — the `builtin_` prefix and any module path stripped — so the
+lists say what they were written to say. `find2_below` joins the pure list;
+it returns an integer. And an `append` at a site the linearity analysis
+proved unique (`MutSites`, keyed by source position, the same set the chain
+test reads) is asked only about what it appends: its target is the builder,
+whose growth is outside the arena, and a `slice` nested as its argument is the
+fused copy, so only the slice's own arguments are asked about. Pushes and
+puts are not admitted: a list or map grown in place still takes its next
+buffer from the arena.
+
+With that the escaper's cycle has no allocating member, and `beat_loops` does
+not license it. The entry from `escape_rest` stops being a demoted plain call
+and is a tail call again.
+
+### What it measures
+
+    runbench   2,879,430,792 -> 2,855,405,382   -24,025,410   -0.8341%
+
+the ceiling exactly, on the container with clang 19; the same bytes out.
+`beat_iters` 2,937,383 -> 2,686,373 and nothing else moves.
+
+### The spec, and the mutation
+
+`tests/golden/mem/a_cycle_that_allocates_nothing_needs_no_bracket.kso` is a
+four-group cycle that scans bytes with `find2_below`, appends the run before
+each hit as a fused slice and the hit as two bytes, over 120,000 bytes built
+by a loop of the same kind. The compiler before this change counts
+`beat_iters=60001` on it — 20,000 for the loop that builds the input, 40,000
+for the cycle, one for the entry — watched; this one counts `0`, with `allocs`
+and the arena's one block identical, and the .mem golden pins the zero. The
+ratchet row `pure_cycle` applies `a_pure_cycle_bracketed_again`, which makes
+the in-place test never hold; the mem vein reads it through that fixture and
+every other beat golden.
+
+### What else moved
+
+Nothing but `beat_iters`, in three cost goldens and two .mem fixtures, and no
+peak anywhere: runbench 2,937,383 -> 2,686,373, livebench 6,148,001 ->
+5,032,401, oneshot 15,370 -> 12,581; `append_in_place` and
+`append_of_a_slice_boxes_nothing` 40 -> 0, each a loop that only appends in
+place and had been rewinding forty times for nothing. Every other beat in the
+corpus allocates and keeps its bracket.
+
+Priced with the container's row laid over CI's (2,855,406,036 projected):
+**welfare 57.10 -> 57.16, +0.06** on top of the entry above, all of it the run
+term; `--set` with CI's rows.
+
+The emitted code loses the bracket's calls: the decoder 1,251 -> 1,248, runbench
+6,105 -> 6,102, widebench 1,843 -> 1,832 — a loop of widebench's that only
+appends in place lost a bracket it never counted through — and `.text` falls
+by 32 to 96 bytes on six programs here. `compile_instructions` is CI's.
+
+## 2026-09-07 — THE REMAINDER AND THE QUOTIENT OF TWO INTEGERS ARE ONE INSTRUCTION EACH
+
+`%` always went through `k_mod`, whatever the inference knew about its
+operands, and runbench asked it 2,565,677 times: 1,548,800 from the escape
+phase's indexing, 451,638 from the decoder's `str_run`, the rest from the hex
+arms and the phase drivers. Every one was an integer pair. The call is 43
+million instructions of self cost, about seventeen a call, before the argument
+boxing around it. `/` went through `k_div` the same way.
+
+`emit_binop_builtin` has had an integer fast path for `+ - *` and the six
+comparisons since the tag switch; `/` and `%` were routed to the call above
+it. On a pair the inference has proved integer they are `srem` and `sdiv` now,
+with two divisors sent to the call as before: zero, whose failure is the value
+`a_division_by_zero_is_a_value` shows a handler asking for by name, and minus
+one, whose quotient overflows at the least integer — `k_div` dies there,
+`k_mod` answers zero. Two compares and a branch decide it.
+
+    runbench   2,855,405,382 -> 2,816,922,233   -38,483,149   -1.3477%
+
+on the container with clang 19, the same bytes out, and no counter moves at
+all — the change is instructions and nothing else. The remainder is
+38,068,669 of it and the quotient 414,480: runbench divides little. Six sites
+in its emitted code, one per source spelling that survives inlining.
+
+`tests/golden/micro/the_remainder_of_two_integers.kso` pins the remainder's
+sign on all four quadrants, the least integer against minus one and against
+seven, the largest against two, the quotient's truncation on all four
+quadrants, and the zero divisor for both operators, as a handler's match and
+as text, on every engine; the interpreter and native agreed before the golden
+was written. The ratchet row `remainder` sends every remainder and quotient
+back to the runtime and the emitted goldens read the calls that return.
+
+Priced with the container's row laid over CI's (2,816,922,887 projected):
+about +0.09 on the run term.
+
+The emitted code trades a call line for the instruction at each site: the
+decoder 1,248 -> 1,247 calls, runbench 6,102 -> 6,096, and `.text` moves by a
+few bytes either way on six programs here. `compile_instructions` is CI's.
