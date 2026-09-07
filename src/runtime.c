@@ -1965,28 +1965,48 @@ static int k_memo_outlives(KValue result) {
     return k_survives((const void*)(intptr_t)result.payload, inner);
 }
 
+/* The pop's work, for a pop that has some. Kept out of line so the pop that
+   has none -- a heap result with nothing carried, nothing registered and no
+   tenure block at its depth, which is 507,678 of runbench's 507,685 -- pays
+   its four tests and returns without the six callee-saved pushes the copy
+   and the migrates below need. The same split the rewind made. */
+static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
+                                                        int rewound) {
+    KCarry* c = &k_carries[d];
+    if (rewound) {
+        k_beat_rewind(&k_beat_stack[d]);
+    } else {
+        if (c->used_flag) {
+            KCopy cp = { NULL, NULL, 1, 0 };
+            k_ptrmap_begin(&k_copy_map);
+            k_copy_map_live = 0;
+            r = k_deep_copy(r, &cp);
+        }
+        k_chunkreg_migrate((int)d);
+        k_viewreg_migrate((int)d);
+        k_permreg_migrate((int)d);
+    }
+    if (rewound) k_ten_release(d);
+    else k_ten_hand_up(d);
+    c->used_flag = 0;
+    return r;
+}
+
 KValue k_beat_pop(KValue r) {
     if (k_beat_depth > 0) {
         k_beat_depth--;
-        if (k_beat_depth < K_BEAT_MAX) {
-            KCarry* c = &k_carries[k_beat_depth];
+        long long d = k_beat_depth;
+        if (d < K_BEAT_MAX) {
             int rewound = !k_is_heap(r.tag) && r.tag != K_THUNK;
-            if (rewound) {
-                k_beat_rewind(&k_beat_stack[k_beat_depth]);
-            } else {
-                if (c->used_flag) {
-                    KCopy cp = { NULL, NULL, 1, 0 };
-                    k_ptrmap_begin(&k_copy_map);
-                    k_copy_map_live = 0;
-                    r = k_deep_copy(r, &cp);
-                }
-                k_chunkreg_migrate(k_beat_depth);
-                k_viewreg_migrate(k_beat_depth);
-                k_permreg_migrate(k_beat_depth);
+            /* k_reg_any[d] summarises the three registries: every add sets
+               its bit and every migrate or flush clears it, and the chunk
+               spill count travels with the chunk bit. An empty migrate wrote
+               three zeros over zeros. */
+            if (!rewound && !k_carries[d].used_flag && !k_reg_any[d]
+                && !k_ten_blocks[d]) {
+                return r;
             }
-            if (rewound) k_ten_release(k_beat_depth);
-            else k_ten_hand_up(k_beat_depth);
-            c->used_flag = 0;
+            return k_beat_pop_slow(r, d, rewound);
         }
     }
     return r;

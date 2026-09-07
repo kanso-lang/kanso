@@ -49848,3 +49848,68 @@ this exposure because they are counted on programs the compiler emitted rather
 than on the compiler itself.
 
 ---
+
+## 2026-09-06 (third) — SPLIT HANDS BACK THE INPUT WHEN IT FINDS NO SEPARATOR: readbench −90.6543%, welfare 75.17
+
+**DONE.** Continues the first entry of today, whose OPEN thread asked what was
+left in readbench once the memcmp-per-position went. Searched again as the
+filing gate requires: this file's only mentions of `k_b_split` are today's two
+entries, `log/compiler-log-archive.md` has none, and neither file anywhere
+discusses handing a split's input back as its own piece.
+
+**With the scan fixed, readbench is 82.66% one memcpy.** 45,882,918
+instructions, of which `__memcpy_avx_unaligned_erms` is 37,928,498 and
+`__memchr_avx2` 7,684,400 — 400 memchr calls, two per round, one per walk, at
+19,211 instructions for 188,698 bytes. The copy is the 200 rounds copying the
+whole document to return the single piece, because the separator is not in it.
+
+**A KStr's `data` and `len` are written once at construction.** The only
+in-place write to one anywhere in the runtime is `k_str_chars` memoising the
+codepoint count into `cap`, and two holders of one string would compute that
+alike. So when the count loop finds nothing, the one piece can be the input
+value.
+
+    row            before             after            delta        pct
+    readbench      45,883,331      4,288,131      -41,595,200  -90.6543%
+    scanbench     774,357,155    776,362,839       +2,005,684   +0.2590%
+    basket         35,508,390     35,510,217           +1,827   +0.0051%
+    pendbench     605,536,009    605,537,209           +1,200   +0.0002%
+
+`read_allocs` 615 -> 415, exactly the two hundred copies; `read_alloc_bytes`
+37,942,816 -> 198,816 and `read_sh_str` 37,932,784 -> 188,784. `scan_allocs`
+falls by 4 and `scan_sh_str` by 128, which is scanbench's four splits that find
+nothing.
+
+**THE THREE ROWS THAT RISE ARE THE SHAPE OF THE TEST, and the first shape cost
+three times as much.** Written as a test on the last piece — `from == 0 ? sv :
+k_str_n(...)` — `sv` stayed live to the tail and spilled: scanbench makes
+501,500 split calls and paid **twelve instructions on every one**, 6,017,840 in
+total, for a path four of them take. Taken as an early return before the buffer
+is sized, the loop below reads exactly what it read before and the cost is four
+instructions a call. The call counts are identical across all three builds, so
+this is the test and the branch, not work.
+
+The early return also skips the second walk for that case, which is why
+readbench lands at 4,288,131 rather than the 8,138,118 the first shape read.
+That closes the first entry's OPEN thread about the two walks for the only
+input where the second one was free to remove.
+
+**The `text` vein worsens, deliberately, from 1,264,058 to 1,265,018** — 240
+bytes on each of the four binaries that call split. **`compile_instructions`
+rises 41,460,602 -> 41,461,827**, which is `src/runtime.c` growing by the
+comment and the block, `include_str!`'d into the compiler. That row is
+PROJECTED from a container A/B of 41,879,916 -> 41,881,141; the entry above
+this one records CI reading 373 off the container's last projection of it, so
+CI's sitting corrects this if it differs.
+
+**Welfare 75.16 -> 75.17, `--set` in this PR.** The objective takes the trade:
+readbench's dimension is nearly saturated, so most of a 90% fall scores
+nothing, and scanbench's 0.259% is a real loss against it. The sum still rises.
+
+**Watched red.** Returning `sv` whether or not a separator was found makes the
+last piece the whole input, and the corpus names it in nine cases at once:
+`"a,b,c"` on `","` answers `["a" "b" "a,b,c"]`, `"a/b/c"` joined back reads
+`a/b/a/b/c`. Both engines agree with the interpreter on all thirteen cases with
+the fix in place.
+
+---

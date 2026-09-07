@@ -20,71 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (third) — SPLIT HANDS BACK THE INPUT WHEN IT FINDS NO SEPARATOR: readbench −90.6543%, welfare 75.17
-
-**DONE.** Continues the first entry of today, whose OPEN thread asked what was
-left in readbench once the memcmp-per-position went. Searched again as the
-filing gate requires: this file's only mentions of `k_b_split` are today's two
-entries, `log/compiler-log-archive.md` has none, and neither file anywhere
-discusses handing a split's input back as its own piece.
-
-**With the scan fixed, readbench is 82.66% one memcpy.** 45,882,918
-instructions, of which `__memcpy_avx_unaligned_erms` is 37,928,498 and
-`__memchr_avx2` 7,684,400 — 400 memchr calls, two per round, one per walk, at
-19,211 instructions for 188,698 bytes. The copy is the 200 rounds copying the
-whole document to return the single piece, because the separator is not in it.
-
-**A KStr's `data` and `len` are written once at construction.** The only
-in-place write to one anywhere in the runtime is `k_str_chars` memoising the
-codepoint count into `cap`, and two holders of one string would compute that
-alike. So when the count loop finds nothing, the one piece can be the input
-value.
-
-    row            before             after            delta        pct
-    readbench      45,883,331      4,288,131      -41,595,200  -90.6543%
-    scanbench     774,357,155    776,362,839       +2,005,684   +0.2590%
-    basket         35,508,390     35,510,217           +1,827   +0.0051%
-    pendbench     605,536,009    605,537,209           +1,200   +0.0002%
-
-`read_allocs` 615 -> 415, exactly the two hundred copies; `read_alloc_bytes`
-37,942,816 -> 198,816 and `read_sh_str` 37,932,784 -> 188,784. `scan_allocs`
-falls by 4 and `scan_sh_str` by 128, which is scanbench's four splits that find
-nothing.
-
-**THE THREE ROWS THAT RISE ARE THE SHAPE OF THE TEST, and the first shape cost
-three times as much.** Written as a test on the last piece — `from == 0 ? sv :
-k_str_n(...)` — `sv` stayed live to the tail and spilled: scanbench makes
-501,500 split calls and paid **twelve instructions on every one**, 6,017,840 in
-total, for a path four of them take. Taken as an early return before the buffer
-is sized, the loop below reads exactly what it read before and the cost is four
-instructions a call. The call counts are identical across all three builds, so
-this is the test and the branch, not work.
-
-The early return also skips the second walk for that case, which is why
-readbench lands at 4,288,131 rather than the 8,138,118 the first shape read.
-That closes the first entry's OPEN thread about the two walks for the only
-input where the second one was free to remove.
-
-**The `text` vein worsens, deliberately, from 1,264,058 to 1,265,018** — 240
-bytes on each of the four binaries that call split. **`compile_instructions`
-rises 41,460,602 -> 41,461,827**, which is `src/runtime.c` growing by the
-comment and the block, `include_str!`'d into the compiler. That row is
-PROJECTED from a container A/B of 41,879,916 -> 41,881,141; the entry above
-this one records CI reading 373 off the container's last projection of it, so
-CI's sitting corrects this if it differs.
-
-**Welfare 75.16 -> 75.17, `--set` in this PR.** The objective takes the trade:
-readbench's dimension is nearly saturated, so most of a 90% fall scores
-nothing, and scanbench's 0.259% is a real loss against it. The sum still rises.
-
-**Watched red.** Returning `sv` whether or not a separator was found makes the
-last piece the whole input, and the corpus names it in nine cases at once:
-`"a,b,c"` on `","` answers `["a" "b" "a,b,c"]`, `"a/b/c"` joined back reads
-`a/b/a/b/c`. Both engines agree with the interpreter on all thirteen cases with
-the fix in place.
-
----
-
 ## 2026-09-06 (fourth) — k_b_chars IS 504 INSTRUCTIONS; k_b_at IS 44.51% OF indexbench
 
 **CLOSED and ATTRIBUTED.** The entry above left `k_b_chars` and `k_b_at` open
@@ -3391,3 +3326,49 @@ five-sixths empty, watched red with every other counter identical. The
 ratchet row `ten_open` makes every inner beat open its own block again and
 asks the run program's counters — the first row that gate has had since
 runbench joined on 2026-09-06.
+
+---
+
+## 2026-09-07 — A BEAT POP WITH NOTHING TO DO
+
+`k_beat_pop` on runbench: 507,685 pops, 36,026,319 instructions, 71 a pop.
+Its rewind twin got a fast path on 2026-09-05 — `k_beat_rewind` tests the
+dirty flag, the depth's registry summary and the mark's block and takes the
+arena back in four stores — and the heap-result pop kept its full frame.
+That pop deep-copies a carried result, migrates the three registries and
+hands the depth's tenure blocks up, and on runbench 507,678 of the 507,685
+carry nothing, have nothing registered and hold no tenure block: the copy
+was skipped by its flag, the three migrates each found an empty registry
+and wrote three zeros over zeros, and `k_ten_hand_up` returned at its first
+line. What every one of them paid was the frame those calls need — six
+callee-saved pushes and pops around four tests that all said no.
+
+### The four tests, then the frame
+
+The pop's work moves out of line into `k_beat_pop_slow`, the split the
+rewind made; `k_beat_pop` itself tests the result's tag, the carry flag,
+`k_reg_any[d]` and `k_ten_blocks[d]` and returns the result when all four
+are clear. `k_reg_any` is the summary the rewind already trusts: every add
+to the chunk, view and permanent registries sets its bit, every migrate or
+flush clears it, and the chunk spill count travels with the chunk bit, so a
+clear summary is a proof that the three migrates would have done nothing.
+A pop with a tenure block still hands it up, and a carried result is still
+copied, on the slow side.
+
+    runbench   2,717,267,333 -> 2,692,922,207   −24,345,126   −0.8959%
+
+on the container with clang 19, the same bytes out (md5 e8e74ccb…). The
+pop is 14,517,216 now, 28.6 an execution, and the seven that take the slow
+side are the ones with a block to hand up. No counter in the twelve veins or
+the lazy tier moves: `arena_blocks`, `beat_iters`, `evac_allocs`,
+`survive_slots`, `ten_blocks` and `ten_frees` print the same run to run, and
+`all_counters.sh` agrees with every golden. The ratchet row `pop_fast` puts
+the frame back under every pop and asks the work vein, which is the only
+witness this change has: a pop that does nothing leaves no counter behind.
+
+**OPEN.** The seven slow pops are runbench's outer laps, and each pays the
+hand-up plus the frame; nothing to take there. The four tests are 28
+instructions because two of them index by depth from a global base, and a
+per-depth record holding the carry flag, the registry summary and the block
+head would make them one load each. `k_beat_rewind` reads two of the same
+fields, so the record would pay twice.
