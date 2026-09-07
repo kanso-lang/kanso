@@ -4118,11 +4118,20 @@ the empty-set defect too, so its 690 sites are an upper bound on what a sound
 version of the same idea removes — and it lost anyway, which is what makes
 the decline safe to record. The decode side does
 what #384 predicted — `obj_key_start` 138,744,540 -> 133,023,429, −4.12% — and
-the encoder more than pays it back. `d_json/word_4` stops being inlined into
-`value_for` and appears as 9,900,000 on its own; `encode_onto` rises 3,689,460
-and `entry_onto` 3,816,180. Removing the branch removes what followed from it,
-and what followed from it was `tag != 5` holding on the arm below. Measured on
-clang 18.1.3 first (+0.1169%) and the sign held on 19.
+the total rises anyway. Measured on clang 18.1.3 first (+0.1169%) and the sign
+held on 19.
+
+**WHY it rises is not established, and the first answer written here was
+wrong.** It said `d_json/word_4` stopped being inlined into `value_for` and
+appeared as 9,900,000 on its own. `word_4` is `musttail`-called from three
+sites, so it cannot be inlined at any threshold: marking it `noinline` by hand
+in the IR and relinking gives a byte-identical binary. Its 0 -> 9,900,000 is
+the linker folding it with an identical twin in one build and not the other,
+which moves where callgrind files the cost and not what the cost is. The rows
+that remain unexplained are `encode_onto` +3,689,460 and `entry_onto`
++3,816,180, and those may be attribution too — the total is the measurement,
+the per-function split is a reading, and one row of that reading has now been
+shown to be an artifact.
 
 **This bounds #384.** That thread put the failure-tag compares at 40,778,277
 executions across runbench, 1.50%, and read a cannot-fail analysis as having a
@@ -4142,8 +4151,9 @@ else in the emitter reads that bit, so the tighter set buys nothing by itself.
 An earlier draft of this paragraph read 20 for the second cell — it was
 measuring a mutation that left the empty-set folds standing.
 
-**OPEN — why the encoder pays.** The 690-site version's cost is an inlining
-and specialisation reshuffle, not extra work anybody wrote, and the mechanism
-above is a reading rather than a measurement. If it is right, the same fold
-behind a `noinline` on `word_4` would land the decode win without the encode
-loss, and that is checkable. Nobody has checked it.
+**OPEN — why the encoder pays.** The `noinline` probe above answers the
+version of this question that named `word_4` and answers it no. What is left is
+the real one: the 690-site version removes 623 tag tests and runs 3,683,016
+instructions more, and nothing yet says where. The next thing to try is
+callgrind with `--separate-callers=2` on both builds, which distinguishes a
+function that got slower from one that merely got renamed. Nobody has run it.
