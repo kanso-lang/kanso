@@ -3898,10 +3898,22 @@ latches at `k_b_push`'s frontier write, which is where `scripts/trend_gate`
 latches too. Watched red first: under the mutation the fixture reads
 `survive_slots=807` and `carry_dedup=17` against `407` and `416`.
 
-**OPEN — the fixture latches but does not segfault**, and the crash witness is
-still `scripts/trend_gate` unreduced. Four shapes were tried; the one that
-dangles wants the node holding the carry pointer to be pruned at AND the
-buffer reused before the read, and the reduced programs read it back first.
-The ratchet row `pop_deep` is live on the counters either way, which is what
-the gate needs; a program that actually faults would be better and is worth
-another sitting.
+**A CORRECTION, made before this landed.** The commit that opened kanso#1301
+said the mutation segfaults `scripts/trend_gate`, copying kanso#1300's record.
+It does not, on this tree. The gate's workload is the golden diff against a
+base, and with the mutation applied and five bases tried -- HEAD~1, e751c948,
+82310c5d, a8d5296b, 38865021 -- none faulted. #1300 saw the fault while the
+shape was being built and its record stands for that tree; what is here is the
+mechanism and the counters, not a program that faults on demand. The guard
+stays: that a hazard is unreachable today is not that it is unreachable, and
+#1300 is the reason to believe it is not.
+
+**OPEN — nothing in the tree faults without the walk.** The fixture latches
+and its counters move, but its bytes out are the same, and the trend gate no
+longer reproduces #1300's segfault (see the correction above). Four fixture
+shapes were tried; the one that dangles wants the node holding the carry
+pointer to be pruned at AND the buffer reused before the read, and the reduced
+programs read it back first. The ratchet row `pop_deep` is live on the
+counters, which is what the gate needs. A program that actually faults is
+worth another sitting, and until there is one the walk rests on the mechanism
+and on #1300's record.
