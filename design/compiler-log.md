@@ -2814,3 +2814,113 @@ corruption that may or may not happen; this one is the decision that allows it.
 
 No counter moves. `kanso run`'s temp handling is not on any measured path: the
 compile veins run `kanso check`, which never reaches `cached_program_binary`.
+
+## 2026-09-08 (fifth) — the entry reorder re-derived, and the alias pass refuses a valid program
+
+Searched the log, the archive and design/ before filing: the 2026-09-08 entry
+"the entry path's reorder costs a diagnostic, and is reverted" is this same
+change, and the entry after it records the vein that now measures it. The
+archive's `canonicalize_bare_aliases` entries are about what the pass costs, not
+about when it runs. What neither has is the failure set as it stands today.
+
+**DECLINED, a second time, on wider grounds than the first.** Hoisting
+`canonicalize_types` and `canonicalize_bare_aliases` out of
+`compile_parsed_entry`'s success arm is worth, on 9ec9f7e9 in this box:
+
+    entry_instructions   164,922,557 -> 163,362,291   -1,560,266  (-0.9461%)
+    compile_instructions  49,170,337 ->  49,170,337            0
+
+against kanso#1329's -1,674,396 (-1.0136%) for the same edit a few merges
+earlier. The module row is byte-identical here, which is what a
+`compile_parsed_entry`-only edit should read; CI has not been asked, so that is
+a projection.
+
+**The failure set has moved since the revert.** `scripts/module_differential`
+reads 0 wrong on 9ec9f7e9 and 2 wrong with the reorder, and only one of the two
+is the one kanso#1329 recorded:
+
+    a call from the entry at the wrong arity
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
+      where the program says `one`
+
+    a type and a function sharing a name
+      expected it to compile; got
+      error[opacity]: `m/thing` is foreign -- only `m` builds a `thing`
+
+The sibling-arity case kanso#1329 also lost now passes. In its place is a
+program that compiled before the reorder and does not compile after it, which is
+a worse thing than a diagnostic quoting the wrong spelling. `m/b.kso` declares
+`pub fn thing _`, the entry writes `print "{thing 0}"`, and the answer should be
+`m/thing 0`.
+
+**Both objections are the alias pass, not the type pass.** Moving
+`canonicalize_bare_aliases` alone and leaving `canonicalize_types` in the success
+arm leaves the differential at the same 2 wrong, and reads slightly BETTER than
+moving both:
+
+    entry_instructions   164,922,557 -> 163,353,361   -1,569,196  (-0.9515%)
+
+8,930 better than the pair, because the alias pass deletes the twins before
+`canonicalize_types` walks them rather than after. `thing` in `print "{thing 0}"` is a CALL, so the alias pass rewrites it to
+`m/thing` like any other bare name, and the opacity check then reads a qualified
+name as a foreign type construction. One pass, one mechanism, two checks that
+read a name after something else has rewritten it.
+
+**What would make it shippable**, stated more narrowly than kanso#1329 could:
+`check_merged`'s opacity and arity checks have to see the spelling the program
+used. The obvious inverse map from `aliases` is unsound -- it is keyed by name,
+so it would also rewrite the diagnostic for a call the user really did write
+qualified. The per-site record was then built as a probe and measured, and it is
+affordable:
+
+    alias-only reorder, no record   163,353,361
+    with the per-site record        163,380,706   +27,345
+
+1.7% of the prize, leaving -1,541,851 (-0.9349%) against 164,922,557. And the
+27,345 is not the recording. THE PASS REWRITES NOTHING ON ANY MEASURED CORPUS: a
+counter at the rewrite site reads 0 sites on bench/entry_corpus, 0 on
+bench/compile_corpus and 0 on lib/json, against 1 on the `m/thing` fixture that
+draws the opacity refusal. The vector never allocates, so what the 27,345 buys is
+an extra parameter carried through a recursive walk over every expression in the
+program, and a shape that hangs the recorder off a walker rather than threading
+it should cost less. Two things a real implementation must handle that the probe
+did not: the reader half in check.rs, and the second caller of the same walker at
+src/lib.rs:2616, which walks with the door map.
+
+**And the two readers want different things, which reading `foreign_constructions`
+settles.** Its own comment states the invariant the reorder breaks, at
+check.rs:1847: "A qualified name can never be a local binding, so unlike the
+arity walk beside it this needs no shadowing set: the slash IS the foreignness."
+That holds only while every slash in the merged program was written by a person.
+After the alias pass has run a slash also means the pass put one there, and the
+check fires on `m/thing 0` -- a call of an imported function -- as though it were
+a construction of the imported type of the same name. So opacity does not want a
+spelling to quote. It wants to SKIP a head the pass rewrote, because that head
+was never a construction. Arity is the one that wants the spelling. One record,
+two uses, and a fix that handed both readers the old name would leave the opacity
+refusal exactly where it is.
+
+This is not a gavel: the
+substance was ruled in kanso#1120, a diagnostic names what the import writes, and
+which mechanism satisfies it is the implementer's.
+
+**How this came to be built twice, since the answer is a process one.** The task
+list carried it as BUILT AND PROVEN with a full `cargo test` behind it. The
+kanso#1329 entry names that exact evidence as worthless here --
+`scripts/module_differential` is a kanso program run by the diagnostics-
+differential CI job and `cargo test` never invokes it -- so the suite was green
+both times and said nothing both times. The filing search caught it before the
+branch was pushed, which is what the search is for.
+
+- **DECLINED** — the entry path's alias-pass reorder, in any shape that leaves a
+  check reading a rewritten name. Re-measured, re-refused, and this time the
+  opacity refusal is on the record beside the arity one.
+- **OPEN** — the pre-canonical spelling for `check_merged`'s two name-reading
+  checks. Worth -1,569,196 on the entry row in the alias-only shape, and
+  -1,541,851 with the per-site record that makes it sound. What is unbuilt is
+  the reader half: the two checks in check.rs that have to consult the record
+  instead of the node, and a fixture for each.
+- **OPEN, unchanged** — the twins inside `infer`, which is the other half of the
+  reorder's value and is blocked on a different thing: `infer` indexes
+  declarations positionally, and a group keyed by (name, arity) is a dispatch
+  group, so the twin is what lets a bare name resolve.
