@@ -50,11 +50,17 @@ fn which_file_names_a_dependency_does_not_change_what_checking_costs() {
     let second = peak(&named_second);
 
     // Not byte-equal: a module's declarations are merged in file order, so
-    // moving one between files still shifts the number, by seventeen bytes
+    // moving one between files still shifts the number, by fifteen bytes
     // here. A dependency loaded in the wrong order shifted it by 36,983.
+    //
+    // It was seventeen until 2026-09-08, when `FnDecl.file` became a shared
+    // `Arc<str>`: the peak no longer holds a copy of the path per declaration,
+    // so two of the bytes that used to move with file order are not there to
+    // move. Read three times at 483,758 against 483,773; the counter is
+    // deterministic and the number is exact, not a band.
     assert_eq!(
         second as i64 - first as i64,
-        17,
+        15,
         "which file names a dependency moved what the front end holds: {first} against {second}"
     );
 }

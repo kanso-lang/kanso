@@ -2968,3 +2968,13 @@ All seven `tests/golden/errors_module` fixtures are byte-identical and
 `all_compile.sh` reports emitted_code AGREED. An `Arc<str>` is immutable, so
 sharing a path between declarations cannot alias a write — nothing in the tree
 mutates a declaration's file after stamping it.
+
+One spec moved and was repaired rather than relaxed.
+`tests/import_order.rs` pins the peak difference between two modules that
+declare the same two functions and differ only in which file names `std/list`.
+It read seventeen bytes and reads fifteen: the peak no longer holds a copy of
+the path per declaration, so two of the bytes that used to move with file order
+are not there to move. Read three times at 483,758 against 483,773. The number
+stays exact — the spec exists to catch the 36,983 a dependency loaded in the
+wrong order cost, and a band would have hidden this move instead of reporting
+it.
