@@ -9,12 +9,35 @@ import "std/text"
 # The shape is prose_check's, which is the real workload behind it: walk a
 # subject once, matching at every position, keeping nothing. Peak should be
 # flat in the subject length, because a position that matched nothing has no
-# result to hold. It is not flat. regexp's walk passes its position index
-# through a continuation that is both called and captured, inference cannot
-# say who calls that continuation, so the index is seeded at TOP, TOP carries
-# the BYTES bit, and the beat guard refuses to rewind a cluster whose
-# parameter might be bytes. Nothing sweeps per position, and every position's
-# scratch survives to the end.
+# result to hold. It is not flat, and nothing sweeps per position: every
+# position's scratch survives to the end.
+#
+# THIS HEADER USED TO SAY the index is seeded at TOP, TOP carries the BYTES
+# bit, and the beat guard refuses to rewind a cluster whose parameter might be
+# bytes. The guard is real; the measurement below puts the cause elsewhere.
+#
+# regexp/walked/5 is the loop that keeps the scratch. The beat report gives it
+# two reasons to decline -- "another group tail-calls it (unbracketed entry)"
+# and "argument 1 also carries heap". Measured on 2026-09-08, each against this
+# benchmark's 198,180,864 bytes over 189 blocks: removing the BYTES condition
+# from all three guard sites leaves it at 198,180,864 over 189, to the byte;
+# disabling the unbracketed-entry check leaves it there too; clearing BOTH, so
+# the group classifies as a carry beat evacuating arguments 1, 3, 4 and 5,
+# leaves the emitted IR byte-identical to baseline.
+#
+# What decides it sits downstream of the classifier. codegen reads beat_loops,
+# and beat_loops drops every group whose file begins "std/" or "lib/" from the
+# carry tier, so regexp/walked's carry is stripped and its id dropped whatever
+# the verdict was. Clear that filter as well and the peak is 1,048,576 bytes
+# over one block, with alloc_bytes unchanged at 197,577,484: the same
+# allocation, now reclaimed.
+#
+# The filter earns its place. Removing it wholesale left runbench still running
+# after ten minutes against a 0.4-second baseline, because every library loop
+# begins evacuating, and the 2026-09-01 sitting priced the same removal at
+# -0.56 welfare under the objective of that day. This row is the price of the
+# carry tier being decided by a path prefix rather than by the property the
+# prefix stands in for, and it moves when that is fixed.
 #
 # The pattern retains nothing on purpose. A pattern that matched would make
 # peak grow for an honest reason — the matches are real data — and the row

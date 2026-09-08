@@ -20,101 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (twenty-fourth) — the fold asks the length twice, and the tag test is why
-
-`encode_onto`'s escape fold reads the same header field twice per byte. The
-loop, at 0x62d2 in the shipped binary:
-
-    62d2  cmpq  $0xd,0x40(%rsp)   ; is the collection bytes?
-    62da  mov   (%r15),%rcx       ; the length, load one -- `length coll < i`
-    62dd  cmp   %r14,%rcx
-    62e7  ...   call k_b_length   ; the other arm
-    6324  cmp   %r14,(%r15)       ; the length, load two -- `coll[i]!`
-
-Both are `cmp %r14,(%r15)`, the identical comparison against the identical
-address, and nothing between them writes memory on the fast path. GVN does not
-forward the first to the second because the `k_b_length` call arm merges
-between them, and the merge is the tag test: `k_b_length_fast` inlines a header
-load for a list or a bytes and calls the C entry for anything else.
-
-**What the second compare is worth: 1.4650%.** Both emission sites in the
-demanded-index guard were neutralised in turn, which is unshippable and prices the guard:
-
-    the whole guard removed     4,390,891,562 -> 4,324,668,394   -1.5081%
-    only `idx <= len` removed   4,390,891,562 -> 4,326,560,692   -1.4650%
-    only `idx >= 1` removed                                      -0.0431%
-
-The `>= 1` half is nearly free because LLVM proves it from the induction
-variable; the upper bound and the load under it are the whole cost. #349
-already declined folding the two signed compares into one unsigned one -- the
-signed pair is what buys `movzbl -0x1(%rax,%rbp,1)`, with the `-1` in the
-address -- so this thread is about asking the same compare once rather than
-about asking fewer of them.
-
-**The static proof does not reach it.** The emitter has a `proven` path for the
-demanded index when `set_of(container) == BYTES`, and `length` had none, so a
-`length` of a value already proved bytes went through the twin's tag test for
-nothing. The emitter writes the header load directly now, and every row falls
-or holds:
-
-    encodebench  4,390,891,562 -> 4,389,081,554   -1,810,008   -0.0412%
-    livebench    4,400,130,843 -> 4,399,421,576     -709,267   -0.0161%
-    oneshot         24,108,858 ->     24,107,081       -1,777   -0.0074%
-    jsonbench    1,542,924,537 -> 1,542,924,177         -360
-    widebench       54,609,406 ->     54,609,398           -8
-    digestbench     77,175,233 ->     77,175,230           -3
-
-Six fall and the other seven are byte-identical -- basket, deepbench,
-pendbench, escapebench, indexbench, scanbench and readbench have no `length`
-site the sets prove. Nothing rises.
-
-**And it does not touch the fold.** `list/fold_flat` is one function for lists
-and bytes both, so its `coll` carries the union and neither its `length` nor
-its index gets the proof -- the tag test above is the run-time answer to a
-question the call site already knew. The fold is inlined into `encode_onto` and
-the back edge at 0x63f3 makes a machine loop of it, but the recursion is
-`musttail`, so LLVM sees no loop and LICM never runs: the tag test, the length
-load and the bound are paid on every byte.
-
-That names the next thing rather than doing it. `coll` is passed unchanged to
-every self-call, which makes it invariant across the cycle by construction, and
-an emitter that specialised on an invariant parameter's tag once at entry would
-collect the 1.4650% and the tag ladder with it.
-
-The two emitted-code veins move in opposite directions and the trend gate wants
-both named. `emitted_calls` falls 1,845 -> 1,843 and `emitted_other_calls`
-15,823 -> 15,814, because a call to the twin leaves each site. `emitted_lines`
-rises 12,708 -> 12,716 and `emitted_other_lines` 104,496 -> 104,532, because
-four IR lines take its place: an `inttoptr`, a `getelementptr`, a `load` and an
-`insertvalue`. Four lines a call is the trade, and `text` falls 1,233,802 ->
-1,233,434 over the same change, so what the linker kept is smaller than what
-the emitter wrote. `defines` and `branches` hold in every program.
-
-CI's own sitting, which is the one the goldens hold, agrees with the container
-on every sign and on four of the six magnitudes to the instruction:
-
-    encodebench  4,390,892,021 -> 4,389,082,013   -1,810,008   -0.0412%
-    livebench    4,400,131,256 -> 4,399,422,049     -709,207   -0.0161%
-    oneshot         24,109,317 ->     24,107,540       -1,777   -0.0074%
-    jsonbench    1,542,924,950 -> 1,542,924,650         -300
-    widebench       54,609,879 ->     54,609,871           -8
-    digestbench     77,175,692 ->     77,175,689           -3
-
-basket, deepbench, escapebench, pendbench, indexbench, scanbench and readbench
-hold to the instruction. Welfare 75.31082442642723 -> 75.31169684664573,
-banked with `--set`.
-
-`compile_instructions` FALLS, 42,092,346 -> 42,091,852. CLAUDE.md's rule is that
-this row moves on any edit to the compiler's own Rust and usually upward,
-because src/codegen.rs is the compiler and the layout under its bytes moves with
-them; #1275 paid 2,728 for a smaller diff than this one. It falls here for a
-reason the diff shows: the proven-bytes arm returns before the generic builtin
-path builds `args_ir`, a Vec of formatted Strings one per argument, and before
-it collects the argument sets `infer::builtin_set` reads. The emitter writes
-four IR lines where it wrote one call and does less work deciding to.
-
----
-
 ## 2026-09-06 (twenty-fifth) — the fold's container cannot be proved from the library, and the beat is why
 
 The twenty-fourth entry left the 1.4650% behind one wall: `list/fold_flat` is
@@ -3816,3 +3721,94 @@ So the marshalling is real and the obvious way at it costs thirty times what it
 saves. What the emitter does today is not a narrow rule that nobody widened —
 it is the widest rule that keeps the inlining, and `int` qualifying alone is the
 point rather than an oversight.
+
+## 2026-09-08 (second) — the run peak is one phase, and the guard its benchmark blames is not the one holding it
+
+SEARCHED FIRST: design/compiler-log.md, design/log/compiler-log-archive.md
+(the 2026-08-31 entry "IDENTIFIED: the digest's 86x is a source-path prefix"
+and the 2026-09-01 entry "the carry tier, arbitrated: DECLINED at -0.56"),
+design/pending-gavels.md. The carry tier's exclusion has been identified before
+and priced once. What is new here is where runbench's peak actually sits, and
+that the benchmark watching it names the wrong guard.
+
+**Why look.** `run_peak_bytes` is welfare's second-heaviest term at weight 0.26
+and its least satisfied after `run_instructions`. Nothing had attributed it.
+
+**The peak is one phase.** Each of runbench's eight phases built alone with the
+other seven zeroed -- the shape the program's own header describes -- and
+`arena_peak_bytes` read off each:
+
+| phase | blocks | peak |
+|---|---:|---:|
+| EMPTY | 2 | 2,097,152 |
+| decode | 4 | 4,194,304 |
+| encode | 2 | 2,097,152 |
+| deep | 3 | 3,145,728 |
+| digest | 6 | 6,291,456 |
+| index | 5 | 6,098,640 |
+| escape | 2 | 2,097,152 |
+| pend | 4 | 4,194,304 |
+| **split** | **37** | **38,797,312** |
+| the whole program | 43 | 45,944,528 |
+
+`split` carries 84.4% of the peak on 4.87% of the instructions. Its
+`alloc_bytes` is 38,248,797 against `evac_bytes` 9,216: it allocates 38 MB and
+reclaims almost none of it, where every other phase sits at two to six blocks.
+
+**The arena is flat, and the doubling comment belongs to another pool.** The
+counter reads `k_live_block_bytes`, summed at `k_arena_push` (runtime.c:534),
+whose only caller asks for a flat 1 MiB (`k_alloc_refill`, line 584). The
+doubling blocks with the "address space rather than pages" note at line 1372
+are the TENURE tier, `KTenBlock`, which reads 7 on this run and is not in this
+counter at all. Residency checked from outside with getrusage: ru_maxrss is
+52,088 / 52,028 / 52,108 KB over three runs, above the 46,682,840 the three
+peak counters sum to. The counter is if anything conservative -- line 843
+decrements when a block retires to `k_spare`, so spare blocks stay resident and
+uncounted.
+
+**The benchmark blames the wrong guard.** scanbench's header said the peak
+stands because the walk's index is seeded at TOP, TOP carries the BYTES bit,
+and the beat guard refuses a cluster whose parameter might be bytes. The beat
+report gives `regexp/walked/5` two reasons to decline, and the one classify
+stops at is the other one: "another group tail-calls it (unbracketed entry)",
+with "argument 1 also carries heap" as an also. Three probes, each against
+scanbench's 198,180,864 bytes over 189 blocks:
+
+- BYTES condition removed from all three guard sites: 198,180,864 / 189, to the
+  byte.
+- `outside_tails` disabled in `classify`: 198,180,864 / 189.
+- both cleared, so the group classifies as "carry beat: rewinds every
+  iteration, evacuating argument 1, 3, 4, 5": 198,180,864 / 189, and the
+  emitted IR is byte-identical to baseline (diff of 0 lines).
+
+**What decides it is downstream of the classifier, and it is the 2026-08-31
+prefix.** codegen reads `beat_loops`, not `classify`. After classifying,
+`beat_loops` builds `imported` from `d.file.starts_with("std/") ||
+d.file.starts_with("lib/")` and strips those groups' carries and ids.
+`regexp/walked` lives in std/regexp, so its carry goes whatever the verdict
+was. Clearing that filter as well: peak 1,048,576 over ONE block, a 189x fall,
+with `alloc_bytes` unchanged at 197,577,484 and the program still printing 0.
+The same allocation, now reclaimed.
+
+**Reading a diagnostic as the decision is how three probes came back
+byte-identical without saying so.** `report` calls `classify_all` and never
+passes through the `imported` filter, so it describes a verdict the backend
+does not act on. CLAUDE.md's rule against specs written on an internal verdict
+applies to diagnosis too: the IR diff is what caught it, and it should have
+been the first thing checked rather than the fourth.
+
+**Not a proposal.** Removing the filter wholesale left runbench still running
+after ten minutes against a 0.405-second baseline, because every library loop
+starts evacuating, and the 2026-09-01 sitting priced that same removal at -0.56
+welfare under the objective of the day. The exclusion has a real reason written
+beside it -- a shared library driver threading its caller's invariant source
+would copy an unbounded value every iteration. The defect is that the reason is
+approximated by a path prefix, and the fix is to ask for the property. That is
+a build, and it is priced by the objective when it exists, not by this counter.
+
+**Open, and worth saying plainly:** the 2026-09-01 decline was measured on
+digestbench under twenty-eight counters and a corpus the 2026-09-06 gavel has
+since replaced with one consolidated program, and kanso#1295 has since moved
+the thunk memo that entry named as the conflicting mechanism. The decline
+stands until something re-measures it. It should not be cited as settled under
+the current objective.
