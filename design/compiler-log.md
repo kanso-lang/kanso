@@ -2650,3 +2650,61 @@ project has given three times is that it does not.
 are available and both were taken on the changeover head, so no re-measurement
 is needed. If the fall is kept deliberately, that is a claim about the weights,
 which CLAUDE.md says is settled before the floor moves rather than after.
+
+## 2026-09-08 (second) — the compile term read one compile out of two
+
+Searched the log, the archive and design/ before filing: the re-basing precedent
+is the 2026-09-05 entry for kanso#1242 and the archive's #729 and #741; the entry
+vein opened in kanso#1330, whose own entry above closes with this as an OPEN
+question — "should welfare's compile term read the entry path as well as the
+module path? Two compiles, one term." This answers it.
+
+**The term summed one path.** `kanso check <directory>` takes
+`compile_module_inner`; `kanso check <file>` with a top-level expression takes
+`compile_parsed_entry`, which merges the imports itself and runs its own
+whole-program check. Every `kanso run` takes the second, and nothing counted it
+until kanso#1330. The compile term now adds the two rows:
+
+    compile_instructions   48,757,859 + 163,886,731 = 212,644,590
+
+**The baseline moves with it, so the score does not.** The entry vein has no
+reading at this objective's epoch, because its corpus did not exist then, so its
+baseline is imputed at the ratio the module row holds:
+
+    r = 154,032,855 / 48,757,859 = 3.1591390221
+    entry baseline    163,886,731 * r = 517,740,967
+    summed baseline   154,032,855 + 517,740,967 = 671,773,822
+    summed ratio      671,773,822 / 212,644,590 = 3.1591390216
+
+The preservation is algebraic — `(cb + ec*r) / (cc + ec) = r` for any `ec` — and
+it was measured rather than trusted: welfare reads 66.29 against a floor of 66.29
+before and after.
+
+**What the shape of the change turned out to be.** The plan recorded for this
+work said it was one line in `bench/objective_sources.txt`, and that was wrong.
+welfare does not build its counters from that file; it reads the goldens itself,
+in `fn measured` and a reader chain, and objective_sources is the LINK that the
+trend gate's `shifted?` and `tests/the_objective_reads_what_the_gate_watches.rs`
+replay. Both halves are needed and they are different files. The spec was watched
+red before it passed: with the second key removed it reports `compile_instructions
+reads 212644590 from welfare and 48757859 from compile_instructions`.
+
+Two smaller things the edit forced. The compile veins now reach `measured` as one
+list rather than as four positional arguments, because a fourth `compile[4]!` at
+the call site overflows the 80-column rule by three characters; the next golden
+to join is now one list entry and one binding. And the binding is `ent`, because
+`entry` is bare-enrolled from an import and the resolver refuses to shadow it.
+
+**golden_prose needed the same golden and would not have said so.** Its
+`golden_for` answers for `decode`, `encode` and `compile` and returns `[]` for
+any other family, so a page span written `data-golden="entry.entry_instructions"`
+resolves against an empty golden — a span nothing watches, which is the exact
+failure that gate was widened to fix in kanso#1047. The entry row joins the
+`compile` family instead, whose own comment already licenses it: the key names do
+not collide.
+
+**Still to ship: the twin skip.** kanso#1330 measured it and deliberately left it
+out, because the objective could see the module row's +7,745 and not the entry
+row's −260,849. Under the sum it is a fall of 253,104, −0.1190%. It is a separate
+change because it moves two goldens whose values are CI's, and this one moves no
+counter at all.
