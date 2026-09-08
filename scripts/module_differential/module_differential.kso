@@ -438,7 +438,39 @@ cases_c = text/concat cases_b [c19 c20 c21 c22]
 
 cases_d = text/concat cases_c [c23]
 
-cases = text/concat cases_d [c24 c25]
+# The module-path twins of c7 and c11. Both readers under the whole-program
+# check ask what a call's head is spelled, and `canonicalize_bare_aliases`
+# rewrites bare names to qualified ones before either of them looks. On the
+# ENTRY path c7 and c11 have watched that since kanso#1332; the module path ran
+# the same pass in front of the same check from kanso#1328 and nothing here
+# asked it anything. It gave two wrong answers: opacity refused c26 outright,
+# and arity quoted `m/one` in c27 for a program that says `one`.
+#
+# c26 is a module and so has no `main.kso`: it checks clean and the run is what
+# refuses it, which is c15's message and c15's verdict.
+c26c = filed "use.kso" """
+  import "./m"
+
+  pub fn f _
+    thing 0
+"""
+
+c26l = "a bare call to a name a sibling type shares, from a module"
+
+c26 = kase c26l [c7a c7b c26c] "" "run refuses" c15said
+
+c27c = filed "use.kso" """
+  import "./m"
+
+  pub fn f _
+    one 1 2
+"""
+
+c27l = "a call from a module at the wrong arity"
+
+c27 = kase c27l [c10a c27c] "" "check refuses" arity_said
+
+cases = text/concat cases_d [c24 c25 c26 c27]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written

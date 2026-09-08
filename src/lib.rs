@@ -3610,8 +3610,16 @@ fn compile_module_loaded(
         merged.fns.extend(program.fns);
     }
     phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
-    phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
-    let diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
+    // kanso#1328 moved this pass in front of the check on the module path and
+    // handed the check nothing, so both readers below it saw a slash a person
+    // never wrote: the arity diagnostic quoted `m/one` for a program that says
+    // `one`, and opacity refused a valid call outright. Same record, same two
+    // readers as the entry path.
+    let rewritten =
+        phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
+    let diags = phase::watched("check_merged", || {
+        check::check_merged_after_aliases(&merged, require_entry, &rewritten)
+    });
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
