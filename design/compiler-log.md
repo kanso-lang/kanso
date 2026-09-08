@@ -4332,3 +4332,64 @@ moved once, appends entries to the log, and reads the gate's own output: the
 nine-ruling batch passes at 1/3, four entries recording shipped work still fail
 at 4/3 and are named, and four headings that mention a gavel without being one
 still fail. The first was watched red on the old gate before the fix went in.
+
+## 2026-09-08 (sixth) — k_b_join called libc for a single byte
+
+`k_b_join` copied both the separator and each item with `memcpy`. In every
+shipped caller measured both are one byte or none: `join [s s] ""` gives a
+zero-length separator, and `join digits " "` joins one-byte strings with a
+one-byte separator.
+
+**Attributed before it was built.** The whole program's
+`__memcpy_avx_unaligned_erms` is 55,344,167 instructions, 2.33% of runbench,
+and the per-caller breakdown sums to it exactly:
+
+```
+     Ir      calls   Ir/call  caller
+ 29,208,336  353,394     82.7  k_b_append_grow
+  9,472,765  400,019     23.7  k_b_join
+  9,306,956  130,618     71.3  main
+  2,926,620  191,070     15.3  render_ryu
+  2,296,030  177,706     12.9  k_b_split
+```
+
+Through the call a one-byte separator costs 16.0 instructions and a one-byte
+item 23.6. Storing the byte where the length says one saves 5.5 on an average
+call.
+
+**The earlier ceiling estimate was wrong by 7.6x, and the reason is worth
+keeping.** It priced a one-byte copy at the whole-program memcpy average, about
+forty instructions. The distribution above is bimodal — `k_b_append_grow`'s 82.7
+per call is a real buffer copy and drags the mean far above what a short copy
+costs — so the average describes no call site in the program. A per-site figure
+is the only one that means anything here. The same error nearly shipped a second
+time in this change's own source comment and was caught before the commit.
+
+**On CI.** runbench 2,398,991,511 -> 2,397,582,951 (−0.0587%), and pendbench
+596,612,948 -> 590,979,348 (**−0.9443%**), which is where join's one-byte
+separators live: 199,900 separator calls and 199,973 item calls of the 400,019.
+The local reading was −0.0930% of runbench against a different baseline.
+
+**The compile row moved, as it was warned it might.** compile_instructions
+19,315,772 -> 19,316,711, a rise of 939. `src/runtime.c` is `include_str!`'d
+into the compiler, so its bytes shift the binary's layout even though
+`kanso check lib/json` stops before codegen — the eighth layout-only move that
+row has recorded. It could not be settled before CI: this container refuses to
+compare that vein at all, its golden measured on glibc 2.39-0ubuntu8.8 and
+rustc 1.98.1 against the container's 2.39-0ubuntu8.7 and 1.94.1. The five
+.text rows that carry the extra branch grew 64 bytes each, so the text vein
+sums 1,469,868 -> 1,470,188. The first round of this change said three rows
+and updated three; the two it missed were found by comparing all fourteen
+against CI's output rather than by eye.
+
+Welfare 66.00 -> 66.01, and the floor is ratcheted in the same change. The sum
+rises with the compile term's 939 counted against it, which is the trade the
+weights exist to make.
+
+**What this closes and what it leaves.** The short-copy regime (callers under
+about 25 instructions a call, where the call dominates the copy) is 16.4M of
+that 55.3M, and join was 9.47M of it — the largest single site by three times.
+The rest is `render_ryu`, `k_b_split`, `w_klam42` and `k_stats_switch`, about
+6.95M together, worth measuring as one change on a baseline that includes this
+one. `k_b_append_grow`'s 29.2M is not that shape and is already understood:
+one first-append per escaped string, not repeated growth.
