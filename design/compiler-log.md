@@ -3274,13 +3274,80 @@ This is also the branch that finally proves `library_ir` on CI. The ratchet's
 `touched origin/main` pass selects only rows patching a file the branch
 changed, and kanso#1337 touched no `src/` — so the new row's mutation was
 verified there only as an anchor that still matches, never run. This change
-patches `src/lib.rs`, which is what that mutation patches, so the row is
-selected and turned red on the runner for the first time.
+patches `src/lib.rs`, which is what that mutation patches, so the touched pass
+selects the row. Whether it turns red on the runner is CI's to say, and the
+paragraph below is what happened on the first attempt.
 
 `canonicalize_types` stays where it is. On the entry path moving it too read
 8,930 instructions worse, because the alias pass deletes the twins before that
 one would have walked them, and there is no reason to expect the other
 direction here.
+
+**CI's row.** The vein summary named exactly one failing counter against
+eighteen green, which is what round one was for:
+
+    library_instructions   164,253,088 -> 162,970,167   -1,282,921   -0.7811%
+
+The container projected a fall of 1,288,946, or 0.7784%. It overstated the
+saving by 6,025 instructions — half a per cent of the fall — while reading
+0.8136% high on the LEVEL of the row. A level offset between toolchains does
+not carry to a delta, and this is the second sitting to say so: kanso#1335
+recorded the same thing on the entry and module rows, where the projections
+also came out conservative.
+
+**THE OTHER TWO COMPILE ROWS DID NOT MOVE AT ALL**, and that is worth writing
+down because this change edits `src/lib.rs`, the compiler's own Rust.
+`compile_instructions=48,791,172` and `entry_instructions=162,170,772` are
+byte-identical to their goldens in the job that counted the new row. CLAUDE.md's
+prior is that `compile_instructions` usually moves on such an edit through
+layout alone; it holds, and this is the second recorded change small enough to
+leave it alone, after kanso#1285.
+
+**The mutation's anchor went stale in this same change, and pass one of the
+ratchet is what said so.** `the_library_program_is_checked_twice.sh` anchors on
+`let merged_diags = check::check_merged(&program, false);`, which is the exact
+line the reorder rewrites, at both sites. So round one's ratchet job failed
+`every mutation still matches the source it patches` and skipped the touched
+pass underneath it — the pass this branch exists to reach. The anchor moves to
+`check::check_merged_after_aliases(&program, false, &rewritten)` and the
+duplicate lands at 465, inside `compile_library` (390), with `compile_one`'s
+call at 372 untouched.
+
+A mutation anchored on a line a change is about to rewrite goes stale in that
+change. That is the ordinary case rather than a surprise, and the first pass
+exists to report it on the runner before the row it guards is ever read.
+
+**A FIFTH READER, found by running the trend gate on this change's own diff.**
+The fall printed as UNCLASSIFIED:
+
+    UNCLASSIFIED — no direction table names these, so they count
+    toward neither side of the pure-regression rule:
+      library_instructions
+
+The gate walks the golden and has no direction for the counter in it, so it can
+report the move and cannot say which way is better. A rise of the same size
+would have printed identically and counted toward neither side of the
+pure-regression rule. `entry_instructions` has been in the same position since
+kanso#1330 — two compile veins unclassified for as long as they have existed.
+
+This is the digestbench failure one vein down, which
+`tests/every_benchmark_in_the_work_vein_has_a_direction.rs` exists to prevent
+and could not see here: it reads `bench/instructions_golden.txt` and stops. Its
+own argument carries straight across — each compile golden holds retired
+instructions for one compile and fewer is better in all of them, so every row
+has a direction and none of them is a presence counter whose direction means
+nothing alone.
+
+`tests/every_compile_vein_row_has_a_direction.rs` asserts it over every
+`bench/*instructions_golden.txt` other than the work vein's, read off disk, so a
+fourth compile path opening a vein under a fourth name is covered on the day the
+file lands. Watched red first, naming both: `["entry_instructions",
+"library_instructions"]`. Both join `lower_gg` and the gate now prints
+`improved: library_instructions 164,253,088 -> 162,970,167`.
+
+That makes five readers a compile vein owes: its gate, `all_compile.sh`'s
+`gates=` line, the trend gate's walk, `golden_prose`, and the trend gate's
+direction table. kanso#1337 wired three of them.
 
 ---
 

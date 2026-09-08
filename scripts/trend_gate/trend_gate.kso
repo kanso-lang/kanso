@@ -69,11 +69,25 @@ lower_e = ["rounds" "visits"]
 
 lower_f = ["front_end_rounds" "front_end_visits" "compile_peak_bytes"]
 
-# The two MEASURED compile veins. They became welfare's compile-speed terms on
-# 2026-08-26 and this gate could not see either of them, so an instruction
-# count could move by a million with the listing silent — which is exactly what
-# it did while gavel 24 was being built, and only the per-golden diff caught it.
+# The MEASURED compile veins. The first two became welfare's compile-speed
+# terms on 2026-08-26 and this gate could not see either of them, so an
+# instruction count could move by a million with the listing silent — which is
+# exactly what it did while gavel 24 was being built, and only the per-golden
+# diff caught it.
 lower_g = ["compile_instructions" "compile_allocs"]
+
+# `kanso check` routes a single file by content and the three routes are three
+# compiles, so the module row above has two siblings: `entry_instructions` from
+# kanso#1330 and `library_instructions` from kanso#1337. NEITHER JOINED THIS
+# TABLE WHEN IT JOINED THE TREE. Both were walked by the gate and unclassified
+# by it for as long as they existed, which is the digestbench failure one vein
+# down: a rise printed as drift and counted toward neither side of the
+# pure-regression rule. Running the gate on kanso#1338's own diff is what
+# surfaced it, and tests/every_compile_vein_row_has_a_direction.rs derives the
+# veins off disk so a fourth compile path cannot open one blind.
+lower_gg = ["entry_instructions" "library_instructions"]
+
+lower_gs = text/concat lower_g lower_gg
 
 # The runtime work vein, per benchmark. Four of these are welfare's run-speed
 # terms, so half the score's inputs were invisible to the gate that exists to
@@ -110,7 +124,7 @@ lower_ab = text/concat lower_a (text/concat lower_b lower_bb)
 
 lower_cd = text/concat lower_c lower_d
 
-lower_ef = text/concat lower_e (text/concat lower_f lower_g)
+lower_ef = text/concat lower_e (text/concat lower_f lower_gs)
 
 # emitted_golden's four counters need no entry: `lines`, `calls`, `branches`
 # and `defines` are in lower_d already, for compile_golden. The prefix on the
