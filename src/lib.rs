@@ -508,8 +508,14 @@ fn canon_id(file: &str) -> u32 {
 /// Err origins name the function and the file it lives in; the file is
 /// per-declaration so it survives multi-file module merging.
 fn stamp_file(program: &mut ast::Program, file: &str) {
+    // One allocation for the path and a refcount bump per declaration. It was
+    // a `String` apiece — 803 copies of about seven distinct values on the
+    // fixed corpus — and the sets in linear.rs, beat.rs and codegen.rs that
+    // key on (file, line, col) cloned the whole path again on every insert
+    // and lookup.
+    let file: std::sync::Arc<str> = std::sync::Arc::from(file);
     for decl in &mut program.fns {
-        decl.file = file.to_string();
+        decl.file = std::sync::Arc::clone(&file);
     }
 }
 
@@ -664,7 +670,7 @@ fn synthesize_getters(program: &mut ast::Program) {
                     whole: None,
                 }],
                 body: vec![ast::Stmt::Expr(ast::Expr::Ident(Name::new(ast::GETTER_BINDER), *span))],
-                file: String::new(),
+                file: crate::ast::unstamped(),
                 synthetic: false,
             });
         }
@@ -933,7 +939,7 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
         if !twin.synthetic {
             at_site
                 .entry((
-                    twin.file.as_str(),
+                    &twin.file,
                     twin.span.line as usize,
                     twin.span.col as usize,
                     twin.params.len(),
@@ -951,12 +957,9 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
         let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::default()));
         entry.0 &= d.synthetic;
         if d.synthetic {
-            if let Some(twins) = at_site.get(&(
-                d.file.as_str(),
-                d.span.line as usize,
-                d.span.col as usize,
-                d.params.len(),
-            )) {
+            if let Some(twins) =
+                at_site.get(&(&d.file, d.span.line as usize, d.span.col as usize, d.params.len()))
+            {
                 for name in twins {
                     // `qual/name`, asked without building the needle. A
                     // `format!("/{}", d.name)` here cost a String per

@@ -333,7 +333,7 @@ fn accumulator_grows(program: &Program, name: &str, arity: usize, position: usiz
 /// Sites where a push/append/put was proven unique, keyed by source
 /// position — the linearity analysis's output, threaded in so the chain
 /// test below can insist on pointer identity rather than merely on type.
-pub type MutSites = crate::hash::Set<(String, usize, usize)>;
+pub type MutSites = crate::hash::Set<(std::sync::Arc<str>, usize, usize)>;
 
 /// Groups whose every arm returns the very object that arrived as its first
 /// parameter — pointer identity through mut appends, folds, conditionals and
@@ -1113,7 +1113,7 @@ fn alloc_groups<'a>(program: &'a Program, mut_sites: &MutSites) -> HashSet<&'a s
 /// sites, so an append the linearity analysis already proved in place can be
 /// told from one that copies.
 struct Site<'a> {
-    file: &'a str,
+    file: &'a std::sync::Arc<str>,
     mut_sites: &'a MutSites,
 }
 
@@ -1127,7 +1127,7 @@ impl Site<'_> {
         matches!(head, Expr::Ident(n, _) if matches!(n.as_str(), "append" | "builtin_append"))
             && args.len() == 2
             && self.mut_sites.contains(&(
-                self.file.to_string(),
+                std::sync::Arc::clone(self.file),
                 span.line as usize,
                 span.col as usize,
             ))
@@ -2004,7 +2004,7 @@ mod tests {
         let (mut program, _) = compiled(src);
         let mut clone = program.fns.iter().find(|d| d.name == "go").unwrap().clone();
         clone.synthetic = true;
-        clone.file = "std/list".to_string();
+        clone.file = std::sync::Arc::from("std/list");
         program.fns.push(clone);
         let inference = infer::infer(&program);
         let beats = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));

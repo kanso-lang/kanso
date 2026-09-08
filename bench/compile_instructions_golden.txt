@@ -949,4 +949,20 @@
 # container measured the same change at -1,778,716 with the tunables pinned
 # (52,170,583 against a 53,949,299 baseline on rustc=1.94.1), and
 # compile_allocs falls 3.74% beside it.
-compile_instructions=50832211
+#
+# 2026-09-08 (a module's path is shared, not copied once per declaration):
+# 50,832,211 -> 50,685,978, a FALL of 146,233 or 0.2877%. `FnDecl.file` was a
+# `String`, so `stamp_file` wrote 803 copies of about seven distinct values on
+# the fixed corpus, and the sets in linear.rs, beat.rs and codegen.rs that key
+# on (file, line, col) copied the whole path again on every insert and every
+# lookup. It is an `Arc<str>` now: one allocation for the path and a refcount
+# bump apiece. The instructions that went are the copies themselves and the
+# byte comparisons the map keys no longer do.
+#
+# This is the front end doing less, not the layout vein moving, and
+# compile_allocs falling 30,414 -> 29,941 beside it is what says so. That row
+# and compile_peak_bytes were both written from a container and CI agreed with
+# both to the unit, which is the third reading to support the licence #1321
+# and #1323 established. This row was left for CI, as it always is: the
+# container reads it on a different rustc and a different glibc.
+compile_instructions=50685978

@@ -117,7 +117,7 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         body,
         span,
         is_pub: false,
-        file: String::new(),
+        file: crate::ast::unstamped(),
         synthetic: false,
     });
     Ok(program)
@@ -218,7 +218,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         body,
         span,
         is_pub: false,
-        file: String::new(),
+        file: crate::ast::unstamped(),
         synthetic: false,
     };
     Ok(Program { fns: vec![main], types: Vec::new(), imports, reexports: Vec::new() })
@@ -584,7 +584,15 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         return Err(Diagnostic::new("syntax", format!("function `{name}` has no body"), span));
     }
     let stmts = parse_body(body)?;
-    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new(), synthetic: false })
+    Ok(FnDecl {
+        name,
+        is_pub,
+        span,
+        params,
+        body: stmts,
+        file: crate::ast::unstamped(),
+        synthetic: false,
+    })
 }
 
 fn is_else_line(line: &Line) -> bool {
@@ -630,7 +638,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             span,
             params: Vec::new(),
             body: stmts,
-            file: String::new(),
+            file: crate::ast::unstamped(),
             synthetic: false,
         });
     }
@@ -655,7 +663,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             span,
             params: Vec::new(),
             body: vec![Stmt::Expr(expr)],
-            file: String::new(),
+            file: crate::ast::unstamped(),
             synthetic: false,
         });
     }
@@ -675,7 +683,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         span,
         params: Vec::new(),
         body: vec![Stmt::Expr(expr)],
-        file: String::new(),
+        file: crate::ast::unstamped(),
         synthetic: false,
     })
 }
