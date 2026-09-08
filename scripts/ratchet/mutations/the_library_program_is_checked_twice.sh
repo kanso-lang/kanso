@@ -32,6 +32,16 @@
 # beside it stay green through it.
 set -e
 file=src/lib.rs
+
+# THE PATH IS SPELLED ON A GUARD LINE, and that is load-bearing rather than
+# decorative. The ratchet's `touched` pass selects the rows a branch could have
+# made blind by intersecting the files a branch changed with the paths each
+# mutation names on a `grep -q` line. Every assertion below reaches src/lib.rs
+# through "$file", so the path appeared on no guard line and this row was
+# invisible to that pass -- it could never be selected, whatever a branch
+# touched. Proved on kanso#1338, whose diff rewrites this very call: the pass
+# selected three rows and neither this one nor its entry twin was among them.
+grep -q 'pub fn compile_library' src/lib.rs
 sig='pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {'
 call='    let merged_diags = check::check_merged_after_aliases(&program, false, &rewritten);'
 sigs=$(grep -cF "$sig" "$file" || true)

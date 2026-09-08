@@ -3270,13 +3270,57 @@ which is why the record ships with the reorder rather than after it. With
 `check_merged_after_aliases(&program, false, &rewritten)` at both sites the same
 run is 29 modules, 0 wrong.
 
-This is also the branch that finally proves `library_ir` on CI. The ratchet's
-`touched origin/main` pass selects only rows patching a file the branch
-changed, and kanso#1337 touched no `src/` — so the new row's mutation was
-verified there only as an anchor that still matches, never run. This change
-patches `src/lib.rs`, which is what that mutation patches, so the touched pass
-selects the row. Whether it turns red on the runner is CI's to say, and the
-paragraph below is what happened on the first attempt.
+**THE ROW COULD NOT BE SELECTED AT ALL, and this branch is what found out.**
+kanso#1337 said its mutation was verified only as an anchor that still matches,
+never run, because the touched pass selects rows patching a file the branch
+changed and that branch touched no `src/`. This one rewrites `src/lib.rs`, so
+the row should have been selected. It was not. CI's touched pass named three
+rows and neither `library_ir` nor its entry twin was among them:
+
+    ratchet: 3 rows patch a file this branch changed
+      cost goldens — a front-end pass that owns the program's names instead of
+        borrowing them
+      welfare — a number the page states about the present drifting from its
+        golden
+      diagnostics differential — a name a module keeps private crossing an
+        import anyway
+
+THE SELECTION KEYS ON GUARD LINES, NOT ON THE PATCHED FILE. `read_it` collects
+the lines of a mutation that spell `grep -q` and asks whether any of them names
+a file the branch changed. That is deliberate and kanso#1254 argued it well: a
+guard IS the dependency, and reading the whole script instead selected 33 rows
+where 12 were at risk. But both compile-path mutations reach `src/lib.rs`
+through `"$file"` and assert with `grep -c`, so the path appears on no guard
+line and neither row could ever be selected, whatever a branch touched.
+
+`entry_instructions` has been in that position since kanso#1330 and
+`library_instructions` since kanso#1337 — the same pair the trend gate had left
+unclassified, found the same afternoon by two different means.
+
+Both mutations now carry a guard line that spells the path, and the selection
+goes from three rows to five with the entry and library rows both named. Watched
+blind first: the three-row listing above is this branch before the repair.
+
+**EIGHT MORE ARE IN THE SAME POSITION**, and the count is off disk rather than
+from memory: of 112 mutations, 77 name a path under `src/` and 69 of those name
+one on a `grep -q` line. The two repaired here were among the ten that did not.
+The eight left are
+
+    a_module_rewritten_twice_before_it_is_checked.sh
+    a_path_copied_once_per_declaration.sh
+    a_validator_that_skips_its_tail.sh
+    a_validator_the_reference_disagrees_with.sh
+    an_entry_program_rewritten_twice_before_it_is_checked.sh
+    clippy_bait.sh
+    misformatted_source.sh
+    the_wasm_engine_answers_something_else.sh
+
+and each is unselectable for the same reason: it reaches its file through a
+variable and asserts with `grep -c`, `grep -cF` or `grep -A1`. Repairing them is
+its own change, and it owes a spec that reads the mutations off disk — which is
+why one is not shipped here. Written and watched red, it named all ten; with a
+green list of eight it would only be a list, and a list is the shape that goes
+stale.
 
 `canonicalize_types` stays where it is. On the entry path moving it too read
 8,930 instructions worse, because the alias pass deletes the twins before that
