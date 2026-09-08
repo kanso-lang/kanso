@@ -2724,15 +2724,30 @@ short name — body and all, `synthetic = true`. On `bench/entry_corpus` that is
 those clones: `check_build_blocks`, `check_none_in_collections` and
 `check_field_exists`. Thirteen others already skip them. These three now do too.
 
-Re-measured on the same container as the kanso#1330 entry, and the two rows
-reproduce it to the instruction:
+CI's rows, which are the ones this vein may hold:
 
-    entry_instructions   165,183,406 -> 164,922,557   -260,849  (-0.1579%)
-    compile_instructions  49,162,592 ->  49,170,337     +7,745  (+0.0158%)
+    entry_instructions   163,886,731 -> 163,612,976   -273,755  (-0.1671%)
+    compile_instructions  48,757,859 ->  48,761,165     +3,306  (+0.0068%)
 
-Against CI's rows, the summed compile term the objective now reads:
+Under kanso#1331's summed compile term that is
 
-    212,644,590 -> 212,391,486   -253,104  (-0.1190%)
+    212,644,590 -> 212,374,141   -270,449  (-0.1272%)
+
+and welfare moves 66.2874470488728 -> 66.28984813328917, banked in this PR.
+
+**compile_instructions RISES to 48,761,165 and that is the change's own doing.**
+The module path has had no twins to skip since kanso#1328 put
+`canonicalize_bare_aliases` in front of the check there, so the walk does the
+same work and now pays for a test that can never say yes; src/check.rs is the
+compiler, so its bytes and the layout under them move with the edit as well.
+The row is traded against the entry row's fall, which is 83 times it.
+
+**The container projected the deltas and got the digits wrong in both
+directions**, which is the kanso#1326 lesson again. It read 165,183,406 ->
+164,922,557 for the entry row (-260,849) against CI's -273,755, and +7,745 for
+the module row against CI's +3,306. Sign and order of magnitude carried across
+rustc 1.94.1 here and 1.98.1 there; nothing finer did. Both rows are copied out
+of the job log.
 
 The compile row rises because the module path has no twins left to skip — since
 kanso#1328 `canonicalize_bare_aliases` deletes them before the check there — so
