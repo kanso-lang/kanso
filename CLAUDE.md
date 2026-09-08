@@ -66,18 +66,26 @@ question that has already been ruled is never re-asked. A performance question
 with no surface area is the implementer's and does not go to Clay at all.
 
 **GITHUB API ACCESS DEPENDS ON HOW A SESSION WAS STARTED, NOT ON ITS AGE.**
-Established 2026-09-08 by comparing three sessions in one environment:
+Established 2026-09-08 by comparing four sessions in one environment:
 
     session         created             origin                GitHub API
     kanso cloud     2026-08-23 02:40Z   web_claude_ai         works
     the design chat 2026-08-23 17:32Z   claude_code_cli       403 on every call
     a spawned child 2026-09-08 01:34Z   claude_code_mcp_seed  403 on every call
+    this chat       2026-09-08 02:46Z   desktop_app           works
 
 Cloud is fifteen hours OLDER than the chat and merged three pull requests on
 the day the chat could not read a repository, so age is not the variable. A
 session started from claude.ai/code or the desktop app carries the GitHub App
 credential. One started with `claude` in a terminal does not, and one it spawns
 inherits the refusal, so spawning a fresh session does not route around it.
+
+The fourth row is the prediction tested. This chat replaced the 403 one, was
+started from the desktop app, and read the repository on its first call. The
+spawned child, created seventy-two minutes EARLIER the same morning, still
+cannot. Two sessions an hour apart landing on opposite answers is what closes
+the age question. Restarting fixes it only when the new session has a
+different origin.
 
 What makes this hard to see is that git keeps working in all of them: the proxy
 injects push credentials on a separate path from the API. So the session commits
