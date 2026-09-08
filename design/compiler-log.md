@@ -2770,3 +2770,74 @@ arbitrary. Only its direction and the size of its moves mean anything." An
 arbitrary origin stays where it is; the term's value falls once, the floor
 absorbs that fall, and every move after it means what it always did. Moving the
 baseline as well would hide the fall rather than record it.
+
+---
+
+## 2026-09-08 — A MODULE WAS REWRITTEN TWICE BEFORE IT WAS CHECKED, AND ONCE IS ENOUGH
+
+`compile_module_loaded` ran four rewrite passes, checked the merged program,
+and then ran the same four passes again:
+
+    finish_program
+    desugar_field_reads
+    prune_unused_getters
+    trmc::rewrite
+    check_merged                     <- the whole-program check
+    canonicalize_types
+    canonicalize_bare_aliases
+    hoist_repeated_strings
+    fuse_enumerable
+    finish_program                   <- again
+    desugar_field_reads              <- again
+    prune_unused_getters             <- again
+    trmc::rewrite                    <- again
+
+The second run is the one the emitter reads, because the four passes between
+them can produce work for all four. The first run's output is read by
+`check_merged` and by nothing else, and `check_merged` does not require any of
+it: the four passes rewrite field reads into getter calls, drop getters
+nothing calls, and turn tail-recursive modulo cons into a loop, none of which
+the check asks about. So the first run is deleted and the check reads the
+merged program as merged.
+
+    compile_corpus  53,949,299 -> 52,170,583   −1,778,716   −3.30%
+
+read with `scripts/compile_row_probe.sh` on this container, environment
+emptied and the glibc tunables pinned, so the two sittings differ only in the
+compiler. The row this host may not write is CI's to re-sit.
+
+**The risk here was ordering, not cost, and `emitted_code` answers it.** Four
+passes moved from before a check to after four other passes is a
+reordering, and a reordering can change what the emitter is handed even when
+every pass is individually sound. `all_compile.sh` reports `emitted_code`
+AGREED, byte for byte, along with `compile_libraries` and `compile_cost`, and
+"compile veins: nothing moved that this host can see". The same bytes come out
+of a compiler doing less work to produce them, which is the whole claim.
+
+Diagnostics are unmoved: all seven `tests/golden/errors_module` fixtures are
+byte-identical. That is the corpus that would have caught a check reading a
+differently-shaped tree, and it is quiet.
+
+The ratchet row `rewritten_twice` restores the four deleted lines and asks
+`compile_instructions`. The mutated tree measures 53,936,404 against the
+52,170,583 the row is pinned to, so the gate goes red — the only witness a
+repeated rewrite leaves, since it emits the same bytes.
+
+**The mutation anchors on the check line, not the pass it inserts before.**
+`inline::inline_builtin_wrappers(&mut merged);` appears twice in `src/lib.rs` —
+the single-file compile paths call it too — so a `grep -cF` guard on it
+refuses. `phase::watched("check_merged", ...)` appears once, and the guard
+asserts that before inserting. Written into the mutation's own comment so the
+next person to touch it does not rediscover it.
+
+OPEN, and larger: `check_merged` still runs once per dependency rather than
+once for the program. Seven calls walking 803 declarations, 394 distinct, 409
+of them repeats — 53,949,299 -> 44,637,899 with the per-dependency calls
+gated off, −17.26%. It is not a deletion, because two error fixtures depend on
+it: `field_read_in_a_deep_library` loses its diagnostic entirely and
+`deep_library_error` attributes the fault to `mid` instead of `deep`. The
+blocker is `desugar_expr` at `src/lib.rs:1917`, which rewrites every
+`Expr::Field` into a getter call, so `check_field_exists` — which matches on
+`Expr::Field` — sees nothing after it has run. Making the whole-program check
+carry those two diagnostics is a design question and goes to the ledger, not
+into this entry.
