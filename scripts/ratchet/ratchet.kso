@@ -377,6 +377,14 @@ compile_ir = row
   (breaking "compile_ir_unwatched")
   release
 
+rewritten_twice = row
+  "a module rewritten twice before it is checked"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_module_rewritten_twice_before_it_is_checked")
+  release
+
 compile_ir_host = row
   "the instruction vein read under a toolchain that did not retire it"
   false
@@ -1126,7 +1134,7 @@ rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
 
 rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
 
-rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words]
+rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words rewritten_twice]
 
 rows_b = text/concat rows_b1m [compile_mem compile_mem_host]
 
