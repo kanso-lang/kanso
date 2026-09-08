@@ -2770,3 +2770,136 @@ arbitrary. Only its direction and the size of its moves mean anything." An
 arbitrary origin stays where it is; the term's value falls once, the floor
 absorbs that fall, and every move after it means what it always did. Moving the
 baseline as well would hide the fall rather than record it.
+
+---
+
+## 2026-09-08 — A MODULE WAS REWRITTEN TWICE BEFORE IT WAS CHECKED, AND ONCE IS ENOUGH
+
+`compile_module_loaded` ran four rewrite passes, checked the merged program,
+and then ran the same four passes again:
+
+    finish_program
+    desugar_field_reads
+    prune_unused_getters
+    trmc::rewrite
+    check_merged                     <- the whole-program check
+    canonicalize_types
+    canonicalize_bare_aliases
+    hoist_repeated_strings
+    fuse_enumerable
+    finish_program                   <- again
+    desugar_field_reads              <- again
+    prune_unused_getters             <- again
+    trmc::rewrite                    <- again
+
+The second run is the one the emitter reads, because the four passes between
+them can produce work for all four. The first run's output is read by
+`check_merged` and by nothing else, and `check_merged` does not require any of
+it: the four passes rewrite field reads into getter calls, drop getters
+nothing calls, and turn tail-recursive modulo cons into a loop, none of which
+the check asks about. So the first run is deleted and the check reads the
+merged program as merged.
+
+    compile_corpus  53,949,299 -> 52,170,583   −1,778,716   −3.30%
+
+read with `scripts/compile_row_probe.sh` on this container, environment
+emptied and the glibc tunables pinned, so the two sittings differ only in the
+compiler. The row this host may not write is CI's to re-sit.
+
+**The risk here was ordering, not cost, and `emitted_code` answers it.** Four
+passes moved from before a check to after four other passes is a
+reordering, and a reordering can change what the emitter is handed even when
+every pass is individually sound. `all_compile.sh` reports `emitted_code`
+AGREED, byte for byte, along with `compile_libraries` and `compile_cost`, and
+"compile veins: nothing moved that this host can see". The same bytes come out
+of a compiler doing less work to produce them, which is the whole claim.
+
+Diagnostics are unmoved: all seven `tests/golden/errors_module` fixtures are
+byte-identical. That is the corpus that would have caught a check reading a
+differently-shaped tree, and it is quiet.
+
+The ratchet row `rewritten_twice` restores the four deleted lines and asks
+`compile_instructions`. The mutated tree measures 53,936,404 against the
+52,170,583 the row is pinned to, so the gate goes red — the only witness a
+repeated rewrite leaves, since it emits the same bytes.
+
+**The mutation anchors on the check line, not the pass it inserts before.**
+`inline::inline_builtin_wrappers(&mut merged);` appears twice in `src/lib.rs` —
+the single-file compile paths call it too — so a `grep -cF` guard on it
+refuses. `phase::watched("check_merged", ...)` appears once, and the guard
+asserts that before inserting. Written into the mutation's own comment so the
+next person to touch it does not rediscover it.
+
+OPEN, and larger: `check_merged` still runs once per dependency rather than
+once for the program. Seven calls walking 803 declarations, 394 distinct, 409
+of them repeats — 53,949,299 -> 44,637,899 with the per-dependency calls
+gated off, −17.26%. It is not a deletion, because two error fixtures depend on
+it: `field_read_in_a_deep_library` loses its diagnostic entirely and
+`deep_library_error` attributes the fault to `mid` instead of `deep`. The
+blocker is `desugar_expr` at `src/lib.rs:1917`, which rewrites every
+`Expr::Field` into a getter call, so `check_field_exists` — which matches on
+`Expr::Field` — sees nothing after it has run. Making the whole-program check
+carry those two diagnostics is a design question and goes to the ledger, not
+into this entry.
+
+---
+
+## 2026-09-08 — CI'S ROWS FOR THE SINGLE REWRITE, AND THE DIAMOND MEMO DECLINED
+
+CI re-sat the two compile veins the container may not compare:
+
+    compile_instructions   52,603,220 -> 50,832,211   −1,771,009   −3.3668%
+    compile_allocs             31,596 ->     30,414       −1,182   −3.74%
+
+Both FALL. `compile_peak_bytes` is byte-identical at 789,740, and every other
+vein in the cost-goldens summary reads `:success`. The container had predicted
+−1,778,716 on the instruction row with the tunables pinned, which is the same
+number to four digits on a different toolchain.
+
+`compile_allocs` is the row worth pausing on, because nothing in the tree could
+see it before CI did. The host gate refuses to let a container compare it, so
+`all_compile.sh` reported "nothing moved that this host can see" while the row
+had in fact fallen 3.74%. #1321 found that this container reads
+`compile_allocs` and `compile_peak_bytes` exactly as the runner does, and this
+round is the case where knowing that would have saved a red one: the gate's
+refusal is about the instruction row, and it takes the other two down with it.
+
+Welfare 59.74 -> 59.95, ratcheted in the same PR.
+
+### The diamond memo, built and declined
+
+`std/text` is compiled twice on the fixed corpus — once under `std/json`, once
+under the corpus — because `compile_module_inner` has no memo and `visited` is
+a cycle guard that empties as each module returns. A thread-local
+`Map<PathBuf, Program>` keyed the way the cycle guard keys, cleared by a
+`fresh_build()` that all four roots go through, with `ast::Program` given
+`Clone`:
+
+    baseline                      52,170,583
+    memo written, never read      55,185,945   +3,015,362   seven clones
+    memo written and read         53,908,630   +1,738,047
+
+It is correct — `std/text` loads once and all seven `tests/golden/errors_module`
+fixtures stay byte-identical — and it costs 431,000 instructions a module to
+keep a program that only one of them is ever asked for twice. The saved
+recompile is real and worth 1,940,015, which the clones spend twice over.
+
+Reversing the memo does not fix it. A module is not known to be shared until
+the second importer asks, and the first compile's program is gone by then, so
+keeping it costs one deep clone per module compiled whether or not anything
+reuses it. `Rc<Program>` does not help either: every importer calls `qualify`,
+which renames the dependency's declarations into that importer's namespace, so
+each importer needs an owned copy regardless.
+
+Two shapes would win, neither small. One is an import-graph pre-pass that
+counts importers before compiling, so only shared modules are kept — it has to
+duplicate the whole resolution surface, hako pins and embedded modules and
+handed sources and the `./` forms, which is where it stops being cheap. The
+other is to cache each module's OWN declarations rather than its merged
+program; the clone then scales with the module instead of with its whole
+dependency closure, which is why `std/json`'s costs 431,000 in the first place.
+That second shape also reaches the reason the diamond is expensive at all:
+every importer merges a full copy of every transitive dependency.
+
+Measured with `scripts/compile_row_probe.sh`, environment emptied and the glibc
+tunables pinned. Reverted; nothing of it is in the diff.

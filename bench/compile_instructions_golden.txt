@@ -941,4 +941,12 @@
 #
 # Installing clang 19 does not move this row again: the compiler binary is
 # built by cargo, and clang compiles only the runtime and the emitted IR.
-compile_instructions=52603220
+#
+# 2026-09-08 (a module is rewritten once before it is checked, not twice):
+# 52,603,220 -> 50,832,211, a FALL of 1,771,009 or 3.3668%. The four rewrite
+# passes that ran once before the whole-program check and again after it now
+# run once. This is the front end doing less, not the layout vein moving: the
+# container measured the same change at -1,778,716 with the tunables pinned
+# (52,170,583 against a 53,949,299 baseline on rustc=1.94.1), and
+# compile_allocs falls 3.74% beside it.
+compile_instructions=50832211

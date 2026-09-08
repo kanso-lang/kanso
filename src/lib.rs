@@ -3541,10 +3541,6 @@ fn compile_module_loaded(
         merged.fns.extend(program.fns);
     }
     let diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
-    finish_program(&mut merged);
-    phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
-    phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
-    trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
