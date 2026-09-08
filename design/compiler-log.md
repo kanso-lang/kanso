@@ -2971,9 +2971,9 @@ dead code and neither is doing the other's work.
 
 **What it costs, in this box.**
 
-    entry_instructions   164,922,557 -> 163,499,681   -1,422,876  (-0.8628%)
-    compile_instructions  49,170,337 ->  49,207,807      +37,470  (+0.0762%)
-    summed                214,092,894 -> 212,707,488  -1,385,406  (-0.6471%)
+    entry_instructions   164,922,557 -> 163,499,802   -1,422,755  (-0.8627%)
+    compile_instructions  49,170,337 ->  49,207,870      +37,533  (+0.0763%)
+    summed                214,092,894 -> 212,707,672  -1,385,222  (-0.6470%)
 
 The module row rises for the same reason kanso#1332's did: the path pays for
 something it cannot use. Its record is always empty, and what it pays is a
@@ -2990,6 +2990,32 @@ the entry row 146,320. The probe in the entry above put the recorder alone at
 
 These are container numbers and none of them is a row. CI counts both compile
 veins, and this branch expects a deliberate red first round for exactly that.
+
+**The module path had both defects live, and nothing in the tree asked it.**
+kanso#1328 moved the same pass in front of the same check on the module path
+three days before this, and handed the check nothing. So on main today:
+
+    kanso check <a module>   opacity REFUSES a program that compiles
+    kanso check <a module>   arity quotes `m/one` where the source says `one`
+
+Reduced, that is a module whose sibling declares `pub type thing` beside
+`pub fn thing _`, importing it and calling `thing 0`. The entry-path form of
+exactly that program is c7 in scripts/module_differential, and it was watched
+through both reverts of the entry reorder; the module form had no case at all,
+so the sweep read 0 wrong on a defect it could not see. The fix is the entry
+path's, and both programs go into the sweep as c26 and c27 -- watched red on the
+pre-fix compiler for the two messages above, verbatim, before they went green.
+
+Threading the module path costs almost nothing because it was already paying:
+`check_merged` built an empty `Rewrites` on every call, and the change replaces
+that construction with the real one. Entry +121, compile +63 against the
+readings in the table above, both already folded in.
+
+**What this says about where a defect gets found.** The reorder was reverted
+twice on the entry path for objections the sweep caught within a round, because
+the entry path had cases. The same reorder shipped on the module path and its
+two objections sat for three days. The corpus decides what a sweep can see, and
+a path with no case in it reads clean whatever it does.
 
 - **DONE** — the OPEN item the entry above filed. The reorder, the record, both
   readers, both mutations, and the differential back to 0 wrong.
