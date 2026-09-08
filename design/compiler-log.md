@@ -4226,3 +4226,55 @@ for anything behind it.
 
 **OPEN.** Until one of the two lands, a chat pull request carrying more than
 three rulings cannot go green.
+
+## 2026-09-08 — gavel: the compile term reads a fixed corpus, not whatever lib/json imports
+
+Clay, 2026-09-08, taking the recommendation the ledger carried: the three
+compile gates and the objective compile a package that names its imports once,
+rather than whatever lib/json happens to import that week.
+
+The question. kanso#1291 retired lib/json's escape fold, which was its only use
+of std/list, and the import went with it. `kanso check lib/json` then compiled
+half the code it had: `compile_instructions` about 42.6M to about 19.6M,
+`compile_allocs` 25,862 to 11,613, `compile_peak_bytes` 724,798 to 375,222 on
+the container, welfare 51.95 to about 56 -- with the compiler byte-identical. By
+the objective's definition that rise was real. By what the term is for, how fast
+the compiler is, it measured nothing, and a later change re-importing std/list
+would have read as a four-point fall.
+
+**Ruled: option (b).** The corpus is lib/json plus every std module the
+benchmarks import -- list, text, testing -- named once in a package the gates
+and the objective both read. A dropped import then moves the rows by that
+import's own compile cost and nothing else, and a bare library edit reads as
+what it is. Rebased once with its own `--set`, and the history chart marks the
+day.
+
+The other two are declined with it. (a) pricing whatever lib/json imports, and
+(c) recording this rise as a re-basing while leaving the workload alone. Each
+leaves the next import change to make the same argument again.
+
+The floor kanso#1291 set stands until the rebase, per the standing rule that a
+rise is held rather than banked. Building this is cloud's.
+
+## 2026-09-08 — gavel: an infinite or nan float renders as inf, -inf and nan
+
+Clay, 2026-09-08, taking the recommendation the ledger carried: C's spelling,
+which is what the `%g` rule the renderer already mirrors produces.
+
+Neither engine had an answer and no golden in the corpus asked for one. The
+interpreter panics: `render_float` asks Rust for `{:e}` digits and expects an
+`e` in the reply, which `inf` has none of (src/eval.rs:3949). Native prints
+`1.797693134862316e+308`, the largest double's digits, for a value that is not a
+double's, and `2.696539702293474e+308` for nan. Both engines are wrong and the
+oracle's wrong is a crash, which is why this reached the ledger rather than
+being fixed where it was found.
+
+**Ruled: `inf`, `-inf`, `nan`.** Rust's `Display` for f64 prints the same three,
+so the oracle says it with one arm and native with one branch in front of ryu.
+JavaScript's `Infinity` and `NaN` were the alternative named and are declined:
+they descend from no other rule in this renderer, where the `%g` lineage
+already decides every other question it answers.
+
+A differential fixture over the three values on all three engines ships with the
+change, per the differential law. Whether `json/encode` may emit such a value at
+all belongs to that library and is not answered here. Building this is cloud's.
