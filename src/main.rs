@@ -950,6 +950,12 @@ fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
         return Err(std::io::Error::other("clang failed"));
     }
     std::fs::rename(&staging, &binary)?;
+    // clang has read it, and nothing reads it again: the binary beside it is
+    // the cache, keyed by the same hash. Left behind, one accumulates per
+    // cache MISS -- 42 KB each, and a long-lived container reached 112,000 of
+    // them, which is the whole of a session's disk allowance. The staging
+    // path above needs no such line because `rename` consumes it.
+    let _ = std::fs::remove_file(&ll_path);
     Ok(binary)
 }
 

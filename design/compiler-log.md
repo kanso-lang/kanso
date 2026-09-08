@@ -2765,3 +2765,52 @@ reaches a reader — which is why this change has counters and no fixture.
 `infer` is deliberately not given the skip. It indexes declarations positionally
 (`vec![0; program.fns.len()]`, groups by index), so a `continue` misaligns it.
 That is the rest of kanso#1329's reverted reorder and stays open.
+
+## 2026-09-08 (fourth) — a compile left its IR behind, and the guard for it read the litter
+
+Searched the log, the archive and design/ before filing: the archive names
+`cached_program_binary` once, in the entry that introduced the per-pid IR path
+after concurrent builds segfaulted inside clang. Nothing records the leak, and
+nothing else in the tree measures what a `kanso run` leaves in the temp
+directory.
+
+`kanso run` caches its binary under a hash of the IR and `runtime.c`. On a miss
+it writes the IR to `kanso_run_<key>_<pid>.ll`, hands that to clang, and renames
+the staging binary into place. The `.ll` was never removed. One cold run in an
+isolated TMPDIR leaves four files and exactly one of them is a leak:
+
+    kanso_run_<key>                     185 KB   the binary cache, intentional
+    kanso_run_<key>_<pid>.ll             42 KB   THE LEAK, one per cache MISS
+    kanso_runtime_dev_<hash>.c          415 KB   content-keyed, shared, bounded
+    kanso_runtime_dev_<hash>.o          258 KB   likewise
+
+At 42 KB a miss this reached about 112,000 files in one long-lived container,
+which is the whole of a session's disk allowance, and it was the true cause of
+four "spec failures" chased as real during kanso#1330. The staging path needs no
+removal because `rename` consumes it.
+
+**The obvious fix blinds a real guard, which is why this took two attempts.**
+`tests/concurrent_build.rs::two_builds_of_one_program_do_not_share_a_file`
+proved that two concurrent builds are handed different paths BY FINDING THE
+LEFTOVER `.ll` AND READING A PID OUT OF ITS NAME. Delete the file and the guard
+has nothing to look at; the first draft of this change shipped the removal, the
+guard went green on an empty set, and the whole thing was backed out. A guard
+resting on a bug fails the moment the bug is fixed.
+
+So the guard now watches during the build rather than counting what is left. The
+IR is written before clang starts and removed after it returns, and a cold run of
+that fixture is ~133 ms with ~100 ms of that window, against a one-millisecond
+poll. It cannot pass vacuously: seeing no IR file at all is a failure with its
+own sentence, because "the race never happened" and "the race happened and was
+safe" must not look alike.
+
+**Why the sibling is not enough on its own**, measured rather than assumed. With
+the pid stripped back out of the path, this guard caught the defect in 10
+sittings of 10 and again in 5 of 5 after the rebase, where
+`many_builds_of_one_program_all_answer` caught it in 9 of 10 — it passed once
+with the bug in place, because whether two processes actually overlap on the
+file is the race, and the race is not owed to anyone. One of the two is a
+corruption that may or may not happen; this one is the decision that allows it.
+
+No counter moves. `kanso run`'s temp handling is not on any measured path: the
+compile veins run `kanso check`, which never reaches `cached_program_binary`.

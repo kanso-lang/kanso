@@ -34,7 +34,29 @@ fn run(root: &std::path::Path) -> Command {
 
 /// The defect itself, which is deterministic even though the corruption it
 /// causes is not: two processes compiling one program must not be handed the
-/// same file to write. Counting what they leave behind says whether they were.
+/// same file to write.
+///
+/// WHY THIS WATCHES INSTEAD OF COUNTING WHAT IS LEFT. It used to read the
+/// leftovers after both runs exited, which worked only because the IR file was
+/// never cleaned up -- a leak of 42 KB per cache MISS that reached 112,000
+/// files, and a guard resting on a bug fails the moment the bug is fixed. The
+/// file now goes as soon as clang has read it, so the property is observed
+/// while it holds: the IR is written before clang starts and removed after it
+/// returns, and a cold run of this program is ~133 ms with ~100 ms of that
+/// window. The poll below is a millisecond, so it sees the file with about a
+/// hundredfold margin.
+///
+/// It cannot pass vacuously. Seeing nothing at all is a failure with its own
+/// sentence, because "the race never happened" and "the race happened and was
+/// safe" must not look alike.
+///
+/// AND IT IS WHY THE SIBLING BELOW IS NOT ENOUGH ON ITS OWN. Under the pid
+/// stripped back out of the path, this caught the defect in 10 sittings of 10
+/// and `many_builds_of_one_program_all_answer` in 9 -- it passed once with the
+/// bug in place, because whether two processes actually overlap on the file is
+/// the race and the race is not owed to anyone. One of these two is a
+/// corruption that may or may not happen; this one is the decision that lets
+/// it.
 #[test]
 fn two_builds_of_one_program_do_not_share_a_file() {
     let root = std::env::temp_dir().join("kanso-concurrent-paths");
@@ -43,20 +65,37 @@ fn two_builds_of_one_program_do_not_share_a_file() {
 
     let temp = std::env::temp_dir();
     let before = ir_files(&temp);
-    let first = run(&root).spawn().expect("kanso starts");
-    let second = run(&root).spawn().expect("kanso starts");
-    for r in [first, second] {
-        r.wait_with_output().expect("kanso finishes");
-    }
-    // The second run finds the binary already cached and writes no IR at all,
-    // so the two are started together and whichever of them compiled left a
-    // file named for itself.
-    let written: Vec<String> = ir_files(&temp).difference(&before).cloned().collect();
+    let mut first = run(&root).spawn().expect("kanso starts");
+    let mut second = run(&root).spawn().expect("kanso starts");
 
+    // Everything either process was seen holding at any instant, unioned. The
+    // second run may find the binary already cached and write no IR at all,
+    // which is why this asks for at least one rather than exactly two.
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    loop {
+        seen.extend(ir_files(&temp).difference(&before).cloned());
+        let done = |c: &mut std::process::Child| matches!(c.try_wait(), Ok(Some(_)));
+        if done(&mut first) && done(&mut second) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    for mut r in [first, second] {
+        r.wait().expect("kanso finishes");
+    }
+
+    let watched: Vec<String> = seen.into_iter().collect();
     assert!(
-        !written.is_empty() && written.iter().all(|f| owner(f).is_some()),
+        !watched.is_empty(),
+        "no IR file was seen at all, so this proved nothing: either the \
+         binary was already cached for both runs -- the literal is built from \
+         this process's own id to stop that -- or the poll is too slow for the \
+         compile it is watching"
+    );
+    assert!(
+        watched.iter().all(|f| owner(f).is_some()),
         "an IR file named for the program alone is one a second process \
-         truncates while the first is reading it: {written:?}"
+         truncates while the first is reading it: {watched:?}"
     );
 }
 
