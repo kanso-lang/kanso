@@ -2420,73 +2420,59 @@ check for that is to read the line back.
 Nothing in ci.yml moves. The three gates already run there, and the spec rides in
 the specs job with every other `cargo test`.
 
-## 2026-09-08 (fourth) — the entry path had the same ordering, and nothing could see it
+## 2026-09-08 (fourth) — the entry path's reorder costs a diagnostic, and is reverted
 
-Searched the log, the archive and design/ before filing: kanso#1328's entry
-above records the reorder on the MODULE path and says nothing about the entry
-path; kanso#1325's records the entry path's doubled rewrites, which is a
-different defect in the same function. Neither asks this.
+Searched the log, the archive and design/ before filing: the 2026-09-08 entry
+above records the same reorder on the MODULE path (kanso#1328), and kanso#1120
+records the rule this breaks — a module is named the way an import writes it.
+Neither anticipates the interaction.
 
-**DONE.** `compile_parsed_entry` runs its alias pass before the whole-program
-check now, as `compile_module_inner` has since kanso#1328, and
-`bench/entry_instructions_golden.txt` watches the path so the win cannot be
-lost quietly.
+**REVERTED.** `compile_parsed_entry` has the same ordering kanso#1328 fixed on
+the module path, and moving its alias pass in front of the whole-program check
+is worth 1,674,396 instructions. It also renames a diagnostic, so it does not
+ship in that shape.
 
-The mechanism is #1328's exactly. `enroll_bare` is called at src/lib.rs:2477,
-INSIDE `load_dependencies`, so `dep_program` carries a synthetic twin for every
-exported declaration of every import — and BOTH paths merge that program. On
-the entry path the twins landed in `merged`, `check_merged` walked them, and
-`canonicalize_bare_aliases` deleted them four lines later.
+The measurement first, because it is real and the idea is worth returning to.
+`enroll_bare` is called at src/lib.rs:2477, inside `load_dependencies`, so
+`dep_program` carries a synthetic twin for every exported declaration of every
+import — and both paths merge that program. On the entry path the twins landed
+in `merged`, `check_merged` walked them, and `canonicalize_bare_aliases` deleted
+them four lines later. Hoisting the two canonicalize calls out of the success
+arm reads, in the box:
 
     entry_instructions   165,184,791 -> 163,510,395   -1,674,396  (-1.0136%)
 
-Output byte-identical. The error corpus, both micro corpora and the .mem vein
-are green, and `tests/reexports.rs` still asserts the ambiguous-bare-name
-refusal — the alias pass removes a twin only where the bare name has one target
-and no local binding, so `check_bare_ambiguity` still sees both copies of an
-ambiguous one.
+and CI counted 162,218,854 against the container on the same tree, the two boxes
+0.79% apart where the module row sits 0.81% apart on that pair.
 
-**Nothing in the tree reached that path, and that is why this needed finding
-rather than noticing.** `kanso check` on a DIRECTORY module goes through
-`compile_module_inner`; on a FILE it goes through `compile_parsed_entry`. A
-probe eprintln at the entry site settles it: `bench/entry_corpus/main.kso`
-reaches it, `kanso check bench/compile_corpus` gives no hits at all. So every
-compile gate in the repository measured one of the two paths, and the reorder
-could have been made on that one and left on the other with CI entirely green.
+**What it costs.** `scripts/module_differential` went from 0 wrong to 2:
 
-`KANSO_PHASES` cannot tell the two apart and it looked as though it could.
-`load_dependencies` compiles each imported module through the module path, so a
-phase report is the union of both; a `kanso build` on a three-import program
-prints `check_merged` at 0.63 ms and `canonicalize_bare_aliases` at 0.09 ms with
-no way to attribute either. The entry path's `check_merged` is also unwatched,
-where the module path's is watched.
+    a call from the entry at the wrong arity
+      refused, but not with 'error[arity]: no 2-argument arm of `one` (arms take 1)':
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
 
-**Two readings of mine were wrong and are corrected here rather than quietly
-replaced.** The first: I had recorded that `kanso check` on a `.kso` file routes
-through the module path. It does not, and the probe above is what settles it;
-the earlier attempt to measure this path failed for that reason and was written
-up as a null result. The second: the first A/B was taken with an absolute path
-under /tmp instead of the box-relative path the gate uses, and read
-165,178,246 -> 163,500,789. The FALL survives to within three thousand, because
-the path term is a constant offset, but the absolute values sit 6,545 and 9,606
-away from the box's. `scripts/gates/library_box.sh` says the count tracks the
-length of the directory the compiler runs in and it is right about that.
+The alias pass rewrites a bare reference to its qualified spelling, so once it
+runs before the check, the arity refusal quotes `m/one` where the program says
+`one`. That is a diagnostic naming a spelling the user did not write, which
+kanso#1120 settled the other way, and it is a worse trade than a per-cent of
+compile work is worth. Reverting the reorder alone takes the differential back
+to 0 wrong, which is what says the reorder is the whole cause.
 
-`kanso run` on the same corpus reads 20,866,698,641, which is the runtime
-swamping the front end about 127 to 1. A compile change of 1.7 million would
-show there as 0.008%, so the workload is `kanso check`.
+The module path does not have this problem because a dependency's own call
+sites are already qualified by the time they are merged; the entry's are the
+ones the user wrote. That asymmetry is why one of the two reorders shipped.
 
-**The row is a second golden rather than a second key.** A key added to
-`bench/compile_instructions_golden.txt` turns
-`tests/the_compile_row_holds_one_value.rs` red, and that spec carries the
-2026-09-05 ruling that retired a pinned pair and a per-chip table. The ruling is
-about two values for ONE measurement; this is a second measurement, so it gets
-its own file and its own `measured-on` line — which
-`scripts/gates/compile_instructions.sh` READS, because a measured-on line
-nothing reads is a comment and this repository has caught four of those.
-`scripts/trend_gate` walks the new golden for the reason every sibling was added
-to that list: a golden the gate does not walk is one whose regressions arrive
-unpriced.
+**A GREEN SUITE SAID NOTHING ABOUT IT, and the reason is worth having.** Before
+pushing I ran the error corpus, both micro corpora, the .mem vein and
+tests/reexports.rs, all green, and reported that as the correctness evidence.
+`scripts/module_differential` is a kanso program run by the diagnostics-
+differential CI job; `cargo test` does not run it, so no amount of the suite
+would have found this. It is the same shape as the page gates — a check that
+lives outside the harness a session reaches for by habit. The nine differential
+sweeps each have this property.
 
-The value recorded is the container's. CI's toolchain differs and its reading
-replaces it in a second round, deliberately, the way kanso#1328's did.
+What would make the reorder shippable is deciding what the arity refusal should
+quote when the pass that rewrote the name has already run: either the check
+reads the pre-canonical spelling, or the pass records what it rewrote. That is a
+design question about diagnostics rather than about ordering, and it is where
+this thread now sits.

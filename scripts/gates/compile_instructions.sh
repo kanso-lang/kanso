@@ -43,22 +43,10 @@ golden=bench/compile_instructions_golden.txt
 # carries the reasons; 3 means measure, print, and fail at the end. The build is
 # what the golden names — a toolchain it does not name is not the same build, so
 # its number is not a reproduction of anything.
-entry_golden=bench/entry_instructions_golden.txt
 host=0
 sh scripts/gates/host_gate.sh "$golden" || host=$?
 if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
   exit "$host"
-fi
-# The entry golden carries a measured-on line of its own and it is READ, not
-# decoration. Both files name the same toolchain today, so this looks
-# redundant; it is not, because a measured-on line nothing reads is a comment,
-# and this repository has caught four pins that turned out to be prose. If the
-# two goldens ever name different builds, that is a thing to find out about
-# here rather than by reading a row counted on a toolchain it does not name.
-entry_host=0
-sh scripts/gates/host_gate.sh "$entry_golden" || entry_host=$?
-if [ "$entry_host" -ne 0 ] && [ "$entry_host" -ne 3 ]; then
-  exit "$entry_host"
 fi
 
 # And which silicon is about to count it. Not because the row is keyed by it —
@@ -212,46 +200,6 @@ printf 'compile_sample cpu="%s" sha=%.12s row=%s\n' \
   "$(sha256sum "$box/kanso" | cut -d' ' -f1)" \
   "$(sed -n 's/^compile_instructions=//p' compile_ir_got.txt)"
 
-# THE ENTRY PATH, WHICH THE ROW ABOVE DOES NOT REACH. `kanso check` on a
-# directory module goes through compile_module_inner; on a FILE it goes through
-# compile_parsed_entry, and the two order their passes differently. Proved by a
-# probe eprintln at the entry site on 2026-09-08: bench/entry_corpus/main.kso
-# reaches it, `check compile_corpus` does not. So kanso#1328's reorder could
-# have been made on the module path and left on the entry path with every gate
-# in the tree green, which is the case this second row exists to prevent.
-#
-# NOT A PINNED PAIR. The 2026-09-05 ruling retired a per-chip table and a pair
-# of values for ONE measurement, because a row holds one value and a
-# disagreement is a reproduction failure. This is a second WORKLOAD with a row
-# of its own, measured the same way in the same box, and each row still holds
-# exactly one value.
-(
-  cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
-    --callgrind-out-file=/tmp/cg.entry ./kanso check entry_corpus/main.kso \
-    >/dev/null 2>/dev/null
-)
-entry_own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.entry 2>/dev/null \
-      | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
-case "$entry_own" in
-  '' | *[!0-9]*)
-    echo "::error::the entry profile carries no kanso::main frame, so the"
-    echo "::error::compiler's own work on that path cannot be read out of it."
-    callgrind_annotate --inclusive=yes --threshold=99 /tmp/cg.entry 2>&1 | head -20
-    exit 1
-    ;;
-esac
-printf 'entry_sample cpu="%s" sha=%.12s row=%s\n' \
-  "$(sh scripts/gates/dispatch.sh name | sed -n 's/^silicon: //p')" \
-  "$(sha256sum "$box/kanso" | cut -d' ' -f1)" \
-  "$entry_own"
-
-# WRITTEN TO A FILE, not only to this step's output, because the module row is
-# and the asymmetry cost a reader 340 lines of job log to find CI's value for
-# this one. The workflow cats both after the counter steps, so either row is
-# found the same way.
-printf 'entry_instructions=%s\n' "$entry_own" > entry_ir_got.txt
-
 # The profile is on disk either way, and where the front end's work sits is the
 # question every one of these moves turns on. Printed rather than summarised,
 # because a step summary cannot be read back from the job log.
@@ -275,7 +223,7 @@ esac
 
 # A toolchain the golden does not name is not the same build, so its number
 # reproduces nothing and is not read against the row. It is still printed above.
-if [ "$host" -eq 3 ] || [ "$entry_host" -eq 3 ]; then
+if [ "$host" -eq 3 ]; then
   echo "::error::the sitting above was counted on a toolchain $golden does not"
   echo "::error::name, so it is not a reproduction of the recorded build and"
   echo "::error::says nothing about the value. Name the toolchain in $golden,"
@@ -283,40 +231,9 @@ if [ "$host" -eq 3 ] || [ "$entry_host" -eq 3 ]; then
   exit 1
 fi
 
-entry_want=$(sed -n 's/^entry_instructions=//p' "$entry_golden")
-case "$entry_want" in
-  '' | *[!0-9]*)
-    echo "::error::$entry_golden carries no single entry_instructions= value. The"
-    echo "::error::entry path is measured above and has nothing to land on."
-    exit 1
-    ;;
-esac
-
-# BOTH ROWS ARE READ BEFORE EITHER FAILS. Stopping at the first divergence is
-# what all_counters.sh refuses for its twelve veins and for the same reason:
-# these are two paths through one compiler and a session that sees only the
-# first one move goes looking in the wrong half.
-entry_ok=0
-[ "$entry_own" = "$entry_want" ] && entry_ok=1
-if [ "$entry_ok" -eq 1 ]; then
-  echo "entry_instructions: $entry_own, on the row"
-else
-  echo "::error::entry_instructions counted $entry_own against $entry_want in"
-  echo "::error::$entry_golden, a move of $((entry_own - entry_want)). The two cases"
-  echo "::error::and how they are settled are written out below; they are the"
-  echo "::error::same two, read against bench/entry_corpus rather than"
-  echo "::error::bench/compile_corpus. The entry path is compile_parsed_entry"
-  echo "::error::in src/lib.rs, which orders its passes separately from the"
-  echo "::error::module path -- a change to one and not the other lands here."
-fi
-
-if [ "$got" = "$want" ] && [ "$entry_ok" -eq 1 ]; then
-  echo "compile_instructions: $got, on the row"
-  exit 0
-fi
 if [ "$got" = "$want" ]; then
   echo "compile_instructions: $got, on the row"
-  exit 1
+  exit 0
 fi
 
 echo "::error::compile_instructions counted $got against $want in $golden,"
@@ -340,5 +257,4 @@ echo "::error::"
 echo "::error::The compile_binary sha256 and compile_sample lines above are"
 echo "::error::where the hunt starts: one sha counting two rows is (2); two"
 echo "::error::shas is (1) until the pair is built and both are read."
-rm -f /tmp/cg.entry
 exit 1

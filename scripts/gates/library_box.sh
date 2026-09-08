@@ -36,12 +36,3 @@ cp -R lib "$box/lib"
 find "$box/lib" -name '*_test.kso' -delete
 cp ./target/release/kanso "$box/kanso"
 cp -R bench/compile_corpus "$box/compile_corpus"
-cp -R bench/entry_corpus "$box/entry_corpus"
-
-# TWO CORPORA, TWO PATHS. bench/compile_corpus is a directory module and
-# `kanso check` on it goes through compile_module_inner; bench/entry_corpus is
-# a FILE and `kanso check` on it goes through compile_parsed_entry. The two
-# order their passes differently, so a change made on one path and left on the
-# other reads as green everywhere. Staged from the same fixed path for the same
-# reason the first one is: the count tracks the length of the directory the
-# compiler runs in.
