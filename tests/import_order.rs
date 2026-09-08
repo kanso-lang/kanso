@@ -92,8 +92,5 @@ fn which_file_names_a_dependency_does_not_change_what_checking_costs() {
     // beside the order in the failure message.
     let first = peak(&named_first);
     let second = peak(&named_second);
-    assert!(
-        first > 0 && second > 0,
-        "the front end reported no peak: {first} against {second}"
-    );
+    assert!(first > 0 && second > 0, "the front end reported no peak: {first} against {second}");
 }
