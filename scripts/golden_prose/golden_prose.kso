@@ -62,6 +62,14 @@ allocs_golden = "bench/compile_allocs_golden.txt"
 
 ir_golden = "bench/compile_instructions_golden.txt"
 
+# The fourth member of the `compile.` family, and the reason it is a member
+# rather than a family of its own: `golden_for` answers for exactly three
+# names and returns [] for any other, so a span written `entry.something`
+# would resolve against an empty golden -- a span nothing watches, which is
+# the failure this gate was widened to fix in the first place. The key names
+# still do not collide.
+entry_golden = "bench/entry_instructions_golden.txt"
+
 fn counters src
   lines = text/split src "\n"
   list/to_list (list/select lines assignment?)
@@ -160,7 +168,10 @@ fn both write decode encode m a
   with_allocs write decode encode "{m}\n{a}"
 
 fn with_allocs write decode encode so_far
-  os/read_file! ir_golden . (i -> whole write decode encode "{so_far}\n{i}")
+  os/read_file! ir_golden . (i -> with_ir write decode encode "{so_far}\n{i}")
+
+fn with_ir write decode encode so_far
+  os/read_file! entry_golden . (e -> whole write decode encode "{so_far}\n{e}")
 
 fn whole write decode encode compile
   started (job (counters compile) decode encode write)

@@ -263,9 +263,14 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"]! + m["held_peak_bytes"]! + m["perm_peak_bytes"]!
 
-fn measured run work ir traffic held
+fn measured run work veins
   rp = [["run_peak_bytes" (peak_of run)]]
-  ci = [["compile_instructions" ir["compile_instructions"]!]]
+  ir = veins[1]!
+  traffic = veins[2]!
+  held = veins[3]!
+  ent = veins[4]!
+  both = ir["compile_instructions"]! + ent["entry_instructions"]!
+  ci = [["compile_instructions" both]]
   ca = [["compile_allocs" traffic["compile_allocs"]!]]
   cm = [["compile_peak_bytes" held["compile_peak_bytes"]!]]
   compile = text/concat ci (text/concat ca cm)
@@ -409,9 +414,9 @@ fn filled s width false
 fn asked path
   os/read_file! path
 
-fn gauge run w ir ca held
-  compile = [(counters ir) (counters ca) (counters held)]
-  now = measured (counters run) (work_of w) compile[1]! compile[2]! compile[3]!
+fn gauge run w ir ca held ent
+  veins = [(counters ir) (counters ca) (counters held) (counters ent)]
+  now = measured (counters run) (work_of w) veins
   os/read_file! floor_path . (f -> against now (json/decode f))
 
 # Every counter the objective weighs stands on a measurement of its own.
@@ -713,7 +718,7 @@ fn rose gap
   >> io/write "next change is free to spend. Bank it in this same PR:\n"
   >> io/write "welfare --set \"what improved and why\".\n"
 
-# FIVE GOLDENS, where there were eleven. The run program's cost golden and its
+# SIX GOLDENS, where there were eleven. The run program's cost golden and its
 # row in the instruction golden are the whole runtime side now; the three
 # compile files are unchanged. The seven per-phase cost goldens this chain used
 # to read are still written, still compared by their own gates, and no longer
@@ -728,6 +733,10 @@ fn with_ir run w ir
   asked "bench/compile_allocs_golden.txt" . (ca -> with_traffic run w ir ca)
 
 fn with_traffic run w ir ca
-  asked "bench/compile_memory_golden.txt" . (held -> gauge run w ir ca held)
+  asked "bench/compile_memory_golden.txt" . (held -> with_held run w ir ca held)
+
+fn with_held run w ir ca held
+  entry_golden = "bench/entry_instructions_golden.txt"
+  asked entry_golden . (e -> gauge run w ir ca held e)
 
 pub play = asked "bench/cost_golden_run.txt" . (r -> with_run r)

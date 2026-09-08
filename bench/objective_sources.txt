@@ -47,7 +47,11 @@ run_peak_bytes run_arena_peak_bytes
 run_peak_bytes run_held_peak_bytes
 run_peak_bytes run_perm_peak_bytes
 
-# what compiling costs
+# what compiling costs. The instruction term sums BOTH compile paths:
+# `kanso check <dir>` is a module and `kanso check <file>` is an entry, they
+# take different code, and until the entry vein opened on 2026-09-08 the
+# objective could see only the first.
 compile_instructions compile_instructions
+compile_instructions entry_instructions
 compile_allocs compile_allocs
 compile_peak_bytes compile_peak_bytes
