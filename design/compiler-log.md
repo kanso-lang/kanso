@@ -2924,3 +2924,82 @@ branch was pushed, which is what the search is for.
   reorder's value and is blocked on a different thing: `infer` indexes
   declarations positionally, and a group keyed by (name, arity) is a dispatch
   group, so the twin is what lets a bare name resolve.
+
+## 2026-09-08 (sixth) — the pre-canonical spelling, and the entry reorder ships
+
+Searched the log, the archive and design/ before filing: the entry above
+("the entry reorder re-derived") is this thread's own, and leaves exactly this
+as OPEN with the recorder measured and the reader half unbuilt. kanso#1329
+records the first revert, kanso#1328 the module path's reorder, kanso#1120 the
+ruling both readers have to satisfy. This builds what that OPEN item names.
+
+**The reorder ships, with the two readers that make it honest.**
+`canonicalize_bare_aliases` runs in front of `check_merged` on the entry path
+now, so the whole-program check no longer walks the synthetic twins the pass is
+about to delete. `canonicalize_types` stays in the success arm, which is the
+cheaper of the two shapes by 8,930 instructions.
+
+The pass returns a `Rewrites` — line and column to the bare name it replaced —
+and `check_merged_after_aliases` hands it to the two checks that read a call's
+name. Every other caller runs the pass after the check and passes an empty
+record, where both readers behave as they always did.
+
+**The two readers want different things, and that is the whole finding.**
+
+    check.rs arity (two sites)   quotes the recorded bare name
+    foreign_constructions        SKIPS a head the pass rewrote
+
+Arity is a wording question and kanso#1120 settles it: the diagnostic names what
+the import writes. Opacity is not. Its own comment states the invariant, at
+check.rs:1847 — "A qualified name can never be a local binding, so unlike the
+arity walk beside it this needs no shadowing set: the slash IS the foreignness."
+That holds only while every slash was written by a person. After the pass, a
+slash also means the pass put one there, and the check fires on a call of an
+imported function as though it were a construction of the imported type of the
+same name. No wording of that message is right; the site is not a construction
+at all.
+
+**On scripts/module_differential: 0 wrong, from the 2 wrong the reorder cost
+before.** Both objections are gone, and both readers were watched red on their
+own:
+
+    opacity skip disabled   1 wrong -- `m/thing` is foreign, on a program that compiles
+    arity spelling disabled 1 wrong -- quotes `m/one` where the source says `one`
+
+Each mutation loses exactly its own fixture and no other, so neither reader is
+dead code and neither is doing the other's work.
+
+**What it costs, in this box.**
+
+    entry_instructions   164,922,557 -> 163,499,681   -1,422,876  (-0.8628%)
+    compile_instructions  49,170,337 ->  49,207,807      +37,470  (+0.0762%)
+    summed                214,092,894 -> 212,707,488  -1,385,406  (-0.6471%)
+
+The module row rises for the same reason kanso#1332's did: the path pays for
+something it cannot use. Its record is always empty, and what it pays is a
+parameter carried through `arity_walk_expr` and `foreign_constructions`'s walk,
+both recursive over every expression. Neither lookup runs on a clean module
+compile -- the arity one sits inside the refusal branch and the opacity one
+behind a name being in the foreign set -- so the cost is the threading, not the
+reading. Under kanso#1331's summed compile term the trade is 38 to 1 in favour,
+and the sum is what the objective reads.
+
+Against the reorder measured WITHOUT the readers (163,353,361), the readers cost
+the entry row 146,320. The probe in the entry above put the recorder alone at
+27,345; the rest is the two further walkers now carrying the same parameter.
+
+These are container numbers and none of them is a row. CI counts both compile
+veins, and this branch expects a deliberate red first round for exactly that.
+
+- **DONE** — the OPEN item the entry above filed. The reorder, the record, both
+  readers, both mutations, and the differential back to 0 wrong.
+- **OPEN** — src/lib.rs:348 and :425 still check before canonicalizing.
+  compile_one is reached only from `compile_repl` (src/repl.rs:290) and
+  compile_library only from `kanso check <a library file>`. Both merge
+  `dep_program`, so both see the twins, and both would break the way the entry
+  path did -- they were never blocked on a measurement, they were blocked on
+  this. What is owed there now is a vein, since neither has one.
+- **OPEN, unchanged** — the twins inside `infer`, the other half of the
+  reorder's value. `infer` indexes declarations positionally and a group keyed
+  by (name, arity) is a dispatch group, so the twin is what lets a bare name
+  resolve.

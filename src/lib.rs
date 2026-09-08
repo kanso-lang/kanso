@@ -157,12 +157,19 @@ fn compile_parsed_entry(
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
-    let merged_diags = check::check_merged(&merged, true);
+    // AHEAD OF THE CHECK, so the whole-program check does not walk the synthetic
+    // twins this pass is about to delete -- kanso#1328 did the same on the
+    // module path. `canonicalize_types` stays in the success arm: moving it too
+    // reads 8,930 instructions WORSE, because this pass deletes the twins before
+    // that one would have walked them. The record is what keeps the reorder
+    // honest; see `Rewrites`.
+    let rewritten =
+        phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
+    let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten);
     inline::inline_builtin_wrappers(&mut merged);
     match merged_diags.is_empty() {
         true => {
             phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
-            phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
             phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
             phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
             // Counted here rather than inside the four, because the module
@@ -961,7 +968,24 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
 /// group, one emission, and a module's internal recursion reads as
 /// self-recursion again. A bare name that also has local arms is a real
 /// overload union (the import-incarnation gavel) and is left alone.
-pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
+/// Where `canonicalize_bare_aliases` rewrote a bare name, and what the program
+/// actually said there.
+///
+/// Two checks in `check_merged` read a call's name and mean the spelling the
+/// program used: the arity refusal quotes it, and `foreign_constructions`
+/// decides foreignness BY the slash ("the slash IS the foreignness", its own
+/// comment). Run the alias pass first and both read a name the pass wrote —
+/// the first quotes `m/one` where the source says `one`, and the second refuses
+/// a call of an imported function as a construction of the imported type of the
+/// same name. This says which sites those are.
+///
+/// Keyed by line and column, because a Span is exactly that (kanso#1135) and
+/// carries no file. A merged program can hold two files with a call at the same
+/// position, so a reader confirms the name it holds is the one the pass would
+/// have written before trusting the entry.
+pub type Rewrites = crate::hash::Map<(u32, u32), Name>;
+
+pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
     use crate::hash::{Map as HashMap, Set as HashSet};
     // A synthetic bare alias and the qualified declaration it stands for are
     // the same source position with the same arity, so that tuple indexes
@@ -1039,7 +1063,7 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
         })
         .collect();
     if aliases.is_empty() {
-        return;
+        return Rewrites::default();
     }
     if std::env::var("KANSO_ALIAS_REPORT").is_ok() {
         let mut v: Vec<_> = aliases.iter().collect();
@@ -1049,79 +1073,86 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
         }
     }
     program.fns.retain(|d| !(d.synthetic && aliases.contains_key(&d.name)));
+    let mut wrote = Rewrites::default();
     for d in &mut program.fns {
         for stmt in &mut d.body {
-            alias_stmt(stmt, &aliases);
+            alias_stmt(stmt, &aliases, &mut wrote);
         }
     }
+    wrote
 }
 
-fn alias_stmt(stmt: &mut ast::Stmt, aliases: &crate::hash::Map<String, String>) {
+fn alias_stmt(
+    stmt: &mut ast::Stmt,
+    aliases: &crate::hash::Map<String, String>,
+    wrote: &mut Rewrites,
+) {
     match stmt {
         ast::Stmt::Bind { expr, .. }
         | ast::Stmt::Expr(expr)
-        | ast::Stmt::Set { value: expr, .. } => alias_expr(expr, aliases),
+        | ast::Stmt::Set { value: expr, .. } => alias_expr(expr, aliases, wrote),
     }
 }
 
-fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>) {
+fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wrote: &mut Rewrites) {
     match e {
-        ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+        ast::Expr::Ident(name, sp) | ast::Expr::Partial(name, sp) => {
             if let Some(q) = aliases.get(name.as_str()) {
+                wrote.insert((sp.line, sp.col), name.clone());
                 *name = Name::new(q);
             }
         }
         ast::Expr::Int(..) | ast::Expr::Float(..) => {}
         ast::Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
-                alias_expr(k, aliases);
-                alias_expr(v, aliases);
+                alias_expr(k, aliases, wrote);
+                alias_expr(v, aliases, wrote);
             }
         }
         ast::Expr::Str(parts, _) => {
             for part in parts {
                 if let ast::TemplatePart::Interp(inner) = part {
-                    alias_expr(inner, aliases);
+                    alias_expr(inner, aliases, wrote);
                 }
             }
         }
         ast::Expr::List(items, _) => {
             for item in items {
-                alias_expr(item, aliases);
+                alias_expr(item, aliases, wrote);
             }
         }
         ast::Expr::App { head, args, .. } => {
-            alias_expr(head, aliases);
+            alias_expr(head, aliases, wrote);
             for a in args {
-                alias_expr(a, aliases);
+                alias_expr(a, aliases, wrote);
             }
         }
-        ast::Expr::Field { base, .. } => alias_expr(base, aliases),
+        ast::Expr::Field { base, .. } => alias_expr(base, aliases, wrote),
         ast::Expr::Index { base, index, .. } => {
-            alias_expr(base, aliases);
-            alias_expr(index, aliases);
+            alias_expr(base, aliases, wrote);
+            alias_expr(index, aliases, wrote);
         }
         ast::Expr::Seq(a, b, _) | ast::Expr::Join { lhs: a, rhs: b, .. } => {
-            alias_expr(a, aliases);
-            alias_expr(b, aliases);
+            alias_expr(a, aliases, wrote);
+            alias_expr(b, aliases, wrote);
         }
         ast::Expr::Lambda { body, .. } | ast::Expr::Upcast { expr: body, .. } => {
-            alias_expr(body, aliases)
+            alias_expr(body, aliases, wrote)
         }
         ast::Expr::BinOp { lhs, rhs, .. } => {
-            alias_expr(lhs, aliases);
-            alias_expr(rhs, aliases);
+            alias_expr(lhs, aliases, wrote);
+            alias_expr(rhs, aliases, wrote);
         }
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
             for st in stmts {
-                alias_stmt(st, aliases);
+                alias_stmt(st, aliases, wrote);
             }
         }
         ast::Expr::Guard { cond, early, rest, .. } => {
-            alias_expr(cond, aliases);
-            alias_expr(early, aliases);
+            alias_expr(cond, aliases, wrote);
+            alias_expr(early, aliases, wrote);
             for st in rest {
-                alias_stmt(st, aliases);
+                alias_stmt(st, aliases, wrote);
             }
         }
     }
@@ -2600,7 +2631,7 @@ fn open_qualified_doors(
                 door_pattern(pattern, &doors);
             }
             door_stmt(stmt, &doors);
-            alias_stmt(stmt, &doors);
+            alias_stmt(stmt, &doors, &mut Rewrites::default());
         }
     }
 }
