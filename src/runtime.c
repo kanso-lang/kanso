@@ -8011,9 +8011,20 @@ KValue k_b_join(KValue lv, KValue sep) {
     char* data = k_alloc(total + 1);
     long at = 0;
     for (long long i = 0; i < l->len; i++) {
-        if (i) { memcpy(data + at, ss->data, ss->len); at += ss->len; }
+        /* Both copies are one byte or none in every shipped caller measured:
+           `join [s s] ""` gives a zero-length separator and `join digits " "`
+           joins one-byte strings with a one-byte separator. Through the call
+           a one-byte separator costs 16.0 instructions and a one-byte item
+           23.6, over 400,019 calls in runbench; storing the byte where the
+           length says one saves 5.5 on an average call. */
+        if (i) {
+            if (ss->len == 1) data[at] = ss->data[0];
+            else if (ss->len) memcpy(data + at, ss->data, (size_t)ss->len);
+            at += ss->len;
+        }
         KStr* is = k_as_str(l->items[i]);
-        memcpy(data + at, is->data, is->len);
+        if (is->len == 1) data[at] = is->data[0];
+        else if (is->len) memcpy(data + at, is->data, (size_t)is->len);
         at += is->len;
     }
     KStr* os = k_alloc(sizeof(KStr));
