@@ -291,7 +291,16 @@ bench_cf = text/concat bench_ce bench_rest
 # which is the shape the siblings above were each added to close.
 bench_runbench = [["bench/cost_golden_run.txt" "run_"]]
 
-bench_goldens = text/concat bench_runbench (text/concat bench_ab bench_cf)
+# The entry path joined on 2026-09-08. `kanso check` on a directory module
+# goes through compile_module_inner and on a FILE through compile_parsed_entry,
+# and the two order their passes separately -- so bench/compile_instructions
+# above watches one path and this watches the other. It is walked here for the
+# reason every sibling was added: a golden the gate does not walk is one whose
+# regressions arrive unpriced.
+bench_entry = [["bench/entry_instructions_golden.txt" ""]]
+
+bench_goldens = text/concat bench_entry
+  (text/concat bench_runbench (text/concat bench_ab bench_cf))
 
 mem_dir = "tests/golden/mem"
 

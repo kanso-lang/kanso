@@ -1,0 +1,39 @@
+# The workload for the ENTRY path, which no other gate reaches.
+#
+# `kanso check` on a directory module goes through compile_module_inner;
+# `kanso check` on a FILE like this one goes through compile_parsed_entry, and
+# the two orders their passes differently. bench/compile_corpus measures the
+# first and nothing measured the second, so kanso#1328's reorder could have
+# been made on one path and left on the other with every gate green. Proved by
+# a probe at the entry site: this file reaches it, `check bench/compile_corpus`
+# does not.
+#
+# An entry file holds statements only, so the imports have to be USED — one
+# call apiece, chosen to be the cheapest export each module offers. What is
+# being counted is the front end deciding about eleven modules' declarations,
+# not what these calls do.
+#
+# It imports rather than defines, because the cost this watches is
+# `enroll_bare` giving every exported declaration of every import a twin under
+# its short name. Adding an import moves this row on purpose; adding a local
+# function barely moves it at all.
+import "std/bits"
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/math"
+import "std/path"
+import "std/regexp"
+import "std/render"
+import "std/sha256"
+import "std/text"
+
+a = bits/complement 1
+b = json/encode 1
+c = list/first [1 2 3]
+d = math/round 1.5
+e = path/basename "/a/b"
+f = regexp/matches "a" "a"
+g = render/to_string 1
+h = sha256/hex (text/bytes "x")
+io/write "{a}{b}{c}{d}{e}{f}{g}{h}\n"

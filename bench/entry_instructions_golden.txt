@@ -1,0 +1,44 @@
+# Retired instructions for `kanso check entry_corpus/main.kso`, counted under
+# callgrind in the same box and under the same pinned tunables as
+# bench/compile_instructions_golden.txt. scripts/gates/compile_instructions.sh
+# reads both.
+#
+# WHY THERE ARE TWO. `kanso check` on a DIRECTORY module goes through
+# compile_module_inner; `kanso check` on a FILE goes through
+# compile_parsed_entry. The two order their passes separately, so a change made
+# on one path and left on the other reads as green everywhere. Proved on
+# 2026-09-08 by a probe eprintln at the entry site: this corpus reaches it,
+# `check compile_corpus` gives no hits at all.
+#
+# It is a SEPARATE FILE rather than a second key in the compile golden because
+# tests/the_compile_row_holds_one_value.rs asserts that file holds exactly one
+# value, and that assertion enforces the 2026-09-05 ruling retiring a pinned
+# pair and a per-chip table. That ruling is about two values for ONE
+# measurement. This is a second measurement, and giving it its own file keeps
+# both true without loosening the spec that carries the gavel.
+#
+# ONE ROW, ONE VALUE, on the same terms as its sibling: a disagreement within
+# this row is a reproduction failure, hunted rather than pinned as a mode.
+#
+# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
+#
+# 2026-09-08 (the entry path runs its alias pass before the whole-program
+# check, as the module path has since kanso#1328):
+# The same reorder applied to compile_parsed_entry reads 165,184,791 ->
+# 163,510,395 in the box, a FALL of 1,674,396 or 1.0136%, with the program's
+# output byte-identical.
+#
+# THE FIRST READING OF THIS WAS TAKEN OUTSIDE THE BOX and it was the wrong
+# number: 165,178,246 -> 163,500,789, from an absolute path under /tmp. The
+# fall is the same to within three thousand, because the path term is a
+# constant offset either way, but the absolute values sit 6,545 and 9,606
+# apart. scripts/gates/library_box.sh says the count tracks the length of the
+# directory the compiler runs in, and it is right; a row read from anywhere but
+# the box pins the reader's filesystem.
+#
+# That fall is WORK, so by kanso#1326's reading it carries its sign and roughly
+# its magnitude across hosts and NOT its absolute value: the module row sat
+# 410,330 apart on the two boxes (0.81%) at one commit. The value below is the
+# container's and CI's reading replaces it, which is a deliberate red round
+# rather than a surprise.
+entry_instructions=163510395

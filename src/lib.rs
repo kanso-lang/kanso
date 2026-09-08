@@ -157,12 +157,12 @@ fn compile_parsed_entry(
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
+    phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
+    phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
     let merged_diags = check::check_merged(&merged, true);
     inline::inline_builtin_wrappers(&mut merged);
     match merged_diags.is_empty() {
         true => {
-            phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
-            phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
             phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
             phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
             // Counted here rather than inside the four, because the module

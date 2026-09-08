@@ -2419,3 +2419,74 @@ check for that is to read the line back.
 
 Nothing in ci.yml moves. The three gates already run there, and the spec rides in
 the specs job with every other `cargo test`.
+
+## 2026-09-08 (fourth) — the entry path had the same ordering, and nothing could see it
+
+Searched the log, the archive and design/ before filing: kanso#1328's entry
+above records the reorder on the MODULE path and says nothing about the entry
+path; kanso#1325's records the entry path's doubled rewrites, which is a
+different defect in the same function. Neither asks this.
+
+**DONE.** `compile_parsed_entry` runs its alias pass before the whole-program
+check now, as `compile_module_inner` has since kanso#1328, and
+`bench/entry_instructions_golden.txt` watches the path so the win cannot be
+lost quietly.
+
+The mechanism is #1328's exactly. `enroll_bare` is called at src/lib.rs:2477,
+INSIDE `load_dependencies`, so `dep_program` carries a synthetic twin for every
+exported declaration of every import — and BOTH paths merge that program. On
+the entry path the twins landed in `merged`, `check_merged` walked them, and
+`canonicalize_bare_aliases` deleted them four lines later.
+
+    entry_instructions   165,184,791 -> 163,510,395   -1,674,396  (-1.0136%)
+
+Output byte-identical. The error corpus, both micro corpora and the .mem vein
+are green, and `tests/reexports.rs` still asserts the ambiguous-bare-name
+refusal — the alias pass removes a twin only where the bare name has one target
+and no local binding, so `check_bare_ambiguity` still sees both copies of an
+ambiguous one.
+
+**Nothing in the tree reached that path, and that is why this needed finding
+rather than noticing.** `kanso check` on a DIRECTORY module goes through
+`compile_module_inner`; on a FILE it goes through `compile_parsed_entry`. A
+probe eprintln at the entry site settles it: `bench/entry_corpus/main.kso`
+reaches it, `kanso check bench/compile_corpus` gives no hits at all. So every
+compile gate in the repository measured one of the two paths, and the reorder
+could have been made on that one and left on the other with CI entirely green.
+
+`KANSO_PHASES` cannot tell the two apart and it looked as though it could.
+`load_dependencies` compiles each imported module through the module path, so a
+phase report is the union of both; a `kanso build` on a three-import program
+prints `check_merged` at 0.63 ms and `canonicalize_bare_aliases` at 0.09 ms with
+no way to attribute either. The entry path's `check_merged` is also unwatched,
+where the module path's is watched.
+
+**Two readings of mine were wrong and are corrected here rather than quietly
+replaced.** The first: I had recorded that `kanso check` on a `.kso` file routes
+through the module path. It does not, and the probe above is what settles it;
+the earlier attempt to measure this path failed for that reason and was written
+up as a null result. The second: the first A/B was taken with an absolute path
+under /tmp instead of the box-relative path the gate uses, and read
+165,178,246 -> 163,500,789. The FALL survives to within three thousand, because
+the path term is a constant offset, but the absolute values sit 6,545 and 9,606
+away from the box's. `scripts/gates/library_box.sh` says the count tracks the
+length of the directory the compiler runs in and it is right about that.
+
+`kanso run` on the same corpus reads 20,866,698,641, which is the runtime
+swamping the front end about 127 to 1. A compile change of 1.7 million would
+show there as 0.008%, so the workload is `kanso check`.
+
+**The row is a second golden rather than a second key.** A key added to
+`bench/compile_instructions_golden.txt` turns
+`tests/the_compile_row_holds_one_value.rs` red, and that spec carries the
+2026-09-05 ruling that retired a pinned pair and a per-chip table. The ruling is
+about two values for ONE measurement; this is a second measurement, so it gets
+its own file and its own `measured-on` line — which
+`scripts/gates/compile_instructions.sh` READS, because a measured-on line
+nothing reads is a comment and this repository has caught four of those.
+`scripts/trend_gate` walks the new golden for the reason every sibling was added
+to that list: a golden the gate does not walk is one whose regressions arrive
+unpriced.
+
+The value recorded is the container's. CI's toolchain differs and its reading
+replaces it in a second round, deliberately, the way kanso#1328's did.
