@@ -156,9 +156,12 @@ make a PR and then merge it."
   them.** `lib/*.kso` is `include_str!`'d into the compiler (`src/lib.rs`), so
   adding a line to lib/json is a line the compiler carries and compiles.
   `all_counters.sh` names the runtime cost goldens only; `machine_code`,
-  `emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`
-  and `compile_libraries` are separate gates and two of their counters are
-  welfare terms. On 2026-09-05 a twelve-line library change read as a welfare
+  `emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`,
+  `entry_instructions` and `compile_libraries` are separate gates and two of
+  their counters are welfare terms. `entry_instructions` is the newest and
+  answers for a compile the others cannot reach: `kanso check <dir>` is a
+  module and `kanso check <file>` is an entry, and until 2026-09-08 every
+  compile gate checked a directory. On 2026-09-05 a twelve-line library change read as a welfare
   RISE with the compile veins stale and a FALL once they were regenerated.
   `sh scripts/gates/all_compile.sh` runs the set after any edit under lib/ and
   separates a vein that MOVED from one this host may not compare — three of

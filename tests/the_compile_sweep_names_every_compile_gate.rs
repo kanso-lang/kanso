@@ -40,6 +40,13 @@ fn named() -> BTreeSet<String> {
 
 /// Every gate under scripts/gates whose script reads a compile-side golden.
 ///
+/// `bench/entry_*` is in the prefix list beside `bench/compile_*` because the
+/// entry path is a compile the module rows cannot reach: `kanso check <dir>`
+/// takes compile_module_inner and `kanso check <file>` takes
+/// compile_parsed_entry. A prefix list is exactly the shape that goes stale
+/// when a vein is added under a new name, which is why the two derivations
+/// below name theirs in one place each.
+///
 /// One is excluded for a reason that is not "it was inconvenient":
 /// `build_benchmarks` is not a gate and says so in its own first line.
 /// `all_compile` matches its own list and is not a gate; `all_counters` reads
@@ -61,6 +68,7 @@ fn compile_gates_on_disk() -> BTreeSet<String> {
         let body = std::fs::read_to_string(&path).expect("a gate reads");
         let reads_compile_golden = body.lines().any(|l| {
             (l.contains("bench/compile_") && l.contains("golden"))
+                || (l.contains("bench/entry_") && l.contains("golden"))
                 || l.contains("bench/text_golden")
                 || l.contains("bench/emitted_golden")
         });
@@ -146,6 +154,7 @@ fn compile_goldens_on_disk() -> BTreeSet<String> {
             continue;
         }
         if (name.starts_with("compile_") && name.contains("golden"))
+            || (name.starts_with("entry_") && name.contains("golden"))
             || name == "text_golden.txt"
             || name.starts_with("emitted_golden")
         {

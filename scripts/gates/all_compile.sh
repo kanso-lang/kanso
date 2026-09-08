@@ -43,8 +43,9 @@ set -e
 sh scripts/gates/build_benchmarks.sh > /dev/null
 
 # Derived from the goldens rather than remembered: these are the gates whose
-# script names a compile-side golden (bench/compile_*_golden, text_golden,
-# emitted_golden). `tests/the_compile_sweep_names_every_compile_gate.rs`
+# script names a compile-side golden (bench/compile_*_golden,
+# bench/entry_*_golden, text_golden, emitted_golden).
+# `tests/the_compile_sweep_names_every_compile_gate.rs`
 # replays that derivation, so a gate added later is a red spec rather than a
 # vein nobody sweeps.
 #
@@ -52,7 +53,7 @@ sh scripts/gates/build_benchmarks.sh > /dev/null
 # own first line. `compile_ir_row` used to be the second exclusion; it went with
 # the per-chip table on 2026-09-05, and the compile row now compares against its
 # single golden inside `compile_instructions` itself.
-gates="machine_code emitted_code compile_memory compile_allocs compile_instructions compile_libraries"
+gates="machine_code emitted_code compile_memory compile_allocs compile_instructions entry_instructions compile_libraries"
 moved=""
 refused=""
 regen=""

@@ -2476,3 +2476,120 @@ quote when the pass that rewrote the name has already run: either the check
 reads the pre-canonical spelling, or the pass records what it rewrote. That is a
 design question about diagnostics rather than about ordering, and it is where
 this thread now sits.
+
+## 2026-09-08 (fifth) — the entry path compiles and nothing counted it
+
+Searched the log, the archive and design/ before filing: `compile_parsed_entry`
+appears in the 2026-09-08 entries for kanso#1324, #1325 and #1326 and in
+kanso#1329's revert, and every one of them measures it on a corpus that lived in
+a session's temporary directory. None of them asks why there is no vein.
+
+**The two compiles.** `kanso check <directory>` is a module and goes through
+`compile_module_inner`. `kanso check <file>` with a top-level expression is an
+entry and goes through `compile_parsed_entry`, which merges the imports itself
+and runs its own whole-program check at src/lib.rs:160. Proved by probe, not by
+reading: an `eprintln!` at the entry site fires once for
+`bench/entry_corpus/main.kso` and not at all for `kanso check
+bench/compile_corpus`.
+
+Every compile gate in the tree checks a directory. So the call at line 160 was
+watched by nothing, and `KANSO_PHASES` cannot separate the two — `load_dependencies`
+compiles each import through the module path, so a phase report over an entry is
+the union of both.
+
+**What that cost.** kanso#1326 projected a RISE of 629 from this container and CI
+read a FALL of 367. kanso#1324 and #1325 landed on numbers no CI job could
+reproduce. Two further findings — the synthetic-twin skip below and kanso#1329's
+reverted reorder — were measured and could not be landed against anything.
+
+**The vein.** `bench/entry_corpus/main.kso` names ten imports and uses each,
+following bench/compile_corpus's rule that a workload is named rather than
+inherited; it imports ten where the compile corpus imports four, because the
+entry path's own work is the merge and the check over everything the imports
+bring and a corpus with one small import measures mostly the module path
+underneath it. `scripts/gates/entry_instructions.sh` counts it the way
+`compile_instructions.sh` counts its own — same box, same emptied environment,
+same pinned tunables, same `kanso::main` anchor — and every reason for those is
+left in the original rather than restated.
+
+`bench/entry_instructions_golden.txt` opened holding zero, because the row is
+CI's and this container reads high against CI's rustc. Round one was red on
+purpose and CI answered **163,886,731**, on binary sha 3c53d0acdbcb — the same
+sha that counted `compile_instructions=48,757,859` in the same job, so both
+rows answer for one build. The container had projected 165,183,406 from the
+same recipe minus the host check: 1,296,675 high, or +0.79%, which is the
+offset already recorded between rustc 1.94.1 here and CI's 1.98.1. The
+projection was right about the size and could not have been recorded as a row.
+
+**And the trend gate did not walk the new golden.** Found by asking which
+files in bench/ `scripts/trend_gate/trend_gate.kso` names, which its own
+comments say is the only method that has ever found one of these. The list has
+been short five times: three cost goldens nobody entered, then readbench —
+whose golden the gate could not see while two of its rows were welfare terms —
+then livebench, then the consolidated run program. This would have been the
+sixth, in the very PR that exists because a compile the gates could not see
+went unpriced.
+
+Two files in bench/ are unwalked and one of them belongs that way:
+`bench/compile_libraries_golden.txt` holds five sonames rather than counters
+and its own gate diffs it byte for byte. So the excuse list is one line long,
+and `tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads bench/
+off disk, asks the gate which files it names, and fails on anything neither
+walked nor excused. Its three assertions were each watched red: dropping the
+entry golden from the gate names it in the failure; an excuse for a file that
+is not there fires the second; an excuse for a golden the gate already walks
+fires the third. Finding this by hand a sixth time was not a plan.
+
+**The ratchet row separates the two veins, measured.** The mutation asks the
+entry's whole-program check twice. In the box:
+
+    entry_instructions   165,183,406 -> 190,382,616   +25,199,210  (+15.25%)
+    compile_instructions  49,162,592 ->  49,162,592   byte-identical
+
+A vein whose defects another vein already catches would not be worth its
+callgrind run. This one is worth it: the compile row cannot move for a defect on
+this path however much work it does.
+
+**MEASURED, NOT SHIPPED — the synthetic-twin skip.** `enroll_bare` gives every
+exported declaration of an imported module a twin under its short name, cloning
+the whole declaration, body and all. On the entry corpus that is 145 of 882
+declarations and 155 of 1,035 statements, and the whole-program check walks both
+copies. It is visible as a defect only under kanso#1329's reshape, where six
+error fixtures reported one diagnostic twice at the same line AND the same
+column — `field_missing/play` and its twin `play`, both at span 4 of the same
+file, each answering `check_field_exists` once. The module path has not had this
+since kanso#1328: `canonicalize_bare_aliases` takes the twins out before the
+check there, which is why `compile_instructions` reads synthetic=0 and this whole
+thread is invisible to it.
+
+Skipping synthetic declarations in the three checks that are pure body walks —
+`check_build_blocks`, `check_none_in_collections`, `check_field_exists` — was
+built and measured in the box:
+
+    entry_instructions   165,183,406 -> 164,922,557   -260,849  (-0.1579%)
+    compile_instructions  49,162,592 ->  49,170,337     +7,745  (+0.0158%)
+
+The entry row falls 34 times what the compile row rises, and the compile row's
+rise is the branch itself plus layout — the module path has no twins to skip.
+**Welfare reads the compile row and not the entry row**, so by the objective as
+it stands today this change is a small loss. That is a question about the
+objective's inputs rather than about the change, and it is not settled here: the
+skip is left out of this PR, and what lands is the vein it would be measured
+against. Recorded as OPEN.
+
+The remaining 0.85% of kanso#1329's reverted reorder is inference, which is 22.6%
+of the entry compile against `check_merged`'s 38.3%. `infer` indexes declarations
+positionally — `vec![0; program.fns.len()]`, groups by index — so it does not take
+a `continue`, and skipping the twins there is a different change from this one.
+
+- **DONE** — the entry vein: corpus, gate, golden with CI's row, CI step and
+  summary row, ratchet row, sweep membership, the trend gate's own list and
+  the spec that keeps it honest. The derivations in
+  `tests/the_compile_sweep_names_every_compile_gate.rs` walked past
+  `bench/entry_*` and now do not, and `the_compile_row_holds_one_value` covers
+  both instruction goldens rather than one, because the one-row-one-value ruling
+  is about the shape of a row and not about a filename.
+- **OPEN** — the synthetic-twin skip, measured above, held on the objective
+  question: should welfare's compile term read the entry path as well as the
+  module path? Two compiles, one term.
+- **OPEN** — the twins inside `infer`, worth most of the remaining 0.85%.

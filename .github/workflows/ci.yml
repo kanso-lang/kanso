@@ -391,6 +391,14 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/compile_instructions.sh
+      # The same count for the ENTRY path, which the step above cannot reach:
+      # it checks a directory, and a directory is a module. Every `kanso run`
+      # takes the path this one measures.
+      - name: entry instructions
+        id: entry_ir
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/entry_instructions.sh
       - name: compile memory
         id: compile_memory
         if: always()
@@ -477,6 +485,7 @@ jobs:
             cat "$f"
           done
           [ -f compile_ir_got.txt ] && { echo "=== compile_ir_got.txt"; cat compile_ir_got.txt; }
+          [ -f entry_ir_got.txt ] && { echo "=== entry_ir_got.txt"; cat entry_ir_got.txt; }
           exit 0
       - name: every vein had its say
         if: always()
@@ -493,6 +502,7 @@ jobs:
                       "compile memory:${{ steps.compile_memory.outcome }}" \
                       "compile allocations:${{ steps.compile_allocs.outcome }}" \
                       "compile instructions:${{ steps.compile_ir.outcome }}" \
+                      "entry instructions:${{ steps.entry_ir.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \

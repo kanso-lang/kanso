@@ -1,0 +1,44 @@
+# The workload the ENTRY path is measured on.
+#
+# `kanso check <directory>` and `kanso check <file>` are two different
+# compiles. A directory is a module and goes through compile_module_inner; a
+# file with a top-level expression is an entry and goes through
+# compile_parsed_entry, which merges its imports and runs the whole-program
+# check itself. bench/compile_corpus is a directory, so every compile gate in
+# the tree reads the module path and none of them reads this one.
+#
+# What that cost: three merged changes to the entry path were measured on a
+# scratch corpus that lived in a session's temporary directory and was gone
+# the next morning, and two more were still holding for a number nothing in
+# CI could produce. A path a compiler takes on every `kanso run` is not a
+# path whose regressions should arrive unpriced.
+#
+# THE WORKLOAD IS NAMED, NOT INHERITED, for the reason compile_corpus's
+# header gives at length: a row measured on a library moves when that library
+# changes its imports. These ten are named here, and each is used below,
+# because an unused import is a refusal.
+#
+# It imports ten where compile_corpus imports four, and the reason is
+# sensitivity rather than appetite: the entry path's own work is the merge and
+# the whole-program check over everything the imports bring, so a corpus with
+# one small import measures mostly the module path underneath it.
+import "std/bits"
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/math"
+import "std/path"
+import "std/regexp"
+import "std/render"
+import "std/sha256"
+import "std/text"
+
+a = bits/complement 1
+b = json/encode 1
+c = list/first [1 2 3]
+d = math/round 1.5
+e = path/basename "/a/b"
+f = regexp/matches "a" "a"
+g = render/to_string 1
+h = sha256/hex (text/bytes "x")
+io/write "{a}{b}{c}{d}{e}{f}{g}{h}\n"

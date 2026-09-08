@@ -31,6 +31,17 @@ fn root() -> PathBuf {
 
 const GOLDEN: &str = "bench/compile_instructions_golden.txt";
 
+/// Both instruction rows, each with the key its value line carries. The rule
+/// is about the shape of a row rather than about one file, so the entry row
+/// opened under it on 2026-09-08 rather than beside it: the first draft of
+/// that vein put `entry_instructions=` into the file above and turned this
+/// spec red, which is the spec doing its job — a second value in one file is
+/// exactly the shape the ruling retired, whatever the second value counts.
+const ROWS: [(&str, &str); 2] = [
+    (GOLDEN, "compile_instructions="),
+    ("bench/entry_instructions_golden.txt", "entry_instructions="),
+];
+
 /// The golden's value lines, comments and blanks dropped.
 fn value_lines(body: &str) -> Vec<&str> {
     body.lines()
@@ -41,27 +52,29 @@ fn value_lines(body: &str) -> Vec<&str> {
 
 #[test]
 fn the_golden_pins_exactly_one_value() {
-    let body = std::fs::read_to_string(root().join(GOLDEN)).expect("the compile golden reads");
-    let lines = value_lines(&body);
-    assert_eq!(
-        lines.len(),
-        1,
-        "{GOLDEN} carries {} value lines and the row is one row with one \
-         value; the extras are {:?}",
-        lines.len(),
-        &lines[1.min(lines.len())..]
-    );
-    let line = lines[0];
-    let value = line.strip_prefix("compile_instructions=").unwrap_or_else(|| {
-        panic!("{GOLDEN}'s value line reads {line:?}, not compile_instructions=")
-    });
-    assert!(
-        !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()),
-        "{GOLDEN} pins {value:?}. One row, one value: a second number beside \
-         the first, or a range around it, records a reproduction failure as a \
-         mode instead of hunting it, and that is what the 2026-09-05 ruling \
-         forbids."
-    );
+    for (golden, key) in ROWS {
+        let body = std::fs::read_to_string(root().join(golden)).expect("the compile golden reads");
+        let lines = value_lines(&body);
+        assert_eq!(
+            lines.len(),
+            1,
+            "{golden} carries {} value lines and the row is one row with one \
+             value; the extras are {:?}",
+            lines.len(),
+            &lines[1.min(lines.len())..]
+        );
+        let line = lines[0];
+        let value = line
+            .strip_prefix(key)
+            .unwrap_or_else(|| panic!("{golden}'s value line reads {line:?}, not {key}"));
+        assert!(
+            !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()),
+            "{golden} pins {value:?}. One row, one value: a second number \
+             beside the first, or a range around it, records a reproduction \
+             failure as a mode instead of hunting it, and that is what the \
+             2026-09-05 ruling forbids."
+        );
+    }
 }
 
 #[test]

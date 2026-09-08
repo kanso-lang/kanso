@@ -36,3 +36,8 @@ cp -R lib "$box/lib"
 find "$box/lib" -name '*_test.kso' -delete
 cp ./target/release/kanso "$box/kanso"
 cp -R bench/compile_corpus "$box/compile_corpus"
+# And the entry corpus, for the same reasons. `kanso check <dir>` is the module
+# path and `kanso check <file>` is the entry path, so the two corpora measure
+# two different compiles and both are staged here rather than read out of the
+# checkout — the path length moves the count either way.
+cp -R bench/entry_corpus "$box/entry_corpus"
