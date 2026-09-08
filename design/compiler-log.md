@@ -3105,11 +3105,22 @@ stricter rule: a counter may rise when something else falls, and here nothing
 fell. Paying 502 instructions on every module compile for a number only a spec
 reads is a bad trade however small it is.
 
-So the counter moved to the four call sites in `compile_parsed_entry`. The
-compile gates check a module and never enter that function, so the row is
-untouched and the gate is silent. `tests/rewrite_passes.rs` now pins 4 rather
-than 20 — the entry group alone, not the entry group plus every module's — and
-was watched red at 8 under the restored group before it was believed.
+So the counter moved to the four call sites in `compile_parsed_entry`, which
+takes it off the measured path altogether: the gate checks a module and enters
+neither the deleted rewrites nor the bumps that replaced them.
+`tests/rewrite_passes.rs` now pins 4 rather than 20 — the entry group alone, not
+the entry group plus every module's — and was watched red at 8 under the
+restored group before it was believed.
+
+The row did not come back to where it started. CI read **50,685,288**, a FALL of
+690 from main's 50,685,978, with `compile_allocs` and `compile_peak_bytes`
+byte-identical. Nothing the gate executes changed, so this is the layout vein
+that this golden's own history records moving seven times before on edits to the
+compiler's Rust. It is an improvement rather than a cost, `scripts/trend_gate`
+reads it as one, and the golden is regenerated down with that reason written in.
+The three readings together are the useful record: 50,685,978 with no counter,
+50,686,480 with it inside the four functions, 50,685,288 with it at the entry
+call sites.
 
 **The placement costs something and the spec says so.** `infer::work` counts
 inside `infer`, which catches any caller anywhere; that is the property its own
