@@ -3419,3 +3419,58 @@ resolve to one module for the whole build — but it changes what a qualified na
 means, so it is its own piece of work rather than a tidy on this one.
 
 Declined, reverted, nothing shipped.
+
+## What the per-module reshape costs the diagnostics, fixture by fixture
+
+The reshape is `src/lib.rs`'s `outermost` branch: a dependency runs
+`check::check_own_declarations` — the three checks that skip any name carrying a
+slash — plus `canonicalize_bare_aliases`, `finish_program` and `trmc::rewrite`,
+and hands its declarations up. Everything else runs once, at the outermost
+compile. Against the 193 fixtures in `tests/golden/errors`, run as libraries
+behind a generated entry the way `tests/golden.rs` drives them:
+
+    155 agree   38 move   0 without a golden
+
+Thirty-one of the thirty-eight carry an `.imported.stderr` golden, which the
+corpus already keeps for fixtures whose names spell qualified through an import.
+The seven with a plain golden are the ones worth reading, and they are two
+kinds.
+
+Three are an improvement. `a_wall_whose_right_side_is_a_name`,
+`fields_that_no_one_record_declares` and `sequencing_takes_two_descriptions`
+traded the `(module X)` suffix for a `--> X.kso:line:col`, which is the
+attribution work doing what it was written to do.
+
+Four print a qualified name where the old output printed a short one:
+
+    fixture                          was                 is now
+    constructor_in_a_list            `point`             `constructor_in_a_list/point`
+    an_arm_set_with_no_settling_arm  `open_start?`       `an_arm_set_with_no_settling_arm/open_start?`
+    field_of_the_wrong_record        `point`             `field_of_the_wrong_record/point`
+    field_of_an_annotated_parameter  `money`             `field_of_an_annotated_parameter/money`
+
+Measured both ways on the same fixtures rather than inferred: the base binary
+prints the short name for all four when they run as libraries, so the reshape
+introduces this and does not inherit it.
+
+The mechanism is the reshape itself. Today a module's own `check_merged` runs
+inside its own compile, before its declarations are qualified for an importer,
+so a message that names a declaration reads the spelling the source wrote. Move
+that check to the outermost compile and the same message sees the name after
+qualification.
+
+Where a fix goes. Every diagnostic now carries the file it belongs to, and a
+module's qualifier is that module's short name, so one rule at render time
+covers it: print a name without the qualifier that names the diagnostic's own
+module, since that is the spelling the file being pointed at uses. One site,
+one rule.
+
+It does not cover all four. `an_arm_set_with_no_settling_arm` attributes to
+`run_an_arm_set_with_no_settling_arm.kso`, the generated entry, because a
+dispatch tie is reported at a call rather than at the arms it is about. The
+qualifier there is not the diagnostic's own module and the rule would leave it
+alone. That is a second defect, in where a tie points, and it wants its own
+fixture.
+
+Nothing shipped. The three patches are held; the corpus classification is what
+this entry is for.
