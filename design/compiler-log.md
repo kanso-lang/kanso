@@ -3540,23 +3540,32 @@ so `spelled_in` derives the qualifier from the entry and leaves the name alone.
 It is the fourth member of the class this entry already names, and it has a
 fixture, which the other three do not.
 
-`builtin_arg_type` is the serious one. Its own error disappears and a different
-one takes its place:
+`builtin_arg_type` looked like the serious one. Its own error disappeared and a
+different one took its place:
 
     was  error[type]: `length` takes a list, a map, or a string here, not an int
-    now  error[name]: `builtin_arg_type/play` is internal to the standard
+    then error[name]: `builtin_arg_type/play` is internal to the standard
          library — import its module
 
-The fixture's type error is no longer reported at all, and what the reader gets
-instead is about the harness's generated entry. A diagnostic that vanishes is
-worse than one that reads badly, so this one is a stop rather than a golden to
-regenerate. Diagnosing it is the next step on this thread.
+Diagnosed, and the first reading was wrong: this belongs to the entry below
+rather than to the reshape. `resolve_name` stripped `builtin_` from a qualified
+name, so a fixture named `builtin_arg_type` had every reference to it refused.
+That bug predates the reshape by as long as the refusal has existed; the fixture
+survived only because its own error used to be raised first and stop the compile.
+With the prefix check restricted to bare names, the fixture reports its own
+error again, and better than before:
 
-Nothing shipped. The rules are dead code on main — no diagnostic carries a file
-until the attribution patch lands — so they belong to the reshape's bundle
+    error[type]: `length` takes a list, a map, or a string here, not an int
+      --> builtin_arg_type.kso:1:27
+
+So the classification is 31 location-only, 6 one-becomes-two, and one blocker:
+`sub_of_none`.
+
+Nothing of the reshape shipped. The rules are dead code on main — no diagnostic
+carries a file until the attribution patch lands — so they belong to its bundle
 rather than to changes of their own. Five patches held; the candidates are
-written out beside them. The reshape does not land until `builtin_arg_type`
-reports its own error again.
+written out beside them. What remains before it lands is `sub_of_none`, the
+thirty-seven goldens, and the compile veins measured for the whole bundle.
 
 ## A module named for what it holds could be imported and never used
 

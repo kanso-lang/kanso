@@ -1810,6 +1810,22 @@ the stack holds</code></pre>
 
 <p>this route was walked once before and withdrawn in kanso#1003 as &quot;the per-dependency check_merged is not redundant&quot;, without naming what made it so. the mechanism is the slash, and it is written down now.</p>
 
+<h2 id="builtinprefix"><span class="sec-num">60</span>a prefix belongs to a name, not to the head of a path</h2>
+
+<p><code>builtin_</code> names are how the standard library reaches the engine, and a program that writes one for itself is refused: <code>builtin_length</code> is the library's business. the resolver enforced that by stripping the prefix and asking whether what remained was a builtin it knows.</p>
+
+<p>it asked the same question of a qualified name. <code>builtin_shapes/circle</code> lost its prefix, <code>shapes/circle</code> was not a builtin anyone has, and the reference was refused as internal to the standard library. every use of a module whose own name began with those seven bytes met the same answer, so such a module could be imported and never used. two files reproduce it:</p>
+
+<pre><code>builtin_probe/builtin_probe.kso   pub hello = "hi"
+main.kso                          import "./builtin_probe"
+
+                                  print builtin_probe/hello
+
+error[name]: `builtin_probe/hello` is internal to the standard library
+— import its module</code></pre>
+
+<p>the rule the check wanted is about a bare name. a qualified name is a declaration somewhere else, and what that module calls itself is its own business. so the prefix test applies to bare names, and a module may be named for what it holds.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
