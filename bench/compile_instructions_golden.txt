@@ -1,4 +1,6 @@
-# Retired instructions for `kanso check lib/json`, counted under callgrind.
+# Retired instructions for `kanso check compile_corpus`, counted under
+# callgrind. The workload was `kanso check lib/json` until 2026-09-08; the
+# history below is written against that one.
 #
 # bench/instructions_golden.txt counts the benchmarks, which are the programs
 # the compiler PRODUCES. This counts the compiler. Until 2026-08-24 nothing

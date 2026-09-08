@@ -74,7 +74,7 @@ echo
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
-    --callgrind-out-file="$out" ./kanso check lib/json >/dev/null 2>/dev/null
+    --callgrind-out-file="$out" ./kanso check compile_corpus >/dev/null 2>/dev/null
 )
 
 printf 'probe row=%s\n' "$(grep -o '^summary: [0-9]*' "$out" | tr -dc 0-9)"

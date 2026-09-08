@@ -6,13 +6,13 @@
 set -e
 golden=bench/compile_memory_golden.txt
 sh scripts/gates/library_box.sh
-(cd /tmp/kanso-compile-ir && KANSO_COUNTERS=1 ./kanso check lib/json 2>&1 >/dev/null) \
+(cd /tmp/kanso-compile-ir && KANSO_COUNTERS=1 ./kanso check compile_corpus 2>&1 >/dev/null) \
   > counters_compile.txt
 for k in rounds visits; do
   got=$(grep "^compile_${k}=" counters_compile.txt | cut -d= -f2)
   want=$(grep "^front_end_${k}=" "$golden" | cut -d= -f2)
   if [ "$got" != "$want" ]; then
-    echo "::error::the front end's ${k} on lib/json moved: ${want} -> ${got}."
+    echo "::error::the front end's ${k} on compile_corpus moved: ${want} -> ${got}."
     echo "::error::rounds and visits are NOT welfare terms -- the objective has"
     echo "::error::weighed compile_instructions, compile_allocs and"
     echo "::error::compile_peak_bytes and nothing else about the front end since"
@@ -48,7 +48,7 @@ fi
 want=$(grep '^compile_peak_bytes=' "$golden" | cut -d= -f2)
 echo "front end holds ${got} bytes; golden ${want}"
 if [ "$got" != "$want" ]; then
-  echo "::error::what the front end holds while checking lib/json moved:"
+  echo "::error::what the front end holds while checking compile_corpus moved:"
   echo "::error::${want} -> ${got}. That is a welfare term, and this row is"
   echo "::error::exact for the host its measured-on line names, so any"
   echo "::error::difference is a real one. A rise is a regression to explain"

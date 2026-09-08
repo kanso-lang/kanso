@@ -1,0 +1,25 @@
+# The workload the compile term is measured on, named once.
+#
+# Ruled 2026-09-08. The three compile gates and the objective used to check
+# lib/json, so the term moved with whatever lib/json happened to import that
+# week: kanso#1291 retired the escape fold, std/list went with it, and the rows
+# halved with the compiler byte-identical. By the objective's definition that
+# was a four-point rise; by what the term is for -- how fast the compiler is --
+# it measured nothing.
+#
+# This package names its imports, so a library edit moves the rows by that
+# edit's own compile cost and a dropped import moves them by that import's.
+#
+# Each import is used, because an unused one is a refusal.
+import "std/json"
+import "std/list"
+import "std/testing"
+import "std/text"
+
+pub fn workload s
+  json/decode s
+    . (v -> json/encode v)
+    . (t -> text/append t (text/join (list/take ["a" "b" "c"] 2) ","))
+
+pub fn checked? s
+  testing/failed? (workload s)

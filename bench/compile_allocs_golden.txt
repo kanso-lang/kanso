@@ -1,4 +1,6 @@
-# What the front end ALLOCATES on lib/json, beside what it keeps.
+# What the front end ALLOCATES on bench/compile_corpus, beside what it keeps.
+# The workload was lib/json until 2026-09-08; the history below is written
+# against that one.
 #
 # bench/compile_memory_golden.txt holds the work the compiler decided to do —
 # rounds and visits — and the peak it held while deciding. Neither can see the

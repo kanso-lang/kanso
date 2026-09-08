@@ -15,7 +15,7 @@ if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
   exit "$host"
 fi
 sh scripts/gates/library_box.sh
-(cd /tmp/kanso-compile-ir && KANSO_COUNTERS=1 ./kanso check lib/json 2>&1 >/dev/null) \
+(cd /tmp/kanso-compile-ir && KANSO_COUNTERS=1 ./kanso check compile_corpus 2>&1 >/dev/null) \
   > counters_allocs.txt
 grep -v '^#' "$golden" > allocs_want.txt
 for k in compile_allocs; do

@@ -1,6 +1,10 @@
-# What the front end costs on a real library — checking lib/json, which is a
-# thousand lines of kanso rather than the few hundred the emitted-code golden
-# samples. Rounds and visits say how much work it decided to do; peak bytes
+# What the front end costs on bench/compile_corpus, the FIXED corpus the
+# compile term reads since 2026-09-08. It was lib/json until that day, and
+# the history below is written against that workload; why it moved is in the
+# log entry for the day. lib/json is still most of what gets compiled here,
+# since the corpus imports it, beside the std modules the ruling names.
+#
+# Rounds and visits say how much work the front end decided to do; peak bytes
 # says how much it had to keep while deciding.
 #
 # The five samples in compile_golden.txt hold 126 visits between them, and
@@ -112,13 +116,13 @@
 # run can be appended in one piece — and a declaration is expressions to visit
 # and two more rounds for the fixpoint to reach it. Banked as the price of the
 # runtime fall it buys.
-front_end_rounds=35
+front_end_rounds=62
 # 2026-09-06 (the array's second walk over the same whitespace): visits 17,169
 # -> 17,115, a fall of 54, or 0.31%, and rounds hold at 40. Two expressions
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
 # end has that much less to visit. Banked, and it moves the same way as the
 # runtime fall it comes with rather than paying for it.
-front_end_visits=9884
+front_end_visits=23723
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

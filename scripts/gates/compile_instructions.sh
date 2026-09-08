@@ -107,7 +107,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
-    --callgrind-out-file=/tmp/cg.compile ./kanso check lib/json \
+    --callgrind-out-file=/tmp/cg.compile ./kanso check compile_corpus \
     >/dev/null 2>/dev/null
 )
 # THE COMPILER'S OWN WORK, not the whole process. `kanso::main` inclusive is

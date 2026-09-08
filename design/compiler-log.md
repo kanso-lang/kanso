@@ -4624,3 +4624,87 @@ Named by the keys the trend gate reads, each with the value it landed on:
 `work_basket` 34,694,178, `work_indexbench` 3,265,786, `work_digestbench`
 10,420,396, `work_readbench` 4,287,137, and `text` 1,471,084 -> 1,487,564,
 the sum of the fourteen rows above.
+
+## 2026-09-08 (ninth) — the compile term is measured on a workload it names
+
+Ruled on 2026-09-08: the compile term reads a fixed corpus rather than
+lib/json. The reason is kanso#1291. That change retired the escape fold,
+`lib/json` stopped importing `std/list`, and all three compile rows roughly
+halved — with the compiler byte-identical. By the objective's arithmetic that
+was a four-point rise. By what the term is for, how expensive the compiler is
+to run, it measured nothing at all.
+
+`bench/compile_corpus` is a package that names its imports: `std/json`,
+`std/list`, `std/testing`, `std/text`, each used, because an unused import is
+a refusal. `scripts/gates/compile_allocs.sh`, `compile_memory.sh` and
+`compile_instructions.sh` check it instead of lib/json, and
+`scripts/compile_row_probe.sh` follows so the probe answers the same question
+the gates do. lib/json is still most of what gets compiled, since the corpus
+imports it; what changed is that a row now moves by a compiler change or by an
+edit to the corpus, and not by a library changing its mind about a dependency.
+
+**`library_box.sh` stages `lib/` and nothing else**, so a gate asked for
+`compile_corpus` would have found no such package. It gains one `cp -R` line.
+The corpus lives under `bench/` rather than `lib/` because a benchmark is not
+the library — which is exactly why the line is needed.
+
+**The rows this host may write.** `front_end_rounds` 35 -> 62 and
+`front_end_visits` 9,884 -> 23,723. Those two count the compiler's own
+algorithm and are the same on every host, so `compile_memory.sh` compares them
+before it reaches its host check and this container may measure them.
+`compile_peak_bytes`, `compile_allocs` and `compile_instructions` are
+host-keyed and are left at their lib/json values on purpose: `host_gate.sh`
+exists because "a container's numbers going into a golden over the runner's is
+the exact accident measured_on was written after". So round one of this PR is
+RED on all three by design — CI compares, fails, and prints the sitting to copy,
+which is what its refusal text has always told a reader to do.
+
+For scale, the container reads `compile_allocs` 31,596 against lib/json's
+11,613 and `compile_peak_bytes` 789,740 against 375,222. The corpus is a bigger
+program, so the compile terms rise and welfare falls.
+
+**The floor moves DOWN by hand, and that is a re-basing rather than a
+regression.** `--set` cannot lower a floor — Clay's 2026-08-03 ruling — so the
+new value goes into `bench/welfare_floor.json` where a reviewer sees it in the
+diff. CLAUDE.md says moving the floor to accommodate a change while leaving the
+weights alone is declaring the objective wrong without saying so. That rule is
+about a change that makes the COMPILER worse. This one does not touch the
+compiler; it changes what the term is measured on, which is the third state the
+trend gate already models: a re-basing counts toward neither side, because a
+ratio between two definitions cannot say which way the compiler went. The
+authority is the ruling.
+
+**Two things a reader should see rather than discover.**
+
+`std/testing` is imported today by `lib/json/json_test.kso` and by nothing
+else, and `library_box.sh` DELETES every `*_test.kso` before measuring. So the
+compile rows have never compiled `std/testing`, and naming it in the corpus adds
+a module they have never counted. The 2026-08-25 fault that `library_box.sh`
+was written after was incidental drift — a test file's imports leaking into the
+measurement. This is the opposite: the workload is named on purpose. Built as
+ruled, stated here so the addition is visible.
+
+And the ruling names list, text and testing, while the benchmarks import more
+than that: runbench alone pulls `std/json`, `std/list`, `std/text`,
+`std/regexp`, `std/sha256`, `std/io` and `std/os`. Built as ruled; the wider
+set is recorded rather than assumed either way.
+
+**A one-word edit could revert all of this silently** — `compile_corpus` back
+to `lib/json` in any one gate — and every golden would simply be re-based to the
+new workload and agree with itself. `tests/the_compile_term_reads_the_fixed_corpus.rs`
+asserts the workload by name in all four readers, that the box stages it, and
+that the corpus still names the four modules. All three assertions were watched
+red first: a gate reverted, the staging line deleted, and an import dropped.
+
+**The welfare BASELINE does not move with the workload, and here is why that
+was checked.** `bench/welfare_floor.json` carries a baseline for each term —
+`compile_allocs` 62,110, `compile_instructions` 56,563,967,
+`compile_peak_bytes` 819,217 — all measured on lib/json. The obvious worry is
+that scoring a corpus reading against a library baseline compares two
+different programs, and that the baseline has to be re-measured too. It does
+not. CLAUDE.md settles it: the number "is an index, not a percentage — the
+ceiling is a hundred, where every term costs nothing, and the origin is
+arbitrary. Only its direction and the size of its moves mean anything." An
+arbitrary origin stays where it is; the term's value falls once, the floor
+absorbs that fall, and every move after it means what it always did. Moving the
+baseline as well would hide the fall rather than record it.
