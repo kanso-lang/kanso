@@ -3681,3 +3681,41 @@ it. The rule already in CLAUDE.md — project a compile-instructions move from C
 or take the red round, never write down that it moved before CI has said so —
 now has this as its worked example, and the sign is the part it costs a round to
 learn.
+
+## 2026-09-08 — the whole-program check ran over declarations the next pass deletes
+
+`enroll_bare` gives every exported declaration of every imported module a twin
+under its short name, so `import "std/list"` puts both `list/next` and `next`
+into the merged program. `canonicalize_bare_aliases` then takes most of those
+twins straight back out: where a bare name has exactly one qualified target and
+is never locally bound, it rewrites the references to the qualified spelling and
+drops the clone.
+
+On `bench/compile_corpus` that pass declines nothing. All 83 twins go, out of
+394 declarations — 21% of the merged program. And it ran at src/lib.rs:3599,
+seventeen lines after `check_merged` at 3581. So the whole-program check, and
+every pass reading its results, ran over 83 declarations that were about to be
+deleted.
+
+Moving `canonicalize_types` and `canonicalize_bare_aliases` in front of the
+check:
+
+    compile_instructions   51,095,251 -> 49,162,592   -1,932,659  (-3.78%)
+
+Both readings on this container, from the gate's own valgrind recipe with the
+host-comparability check removed — this box cannot be compared against CI's
+golden, but it can be compared against itself across two builds, which is what
+an A/B needs. CI's number is the one the golden takes.
+
+The census that found this was looking for something else. Task #427 recorded
+"99 of 428 merged declarations are a second copy reached through a further
+qualifier" — the diamond's duplicates, a module reached by two import paths
+contributing its declarations twice. On the compile corpus there are none of
+those: `collapse_diamonds` already drops them, and every one of the 83 pairs the
+census turned up is a bare twin beside its qualified original. The number was
+right and the reading of it was wrong.
+
+Nothing else changes. The alias pass removes a twin only where the bare name has
+one target and no local binding, so an ambiguous bare name keeps both copies and
+`check_bare_ambiguity` still sees them. The full golden suite is green,
+including all 173 error fixtures and the micro corpus run twice.

@@ -3578,6 +3578,8 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
+    phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
+    phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
     let diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
@@ -3595,8 +3597,6 @@ fn compile_module_loaded(
             .collect();
         return Err(rendered.join(""));
     }
-    phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
-    phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
     phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
     phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
     finish_program(&mut merged);
