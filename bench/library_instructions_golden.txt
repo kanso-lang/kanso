@@ -30,9 +30,21 @@
 #
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
 #
-# 2026-09-08 (the vein opens): the container projected 165,589,540, from the
-# same recipe minus the host check, on the tree kanso#1335 merged. That
-# projection is what the first CI sitting is checked against and is NOT a row:
-# a number this file may hold is one CI counted.
+# 2026-09-08 (the vein opens): library_instructions=164,253,088.
+#
+# CI's own first sitting, on binary sha 9bc8f829af68 with .text=2,599,486 --
+# the same job that counted compile_instructions=48,791,172 and
+# entry_instructions=162,170,772, so all three rows answer for one build.
+#
+# The container that wrote this file projected 165,589,540 from the same recipe
+# minus the host check. That is 1,336,452 high, or +0.8136%, which lands on the
+# offset the other two rows already record between rustc 1.94.1 there and CI's
+# 1.98.1 -- the module row's and the entry row's both sit at about +0.8%. The
+# projection is kept as the thing this sitting was checked against and is not a
+# row: a number this file may hold is one CI counted.
+#
+# For scale beside the other two: the module row is 48.8M and the entry row
+# 162.2M. This row sits beside the entry row because the two corpora are the
+# same shape and both paths merge the dependency program before checking it.
 
-library_instructions=165589540
+library_instructions=164253088

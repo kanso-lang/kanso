@@ -3147,9 +3147,18 @@ mostly the work underneath it. The directory is named to the same length as
 `compile_corpus`, because the count tracks the length of the path the compiler
 is handed at about 160 instructions a character.
 
-The container projected 165,589,540 and CI wrote the row. Only CI may: this box
-has rustc 1.94.1 against CI's 1.98.1 and reads about 0.8% high on the level of
-both existing compile rows.
+The container projected 165,589,540 and CI wrote the row: **164,253,088**, on
+binary sha 9bc8f829af68 in the job that also counted
+compile_instructions=48,791,172 and entry_instructions=162,170,772, so all
+three answer for one build. The projection is 1,336,452 high, +0.8136%, which
+lands on the offset the other two rows already carry between this box's rustc
+1.94.1 and CI's 1.98.1. Only CI may write the row, and the reason is that
+offset.
+
+CI's summary named exactly one failing vein and eighteen green, which is what
+round one was for. The ratchet job passed in the same run, so `library_ir`'s
+mutation applies on the runner and the row is provable there rather than only
+here.
 
 **THE SPEC PREDICTED ITS OWN FAILURE MODE AND THIS IS THE INSTANCE.**
 `tests/the_compile_sweep_names_every_compile_gate.rs` derives the sweep's list
