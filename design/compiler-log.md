@@ -3542,10 +3542,25 @@ TEXT alone. Three classes came out:
      6  one diagnostic became two
      2  the message text itself changed
 
-The thirty are the reshape's improvement, in bulk. The six are worth reading and
-are probably also an improvement — a module's own check used to stop its compile
-with one message, and the whole-program check now reports what follows — but
-each needs reading before its golden moves.
+The thirty are the reshape's improvement, in bulk. The six wanted reading, and
+reading them changed the count above: they are the same diagnostic twice, at the
+same file, line and column.
+
+    error[name]: no record type has a field `name`
+      --> field_missing.kso:6:12
+    error[name]: no record type has a field `name`
+      --> field_missing.kso:6:12
+
+Two reports of one source location is a declaration present twice in the merged
+program, which is the finding the module memo turned up above — 99 of the
+corpus's 428 merged declarations are a second copy reached through a further
+qualifier. The reshape did not create those copies; it moved the check that
+walks them from per module, where each saw one copy, to once at the end, where
+one walk sees both. Under the old suffix the two reports read as different
+messages, so nothing noticed.
+
+That makes the duplicate declarations a blocker for the reshape rather than a
+performance question beside it, and it is where this thread now goes.
 
 The two are the blockers, and they are different from each other.
 
@@ -3574,8 +3589,13 @@ error again, and better than before:
     error[type]: `length` takes a list, a map, or a string here, not an int
       --> builtin_arg_type.kso:1:27
 
-So the classification is 31 location-only, 6 one-becomes-two, and one blocker:
-`sub_of_none`.
+`sub_of_none` was the other, and it is fixed: `check_sub_parents` walks
+`program.types`, `stamp_file` stamped only `program.fns`, and giving `TypeDecl`
+a file — a field, a second loop in `stamp_file`, an `impl HasFile`, and the walk
+through `diag::attributing` — makes it read `missing` at
+`sub_of_none.kso:1:6`. With that in, every one of the thirty-eight is either
+location-only (32) or the doubled report below (6). No message text is worse
+than it was.
 
 Nothing of the reshape shipped. The rules are dead code on main — no diagnostic
 carries a file until the attribution patch lands — so they belong to its bundle
