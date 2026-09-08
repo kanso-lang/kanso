@@ -2981,3 +2981,144 @@ for the current row, done for every row.
 Apply the same per-epoch scaling to the compile side's two changes of
 measurement. Until both land, the chart shows the history of what was measured
 rather than the history of the compiler, and no reader can tell which.
+
+## 2026-09-08 (sixth) — the pre-canonical spelling, and the entry reorder ships
+
+Searched the log, the archive and design/ before filing: the entry above
+("the entry reorder re-derived") is this thread's own, and leaves exactly this
+as OPEN with the recorder measured and the reader half unbuilt. kanso#1329
+records the first revert, kanso#1328 the module path's reorder, kanso#1120 the
+ruling both readers have to satisfy. This builds what that OPEN item names.
+
+**The reorder ships, with the two readers that make it honest.**
+`canonicalize_bare_aliases` runs in front of `check_merged` on the entry path
+now, so the whole-program check no longer walks the synthetic twins the pass is
+about to delete. `canonicalize_types` stays in the success arm, which is the
+cheaper of the two shapes by 8,930 instructions.
+
+The pass returns a `Rewrites` — line and column to the bare name it replaced —
+and `check_merged_after_aliases` hands it to the two checks that read a call's
+name. Every other caller runs the pass after the check and passes an empty
+record, where both readers behave as they always did.
+
+**The two readers want different things, and that is the whole finding.**
+
+    check.rs arity (two sites)   quotes the recorded bare name
+    foreign_constructions        SKIPS a head the pass rewrote
+
+Arity is a wording question and kanso#1120 settles it: the diagnostic names what
+the import writes. Opacity is not. Its own comment states the invariant, at
+check.rs:1847 — "A qualified name can never be a local binding, so unlike the
+arity walk beside it this needs no shadowing set: the slash IS the foreignness."
+That holds only while every slash was written by a person. After the pass, a
+slash also means the pass put one there, and the check fires on a call of an
+imported function as though it were a construction of the imported type of the
+same name. No wording of that message is right; the site is not a construction
+at all.
+
+**On scripts/module_differential: 0 wrong, from the 2 wrong the reorder cost
+before.** Both objections are gone, and both readers were watched red on their
+own:
+
+    opacity skip disabled   1 wrong -- `m/thing` is foreign, on a program that compiles
+    arity spelling disabled 1 wrong -- quotes `m/one` where the source says `one`
+
+Each mutation loses exactly its own fixture and no other, so neither reader is
+dead code and neither is doing the other's work.
+
+**What it costs, in this box.**
+
+    entry_instructions   164,922,557 -> 163,499,802   -1,422,755  (-0.8627%)
+    compile_instructions  49,170,337 ->  49,207,870      +37,533  (+0.0763%)
+    summed                214,092,894 -> 212,707,672  -1,385,222  (-0.6470%)
+
+The module row rises for the same reason kanso#1332's did: the path pays for
+something it cannot use. Its record is always empty, and what it pays is a
+parameter carried through `arity_walk_expr` and `foreign_constructions`'s walk,
+both recursive over every expression. Neither lookup runs on a clean module
+compile -- the arity one sits inside the refusal branch and the opacity one
+behind a name being in the foreign set -- so the cost is the threading, not the
+reading. Under kanso#1331's summed compile term the trade is 38 to 1 in favour,
+and the sum is what the objective reads.
+
+Against the reorder measured WITHOUT the readers (163,353,361), the readers cost
+the entry row 146,320. The probe in the entry above put the recorder alone at
+27,345; the rest is the two further walkers now carrying the same parameter.
+
+These are container numbers and none of them is a row. CI counts both compile
+veins, and this branch expects a deliberate red first round for exactly that.
+**CI's rows, and what the container got wrong about them.**
+
+    entry_instructions   163,612,976 -> 162,170,772   -1,442,204  (-0.8814%)
+    compile_instructions  48,761,165 ->  48,791,172      +30,007  (+0.0615%)
+    summed               212,374,141 -> 210,961,944   -1,412,197  (-0.6650%)
+
+Welfare 66.2898 -> 66.30, ratcheted in the same change.
+
+The container projected -1,422,755 and +37,533. Sign and order right on both,
+digits wrong on both, and the two errors ran the same way: it UNDERSTATED the
+entry fall by 19,449 and OVERSTATED the module rise by 7,526. Its standing
+offset is +0.8% on the LEVEL of each row, so the naive expectation was that it
+would overstate a fall; a level offset between toolchains does not carry to a
+delta, and this pair is the demonstration. Under the summed term the trade is
+48 to 1 in favour, against the 38 to 1 the container projected.
+
+
+**The module path had both defects live, and nothing in the tree asked it.**
+kanso#1328 moved the same pass in front of the same check on the module path
+three days before this, and handed the check nothing. So on main today:
+
+    kanso check <a module>   opacity REFUSES a program that compiles
+    kanso check <a module>   arity quotes `m/one` where the source says `one`
+
+Reduced, that is a module whose sibling declares `pub type thing` beside
+`pub fn thing _`, importing it and calling `thing 0`. The entry-path form of
+exactly that program is c7 in scripts/module_differential, and it was watched
+through both reverts of the entry reorder; the module form had no case at all,
+so the sweep read 0 wrong on a defect it could not see. The fix is the entry
+path's, and both programs go into the sweep as c26 and c27 -- watched red on the
+pre-fix compiler for the two messages above, verbatim, before they went green.
+
+Threading the module path costs almost nothing because it was already paying:
+`check_merged` built an empty `Rewrites` on every call, and the change replaces
+that construction with the real one. Entry +121, compile +63 against the
+readings in the table above, both already folded in.
+
+**And the third path is now watched before it moves.** `kanso check` on a single
+library file takes `compile_library`, which still checks before it canonicalizes
+-- so both readers are right there today. c28 and c29 say so, and they were
+watched red by making exactly the reorder the OPEN item below proposes for that
+path: both go wrong together, with the same two messages. `compile_one` carries
+a byte-identical block, so the mutation is one edit applied twice and the two
+paths answer as one.
+
+**What this says about where a defect gets found.** The reorder was reverted
+twice on the entry path for objections the sweep caught within a round, because
+the entry path had cases. The same reorder shipped on the module path and its
+two objections sat for three days. The corpus decides what a sweep can see, and
+a path with no case in it reads clean whatever it does.
+
+- **DONE** — the OPEN item the entry above filed. The reorder, the record, both
+  readers, both mutations, and the differential back to 0 wrong.
+- **OPEN, and now priced** — src/lib.rs:348 and :425 still check before
+  canonicalizing. compile_one is reached only from `compile_repl`
+  (src/repl.rs:290) and compile_library only from `kanso check <a library
+  file>`. Both merge `dep_program`, so both see the twins, and both would break
+  the way the entry path did -- they were never blocked on a measurement, they
+  were blocked on this.
+
+  Measured on this box, on `kanso check bench/compile_corpus/compile_corpus.kso`
+  with the reorder and the record applied to both sites:
+
+      library_instructions   50,244,948 -> 48,681,802   -1,563,146  (-3.111%)
+
+  Larger in proportion than the entry path's -0.8627%, on a path no vein
+  watches. The differential stays 29 cases 0 wrong through it, which is what
+  says the record makes the reorder correct there and not merely cheaper; c28
+  and c29 go red on the same edit with the record left out. The baseline
+  reproduced to the instruction on a second run. What is owed before it ships
+  is the vein, since a fall nothing counts is a fall nothing keeps.
+- **OPEN, unchanged** — the twins inside `infer`, the other half of the
+  reorder's value. `infer` indexes declarations positionally and a group keyed
+  by (name, arity) is a dispatch group, so the twin is what lets a bare name
+  resolve.

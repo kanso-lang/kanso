@@ -10,19 +10,26 @@
 # when the block was removed -- so the compile-instructions vein is the witness.
 #
 # The anchor is the check_merged line rather than the inline call below it:
-# `inline::inline_builtin_wrappers(&mut merged)` also appears in the
-# single-file compile paths, and a sed on that name patched the wrong site.
+# `inline::inline_builtin_wrappers(&mut merged)` appears TWICE in this file --
+# on this path and on the entry path -- and a sed on that name patched the
+# wrong site. kanso#1335 gave this call the alias record, which took it over
+# eighty characters and rustfmt wrapped it across three lines, so the anchor
+# opens the statement and the insertion goes after the `});` that closes it.
+# Putting the four calls straight after the opening line would put them inside
+# the closure, where they do not compile.
 set -e
-target='    let diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));'
+target='    let diags = phase::watched("check_merged", || {'
 n=$(grep -cF "$target" src/lib.rs)
 [ "$n" -eq 1 ] || { echo "the merged check moved or multiplied ($n); rewrite this" >&2; exit 1; }
 awk '
   { print }
-  index($0, "let diags = phase::watched(\"check_merged\"") {
+  index($0, "let diags = phase::watched(\"check_merged\"") { open = 1; next }
+  open && $0 == "    });" {
       print "    finish_program(&mut merged);"
       print "    phase::watched(\"desugar_field_reads\", || desugar_field_reads(&mut merged));"
       print "    phase::watched(\"prune_unused_getters\", || prune_unused_getters(&mut merged));"
       print "    trmc::rewrite(&mut merged);"
+      open = 0
   }
 ' src/lib.rs > src/lib.rs.mut && mv src/lib.rs.mut src/lib.rs
 grep -qF '    trmc::rewrite(&mut merged);

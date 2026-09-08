@@ -1687,6 +1687,22 @@ fn base_type<'a>(
 }
 
 pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
+    check_merged_after_aliases(program, require_entry, &crate::Rewrites::default())
+}
+
+/// The whole-program check, told which call names `canonicalize_bare_aliases`
+/// rewrote.
+///
+/// The entry path runs that pass BEFORE this check, so that the check does not
+/// walk the synthetic twins the pass is about to delete. Two of the checks
+/// below read a call's name and mean the spelling the program used, so they are
+/// handed the record and consult it. Every other caller runs the pass after the
+/// check and passes an empty one, where both readers behave exactly as they did.
+pub fn check_merged_after_aliases(
+    program: &Program,
+    require_entry: bool,
+    rewritten: &crate::Rewrites,
+) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
@@ -1707,8 +1723,8 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_sub_parents(program, &mut diags);
     check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
-    check_call_arities(program, &mut diags);
-    foreign_constructions(program, &mut diags);
+    check_call_arities(program, rewritten, &mut diags);
+    foreign_constructions(program, rewritten, &mut diags);
     typeset_constructions(program, &mut diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
@@ -1846,7 +1862,11 @@ fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
 ///
 /// A qualified name can never be a local binding, so unlike the arity walk
 /// beside it this needs no shadowing set: the slash IS the foreignness.
-fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
+fn foreign_constructions(
+    program: &Program,
+    rewritten: &crate::Rewrites,
+    diags: &mut Vec<Diagnostic>,
+) {
     let foreign: HashSet<&str> = program
         .types
         .iter()
@@ -1858,10 +1878,24 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
     if foreign.is_empty() {
         return;
     }
-    fn walk(e: &Expr, foreign: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    fn walk(
+        e: &Expr,
+        foreign: &HashSet<&str>,
+        rewritten: &crate::Rewrites,
+        diags: &mut Vec<Diagnostic>,
+    ) {
         if let Expr::App { head, .. } = e {
             if let Expr::Ident(name, span) = &**head {
-                if foreign.contains(name.as_str()) {
+                // The slash here was written by `canonicalize_bare_aliases`, not
+                // by a person, so it says nothing about foreignness: the program
+                // called an imported FUNCTION by its bare name and the pass
+                // qualified it. Refusing that as a construction of the imported
+                // type of the same name rejects a program that compiles.
+                let pass_wrote_it = match rewritten.get(&(span.line, span.col)) {
+                    Some(bare) => name.as_str().ends_with(bare.as_str()),
+                    None => false,
+                };
+                if !pass_wrote_it && foreign.contains(name.as_str()) {
                     let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
                     diags.push(Diagnostic::new(
                         "opacity",
@@ -1874,7 +1908,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
                 }
             }
         }
-        crate::for_each_child(e, |child| walk(child, foreign, diags));
+        crate::for_each_child(e, |child| walk(child, foreign, rewritten, diags));
     }
     for decl in &program.fns {
         if decl.synthetic || crate::ast::has_slash(&decl.name) {
@@ -1883,7 +1917,7 @@ fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
         for stmt in &decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    walk(expr, &foreign, diags)
+                    walk(expr, &foreign, rewritten, diags)
                 }
             }
         }
@@ -1933,7 +1967,7 @@ impl<'a> Arities<'a> {
     }
 }
 
-fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
+fn check_call_arities(program: &Program, rewritten: &crate::Rewrites, diags: &mut Vec<Diagnostic>) {
     // Construction is positional and complete, and the same seam hid it: a
     // type declared in one file of a module and built in another was checked
     // by nobody, and a foreign type never was. A typeset does not construct
@@ -1960,7 +1994,7 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
             bound_in_stmt(stmt, &mut bound);
         }
         for stmt in &decl.body {
-            arity_walk_stmt(stmt, &arities, &fields, &bound, diags);
+            arity_walk_stmt(stmt, &arities, &fields, &bound, rewritten, diags);
         }
     }
 }
@@ -2035,11 +2069,12 @@ fn arity_walk_stmt(
     arities: &Arities,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
+    rewritten: &crate::Rewrites,
     diags: &mut Vec<Diagnostic>,
 ) {
     match stmt {
         Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            arity_walk_expr(expr, arities, fields, bound, diags)
+            arity_walk_expr(expr, arities, fields, bound, rewritten, diags)
         }
     }
 }
@@ -2049,6 +2084,7 @@ fn arity_walk_expr(
     arities: &Arities,
     fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
+    rewritten: &crate::Rewrites,
     diags: &mut Vec<Diagnostic>,
 ) {
     if let Expr::App { head, args, .. } = e {
@@ -2088,12 +2124,19 @@ fn arity_walk_expr(
                     if !known.contains(&args.len()) && !known.contains(&0) {
                         let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
                         takes.sort();
+                        // kanso#1120: a diagnostic names what the import
+                        // writes. Where the alias pass qualified a bare call,
+                        // that is the bare name, not the one it wrote.
+                        let said = match rewritten.get(&(span.line, span.col)) {
+                            Some(bare) if name.as_str().ends_with(bare.as_str()) => bare.as_str(),
+                            _ => name.as_str(),
+                        };
                         diags.push(Diagnostic::new(
                             "arity",
                             format!(
                                 "no {}-argument arm of `{}` (arms take {})",
                                 args.len(),
-                                name,
+                                said,
                                 takes.join(", ")
                             ),
                             *span,
@@ -2103,7 +2146,9 @@ fn arity_walk_expr(
             }
         }
     }
-    crate::for_each_child(e, |child| arity_walk_expr(child, arities, fields, bound, diags));
+    crate::for_each_child(e, |child| {
+        arity_walk_expr(child, arities, fields, bound, rewritten, diags)
+    });
 }
 
 /// A literal argument no arm could ever take.

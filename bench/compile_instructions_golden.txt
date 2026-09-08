@@ -1024,4 +1024,27 @@
 #
 # The container projected +7,745 for this row against CI's +3,306. Same sign,
 # same order; the digits are the toolchain's and are CI's to write.
-compile_instructions=48761165
+#
+# 2026-09-08 (kanso#1335): compile_instructions=48,791,172, a RISE of 30,007
+# (+0.0615%) from 48,761,165.
+#
+# The module path pays for something it cannot use, the same way it did in
+# kanso#1332. It carries the alias record through `arity_walk_expr` and
+# `foreign_constructions`'s walk, both recursive over every expression, and on
+# this corpus that record is empty: no bare name is rewritten, so neither
+# lookup ever runs. What the row buys is the parameter, not a read.
+#
+# It buys correctness on the paths where the record is NOT empty. kanso#1328
+# had already put the pass in front of this path's check without one, and both
+# readers had been wrong here ever since -- opacity refusing a valid module
+# program, arity quoting `m/one` for a program that says `one`.
+#
+# Under kanso#1331's summed compile term the trade is 48 to 1 in favour:
+# 212,374,141 -> 210,961,944, a fall of 1,412,197 (-0.6650%). The sum is what
+# the objective reads.
+#
+# The container projected 49,207,870, a rise of 37,533 or +0.0763%. Right sign,
+# right order, 7,526 high -- it OVERSTATED this cost as it understated the
+# entry gain, so both of its errors ran against the change.
+
+compile_instructions=48791172

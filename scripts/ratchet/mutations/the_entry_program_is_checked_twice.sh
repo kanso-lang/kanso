@@ -13,7 +13,10 @@
 # mutation leaves the compile row's own gate green.
 set -e
 file=src/lib.rs
-anchor='let merged_diags = check::check_merged(&merged, true);'
+# kanso#1335 moved the alias pass in front of this check and renamed the call,
+# so the anchor is the new one. The shape the mutation makes is unchanged: the
+# entry's whole-program check asked twice.
+anchor='let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten);'
 before=$(grep -cF "$anchor" "$file" || true)
 if [ "$before" -ne 1 ]; then
   echo "expected one entry-path check_merged call in $file, found $before;" >&2
@@ -22,14 +25,14 @@ if [ "$before" -ne 1 ]; then
 fi
 awk -v anchor="$anchor" '
   index($0, anchor) {
-    print "    let _ = check::check_merged(&merged, true);"
+    print "    let _ = check::check_merged_after_aliases(&merged, true, &rewritten);"
     print
     next
   }
   { print }
 ' "$file" > "$file.mutated"
 mv "$file.mutated" "$file"
-after=$(grep -cF 'check::check_merged(&merged, true)' "$file" || true)
+after=$(grep -cF 'check::check_merged_after_aliases(&merged, true, &rewritten)' "$file" || true)
 if [ "$after" -ne 2 ]; then
   echo "wanted the entry check asked twice, and the file holds $after calls" >&2
   exit 1
