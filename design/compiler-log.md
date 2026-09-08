@@ -3515,7 +3515,45 @@ iterator, so none of them carries a file either. The corpus surfaced only the
 tie because only the tie has a fixture that crosses files. The other three want
 fixtures before they want fixes.
 
+Then the goldens, which is where the reshape actually stands or falls. All 38
+movers were regenerated with the harness's own staging — `pub play` files behind
+a generated entry, everything else run in place, which is what
+`run_kanso_as_library` does — and each candidate compared to its golden with the
+`(module X)` suffix and the `-->` block removed, so the comparison is of message
+TEXT alone. Three classes came out:
+
+    30  message text identical: only the location changed
+     6  one diagnostic became two
+     2  the message text itself changed
+
+The thirty are the reshape's improvement, in bulk. The six are worth reading and
+are probably also an improvement — a module's own check used to stop its compile
+with one message, and the whole-program check now reports what follows — but
+each needs reading before its golden moves.
+
+The two are the blockers, and they are different from each other.
+
+`sub_of_none` still leaks: `sub_of_none/missing cannot derive from none yet`,
+pointing at `run_sub_of_none.kso:1:6`, the import line in the generated entry.
+That is the same class as the dispatch tie — a check that raises without a file,
+so `spelled_in` derives the qualifier from the entry and leaves the name alone.
+It is the fourth member of the class this entry already names, and it has a
+fixture, which the other three do not.
+
+`builtin_arg_type` is the serious one. Its own error disappears and a different
+one takes its place:
+
+    was  error[type]: `length` takes a list, a map, or a string here, not an int
+    now  error[name]: `builtin_arg_type/play` is internal to the standard
+         library — import its module
+
+The fixture's type error is no longer reported at all, and what the reader gets
+instead is about the harness's generated entry. A diagnostic that vanishes is
+worse than one that reads badly, so this one is a stop rather than a golden to
+regenerate. Diagnosing it is the next step on this thread.
+
 Nothing shipped. The rules are dead code on main — no diagnostic carries a file
 until the attribution patch lands — so they belong to the reshape's bundle
-rather than to changes of their own. Five patches held; the corpus
-classification is what this entry is for.
+rather than to changes of their own. Five patches held; the candidates are
+written out beside them. The reshape does not land until `builtin_arg_type`
+reports its own error again.
