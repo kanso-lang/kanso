@@ -1,0 +1,50 @@
+# Retired instructions for `kanso check library_corpus/library_corpus.kso`,
+# counted under callgrind, anchored at the `kanso::main` frame.
+#
+# WHAT THIS COUNTS THAT THE OTHER TWO COMPILE ROWS DO NOT. `kanso check`
+# routes a single file by its content, and the three routes are three
+# compiles. bench/compile_instructions_golden.txt checks a DIRECTORY, which is
+# a module: compile_module_inner. bench/entry_instructions_golden.txt checks a
+# file with a top-level expression, which is an entry: compile_parsed_entry.
+# This checks a file of definitions alone, which is a LIBRARY:
+# compile_library. `kanso test` takes that path on every run and so does
+# `kanso check` on most files in the tree, and until this row opened nothing
+# counted it.
+#
+# The three move together for the lexer, the parser, inference and the checks
+# they share, and independently for the passes only one of them runs. This row
+# is the one that answers for `compile_library`'s own pass order, which is not
+# the order the other two run in: kanso#1328 moved `canonicalize_bare_aliases`
+# in front of the whole-program check on the module path and kanso#1335 did it
+# on the entry path, and this path still checks first.
+#
+# ONE ROW, ONE VALUE, ruled 2026-09-05 and enforced by
+# tests/the_compile_row_holds_one_value.rs for the module row. No per-chip key,
+# no pinned pair: a build that counts two numbers is a reproduction failure and
+# is hunted rather than recorded. compile_instructions.sh carries the
+# measurements that ruling was made on.
+#
+# THE ROW IS CI'S, never a container's. The container this file was written on
+# has rustc 1.94.1 against CI's 1.98.1 and reads about 0.8% high on both of the
+# other compile rows, so its number is a projection and not a sitting.
+#
+# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
+#
+# 2026-09-08 (the vein opens): library_instructions=164,253,088.
+#
+# CI's own first sitting, on binary sha 9bc8f829af68 with .text=2,599,486 --
+# the same job that counted compile_instructions=48,791,172 and
+# entry_instructions=162,170,772, so all three rows answer for one build.
+#
+# The container that wrote this file projected 165,589,540 from the same recipe
+# minus the host check. That is 1,336,452 high, or +0.8136%, which lands on the
+# offset the other two rows already record between rustc 1.94.1 there and CI's
+# 1.98.1 -- the module row's and the entry row's both sit at about +0.8%. The
+# projection is kept as the thing this sitting was checked against and is not a
+# row: a number this file may hold is one CI counted.
+#
+# For scale beside the other two: the module row is 48.8M and the entry row
+# 162.2M. This row sits beside the entry row because the two corpora are the
+# same shape and both paths merge the dependency program before checking it.
+
+library_instructions=164253088

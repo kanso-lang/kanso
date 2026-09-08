@@ -41,3 +41,10 @@ cp -R bench/compile_corpus "$box/compile_corpus"
 # two different compiles and both are staged here rather than read out of the
 # checkout — the path length moves the count either way.
 cp -R bench/entry_corpus "$box/entry_corpus"
+# And the library corpus, the third of the three. `kanso check` routes a single
+# file by content: bare statements make it an entry, definitions alone make it a
+# library, and those take different functions with different pass orders. Named
+# to the same length as compile_corpus so the one term that is not the compiler
+# — the path the count tracks, about 160 instructions a character — is the same
+# for all three.
+cp -R bench/library_corpus "$box/library_corpus"

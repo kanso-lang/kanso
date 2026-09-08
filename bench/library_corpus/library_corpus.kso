@@ -1,0 +1,59 @@
+# The workload the LIBRARY path is measured on.
+#
+# `kanso check` routes a single file by its content. A file with bare
+# statements is an entry and goes through compile_parsed_entry; a file of
+# definitions alone is a library and goes through compile_library. A
+# directory is a module and goes through compile_module_inner. Three
+# compiles, and until this corpus existed the third had no row: the module
+# path is bench/compile_corpus, the entry path is bench/entry_corpus, and
+# `kanso test` — which takes the library path on every run — was priced by
+# nothing.
+#
+# THE WORKLOAD IS NAMED, NOT INHERITED, for the reason compile_corpus's
+# header gives at length: a row measured on a library moves when that library
+# changes its imports, so kanso#1291 halved the compile rows with the compiler
+# byte-identical. These ten are named here and each is used, because an
+# unused import is a refusal.
+#
+# Ten, matching bench/entry_corpus rather than compile_corpus's four, because
+# compile_library merges the dependency program and runs the whole-program
+# check over everything the imports bring — the same shape the entry path has,
+# and the same reason a corpus with one small import would measure mostly the
+# work underneath it.
+import "std/bits"
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/math"
+import "std/path"
+import "std/regexp"
+import "std/render"
+import "std/sha256"
+import "std/text"
+
+pub fn masked n
+  bits/complement n
+
+pub fn encoded v
+  json/encode v
+
+pub fn first_of xs
+  list/first xs
+
+pub fn rounded x
+  math/round x
+
+pub fn base p
+  path/basename p
+
+pub fn matched? pat s
+  regexp/match? pat s
+
+pub fn shown v
+  render/to_string v
+
+pub fn digest s
+  sha256/hex (text/bytes s)
+
+pub fn announce s
+  io/write s

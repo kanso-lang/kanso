@@ -216,6 +216,17 @@ bench_ir = [["bench/compile_instructions_golden.txt" ""]]
 # collides with nothing.
 bench_entry = [["bench/entry_instructions_golden.txt" ""]]
 
+# The library path's row, added with its vein on 2026-09-08. It is the third of
+# the three compiles `kanso check` routes to by content, and the only one
+# `kanso test` takes. Listed here in the commit that opens the vein, and this
+# time the list did not have to be caught by hand: the spec beside it reads
+# bench/ off disk and keys on the word `golden`, so it went red the moment the
+# file existed. Its sibling under tests/ keys on a PREFIX and did not, which is
+# the whole difference between the two.
+# No prefix, for the reason `bench_ir` and `bench_entry` have none:
+# `library_instructions` collides with nothing.
+bench_library = [["bench/library_instructions_golden.txt" ""]]
+
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
@@ -279,7 +290,9 @@ bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_compiled = text/concat bench_ir (text/concat bench_entry bench_traffic)
+bench_libcheck = text/concat bench_library bench_traffic
+
+bench_compiled = text/concat bench_ir (text/concat bench_entry bench_libcheck)
 
 bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
 

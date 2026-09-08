@@ -47,6 +47,17 @@ fn named() -> BTreeSet<String> {
 /// when a vein is added under a new name, which is why the two derivations
 /// below name theirs in one place each.
 ///
+/// AND IT WENT STALE, exactly as that sentence said it would. `bench/library_*`
+/// joined on 2026-09-08 with `library_instructions`, the row for the THIRD
+/// compile path — `kanso check <a file of definitions>` takes compile_library,
+/// which neither of the other two rows enters. It matched neither prefix, so
+/// both derivations in this file walked past it and the sweep would have read
+/// as coverage while missing the newest vein. The warning was already written
+/// here; what it lacked was a reader. The trend gate's own coverage spec,
+/// `every_counter_golden_is_walked_by_the_trend_gate.rs`, keys on
+/// `contains("golden")` instead and went red on its own the moment the file
+/// existed.
+///
 /// One is excluded for a reason that is not "it was inconvenient":
 /// `build_benchmarks` is not a gate and says so in its own first line.
 /// `all_compile` matches its own list and is not a gate; `all_counters` reads
@@ -69,6 +80,7 @@ fn compile_gates_on_disk() -> BTreeSet<String> {
         let reads_compile_golden = body.lines().any(|l| {
             (l.contains("bench/compile_") && l.contains("golden"))
                 || (l.contains("bench/entry_") && l.contains("golden"))
+                || (l.contains("bench/library_") && l.contains("golden"))
                 || l.contains("bench/text_golden")
                 || l.contains("bench/emitted_golden")
         });
@@ -155,6 +167,7 @@ fn compile_goldens_on_disk() -> BTreeSet<String> {
         }
         if (name.starts_with("compile_") && name.contains("golden"))
             || (name.starts_with("entry_") && name.contains("golden"))
+            || (name.starts_with("library_") && name.contains("golden"))
             || name == "text_golden.txt"
             || name.starts_with("emitted_golden")
         {

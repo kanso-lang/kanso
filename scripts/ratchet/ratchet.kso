@@ -143,13 +143,21 @@ front_gate = "sh scripts/gates/compile_instructions.sh"
 # refusal reported as a regression is the failure this list prevents.
 entry_gate = "sh scripts/gates/entry_instructions.sh"
 
+# The library path's row, the third of the three `kanso check` takes. It counts
+# under callgrind like the rest, so it belongs on this list for the same reason:
+# a runner the golden does not name refuses it, and a refusal read as a
+# regression fails a job over the machine it ran on.
+library_gate = "sh scripts/gates/library_instructions.sh"
+
 bound_a = bound work_gate why_exact
 
 bound_b = bound front_gate why_exact
 
 bound_c = bound entry_gate why_exact
 
-host_bound = [bound_a bound_b bound_c]
+bound_d = bound library_gate why_exact
+
+host_bound = [bound_a bound_b bound_c bound_d]
 
 fn host_bound? gate
   list/any? host_bound (e -> e.gate == gate)
@@ -396,6 +404,21 @@ entry_ir = row
   "sh scripts/gates/entry_instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "the_entry_program_is_checked_twice")
+  release
+
+# And the LIBRARY path, which neither row above reaches. `kanso check` routes a
+# single file by its content: bare statements make it an entry and take
+# compile_parsed_entry, definitions alone make it a library and take
+# compile_library, and the two run different passes in a different order. The
+# mutation asks the library program's whole-program check twice --
+# library_instructions 165,589,540 -> 190,698,277 (+15.16%) in the box, with the
+# entry and module rows untouched, so the three separate cleanly.
+library_ir = row
+  "work on the library path, which the entry and module rows both walk past"
+  false
+  "sh scripts/gates/library_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_library_program_is_checked_twice")
   release
 
 entry_rewritten_twice = row
@@ -1147,7 +1170,9 @@ rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
 
 rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host entry_ir]
 
-rows_b1e0 = text/concat rows_b1d2 [compile_ir_one_value]
+rows_b1d3 = text/concat rows_b1d2 [library_ir]
+
+rows_b1e0 = text/concat rows_b1d3 [compile_ir_one_value]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 

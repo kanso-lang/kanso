@@ -399,6 +399,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/entry_instructions.sh
+      # And the THIRD compile path, which neither of the two above enters.
+      # `kanso check` routes a single file by content: bare statements make it
+      # an entry, definitions alone make it a library and take compile_library.
+      # That is the path `kanso test` runs on.
+      - name: library instructions
+        id: library_ir
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/library_instructions.sh
       - name: compile memory
         id: compile_memory
         if: always()
@@ -486,6 +495,7 @@ jobs:
           done
           [ -f compile_ir_got.txt ] && { echo "=== compile_ir_got.txt"; cat compile_ir_got.txt; }
           [ -f entry_ir_got.txt ] && { echo "=== entry_ir_got.txt"; cat entry_ir_got.txt; }
+          [ -f library_ir_got.txt ] && { echo "=== library_ir_got.txt"; cat library_ir_got.txt; }
           exit 0
       - name: every vein had its say
         if: always()
@@ -503,6 +513,7 @@ jobs:
                       "compile allocations:${{ steps.compile_allocs.outcome }}" \
                       "compile instructions:${{ steps.compile_ir.outcome }}" \
                       "entry instructions:${{ steps.entry_ir.outcome }}" \
+                      "library instructions:${{ steps.library_ir.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \
