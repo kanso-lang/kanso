@@ -4562,3 +4562,65 @@ Raising that threshold is a tuning question of its own — kanso#1209 moved a
 different cap from four to eight and had to measure it — and the answer here is
 not assumed. `k_b_append_grow`'s 29.2M at 82.7 a call remains a real buffer
 copy and is not this shape.
+
+**CI's rows.** The container may not write the host-keyed veins, so these are
+the linux runner's, copied in. Twelve of the fourteen work rows moved and ten
+of them fall:
+
+```
+  jsonbench    1,487,045,449 -> 1,485,345,052   -1,700,397  (-0.1143%)
+  encodebench  4,060,329,349 -> 4,043,253,556  -17,075,793  (-0.4206%)
+  oneshot         21,762,251 ->     21,708,250      -54,001  (-0.2481%)
+  widebench       36,104,947 ->     35,967,285     -137,662  (-0.3813%)
+  pendbench      590,979,348 ->    590,971,748       -7,600  (-0.0013%)
+  scanbench      730,307,043 ->    726,019,157   -4,287,886  (-0.5871%)
+  livebench    3,597,771,294 -> 3,580,692,761  -17,078,533  (-0.4747%)
+  runbench     2,397,964,551 -> 2,392,210,251   -5,754,300  (-0.2400%)
+```
+
+`deepbench` and `escapebench` are byte-identical. The runner's runbench delta
+is 5,754,300 against the container's 5,885,352 — the same change on a different
+glibc, where the call it removes is a different call.
+
+**Four work rows RISE and are priced here by name and landed value**, as the
+trend gate asks: `basket` 34,684,338 -> 34,694,178 (+9,840, +0.0284%),
+`indexbench` 3,265,784 -> 3,265,786 (+2), `digestbench` 10,420,391 ->
+10,420,396 (+5), `readbench` 4,287,134 -> 4,287,137 (+3). The three
+single-digit moves are layout; `basket`'s 9,840 is the same, and its own
+allocation counters are byte-identical, which is what says no work was added.
+
+**All fourteen .text rows rise**, which is what inlining a copy does — the
+bytes the call used to stand for now sit at each site:
+
+```
+  jsonbench     94,962 ->  96,418  +1,456      pendbench     86,722 ->  87,666    +944
+  encodebench  115,090 -> 116,546  +1,456      indexbench    55,586 ->  56,402    +816
+  oneshot      105,986 -> 107,442  +1,456      scanbench    154,386 -> 155,602  +1,216
+  basket       109,858 -> 110,978  +1,120      digestbench  105,682 -> 106,498    +816
+  widebench    120,514 -> 121,970  +1,456      readbench     51,954 ->  52,930    +976
+  deepbench     70,482 ->  71,250    +768      livebench    106,562 -> 108,018  +1,456
+  escapebench   51,618 ->  52,386    +768      runbench     241,682 -> 243,458  +1,776
+```
+
+The 2026-09-05 gavel keeps machine-code size out of welfare and in its own
+exact vein, so these rows are recorded rather than weighed.
+
+**`compile_instructions` 19,316,381 -> 19,316,962 (+581)**, and the page's two
+`data-golden="compile.compile_instructions"` spans move with it. `kanso check
+lib/json` stops before codegen, so no decision this row counts has changed;
+`src/runtime.c` is `include_str!`'d into the compiler, so its bytes move the
+binary's layout. `compile_allocs` and `compile_peak_bytes` are byte-identical,
+which is what separates a layout move from a real one.
+
+**And the threshold is right where it is.** Raising all four element loops from
+four to eight — `k_rec`, `k_mklist`, `k_closure` and the list push — costs
+runbench 798,725 instructions, 2,368,295,010 to 2,369,093,735 (+0.0337%),
+measured on this host with each side rebuilt. kanso#1209 moved a different cap
+from four to eight and gained; this one loses, because the counts past four are
+rare enough that the extra compare on every short copy outweighs the calls it
+removes. Declined, and the four stay at four.
+
+Named by the keys the trend gate reads, each with the value it landed on:
+`work_basket` 34,694,178, `work_indexbench` 3,265,786, `work_digestbench`
+10,420,396, `work_readbench` 4,287,137, and `text` 1,471,084 -> 1,487,564,
+the sum of the fourteen rows above.
