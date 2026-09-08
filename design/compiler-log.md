@@ -2512,9 +2512,33 @@ underneath it. `scripts/gates/entry_instructions.sh` counts it the way
 same pinned tunables, same `kanso::main` anchor — and every reason for those is
 left in the original rather than restated.
 
-`bench/entry_instructions_golden.txt` opens holding zero. The row is CI's, and
-this container reads about 0.8% high on both compile rows against CI's rustc, so
-its number is a projection rather than a sitting. Round one is red on purpose.
+`bench/entry_instructions_golden.txt` opened holding zero, because the row is
+CI's and this container reads high against CI's rustc. Round one was red on
+purpose and CI answered **163,886,731**, on binary sha 3c53d0acdbcb — the same
+sha that counted `compile_instructions=48,757,859` in the same job, so both
+rows answer for one build. The container had projected 165,183,406 from the
+same recipe minus the host check: 1,296,675 high, or +0.79%, which is the
+offset already recorded between rustc 1.94.1 here and CI's 1.98.1. The
+projection was right about the size and could not have been recorded as a row.
+
+**And the trend gate did not walk the new golden.** Found by asking which
+files in bench/ `scripts/trend_gate/trend_gate.kso` names, which its own
+comments say is the only method that has ever found one of these. The list has
+been short five times: three cost goldens nobody entered, then readbench —
+whose golden the gate could not see while two of its rows were welfare terms —
+then livebench, then the consolidated run program. This would have been the
+sixth, in the very PR that exists because a compile the gates could not see
+went unpriced.
+
+Two files in bench/ are unwalked and one of them belongs that way:
+`bench/compile_libraries_golden.txt` holds five sonames rather than counters
+and its own gate diffs it byte for byte. So the excuse list is one line long,
+and `tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads bench/
+off disk, asks the gate which files it names, and fails on anything neither
+walked nor excused. Its three assertions were each watched red: dropping the
+entry golden from the gate names it in the failure; an excuse for a file that
+is not there fires the second; an excuse for a golden the gate already walks
+fires the third. Finding this by hand a sixth time was not a plan.
 
 **The ratchet row separates the two veins, measured.** The mutation asks the
 entry's whole-program check twice. In the box:
@@ -2558,8 +2582,9 @@ of the entry compile against `check_merged`'s 38.3%. `infer` indexes declaration
 positionally — `vec![0; program.fns.len()]`, groups by index — so it does not take
 a `continue`, and skipping the twins there is a different change from this one.
 
-- **DONE** — the entry vein: corpus, gate, golden, CI step and summary row,
-  ratchet row, sweep membership. The derivations in
+- **DONE** — the entry vein: corpus, gate, golden with CI's row, CI step and
+  summary row, ratchet row, sweep membership, the trend gate's own list and
+  the spec that keeps it honest. The derivations in
   `tests/the_compile_sweep_names_every_compile_gate.rs` walked past
   `bench/entry_*` and now do not, and `the_compile_row_holds_one_value` covers
   both instruction goldens rather than one, because the one-row-one-value ruling

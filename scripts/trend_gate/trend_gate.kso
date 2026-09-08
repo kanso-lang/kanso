@@ -203,6 +203,19 @@ bench_memory = [["bench/compile_memory_golden.txt" ""]]
 
 bench_ir = [["bench/compile_instructions_golden.txt" ""]]
 
+# The entry path's own instruction row, added with the vein on 2026-09-08.
+# `kanso check <dir>` is a module and `kanso check <file>` is an entry, and
+# every compile gate watched the first until that day. Listed here in the same
+# commit that opens the vein, because this list has been short five times now
+# — the three cost goldens nobody had entered, then readbench, whose row was
+# an OBJECTIVE term while this gate could not see its golden at all — and each
+# one was found by hand. The spec beside it,
+# `tests/every_counter_golden_is_walked_by_the_trend_gate.rs`, is what stops
+# the sixth: it reads bench/ off disk and asks this program which files it
+# names. No prefix, for the reason `bench_ir` has none: `entry_instructions`
+# collides with nothing.
+bench_entry = [["bench/entry_instructions_golden.txt" ""]]
+
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
@@ -266,7 +279,7 @@ bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_compiled = text/concat bench_ir bench_traffic
+bench_compiled = text/concat bench_ir (text/concat bench_entry bench_traffic)
 
 bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
 

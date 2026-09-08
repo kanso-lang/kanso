@@ -25,8 +25,16 @@
 #
 # measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
 #
-# 2026-09-08 (the vein opens):
-# The container projected 165,616,715 for this corpus. The value below is
-# CI's own first sitting, and the container's projection is kept here as the
-# thing it was checked against rather than as a row.
-entry_instructions=0
+# 2026-09-08 (the vein opens): entry_instructions=163,886,731.
+#
+# CI's own first sitting, on binary sha 3c53d0acdbcb and cpu family 0x19
+# model 0x11 — the same sha that counted compile_instructions=48,757,859 in
+# the same job, so both rows answer for one build.
+#
+# The container that wrote this file projected 165,183,406 from the same
+# recipe minus the host check. That is 1,296,675 high, or +0.79%, which is
+# the offset already recorded for the module row between rustc 1.94.1 here
+# and CI's 1.98.1. The projection is kept as the thing the sitting was
+# checked against and is not a row: a number this file may hold is one CI
+# counted.
+entry_instructions=163886731
