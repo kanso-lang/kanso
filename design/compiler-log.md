@@ -2919,3 +2919,82 @@ which is what says the baseline pass itself did not move.
 What this does not do is prove a compile row on a runner. That is CI's to say,
 and the reading is in the next ratchet job on a branch touching src/: five rows
 selected should now be five rows proved.
+
+## 2026-09-08 (eleventh) — the per-module check, built and refuted as specified
+
+§59 prices the per-module whole-program check at 20.38% gross and reasons down
+to "about 8.5 million instructions, roughly 16.5% of the row" for a version that
+moves the check up and leaves six slash-guarded passes where they are. This
+built that version. The ceiling is larger than the page says and the change is
+not reachable, and both halves are worth writing down.
+
+Repriced first, with an env-gated skip of `check_merged` for every module that
+is not the root, both readings on one probe binary:
+
+    corpus                        checked        skipped         delta
+    compile_corpus (module)     49,209,611     40,189,876    -18.3292%
+    library_corpus (library)   164,306,354    126,030,042    -23.2957%
+
+The library row gains more because 67.8% of that compile is
+`load_dependencies` and its corpus names ten imports where the module corpus
+names four. The shape §59 describes is most of what the library path does.
+
+**§59 NAMES ONE MECHANISM AND THERE ARE THREE.** The page's account is the
+slash: six passes skip any declaration whose name carries one, so run at the
+root they apply to the root and pass over every dependency. That is right and it
+is not the whole list.
+
+The second is a message that QUOTES A DECLARATION. With only the three
+slash-guarded checks kept per module, `scripts/module_differential` reads 29
+modules and 2 wrong:
+
+    a call to a sibling at the wrong arity
+      refused, but not with 'error[arity]: no 2-argument arm of `one`':
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
+
+    an arm no call can reach
+      refused, but not with 'error[dispatch]: overlapping overloads of `twice`':
+      error[dispatch]: overlapping overloads of `m/twice` are illegal
+
+Neither `check_call_arities` nor `check_overlapping_arms` is slash-guarded. What
+makes them per-module is that the message names a declaration and the merge has
+already qualified it — the spelling kanso#1120 settled. Keeping those two per
+module returns the sweep to 29 and 0.
+
+The third is ATTRIBUTION, and it is the one that closes the route. With five
+checks per module the suite is 122 binaries and four fail, five tests:
+
+    a_library_at_fault_is_reported_through_the_program_that_imports_it
+    error_corpus_reports_each_golden_diagnostic
+    the_wasm_engine_agrees_with_the_golden_corpus
+    the_wasm_engine_complains_the_way_the_others_do
+    the_front_end_infers_the_whole_program_four_times
+
+The first four are one defect. A diagnostic raised on a dependency's
+declarations at the root loses the file, the span and the module suffix that the
+dependency's own compile supplied:
+
+    error[naming]: `silly` answers only true or false: name it `silly?`
+      --> deep_library_error/main.kso:4:8
+
+    error[naming]: `silly` answers only true or false: name it `silly?`
+      (module deep_library_error/deep)
+
+It points at `main.kso`, which does not contain the fault. Detection is
+unaffected — the dependency's declarations are all in the merged program — so
+what is lost is attribution. The fifth failure is the saving showing up: a spec
+pins how many times the front end infers the whole program, and running the
+check once at the root is what moves it.
+
+So any check that can fire on a dependency's declarations stays per module
+unless a root-raised diagnostic can name where the declaration came from, and
+that is nearly all of them. `infer::infer` is 11.8M of `check_merged`'s 19.1M
+and runs for any check that reads inference, so the saving leaves with them.
+18.33% and 23.30% are a ceiling reachable only with provenance on merged
+declarations, which is a larger piece of work than a two-way split and is what
+this thread owes next.
+
+kanso#1003 walked this route once and withdrew it as "the per-dependency
+check_merged is not redundant" without naming what made it so. §59 named one
+thing. There are three, and they are written down now. Nothing shipped: the
+probe is reverted and the page is corrected to say what the tree says.

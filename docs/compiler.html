@@ -1808,7 +1808,19 @@ the stack holds</code></pre>
 
 <p>callgrind says what is actually reachable. against 51.6M on the fixed corpus, <code>check_merged</code> is 19,092,779 and <code>infer::infer</code> inside it is 11,803,600, none of which asks about slashes. the four guarded checks together are under 0.02%, so keeping them per module costs almost nothing. the two guarded rewrites are 1,651,829 and 504,558 and have to stay. that leaves about <strong>8.5 million</strong> instructions, roughly 16.5% of the row, for a version that moves the whole-program check up and leaves those six where they are.</p>
 
-<p>this route was walked once before and withdrawn in kanso#1003 as &quot;the per-dependency check_merged is not redundant&quot;, without naming what made it so. the mechanism is the slash, and it is written down now.</p>
+<p>the slash is one mechanism of three, and the split was built to find the other two. with the three slash-guarded checks kept per module, <code>scripts/module_differential</code> reads 29 modules and 2 wrong: the arity message quotes <code>m/one</code> where the source says <code>one</code>, and the dispatch message quotes <code>m/twice</code> for <code>twice</code>. neither check is slash-guarded. what makes them per-module is that the message names a declaration, and at the root the merge has already qualified it &#8212; the spelling rule this compiler settled when a module gained the right to be named the way an import writes it. keeping those two per module returns the sweep to 29 and 0.</p>
+
+<p>the third mechanism is where the saving actually goes. with five checks per module the suite is 122 binaries and four fail. one of them is the measurement showing up: a spec pins how many times the front end infers the whole program, and running the check once at the root is what moves it. the other three are one defect. a diagnostic raised on a dependency&#39;s declarations at the root loses the file, the span and the module suffix that the dependency&#39;s own compile supplied:</p>
+
+<pre><code>error[naming]: `silly` answers only true or false: name it `silly?`
+  --&gt; deep_library_error/main.kso:4:8
+
+error[naming]: `silly` answers only true or false: name it `silly?`
+  (module deep_library_error/deep)</code></pre>
+
+<p>the first points at <code>main.kso</code>, which does not contain the fault. detection is unaffected, because the dependency&#39;s declarations are all in the merged program; what is lost is attribution. so any check that can fire on a dependency&#39;s declarations has to stay per module unless a root-raised diagnostic can name where the declaration came from &#8212; and that is nearly all of them, with <code>infer::infer</code>, 11.8M of <code>check_merged</code>&#39;s 19.1M, running for any check that reads inference.</p>
+
+<p>the figures above are a ceiling, not an estimate of a change. an env-gated skip of the whole check for every non-root module reads <strong>-18.33%</strong> on the module row and <strong>-23.30%</strong> on the library row, and reaching either needs provenance on merged declarations rather than a two-way split of <code>check_merged</code>. that is a larger piece of work and it is what this thread owes. kanso#1003 walked this route once and withdrew it as &quot;the per-dependency check_merged is not redundant&quot; without naming what made it so; there are three things, and they are written down now.</p>
 
 <h2 id="builtinprefix"><span class="sec-num">60</span>a prefix belongs to a name, not to the head of a path</h2>
 
