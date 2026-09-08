@@ -192,31 +192,30 @@ supersedes the three-chain-words form.** The call-site story the book
 owes is now: `<t>effect` as a first-class passable outcome type;
 `bind`, `annotate`, `rescue` as ordinary effect-first functions and the
 sole eliminators; no automatic bind — a box where the unwrapped type is
-expected is refused, and propagation is bind's contract. Half one (ch04
-"nothing is asked of the signature") DOES NOT survive as written: its
-short-circuit-at-the-call story describes the retired railway and needs
-rewriting on explicit elimination. Half two lands when the typed-effect
-surface is implemented, present tense as always. compiler.html entry 23
-owes a rewrite or retirement in the same campaign.
+expected is refused, and propagation is bind's contract.
 
+**BOTH HALVES WAIT ON THE IMPLEMENTATION. Measured 2026-09-08 on
+`2abcedaf`.** Since 2026-08-29 this entry has said that half one — ch04's
+"nothing is asked of the signature" — does not survive as written and can
+be rewritten ahead of the surface. Two probes say otherwise. A lambda
+handed a failing argument does not run its body, and the call answers the
+failure: that is the railway ch04 teaches, live, word for word. And
+`<int>effect` is not spellable: the canonical-spacing rule refuses the form
+outright, and no checker ever sees a type, because there is no `effect` type
+in the tree for one to see. The gavel retired the design. The engines still
+run the railway, and the book is present tense, so a rewritten ch04 would
+describe a language nobody can run.
 
-### An assert hako
+What has landed is the smaller part, and the book already has it: `bind`,
+`annotate` and `rescue` ship on all three engines (kanso#1116), and ch05
+teaches them as ordinary two-argument functions taking the effect first.
+Missing is the type — passing a box, and the refusal of a box where the
+unwrapped value is expected.
 
-**Cited: the licence half is ruled — archive 2026-08-17, assertions are
-ordinary foreign rescue. What is open is the surface shape only.**
-
-A real assertion library in the rspec direction Clay sketched —
-`(expect 1) . to (equal x)` — as its own small surface design, never
-improvised inside a test fix. Its arms are foreign to every tested hako,
-so the err license needs nothing special. Queued 2026-08-17.
-
-**RECOMMENDATION: build it as its own design pass. The gate is lifted.**
-The matcher surface reads failures, so its shape depended on how a
-failure is spelled — that is ruled (three-forms gavel, 2026-08-26) and
-built on all three engines (kanso#1116), so designing it now cannot mean
-designing it twice. `rescue` is the word a matcher's own failure door
-would use.
-
+**RECOMMENDATION: hold until `<t>effect` exists, then run the campaign
+once.** ch04, ch05's framing and compiler.html entry 23 move together in
+that pass. Nothing here is a question for Clay; the entry stays as the
+record of what the book owes and what it is waiting for.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 

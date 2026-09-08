@@ -49,12 +49,13 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The two open, not blocking** — the book teaching the boundary language,
-queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types gavel,
-so half one of ch04 does not survive as written and compiler.html entry 23 owes
-a rewrite in the same campaign; and the assert hako's surface shape, whose
-licence half was ruled in the archive on 2026-08-17 and which waits on nothing
-but its own design pass.
+**The one open, not blocking** — the book teaching the boundary language,
+queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types gavel.
+Measured on 2026-09-08, both halves wait on the same thing: the engines still
+short-circuit at an ordinary call and `<int>effect` is not spellable, so ch04
+describes the language as it runs and compiler.html entry 23 moves with it,
+after the surface lands. The assert hako left this list by being built —
+`lib/expect`, kanso#1233, 2026-09-03.
 
 **The July letters are closed.** C struck, `done` minted for D, G struck on the
 July provenance measurement, Z confirmed declined, AA explicit-cast only. Every
@@ -283,25 +284,29 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Six questions wait in `design/pending-gavels.md`** — none blocking, six
-open — each with a recommendation. Counted from the ledger on 2026-09-05 by
-reading its headings, which is what this line has always claimed to do and
-had stopped doing: it said nineteen while the ledger held three. Fifteen had
-been gaveled and had left the file as the lifecycle requires, and the count
-here was carried forward instead of recounted. The three standing are the
-compile row's residual layout term, the book teaching the boundary language,
-and the assert hako. Two are new today: whether the welfare index should carry
-a term for machine-code size, raised by an inline that buys 15,427,521
-instructions on jsonbench and costs 34,320 bytes across all twelve programs;
-and whether a chip row may still pin two values, raised because the tree
-contradicts itself about the 508-instruction residual that mechanism was ruled
-a fallback for, and because the second pair ever written turned out to be two
-binaries. A sixth was filed later the same day: whether a benchmark that enters
-the objective at its dimension's standing enters unimprovable, raised by a
-library change that falls livebench 3.08% and is declined in all four shapes it
-was written in. That sixth is CLOSED AS MOOT by the gavel of 2026-09-06, which
-put the run side on one consolidated program: nothing enters at a dimension's
-standing now, and the granted-baseline rule is retired with the question.
+**Four questions wait in `design/pending-gavels.md`** — three blocking, one
+open — each with a recommendation. Counted from the ledger on 2026-09-08 by
+reading its `###` headings, which is what this line has always claimed to do
+and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
+held three; fifteen had been gaveled and had left the file as the lifecycle
+requires, and the count here was carried forward instead of recounted. It was
+recounted that day and went stale again within three days: it said six, none
+blocking, while the ledger held three under a heading named Blocking, and
+four of the six it named had been ruled or shipped since. A count maintained
+by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
+now reads both files and fails when this sentence and the ledger disagree.
+
+The three blocking are the welfare history's baseline after the one-program
+gavel, the compile term's workload, and an infinite or nan float's rendering.
+The one open is the book teaching the boundary language, which as of
+2026-09-08 waits on the typed-effect surface in both halves rather than one.
+
+Rulings since the last recount: no machine-code-size term in welfare and no
+two-value chip row (both 2026-09-05); the granted-baseline question CLOSED AS
+MOOT by the gavel of 2026-09-06, which put the run side on one consolidated
+program; and the assert hako, which was never a decision in the end — it was
+built on 2026-09-03 as `lib/expect` (kanso#1233) while the ledger went on
+recommending that somebody build it.
 
 **The rules that carry forward**, each earned twice:
 
