@@ -3122,3 +3122,78 @@ a path with no case in it reads clean whatever it does.
   reorder's value. `infer` indexes declarations positionally and a group keyed
   by (name, arity) is a dispatch group, so the twin is what lets a bare name
   resolve.
+
+---
+
+## 2026-09-08 (seventh) — the third compile path gets a row
+
+`kanso check` routes a single file by its content and the three routes are
+three different compiles. A directory is a module and takes
+`compile_module_inner`, which is what `bench/compile_corpus` and
+`compile_instructions` watch. A file with bare statements is an entry and takes
+`compile_parsed_entry`, which `bench/entry_corpus` and `entry_instructions`
+have watched since kanso#1330. A file of definitions alone is a library and
+takes `compile_library` — and nothing in the tree counted it.
+
+That path is not a corner. `kanso test` takes it on every run, and so does
+`kanso check` on any single file that is not an entry, which is most files
+here.
+
+`bench/library_corpus/library_corpus.kso` names ten imports and uses each, the
+shape `bench/entry_corpus` has and for the same reason: `compile_library`
+merges the dependency program and runs its own whole-program check over
+everything the imports bring, so a corpus with one small import would measure
+mostly the work underneath it. The directory is named to the same length as
+`compile_corpus`, because the count tracks the length of the path the compiler
+is handed at about 160 instructions a character.
+
+The container projected 165,589,540 and CI wrote the row. Only CI may: this box
+has rustc 1.94.1 against CI's 1.98.1 and reads about 0.8% high on the level of
+both existing compile rows.
+
+**THE SPEC PREDICTED ITS OWN FAILURE MODE AND THIS IS THE INSTANCE.**
+`tests/the_compile_sweep_names_every_compile_gate.rs` derives the sweep's list
+from goldens matching `bench/compile_*` and `bench/entry_*`, and its own doc
+comment says: *a prefix list is exactly the shape that goes stale when a vein
+is added under a new name.* `bench/library_instructions_golden.txt` matches
+neither prefix, so both derivations in that file walked straight past it and
+the sweep would have looked like coverage while missing the newest vein. Both
+are widened here, in the commit that adds the vein.
+
+The trend gate's own coverage spec did NOT have that hole:
+`tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads `bench/` off
+disk and keys on `contains("golden")`, so it went red the moment the file
+existed and named what was missing. Two coverage specs over the same tree, one
+keyed on a prefix and one on a substring, and only the substring one survived a
+new name.
+
+A third coverage spec found the other half of the same gap. The ratchet keeps a
+`host_bound` list of the gates that count under callgrind, so that a runner the
+golden does not name is reported as unproven rather than credited as a
+regression, and `tests/a_host_bound_gate_is_reported_not_credited.rs` derives
+that list from the gates that actually run the tool. It went red naming `sh
+scripts/gates/library_instructions.sh` as soon as the gate existed. Three specs
+over one tree: the substring-keyed pair spoke, the prefix-keyed one did not.
+
+The mutation is `the_library_program_is_checked_twice.sh`, the library twin of
+the entry one, and its anchor takes two steps rather than one:
+`let merged_diags = check::check_merged(&program, false);` appears twice in
+`src/lib.rs` because `compile_one` carries a byte-identical block, so the
+function is found by its signature and the duplicate goes in at the first such
+call after it. What it proves is the argument for the row: the same edit leaves
+`compile_instructions` and `entry_instructions` green. It rides in the ratchet
+as `library_ir`, beside `compile_ir` and `entry_ir`.
+
+Proved rather than assumed, in the order the rule asks for: it applies (two
+calls become three, and the third is inside `compile_library` at 432 with
+`compile_one`'s at 355 untouched), it compiles, and the row it moves goes
+165,589,540 -> 190,698,277, a rise of 25,108,737 or 15.16%, against a gate that
+asserts equality. Counted here with the host check bypassed on purpose, because
+this container may not compare the row and the question was whether the
+mutation moves it rather than what the value is. Restored, rebuilt, clean.
+
+Still open, unchanged by this: `src/lib.rs`'s two remaining callers check
+before they canonicalize. That reorder is measured — 50,244,948 -> 48,681,802,
+**−1,563,146 / −3.111%** — and was blocked on this vein. It is not in this
+commit, so the row this one opens is the pre-reorder baseline and the next PR
+is what spends it.

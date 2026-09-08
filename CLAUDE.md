@@ -157,20 +157,38 @@ make a PR and then merge it."
   adding a line to lib/json is a line the compiler carries and compiles.
   `all_counters.sh` names the runtime cost goldens only; `machine_code`,
   `emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`,
-  `entry_instructions` and `compile_libraries` are separate gates and two of
-  their counters are welfare terms. `entry_instructions` is the newest and
-  answers for a compile the others cannot reach: `kanso check <dir>` is a
-  module and `kanso check <file>` is an entry, and until 2026-09-08 every
-  compile gate checked a directory. On 2026-09-05 a twelve-line library change read as a welfare
+  `entry_instructions`, `library_instructions` and `compile_libraries`
+  are separate gates and two of their counters are welfare terms. THE LAST TWO OF
+  THOSE NAMES ARE ONE LETTER APART AND ARE UNRELATED: `compile_libraries` diffs
+  the list of shared objects the compiler links against, where
+  `library_instructions` counts instructions. `kanso check` routes a single file
+  by content and the three routes are three compiles, which is what the newest
+  two rows are for: a DIRECTORY is a module and takes compile_module_inner, a
+  file with bare STATEMENTS is an entry and takes compile_parsed_entry, a file
+  of DEFINITIONS alone is a library and takes compile_library. Until 2026-09-08
+  every compile gate checked a directory; the entry row opened that morning and
+  the library row the same day, and the third is the path `kanso test` takes on
+  every run. On 2026-09-05 a twelve-line library change read as a welfare
   RISE with the compile veins stale and a FALL once they were regenerated.
   `sh scripts/gates/all_compile.sh` runs the set after any edit under lib/ and
-  separates a vein that MOVED from one this host may not compare — three of
-  them refuse on a container, and a refusal exits non-zero exactly like a
-  regression, so a session that runs them raw and sees three failures learns
-  nothing it can act on. This sentence named five of them until 2026-09-05,
-  when deriving the set from the golden each script reads turned up the sixth;
-  `tests/the_compile_sweep_names_every_compile_gate.rs` pins the list in both
-  places now, because a list written down is a list that goes stale.
+  separates a vein that MOVED from one this host may not compare — a refusal
+  exits non-zero exactly like a regression, so a session that runs them raw and
+  reads the failures as regressions learns nothing it can act on. DO NOT COUNT
+  THE REFUSALS FROM THIS SENTENCE. It said THREE from 2026-09-05 until
+  2026-09-08, and on the day it was corrected the sweep refused five —
+  `machine_code`, `compile_memory`, `compile_allocs`, `compile_instructions` and
+  `entry_instructions` — with `library_instructions` making six. Which gates
+  refuse is a property of the host, not of the list: each one calls
+  `host_gate.sh` against its own golden's measured-on line, so the answer moves
+  with the container's glibc and rustc and with every golden re-measured on a
+  new runner image. Run the sweep and read its `not compared here` line.
+  The NAMES above are the list and there is deliberately no count beside them:
+  this bullet said five gates when there were six on 2026-09-05, `entry_
+  instructions` made seven on 2026-09-08 and `library_instructions` eight the
+  same day, and every one of those was found by hand after the sentence had gone
+  stale. `tests/the_compile_sweep_names_every_compile_gate.rs` reads the gates
+  off disk and asserts this bullet names each one, so a gate added without a
+  mention here is a red spec — which is the only reason the list can be trusted.
 - **Two compile veins are read by a cargo test, not by a gate script, and the
   derivation walks past them.** `bench/compile_golden.txt` and
   `bench/compile_golden_modules.txt` are read only by `tests/compile_cost.rs`,
