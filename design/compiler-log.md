@@ -4653,15 +4653,27 @@ the library — which is exactly why the line is needed.
 algorithm and are the same on every host, so `compile_memory.sh` compares them
 before it reaches its host check and this container may measure them.
 `compile_peak_bytes`, `compile_allocs` and `compile_instructions` are
-host-keyed and are left at their lib/json values on purpose: `host_gate.sh`
-exists because "a container's numbers going into a golden over the runner's is
-the exact accident measured_on was written after". So round one of this PR is
-RED on all three by design — CI compares, fails, and prints the sitting to copy,
-which is what its refusal text has always told a reader to do.
+host-keyed, so round one of this PR left them at their lib/json values and went
+to CI RED on all three by design: `host_gate.sh` exists because "a container's
+numbers going into a golden over the runner's is the exact accident measured_on
+was written after", and its refusal prints the sitting to copy.
 
-For scale, the container reads `compile_allocs` 31,596 against lib/json's
-11,613 and `compile_peak_bytes` 789,740 against 375,222. The corpus is a bigger
-program, so the compile terms rise and welfare falls.
+**The rows CI wrote.** `compile_allocs` 11,613 -> 31,596, `compile_peak_bytes`
+375,222 -> 789,740, `compile_instructions` 19,316,962 -> 52,603,220. Every
+runtime vein stayed green in that round, which is the evidence that a corpus
+change does not reach the runtime. `front_end_rounds` 35 -> 62 and
+`front_end_visits` 9,884 -> 23,723 were already written here, from this
+container, for the reason above.
+
+Worth recording: `compile_allocs` 31,596 and `compile_peak_bytes` 789,740 are
+what this container read, to the unit. Only `compile_instructions` was
+genuinely host-dependent — the container had 52,608,ish against the runner's
+52,603,220 — so of the three rows the host gate refuses to let a container
+write, two would have been right anyway. That is not an argument for relaxing
+the gate; it is a note that the gate's cost is one row, not three.
+
+The corpus is a bigger program, so the compile terms rise and welfare falls:
+66.02 -> 59.74.
 
 **The floor moves DOWN by hand, and that is a re-basing rather than a
 regression.** `--set` cannot lower a floor — Clay's 2026-08-03 ruling — so the

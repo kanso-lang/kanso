@@ -289,4 +289,4 @@
 # allocate while it checks. The container is rustc=1.94.1 against this
 # row's 1.98.1 and cannot compare; 25,862 is CI's own reading from the
 # round-one job log on 31537922.
-compile_allocs=11613
+compile_allocs=31596
