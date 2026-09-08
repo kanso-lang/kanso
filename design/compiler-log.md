@@ -4037,3 +4037,67 @@ definition (the 2026-09-06 directive stands: one welfare line on the chart,
 no replayed-versus-recorded pair), the floor is re-set from the rewritten
 column, and the ledger entry leaves in this commit. The rewrite is cloud's;
 this entry is the ruling it was waiting on.
+
+## 2026-09-07 — the one-program gavel re-priced the declined queue, and one decline flips
+
+Clay asked whether declining changes one at a time strands the project on a
+local maximum, where some combination of the refusals would have paid. The
+question has a smaller population than it sounds like. Searching the log and
+the archive for changes the OBJECTIVE declined, rather than changes declined
+because they were worse on their own numbers, turns up two. Both were priced
+under the model the 2026-09-06 gavel retired: twenty-five counters over
+thirteen programs, each normalised against its own baseline and averaged.
+
+**The tag-switch widening flips.** Archive entry "BUILT, MEASURED, AND DECLINED
+BY THE OBJECTIVE — an arm that destructures stays on the cascade". Its rows
+re-priced through `bench/runbench_phases.txt`:
+
+    row              move     phase    share    contribution
+    pendbench    -2.8838%     pend     4.94%       -0.14246%
+    livebench    -0.1484%     no phase, invisible to the objective
+    basket       -0.1092%     no phase, invisible to the objective
+    oneshot      -0.0654%     no phase, invisible to the objective
+    scanbench    +1.0826%     split    4.87%       +0.05272%
+    encodebench  +0.1286%     encode  34.43%       +0.04428%
+    digestbench  +0.0427%     digest   5.05%       +0.00216%
+                                                   ---------
+    reconstructed runbench instructions             -0.04330%
+
+The change was reverted for falling. Under the objective as it now stands it
+is a win, and it wins while the reconstruction throws away three of the four
+programs it improved, because livebench, basket and oneshot have no phase.
+
+**Why it flips is the shape of the old model.** Twenty-five rows meant
+twenty-five ratios, each against its own baseline, so every row sat at its own
+point on the satiation curve and carried its own stiffness. A win on a program
+already far ahead of its baseline bought little; a loss on one sitting near its
+baseline cost a lot. pendbench's 2.88% fall was the first kind and scanbench's
+1.08% rise was the second. runbench combines its phases by measured share
+BEFORE the curve applies, so the same two moves are priced at 4.94% and 4.87%
+of one program and the larger move wins.
+
+That is most of the answer to the question as asked. The sequential-acceptance
+trap was substantially a property of the twenty-five-row model, which could
+decline a change that lowered total work because of where each row happened to
+sit. What remains is genuine complementarity: changes sharing a fixed cost, and
+changes that are prerequisites for other changes. Those the objective cannot
+see whatever its shape, and they need the combination sweep Clay described.
+
+**The other two do not flip, which is the check.** The gate widening of
+2026-08-02 cost basket allocations and arena buffer; basket has no phase, so
+the objective can now see neither its cost nor its benefit, and the entry's own
+corpus-breadth argument is what it still turns on. The unsigned-compare
+decline of the live log, "worse on nine of the thirteen benchmarks",
+re-prices to +0.87% and stays declined on every mapped phase.
+
+**WHAT THIS IS NOT.** `bench/runbench_phases.txt` licenses direction and share
+and says in its own header that the scale does not carry across. The tree has
+moved a long way since the widening was written. Nothing here is a measurement
+of today's compiler, and the widening has to be rebuilt on current main with
+runbench counted before any of it is banked. The reconstruction says the
+rebuild is worth an afternoon, and no more than that.
+
+**OPEN, and named by the widening's own entry.** A group mixing int literals
+with type patterns takes neither switch. The shape that would serve both is a
+switch on the tag whose int case holds a second switch on the payload, and it
+is what would remove the split phase's cost rather than outweigh it.
