@@ -3047,6 +3047,22 @@ the entry row 146,320. The probe in the entry above put the recorder alone at
 
 These are container numbers and none of them is a row. CI counts both compile
 veins, and this branch expects a deliberate red first round for exactly that.
+**CI's rows, and what the container got wrong about them.**
+
+    entry_instructions   163,612,976 -> 162,170,772   -1,442,204  (-0.8814%)
+    compile_instructions  48,761,165 ->  48,791,172      +30,007  (+0.0615%)
+    summed               212,374,141 -> 210,961,944   -1,412,197  (-0.6650%)
+
+Welfare 66.2898 -> 66.30, ratcheted in the same change.
+
+The container projected -1,422,755 and +37,533. Sign and order right on both,
+digits wrong on both, and the two errors ran the same way: it UNDERSTATED the
+entry fall by 19,449 and OVERSTATED the module rise by 7,526. Its standing
+offset is +0.8% on the LEVEL of each row, so the naive expectation was that it
+would overstate a fall; a level offset between toolchains does not carry to a
+delta, and this pair is the demonstration. Under the summed term the trade is
+48 to 1 in favour, against the 38 to 1 the container projected.
+
 
 **The module path had both defects live, and nothing in the tree asked it.**
 kanso#1328 moved the same pass in front of the same check on the module path

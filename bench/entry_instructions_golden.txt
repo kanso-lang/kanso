@@ -58,4 +58,21 @@
 # +7,745 where CI read +3,306 -- the direction and the order of magnitude
 # carry across the toolchain gap and the digits do not, which is why only CI
 # may write a row here.
-entry_instructions=163612976
+#
+# 2026-09-08 (kanso#1335): entry_instructions=162,170,772, a FALL of 1,442,204
+# (-0.8814%) from 163,612,976.
+#
+# `canonicalize_bare_aliases` runs in front of the entry path's whole-program
+# check now, so that check no longer walks the synthetic twins the pass is
+# about to delete. The pass hands the check a record of what it rewrote, which
+# is what makes the reorder honest: two checks read a call's head and mean the
+# spelling by it, and without the record one quoted a name the program never
+# wrote and the other refused a program that compiles.
+#
+# The container projected 163,499,802, a fall of 1,422,755 or -0.8627%. Right
+# sign, right order, and 19,449 short of CI's fall -- it UNDERSTATED the gain,
+# where its standing 0.8% offset would have overstated it. The offset is a
+# level offset between toolchains and does not carry to a delta, which is the
+# reason only CI writes this row.
+
+entry_instructions=162170772
