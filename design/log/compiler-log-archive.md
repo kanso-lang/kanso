@@ -50467,3 +50467,879 @@ cannot even be A/B'd.
 ---
 
 ---
+
+## 2026-09-06 (sixteenth) — the last compile row, and the floor set on three readings
+
+`compile_allocs` came back from CI on f5f4914d: 25,490 -> 25,817, a rise of
+327, or 1.28%. That is the third and last of the compile veins, and it closes
+the entry above. All three, as measured:
+
+    compile_instructions   41,462,716 -> 42,018,130   +555,414   +1.34%
+    compile_peak_bytes          714,995 ->    722,429     +7,434   +1.04%
+    compile_allocs               25,490 ->     25,817       +327   +1.28%
+
+The three move together and by about the same fraction, which is what a change
+that adds declarations to lib/json should look like: six guarded whitespace
+arms and three helper functions enter the library where an inlined `skip_ws`
+used to be, and the digit test's two arms leave it. Against that the decoder
+retires 166,709,589 fewer instructions a run, 9.5952%.
+
+The branch reads **75.27**, and the floor is now that number. It was 75.33,
+and 75.33 was not a reading — the eleventh and thirteenth entries set it from
+projections for two rows that cannot be projected at all. `--set` refuses to
+lower the objective, and refuses correctly: it cannot tell a re-basing from an
+excuse. So the floor was lowered by hand, which is what the flag's own refusal
+tells you to do, and this entry is the sentence a reviewer reads beside the
+diff. The weights are untouched. Against main's 75.1655 the branch is a rise of
+0.108.
+
+Worth keeping separate: 75.33 -> 75.27 is not a regression this branch
+introduced between one commit and the next. Nothing in the tree changed between
+the two numbers. The first was arithmetic on a placeholder and the second is a
+measurement, and the difference between them is the size of the error in the
+placeholder.
+
+---
+
+## 2026-09-06 (seventeenth) — the `and` under an `if` is asked in pieces
+
+The digit test in the (thirteenth) entry measured a sixth of what the
+arithmetic predicted, and that entry said why: the `and` of two comparisons
+still travels as a value, so only the `if`'s own test fuses. That names a gap
+in the emitter rather than a fact about the language, and this closes it.
+
+`a and b` parses to `if a b false`, `a or b` to `if a true b` and `not a` to
+`if a false true`, so a condition is very often another `if`. `emit_cond` had
+no arm for one. It fell through to `emit_expr`, which built the inner `if` as a
+value — a phi over tagged booleans — and then `test_cond_value` called
+`k_truthy` on the phi and branched on the answer. Two comparisons that each
+already knew their answer as an i1 were rebuilt into a tag and taken apart
+again, which is the family the (2026-09-05) comparison change measured at 1.60%
+of encodebench on one site.
+
+`emit_cond` recurses into it now. Each arm of the inner `if` is asked the same
+question the outer one asked, and an arm that is the literal the desugaring
+wrote is an unconditional branch. Nothing is duplicated: both arms branch to
+the labels the outer `if` already made, so the change adds blocks and removes
+instructions.
+
+    work_jsonbench   1,570,704,224 -> 1,564,492,424   -6,211,800   -0.3955%
+    work_oneshot        24,383,381 ->    24,341,969      -41,412   -0.1698%
+    work_livebench   4,436,977,137 -> 4,436,935,725      -41,412   -0.0009%
+    work_scanbench     776,362,839 ->   776,364,842       +2,003   +0.0003%
+
+The other nine work rows hold and no allocation counter moves — all eleven
+veins agree. Every other vein falls with it: the decoder's emitted calls
+1,834 -> 1,832, branches 1,205 -> 1,185 and lines 12,562 -> 12,509; six of the
+twelve `_other` rows fall and none rises; machine code falls on six binaries,
+400 bytes on jsonbench and on livebench.
+
+**This entry said the three compile rows do not move at all, and that was wrong
+about one of them.** `compile_allocs` and `compile_peak_bytes` are byte-identical,
+as CI confirmed. `compile_instructions` FELL 42,018,130 -> 41,886,863, a fall of
+131,267 or 0.31%, and it is layout: `kanso check lib/json` stops before the
+backend runs, so no decision this row counts can change, but src/codegen.rs is
+the compiler and the compiler's own bytes move under it. The vein has recorded
+seven layout-only moves before, all from runtime or prelude edits; this is the
+first from the emitter, and the largest. "The backend never runs" keeps the
+decisions identical and says nothing about where they land.
+
+work_scanbench 776,364,842 is the one row that pays, and it is 0.0003%. A
+condition whose arms are not constants gains two blocks and a branch where the
+phi used to be, and LLVM does not always fold them back.
+
+The four work rows are PROJECTIONS — the golden is CI's and this container
+reads a different glibc — so each is the golden plus the container's own A/B
+delta, measured on one host from the repo root with both binaries in place.
+Every other row here is exact.
+
+Watched red before it passed, on the old emitter and for the right reason:
+`an_and_under_an_if_is_asked_in_pieces` reported that `pick` still called
+`k_truthy`. `a_condition_made_of_and_is_asked_in_pieces` covers the shapes the
+new arm reaches — two int comparisons, the runtime path a text comparison
+takes, a `<` declared over a record, `not`, `or`, both nestings of the two, an
+`and` in tail position, and a hand-written `if` standing where a condition
+goes — and both engines answer it identically.
+
+---
+
+
+## 2026-09-06 (eighteenth) — the index's two bounds compares buy something
+
+`k_index_fast` and `k_b_at_fast` both test a 1-based position with two signed
+compares and an `and`:
+
+    %lo = icmp sgt i64 %i, 0
+    %hi = icmp sle i64 %i, %len
+    %inr = and i1 %lo, %hi
+
+One unsigned compare on the offset answers both. Below 1 the subtraction wraps
+to something enormous and fails the same `ult` that a position past the end
+fails, so `icmp ult (i - 1), len` is exactly equivalent and three instructions
+become two. Built, measured, DECLINED: it is worse on nine of the thirteen
+benchmarks.
+
+    livebench    4,436,935,278 -> 4,526,588,390   +89,653,112   +2.02%
+    encodebench  4,425,477,206 -> 4,502,836,968   +77,359,762   +1.75%
+    digestbench     77,352,921 ->    79,973,742    +2,620,821   +3.39%
+    oneshot         24,341,570 ->    24,594,343      +252,773   +1.04%
+    jsonbench    1,564,492,011 -> 1,568,798,811    +4,306,800   +0.28%
+    scanbench      776,364,429 ->   775,361,412    -1,003,017   -0.13%
+
+The checksum stays 24000, so this is not a correctness difference. What the two
+signed compares buy is a FACT: on the fast path LLVM knows `i >= 1` and
+`i <= len`, and it spends that on the addressing mode — every index in the
+decoder's disassembly reads `movzbl -0x1(%rax,%rbp,1)`, with the `-1` folded
+into the address. The unsigned form proves only `j < len`, so the offset is
+materialised at every use. Two instructions saved at the compare, more than two
+paid everywhere the result is read.
+
+Reverted, and the baseline returns to 1,564,492,011 to the instruction.
+
+The attribution that prompted it is worth keeping. On the decoder after the
+whitespace fold and the `and` change, `obj_key_start_4'2` is 205,282,500
+instructions, 13.12% of jsonbench and second only to `value_for_3'2` at 22.60%,
+and its whole body is six repeats of the indexed-load block at 1,060,050
+executions each. Two structural walls stand behind it, both already recorded:
+the length and the data pointer are RELOADED at every site because calls sit
+between them and may clobber memory, and there is no LLVM loop to hoist out of
+because the recursion is a mutual cycle. A third thing the join shows is
+smaller and real: the guard reads the index's tag with three compares before it
+compares the byte, and one of the three — the failure test — is provably dead,
+because the tag is a phi over exactly `{int, none}`.
+
+---
+
+## 2026-09-06 (twentieth) — an append of a slice reads the range in place
+
+`d_jsonbench/str_char_4` was 164,974,500 instructions, 10.58% of the decode.
+It is the walk after an escape: once a string has a `\n` in it, `str_chars`
+went to the closing quote a character at a time, appending each. 1,773 of
+bench/large.json's 10,475 strings have an escape, and the walk covers 26,019
+bytes a parse — 42.27 instructions a byte, against roughly two on the find2
+path the escape-free strings take.
+
+find2 already knows how to skip to the next quote or backslash. Writing that:
+
+    fn str_chars cs p acc
+      str_run cs p (text/find2 cs p 34 92) acc
+
+    fn str_run cs p n acc
+      str_char cs cs[n] n (text/append acc (text/slice cs p (n - 1)))
+
+is WORSE on its own, by 3.4635%. The runs between two escapes are a median of
+three bytes, and a `slice` of three bytes is a view header the arena hands out
+to be read once and dropped: `k_b_slice_raw` appears at 59,127,900 where it
+was absent, and `k_b_append_wide` goes 7,446,600 to 54,299,400.
+
+So the emitter fuses the pair. `append acc (slice cs a b)` is recognised
+before either argument is emitted — the same place and the same wrapper-
+spelling rule as the `utf8` of a `slice` above it — and reaches
+`k_b_append_slice_fast`, an alwaysinline door that tests the four tags, does
+the slice's bounds arithmetic itself, and copies the range into the
+accumulator's spare capacity with the small-copy ladder the string arm of
+`append_mut_byte` already uses. Nothing is boxed.
+
+Three things had to be in it before it paid:
+
+- **The door has to inline.** Out of line, through the C, the pair cost
+  1,585,031,315 against the baseline's 1,559,465,765 — a call into
+  `append_slice` and a second into `append_range` are more than the byte walk
+  they replace.
+- **The empty range has to be answered inline.** 1,363 of the corpus's 6,335
+  runs are empty, because two escapes sitting next to each other leave no
+  bytes between them, and sending those to the C left the row at +1.6394%.
+- **The empty range must not build a view either.** `k_b_append_slice`'s C
+  path first appended `k_bytes_view(data, 0)`, which is a 32-byte header for
+  nothing: 204,450 allocations a decode, and the row read -0.9153% rather
+  than -1.0607%.
+
+Three work rows fall and ten are byte-identical:
+
+    work_jsonbench   1,559,466,178 -> 1,542,925,378  -16,540,800  -1.0607%
+    work_oneshot        24,300,109 ->    24,190,898     -109,211  -0.4494%
+    work_livebench   4,432,486,910 -> 4,432,419,027      -67,883  -0.0015%
+
+The decode's allocations fall with them: allocs 4,999,965 -> 4,734,015, a fall
+of 265,950, which is exactly one per escaped string per run — `string_at`'s
+own `append (slice ...)` at the head of the escape path is a fused site too,
+and its view is the one that goes. alloc_bytes 259,660,448 -> 251,150,048 and
+sh_bytes 27,950,400 -> 21,567,600 with it. find2_calls rises 1,571,250 ->
+2,521,500, one per run, and append_fast falls 3,218,550 -> 1,634,550: that is
+the trade, one scan for four appends.
+
+Machine code rises on exactly the three programs that have the pair in them —
+jsonbench 91,922 -> 93,362, oneshot 115,442 -> 116,882, livebench 116,050 ->
+117,490, 1,440 bytes each — and is byte-identical on the other ten, which is
+the check that the door is linked only where it is used. The emitted-line
+count rises everywhere, by 134 lines, because the emitter writes the door into
+every module and the linker drops it again.
+
+lib/json gains one declaration and the front end pays for it: rounds 40 -> 42,
+visits 17,068 -> 17,264, compile_peak_bytes 722,429 -> 724,493,
+compile_allocs 25,817 -> 25,899, compile_instructions 41,888,129 ->
+42,089,618. Banked.
+Welfare holds at 75.30 and the floor is re-set on the new terms.
+
+The other gate keys this branch moves, by name: oneshot_append_fast, oneshot_find2_calls, front_end_rounds,
+front_end_visits, emitted_branches, emitted_calls, emitted_defines,
+emitted_lines, emitted_other_branches, emitted_other_calls,
+emitted_other_defines, emitted_other_lines, live_append_fast,
+live_find2_calls.
+oneshot_find2_calls 20,950 -> 27,285 and live_find2_calls 4,200,475 ->
+4,206,810 are the same scan-for-appends trade the decode makes;
+oneshot_append_fast 127,239 -> 116,679 and live_append_fast 42,334,257 ->
+42,323,697 are its other half. The four emitted_ keys and the four
+emitted_other_ keys are the door's 134 lines in every module.
+
+Every counter this branch moved, with the value it landed on:
+
+    emitted_branches 1,185 -> 1,203
+    emitted_calls 1,832 -> 1,847
+    emitted_defines 183 -> 185
+    emitted_lines 12,509 -> 12,716
+    emitted_other_branches 9,815 -> 9,981
+    emitted_other_calls 15,808 -> 15,858
+    emitted_other_defines 1,797 -> 1,811
+    emitted_other_lines 102,778 -> 104,532
+    a_builder_handed_on_is_still_a_builder_alloc_bytes 165 -> 198
+    a_cluster_entered_by_a_tail_call_sweeps_sh_str 9,035,232 -> 9,035,264
+    a_pushed_call_keeps_the_sweep_sh_buf 19,168 -> 19,200
+    a_repaired_node_below_the_mark_holds_tenure_sh_buf 10,976 -> 11,008
+    an_escaped_list_gives_its_buffer_back_sh_buf 6,368 -> 6,400
+    build_cycle.imported_sh_buf 176 -> 208
+    builder_guard_sh_str 176 -> 208
+    builder_reclaim_sh_bytes 936 -> 960
+    builder_transient_sh_bytes 1,896 -> 1,920
+    effect_push_shape_sh_buf 672 -> 704
+    fold_push_shape_sh_buf 174,848 -> 174,880
+    fused_map_shape_sh_buf 174,848 -> 174,880
+    fused_select_shape_sh_buf 174,848 -> 174,880
+    fused_tally_sh_buf 9,872 -> 9,904
+    record_fields_sh_buf 2,736 -> 2,768
+    sort_shape_sh_buf 180,464 -> 180,496
+    stream_write_sh_bytes 4,776 -> 4,800
+    string_builder_shape_alloc_bytes 8,246 -> 8,279
+    string_headers_sh_buf 2,736 -> 2,768
+    take_shape_sh_buf 174,848 -> 174,880
+    tally_shape_sh_buf 1,984 -> 2,016
+    the_same_capture_built_below_the_mark_is_shared_sh_buf 10,944 -> 10,976
+
+bench/compile_golden.txt's five samples each gain the same 134 lines, and its
+four totals with them: lines 5,018 -> 5,688, calls 205 -> 215, branches
+312 -> 357, defines 189 -> 194. Per sample that is 1,006 -> 1,140 on
+recursion, 998 -> 1,132 on dispatch, 995 -> 1,129 on guards, 1,047 -> 1,181 on
+records and 972 -> 1,106 on build_block, with one more define and two more
+calls apiece. That is the door written into every module again. Rounds and
+visits do not move at all, which is the check that the front end decided
+nothing differently for these five.
+
+The module sample in bench/compile_golden_modules.txt carries the door too:
+module_lines 5,051 -> 5,185, module_calls 752 -> 754, module_branches
+421 -> 430, module_defines 97 -> 98, and module_rounds and module_visits
+hold.
+
+`tests/golden/mem/append_of_a_slice_boxes_nothing.mem` is the spec, and it was
+watched red: with the fusion switched off it reads allocs=85 and
+sh_bytes=1944 against the 45 and 984 it pins, one view per round over forty
+rounds. `tests/golden/micro/an_append_of_a_slice_reads_the_range_in_place`
+covers what the door has to answer the same way the unfused pair did — an
+inverted range, a start below one, an end past the length, a range inside
+multibyte text, and two appends threaded through one accumulator.
+
+
+## 2026-09-06 (nineteenth) — the counter switch is set once, and every row falls
+
+`k_stats_on` initialised itself on first use, inside `k_alloc`:
+
+    if (k_stats_on != 0) {
+        if (k_stats_on < 0) k_stats_on = getenv("KANSO_COUNTERS") != NULL;
+        ...
+
+`k_alloc` is `always_inline` and it is inlined into every hot caller there is,
+so every loop that allocates carried a WRITE to that global — and a loop that
+writes a global cannot have any read of that global hoisted out of it. Every
+counter check in every hot loop reloaded it and re-tested it once an iteration,
+on release runs where the counters are off and the answer never changes for the
+life of the program. A constructor sets it before main, the lazy line goes, and
+LICM hoists the rest without being told anything.
+
+All thirteen work rows fall. This vein has not recorded a clean sweep before.
+
+    work_scanbench     776,364,842 ->   768,876,199   -7,488,643   -0.9646%
+    work_digestbench    77,353,320 ->    76,854,629     -498,691   -0.6447%
+    work_deepbench     708,507,318 ->   705,892,821   -2,614,497   -0.3690%
+    work_jsonbench   1,564,492,424 -> 1,559,466,178   -5,026,246   -0.3213%
+    work_oneshot        24,341,969 ->    24,300,109      -41,860   -0.1720%
+    work_widebench      54,690,359 ->    54,610,292      -80,067   -0.1464%
+    work_readbench       4,288,131 ->     4,283,685       -4,446   -0.1037%
+    work_encodebench 4,425,477,605 -> 4,421,003,600   -4,474,005   -0.1011%
+    work_livebench   4,436,935,725 -> 4,432,486,910   -4,448,815   -0.1003%
+    work_basket         35,510,217 ->    35,477,286      -32,931   -0.0927%
+    work_escapebench   114,596,730 ->   114,584,648      -12,082   -0.0105%
+    work_indexbench      4,691,365 ->     4,691,237         -128   -0.0027%
+    work_pendbench     605,537,209 ->   605,526,497      -10,712   -0.0018%
+
+Machine code shrinks with it, 1,263,818 bytes to 1,233,770, a fall of 30,048 or
+2.38%, on every one of the thirteen: each inlined copy of `k_alloc` carried a
+getenv call and a second test, and every copy of that goes. The emitted-code
+vein does not move at all, which is the check that this is the runtime rather
+than the compiler: `src/runtime.c` changes what a program links, not what the
+emitter writes.
+
+**It also fixes the counted run.** Every counting site tests `k_stats_on > 0`,
+and -1 fails that test, so anything that ran before the switch turned positive
+was never counted at all — and under the lazy form it stayed at -1 until the
+first inlined `k_alloc` body reached the getenv. Seven counters move, every one
+of them upward, which is the evidence for what they are: basket_allocs 28,169,
+basket_alloc_bytes 4,900,753, basket_bytes_malloc 31, basket_sh_str 622,320,
+pend_sh_buf 32,134,736, escape_sh_buf 96,000 and scan_sh_buf 24,105,200. One
+allocation and one byte malloc at startup on basket, sixteen bytes of shared
+string with them, and thirty-two to forty-eight bytes of shared buffer on the
+other three. Small, and silently missing for as long as the switch has been
+lazy.
+
+The `.mem` vein carries it too: 45 of its files move, on `allocs`,
+`alloc_bytes`, `bytes_malloc`, `sh_str`, `sh_rec`, `sh_buf` and `sh_bytes`, and
+every one of them upward. `builder_counts_once` is the shape of all of them —
+allocs 10 -> 11, alloc_bytes 22,557 -> 22,590, bytes_malloc 7 -> 8, sh_str
+32 -> 48 — one startup allocation and sixteen bytes of shared string that the
+lazy switch never saw.
+
+The gate keys that moved with them, so the sweep has them by name:
+a_builder_handed_on_is_still_a_builder_alloc_bytes,
+a_builder_handed_on_is_still_a_builder_allocs,
+a_builder_handed_on_is_still_a_builder_bytes_malloc,
+a_builder_handed_on_is_still_a_builder_sh_str,
+a_cluster_entered_by_a_tail_call_sweeps_sh_str,
+a_digest_holds_every_block_it_walked_sh_bytes,
+a_pushed_call_keeps_the_sweep_sh_buf,
+a_repaired_node_below_the_mark_holds_tenure_sh_buf,
+an_escaped_list_gives_its_buffer_back_sh_buf,
+an_unasked_equality_stays_a_cell_sh_str, append_in_place_sh_bytes,
+beat_builder_sh_bytes, beat_cycle_sh_bytes, build_cycle.imported_sh_buf,
+builder_counts_once_alloc_bytes, builder_counts_once_allocs,
+builder_counts_once_bytes_malloc, builder_counts_once_sh_str,
+builder_guard_sh_str, builder_reclaim_sh_bytes, builder_transient_sh_bytes,
+early_exit_sh_buf, effect_push_shape_sh_buf, fold_push_shape_sh_buf,
+force_path_sh_str, fresh_builder_sh_bytes, fresh_cycle_sh_bytes,
+fused_map_shape_sh_buf, fused_reducer_sh_buf, fused_select_shape_sh_buf,
+fused_tally_sh_buf, lazy_verdict_is_per_arm_sh_rec, many_cells_sh_str,
+piped_reducer_sh_buf, record_fields_sh_buf, record_reuse_shape_sh_rec,
+returned_thunk_sh_str, reuse_guard_sh_rec, shared_twice_sh_str,
+skip_shape_sh_buf, skip_unused_sh_str, skipped_err_sh_str,
+sort_shape_sh_buf, stream_fold_sh_str, stream_write_sh_bytes,
+string_builder_shape_alloc_bytes, string_builder_shape_allocs,
+string_builder_shape_bytes_malloc, string_builder_shape_sh_str,
+string_headers_sh_buf, take_shape_sh_buf, tally_shape_sh_buf,
+the_same_capture_built_below_the_mark_is_shared_sh_buf, unsafe_wrap_sh_buf.
+
+The book carries the same correction in two places. `ch10/counters_counters.out`
+and `ch12/fused_counters.out` are counted runs, and both read `sh_buf=0` where
+they now read `sh_buf=32`: `k_buf` adds to `k_stat_sh_buf` BEFORE the `k_alloc`
+that used to flip the switch, so the first buffer a program allocated was the
+one that never got counted. Both samples and both chapter panels are
+regenerated here.
+
+`!invariant.load` on the six prelude reads of the switch was tried on top of
+this and is WORSE: jsonbench 1,559,465,765 -> 1,561,061,464 and livebench
++8.4M on the container, with everything else identical. It is dropped. The
+write was the whole blocker; once it is gone LICM hoists without being told,
+and telling it costs something at the sites where the hoist was not the
+cheapest shape.
+
+`compile_instructions` moves 41,886,863 -> 41,888,129, a rise of 1,266 or
+0.003%, and it is layout from a file the compiler only carries: `src/runtime.c`
+is `include_str!`'d into `src/main.rs`, so twenty-six lines of C the front end
+never executes still shift the compiler's own bytes. `compile_allocs` and
+`compile_peak_bytes` are byte-identical, as they were the last two times this
+row moved on its own.
+
+The thirteen work rows are PROJECTIONS — the golden is CI's and this container
+reads a different glibc — so each is the golden plus the container's own A/B
+delta, measured on one host from the repo root with both binaries in place.
+Every other row here is exact. `src/runtime.c` is `include_str!`'d into the
+compiler, so the compile veins move too and CI is the record for them.
+
+## 2026-09-06 (twenty-first) — the blank byte walks the whole ladder, and splitting the function does not split the loop
+
+`d_jsonbench/value_for_3'2` is 353,650,950 instructions on the merged decoder,
+22.92% of jsonbench, over 2,713,950 calls. Twenty-seven of its 489
+instructions — the loop at 0x2bb0-0x2c25 — run MORE than once a call:
+125,707,350 instructions, **8.1473% of the benchmark** and 35.55% of the
+function. The loop head runs 5,276,700 times, 1.94 a call.
+
+It is the whitespace skip. bench/large.json is pretty-printed, so nearly every
+value is preceded by a blank byte, and a blank byte is what `value_for` decides
+LAST:
+
+    2bb0  cmp  $0x4,%rdi          ; is the byte `none`
+    2bb8  lea  -0x2b(%r11),%rdi   ; the jump table's range starts at 43
+    2bbc  cmp  $0x1a,%rdi
+    2bc0  ja   2bcb               ; 9, 10, 13 and 32 all miss it
+    2bcb  cmp  $0x65,%r11
+    2bd1  cmp  $0x100,%r11
+    2bde  add  $-0x30,%r11        ; number_start?
+    2be2  cmp  $0xa,%r11
+    2bef  cmp  $0x2,%rdi          ; ws?
+    2bf5  inc  %rcx               ; and only now, advance one byte
+
+The four blank bytes sit below the table's range, so each one falls through the
+table, both fallback compares and the digit test before `ws?` answers. `array_delim`
+above keeps whitespace as its last arm for a reason the entry beside it gives —
+one dispatch on one loaded byte does two jobs — and that reasoning is right for
+a three-arm ladder. This one is nine.
+
+### Two shapes, both declined
+
+**Split the run out into its own function.** `value_blank` hands a blank byte
+to a `value_run` that tests `ws?` and nothing else, and only the byte that ends
+the run enters the ladder:
+
+    fn value_run cs c p
+      blank = ws? c
+      if blank (value_run cs cs[p + 1] (p + 1)) (value_for c cs p)
+
+The loop is **byte-identical** afterwards: the same 27 instructions, the same
+125,707,350, the head still at 5,276,700. `value_run` and `value_for` are
+mutually tail-recursive, so the emitter puts them in one cluster and the two
+kanso functions share one emitted loop — the split cannot reach the machine
+code. jsonbench reads 1,542,924,905 -> 1,540,668,605, and that −0.1462% is
+`obj_key_start` and `array_step` moving under a different inlining, not the
+loop. It costs 110 emitted lines in every module, front_end_visits 17,264 ->
+17,318, and the compile veins with them.
+
+**Make the four blank bytes arms of the dispatch.** Written as `fn value_for 9`,
+`10`, `13` and `32`, they are entries in the jump table rather than a test
+after it, and the table's range opens from 43..69 to 9..123. That is **worse by
+0.5853%**: 1,542,924,905 -> 1,551,955,655, with `value_for` itself 353,650,950
+-> 362,681,550. A table of 115 entries costs every byte that reaches it more
+than the ladder cost the blanks, and the blanks are 1.94 a call against the one
+real value.
+
+So the 8.15% is not reachable by rearranging the library. What is left is a
+builtin that answers "the first byte here that is not one of these four" in one
+call, the way `find2` answers the quote-or-backslash question for the string
+scan. That is a new primitive for one caller, and it is a separate question.
+
+## 2026-09-06 (twenty-second) — the scalar validator's ascii bytes are too few to skip
+
+`k_utf8_bad_scalar` is 38,820,450 instructions on the merged decoder, 2.52% of
+jsonbench, over 203,700 calls — 190.58 apiece. Its byte loop runs 15.45 times a
+call and 13.72 of those go down the ascii arm:
+
+    if (b0 < 0x80) { i += 1; continue; }
+
+`K_UTF8_SCALAR_MAX` is 32, so the arm serves every string of thirty-two bytes
+or fewer that carries at least one high byte — the door answers a wholly ascii
+run without coming here at all.
+
+The obvious repair is the one the split scan took in #1269: read eight bytes,
+test them against `0x8080808080808080`, advance eight when the mask is clear.
+It is **worse by 0.2314%**: jsonbench 1,542,924,905 -> 1,546,494,665, and
+`k_utf8_bad_scalar` itself 38,820,450 -> 42,390,150. The 3,569,700 the kernel
+gains is the whole 3,569,760 the program gains.
+
+The reason is the length. A string of thirty-two bytes or fewer, with a high
+byte somewhere in it, leaves ascii runs shorter than eight between the high
+bytes and near the ends, so `i + 8 <= len` rarely holds. Every ascii byte pays
+the guard and almost none of them get the skip. The same word test that saved
+97% of readbench in #1269 loses here, because there the runs were kilobytes
+and here they are single digits.
+
+### The harness was watched red first
+
+`scripts/utf8_differential` extracts this function's text from `src/runtime.c`
+at run time and checks it against an independently written reference. With the
+skip in it reports 45,189,025 checks and 0 mismatches. Breaking the mask to
+`0x8080808080808000` — which stops the test seeing a high bit in the word's
+first byte — gives 1,816,277 mismatches and exit 1, the first at
+`59 52 f4 5f 35 71 10 1e 32 66 6e 3f`. So the gate does cover this arm, which
+is what made the measurement worth trusting.
+
+Reverted.
+
+### And the two scans over a string are not two walks
+
+The natural next thought is that the decode reads every string twice — `find2`
+looking for the closing quote or a backslash, then the validator — and that one
+pass could do both. The profile says otherwise. Neither is a per-byte loop:
+
+    k_b_find2_raw       65,892,000 over 2,521,500 calls   26.13 each, 26 instrs
+    k_b_utf8_slice_raw  86,519,850 over 1,305,300 calls   66.28 each, 94 instrs
+
+No instruction in either runs more than twice a call. `find2_raw` is SSE2 on
+x86-64 and NEON on aarch64, sixteen bytes a step, so a short string is answered
+in one step; `k_b_utf8_slice_raw` is the ascii door, and it reaches the scalar
+validator on 25,650 of its 1,305,300 calls. What both rows measure is per-call
+setup over a scan that is already vectorised or already short-circuited, so
+there is no shared walk for a fused pass to save. The saving would be one
+call's frame, not one pass over the bytes.
+
+### The decode has no deep loop left
+
+Counting, for every block over four per cent, how many of its instructions run
+more than once a call:
+
+    value_for_3'2     353,650,950   2,713,950 calls   130.3 each    27 of 489 loop
+    obj_key_start_4'2 205,282,500   1,060,050         193.7          0 of 231
+    str_run_4         122,966,100     265,950         462.4        107 of 271
+    array_step_3'2    119,421,450     410,550         290.9         82 of 124
+    string_at_4       104,138,254   1,571,250          66.3          0 of 156
+
+`obj_key_start` and `string_at` are flat: every instruction exactly once a
+call. Of the three that do loop, only `value_for`'s runs deep, and the entry
+above closes it.
+
+`array_step`'s head runs 3.48 times a call and `str_run`'s 3.57. The first is
+`array_delim` skipping the comma, newline and indent between two elements —
+the same whitespace shape as `value_for`, through a three-arm ladder rather
+than a nine-arm one, at about thirty-five instructions a blank byte. The
+second is one iteration per escape in an escaped string, about a hundred and
+thirty instructions each: 2.57 `find2` calls, a utf-8 validation and an
+append, which is the fused path doing the work it exists to do.
+
+So what remains is per-call overhead and short loops earning their keep. A
+later reading should not go looking for another `value_for`.
+
+---
+
+## 2026-09-06 (twenty-third) — a lambda that captures nothing is a link-time constant
+
+`w_klam17` is 712,277,200 instructions of encodebench, 16.11%, over 11,658,800
+calls at 61.09 apiece. It is the escape fold's lambda — `(a b -> esc_byte a b)`
+in `lib/json/text.kso`, one call per byte of every string that carries an
+escape. Every one of those calls comes from `encode_onto`, because `list/fold`
+and `escape_able` are both inlined into it; the closure call is the only
+indirection left.
+
+Joining the callgrind profile to the disassembly instruction by instruction:
+
+    69a0  push %rbp / %r15 / %r14 / %r13 / %r12 / %rbx    1.00 a call
+    69aa  sub  $0x18,%rsp                                 1.00
+    ...
+    6b0d  the b >= 32 arm, 24 instructions                0.843
+    6c05  mov  %r15b,(%rsi,%rax,1)   ; the byte           0.843
+    7082  three movs, add rsp, six pops, ret              1.00
+
+Fifteen of the sixty-one are the frame: six callee-saved pushes, the stack
+adjustment, and their mirror on the way out. 84.3% of the calls take the arm
+that stores one byte.
+
+### Why the call could not be resolved
+
+`k_call2_fast` reaches the closure through `%fnp = load ptr, ptr %c`, and `%c`
+came from `k_closure_lit`, which fills a mutable global on first visit. LLVM
+cannot know what is in it, so the tag test, the arity test and the call itself
+all stayed. The emitted code says the value never changes: a lambda with no
+captures is the same closure every evaluation, which is why the cell existed.
+
+So the emitter writes the closure as a module constant instead:
+
+    @klam17_cell_env = internal constant %KValue zeroinitializer
+    @klam17_cell_clo = internal constant { ptr, ptr, i64, i64 }
+                       { ptr @w_klam17, ptr @klam17_cell_env, i64 0, i64 2 }
+    @klam17_cell     = internal constant %KValue
+                       { i64 11, i64 ptrtoint (ptr @klam17_cell_clo to i64) }
+
+and the site loads it.
+
+**What actually folds, checked against the shipped binary rather than assumed.**
+The K_CLOSURE tag test folds and goes. The address folds: where the baseline
+loaded the closure pointer from a stack slot, `mov 0x38(%rsp),%r10`, this one
+writes `lea @klam17_cell_clo,%r10`. Two of the program's three call sites
+become `call 6810 <w_klam17>`.
+
+The hot one does not. At 0x61fb, the site the escape fold reaches 11,658,800
+times, the emitted code still reads
+
+    61e4  lea   0x23a65(%rip),%r10   # klam17_cell_clo
+    61eb  mov   0x8(%r10),%rdi       ; the env, loaded
+    61fb  call  *(%r10)              ; the fn, loaded
+
+and the arity is still re-read at 0x6214, `cmpq $0x2,0x18(%rcx)`, from that
+same constant. LLVM resolved the ADDRESS of a constant global and then declined
+to constant-fold three loads out of it. The payload crosses as an i64 by the
+KValue ABI, so the pointer reaches the load as `inttoptr(ptrtoint(@g))`; the
+two cold sites fold through that and this one does not. Why they differ is not
+established here, and this entry does not guess.
+
+`k_deep_copy`'s in-place arm gains `if (cl->ncaps == 0) break;`. It used to
+memcpy a one-slot env and write `cl->env` back into the header when the env did
+not survive, which is a store into `.rodata` now. A closure over nothing holds
+no arena pointer, so there was nothing to evacuate either way.
+
+### What it bought
+
+    encodebench   4,421,026,939 -> 4,390,891,562   -0.6816%
+    jsonbench     1,542,924,905 -> 1,542,924,537   -368
+
+`livebench` is the other program that runs this fold, over `lib/json` rather
+than the frozen snapshot, and it reads 4,400,130,843 here against CI's golden
+of 4,432,419,027 — a fall of 32,288,184, 0.728%. That comparison crosses hosts,
+which is worth 23,339 instructions on encodebench, 0.0005%. `basket` falls
+4,090 and `pendbench` 7,757, both at the noise of that offset: eight
+capture-free lambdas in basket and five in pendbench, none of them in a loop.
+
+`w_klam17` itself does not move: LLVM declines to inline 240 instructions of
+jump table into a 606-instruction loop, so the frame is still paid. The whole
+of the encode fall is `encode_onto`, 1,730,978,829 -> 1,703,308,420, and joined
+instruction by instruction it is three things rather than a devirtualization:
+the `k_closure_lit` call and its first-visit branch leave the loop, the
+accumulator's tag test folds, and the loop stops reloading the list pointer
+from `0x50(%rsp)` every iteration because the frame has a register to spare —
+`sub $0x188,%rsp` becomes `sub $0x178`. The loop body is 33 instructions a byte
+where it was 34. The decoder has one capture-free lambda and it is not in a
+loop.
+
+`perm_allocs` falls in all ten cost goldens — two allocations per capture-free
+lambda, the KClosure and its one-slot env, now in `.rodata`. Emitted calls fall
+in every program: the decoder 1,847 -> 1,845, encodebench 1,648 -> 1,646,
+basket 1,278 -> 1,270. Three constants replace one call, so `lines` falls where
+the program has few such lambdas and rises slightly where it has many.
+
+The fifteen frame instructions are still there, and #290 is what would take
+them: `preserve_none` on the wrapper, blocked on LLVM 19.
+
+### CI's rows, and the one that rose
+
+    encodebench   4,421,003,600 -> 4,390,892,021   -0.6811%
+    livebench     4,432,419,027 -> 4,400,131,256   -0.7285%
+    oneshot          24,190,898 ->     24,109,317  -0.3373%
+    deepbench       705,892,821 ->    704,511,486  -0.1957%
+    digestbench      76,854,629 ->     77,175,692  +0.4177%
+
+Eleven of the thirteen fall. escapebench and indexbench rise by 28 each, which
+is one closure built once instead of a first-visit branch taken once.
+digestbench rises 321,063, and its `.text` rises 192 bytes over the same
+change while its emitted lines fall by seven — the direct call changes what
+LLVM inlines there, downstream of anything the emitter wrote. Welfare weighs
+all thirteen and reads 75.30 -> 75.31, so the trade is taken. `compile_instructions`
+rises 2,728, 0.0065%, which is what any edit to src/codegen.rs costs.
+
+### And the wrapper still cannot be inlined
+
+The direct call raises the obvious next question: `w_klam17` has one hot caller
+now, so mark it `alwaysinline` and let the loop swallow it. Built and measured:
+encodebench reads **4,390,891,562, byte-identical**. The IR changes — the
+wrapper is inlined into `encode_onto` and the tailcc body is called from there,
+rather than the body being inlined into the wrapper — and the machine
+instruction count does not move at all, because the frame is paid either way.
+Reverted. The fifteen instructions are #290's.
+
+### The four that rose, by the keys the gate reads
+
+    work_digestbench       76,854,629 ->  77,175,692   +0.4177%
+    work_escapebench      114,584,648 -> 114,584,676   +28
+    work_indexbench         4,691,237 ->   4,691,265   +28
+    compile_instructions   42,089,618 ->  42,092,346   +0.0065%
+
+`work_escapebench` and `work_indexbench` gain 28 apiece, which is one closure
+built once at link time instead of a first-visit branch taken once at run time.
+`compile_instructions` is what any edit to src/codegen.rs costs: the emitter is
+the compiler, so its own bytes and the layout under them move whether or not
+the decision this row counts changed. `work_digestbench` is the one with no
+account: its emitted lines FALL by seven over the same change while its `.text`
+rises 192 bytes, so the 321,063 is a choice LLVM made downstream of the direct
+call at digestbench's two cold sites, and this entry does not guess further.
+Welfare weighs all thirteen work rows and the three compile rows together and
+reads 75.30 -> 75.31, so the corpus is ahead and the trade is taken.
+
+### What is left, priced
+
+`encode_onto`'s sixty spine instructions — the ones that run on essentially
+every one of its 10,581,600 calls — are 672,571,200 instructions, **15.32% of
+encodebench**. Fifteen of them are the frame: six callee-saved pushes, a
+376-byte stack adjustment, and their mirror on the way out, 158,724,000
+instructions or 3.61%. #338 declined outlining the arm that sizes that frame at
++2.5582%, so the shape is known and priced.
+
+The rest is the fold loop, which runs 1.102 times per `encode_onto` call and
+carries the three unfolded loads above. Two of them are the closure's fn and
+env, which nothing about this program can change at run time; a third is the
+arity. That is three loads and a compare, 46.6M instructions, 1.06% of
+encodebench, sitting behind an `inttoptr(ptrtoint(@g))` the optimizer resolves
+for the address and not for the contents.
+
+---
+
+## 2026-09-06 (twenty-fourth) — the fold asks the length twice, and the tag test is why
+
+`encode_onto`'s escape fold reads the same header field twice per byte. The
+loop, at 0x62d2 in the shipped binary:
+
+    62d2  cmpq  $0xd,0x40(%rsp)   ; is the collection bytes?
+    62da  mov   (%r15),%rcx       ; the length, load one -- `length coll < i`
+    62dd  cmp   %r14,%rcx
+    62e7  ...   call k_b_length   ; the other arm
+    6324  cmp   %r14,(%r15)       ; the length, load two -- `coll[i]!`
+
+Both are `cmp %r14,(%r15)`, the identical comparison against the identical
+address, and nothing between them writes memory on the fast path. GVN does not
+forward the first to the second because the `k_b_length` call arm merges
+between them, and the merge is the tag test: `k_b_length_fast` inlines a header
+load for a list or a bytes and calls the C entry for anything else.
+
+**What the second compare is worth: 1.4650%.** Both emission sites in the
+demanded-index guard were neutralised in turn, which is unshippable and prices the guard:
+
+    the whole guard removed     4,390,891,562 -> 4,324,668,394   -1.5081%
+    only `idx <= len` removed   4,390,891,562 -> 4,326,560,692   -1.4650%
+    only `idx >= 1` removed                                      -0.0431%
+
+The `>= 1` half is nearly free because LLVM proves it from the induction
+variable; the upper bound and the load under it are the whole cost. #349
+already declined folding the two signed compares into one unsigned one -- the
+signed pair is what buys `movzbl -0x1(%rax,%rbp,1)`, with the `-1` in the
+address -- so this thread is about asking the same compare once rather than
+about asking fewer of them.
+
+**The static proof does not reach it.** The emitter has a `proven` path for the
+demanded index when `set_of(container) == BYTES`, and `length` had none, so a
+`length` of a value already proved bytes went through the twin's tag test for
+nothing. The emitter writes the header load directly now, and every row falls
+or holds:
+
+    encodebench  4,390,891,562 -> 4,389,081,554   -1,810,008   -0.0412%
+    livebench    4,400,130,843 -> 4,399,421,576     -709,267   -0.0161%
+    oneshot         24,108,858 ->     24,107,081       -1,777   -0.0074%
+    jsonbench    1,542,924,537 -> 1,542,924,177         -360
+    widebench       54,609,406 ->     54,609,398           -8
+    digestbench     77,175,233 ->     77,175,230           -3
+
+Six fall and the other seven are byte-identical -- basket, deepbench,
+pendbench, escapebench, indexbench, scanbench and readbench have no `length`
+site the sets prove. Nothing rises.
+
+**And it does not touch the fold.** `list/fold_flat` is one function for lists
+and bytes both, so its `coll` carries the union and neither its `length` nor
+its index gets the proof -- the tag test above is the run-time answer to a
+question the call site already knew. The fold is inlined into `encode_onto` and
+the back edge at 0x63f3 makes a machine loop of it, but the recursion is
+`musttail`, so LLVM sees no loop and LICM never runs: the tag test, the length
+load and the bound are paid on every byte.
+
+That names the next thing rather than doing it. `coll` is passed unchanged to
+every self-call, which makes it invariant across the cycle by construction, and
+an emitter that specialised on an invariant parameter's tag once at entry would
+collect the 1.4650% and the tag ladder with it.
+
+The two emitted-code veins move in opposite directions and the trend gate wants
+both named. `emitted_calls` falls 1,845 -> 1,843 and `emitted_other_calls`
+15,823 -> 15,814, because a call to the twin leaves each site. `emitted_lines`
+rises 12,708 -> 12,716 and `emitted_other_lines` 104,496 -> 104,532, because
+four IR lines take its place: an `inttoptr`, a `getelementptr`, a `load` and an
+`insertvalue`. Four lines a call is the trade, and `text` falls 1,233,802 ->
+1,233,434 over the same change, so what the linker kept is smaller than what
+the emitter wrote. `defines` and `branches` hold in every program.
+
+CI's own sitting, which is the one the goldens hold, agrees with the container
+on every sign and on four of the six magnitudes to the instruction:
+
+    encodebench  4,390,892,021 -> 4,389,082,013   -1,810,008   -0.0412%
+    livebench    4,400,131,256 -> 4,399,422,049     -709,207   -0.0161%
+    oneshot         24,109,317 ->     24,107,540       -1,777   -0.0074%
+    jsonbench    1,542,924,950 -> 1,542,924,650         -300
+    widebench       54,609,879 ->     54,609,871           -8
+    digestbench     77,175,692 ->     77,175,689           -3
+
+basket, deepbench, escapebench, pendbench, indexbench, scanbench and readbench
+hold to the instruction. Welfare 75.31082442642723 -> 75.31169684664573,
+banked with `--set`.
+
+`compile_instructions` FALLS, 42,092,346 -> 42,091,852. CLAUDE.md's rule is that
+this row moves on any edit to the compiler's own Rust and usually upward,
+because src/codegen.rs is the compiler and the layout under its bytes moves with
+them; #1275 paid 2,728 for a smaller diff than this one. It falls here for a
+reason the diff shows: the proven-bytes arm returns before the generic builtin
+path builds `args_ir`, a Vec of formatted Strings one per argument, and before
+it collects the argument sets `infer::builtin_set` reads. The emitter writes
+four IR lines where it wrote one call and does less work deciding to.
+
+---
+
+## 2026-09-06 (twenty-fifth) — the fold's container cannot be proved from the library, and the beat is why
+
+The twenty-fourth entry left the 1.4650% behind one wall: `list/fold_flat` is
+one function for lists and bytes both, so its `coll` carries the union and the
+emitter's proven-bytes paths cannot fire. The cheapest way to test whether that
+union is the whole story is to give the escape fold a container the sets CAN
+prove — a fold of identical shape, in `lib/json/text.kso`, called only with
+bytes:
+
+    fn escape_able acc bs
+      esc_flat bs acc (a b -> esc_byte a b) 1
+
+    fn esc_flat bs acc f i
+      if (length bs < i) acc (esc_flat bs (f acc bs[i]!) f (i + 1))
+
+The lambda is kept deliberately. #313 declined removing the escape fold's
+closure at livebench +3.01% and named the beat as the reason, so a version
+calling `esc_byte` directly would have re-run a declined experiment and
+confounded this one. Same closure, same arity, same body shape; the only thing
+that changes is which function the fold is.
+
+BUILT, MEASURED, DECLINED. Both programs stay correct (`wrote 74072800`,
+`checksum 24000`) and the cost is not close:
+
+    livebench    4,399,421,576 -> 4,740,164,338   +340,742,762   +7.74%
+    oneshot         24,107,081 ->     25,619,336     +1,512,255   +6.27%
+    jsonbench    1,542,924,177 -> 1,542,923,800           -377
+
+The live encode counters say what happened, so this is attributed rather than
+guessed:
+
+    allocs          9,233,103 ->  51,551,103    5.6x
+    alloc_bytes   710,726,112 -> 2,064,935,712  2.9x
+    sh_bytes      100,713,384 -> 1,116,345,384   11x
+    arena_peak_bytes  2,097,152 ->   7,340,032
+    beat_iters      5,032,401 ->         401
+
+The beat stopped. `beat_iters` falls by four orders of magnitude and the
+allocations it was reclaiming become real ones.
+
+**This isolates a variable #313 could not.** That entry removed the closure and
+respelled the fold together, and attributed its +3.01% to the closure. Here the
+closure is untouched and the beat collapses anyway, so a lambda's presence is
+not what the beat turns on.
+
+**And the beat that dies is not the fold's.** `KANSO_BEAT_REPORT=1` gives the
+same verdict for the fold in both shapes:
+
+    beat: list/fold_flat/4: grow-only: another group tail-calls it
+                            (unbracketed entry) (argument 2 also carries heap)
+    beat: json/esc_flat/4:  grow-only: another group tail-calls it
+                            (unbracketed entry) (argument 2 also carries heap)
+
+Grow-only both times: the fold never had a beat to lose. What the report shows
+moving is two functions the change does not touch:
+
+    json/encode_items/3   beat: rewinds every iteration
+                       -> grow-only: argument 1 may carry heap across the iteration
+    json/encode_pairs/3   beat: rewinds every iteration
+                       -> grow-only: argument 1 may carry heap across the iteration
+
+The encoder's item and pair loops are where livebench's five million beat
+iterations were, and respelling the fold two levels below them changes what the
+analysis concludes about their accumulator. **An earlier revision of this entry
+said the beat depends on which function the fold is and pointed at the
+`imported`/`carried` retains in `src/beat.rs`. That was wrong on both counts,
+and reading the report rather than the source is what corrected it.**
+
+The entry hop was tested too, since `escape_able -> list/fold -> fold_flat` has
+one more call than `escape_able -> esc_flat`. Mirroring it exactly --
+`escape_able -> esc_fold -> esc_flat` -- changes nothing: `beat_iters` 401 and
+`allocs` 51,551,103 again, to the instruction. So the depth of the entry is not
+it either. What remains is the accumulator's provenance, and the report names
+the conclusion (`argument 1 may carry heap`) without saying which step reached
+it; that is not established here.
+
+What it settles for the invariant-parameter thread: the library route is
+closed. A fold respelled where the sets can see it costs two loops above it
+their beats, and more than the proof was ever worth, so the 1.4650% has to be
+collected in the EMITTER with one fold, or not at all. It also sharpens the
+caution for that work: a specialisation that clones a fold has to be watched at
+its CALLERS, because this cost landed two levels up from the edit and the
+instruction row alone would have said only "+7.74%, unexplained".
+
+---
