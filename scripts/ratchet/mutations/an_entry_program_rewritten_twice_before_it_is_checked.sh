@@ -5,6 +5,15 @@
 # witness a repeated rewrite leaves is the pass count, and
 # tests/rewrite_passes.rs is what reads it.
 #
+# THE RESTORED GROUP CARRIES ITS COUNTERS, because `kanso::rewrite` counts at
+# the call sites in `compile_parsed_entry` rather than inside the four
+# functions. It sits there because `compile_module_loaded` calls the same four
+# and that path is what the compile gates measure: counting inside them put 502
+# instructions on every module compile, and CI's trend gate refused it as a
+# pure regression. So this mutation writes what somebody adding the group back
+# would write — the calls and their bumps — and tests/rewrite_passes.rs says
+# plainly that a pass added without a bump is one this spec cannot see.
+#
 # THE ANCHOR IS THE CHECK LINE. `check::check_merged` is called four times in
 # src/lib.rs and `finish_program` many more, so neither is a guard that can
 # refuse. `check::check_merged(&merged, true)` appears exactly once — the
@@ -17,9 +26,13 @@ n=$(grep -cF "$target" src/lib.rs)
 awk '
   { print }
   index($0, "let merged_diags = check::check_merged(&merged, true)") {
+      print "    rewrite::pass();"
       print "    finish_program(&mut merged);"
+      print "    rewrite::pass();"
       print "    phase::watched(\"desugar_field_reads\", || desugar_field_reads(&mut merged));"
+      print "    rewrite::pass();"
       print "    phase::watched(\"prune_unused_getters\", || prune_unused_getters(&mut merged));"
+      print "    rewrite::pass();"
       print "    trmc::rewrite(&mut merged);"
   }
 ' src/lib.rs > src/lib.rs.mut && mv src/lib.rs.mut src/lib.rs

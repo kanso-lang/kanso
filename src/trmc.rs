@@ -171,7 +171,6 @@ fn bound_names(p: &Pattern, out: &mut Vec<String>) {
 }
 
 pub fn rewrite(program: &mut Program) {
-    crate::rewrite::pass();
     // Keys borrowed from the program, which already holds every one of these
     // names. `program` is `&mut`, but nothing here writes to it: the arms are
     // accumulated in `new_fns` and extended on at the end, which is what makes

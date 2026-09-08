@@ -3077,27 +3077,50 @@ spec. Its anchor is `check::check_merged(&merged, true)`, which appears once —
 `check_merged` is called four times in src/lib.rs and `finish_program` many
 more, so neither of those is a guard that can refuse.
 
-**The compile row was expected not to move, and it rose 502.** The reasoning
-behind the prediction was right as far as it went: compile_corpus is a module,
-so the gate's workload goes through `compile_module_loaded` and never reaches
-`compile_parsed_entry`, and none of the four deleted lines is on it. What the
-prediction left out is that the counter added to find them is. The corpus loads
-seven modules, each running the four rewrites once, so about twenty-eight
-`rewrite::pass()` calls land on the measured run at roughly eighteen
-instructions apiece. 50,685,978 -> 50,686,480, 0.00099%, and every other vein
-in the job agreed — `compile_allocs` and `compile_peak_bytes` byte-identical,
-which is what says the front end is doing the same work plus a counter.
+**The compile row was expected not to move; it rose 502, and the trend gate
+refused that.** Two things were wrong in sequence, and the second is the one
+worth writing down.
 
-`infer::work` has counted the sibling half of the front end on the same
-always-on thread-local for as long, and its cost sits inside every compile
-number this repository has recorded. Paying the same price for the same kind of
-watch is the trade taken here, and welfare is indifferent to it: 502 on 50.7M
-is far inside the 0.001 band `welfare.kso:686` compares with, so the floor is
-untouched.
+The prediction's reasoning was right as far as it went: compile_corpus is a
+module, so the gate's workload goes through `compile_module_loaded` and never
+reaches `compile_parsed_entry`, and none of the four deleted lines is on it.
+What it left out is that the counter added to find them was. `rewrite::pass()`
+sat inside `finish_program`, `desugar_field_reads`, `prune_unused_getters` and
+`trmc::rewrite` — the same four the module path calls. Seven modules on the
+corpus, four rewrites each, about twenty-eight bumps at roughly eighteen
+instructions apiece: 50,685,978 -> 50,686,480. Every other vein agreed, with
+`compile_allocs` and `compile_peak_bytes` byte-identical, which is what says
+the front end was doing the same work plus a counter.
 
-The saving the change actually makes is on the entry path, and no gate holds
-it. An entry program is walked four fewer times; `tests/rewrite_passes.rs` is
-the only thing in the tree that can see it.
+The wrong response was to regenerate the golden and write a note explaining the
+rise. `scripts/trend_gate` refused it:
+
+    worsened: compile_instructions 50,685,978 -> 50,686,480
+    FAIL  a pure regression: something got worse and nothing got better.
+
+That gate is right and the reasoning behind the regeneration was not. Welfare
+being indifferent — 502 on 50.7M sits inside the 0.001 band `welfare.kso:686`
+compares with — is not a licence, because the trend gate is a separate and
+stricter rule: a counter may rise when something else falls, and here nothing
+fell. Paying 502 instructions on every module compile for a number only a spec
+reads is a bad trade however small it is.
+
+So the counter moved to the four call sites in `compile_parsed_entry`. The
+compile gates check a module and never enter that function, so the row is
+untouched and the gate is silent. `tests/rewrite_passes.rs` now pins 4 rather
+than 20 — the entry group alone, not the entry group plus every module's — and
+was watched red at 8 under the restored group before it was believed.
+
+**The placement costs something and the spec says so.** `infer::work` counts
+inside `infer`, which catches any caller anywhere; that is the property its own
+comment was written for. This counter catches a fifth rewrite added to the
+entry group and does not catch one added by some other caller. That gap is
+real, it is written in the spec's header and in the mutation, and it is the
+price of not charging every module compile for the watch.
+
+The saving the change makes is on the entry path and no gate holds it: an entry
+program is walked four fewer times, and `tests/rewrite_passes.rs` is the only
+thing in the tree that can see it.
 
 All seven `tests/golden/errors_module` fixtures are byte-identical, and
 `all_compile.sh` reports emitted_code AGREED, compile_libraries AGREED and

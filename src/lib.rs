@@ -165,9 +165,19 @@ fn compile_parsed_entry(
             phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
             phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
             phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
+            // Counted here rather than inside the four, because the module
+            // path calls the same functions and the compile gates measure it:
+            // a bump inside `finish_program` costs every module compile 502
+            // instructions for a number only a spec reads. The trade is that
+            // this watches the entry group and not a caller somewhere else —
+            // tests/rewrite_passes.rs says so.
+            rewrite::pass();
             finish_program(&mut merged);
+            rewrite::pass();
             phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
+            rewrite::pass();
             phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
+            rewrite::pass();
             trmc::rewrite(&mut merged);
             Ok(merged)
         }
@@ -636,7 +646,6 @@ fn install_prelude(program: &mut ast::Program) {
 
 /// Everything the compiler adds to a parsed program before anything reads it.
 fn finish_program(program: &mut ast::Program) {
-    rewrite::pass();
     install_prelude(program);
     synthesize_getters(program);
 }
@@ -1882,7 +1891,6 @@ fn qualify(
 /// that read field syntax to say something about the field — a type conflict
 /// names the read site, and an application would have nothing to point at.
 pub fn desugar_field_reads(program: &mut ast::Program) {
-    rewrite::pass();
     // Inequality rides the same hook: it has to see every module the merge
     // produced, which is exactly what this pass already runs after.
     desugar_inequality(program);
@@ -1961,7 +1969,6 @@ fn desugar_expr(e: &mut ast::Expr) {
 /// function whose name the program does not mention — and it keeps the
 /// emitted output the size it was before accessors became functions.
 pub fn prune_unused_getters(program: &mut ast::Program) {
-    rewrite::pass();
     // The set borrows the program's own names. It used to own them, which cost
     // a String allocation per identifier OCCURRENCE — every mention in the
     // whole program, not every distinct name — and a second for each qualified
