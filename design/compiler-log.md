@@ -2870,8 +2870,22 @@ read a name after something else has rewritten it.
 `check_merged`'s opacity and arity checks have to see the spelling the program
 used. The obvious inverse map from `aliases` is unsound -- it is keyed by name,
 so it would also rewrite the diagnostic for a call the user really did write
-qualified -- and a per-site record costs an insert on every rewritten call to be
-read only on the error path. Neither has been measured. This is not a gavel: the
+qualified. The per-site record was then built as a probe and measured, and it is
+affordable:
+
+    alias-only reorder, no record   163,353,361
+    with the per-site record        163,380,706   +27,345
+
+1.7% of the prize, leaving -1,541,851 (-0.9349%) against 164,922,557. And the
+27,345 is not the recording. THE PASS REWRITES NOTHING ON ANY MEASURED CORPUS: a
+counter at the rewrite site reads 0 sites on bench/entry_corpus, 0 on
+bench/compile_corpus and 0 on lib/json, against 1 on the `m/thing` fixture that
+draws the opacity refusal. The vector never allocates, so what the 27,345 buys is
+an extra parameter carried through a recursive walk over every expression in the
+program, and a shape that hangs the recorder off a walker rather than threading
+it should cost less. Two things a real implementation must handle that the probe
+did not: the reader half in check.rs, and the second caller of the same walker at
+src/lib.rs:2616, which walks with the door map. This is not a gavel: the
 substance was ruled in kanso#1120, a diagnostic names what the import writes, and
 which mechanism satisfies it is the implementer's.
 
@@ -2887,8 +2901,10 @@ branch was pushed, which is what the search is for.
   check reading a rewritten name. Re-measured, re-refused, and this time the
   opacity refusal is on the record beside the arity one.
 - **OPEN** — the pre-canonical spelling for `check_merged`'s two name-reading
-  checks. Worth -1,569,196 on the entry row in the alias-only shape, 0.95% of
-  it. Neither mechanism has been measured.
+  checks. Worth -1,569,196 on the entry row in the alias-only shape, and
+  -1,541,851 with the per-site record that makes it sound. What is unbuilt is
+  the reader half: the two checks in check.rs that have to consult the record
+  instead of the node, and a fixture for each.
 - **OPEN, unchanged** — the twins inside `infer`, which is the other half of the
   reorder's value and is blocked on a different thing: `infer` indexes
   declarations positionally, and a group keyed by (name, arity) is a dispatch
