@@ -3472,5 +3472,30 @@ qualifier there is not the diagnostic's own module and the rule would leave it
 alone. That is a second defect, in where a tie points, and it wants its own
 fixture.
 
-Nothing shipped. The three patches are held; the corpus classification is what
-this entry is for.
+That rule was then written and measured. `diag::spelled_in` runs at the one
+place a message is rendered: it derives the qualifier from the path the
+diagnostic points at — the file's stem and its parent directory's name, which
+covers a module that is a directory and a module that is one file — and removes
+that qualifier inside backticks only. A message quotes a name in them and a
+single span can hold more than the bare name (`(mod/point …)` and `&mod/point`
+are both how a message spells the fix), so the span is what it works on; prose
+outside the backticks is left alone.
+
+Three of the four then read exactly as the base spells them, spelling for
+spelling:
+
+    error[name]: `point` has no field `name`
+      --> field_of_the_wrong_record.kso:21:12
+
+The fourth is unchanged, as predicted. `an_arm_set_with_no_settling_arm` still
+says `an_arm_set_with_no_settling_arm/open_start?` because the diagnostic points
+at the generated entry, so the qualifier it carries is not the one this rule
+derives. Where a dispatch tie points is the second defect, and it stays open.
+
+The whole corpus was re-run with the rule in: 155 agree, 38 move, the same
+numbers as without it. It repairs three messages and moves nothing else.
+
+Nothing shipped. The rule is dead code on main — no diagnostic carries a file
+until the attribution patch lands — so it belongs to the reshape's bundle rather
+than to a change of its own. Four patches held; the corpus classification is
+what this entry is for.
