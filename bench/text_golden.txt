@@ -609,11 +609,11 @@
 jsonbench text=94898
 encodebench text=115026
 oneshot text=105922
-basket text=109730
+basket text=109794
 widebench text=120450
 deepbench text=70418
 escapebench text=51554
-pendbench text=86594
+pendbench text=86658
 indexbench text=55522
 scanbench text=154322
 digestbench text=105618
