@@ -3938,6 +3938,17 @@ fn values_equal_seen(
 }
 
 fn render_float(x: f64) -> String {
+    // Ruled 2026-09-08: `inf`, `-inf`, `nan`, which is C's spelling and the
+    // lineage the `%g` rules below already follow. Both are answered here
+    // rather than downstream because neither survives the shortest-digits
+    // path: `{:e}` has no `e` to split on for either of them, and the split
+    // below used to unwrap that absence and panic.
+    if x.is_nan() {
+        return "nan".to_string();
+    }
+    if x.is_infinite() {
+        return if x < 0.0 { "-inf".to_string() } else { "inf".to_string() };
+    }
     if x == x.floor() && x.abs() < 1e15 && x.is_finite() {
         return format!("{x:.1}");
     }
