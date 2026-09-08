@@ -965,4 +965,21 @@
 # both to the unit, which is the third reading to support the licence #1321
 # and #1323 established. This row was left for CI, as it always is: the
 # container reads it on a different rustc and a different glibc.
-compile_instructions=50685978
+#
+# 2026-09-08 (an entry program is rewritten once before it is checked, not
+# twice): 50,685,978 -> 50,685,288, a FALL of 690 or 0.00136%. NOTHING THE GATE
+# EXECUTES CHANGED. `compile_corpus` is a module, so the workload goes through
+# `compile_module_loaded`; the four rewrite calls this change deletes are in
+# `compile_parsed_entry`, and so are the four `rewrite::pass()` bumps that
+# replaced them. The gate enters neither. This is the layout vein, which the
+# note above records moving seven times before on edits to the compiler's own
+# Rust, and `compile_allocs` and `compile_peak_bytes` byte-identical beside it
+# are what say so.
+#
+# The number is worth reading beside the round that preceded it. With the four
+# bumps INSIDE `finish_program`, `desugar_field_reads`, `prune_unused_getters`
+# and `trmc::rewrite` — which the module path does call — CI read 50,686,480, a
+# rise of 502, and scripts/trend_gate refused it as a pure regression. Moving
+# them to the entry call sites took the counter off the measured path
+# altogether. What is left is layout, and it happened to fall.
+compile_instructions=50685288

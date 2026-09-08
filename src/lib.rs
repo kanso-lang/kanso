@@ -158,10 +158,6 @@ fn compile_parsed_entry(
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
     let merged_diags = check::check_merged(&merged, true);
-    finish_program(&mut merged);
-    phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
-    phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
-    trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     match merged_diags.is_empty() {
         true => {
@@ -169,13 +165,52 @@ fn compile_parsed_entry(
             phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
             phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
             phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
+            // Counted here rather than inside the four, because the module
+            // path calls the same functions and the compile gates measure it:
+            // a bump inside `finish_program` costs every module compile 502
+            // instructions for a number only a spec reads. The trade is that
+            // this watches the entry group and not a caller somewhere else —
+            // tests/rewrite_passes.rs says so.
+            rewrite::pass();
             finish_program(&mut merged);
+            rewrite::pass();
             phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
+            rewrite::pass();
             phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
+            rewrite::pass();
             trmc::rewrite(&mut merged);
             Ok(merged)
         }
         false => Err(diag::render(&merged_diags, file, source)),
+    }
+}
+
+/// How many times the front end rewrites the whole program.
+///
+/// `bench/compile_golden_modules.txt` counts what the emitter WROTE and what
+/// the inference fixpoint cost getting there. Neither can see a rewrite pass
+/// run twice: the passes are idempotent on their own output, so the emitted
+/// text is byte-identical, and they are not inference, so rounds and visits
+/// hold. `compile_parsed_entry` ran four of them twice for as long as anyone
+/// has looked, and every gate in the repository stayed green.
+///
+/// This is the same instrument `infer::work::passes` is, pointed at the other
+/// half of the front end. Counted per invocation rather than per expression
+/// because the question is how many times a pass is ASKED for; what one pass
+/// costs is already the fixpoint's two numbers.
+pub mod rewrite {
+    use std::cell::Cell;
+    thread_local! {
+        static PASSES: Cell<u64> = const { Cell::new(0) };
+    }
+    pub fn reset() {
+        PASSES.with(|c| c.set(0));
+    }
+    pub fn pass() {
+        PASSES.with(|c| c.set(c.get() + 1));
+    }
+    pub fn passes() -> u64 {
+        PASSES.with(Cell::get)
     }
 }
 

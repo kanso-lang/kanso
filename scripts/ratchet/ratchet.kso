@@ -377,6 +377,14 @@ compile_ir = row
   (breaking "compile_ir_unwatched")
   release
 
+entry_rewritten_twice = row
+  "an entry program rewritten twice before it is checked"
+  false
+  "cargo test --release --test rewrite_passes"
+  "specs (unit, golden, differential)"
+  (breaking "an_entry_program_rewritten_twice_before_it_is_checked")
+  release
+
 shared_path = row
   "a path copied once per declaration instead of shared"
   false
@@ -1144,7 +1152,7 @@ rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
 
 rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words rewritten_twice]
 
-rows_b1n = text/concat rows_b1m [shared_path]
+rows_b1n = text/concat rows_b1m [shared_path entry_rewritten_twice]
 
 rows_b = text/concat rows_b1n [compile_mem compile_mem_host]
 
