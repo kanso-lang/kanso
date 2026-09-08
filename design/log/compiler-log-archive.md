@@ -50860,3 +50860,146 @@ reads a different glibc — so each is the golden plus the container's own A/B
 delta, measured on one host from the repo root with both binaries in place.
 Every other row here is exact. `src/runtime.c` is `include_str!`'d into the
 compiler, so the compile veins move too and CI is the record for them.
+
+## 2026-09-06 (twenty-first) — the blank byte walks the whole ladder, and splitting the function does not split the loop
+
+`d_jsonbench/value_for_3'2` is 353,650,950 instructions on the merged decoder,
+22.92% of jsonbench, over 2,713,950 calls. Twenty-seven of its 489
+instructions — the loop at 0x2bb0-0x2c25 — run MORE than once a call:
+125,707,350 instructions, **8.1473% of the benchmark** and 35.55% of the
+function. The loop head runs 5,276,700 times, 1.94 a call.
+
+It is the whitespace skip. bench/large.json is pretty-printed, so nearly every
+value is preceded by a blank byte, and a blank byte is what `value_for` decides
+LAST:
+
+    2bb0  cmp  $0x4,%rdi          ; is the byte `none`
+    2bb8  lea  -0x2b(%r11),%rdi   ; the jump table's range starts at 43
+    2bbc  cmp  $0x1a,%rdi
+    2bc0  ja   2bcb               ; 9, 10, 13 and 32 all miss it
+    2bcb  cmp  $0x65,%r11
+    2bd1  cmp  $0x100,%r11
+    2bde  add  $-0x30,%r11        ; number_start?
+    2be2  cmp  $0xa,%r11
+    2bef  cmp  $0x2,%rdi          ; ws?
+    2bf5  inc  %rcx               ; and only now, advance one byte
+
+The four blank bytes sit below the table's range, so each one falls through the
+table, both fallback compares and the digit test before `ws?` answers. `array_delim`
+above keeps whitespace as its last arm for a reason the entry beside it gives —
+one dispatch on one loaded byte does two jobs — and that reasoning is right for
+a three-arm ladder. This one is nine.
+
+### Two shapes, both declined
+
+**Split the run out into its own function.** `value_blank` hands a blank byte
+to a `value_run` that tests `ws?` and nothing else, and only the byte that ends
+the run enters the ladder:
+
+    fn value_run cs c p
+      blank = ws? c
+      if blank (value_run cs cs[p + 1] (p + 1)) (value_for c cs p)
+
+The loop is **byte-identical** afterwards: the same 27 instructions, the same
+125,707,350, the head still at 5,276,700. `value_run` and `value_for` are
+mutually tail-recursive, so the emitter puts them in one cluster and the two
+kanso functions share one emitted loop — the split cannot reach the machine
+code. jsonbench reads 1,542,924,905 -> 1,540,668,605, and that −0.1462% is
+`obj_key_start` and `array_step` moving under a different inlining, not the
+loop. It costs 110 emitted lines in every module, front_end_visits 17,264 ->
+17,318, and the compile veins with them.
+
+**Make the four blank bytes arms of the dispatch.** Written as `fn value_for 9`,
+`10`, `13` and `32`, they are entries in the jump table rather than a test
+after it, and the table's range opens from 43..69 to 9..123. That is **worse by
+0.5853%**: 1,542,924,905 -> 1,551,955,655, with `value_for` itself 353,650,950
+-> 362,681,550. A table of 115 entries costs every byte that reaches it more
+than the ladder cost the blanks, and the blanks are 1.94 a call against the one
+real value.
+
+So the 8.15% is not reachable by rearranging the library. What is left is a
+builtin that answers "the first byte here that is not one of these four" in one
+call, the way `find2` answers the quote-or-backslash question for the string
+scan. That is a new primitive for one caller, and it is a separate question.
+
+## 2026-09-06 (twenty-second) — the scalar validator's ascii bytes are too few to skip
+
+`k_utf8_bad_scalar` is 38,820,450 instructions on the merged decoder, 2.52% of
+jsonbench, over 203,700 calls — 190.58 apiece. Its byte loop runs 15.45 times a
+call and 13.72 of those go down the ascii arm:
+
+    if (b0 < 0x80) { i += 1; continue; }
+
+`K_UTF8_SCALAR_MAX` is 32, so the arm serves every string of thirty-two bytes
+or fewer that carries at least one high byte — the door answers a wholly ascii
+run without coming here at all.
+
+The obvious repair is the one the split scan took in #1269: read eight bytes,
+test them against `0x8080808080808080`, advance eight when the mask is clear.
+It is **worse by 0.2314%**: jsonbench 1,542,924,905 -> 1,546,494,665, and
+`k_utf8_bad_scalar` itself 38,820,450 -> 42,390,150. The 3,569,700 the kernel
+gains is the whole 3,569,760 the program gains.
+
+The reason is the length. A string of thirty-two bytes or fewer, with a high
+byte somewhere in it, leaves ascii runs shorter than eight between the high
+bytes and near the ends, so `i + 8 <= len` rarely holds. Every ascii byte pays
+the guard and almost none of them get the skip. The same word test that saved
+97% of readbench in #1269 loses here, because there the runs were kilobytes
+and here they are single digits.
+
+### The harness was watched red first
+
+`scripts/utf8_differential` extracts this function's text from `src/runtime.c`
+at run time and checks it against an independently written reference. With the
+skip in it reports 45,189,025 checks and 0 mismatches. Breaking the mask to
+`0x8080808080808000` — which stops the test seeing a high bit in the word's
+first byte — gives 1,816,277 mismatches and exit 1, the first at
+`59 52 f4 5f 35 71 10 1e 32 66 6e 3f`. So the gate does cover this arm, which
+is what made the measurement worth trusting.
+
+Reverted.
+
+### And the two scans over a string are not two walks
+
+The natural next thought is that the decode reads every string twice — `find2`
+looking for the closing quote or a backslash, then the validator — and that one
+pass could do both. The profile says otherwise. Neither is a per-byte loop:
+
+    k_b_find2_raw       65,892,000 over 2,521,500 calls   26.13 each, 26 instrs
+    k_b_utf8_slice_raw  86,519,850 over 1,305,300 calls   66.28 each, 94 instrs
+
+No instruction in either runs more than twice a call. `find2_raw` is SSE2 on
+x86-64 and NEON on aarch64, sixteen bytes a step, so a short string is answered
+in one step; `k_b_utf8_slice_raw` is the ascii door, and it reaches the scalar
+validator on 25,650 of its 1,305,300 calls. What both rows measure is per-call
+setup over a scan that is already vectorised or already short-circuited, so
+there is no shared walk for a fused pass to save. The saving would be one
+call's frame, not one pass over the bytes.
+
+### The decode has no deep loop left
+
+Counting, for every block over four per cent, how many of its instructions run
+more than once a call:
+
+    value_for_3'2     353,650,950   2,713,950 calls   130.3 each    27 of 489 loop
+    obj_key_start_4'2 205,282,500   1,060,050         193.7          0 of 231
+    str_run_4         122,966,100     265,950         462.4        107 of 271
+    array_step_3'2    119,421,450     410,550         290.9         82 of 124
+    string_at_4       104,138,254   1,571,250          66.3          0 of 156
+
+`obj_key_start` and `string_at` are flat: every instruction exactly once a
+call. Of the three that do loop, only `value_for`'s runs deep, and the entry
+above closes it.
+
+`array_step`'s head runs 3.48 times a call and `str_run`'s 3.57. The first is
+`array_delim` skipping the comma, newline and indent between two elements —
+the same whitespace shape as `value_for`, through a three-arm ladder rather
+than a nine-arm one, at about thirty-five instructions a blank byte. The
+second is one iteration per escape in an escaped string, about a hundred and
+thirty instructions each: 2.57 `find2` calls, a utf-8 validation and an
+append, which is the fused path doing the work it exists to do.
+
+So what remains is per-call overhead and short loops earning their keep. A
+later reading should not go looking for another `value_for`.
+
+---
