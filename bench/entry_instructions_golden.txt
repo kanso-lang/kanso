@@ -37,4 +37,25 @@
 # and CI's 1.98.1. The projection is kept as the thing the sitting was
 # checked against and is not a row: a number this file may hold is one CI
 # counted.
-entry_instructions=163886731
+#
+# 2026-09-08: 163,886,731 -> 163,612,976, a fall of 273,755 (0.1671%), banked.
+# The twin skip (kanso#1332): `enroll_bare` clones every exported declaration
+# of an imported module under its short name, and three checks in
+# `check_merged` that are pure body walks were reading the clones --
+# `check_none_in_collections`, `check_field_exists` and `check_build_blocks`.
+# Thirteen others in the same file already skipped them. On bench/entry_corpus
+# the clones are 145 of 882 declarations and 155 of 1,035 statements.
+#
+# The module row rose 3,306 in the same commit, because the module path has no
+# clones left to skip -- kanso#1328 put `canonicalize_bare_aliases` in front of
+# the check there -- so what that row records is the added branch plus layout.
+# Under kanso#1331's summed compile term the two together are a fall of
+# 270,449 (0.1272%).
+#
+# The container projected 164,922,557 against this sitting's 163,612,976:
+# 1,309,581 high, +0.80%, the same offset as the row above. It projected the
+# DELTA at -260,849 where CI read -273,755, and the module row's rise at
+# +7,745 where CI read +3,306 -- the direction and the order of magnitude
+# carry across the toolchain gap and the digits do not, which is why only CI
+# may write a row here.
+entry_instructions=163612976

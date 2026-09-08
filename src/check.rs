@@ -725,6 +725,11 @@ fn check_none_in_collections(program: &Program, diags: &mut Vec<Diagnostic>) {
         crate::for_each_child(e, |child| walk(child, diags));
     }
     for decl in &program.fns {
+        // The synthetic twin's body is the original's; see the long note in
+        // check_field_exists.
+        if decl.synthetic {
+            continue;
+        }
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -1355,6 +1360,30 @@ fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
             .collect(),
     };
     for decl in &program.fns {
+        // enroll_bare clones every exported declaration of an import under
+        // its short name -- body and all, synthetic = true -- so an entry
+        // program carries a twin of each. On bench/entry_corpus that is 145
+        // of 882 declarations and 155 of 1,035 statements. The module path
+        // deletes the twins before this runs, because kanso#1328 moved
+        // canonicalize_bare_aliases in front of check_merged there; the entry
+        // path in compile_parsed_entry still checks first, so both copies are
+        // walked and every diagnostic they carry is reported twice at the
+        // same line AND the same column.
+        //
+        // This walk reads bodies only. A twin IS the original's body under a
+        // second name, so it can answer nothing the original answers
+        // differently, and skipping it changes no diagnostic the module path
+        // does not already suppress by deleting the clone.
+        //
+        // Thirteen other checks in this file already skip synthetic
+        // declarations. These three were the outliers.
+        //
+        // `infer` is deliberately NOT given this skip: it indexes
+        // declarations positionally, so a `continue` would misalign it. That
+        // is the rest of kanso#1329's reverted reorder and a different change.
+        if decl.synthetic {
+            continue;
+        }
         // Locals whose initialiser is a bare construction, so the type in
         // hand is known without inference: `p = point 1 2` and then `p.z`.
         // Statements are walked in order, so a rebinding of the same name
@@ -2422,6 +2451,11 @@ fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
         diags,
     };
     for decl in &program.fns {
+        // The synthetic twin's body is the original's; see the long note in
+        // check_field_exists.
+        if decl.synthetic {
+            continue;
+        }
         scan.body(&decl.body);
     }
 }

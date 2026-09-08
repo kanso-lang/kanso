@@ -1009,4 +1009,19 @@
 # 5,597 on a delta of nearly two million: on a WORK fall of this size the sign
 # and the magnitude both carry across hosts, where the 629 the previous entry
 # records did not. The difference is that this one is not layout.
-compile_instructions=48757859
+# 2026-09-08: 48,757,859 -> 48,761,165, a rise of 3,306 (0.0068%). Layout and
+# one branch. The twin skip (kanso#1332) gives three checks in `check_merged`
+# a `continue` on synthetic declarations, and THIS path has no synthetic
+# declarations left to skip: since kanso#1328 `canonicalize_bare_aliases` runs
+# in front of the check on the module path and deletes them, which is why this
+# row reads synthetic=0. So the walk does the same work and pays for the test,
+# and src/check.rs is the compiler, so its bytes move under the edit too.
+#
+# The row it is traded against is bench/entry_instructions_golden.txt, which
+# fell 273,755 in the same commit: the entry path in `compile_parsed_entry`
+# still checks before the alias pass and so walks both copies. Under
+# kanso#1331's summed compile term the pair is a fall of 270,449 (0.1272%).
+#
+# The container projected +7,745 for this row against CI's +3,306. Same sign,
+# same order; the digits are the toolchain's and are CI's to write.
+compile_instructions=48761165
