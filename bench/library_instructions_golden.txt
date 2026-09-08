@@ -13,10 +13,10 @@
 #
 # The three move together for the lexer, the parser, inference and the checks
 # they share, and independently for the passes only one of them runs. This row
-# is the one that answers for `compile_library`'s own pass order, which is not
-# the order the other two run in: kanso#1328 moved `canonicalize_bare_aliases`
-# in front of the whole-program check on the module path and kanso#1335 did it
-# on the entry path, and this path still checks first.
+# is the one that answers for `compile_library`'s own pass order. All three run
+# `canonicalize_bare_aliases` in front of the whole-program check now --
+# kanso#1328 did it on the module path, kanso#1335 on the entry path and
+# kanso#1338 here -- and the row below is what that last one cost.
 #
 # ONE ROW, ONE VALUE, ruled 2026-09-05 and enforced by
 # tests/the_compile_row_holds_one_value.rs for the module row. No per-chip key,
@@ -43,8 +43,28 @@
 # projection is kept as the thing this sitting was checked against and is not a
 # row: a number this file may hold is one CI counted.
 #
+# 2026-09-08 (the alias pass moves in front of the check, kanso#1338):
+# library_instructions=164,253,088 -> 162,970,167, a fall of 1,282,921 or
+# 0.7811%. `compile_library` stops running the whole-program check over the
+# synthetic twins the alias pass deletes, which is the same saving the module
+# and entry paths took in kanso#1328 and kanso#1335.
+#
+# The container projected 164,300,594, a fall of 1,288,946 or 0.7784%. It
+# overstated the saving by 6,025 instructions -- half a per cent OF THE FALL --
+# while reading 0.8136% high on the LEVEL. A level offset between toolchains
+# does not carry to a delta, which is the second sitting to say so: kanso#1335
+# recorded the same thing on the entry and module rows, and in that direction
+# too the projections came out conservative.
+#
+# THE OTHER TWO COMPILE ROWS DID NOT MOVE AT ALL. Both are byte-identical in
+# the job that counted this one -- compile_instructions=48,791,172 and
+# entry_instructions=162,170,772 -- and this change edits src/lib.rs, the
+# compiler's own Rust. CLAUDE.md's prior is that `compile_instructions` usually
+# moves on such an edit through layout alone, and it holds; this is the second
+# recorded change small enough to leave it alone, after kanso#1285.
+
 # For scale beside the other two: the module row is 48.8M and the entry row
 # 162.2M. This row sits beside the entry row because the two corpora are the
 # same shape and both paths merge the dependency program before checking it.
 
-library_instructions=164253088
+library_instructions=162970167

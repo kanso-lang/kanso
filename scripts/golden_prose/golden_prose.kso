@@ -70,6 +70,15 @@ ir_golden = "bench/compile_instructions_golden.txt"
 # still do not collide.
 entry_golden = "bench/entry_instructions_golden.txt"
 
+# The fifth, and it arrived after the comment above was written. kanso#1337
+# opened the library vein and wired it to three readers -- its own gate, the
+# compile sweep and the trend gate -- and not to this one. A span written
+# `compile.library_instructions` answered UNKNOWN KEY and the page could not
+# quote the row at all. The refusal is the right behaviour and is why the gap
+# cost one run to find; what it says is that a compile-side golden has to be
+# listed HERE too before the page may name its row.
+library_golden = "bench/library_instructions_golden.txt"
+
 fn counters src
   lines = text/split src "\n"
   list/to_list (list/select lines assignment?)
@@ -170,8 +179,11 @@ fn both write decode encode m a
 fn with_allocs write decode encode so_far
   os/read_file! ir_golden . (i -> with_ir write decode encode "{so_far}\n{i}")
 
-fn with_ir write decode encode so_far
-  os/read_file! entry_golden . (e -> whole write decode encode "{so_far}\n{e}")
+fn with_ir write decode encode s
+  os/read_file! entry_golden . (e -> with_entry write decode encode "{s}\n{e}")
+
+fn with_entry write decode encode s
+  os/read_file! library_golden . (l -> whole write decode encode "{s}\n{l}")
 
 fn whole write decode encode compile
   started (job (counters compile) decode encode write)

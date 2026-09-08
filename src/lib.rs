@@ -352,12 +352,28 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    let merged_diags = check::check_merged(&program, false);
+    // AHEAD OF THE CHECK, the third and last of the three paths to take this
+    // shape -- kanso#1328 did it on the module path and kanso#1335 on the
+    // entry path, and the reasons are the same here: the whole-program check
+    // stops walking the synthetic twins this pass is about to delete.
+    // `canonicalize_types` stays where it is; on the entry path moving it too
+    // read 8,930 instructions WORSE, because this pass deletes the twins
+    // before that one would have walked them.
+    //
+    // THE RECORD IS NOT AN EXTRA. Two checks in `check_merged` read the head
+    // of a call and mean the SPELLING by it, and after this pass the head is a
+    // qualified name the source never wrote. Without the record the same
+    // reorder takes scripts/module_differential from 29 modules 0 wrong to 2
+    // wrong: the opacity check refuses a program that compiles (`m/thing` is
+    // foreign, on a bare call from a library file), and the arity diagnostic
+    // quotes `m/one` where the source says `one` -- the spelling kanso#1120
+    // settled. `Rewrites` is how the check gets told.
+    let rewritten = canonicalize_bare_aliases(&mut program);
+    let merged_diags = check::check_merged_after_aliases(&program, false, &rewritten);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
     canonicalize_types(&mut program);
-    canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
     finish_program(&mut program);
@@ -429,12 +445,28 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    let merged_diags = check::check_merged(&program, false);
+    // AHEAD OF THE CHECK, the third and last of the three paths to take this
+    // shape -- kanso#1328 did it on the module path and kanso#1335 on the
+    // entry path, and the reasons are the same here: the whole-program check
+    // stops walking the synthetic twins this pass is about to delete.
+    // `canonicalize_types` stays where it is; on the entry path moving it too
+    // read 8,930 instructions WORSE, because this pass deletes the twins
+    // before that one would have walked them.
+    //
+    // THE RECORD IS NOT AN EXTRA. Two checks in `check_merged` read the head
+    // of a call and mean the SPELLING by it, and after this pass the head is a
+    // qualified name the source never wrote. Without the record the same
+    // reorder takes scripts/module_differential from 29 modules 0 wrong to 2
+    // wrong: the opacity check refuses a program that compiles (`m/thing` is
+    // foreign, on a bare call from a library file), and the arity diagnostic
+    // quotes `m/one` where the source says `one` -- the spelling kanso#1120
+    // settled. `Rewrites` is how the check gets told.
+    let rewritten = canonicalize_bare_aliases(&mut program);
+    let merged_diags = check::check_merged_after_aliases(&program, false, &rewritten);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
     canonicalize_types(&mut program);
-    canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
     finish_program(&mut program);

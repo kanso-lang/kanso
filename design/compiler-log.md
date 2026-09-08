@@ -3224,3 +3224,234 @@ before they canonicalize. That reorder is measured — 50,244,948 -> 48,681,802,
 **−1,563,146 / −3.111%** — and was blocked on this vein. It is not in this
 commit, so the row this one opens is the pre-reorder baseline and the next PR
 is what spends it.
+
+---
+
+## 2026-09-08 (eighth) — the last two callers check before they canonicalize
+
+kanso#1328 put `canonicalize_bare_aliases` in front of the whole-program check
+on the module path and kanso#1335 did it on the entry path. `src/lib.rs` kept
+two callers running the old order: `compile_one`, reached only from
+`compile_repl`, and `compile_library`, reached from `kanso check` on a file of
+definitions. Both merge `dep_program`, so both see the twins, and both would
+break the way the entry path did. They were never blocked on a measurement.
+They were blocked on a vein, and the vein opened yesterday.
+
+Measured on the library corpus, both readings on this container, the recipe
+`scripts/gates/library_instructions.sh` uses minus the host check:
+
+    library_instructions   165,589,540 -> 164,300,594   -1,288,946   -0.7784%
+
+Read twice, on two builds whose shas differ, and identical to the instruction.
+
+**The recorded −3.111% is a different workload and does not belong to this
+row.** The 2026-09-08 (sixth) entry measured `kanso check
+bench/compile_corpus/compile_corpus.kso` treated as a library file, 50,244,948
+-> 48,681,802, and that corpus is a third the size of `bench/library_corpus`,
+so the same absolute saving reads as four times the proportion there. The row
+this change is watched by falls 0.7784%.
+
+**The record was watched red before it was watched green.** The reorder without
+it takes `scripts/module_differential` from 29 modules 0 wrong to 2:
+
+    a bare call to a shared name, from a library file
+      expected it to compile:
+      error[opacity]: `m/thing` is foreign -- only `m` builds a `thing`;
+      ask it for one through a pub function
+
+    a call from a library file at the wrong arity
+      refused, but not with
+      'error[arity]: no 2-argument arm of `one` (arms take 1)':
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
+
+The first REFUSES A PROGRAM THAT COMPILES; the second is the spelling
+kanso#1120 settled. Both are the library-path twins of what the entry path had,
+which is why the record ships with the reorder rather than after it. With
+`check_merged_after_aliases(&program, false, &rewritten)` at both sites the same
+run is 29 modules, 0 wrong.
+
+**THE ROW COULD NOT BE SELECTED AT ALL, and this branch is what found out.**
+kanso#1337 said its mutation was verified only as an anchor that still matches,
+never run, because the touched pass selects rows patching a file the branch
+changed and that branch touched no `src/`. This one rewrites `src/lib.rs`, so
+the row should have been selected. It was not. CI's touched pass named three
+rows and neither `library_ir` nor its entry twin was among them:
+
+    ratchet: 3 rows patch a file this branch changed
+      cost goldens — a front-end pass that owns the program's names instead of
+        borrowing them
+      welfare — a number the page states about the present drifting from its
+        golden
+      diagnostics differential — a name a module keeps private crossing an
+        import anyway
+
+THE SELECTION KEYS ON GUARD LINES, NOT ON THE PATCHED FILE. `read_it` collects
+the lines of a mutation that spell `grep -q` and asks whether any of them names
+a file the branch changed. That is deliberate and kanso#1254 argued it well: a
+guard IS the dependency, and reading the whole script instead selected 33 rows
+where 12 were at risk. But both compile-path mutations reach `src/lib.rs`
+through `"$file"` and assert with `grep -c`, so the path appears on no guard
+line and neither row could ever be selected, whatever a branch touched.
+
+`entry_instructions` has been in that position since kanso#1330 and
+`library_instructions` since kanso#1337 — the same pair the trend gate had left
+unclassified, found the same afternoon by two different means.
+
+Both mutations now carry a guard line that spells the path, and the selection
+goes from three rows to five with the entry and library rows both named. Watched
+blind first: the three-row listing above is this branch before the repair.
+
+**EIGHT MORE ARE IN THE SAME POSITION**, and the count is off disk rather than
+from memory: of 112 mutations, 77 name a path under `src/` and 69 of those name
+one on a `grep -q` line. The two repaired here were among the ten that did not.
+The eight left are
+
+    a_module_rewritten_twice_before_it_is_checked.sh
+    a_path_copied_once_per_declaration.sh
+    a_validator_that_skips_its_tail.sh
+    a_validator_the_reference_disagrees_with.sh
+    an_entry_program_rewritten_twice_before_it_is_checked.sh
+    clippy_bait.sh
+    misformatted_source.sh
+    the_wasm_engine_answers_something_else.sh
+
+and each is unselectable for the same reason: it reaches its file through a
+variable and asserts with `grep -c`, `grep -cF` or `grep -A1`. Repairing them is
+its own change, and it owes a spec that reads the mutations off disk — which is
+why one is not shipped here. Written and watched red, it named all ten; with a
+green list of eight it would only be a list, and a list is the shape that goes
+stale.
+
+`canonicalize_types` stays where it is. On the entry path moving it too read
+8,930 instructions worse, because the alias pass deletes the twins before that
+one would have walked them, and there is no reason to expect the other
+direction here.
+
+**CI's row.** The vein summary named exactly one failing counter against
+eighteen green, which is what round one was for:
+
+    library_instructions   164,253,088 -> 162,970,167   -1,282,921   -0.7811%
+
+The container projected a fall of 1,288,946, or 0.7784%. It overstated the
+saving by 6,025 instructions — half a per cent of the fall — while reading
+0.8136% high on the LEVEL of the row. A level offset between toolchains does
+not carry to a delta, and this is the second sitting to say so: kanso#1335
+recorded the same thing on the entry and module rows, where the projections
+also came out conservative.
+
+**THE OTHER TWO COMPILE ROWS DID NOT MOVE AT ALL**, and that is worth writing
+down because this change edits `src/lib.rs`, the compiler's own Rust.
+`compile_instructions=48,791,172` and `entry_instructions=162,170,772` are
+byte-identical to their goldens in the job that counted the new row. CLAUDE.md's
+prior is that `compile_instructions` usually moves on such an edit through
+layout alone; it holds, and this is the second recorded change small enough to
+leave it alone, after kanso#1285.
+
+**The mutation's anchor went stale in this same change, and pass one of the
+ratchet is what said so.** `the_library_program_is_checked_twice.sh` anchors on
+`let merged_diags = check::check_merged(&program, false);`, which is the exact
+line the reorder rewrites, at both sites. So round one's ratchet job failed
+`every mutation still matches the source it patches` and skipped the touched
+pass underneath it — the pass this branch exists to reach. The anchor moves to
+`check::check_merged_after_aliases(&program, false, &rewritten)` and the
+duplicate lands at 465, inside `compile_library` (390), with `compile_one`'s
+call at 372 untouched.
+
+A mutation anchored on a line a change is about to rewrite goes stale in that
+change. That is the ordinary case rather than a surprise, and the first pass
+exists to report it on the runner before the row it guards is ever read.
+
+**A FIFTH READER, found by running the trend gate on this change's own diff.**
+The fall printed as UNCLASSIFIED:
+
+    UNCLASSIFIED — no direction table names these, so they count
+    toward neither side of the pure-regression rule:
+      library_instructions
+
+The gate walks the golden and has no direction for the counter in it, so it can
+report the move and cannot say which way is better. A rise of the same size
+would have printed identically and counted toward neither side of the
+pure-regression rule. `entry_instructions` has been in the same position since
+kanso#1330 — two compile veins unclassified for as long as they have existed.
+
+This is the digestbench failure one vein down, which
+`tests/every_benchmark_in_the_work_vein_has_a_direction.rs` exists to prevent
+and could not see here: it reads `bench/instructions_golden.txt` and stops. Its
+own argument carries straight across — each compile golden holds retired
+instructions for one compile and fewer is better in all of them, so every row
+has a direction and none of them is a presence counter whose direction means
+nothing alone.
+
+`tests/every_compile_vein_row_has_a_direction.rs` asserts it over every
+`bench/*instructions_golden.txt` other than the work vein's, read off disk, so a
+fourth compile path opening a vein under a fourth name is covered on the day the
+file lands. Watched red first, naming both: `["entry_instructions",
+"library_instructions"]`. Both join `lower_gg` and the gate now prints
+`improved: library_instructions 164,253,088 -> 162,970,167`.
+
+That makes five readers a compile vein owes: its gate, `all_compile.sh`'s
+`gates=` line, the trend gate's walk, `golden_prose`, and the trend gate's
+direction table. kanso#1337 wired three of them.
+
+---
+
+## 2026-09-08 (ninth) — the twins inside infer, sized at last
+
+The log has carried this OPEN item since 2026-09-08 (fifth) and twice since:
+*the twins inside `infer`, the other half of the reorder's value.* It has never
+had a number. It has one now, and the number is small.
+
+`enroll_bare` (src/lib.rs) clones every exported declaration of every imported
+module under its short name, and those clones are real declarations that infer
+and check both walk. On `bench/library_corpus` the top-level enrollment makes
+**292 function twins and 45 type twins against a merged program of 1,437
+functions** — one declaration in five. infer is 22.5% of that compile.
+
+**THE OBVIOUS INSTRUMENT DOES NOT WORK, and the way it fails is the blocker
+arriving as a diagnostic.** An env-gated early return in `enroll_bare`, so the
+twins are never made, stops the compile at
+
+    error[name]: `first` is already a declaration; rename the binding
+      --> std/regexp/regexp.kso:654:3
+
+Inside the standard library, not at the corpus's call sites -- `library_corpus`
+writes every call qualified and needs no bare twin of its own. The bare space is
+load-bearing inside std. That is the positional-index blocker already recorded
+for this thread: `group_members`, `ctx.current_index` and the reader bitmap are
+all indexed by position in `program.fns`, and beat.rs, check.rs and codegen.rs
+all read `inference.returns[i]` by that same position.
+
+**The instrument that does work: skip only the BODY WALK.** In infer's fixpoint
+sweep, beside the dirty test, skip a declaration whose `synthetic` is set. Every
+twin stays in `program.fns`, so no index moves. All readings on one probe
+binary, so the added branch cancels:
+
+    corpus                walked        skipped        delta
+    library_corpus   167,284,685   166,685,167     -599,518   -0.3584%
+    entry_corpus     164,832,926   164,512,869     -320,057   -0.1942%
+    compile_corpus    49,403,663    49,412,576       +8,913   +0.0180%
+
+infer itself: 38,972,582 -> 38,342,754, -1.6161%.
+
+**One declaration in five is one instruction in sixty-two.** A count-based
+estimate assuming infer is linear in the declaration count says 20.3% of infer,
+4.57% of the row; the measurement refutes that by 12.6x. The reason is the
+fixpoint: only DIRTY declarations are revisited, and a twin nothing calls goes
+clean after its first visit and is never re-dirtied again.
+
+**The module row goes the wrong way, and that is a finding about the probe.**
+Skipping the walk leaves `returns[twin]` at its default instead of the answer
+the walk would have written, so other declarations infer different values and
+the dirty sets and round count move with them. The delta is a mix of walks not
+taken and a fixpoint doing different work, and on `compile_corpus` the second
+term wins. So these three numbers size the thread; they are not a ceiling in the
+strict sense.
+
+**Where that leaves it.** The shipping shape has to copy the original's answer
+into `returns[twin]` rather than leave it at the default, and that copy costs
+something none of this pays. So the honest reading is a couple of tenths of a
+percent before the copy, against the alias-pass reorder's 0.7784% on the same
+row in the same session. The thread goes to the back of the queue: not refuted,
+not worth building next, and no longer unpriced. What is owed first if it is
+ever picked up is recording the twin/original pairing at the `enroll_bare` clone
+site, which is the cheap half of the copy.
