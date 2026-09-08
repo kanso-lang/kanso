@@ -3027,12 +3027,24 @@ a path with no case in it reads clean whatever it does.
 
 - **DONE** — the OPEN item the entry above filed. The reorder, the record, both
   readers, both mutations, and the differential back to 0 wrong.
-- **OPEN** — src/lib.rs:348 and :425 still check before canonicalizing.
-  compile_one is reached only from `compile_repl` (src/repl.rs:290) and
-  compile_library only from `kanso check <a library file>`. Both merge
-  `dep_program`, so both see the twins, and both would break the way the entry
-  path did -- they were never blocked on a measurement, they were blocked on
-  this. What is owed there now is a vein, since neither has one.
+- **OPEN, and now priced** — src/lib.rs:348 and :425 still check before
+  canonicalizing. compile_one is reached only from `compile_repl`
+  (src/repl.rs:290) and compile_library only from `kanso check <a library
+  file>`. Both merge `dep_program`, so both see the twins, and both would break
+  the way the entry path did -- they were never blocked on a measurement, they
+  were blocked on this.
+
+  Measured on this box, on `kanso check bench/compile_corpus/compile_corpus.kso`
+  with the reorder and the record applied to both sites:
+
+      library_instructions   50,244,948 -> 48,681,802   -1,563,146  (-3.111%)
+
+  Larger in proportion than the entry path's -0.8627%, on a path no vein
+  watches. The differential stays 29 cases 0 wrong through it, which is what
+  says the record makes the reorder correct there and not merely cheaper; c28
+  and c29 go red on the same edit with the record left out. The baseline
+  reproduced to the instruction on a second run. What is owed before it ships
+  is the vein, since a fall nothing counts is a fall nothing keeps.
 - **OPEN, unchanged** — the twins inside `infer`, the other half of the
   reorder's value. `infer` indexes declarations positionally and a group keyed
   by (name, arity) is a dispatch group, so the twin is what lets a bare name
