@@ -20,92 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (twenty-fifth) — the fold's container cannot be proved from the library, and the beat is why
-
-The twenty-fourth entry left the 1.4650% behind one wall: `list/fold_flat` is
-one function for lists and bytes both, so its `coll` carries the union and the
-emitter's proven-bytes paths cannot fire. The cheapest way to test whether that
-union is the whole story is to give the escape fold a container the sets CAN
-prove — a fold of identical shape, in `lib/json/text.kso`, called only with
-bytes:
-
-    fn escape_able acc bs
-      esc_flat bs acc (a b -> esc_byte a b) 1
-
-    fn esc_flat bs acc f i
-      if (length bs < i) acc (esc_flat bs (f acc bs[i]!) f (i + 1))
-
-The lambda is kept deliberately. #313 declined removing the escape fold's
-closure at livebench +3.01% and named the beat as the reason, so a version
-calling `esc_byte` directly would have re-run a declined experiment and
-confounded this one. Same closure, same arity, same body shape; the only thing
-that changes is which function the fold is.
-
-BUILT, MEASURED, DECLINED. Both programs stay correct (`wrote 74072800`,
-`checksum 24000`) and the cost is not close:
-
-    livebench    4,399,421,576 -> 4,740,164,338   +340,742,762   +7.74%
-    oneshot         24,107,081 ->     25,619,336     +1,512,255   +6.27%
-    jsonbench    1,542,924,177 -> 1,542,923,800           -377
-
-The live encode counters say what happened, so this is attributed rather than
-guessed:
-
-    allocs          9,233,103 ->  51,551,103    5.6x
-    alloc_bytes   710,726,112 -> 2,064,935,712  2.9x
-    sh_bytes      100,713,384 -> 1,116,345,384   11x
-    arena_peak_bytes  2,097,152 ->   7,340,032
-    beat_iters      5,032,401 ->         401
-
-The beat stopped. `beat_iters` falls by four orders of magnitude and the
-allocations it was reclaiming become real ones.
-
-**This isolates a variable #313 could not.** That entry removed the closure and
-respelled the fold together, and attributed its +3.01% to the closure. Here the
-closure is untouched and the beat collapses anyway, so a lambda's presence is
-not what the beat turns on.
-
-**And the beat that dies is not the fold's.** `KANSO_BEAT_REPORT=1` gives the
-same verdict for the fold in both shapes:
-
-    beat: list/fold_flat/4: grow-only: another group tail-calls it
-                            (unbracketed entry) (argument 2 also carries heap)
-    beat: json/esc_flat/4:  grow-only: another group tail-calls it
-                            (unbracketed entry) (argument 2 also carries heap)
-
-Grow-only both times: the fold never had a beat to lose. What the report shows
-moving is two functions the change does not touch:
-
-    json/encode_items/3   beat: rewinds every iteration
-                       -> grow-only: argument 1 may carry heap across the iteration
-    json/encode_pairs/3   beat: rewinds every iteration
-                       -> grow-only: argument 1 may carry heap across the iteration
-
-The encoder's item and pair loops are where livebench's five million beat
-iterations were, and respelling the fold two levels below them changes what the
-analysis concludes about their accumulator. **An earlier revision of this entry
-said the beat depends on which function the fold is and pointed at the
-`imported`/`carried` retains in `src/beat.rs`. That was wrong on both counts,
-and reading the report rather than the source is what corrected it.**
-
-The entry hop was tested too, since `escape_able -> list/fold -> fold_flat` has
-one more call than `escape_able -> esc_flat`. Mirroring it exactly --
-`escape_able -> esc_fold -> esc_flat` -- changes nothing: `beat_iters` 401 and
-`allocs` 51,551,103 again, to the instruction. So the depth of the entry is not
-it either. What remains is the accumulator's provenance, and the report names
-the conclusion (`argument 1 may carry heap`) without saying which step reached
-it; that is not established here.
-
-What it settles for the invariant-parameter thread: the library route is
-closed. A fold respelled where the sets can see it costs two loops above it
-their beats, and more than the proof was ever worth, so the 1.4650% has to be
-collected in the EMITTER with one fold, or not at all. It also sharpens the
-caution for that work: a specialisation that clones a fold has to be watched at
-its CALLERS, because this cost landed two levels up from the edit and the
-instruction row alone would have said only "+7.74%, unexplained".
-
----
-
 ## 2026-09-06 (twenty-sixth) — the fold reads its length once, and the guard is three instructions shorter
 
 The twenty-fourth entry ended by naming what it had not done: `coll` is passed
@@ -3812,3 +3726,86 @@ since replaced with one consolidated program, and kanso#1295 has since moved
 the thunk memo that entry named as the conflicting mechanism. The decline
 stands until something re-measures it. It should not be cited as settled under
 the current objective.
+
+## 2026-09-08 (third) — the carry tier by a byte count: built, measured, declined, and the prefix keeps its place
+
+SEARCHED FIRST: design/compiler-log.md, design/log/compiler-log-archive.md (the
+2026-08-31 "IDENTIFIED: the digest's 86x is a source-path prefix" and the
+2026-09-01 "the carry tier, arbitrated: DECLINED at -0.56"), design/pending-gavels.md.
+The 2026-09-01 sitting priced REMOVING the exclusion. This prices REPLACING it,
+which is a different change, and it supersedes that entry's numbers under the
+current objective -- that one was taken under twenty-eight counters and a corpus
+the 2026-09-06 gavel replaced, and before kanso#1295 moved the thunk memo it
+named as the mechanism.
+
+**Where the peak is.** The entry above (2026-09-08 second, kanso#1310) attributed
+runbench's 45,944,528-byte arena peak: `split` holds 38,797,312 of it on 4.87% of
+the instructions, and the loop holding it is `std/regexp`'s walk, kept out of the
+carry tier by `d.file.starts_with("std/") || d.file.starts_with("lib/")`.
+
+**What it is worth.** Clearing the prefix and the two classify guards that also
+block that group: scanbench 198,180,864 -> 1,048,576 over one block, 0.277s ->
+0.115s, allocations and evacuation identical. With a capture added so the walk
+fills its slots at every position and the work volume held: 489,684,992 -> 2,097,152
+across 467 blocks -> 2, allocations within 2,002, 201,168 bytes evacuated.
+
+**The bound.** `k_beat_iter_carry` computes `need` with `k_copy_size` before it
+copies anything, so the threshold is three lines there. Over it, restore
+`k_ten_on`/`k_from_window` and return, which leaves the arena un-rewound: that is
+grow-only, today's behaviour for these loops, so the fallback is correct by
+construction rather than by argument.
+
+| bound | digestbench | peak |
+|---|---:|---:|
+| unbounded | 4,569ms | 559,939,584 |
+| 4,096 | 309ms | 2,097,152 |
+| 65,536 | 986ms | 138,412,032 |
+
+scanmatch is byte-identical at every one of those. So four kilobytes admits the
+regexp walk and refuses sha256's state and schedule, which are rebuilt each round.
+That IS the property the prefix approximates.
+
+**The sizing walk, and the latch.** First measurement: runbench 7,334ms against a
+405ms baseline. The bound is tested AFTER `k_copy_size` has walked everything, so a
+declining loop pays the full walk every iteration and throws it away. Latching the
+decline per beat depth (reset in `k_carry_clear`, checked before the walk) gives
+2,184ms with peak and evac byte-identical. Removing the latch again and letting
+every iteration decide independently reproduces both numbers exactly at 512 and at
+4,096 -- so the latch changes cost and nothing else, and a hypothesis that it was
+punishing cheap loops sharing a depth with expensive ones is REFUTED.
+
+**Where it fails.** Sweeping the threshold on runbench (baseline 405ms /
+45,944,528 / evac 10,578,112):
+
+| bound | time | peak | evac |
+|---|---:|---:|---:|
+| 128 | 453ms | 57,671,680 | 295,744 |
+| 512 | 450ms | 46,137,344 | 5,848,832 |
+| 4,096 | 2,293ms | 10,292,944 | 96,741,744 |
+
+At 512 the run program is nearly free and its split phase does not get the win --
+that phase's carry is genuinely over 512 bytes, which the unlatched run confirms.
+At 4,096 the win lands and costs 5.4x. There is no threshold between them that
+gives both, because the carries that buy the win are the same size class as the
+ones that cost the time. 128 bytes makes the peak WORSE than baseline at
+57,671,680, which is unexplained and is a reason not to reach for a small bound.
+
+**DECLINED.** `run_instructions` is weight 0.30 and the least satisfied term;
+`run_peak_bytes` is 0.26. 5.4x the instructions for 4.5x the peak is not close.
+The prefix stays, and it now stays with a measurement rather than an accident.
+
+**Two other shapes rejected on the way.** Removing the exclusion outright left
+runbench still running after ten minutes against a 0.405-second baseline. Keying
+the decision on the inference sets of the carried positions separates the two
+programs cleanly -- sha256's are narrow LIST (0x200, 0x220, 0x2200, 0x2220),
+walked's are TOP and FN (0x3fff, 0x3fdf, 0x800) -- and was rejected because it
+would refuse the carry exactly where a user wrote a loop whose type is known and
+admit it only where inference failed to pin anything.
+
+**What would reopen it:** a cheaper evacuation, so the carries admitted at 4,096
+stop costing what they cost. Not a better threshold.
+
+**One method note, because it cost two rounds.** codegen reads `beat_loops`, not
+`classify`, and `report()` never passes through the `imported` filter -- so the
+beat report answered three questions this session that it cannot answer, and the
+emitted-IR diff is what caught it each time. Diff the IR first.
