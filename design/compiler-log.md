@@ -4480,3 +4480,85 @@ twice and both quotations moved with the golden. `golden_prose` is what caught
 them, on the round that had everything else right -- which is the gate working:
 a figure on the page and a figure in a golden are the same number or the page
 is wrong.
+
+## 2026-09-08 (eighth) — a short copy went through the call, twice more
+
+kanso#1317 fixed `k_b_join`'s one-byte copies and left a map of where the rest
+of runbench's `memcpy` time sits. Two of those sites are the same shape and
+neither needed a call at all.
+
+`k_str_n` builds every string the runtime does not already hold, and its copy
+went straight to libc. From `split` alone that call is reached 177,706 times a
+run at 12.9 instructions apiece; the pieces being moved are two or three bytes,
+so the call is nearly all of it. `render_ryu` writes ryū's digits into the
+output buffer with three byte loops, and clang outlines each of them into a
+`memcpy` call: 191,070 a run at 15.3.
+
+Both now go through `k_copy_short`, which moves anything under sixteen bytes as
+two overlapping loads and two overlapping stores. Reads stay inside
+`[s, s+n)` and writes inside `[d, d+n)`, so no caller needs slack at either
+end — the same idiom `k_b_utf8_slice_raw` has shipped since kanso#1294.
+
+**Measured on the container, each side rebuilt, run from the repo root, against
+the tree this lands on — main plus kanso#1319:**
+
+```
+  baseline           2,374,180,362
+  k_str_n only       2,372,135,490   -2,044,872  (-0.0861%)
+  render_ryu only    2,370,339,882   -3,840,480  (-0.1617%)
+  both               2,368,295,010   -5,885,352  (-0.2479%)
+```
+
+The two rungs are additive to the instruction: 2,044,872 + 3,840,480 =
+5,885,352. Output md5 identical on all four builds. That is 2.7x what
+kanso#1317's own change recovered, from the same map and the same reading of
+it.
+
+Of the render_ryu rung's 3,840,480, some 913,860 is render_ryu's own self cost
+falling and 2,926,620 is the `memcpy` calls it no longer makes — the figure the
+kanso#1317 map already attributed to render_ryu, to the instruction.
+
+**These two are not independent of kanso#1319, and the earlier note in this
+file saying they were is wrong.** kanso#1319 added an unsigned compare to
+`ryu_d2d`, which is inlined into `render_ryu` in every profile, and it cost
++381,600. On the patched tree it costs nothing:
+
+```
+  render_ryu self cost, no kanso#1319, byte loops        90,045,360
+                        kanso#1319,    byte loops        90,426,960   +381,600
+                        no kanso#1319, k_copy_short      89,513,100
+                        kanso#1319,    k_copy_short      89,513,100         +0
+```
+
+`both` reads 2,368,295,010 on either tree, to the instruction. So the −5,885,352
+above pays back kanso#1319's whole cost along with its own. Which transform
+folds the compare away once the digit copies are inline is not established here
+and is not guessed at: the measurement reproduces, the mechanism is open.
+
+An earlier sitting of this ladder read a baseline of 2,397,583,080 and deltas of
+1,914,270 / 3,458,430 / 5,372,700. That baseline does not reproduce: a clean
+measurement of the same tree reads 2,373,798,762, which is the figure kanso#1317
+reports for its own patched side. The table above is the sitting that survives
+re-measurement, and the earlier one is recorded here so nobody cites it.
+
+`sh scripts/gates/all_counters.sh` says the twelve cost veins and the lazy tier
+agree: no allocation counter moves, because this changes how bytes are copied
+and not how many. `sh scripts/gates/all_compile.sh` says nothing moved that
+this host can see, with four gates refusing on a host they may not compare
+against.
+
+Rows `str_words` and `ryu_words` in the ratchet, one per site. Neither was
+watched red here: `scripts/gates/instructions.sh` refuses to compare on this
+container, whose glibc and rustc are not the pair the golden names, so a local
+mutation run cannot fail for the right reason or any other. What stands behind
+the rows until CI runs them is that each mutation reverts exactly one site and
+both of the trees they produce are in the table above, millions of instructions
+from the ladder against a gate that asserts equality.
+
+**What is left of the map.** `k_closure`, `k_b_put_mut` and `k_mklist` each
+read 22.0 instructions an average call and each already carries an `n <= 4`
+element loop, so their residual is the copies longer than four `KValue`s.
+Raising that threshold is a tuning question of its own — kanso#1209 moved a
+different cap from four to eight and had to measure it — and the answer here is
+not assumed. `k_b_append_grow`'s 29.2M at 82.7 a call remains a real buffer
+copy and is not this shape.
