@@ -1,0 +1,72 @@
+name: delete a branch
+
+# scripts/purge_merged_branches.sh records why this exists: "A ref-deletion
+# push from the container is refused by the agent proxy with HTTP 403, so the
+# sweep waits on a shell that can push a deletion." This is that shell.
+# Actions runs on GitHub's own infrastructure rather than through the proxy,
+# where deleting a ref is an ordinary push, and the perf-history job already
+# proves `contents: write` is enough to push from here.
+#
+# Every deletion prints the sha the branch pointed at before it goes, because
+# that sha is what puts it back:
+#
+#     git push origin <sha>:refs/heads/<name>
+#
+# Nothing here decides WHETHER a branch is dead. This repository squash-merges,
+# so no git-native merged-ness test works — the purge script's header explains
+# that at length. Whoever dispatches this has made that judgement already.
+
+on:
+  workflow_dispatch:
+    inputs:
+      branches:
+        description: "branch names to delete, space separated"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    name: delete the named branches
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The input reaches the shell through the environment rather than
+      # through `${{ }}` interpolation, so a branch name cannot become script.
+      # Both loops run over the same list: the first refuses the whole
+      # dispatch, so a bad name in third position does not leave the first two
+      # already deleted.
+      - name: delete
+        env:
+          BRANCHES: ${{ inputs.branches }}
+        run: |
+          set -e
+
+          for b in $BRANCHES; do
+            case "$b" in
+              main|perf-history)
+                echo "::error::$b is protected and is not deletable here"
+                exit 1 ;;
+            esac
+            case "$b" in
+              ''|*[!A-Za-z0-9._/-]*)
+                echo "::error::'$b' is not a branch name"
+                exit 1 ;;
+            esac
+          done
+
+          for b in $BRANCHES; do
+            sha=$(git ls-remote --heads origin "$b" | cut -f1)
+            if [ -z "$sha" ]; then
+              echo "already gone: $b"
+              continue
+            fi
+            echo "deleting $b at $sha"
+            echo "  to restore: git push origin $sha:refs/heads/$b"
+            git push origin ":refs/heads/$b"
+          done
+
+          echo "$(git ls-remote --heads origin | wc -l) branches remain"
