@@ -2973,9 +2973,17 @@ One spec moved, and repairing its number was the wrong repair.
 `tests/import_order.rs` pinned the peak difference between two modules that
 declare the same two functions and differ only in which file names `std/list`.
 It read seventeen bytes; on this host it now reads fifteen, so the pin was
-moved to fifteen and pushed. The arm64 runner then read TWENTY-THREE on the
-same tree, and that is the finding: both hosts are deterministic and both are
-right. `compile_peak_bytes` reports what the allocator holds, and glibc and
+moved to fifteen and pushed.
+
+The arm64 runner had been refusing it since the FIRST push of this branch, on
+the pin of seventeen, and it read TWENTY-THREE. Three rounds went by with
+`the other host` red before that log was opened, because the row this change
+was about was on the x86 side and the macos job was read as one more thing
+still running. Repairing a two-host pin from one host's reading is the error,
+and it is a larger one than the number: the second reading was sitting in a
+job log the whole time.
+
+Both hosts are deterministic and both are right. `compile_peak_bytes` reports what the allocator holds, and glibc and
 macOS round a merge of the same declarations differently, so the residual is
 not a property of the compiler at all. Seventeen agreeing on both hosts before
 this change was luck.
