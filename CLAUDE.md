@@ -63,11 +63,6 @@ design/compiler-log.md and this file. A change to the compiler, its goldens or
 its benchmarks is cloud's, however small it looks. Clay, 2026-09-08: "your PRs
 should only write to gavels and such, and cloud should do the coding work."
 
-One carve-out is mechanical rather than chosen. page_drift fails a pull request
-that adds more than three log entries without touching docs/compiler.html, so a
-batch of rulings cannot land unless the same PR writes the entry the page owes.
-That paragraph is the chat's; anything else on the page is cloud's.
-
 Each session merges its own pull requests on green. Clay named the alternative
 on the same day and is content with either: cloud sweeping and landing what the
 chat opened. This one is in force because it waits on neither session noticing
