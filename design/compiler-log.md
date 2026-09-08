@@ -3495,7 +3495,27 @@ derives. Where a dispatch tie points is the second defect, and it stays open.
 The whole corpus was re-run with the rule in: 155 agree, 38 move, the same
 numbers as without it. It repairs three messages and moves nothing else.
 
-Nothing shipped. The rule is dead code on main — no diagnostic carries a file
-until the attribution patch lands — so it belongs to the reshape's bundle rather
-than to a change of its own. Four patches held; the corpus classification is
-what this entry is for.
+Then the fourth. The tie's span was already an arm's — `b.span`, the second of
+the pair — so the file it named was wrong rather than the line. The walk reaches
+`program.fns` by index, through a group table built earlier, and the attribution
+the walks carry rides on `diag::attributing`, an iterator. An indexed walk never
+touches it, so the diagnostic reads whatever attribution was last set and the
+render falls back to the file it was handed. Taking `b`'s file explicitly at the
+push site fixes it, and all four fixtures then read as the base spells them:
+
+    error[dispatch]: these `open_start?` arms tie: each is the more specific one
+    somewhere, and a call could match both — write the arm that is most specific
+    in every position
+      --> an_arm_set_with_no_settling_arm.kso:7:4
+
+That is a class, not one site. `check_constants` reads `arms[1].span` out of a
+slice it indexed, `check_overlapping_arms` walks a filtered `Vec<&FnDecl>`, and
+`check_overload_ranks` walks `windows(2)` — none of the three goes through the
+iterator, so none of them carries a file either. The corpus surfaced only the
+tie because only the tie has a fixture that crosses files. The other three want
+fixtures before they want fixes.
+
+Nothing shipped. The rules are dead code on main — no diagnostic carries a file
+until the attribution patch lands — so they belong to the reshape's bundle
+rather than to changes of their own. Five patches held; the corpus
+classification is what this entry is for.
