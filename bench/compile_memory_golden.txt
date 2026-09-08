@@ -122,7 +122,14 @@ front_end_rounds=62
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
 # end has that much less to visit. Banked, and it moves the same way as the
 # runtime fall it comes with rather than paying for it.
-front_end_visits=23723
+# 2026-09-08 (the alias pass runs before the whole-program check): visits
+# 23,723 -> 22,426, a FALL of 1,297 or 5.47%, and rounds hold at 62.
+# `enroll_bare` gives every exported declaration of an imported module a twin
+# under its short name, and `canonicalize_bare_aliases` takes most of those
+# twins back out — 83 of the corpus's 394 declarations, all of them, on this
+# corpus. That pass used to run seventeen lines AFTER `check_merged`, so the
+# whole-program check visited 83 declarations the next pass deleted. Banked.
+front_end_visits=22426
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -173,4 +180,9 @@ front_end_visits=23723
 # at 62 and visits at 23,723, which the rows above already record. Written
 # from this container on the licence #1323 established for the two rows that
 # match the runner to the unit.
-compile_peak_bytes=777031
+# 2026-09-08 (the same reorder): compile_peak_bytes 777,031 -> 773,818, a FALL
+# of 3,213 or 0.41%. The 83 twins and everything the check builds about them
+# are gone before the check starts, so the front end holds less at its peak.
+# Written from this container, which this golden's host gate admits for these
+# three rows.
+compile_peak_bytes=773818
