@@ -58,9 +58,26 @@ compiler work: measure, build, PR, merge. The chat owns the interaction
 machinery: gavels, the log, the ledger, and the rules in this file. A session
 should know which it is before it starts editing.
 
+The chat does not write code. Its pull requests touch design/pending-gavels.md,
+design/compiler-log.md and this file. A change to the compiler, its goldens or
+its benchmarks is cloud's, however small it looks. Clay, 2026-09-08: "your PRs
+should only write to gavels and such, and cloud should do the coding work."
+
+One carve-out is mechanical rather than chosen. page_drift fails a pull request
+that adds more than three log entries without touching docs/compiler.html, so a
+batch of rulings cannot land unless the same PR writes the entry the page owes.
+That paragraph is the chat's; anything else on the page is cloud's.
+
+Each session merges its own pull requests on green. Clay named the alternative
+on the same day and is content with either: cloud sweeping and landing what the
+chat opened. This one is in force because it waits on neither session noticing
+the other's work. The sweep in the merge rules below is unchanged and still
+covers every open PR in both repos, so one that ages is landed by whichever
+session reaches it first.
+
 The chat's job when a decision gets ruled: write the ruling into
 design/compiler-log.md, remove the entry from design/pending-gavels.md in the
-same commit, and push. Cite ledger entries by heading, never by a session task
+same commit, push, and merge it on green. Cite ledger entries by heading, never by a session task
 id, because task numbers resolve nowhere outside the session that made them. A
 question that has already been ruled is never re-asked. A performance question
 with no surface area is the implementer's and does not go to Clay at all.
