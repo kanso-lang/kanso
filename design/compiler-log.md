@@ -20,165 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 (twenty-third) — a lambda that captures nothing is a link-time constant
-
-`w_klam17` is 712,277,200 instructions of encodebench, 16.11%, over 11,658,800
-calls at 61.09 apiece. It is the escape fold's lambda — `(a b -> esc_byte a b)`
-in `lib/json/text.kso`, one call per byte of every string that carries an
-escape. Every one of those calls comes from `encode_onto`, because `list/fold`
-and `escape_able` are both inlined into it; the closure call is the only
-indirection left.
-
-Joining the callgrind profile to the disassembly instruction by instruction:
-
-    69a0  push %rbp / %r15 / %r14 / %r13 / %r12 / %rbx    1.00 a call
-    69aa  sub  $0x18,%rsp                                 1.00
-    ...
-    6b0d  the b >= 32 arm, 24 instructions                0.843
-    6c05  mov  %r15b,(%rsi,%rax,1)   ; the byte           0.843
-    7082  three movs, add rsp, six pops, ret              1.00
-
-Fifteen of the sixty-one are the frame: six callee-saved pushes, the stack
-adjustment, and their mirror on the way out. 84.3% of the calls take the arm
-that stores one byte.
-
-### Why the call could not be resolved
-
-`k_call2_fast` reaches the closure through `%fnp = load ptr, ptr %c`, and `%c`
-came from `k_closure_lit`, which fills a mutable global on first visit. LLVM
-cannot know what is in it, so the tag test, the arity test and the call itself
-all stayed. The emitted code says the value never changes: a lambda with no
-captures is the same closure every evaluation, which is why the cell existed.
-
-So the emitter writes the closure as a module constant instead:
-
-    @klam17_cell_env = internal constant %KValue zeroinitializer
-    @klam17_cell_clo = internal constant { ptr, ptr, i64, i64 }
-                       { ptr @w_klam17, ptr @klam17_cell_env, i64 0, i64 2 }
-    @klam17_cell     = internal constant %KValue
-                       { i64 11, i64 ptrtoint (ptr @klam17_cell_clo to i64) }
-
-and the site loads it.
-
-**What actually folds, checked against the shipped binary rather than assumed.**
-The K_CLOSURE tag test folds and goes. The address folds: where the baseline
-loaded the closure pointer from a stack slot, `mov 0x38(%rsp),%r10`, this one
-writes `lea @klam17_cell_clo,%r10`. Two of the program's three call sites
-become `call 6810 <w_klam17>`.
-
-The hot one does not. At 0x61fb, the site the escape fold reaches 11,658,800
-times, the emitted code still reads
-
-    61e4  lea   0x23a65(%rip),%r10   # klam17_cell_clo
-    61eb  mov   0x8(%r10),%rdi       ; the env, loaded
-    61fb  call  *(%r10)              ; the fn, loaded
-
-and the arity is still re-read at 0x6214, `cmpq $0x2,0x18(%rcx)`, from that
-same constant. LLVM resolved the ADDRESS of a constant global and then declined
-to constant-fold three loads out of it. The payload crosses as an i64 by the
-KValue ABI, so the pointer reaches the load as `inttoptr(ptrtoint(@g))`; the
-two cold sites fold through that and this one does not. Why they differ is not
-established here, and this entry does not guess.
-
-`k_deep_copy`'s in-place arm gains `if (cl->ncaps == 0) break;`. It used to
-memcpy a one-slot env and write `cl->env` back into the header when the env did
-not survive, which is a store into `.rodata` now. A closure over nothing holds
-no arena pointer, so there was nothing to evacuate either way.
-
-### What it bought
-
-    encodebench   4,421,026,939 -> 4,390,891,562   -0.6816%
-    jsonbench     1,542,924,905 -> 1,542,924,537   -368
-
-`livebench` is the other program that runs this fold, over `lib/json` rather
-than the frozen snapshot, and it reads 4,400,130,843 here against CI's golden
-of 4,432,419,027 — a fall of 32,288,184, 0.728%. That comparison crosses hosts,
-which is worth 23,339 instructions on encodebench, 0.0005%. `basket` falls
-4,090 and `pendbench` 7,757, both at the noise of that offset: eight
-capture-free lambdas in basket and five in pendbench, none of them in a loop.
-
-`w_klam17` itself does not move: LLVM declines to inline 240 instructions of
-jump table into a 606-instruction loop, so the frame is still paid. The whole
-of the encode fall is `encode_onto`, 1,730,978,829 -> 1,703,308,420, and joined
-instruction by instruction it is three things rather than a devirtualization:
-the `k_closure_lit` call and its first-visit branch leave the loop, the
-accumulator's tag test folds, and the loop stops reloading the list pointer
-from `0x50(%rsp)` every iteration because the frame has a register to spare —
-`sub $0x188,%rsp` becomes `sub $0x178`. The loop body is 33 instructions a byte
-where it was 34. The decoder has one capture-free lambda and it is not in a
-loop.
-
-`perm_allocs` falls in all ten cost goldens — two allocations per capture-free
-lambda, the KClosure and its one-slot env, now in `.rodata`. Emitted calls fall
-in every program: the decoder 1,847 -> 1,845, encodebench 1,648 -> 1,646,
-basket 1,278 -> 1,270. Three constants replace one call, so `lines` falls where
-the program has few such lambdas and rises slightly where it has many.
-
-The fifteen frame instructions are still there, and #290 is what would take
-them: `preserve_none` on the wrapper, blocked on LLVM 19.
-
-### CI's rows, and the one that rose
-
-    encodebench   4,421,003,600 -> 4,390,892,021   -0.6811%
-    livebench     4,432,419,027 -> 4,400,131,256   -0.7285%
-    oneshot          24,190,898 ->     24,109,317  -0.3373%
-    deepbench       705,892,821 ->    704,511,486  -0.1957%
-    digestbench      76,854,629 ->     77,175,692  +0.4177%
-
-Eleven of the thirteen fall. escapebench and indexbench rise by 28 each, which
-is one closure built once instead of a first-visit branch taken once.
-digestbench rises 321,063, and its `.text` rises 192 bytes over the same
-change while its emitted lines fall by seven — the direct call changes what
-LLVM inlines there, downstream of anything the emitter wrote. Welfare weighs
-all thirteen and reads 75.30 -> 75.31, so the trade is taken. `compile_instructions`
-rises 2,728, 0.0065%, which is what any edit to src/codegen.rs costs.
-
-### And the wrapper still cannot be inlined
-
-The direct call raises the obvious next question: `w_klam17` has one hot caller
-now, so mark it `alwaysinline` and let the loop swallow it. Built and measured:
-encodebench reads **4,390,891,562, byte-identical**. The IR changes — the
-wrapper is inlined into `encode_onto` and the tailcc body is called from there,
-rather than the body being inlined into the wrapper — and the machine
-instruction count does not move at all, because the frame is paid either way.
-Reverted. The fifteen instructions are #290's.
-
-### The four that rose, by the keys the gate reads
-
-    work_digestbench       76,854,629 ->  77,175,692   +0.4177%
-    work_escapebench      114,584,648 -> 114,584,676   +28
-    work_indexbench         4,691,237 ->   4,691,265   +28
-    compile_instructions   42,089,618 ->  42,092,346   +0.0065%
-
-`work_escapebench` and `work_indexbench` gain 28 apiece, which is one closure
-built once at link time instead of a first-visit branch taken once at run time.
-`compile_instructions` is what any edit to src/codegen.rs costs: the emitter is
-the compiler, so its own bytes and the layout under them move whether or not
-the decision this row counts changed. `work_digestbench` is the one with no
-account: its emitted lines FALL by seven over the same change while its `.text`
-rises 192 bytes, so the 321,063 is a choice LLVM made downstream of the direct
-call at digestbench's two cold sites, and this entry does not guess further.
-Welfare weighs all thirteen work rows and the three compile rows together and
-reads 75.30 -> 75.31, so the corpus is ahead and the trade is taken.
-
-### What is left, priced
-
-`encode_onto`'s sixty spine instructions — the ones that run on essentially
-every one of its 10,581,600 calls — are 672,571,200 instructions, **15.32% of
-encodebench**. Fifteen of them are the frame: six callee-saved pushes, a
-376-byte stack adjustment, and their mirror on the way out, 158,724,000
-instructions or 3.61%. #338 declined outlining the arm that sizes that frame at
-+2.5582%, so the shape is known and priced.
-
-The rest is the fold loop, which runs 1.102 times per `encode_onto` call and
-carries the three unfolded loads above. Two of them are the closure's fn and
-env, which nothing about this program can change at run time; a third is the
-arity. That is three loads and a compare, 46.6M instructions, 1.06% of
-encodebench, sitting behind an `inttoptr(ptrtoint(@g))` the optimizer resolves
-for the address and not for the contents.
-
----
-
 ## 2026-09-06 (twenty-fourth) — the fold asks the length twice, and the tag test is why
 
 `encode_onto`'s escape fold reads the same header field twice per byte. The
@@ -3926,3 +3767,52 @@ binary or the gate's own number.
 
 What remains true after all of it: the emitted half is the larger half, and
 nothing found so far in it is waste LLVM has not already collected.
+
+## 2026-09-08 — the unboxed heap parameter, built and declined at ninety-five per cent
+
+The (sixth) entry ended on the emitted half being the larger one and nothing
+found in it being waste. This is the first thing in it that was not already
+collected by LLVM, and it is worse than what it replaced.
+
+The measurement that opened it. Reading executed instructions rather than static
+ones — the distinction the (fifth) and (sixth) entries were about — the emitted
+half spends 12.52% of its work on register-to-register moves against the
+runtime's 7.51%, on the same compiler at the same settings. Sorting those moves
+by their distance to the next call separates the two explanations: 48.8% of the
+emitted half's sit within ten instructions of a call, where 69.2% of the
+runtime's sit far from any call. That is argument marshalling on one side and
+ordinary register allocation on the other, and the marshalling band is
+81,905,302 instructions, 3.41% of the run program.
+
+The emitter already answers part of it. A parameter inference proves is exactly
+`int` crosses the tailcc edge as a raw i64 and is rebuilt at entry from a
+constant tag, and SROA folds the rebuild against both the body and the caller.
+Instrumenting the set of every parameter over the run program's 1,206 slots:
+253 already travel that way, and 298 more hold exactly one tag and do not —
+list 86, string 75, bytes 73, record 31, fn 27, map 6.
+
+Two of those six are not eligible and the reason is worth keeping. A subtype is
+a `K_SUB` wrapper whose own tag is 15 whatever it holds, so `rec` is the bit a
+subtype wears and a rebox at 7 would hand the body a `KSub*`; `tag_switch_shape`
+already refuses on that same condition. And `fn` covers two runtime tags,
+`K_CLOSURE` and `K_FNREF`, so no single constant stands for it. That leaves
+list, string, bytes and map, and only where the program declares no subtype at
+all — which the run program does not, since its dispatch is a tag switch.
+
+Built that way, unboxed parameters go from 289 to 549 of 1,432, and the program
+answers the same bytes: `runbench 46013475` either way. It retires
+**4,690,139,807** instructions against 2,399,081,635, which is ninety-five per
+cent more.
+
+The profile says where, and it is not in the marshalling. Nine functions that
+cost nothing at all before now cost something: `d_json/scan_at_5'2` at
+325,198,863, `d_escape/filled_3'2` at 219,379,776, `d_json/obj_value_4'2` at
+136,746,522. A function with zero self cost was being folded into its caller or
+its tail cycle; changing its parameters from a boxed pair to raw words stopped
+that, and the calls it had been dissolved into came back with their frames. The
+2026-08 `noinline` reading found the same shape from the other direction.
+
+So the marshalling is real and the obvious way at it costs thirty times what it
+saves. What the emitter does today is not a narrow rule that nobody widened —
+it is the widest rule that keeps the inlining, and `int` qualifying alone is the
+point rather than an oversight.
