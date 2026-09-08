@@ -138,11 +138,18 @@ work_gate = "sh scripts/gates/instructions.sh"
 
 front_gate = "sh scripts/gates/compile_instructions.sh"
 
+# The entry path's own row. It counts under callgrind exactly as the two above
+# do, so a runner the golden does not name refuses it the same way, and a
+# refusal reported as a regression is the failure this list prevents.
+entry_gate = "sh scripts/gates/entry_instructions.sh"
+
 bound_a = bound work_gate why_exact
 
 bound_b = bound front_gate why_exact
 
-host_bound = [bound_a bound_b]
+bound_c = bound entry_gate why_exact
+
+host_bound = [bound_a bound_b bound_c]
 
 fn host_bound? gate
   list/any? host_bound (e -> e.gate == gate)
@@ -375,6 +382,20 @@ compile_ir = row
   "sh scripts/gates/compile_instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "compile_ir_unwatched")
+  release
+
+# The same shape for the ENTRY path, which the row above cannot reach: it
+# checks a directory, and a directory takes compile_module_inner. The mutation
+# asks the entry's whole-program check twice, and the two rows separate
+# cleanly on it -- entry_instructions 165,183,406 -> 190,382,616 (+15.25%) in
+# the box, compile_instructions byte-identical at 49,162,592. A vein whose
+# defects another vein already catches would not be worth its callgrind run.
+entry_ir = row
+  "work on the entry path, where the compile row measures a module"
+  false
+  "sh scripts/gates/entry_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_entry_program_is_checked_twice")
   release
 
 entry_rewritten_twice = row
@@ -1124,7 +1145,7 @@ rows_b1c = text/concat rows_b1b [instructions_host text_host]
 
 rows_b1d = text/concat rows_b1c [compile_allocs compile_allocs_host]
 
-rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host]
+rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host entry_ir]
 
 rows_b1e0 = text/concat rows_b1d2 [compile_ir_one_value]
 
