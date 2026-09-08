@@ -192,31 +192,70 @@ supersedes the three-chain-words form.** The call-site story the book
 owes is now: `<t>effect` as a first-class passable outcome type;
 `bind`, `annotate`, `rescue` as ordinary effect-first functions and the
 sole eliminators; no automatic bind — a box where the unwrapped type is
-expected is refused, and propagation is bind's contract. Half one (ch04
-"nothing is asked of the signature") DOES NOT survive as written: its
-short-circuit-at-the-call story describes the retired railway and needs
-rewriting on explicit elimination. Half two lands when the typed-effect
-surface is implemented, present tense as always. compiler.html entry 23
-owes a rewrite or retirement in the same campaign.
+expected is refused, and propagation is bind's contract.
 
+**BOTH HALVES WAIT ON THE IMPLEMENTATION. Measured 2026-09-08 on
+`2abcedaf`.** Since 2026-08-29 this entry has said that half one — ch04's
+"nothing is asked of the signature" — does not survive as written and can
+be rewritten ahead of the surface. Two probes say otherwise. A lambda
+handed a failing argument does not run its body, and the call answers the
+failure: that is the railway ch04 teaches, live, word for word. And
+`<int>effect` is not spellable: the canonical-spacing rule refuses the form
+outright, and no checker ever sees a type, because there is no `effect` type
+in the tree for one to see. The gavel retired the design. The engines still
+run the railway, and the book is present tense, so a rewritten ch04 would
+describe a language nobody can run.
 
-### An assert hako
+What has landed is the smaller part, and the book already has it: `bind`,
+`annotate` and `rescue` ship on all three engines (kanso#1116), and ch05
+teaches them as ordinary two-argument functions taking the effect first.
+Missing is the type — passing a box, and the refusal of a box where the
+unwrapped value is expected.
 
-**Cited: the licence half is ruled — archive 2026-08-17, assertions are
-ordinary foreign rescue. What is open is the surface shape only.**
+**RECOMMENDATION: hold until `<t>effect` exists, then run the campaign
+once.** ch04, ch05's framing and compiler.html entry 23 move together in
+that pass. Nothing here is a question for Clay; the entry stays as the
+record of what the book owes and what it is waiting for.
 
-A real assertion library in the rspec direction Clay sketched —
-`(expect 1) . to (equal x)` — as its own small surface design, never
-improvised inside a test fix. Its arms are foreign to every tested hako,
-so the err license needs nothing special. Queued 2026-08-17.
+### The maps parse is 100% of the compile row's binary-to-binary drift
 
-**RECOMMENDATION: build it as its own design pass. The gate is lifted.**
-The matcher surface reads failures, so its shape depended on how a
-failure is spelled — that is ruled (three-forms gavel, 2026-08-26) and
-built on all three engines (kanso#1116), so designing it now cannot mean
-designing it twice. `rescue` is the word a matcher's own failure door
-would use.
+**Cited: the ruling of 2026-09-03 (NO EXCLUSION; the toggle dropped, sorts
+plus `setarch` shipped instead, kanso#1234) and the archive entry that
+measured this — "the mechanism, named and accounted to the instruction",
+which closes by saying the fact goes to the gavel rather than into a gate.
+Nothing in a design doc or a spec speaks to it.**
 
+**THE MECHANISM IS NAMED NOW, AND IT IS A TERM ALREADY RULED ON.** callgrind's
+call graph: `std::rt::lang_start_internal` calls `pthread_getattr_np`, which
+parses `/proc/self/maps` with `getline` and `sscanf` to place Rust's stack
+guard. Splitting each profile into that parse and the program:
+
+    binary                      row          maps parse   the program
+    9fcc6686dc47 baseline       42,344,081      112,580    41,878,959
+    45c6dbed10bb +64 KiB .bss   42,346,211      114,710    41,878,959
+    2a4e10fb2116 100 fns        42,345,904      112,586    41,880,776
+    5e73453bcc7b 200 fns        42,343,660      110,317    41,880,801
+
+The `.bss` probe adds no code and the compiler's work is **identical to the
+instruction**. All 2,130 of the row's move is the parse.
+
+kanso#1234 found this term and the ruling of 2026-09-03 was NO EXCLUSION, so
+**nothing here asks to exclude it and nothing has been changed.** The new fact
+is its size: 0.27% of the row and 100% of its binary-to-binary drift, with
+`std::rt::lang_start::{{closure}}` sitting still through a change that moved the
+published row by 2,130. The ruling was made when the term was known to exist
+and not known to be the whole of the drift, which is the question this entry
+asks: does the 2026-09-03 ruling stand on the new number?
+
+**RECOMMENDATION: it stands, and this entry closes on a word.** The ruling
+was that the row counts what the binary costs to start, term and all, and
+0.27% is not a reason to reopen a decision made on principle. What the
+number does change is how a session reads a 2,130 move on the row: as the
+loader's, until `lang_start::{{closure}}` says otherwise.
+
+**FILED WITHOUT A HEADING until 2026-09-08**, appended under Parked, where
+the ledger's own navigation could not see it — sessions cite entries by
+heading, STATUS.md indexes by heading, and neither could reach this one.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
@@ -248,24 +287,3 @@ header so a reader looking for the campaign finds where it went.
 - Survivor cap 4× block threshold: the multiplier is a judgment call;
   the principle (the dance's transient stays at threshold scale) is in
   the log.
-
-**THE MECHANISM IS NAMED NOW, AND IT IS A TERM ALREADY RULED ON.** callgrind's
-call graph: `std::rt::lang_start_internal` calls `pthread_getattr_np`, which
-parses `/proc/self/maps` with `getline` and `sscanf` to place Rust's stack
-guard. Splitting each profile into that parse and the program:
-
-    binary                      row          maps parse   the program
-    9fcc6686dc47 baseline       42,344,081      112,580    41,878,959
-    45c6dbed10bb +64 KiB .bss   42,346,211      114,710    41,878,959
-    2a4e10fb2116 100 fns        42,345,904      112,586    41,880,776
-    5e73453bcc7b 200 fns        42,343,660      110,317    41,880,801
-
-The `.bss` probe adds no code and the compiler's work is **identical to the
-instruction**. All 2,130 of the row's move is the parse.
-
-kanso#1234 found this term and the ruling of 2026-09-03 was NO EXCLUSION, so
-**nothing here asks to exclude it and nothing has been changed.** The new fact
-is its size: 0.27% of the row and 100% of its binary-to-binary drift, with
-`std::rt::lang_start::{{closure}}` sitting still through a change that moved the
-published row by 2,130. The ruling was made when the term was known to exist and
-not known to be the whole of the drift, and this entry is where that goes.

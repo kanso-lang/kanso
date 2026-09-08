@@ -3809,3 +3809,89 @@ stop costing what they cost. Not a better threshold.
 `classify`, and `report()` never passes through the `imported` filter -- so the
 beat report answered three questions this session that it cannot answer, and the
 emitted-IR diff is what caught it each time. Diff the IR first.
+
+## 2026-09-08 (fourth) — the ledger held five entries and the queue was reported as three
+
+Clay, on being told the queue was down to his three gavel questions: *"you
+have nothing else to work on? don't we have tons of open gavels?"* He was
+right, and the mistake has a shape worth recording: the answer was read off a
+session's private task list rather than off `design/pending-gavels.md`, which
+is the file the project designates as the single source of truth. A task list
+resolves nowhere but its own session. The ledger held five.
+
+Two of the five were nobody's task, and neither turned out to be work.
+
+**The assert hako shipped five days before this session reported it open.**
+The entry carried "RECOMMENDATION: build it as its own design pass. The gate
+is lifted" — and `lib/expect` was built on 2026-09-03 as kanso#1233
+(`5b0f2eb1`): `expect`, `to`, `equal`, `be_true`, fifty-four lines, no builtin
+and no runner change. The log records the build at "2026-09-03 (eighth) — what
+a failing test is allowed to tell you", and that entry opens by citing this
+very ledger line. So the work was done BY a session reading the entry, and the
+entry stayed. The lifecycle says a settled item leaves the file in the same
+commit as its record; a built item has no ruling to record, which is the gap it
+fell through. It leaves now.
+
+**The book's boundary-language entry cannot start, and its premise about why
+was backwards.** Since the effects-are-types gavel of 2026-08-29 the entry has
+said half one — ch04's "nothing is asked of the signature" — does not
+survive as written and can be rewritten ahead of the typed-effect surface,
+with half two waiting. Two probes on `2abcedaf` say the opposite:
+
+    print ((n -> 99 + n * 0) (1 / 0))
+    error[value]: division by zero
+
+The body never runs and the call answers the failure. That is the railway ch04
+teaches, in the words it teaches it. And `<int>effect` is refused by the
+canonical-spacing rule before any checker is reached, because no `effect` type
+exists in the tree for one to reject — `grep effect src/parser.rs src/ast.rs`
+is empty, and `bind`/`rescue`/`annotate` are builtins of arity two rather than
+eliminators of a type.
+
+So the gavel retired a design the engines still run, and the book is present
+tense. Rewriting ch04 onto explicit elimination would document a language
+nobody can run. Both halves wait on the same implementation, and the
+campaign — ch04, ch05's framing, compiler.html entry 23 — is one pass after
+the surface lands rather than two around it. What HAS landed is already in the
+book: the three words ship on all three engines (kanso#1116) and ch05 teaches
+them as ordinary two-argument functions taking the effect first. Missing is
+the type.
+
+**STATUS.md's count of the ledger was stale for the second time in four days,
+and is now pinned rather than recalled.** The sentence read "Six questions
+wait — none blocking, six open" while the ledger held three entries under a
+heading named Blocking and one under Open. Four of the six it named were gone:
+the machine-code-size term and the two-value chip row were ruled on 2026-09-05,
+the granted-baseline question was closed as moot by the 2026-09-06 gavel, and
+the assert hako was built. The sentence itself carries a note about having gone
+stale once before, when it said nineteen against a ledger of three — which is
+the tell that recounting by hand is not a fix. A new spec,
+`tests/the_status_index_counts_the_ledger.rs`, counts the `###` headings
+under each `##` section of the ledger and compares them to the words
+STATUS.md writes: the same shape as
+`every_counter_gate_is_in_the_sweep`'s pin on CLAUDE.md's cost-golden count.
+Watched red three ways before it passed: a stale total, a stale blocking/open
+split, and an entry leaving the ledger with STATUS.md unchanged.
+
+**A third find, from sweeping the rest of the file for the same shape.** The
+Parked section — "on the record, no action" — carried a whole entry appended
+under it with no `###` heading of its own: callgrind's attribution of the
+compile row's binary-to-binary drift to glibc's `/proc/self/maps` parse, 0.27%
+of the row and 100% of its drift, closing with "the ruling was made when the
+term was known to exist and not known to be the whole of the drift, and this
+entry is where that goes". It was filed deliberately, by the archive entry of
+the same measurement, and then nothing could reach it: sessions cite entries by
+heading, STATUS.md indexes by heading, and it had none — under a section whose
+heading says nothing there is waiting. Filed and invisible at once.
+
+It gets a heading now, under Open, with the recommendation the ledger's own
+rules require: the 2026-09-03 no-exclusion ruling stands, because it was made
+on principle and 0.27% is not a reason to reopen it; what the number changes is
+how a session reads a 2,130 move on the row, as the loader's until
+`lang_start::{{closure}}` says otherwise. Clay can close it on a word.
+
+The second test in the new spec is that hole. Parked is one line per parked
+item, so a non-blank, non-bullet line at column zero under it is an entry
+nobody can cite. Watched red by putting the block back.
+
+Nothing here is a question for Clay. The three blocking entries stand as filed.
