@@ -1,5 +1,15 @@
 #!/bin/sh
-# The library, staged without its tests, at a fixed path.
+# The compile corpus and the library it imports, staged without the library's
+# tests, at a fixed path.
+#
+# THE WORKLOAD IS NAMED, NOT INHERITED. Since 2026-09-08 the three compile
+# gates check bench/compile_corpus rather than lib/json, because a term
+# measured on a library moves when that library changes its imports:
+# kanso#1291 dropped std/list from lib/json and the compile rows halved with
+# the compiler byte-identical. The corpus names what it imports, so a row
+# moves by a compiler change or by an edit to the corpus itself. It lives
+# under bench/ rather than lib/ because a benchmark is not the library, and
+# that is why it needs a staging line of its own below.
 #
 # Two instrument faults, one staging step.
 #
@@ -25,3 +35,4 @@ mkdir -p "$box"
 cp -R lib "$box/lib"
 find "$box/lib" -name '*_test.kso' -delete
 cp ./target/release/kanso "$box/kanso"
+cp -R bench/compile_corpus "$box/compile_corpus"
