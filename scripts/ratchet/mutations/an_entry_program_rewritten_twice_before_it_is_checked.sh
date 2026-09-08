@@ -16,16 +16,17 @@
 #
 # THE ANCHOR IS THE CHECK LINE. `check::check_merged` is called four times in
 # src/lib.rs and `finish_program` many more, so neither is a guard that can
-# refuse. `check::check_merged(&merged, true)` appears exactly once — the
-# other three pass `require_entry` or `false` — and the count is asserted
-# before anything is inserted.
+# refuse. Since kanso#1335 the entry path calls `check_merged_after_aliases`
+# instead — the alias pass runs in front of it now and hands it the record —
+# and that name appears exactly once in the file, which is what makes it a
+# usable anchor. The count is asserted before anything is inserted.
 set -e
-target='    let merged_diags = check::check_merged(&merged, true);'
+target='    let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten);'
 n=$(grep -cF "$target" src/lib.rs)
 [ "$n" -eq 1 ] || { echo "the entry check moved or multiplied ($n); rewrite this" >&2; exit 1; }
 awk '
   { print }
-  index($0, "let merged_diags = check::check_merged(&merged, true)") {
+  index($0, "let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten)") {
       print "    rewrite::pass();"
       print "    finish_program(&mut merged);"
       print "    rewrite::pass();"
