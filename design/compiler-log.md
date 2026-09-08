@@ -3809,3 +3809,231 @@ stop costing what they cost. Not a better threshold.
 `classify`, and `report()` never passes through the `imported` filter -- so the
 beat report answered three questions this session that it cannot answer, and the
 emitted-IR diff is what caught it each time. Diff the IR first.
+
+
+## 2026-09-05 — gavel: corpus first — a blind corpus is repaired, never excused
+
+On "The welfare model cannot see the yield hole, because the corpus
+was written around it" (filed by #1240). The fix carries a chain's
+yield per declaration, closing a hole where eight std effect wrappers
+(os/read_file!, the net wrappers, os/kill) ran a loop on the grow-only
+arena — a natural read loop paid 260 MB against 2 MB. It costs the
+front end +0.2587% and every runtime counter is byte-identical,
+because jsonbench had been hand-written to route around the hole and
+the corpus was measuring the workaround. Welfare falls 0.008.
+
+Clay declined the entry's recommendation (move the floor with "the
+corpus is blind" as the reason). Ruling: **"the corpus is blind" is
+never a reason to lower the floor; it is a corpus defect, and the
+remedy is the one #1215 already set** — add the benchmark the
+objective could not see, baseline it forward, and let the fix score.
+Concretely:
+
+1. The fixture the PR already carries — the natural read loop
+   (reading_insisted.kso: 1 -> 201 beat iterations, 260 MB -> 2 MB)
+   — is promoted into the benchmark corpus as a run-speed and
+   run-memory shelf under the granted-baseline machinery.
+2. Its baseline is measured on the PRE-fix code, so the objective
+   sees the hole.
+3. The fix lands on top; the change scores as the memory win it is;
+   the floor RISES and is set in the same PR.
+
+The golden half of the doctrine was already met (the fixture was
+watched red first); this is the objective half. Clay's framing: the
+corpus must incorporate the behaviour being fixed so it stands as a
+test against the bug going forward — goldens catch a regression,
+the objective prices one. The ledger entry leaves with this commit.
+
+## 2026-09-05 — gavel: no machine-code-size term in welfare
+
+On "Should the welfare index carry a term for machine-code size?",
+Clay: "guessing is not okay so I guess no size term." No term.
+`.text` stays watched exactly, per program, in its own vein that
+refuses a silent move; the welfare sum exists to catch trades between
+dimensions, and one observed trade (kanso#1247's always_inline, 34,320
+bytes for tens of millions of instructions) is not evidence enough to
+weigh one. A weight guessed rather than argued from cases would price
+every future inline decision by the guess. If cases accumulate, the
+way in is a satiation and a weight argued from them, as a weights
+change. The ledger entry leaves with this commit.
+
+## 2026-09-05 — gavel: one row, one value, and every move is the compiler's
+
+On "Should a chip row still be allowed to pin two values?", Clay
+declined both the pinned pair and the proposed binary-sha stamp, and
+set the model the vein works under: "you have done enough work in the
+process to be confident that it is deterministic and so you treat it
+as such. if it got better then good if it got worse then bad and you
+assume it's always because of the compiler. but then of course you
+always just check to see if it's consistent. and if it's not you say
+okay well now we have to look for other sources of inconsistency and
+get ourselves back to a state where we're confident we've nailed them
+all."
+
+The ruling:
+
+- **One row, one value.** The pinned-pair mechanism and the per-chip
+  key retire. `bench/compile_instructions_by_cpu.txt` collapses to a
+  single number; the gate refuses any second value.
+- **Every move is attributed to the change under test.** A rise is a
+  regression to explain, a fall is a win to bank — the ordinary
+  ratchet — with no category of "the measurement drifted." The
+  measurement was made consistent (the row counts from the runtime's
+  entry closure inclusive, loader and stack guard excluded, per the
+  2026-09-04 build) and seven chip keys across two binaries agree to
+  the instruction on it; that is the evidence the model rests on.
+- **Consistency is checked, not assumed silently**: the same build
+  must reproduce its number on any runner and any run. A
+  reproduction failure — the number moving with no compiler change,
+  or two chips disagreeing on one binary — is not a mode to record
+  and not a pair to pin; it halts the vein and is hunted until the
+  source is found and removed, as the /proc/self/maps term was. The
+  vein returns to service when reproduction holds again.
+- No binary-sha stamp: under this model there is nothing for it to
+  distinguish. A move with no compiler change is by definition a
+  consistency failure, and the response to that is the hunt above.
+
+The entry leaves the ledger with this commit; its contradiction about
+the 508 (one binary or two) becomes moot, since neither reading
+licenses a pair.
+
+## 2026-09-06 — gavel: bump clang to 19, with feature detection
+
+On #290's toolchain path, Clay: "yes bump clang." CI's pinned compiler
+moves from Ubuntu clang 18.1.3 to LLVM 19 or later so the emitter can
+use `preserve_none`, the calling convention built for the shape of
+kanso's hot dispatchers (tail-call-heavy, paying a callee-saved
+prologue on every entry): priced at 2.84% of encodebench and the named
+remedy for the prologue cost in both `encode_onto` and `parse_value`.
+Two conditions ride with it:
+
+- **Feature detection, so no user gains a requirement.** The emitter
+  uses `preserve_none` only when the clang it invokes accepts it, and
+  falls back to the current convention otherwise. A user on clang 18
+  still builds and only misses the 2.84%. The bump is CI's and the
+  goldens', never the language's.
+- **Every compile vein re-sits in the one PR that bumps**, with the
+  sentence the veins' own headers require for a toolchain move, and
+  every measured-on line updated. Instruction and machine-code rows
+  will move together; that is the expected shape and is said once.
+
+## 2026-09-06 — gavel: a whole float keeps its point at every magnitude
+
+On #300 (a whole float above 1e15 renders as an integer), Clay: "yes
+float point at all magnitudes." The rule "a whole float renders as its
+digits and `.0`" — the golden's own name — held only below 1e15, where
+the integer cast is exact; above that the shortest-round-trip path
+printed `1000000000000000` with no point, and the value's identity as
+a float vanished at an implementation boundary. Ruled: a float's
+rendering always carries a `.` or an `e`, whatever its magnitude.
+Where the shortest form has neither, `.0` is appended. Both engines
+already agreed on the old behaviour, so this is a surface change
+pinned by a differential golden across all three, and
+`a_whole_float_keeps_its_point` extends past the boundary it was
+named for. The filing for #300 is owed to the ledger by heading; this
+entry stands as its ruling regardless.
+
+## 2026-09-06 — gavel: one consolidated run program is the objective
+
+Asked about escapebench pinning the beat's cost and none of its
+benefit, Clay: "there shouldn't be separate benchmarks, there should
+just be one consolidated program on which we test performance across
+the board." Gaveled. The fleet of run shelves — jsonbench,
+encodebench, widebench, deepbench, pendbench, oneshot, basket, scan,
+digest, escape, index, live — stops being the objective's inputs. In
+their place:
+
+- **One consolidated run program.** Its retired instruction count is
+  the run-speed term; its peak memory is the run-memory term. The
+  workload mix is chosen deliberately to reflect real use — decode and
+  encode as the bulk, the stress shapes (wide, deep, pending, escape,
+  index, digest, scan) present at realistic proportion — and written
+  down in the program's own header so the mix is a decision on the
+  record, never an accident of accretion.
+- **Trades are seen in one place.** A mechanism's cost and its
+  benefit land in the same instruction count and the same peak; a
+  phase weighs by the work it is, so a 172x win in a phase that is 1%
+  of the program moves the total by what it is worth.
+- **Per-phase counters stay as diagnostics**: goldens per phase that
+  say where a move came from and catch a stress shape regressing
+  quietly. The sum is the objective; the terms are diagnostics, one
+  level down.
+- **Peak means peak.** The program's peak is its worst phase's, and
+  that is what "how much memory does this workload need" means; a
+  lesser phase's memory improvement reaches the objective when it
+  becomes the worst, and the per-phase peak goldens keep it visible
+  meanwhile.
+- **Adding a phase is a definition change**: the floor re-sets once,
+  with the reason, in the PR that adds it. No granted baselines, no
+  entry standing, nothing enters satiated.
+- **Superseded**: the advertised-versus-guards split of the weights
+  gavel (2026-09-02) — workloads now weigh by their share of the
+  program; the granted-baseline machinery for run counters; the
+  per-shelf entries #317 (escapebench) and #319 (entry standing),
+  which are moot under one program. The weights (0.30 / 0.26 / 0.32 /
+  0.12) and satiations stand; only what the run terms read changes.
+  The compile side already measures one program and is unchanged.
+- The switch is a definition change: recorded here, the floor re-set
+  in the same PR, and history.jsonl's welfare column rewritten once
+  per the 2026-09-03 directive.
+
+## 2026-09-06 — directive: the framework's language features wait for the language
+
+Clay, on the convention-over-configuration primitives (a function
+value that knows its name, a module's exports as a map, the route
+table as a dispatch group): defer them "until we've got the language
+as currently specified done to the best of our ability — once it's
+optimized and debugged as far as we can get it," which he estimates at
+a couple of weeks. So the parked note carries a DEFERRED marker and
+the order of work is fixed: finish and polish what is already ruled —
+the effects-are-types migration, the fused operators, whole-cohort
+block-born, the growable partial, the suffix contracts, the
+consolidated run benchmark, the clang 19 bump, the book rewrite — then
+the serve campaign and the framework primitives, reopened by Clay and
+not by a session's initiative. A session that finds itself with no
+ruled work left reports that rather than starting this.
+
+## 2026-09-07 — gavel: the welfare history's baseline, after the one-program gavel
+
+The ledger entry "The welfare history's baseline, after the one-program gavel"
+(kanso#1289) asked four questions. Clay ruled all four in one line: "I'll go
+with all your recommendations." The recommendations he took are the ones set
+out to him in chat, which differ from the ledger's on one point, and the
+difference rests on a fact the ledger got wrong, so both are recorded here.
+
+**The ledger's premise was wrong on which counters the old rows carry.** It
+said 426 of 500 rows carry `encode` alone. Read off origin/perf-history
+(history.jsonl, 500 rows): from row 70 (2026-08-10) every row carries four
+run-side instruction counters — `instructions`, which is the DECODE row and
+was never named as such, plus `encode_instructions`, `oneshot_instructions`
+and `basket_instructions`. The eight-phase set begins at row 446 (2026-09-03)
+and `run_instructions` at row 494 (2026-09-06). "Encode alone" was a key-name
+mapping error: the decode counter's unprefixed key was not recognised as a
+phase. A base built from four of the eight phases, two of them the largest
+shares of runbench, is a reconstruction; a base built from one would have been
+a guess, and that guess was the reason the ledger recommended 2026-09-03.
+
+**Rulings.**
+
+- (a) **Share-weighted.** Each phase's ratio to the anchor, weighted by
+  runbench's own measured shares, calibrated to equal runbench at the
+  changeover. A raw sum re-weights the objective away from the mix the
+  one-program gavel ruled, and hides indexbench's 488× behind encode's
+  repetition count.
+- (b) **Baseline at the earliest reconstructable row, 2026-08-10 (row 70),**
+  with the key mapping fixed: `instructions` is decode. A row's shares are
+  renormalised over the phases it carries, so a four-phase row is scored on
+  the four and an eight-phase row on the eight, and no phase is extrapolated
+  from another. The 69 rows before it carry no run counter and stay unscored.
+- (c) **`run_peak_bytes` is based at today**, and the floor file says so in a
+  comment beside the number, until runbench has peak history of its own. The
+  earliest phase peak is 2026-09-03 and has not moved, so there is nothing
+  to reconstruct.
+- (d) **The compile rows keep their accumulated baselines.** The gavel
+  re-defined the run side and said nothing about the compile side.
+
+**What follows.** The history column is rewritten once, in place, under this
+definition (the 2026-09-06 directive stands: one welfare line on the chart,
+no replayed-versus-recorded pair), the floor is re-set from the rewritten
+column, and the ledger entry leaves in this commit. The rewrite is cloud's;
+this entry is the ruling it was waiting on.

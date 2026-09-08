@@ -55,59 +55,6 @@ went to the log rather than here.
 implementer's, per this file's own charter. The log carries the
 research mandate it left with.)
 
-### The welfare history's baseline, after the one-program gavel
-
-**Cited: the 2026-09-06 gavel ("the objective measures ONE consolidated
-run program", log entry of that day, kanso#1284) and the directive that
-followed it the same day: rewrite welfare history under the new
-definition, instructions as the sum of the phase counters, peak as the
-max of the phase peaks, baseline at the earliest reconstructed row,
-re-set the floor. The #1284 entry left one marker OPEN -- whether the
-compile rows re-baseline too. The archive holds the precedent for the
-method (#729, #741, #746: "re-baselined so the corpus change banks
-nothing", each scaled by the measured factor) and nothing on which row
-the base sits at. No design doc and no spec speaks to it.**
-
-Carrying out the directive measured four things, from origin/perf-history
-(500 rows) and bench/welfare_floor.json, and three of them need a word:
-
-1. The 75.50 -> 51.89 cliff is the run baseline re-based to today, not the
-   chart: `run_instructions` and `run_peak_bytes` are based at their own
-   current readings, so both run terms score at exactly 1.0 and every
-   accumulated runtime win is discarded, while the three compile rows keep
-   real history (compile_instructions 56,563,967 -> 42,061,735, ratio 1.34).
-2. All eight runbench phases map one-to-one onto an old counter, but the
-   repetition counts were chosen to hit target shares, so a raw sum has a
-   different mix from runbench: encode is 53.16% of the raw sum against
-   34.43% of runbench, index 0.06% against 4.97%, digest 0.93% against
-   5.05%, decode 18.83% against 34.54%. Under a raw sum indexbench's 488x
-   (#1172) is invisible. A share-weighted index -- each phase's ratio to
-   the anchor, weighted by runbench's own measured shares, calibrated to
-   equal runbench at the changeover -- reproduces the ruled mix.
-3. Only 48 of 500 rows carry all eight phase counters (2026-09-03 on);
-   426 carry `encode` alone, the earliest among them. Based at the
-   earliest row overall (2026-08-10, one phase) the reconstruction reads
-   2.1535 against today; based at the earliest eight-phase row
-   (2026-09-03) it reads 1.3166 share-weighted, 1.3537 raw. The literal
-   directive gives the first, resting entirely on encodebench
-   extrapolated to a mix it is a third of.
-4. The peak half recovers nothing: the earliest row carrying any phase
-   peak is 2026-09-03, its max is scan_peak_bytes = 198,180,864, and that
-   counter has not moved all window, so max-of-phase-peaks reconstructs
-   to exactly 1.0000 and the memory term stays where it is.
-
-**RECOMMENDATION, one word each.** (a) Share-weighted, because the raw
-sum re-weights the objective away from the mix the gavel ruled.
-(b) Baseline at the earliest eight-phase row, 2026-09-03, because a base
-built from one phase of eight is a guess wearing a date; the rows before
-it stay unscored, as the 151 already are. (c) `run_peak_bytes` stays
-based at today with the floor file saying so, until runbench has history
-of its own. (d) The compile rows keep their accumulated baselines -- the
-gavel re-defined the run side and said nothing about the compile side,
-and the index reads what it reads either way. Each answer is a one-line
-change to the floor file; the reconstruction and the rescore follow
-the answers, and nothing moves until they are recorded.
-
 ### The compile term's workload is whatever lib/json imports, and a library edit halved it
 
 **Cited:** the 2026-09-03 rebuild of the objective (three compile rows over
@@ -236,6 +183,21 @@ header so a reader looking for the campaign finds where it went.
 - Postfix index on `)`: `(sort xs)[1]` stays illegal; bind-then-index.
 - `;` inline separator: the borrow if inline groups are ever demanded.
 - `&` as bitwise: orthogonal, someday.
+- Convention over configuration, for the framework campaign (Clay,
+  2026-09-06): reflection only in the safe direction — code to name,
+  never name to code. Two candidate primitives: a function value that
+  knows its qualified name (`name_of`), and a module's exports as a
+  map. A router built from them indexes a map with an IO string and
+  gets a function or `none`; no string ever becomes code. The most
+  kanso-native shape: the path parse is a decode into a typeset of
+  declared routes, and the route table is a dispatch group. Parked
+  beside `serve`; not pending. DEFERRED BY CLAY (2026-09-06): not
+  before the language as currently specified is finished — the
+  effects-are-types migration, the fused operators, whole-cohort
+  block-born, the growable partial, the suffix contracts, the
+  consolidated benchmark, the clang bump, the book rewrite — and then
+  optimized and debugged as far as it can be taken. No session starts
+  this on its own initiative; Clay reopens it.
 - `serve` / processes: the executor-loop primitive; next design
   campaign — three investigations already terminate there. The July
   reification form (an err becoming an inert Failure record at the
