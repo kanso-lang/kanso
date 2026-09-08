@@ -2593,3 +2593,60 @@ a `continue`, and skipping the twins there is a different change from this one.
   question: should welfare's compile term read the entry path as well as the
   module path? Two compiles, one term.
 - **OPEN** — the twins inside `infer`, worth most of the remaining 0.85%.
+
+## 2026-09-08 — the corpus change banked a six-point fall, and the precedent says it should not have
+
+Clay, reading the published chart on kanso-lang.dev/numbers: why didn't the new
+corpus ruling go retroactive, so there is no drop? The answer is that kanso#1321
+left the three compile baselines where they were, and the score fell 6.29 points
+for a change that touched no compiler code.
+
+    2026-09-08 01:53   welfare 66.0241 -> 59.7360      #1321
+    compile_instructions   19,316,962 -> 52,603,220
+    compile_allocs             11,613 ->     31,596
+    compile_peak_bytes        375,222 ->    789,740
+
+**The reason #1321 gives.** "The baselines those three are divided by were taken
+on lib/json and are left where they are: the index has an arbitrary origin and
+only its direction and the size of its moves mean anything, so re-deriving a
+historical compiler's cost on a corpus that did not exist then would buy
+nothing. This is a change of origin, not a regression."
+
+**The origin is arbitrary; the move is not.** That sentence is the argument
+against leaving it. A reader of the chart sees a six-point fall, and a fall is
+what the index says a change made worse. CLAUDE.md is explicit: "Moving the
+floor to accommodate a change while leaving the weights alone is declaring the
+objective wrong without saying so."
+
+**Re-deriving history was never what the precedent asks for.** It asks for one
+measured factor per row, taken on the same head under both definitions -- which
+#1321 already measured and recorded. Scaling each baseline by its own factor
+restores each ratio exactly:
+
+    row                     factor   ratio left as-is   ratio re-based   before
+    compile_instructions    2.7232         1.0753           2.9282       2.9282
+    compile_allocs          2.7207         1.9658           5.3483       5.3483
+    compile_peak_bytes      2.1047         1.0373           2.1833       2.1833
+
+    baselines: 56,563,967 -> 154,032,855 · 62,110 -> 168,985 · 819,217 -> 1,724,228
+
+Every ratio returns to the digit it held before the corpus moved, so the score
+does not move and the chart is flat across the change.
+
+**Three precedents, all in this repository.** The archive: "RE-BASELINED THE
+SAME WAY #729 WAS: `basket_allocs` scaled by exactly the factor", and
+"RE-BASELINED SO IT BANKS NOTHING, the same method as #729 and #741." The floor
+file's own history at 73.53: "the compile row counts the compiler's own frame;
+the baseline is re-based by the same 465,864." And at 84.51, scanbench entering
+the corpus: "The score does not move on entry, by design."
+
+**What is not in dispute.** #1321 is right that a term measured on a library
+moves whenever that library changes its imports, and the fixed corpus is the
+ruling of 2026-09-08. Nothing here argues against the corpus. The question is
+only whether the change of measurement banks a fall, and the answer this
+project has given three times is that it does not.
+
+**OPEN, and cloud's**, since the baselines and the floor are code. Two readings
+are available and both were taken on the changeover head, so no re-measurement
+is needed. If the fall is kept deliberately, that is a claim about the weights,
+which CLAUDE.md says is settled before the floor moves rather than after.
