@@ -37,8 +37,20 @@
 # the box pins the reader's filesystem.
 #
 # That fall is WORK, so by kanso#1326's reading it carries its sign and roughly
-# its magnitude across hosts and NOT its absolute value: the module row sat
-# 410,330 apart on the two boxes (0.81%) at one commit. The value below is the
-# container's and CI's reading replaces it, which is a deliberate red round
-# rather than a surprise.
-entry_instructions=163510395
+# its magnitude across hosts and NOT its absolute value.
+#
+# CI's reading, one round later and the value below: 162,218,854, against the
+# container's 163,510,395. The two boxes sit 1,291,541 apart, 0.79%, where the
+# module row above sits 410,330 apart at 0.81% on the same pair. Two rows, two
+# workloads, the same host offset to within two hundredths of a per cent -- so
+# the gap is the toolchain and not either measurement. Counted on
+# `cpu family 0x19 model 0x11`, binary sha ced46401e56c.
+#
+# NOT AN OBJECTIVE TERM, deliberately. bench/objective_sources.txt weighs five
+# counters and compile_instructions above is already the compile side's work
+# term; adding a second workload's instruction row would weigh compile work
+# twice and quietly change what the existing weights mean. This row is a
+# presence counter for a path nothing else reaches, in the shape of the .text
+# vein: watched exactly, priced at nothing. Changing that is a weights
+# argument, made about the weights.
+entry_instructions=162218854

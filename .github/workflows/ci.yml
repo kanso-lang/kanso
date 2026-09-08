@@ -477,6 +477,7 @@ jobs:
             cat "$f"
           done
           [ -f compile_ir_got.txt ] && { echo "=== compile_ir_got.txt"; cat compile_ir_got.txt; }
+          [ -f entry_ir_got.txt ] && { echo "=== entry_ir_got.txt"; cat entry_ir_got.txt; }
           exit 0
       - name: every vein had its say
         if: always()

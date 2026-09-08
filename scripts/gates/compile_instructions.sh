@@ -246,6 +246,12 @@ printf 'entry_sample cpu="%s" sha=%.12s row=%s\n' \
   "$(sha256sum "$box/kanso" | cut -d' ' -f1)" \
   "$entry_own"
 
+# WRITTEN TO A FILE, not only to this step's output, because the module row is
+# and the asymmetry cost a reader 340 lines of job log to find CI's value for
+# this one. The workflow cats both after the counter steps, so either row is
+# found the same way.
+printf 'entry_instructions=%s\n' "$entry_own" > entry_ir_got.txt
+
 # The profile is on disk either way, and where the front end's work sits is the
 # question every one of these moves turns on. Printed rather than summarised,
 # because a step summary cannot be read back from the job log.
