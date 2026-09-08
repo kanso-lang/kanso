@@ -161,3 +161,78 @@ fn a_scope_that_names_no_row_is_refused() {
         "nothing may claim rows were proved:\n{said}"
     );
 }
+
+/// The same `prove` over the same row, on a copy of the ratchet whose
+/// `work_gate` has been pointed at the python-free gate. That one constant is
+/// the whole edit: it makes a CHEAP gate host-bound, which is otherwise a
+/// property only the four callgrind gates have and only a runner can exercise.
+///
+/// Everything else is the shipped program, run end to end, and the baseline
+/// answers the gate here exactly as CI's runner answers a compile gate there.
+fn proved_under_a_host_bound_gate(key: &str) -> (Output, String) {
+    let tree = std::env::temp_dir().join(format!("kanso-bound-{key}"));
+    discarded(&tree);
+    for stale in ["kanso-ratchet-base", "kanso-ratchet-1"] {
+        discarded(&std::env::temp_dir().join(stale));
+    }
+    let path = tree.to_str().expect("a path");
+    git(root(), &["worktree", "add", "--detach", "--force", path, "HEAD"]);
+
+    let staged = std::env::temp_dir().join(format!("kanso-bound-program-{key}"));
+    let _ = std::fs::remove_dir_all(&staged);
+    std::fs::create_dir_all(&staged).expect("the staged program has a home");
+    let source = root().join("scripts/ratchet");
+    std::fs::copy(source.join("main.kso"), staged.join("main.kso")).expect("main copies");
+    let program = std::fs::read_to_string(source.join("ratchet.kso")).expect("the ratchet reads");
+    let real = "work_gate = \"sh scripts/gates/instructions.sh\"";
+    assert!(program.contains(real), "the work gate is still spelled the way this fixture edits");
+    let bent = program.replace(real, "work_gate = \"sh scripts/gates/python_free.sh\"");
+    std::fs::write(staged.join("ratchet.kso"), bent).expect("the staged ratchet writes");
+
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg(&staged)
+        .args(["--", "prove", "python-free"])
+        .current_dir(&tree)
+        .output()
+        .expect("the ratchet runs");
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&done.stdout),
+        String::from_utf8_lossy(&done.stderr)
+    );
+    discarded(&tree);
+    let _ = std::fs::remove_dir_all(&staged);
+    (done, said)
+}
+
+#[test]
+fn a_host_bound_row_is_proved_where_its_gate_is_green() {
+    let _held = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+    let (done, said) = proved_under_a_host_bound_gate("green");
+    // The baseline ran the gate and it was green, which is the whole question:
+    // this run DID land on a host that can answer it.
+    assert!(
+        said.contains("1 gates green before any mutation"),
+        "the baseline answered the gate:\n{said}"
+    );
+    // So the row is proved, rather than skipped for a property of the gate
+    // that says nothing about this run. Skipping it printed
+    //
+    //     ratchet: no row on this runner could be proved; none was claimed
+    //
+    // on a runner that had just proved it could answer the gate, and the row
+    // vanished from the report without a line. kanso#1338's ratchet job is the
+    // instance in production: five gates green, five rows selected, three
+    // proved, and the two compile rows gone.
+    assert!(
+        !said.contains("no row on this runner could be proved"),
+        "a gate the baseline answered is not an excuse to skip its row:\n{said}"
+    );
+    assert!(said.contains("ratchet: 1 rows"), "the row runs:\n{said}");
+    assert!(
+        said.contains("every row turned its gate red"),
+        "and it turns the gate it claims red:\n{said}"
+    );
+    assert!(done.status.success(), "a proved row is not a failure:\n{said}");
+}
