@@ -1791,6 +1791,25 @@ every changed counter is priced (or improved).</code></pre>
 
 <p>so the prefix stays, and the objective is why: run speed carries more weight than run memory and is the term furthest from satisfied, so 5.4x the instructions for 4.5x the peak is declined by a wide margin. what would reopen this is a cheaper evacuation rather than a better threshold. two other shapes were tried and rejected on the way &#8212; removing the exclusion outright, which left the run program still running after ten minutes, and keying the decision on the inference sets of the carried positions, which separates these two programs only because one is well typed and the other defeats inference.</p>
 
+<h2 id="permodule"><span class="sec-num">59</span>why the whole-program check runs once per module</h2>
+
+<p>compiling a module compiles everything it imports first, and each of those runs the whole-program check over everything loaded so far. seven modules means seven checks over a growing prefix of the same program. doing it once at the end instead looks like free money, and an ablation priced it at <strong>10,632,023</strong> instructions, 20.38% of the compile row.</p>
+
+<p>the smallest program that says why not is three lines. a module defines an accumulating tail call, an entry file imports it and runs it a million times, and with the check moved to the top the program dies:</p>
+
+<pre><code>error[runtime]: the program ran out of stack: recursion went deeper than
+the stack holds</code></pre>
+
+<p><code>trmc::rewrite</code> turns that recursion into a loop, and it declines any declaration whose name carries a slash. a dependency&#39;s declarations are qualified as they are merged, so <code>count</code> arrives at the top as <code>trmc_count/count</code> and the rewrite passes it over. trmc only ever reached that function because it ran inside the dependency&#39;s own compile, while the name was still bare.</p>
+
+<p>it is a family, not an accident. six passes ask the same question the same way: <code>trmc::rewrite</code>, <code>canonicalize_bare_aliases</code>, <code>typeset_constructions</code>, <code>foreign_constructions</code>, and <code>check_bare_ambiguity</code> at two sites. each is about a module&#39;s own declarations &#8212; what this module constructs, which bare name its arms make ambiguous, which aliases it spells short &#8212; and a qualified name is how the merge marks a declaration as somebody else&#39;s. run once at the top they apply to the root and skip every dependency. four of the six are checks, so the failure they produce is a refusal that quietly stops being raised.</p>
+
+<p>so most of the 10.6M is work that would stop happening. an ablation that drops those six passes measures a different compiler, and the saving it reports belongs to that one.</p>
+
+<p>callgrind says what is actually reachable. against 51.6M on the fixed corpus, <code>check_merged</code> is 19,092,779 and <code>infer::infer</code> inside it is 11,803,600, none of which asks about slashes. the four guarded checks together are under 0.02%, so keeping them per module costs almost nothing. the two guarded rewrites are 1,651,829 and 504,558 and have to stay. that leaves about <strong>8.5 million</strong> instructions, roughly 16.5% of the row, for a version that moves the whole-program check up and leaves those six where they are.</p>
+
+<p>this route was walked once before and withdrawn in kanso#1003 as &quot;the per-dependency check_merged is not redundant&quot;, without naming what made it so. the mechanism is the slash, and it is written down now.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
