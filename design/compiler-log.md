@@ -4221,11 +4221,25 @@ are reverted. The page paragraph is separately owed and stays owed: the ryu
 entry says the format layer "mirrors the old %g byte format exactly", and the
 2026-09-06 whole-float gavel made that false above 1e15, where the behaviour has
 shipped and `a_whole_float_keeps_its_point` already pins `1.0e+15`. Landing that
-correction is cloud's, and it also moves the page and drops this budget to zero
-for anything behind it.
+correction is cloud's, and it was separately owed whatever happens to the gate.
 
-**OPEN.** Until one of the two lands, a chat pull request carrying more than
-three rulings cannot go green.
+**A page move does not clear the count, and this entry said it would.** The
+sentence above originally read that landing the page correction "drops this
+budget to zero for anything behind it." Measured on this branch with
+origin/main merged in, it does not: `page_drift` diffs two trees rather than
+walking history, so the anchor is always a commit on the base side and a
+branch's own entries appear as additions from it whatever the page did. With
+kanso#1315 on main the old gate still read 10/3 here. The rule the old gate
+actually enforced was that a pull request adding more than three log entries
+must also edit docs/compiler.html, unconditionally. This is corrected in place
+rather than appended because the entry had not landed; the claim was never on
+main.
+
+**CLOSED by kanso#1316**, which skips a ruling and counts everything else, on
+the `— gavel:` and `— directive:` heading convention the log already writes.
+Nine of this branch's ten entries come out and it reads 1/3. The fix is cloud's
+and the spec is its own: a nine-ruling batch passes, four shipped entries still
+fail and are named, and four headings that merely mention a gavel still fail.
 
 ## 2026-09-08 — gavel: the compile term reads a fixed corpus, not whatever lib/json imports
 
@@ -4278,3 +4292,43 @@ already decides every other question it answers.
 A differential fixture over the three values on all three engines ships with the
 change, per the differential law. Whether `json/encode` may emit such a value at
 all belongs to that library and is not answered here. Building this is cloud's.
+## 2026-09-08 (fifth) — the drift gate counted rulings against the page
+
+`scripts/page_drift` takes the last commit that touched docs/compiler.html,
+diffs design/compiler-log.md from there to HEAD, counts the `## ` headings and
+fails past three. Clay ruled the count wrong on 2026-09-08: "there is no
+specific correlation between a number of log entries and specific changes to
+the HTML." Two shapes were named as tractable, and this is the first of them.
+
+A ruling is skipped now and everything else still counts. The marker is the
+heading convention the log already writes — `## <date> — gavel: ...` and
+`## <date> — directive: ...` — so nothing new had to be agreed. An entry that
+merely mentions a gavel keeps its place in the count, because the colon and the
+dash are what the convention writes.
+
+The whole-float gavel is why that is the right exemption. It was ruled on
+2026-09-06 and filed as one entry; the behaviour it decided shipped in
+kanso#1285 as a second; the page sentence it falsified was corrected in
+kanso#1315 as a third. One page edit was owed across the three, and the ruling
+was not the entry that owed it — a decision documents a page once something
+implements it.
+
+**Measured on the pull request it blocked.** kanso#1313 carries nine rulings
+and one entry that is not one. The old gate reads 10/3 and fails the whole
+cost-goldens job; the new one reads 1/3 and passes, printing
+`(9 rulings not counted)` so the skip is visible.
+
+**The page move alone does not clear it.** The gavel entry expected kanso#1315
+to drop the budget to zero for anything behind it. It does not. page_drift
+diffs trees rather than walking history, so a branch's own entries still appear
+as additions once the merge base moves: with origin/main merged into
+kanso#1313, the old gate still reads 10/3. Landing this fix is what unblocks
+that pull request.
+
+The gate had no spec at all before this one, which is how the defect outlived a
+redesign of the log's headings underneath it.
+`tests/a_ruling_is_not_a_page_the_log_owes.rs` builds a repository whose page
+moved once, appends entries to the log, and reads the gate's own output: the
+nine-ruling batch passes at 1/3, four entries recording shipped work still fail
+at 4/3 and are named, and four headings that mention a gavel without being one
+still fail. The first was watched red on the old gate before the fix went in.
