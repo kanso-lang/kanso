@@ -3980,8 +3980,11 @@ into the compiler, so its bytes shift the binary's layout even though
 `kanso check lib/json` stops before codegen — the eighth layout-only move that
 row has recorded. It could not be settled before CI: this container refuses to
 compare that vein at all, its golden measured on glibc 2.39-0ubuntu8.8 and
-rustc 1.98.1 against the container's 2.39-0ubuntu8.7 and 1.94.1. The three
-.text rows that carry the extra branch grew 64 bytes each.
+rustc 1.98.1 against the container's 2.39-0ubuntu8.7 and 1.94.1. The five
+.text rows that carry the extra branch grew 64 bytes each, so the text vein
+sums 1,469,868 -> 1,470,188. The first round of this change said three rows
+and updated three; the two it missed were found by comparing all fourteen
+against CI's output rather than by eye.
 
 Welfare 66.00 -> 66.01, and the floor is ratcheted in the same change. The sum
 rises with the compile term's 939 counted against it, which is the trade the
