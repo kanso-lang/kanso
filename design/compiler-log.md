@@ -2969,15 +2969,26 @@ All seven `tests/golden/errors_module` fixtures are byte-identical and
 sharing a path between declarations cannot alias a write — nothing in the tree
 mutates a declaration's file after stamping it.
 
-One spec moved and was repaired rather than relaxed.
-`tests/import_order.rs` pins the peak difference between two modules that
+One spec moved, and repairing its number was the wrong repair.
+`tests/import_order.rs` pinned the peak difference between two modules that
 declare the same two functions and differ only in which file names `std/list`.
-It read seventeen bytes and reads fifteen: the peak no longer holds a copy of
-the path per declaration, so two of the bytes that used to move with file order
-are not there to move. Read three times at 483,758 against 483,773. The number
-stays exact — the spec exists to catch the 36,983 a dependency loaded in the
-wrong order cost, and a band would have hidden this move instead of reporting
-it.
+It read seventeen bytes; on this host it now reads fifteen, so the pin was
+moved to fifteen and pushed. The arm64 runner then read TWENTY-THREE on the
+same tree, and that is the finding: both hosts are deterministic and both are
+right. `compile_peak_bytes` reports what the allocator holds, and glibc and
+macOS round a merge of the same declarations differently, so the residual is
+not a property of the compiler at all. Seventeen agreeing on both hosts before
+this change was luck.
+
+So the spec asserts the ORDER now, which is what it was always about — its own
+title says which file names a dependency must not change what checking costs,
+and `import_list.sort_by` in `load_dependencies` is the line that makes it
+true. Removing that line is the mutation, and under it the two modules load
+`list, text, render` and `text, list, render`, with the second's peak going to
+512,480 against the first's 483,682. Watched red exactly there and green with
+the sort restored. The peaks are still read, so a module that stops checking
+still fails, but nothing pins their difference: a number that moves with the
+allocator was pinning the wrong thing, and this is a repair rather than a band.
 
 **CI's rows, and the licence's third reading.** The runner counted
 `compile_instructions` 50,685,978 against the 50,832,211 the golden held — a
