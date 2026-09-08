@@ -2925,7 +2925,7 @@ gate refuses. The licence is two agreements: #1321 found that allocs and peak
 match the runner here to the unit, and #1323 confirmed it — the container read
 30,414 and so did CI. The instruction row is NOT written that way and is left
 for CI, because that one really is host-dependent: 52,170,583 here against
-CI's 50,832,220 for the same tree.
+CI's 50,832,211 for the same tree.
 
 **`Arc`, not `Rc`, and the reason is a thread.** The compiler looks
 single-threaded — thread-locals throughout — but `src/main.rs:379` spawns a
@@ -2978,3 +2978,21 @@ are not there to move. Read three times at 483,758 against 483,773. The number
 stays exact — the spec exists to catch the 36,983 a dependency loaded in the
 wrong order cost, and a band would have hidden this move instead of reporting
 it.
+
+**CI's rows, and the licence's third reading.** The runner counted
+`compile_instructions` 50,685,978 against the 50,832,211 the golden held — a
+FALL of 146,233, or 0.2877%. What went is the copying itself: 803 path copies
+on the fixed corpus, and the byte comparisons the `(file, line, col)` keys no
+longer do on every insert and lookup. The row is the front end doing less
+rather than the layout vein moving, and `compile_allocs` falling beside it is
+what says so.
+
+Both rows written from this container came back from CI unchanged —
+`compile_allocs` 29,941 and `compile_peak_bytes` 777,031, the second read back
+verbatim in the job log as `front end holds 777031 bytes; golden 777031`. That
+is the third agreement, after #1321 and #1323, and the first one where the
+container wrote the rows into the branch before CI had said anything. The
+licence stands. A disagreement would have mattered more than this change does,
+which is why the round was arranged to make one visible.
+
+Welfare 60.03 -> 60.04, banked in the same PR.
