@@ -7,15 +7,11 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: three** -- the welfare history's
-baseline after the one-program gavel, four sub-questions each carrying a
-one-word recommendation (filed 2026-09-07; the push of 2026-09-06 named
-them and the ledger did not); the compile term's workload, after
-kanso#1291 dropped lib/json's only std/list import and the compile rows
-halved with the compiler unchanged (filed 2026-09-07, recommendation: a
-fixed corpus); and the rendering of an infinite or nan float, which the
-interpreter panics on and native prints as the largest double's digits
-(filed 2026-09-07, recommendation: %g's `inf`, `-inf`, `nan`). Before
+only indexes it. **Blocking right now: nothing.** Clay ruled the last two on 2026-09-08,
+taking the recommendation each carried: the compile term reads a fixed
+corpus rather than whatever lib/json imports, and an infinite or nan float
+renders as `inf`, `-inf` and `nan`. Both are cloud's to build. The welfare
+history's baseline left the same day, with the seven gavels beside it. Before
 them, the compile row's drift was the
 last blocking entry, and Clay finished it on 2026-09-05: one row, one value.
 The pinned pair and the per-chip key are retired, every move is attributed to
@@ -285,7 +281,7 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Five questions wait in `design/pending-gavels.md`** — three blocking, two
+**Two questions wait in `design/pending-gavels.md`** — zero blocking, two
 open — each with a recommendation. Counted from the ledger on 2026-09-08 by
 reading its `###` headings, which is what this line has always claimed to do
 and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
