@@ -2708,3 +2708,45 @@ out, because the objective could see the module row's +7,745 and not the entry
 row's −260,849. Under the sum it is a fall of 253,104, −0.1190%. It is a separate
 change because it moves two goldens whose values are CI's, and this one moves no
 counter at all.
+
+## 2026-09-08 (third) — the twin skip ships, now that the objective can see it
+
+Searched the log, the archive and design/ before filing: this thread is the OPEN
+item at the end of the kanso#1330 entry above ("the synthetic-twin skip, measured
+above, held on the objective question"), and the entry above that, for kanso#1331,
+answered the question it was held on. The archive's prior art is `enroll_bare`
+and `canonicalize_bare_aliases` in the kanso#1328 entry. Nothing else is new.
+
+`enroll_bare` clones every exported declaration of an imported module under its
+short name — body and all, `synthetic = true`. On `bench/entry_corpus` that is
+145 of 882 declarations and 155 of 1,035 statements. Three checks in
+`check_merged` are pure body walks and were the only three of sixteen that read
+those clones: `check_build_blocks`, `check_none_in_collections` and
+`check_field_exists`. Thirteen others already skip them. These three now do too.
+
+Re-measured on the same container as the kanso#1330 entry, and the two rows
+reproduce it to the instruction:
+
+    entry_instructions   165,183,406 -> 164,922,557   -260,849  (-0.1579%)
+    compile_instructions  49,162,592 ->  49,170,337     +7,745  (+0.0158%)
+
+Against CI's rows, the summed compile term the objective now reads:
+
+    212,644,590 -> 212,391,486   -253,104  (-0.1190%)
+
+The compile row rises because the module path has no twins left to skip — since
+kanso#1328 `canonicalize_bare_aliases` deletes them before the check there — so
+what that row records is the branch itself plus layout. Under kanso#1331's summed
+term the entry row's fall is 34 times it, and the trade lands the right way up.
+
+A twin's body IS the original's body under a second name, and both copies are in
+the same merged program, so a twin can answer nothing the original answers
+differently. That is why no diagnostic moves. The doubling was visible once, under
+kanso#1329's reverted reorder: six error fixtures reported one diagnostic twice at
+the same line and the same column, `field_missing/play` and its twin `play`. On
+current main the dependency's own compile refuses first, so the second copy never
+reaches a reader — which is why this change has counters and no fixture.
+
+`infer` is deliberately not given the skip. It indexes declarations positionally
+(`vec![0; program.fns.len()]`, groups by index), so a `continue` misaligns it.
+That is the rest of kanso#1329's reverted reorder and stays open.
