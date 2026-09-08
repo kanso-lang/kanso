@@ -3557,3 +3557,43 @@ until the attribution patch lands — so they belong to the reshape's bundle
 rather than to changes of their own. Five patches held; the candidates are
 written out beside them. The reshape does not land until `builtin_arg_type`
 reports its own error again.
+
+## A module named for what it holds could be imported and never used
+
+`builtin_` names are how the standard library reaches the engine, and a program
+that writes one for itself is refused. `resolve_name` did that by stripping the
+prefix and asking whether what remained was a builtin. It asked the same
+question of a QUALIFIED name: `builtin_shapes/circle` became `shapes/circle`,
+which is not a builtin anyone has, so the reference was refused as internal to
+the standard library. Every use of a module whose own name began with those
+bytes met the same refusal, so such a module could be imported and never used.
+
+Reproduced on an unpatched tree, two files:
+
+    builtin_probe/builtin_probe.kso   pub hello = "hi"
+    main.kso                          import "./builtin_probe"
+
+                                      print builtin_probe/hello
+
+    error[name]: `builtin_probe/hello` is internal to the standard library
+    — import its module
+
+The check applies to bare names now. A qualified name is a declaration in
+another module, and that module's name is its own business.
+
+The fixture is `tests/golden/micro/builtin_prefixed_names_are_not_builtins.kso`,
+which the micro corpus runs twice — once directly and once as a library behind a
+generated entry, which is the path that reaches the refusal. It was watched red
+for the right reason: the library run produced empty stdout because the compile
+was refused. The whole golden suite is green with the fix, including
+`a_builtin_the_standard_library_keeps_to_itself`, the fixture that pins the bare
+case this refusal exists for.
+
+How it was found is worth recording, because the first reading was wrong. It
+turned up while regenerating the per-module reshape's error goldens, where
+`builtin_arg_type` had lost its own type error and gained this one instead — a
+diagnostic disappearing, which the entry above called a stop. The reshape had
+not lost anything. The fixture is named `builtin_arg_type`, its own error used
+to be raised first and stop the compile, and moving that check later let this
+refusal reach the reader ahead of it. The bug was already there and had been
+since the refusal was written.
