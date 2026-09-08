@@ -3139,3 +3139,545 @@ compile_cost AGREED. That reading is load-bearing rather than inherited:
 `compile_parsed_entry` puts `inline_builtin_wrappers` BETWEEN the two groups
 where `compile_module_loaded` puts it before both, so #1323's emitted_code
 reading does not carry over to this one.
+
+
+## Checking and rewriting once at the top: six passes have to stay where they are
+
+The idea was that `compile_module_loaded` does the whole-program check and the
+eight rewrites once per module, on a growing prefix of the program, and that
+the outermost compile could do all of it once on everything. An ablation had
+put the saving at 10,632,023 instructions, 20.38% of the compile row.
+
+Gated on `DEPTH <= 1 && !ENTRY_COMPILE`, the change builds, and `tests/golden` goes red
+in three tests. The smallest reduction says why:
+
+    printf 'import "./trmc_count"\n\ntrmc_count/play\n' > main.kso
+    kanso run main.kso
+    error[runtime]: the program ran out of stack: recursion went deeper than
+    the stack holds
+
+`src/trmc.rs:185` declines the group:
+
+    if crate::ast::has_slash(name) || *arity == 0 { continue; }
+
+A dependency's declarations are qualified on the way in, so `count` reaches the
+top as `trmc_count/count` and trmc will not touch it. The accumulating tail
+call stays a tail call, and a million frames overflow the stack. trmc only ever
+rewrote a dependency because it ran inside that dependency's own compile, while
+the names were still bare.
+
+It is a family. Six passes skip qualified declarations by construction:
+`trmc::rewrite`, `typeset_constructions` (check.rs:1768),
+`foreign_constructions` (check.rs:1820), `check_bare_ambiguity` (check.rs:2957,
+at two sites) and `canonicalize_bare_aliases` (lib.rs:929). Each is about a
+module's OWN declarations — what this module constructs, which bare name its
+arms make ambiguous, which aliases it spells short. Run once at the top they
+apply to the root's declarations and skip every dependency's. Four of the six
+are checks, so the failure mode is a refusal that stops being raised.
+
+So a large part of the 10.6M is not redundant work removed. It is work that
+stops happening, and an ablation that does not keep those six passes per module
+measures the wrong thing. The number was real; the inference from it was not.
+
+**The same conclusion was reached in kanso#1003** and withdrawn there as "the
+per-dependency check_merged is not redundant". That entry did not name the
+mechanism, which is why the route was open to walk a second time. The mechanism
+is `has_slash`, and it is written down now.
+
+What survives is most of it, and callgrind on the fixed corpus says how much.
+On the container with the tunables pinned, against 51.6M total:
+
+    kanso::main                         51,094,622   99.09%
+    check::check_merged                 19,092,779   37.03%
+      infer::infer                      11,803,600   22.89%
+      check::check_file_shadow           1,812,314    3.51%
+      the four guarded checks             under 0.02%
+    canonicalize_bare_aliases            1,651,829    3.20%  (guarded)
+    trmc::rewrite                          504,558    0.98%  (guarded)
+
+The four guarded passes inside `check_merged` cost almost nothing —
+`foreign_constructions::walk` is 8,301 instructions across both call sites and
+the other three fall below the threshold — so keeping them per module is free
+and the rest of `check_merged` can move. `infer`, the largest piece, carries no
+`has_slash` at all. The two guarded REWRITES are what has to stay: 1,651,829
+and 504,558, 2,156,387 together.
+
+So the reachable win is about 8.5 million instructions, roughly 16.5% of the
+row, against the 10,632,023 the ablation reported. The change is viable at that
+size, with `canonicalize_bare_aliases` and `trmc::rewrite` left per module and
+the four guarded checks kept as a small pass beside them. An ablation that does
+not keep those measures the wrong thing again.
+
+The peak term was priced before any of this and was never the obstacle: even a
+29% rise in `compile_peak_bytes` leaves a 10.6M fall ahead of the floor
+(60.04 -> 60.12), and the realistic 32,851 bytes of carried sources score
+60.70.
+
+## The corpus says the reshape is not ready, and the earlier reading hid it
+
+Applied on top of e12bfaba and built, `cargo test --release --test golden` reports
+nine of ten tests passing and one failing. That reads like one fixture and it is
+not: `error_corpus_reports_each_golden_diagnostic` asserts inside a loop, so it
+stops at the first mismatch and says nothing about the rest. Driving all 193
+fixtures by hand — the same staged-entry harness the test uses — puts the count
+at **44 changed, 149 byte-identical**, in three classes.
+
+**31 carry an `.imported.stderr` golden** and simply move from the loader's
+`(module X)` suffix to the `--> file:line:col` form. That is the reshape working
+as designed: the check now runs at the top, so the whole-program renderer writes
+the diagnostic instead of the module one. (The comment above that test says 23
+fixtures gain the suffix. There are 34 on disk. The comment is stale.)
+
+**Four leak a qualified name into the message a user reads.** At the top a
+dependency's declarations carry their module prefix, and these messages print
+the declaration's name:
+
+    golden:  `point` takes 2 argument(s), and a list element is one atom …
+    actual:  `constructor_in_a_list/point` takes 2 argument(s), …
+
+    golden:  these `open_start?` arms tie …
+    actual:  these `an_arm_set_with_no_settling_arm/open_start?` arms tie …
+
+with `field_of_the_wrong_record/point` and
+`field_of_an_annotated_parameter/money` the same shape. The user wrote `point`.
+
+**Three name the wrong file outright**, which is worse:
+
+    golden:  no import offers a pub `nonexistent` to re-export
+             --> a_reexport_of_a_name_nothing_offers.kso:3:5
+    actual:  no import offers a pub `nonexistent` to re-export
+             --> std/text/text.kso:3:5
+
+The line and column are the user's; only the file name is wrong, so the excerpt
+quoted underneath is std/text's line 3 under the user's error. `a_wall_whose_
+right_side_is_a_name` lands on `std/io/io.kso:10:27` the same way.
+
+The attribution patch is what should have prevented this, and the way it fails
+is worse than not attributing at all. It hangs a file on each diagnostic through
+`diag::attributing(&program.fns)`, a guard held while walking one declaration.
+Every site that raises inside a `fn` walk is attributed and lands on the right
+file — which is why the 31 above are correct.
+
+The re-export check raises outside any walk, and it does not fall back: it
+INHERITS. `render_across` prefers `d.file` whenever it is set, and the
+thread-local still holds whatever the last walk left in it. Reproduced directly
+on the smallest program — an entry importing the fixture — with the phase report
+beside it:
+
+    load a_reexport_of_a_name_nothing_offers.kso
+    load std/text
+
+    error[name]: no import offers a pub `nonexistent` to re-export
+      --> std/text/text.kso:3:5
+
+The name is the LAST MODULE LOADED. A guard that had simply been absent would
+have left the file the renderer was handed standing; a leaked one overwrites it
+with an unrelated library, and quotes std/text's line 3 underneath the user's
+error. `src/lib.rs:3287` and `src/lib.rs:3206` are the two sites, both inside
+`apply_reexport` under the re-export elevation.
+
+So the fix is not "attribute these two sites". Reading the guard says why it
+leaks, and it is a drop-order bug rather than a missing feature.
+`Attributed::next` is
+
+    self.held = Some(attributed_to(item.file()));
+
+and the right-hand side runs first. `attributed_to` sets the thread-local to
+this item's file and captures the PREVIOUS one; only then is the old guard in
+`self.held` dropped, and its `Drop` writes ITS previous back. Item one sets the
+file to A with previous None. Item two sets it to B with previous A, then drops
+guard one — which restores None. The thread-local oscillates through the walk,
+and when the iterator itself drops at the end it restores whatever the last
+guard happened to be holding rather than what was live before the walk began.
+That is how a std/ path is still standing when the re-export check runs.
+
+One guard for the whole walk fixes it: `attributing` reads what is attributed
+before it starts, `next` just sets the current file, and `Attributed`'s own
+`Drop` restores the value it captured. A walk that ends, or returns from inside
+the loop, then leaves exactly what it found — None at the top level, which makes
+the re-export diagnostic fall back to the file the renderer was handed.
+
+BUILT AND MEASURED. The corpus goes from 44 changed to 38, and all three
+wrong-file fixtures come back byte-identical:
+
+    error[name]: no import offers a pub `nonexistent` to re-export
+      --> a_reexport_of_a_name_nothing_offers.kso:3:5
+       3 | pub nonexistent
+
+I had expected the fallback to name the generated `run_<fixture>.kso` and said
+so. It does not: the re-export check runs during the fixture module's OWN
+compile, where the file the renderer is handed is already the fixture. The stale
+attribution was overriding a correct answer, not standing in for a missing one.
+
+What is left is 38, and it divides cleanly. THIRTY-FOUR are the designed move
+from the loader's `(module X)` suffix to `--> file:line:col` — 31 carrying an
+`.imported.stderr` golden and three (`a_wall_whose_right_side_is_a_name`,
+`fields_that_no_one_record_declares`, `sequencing_takes_two_descriptions`) whose
+plain golden holds the module suffix without an imported twin, which is corpus
+bookkeeping rather than a compiler question. FOUR are the qualified-name leak,
+and that is the whole of what is still wrong:
+
+    `constructor_in_a_list/point`            for `point`
+    `an_arm_set_with_no_settling_arm/open_start?`  for `open_start?`
+    `field_of_the_wrong_record/point`        for `point`
+    `field_of_an_annotated_parameter/money`  for `money`
+
+The guard fix is held as $S/419_guard_fix.patch.
+
+So two bounded gaps stand between the reshape and a corpus that agrees: attribute
+the module-level check sites the way the declaration walks already are, and print
+a declaration's name as the user wrote it rather than as the merge qualified it.
+Neither is a performance question, and neither was visible while the golden test
+stopped at the first of forty-four.
+
+The diagnostic attribution built alongside it changes no output today and is
+held rather than shipped. `Diagnostic` gains an optional file filled from a
+thread-local; `diag::attributing` is an iterator that holds the attribution
+guard and replaces it per item, so a walk that returns early restores what it
+found; `render_across` quotes the right file's line and `render` delegates to
+it with an empty map. A field nothing reads is weight, and nothing reads it
+while the checks stay per module.
+
+## The check verb infers twice, and nothing sets the toggle that would skip it
+
+`kanso check` runs `infer::infer` over the whole program a second time, at
+`src/main.rs:275`, after the front end has already inferred it inside
+`check_merged`. The second one is not a duplicate — it is taken after the
+rewrites, so its answer differs — and its only reader is the provenance refusal
+three lines below it.
+
+The obvious tidy is to move it inside that reader's guard, so a run with
+`KANSO_NO_PROV` set does not infer for nobody. That was written and built. It is
+not being shipped, because the guard's condition is dead:
+
+    $ grep -rn KANSO_NO_PROV --include=*.sh --include=*.yml --include=*.rs \
+        --include=*.kso --include=*.toml .
+    ./src/main.rs:276:        if std::env::var_os("KANSO_NO_PROV").is_none() {
+
+Read in one place, set in none. No gate, no script, no test, no benchmark takes
+that path, so the change saves nothing anything in this repository ever runs,
+while still moving `src/main.rs` — and kanso#1325 spent two rounds learning that
+an edit to the compiler's Rust moves `compile_instructions` by layout alone,
+where a rise with nothing falling is a pure regression the trend gate refuses.
+A coin flip on a round, for a win of zero.
+
+So it stays out until either something sets the toggle or the second inference
+can be made to pay for itself some other way. The 11,803,600 instructions that
+`infer::infer` costs on the fixed corpus are what makes the second call worth
+returning to; the toggle is not the way in.
+
+## Remembering a compiled module costs more than compiling it again
+
+bench/compile_corpus is a diamond. It imports std/text directly, and it imports
+std/json, which imports std/text. `KANSO_PHASES=1 kanso check bench/compile_corpus`
+prints `load std/text` twice, and the compiler really does lex, parse and check
+that module once per path to it. `visited` is a cycle stack — inserted on the way
+in, removed on the way out — so it never held an answer to hand back.
+
+The memo was built: `visited` became a `Load` carrying both the stack and a map
+from canonical path to the finished program, and a second visit returned a clone
+of the first. Every compile counter the objective weighs got worse.
+
+    counter                base         with the memo   delta
+    compile_instructions   51,094,624   51,756,188      +661,564  (+1.29%)
+    compile_allocs         29,940       32,149          +2,209    (+7.38%)
+    compile_peak_bytes     777,057      1,073,098       +296,041  (+38.10%)
+    compile_visits         23,723       23,522          -201
+    compile_rounds         62           58              -4
+
+(Read on this container, which sits about 400,000 above CI's row for the same
+tree; the comparison is against its own base.)
+
+The profile says why, frame by frame. The second compile of std/text is worth
+about 1.13 million instructions — `compile_module_loaded'2` falls 27,087,117 to
+25,961,126, `lexer::lex` 4,330,753 to 4,092,322, `parser::parse` 4,761,741 to
+4,560,696. Handing the answer back costs more than that: `Vec::clone` rises
+263,773 to 2,294,028 across its two frames and `Expr::clone` 328,175 to
+1,592,439. A module's finished program carries every declaration its own dependencies
+contributed, demoted and qualified, so the deep copy runs about 1.6 times the
+compile it replaces. The peak rise is the other half:
+one program per module stays alive for the whole build where before each one was
+dropped as its importer finished with it.
+
+The two counters that improved are not objective terms, and they say how small
+the saving is: 201 expression visits out of 23,723, and four fixpoint rounds.
+
+That number is the finding. The merged program is unchanged by the memo, and the
+reason is where the diamond's cost actually sits: in the second copy of the
+declarations, which every pass downstream then walks. Counting names in the corpus's merged program that another name
+reaches through a further qualifier (`json/text/append` beside `text/append`):
+
+    module                 declarations   reached twice
+    bench/compile_corpus   428            99
+    std/json               196            17
+
+Ninety-nine of 428. Collapsing them
+would mean making two spellings of one declaration into one name, and a
+qualified spelling is permanent identity in this compiler today. It is
+sound in principle — the lock read at the module root makes an import path
+resolve to one module for the whole build — but it changes what a qualified name
+means, so it is its own piece of work rather than a tidy on this one.
+
+Declined, reverted, nothing shipped.
+
+## What the per-module reshape costs the diagnostics, fixture by fixture
+
+The reshape is `src/lib.rs`'s `outermost` branch: a dependency runs
+`check::check_own_declarations` — the three checks that skip any name carrying a
+slash — plus `canonicalize_bare_aliases`, `finish_program` and `trmc::rewrite`,
+and hands its declarations up. Everything else runs once, at the outermost
+compile. Against the 193 fixtures in `tests/golden/errors`, run as libraries
+behind a generated entry the way `tests/golden.rs` drives them:
+
+    155 agree   38 move   0 without a golden
+
+Thirty-one of the thirty-eight carry an `.imported.stderr` golden, which the
+corpus already keeps for fixtures whose names spell qualified through an import.
+The seven with a plain golden are the ones worth reading, and they are two
+kinds.
+
+Three are an improvement. `a_wall_whose_right_side_is_a_name`,
+`fields_that_no_one_record_declares` and `sequencing_takes_two_descriptions`
+traded the `(module X)` suffix for a `--> X.kso:line:col`, which is the
+attribution work doing what it was written to do.
+
+Four print a qualified name where the old output printed a short one:
+
+    fixture                          was                 is now
+    constructor_in_a_list            `point`             `constructor_in_a_list/point`
+    an_arm_set_with_no_settling_arm  `open_start?`       `an_arm_set_with_no_settling_arm/open_start?`
+    field_of_the_wrong_record        `point`             `field_of_the_wrong_record/point`
+    field_of_an_annotated_parameter  `money`             `field_of_an_annotated_parameter/money`
+
+Measured both ways on the same fixtures rather than inferred: the base binary
+prints the short name for all four when they run as libraries, so the reshape
+introduces this and does not inherit it.
+
+The mechanism is the reshape itself. Today a module's own `check_merged` runs
+inside its own compile, before its declarations are qualified for an importer,
+so a message that names a declaration reads the spelling the source wrote. Move
+that check to the outermost compile and the same message sees the name after
+qualification.
+
+Where a fix goes. Every diagnostic now carries the file it belongs to, and a
+module's qualifier is that module's short name, so one rule at render time
+covers it: print a name without the qualifier that names the diagnostic's own
+module, since that is the spelling the file being pointed at uses. One site,
+one rule.
+
+It does not cover all four. `an_arm_set_with_no_settling_arm` attributes to
+`run_an_arm_set_with_no_settling_arm.kso`, the generated entry, because a
+dispatch tie is reported at a call rather than at the arms it is about. The
+qualifier there is not the diagnostic's own module and the rule would leave it
+alone. That is a second defect, in where a tie points, and it wants its own
+fixture.
+
+That rule was then written and measured. `diag::spelled_in` runs at the one
+place a message is rendered: it derives the qualifier from the path the
+diagnostic points at — the file's stem and its parent directory's name, which
+covers a module that is a directory and a module that is one file — and removes
+that qualifier inside backticks only. A message quotes a name in them and a
+single span can hold more than the bare name (`(mod/point …)` and `&mod/point`
+are both how a message spells the fix), so the span is what it works on; prose
+outside the backticks is left alone.
+
+Three of the four then read exactly as the base spells them, spelling for
+spelling:
+
+    error[name]: `point` has no field `name`
+      --> field_of_the_wrong_record.kso:21:12
+
+The fourth is unchanged, as predicted. `an_arm_set_with_no_settling_arm` still
+says `an_arm_set_with_no_settling_arm/open_start?` because the diagnostic points
+at the generated entry, so the qualifier it carries is not the one this rule
+derives. Where a dispatch tie points is the second defect, and it stays open.
+
+The whole corpus was re-run with the rule in: 155 agree, 38 move, the same
+numbers as without it. It repairs three messages and moves nothing else.
+
+Then the fourth. The tie's span was already an arm's — `b.span`, the second of
+the pair — so the file it named was wrong rather than the line. The walk reaches
+`program.fns` by index, through a group table built earlier, and the attribution
+the walks carry rides on `diag::attributing`, an iterator. An indexed walk never
+touches it, so the diagnostic reads whatever attribution was last set and the
+render falls back to the file it was handed. Taking `b`'s file explicitly at the
+push site fixes it, and all four fixtures then read as the base spells them:
+
+    error[dispatch]: these `open_start?` arms tie: each is the more specific one
+    somewhere, and a call could match both — write the arm that is most specific
+    in every position
+      --> an_arm_set_with_no_settling_arm.kso:7:4
+
+That is a class, not one site, and the class has two halves.
+
+The near half is walks that reach declarations by index rather than through the
+iterator: `check_constants` reads `arms[1].span` out of a slice it indexed,
+`check_overlapping_arms` walks a filtered `Vec<&FnDecl>`, and
+`check_overload_ranks` walks `windows(2)`. None goes through `diag::attributing`,
+so none carries a file. The corpus surfaced only the tie because only the tie has
+a fixture that crosses files; the other three want fixtures before fixes.
+
+The far half is larger and was found by chasing the one remaining leak.
+`sub_of_none` comes from `check_sub_parents`, which walks `program.types` with a
+plain `for` — the shape `attributing` was written for. It cannot use it.
+`stamp_file` stamps `program.fns` and nothing else, `TypeDecl` has no `file`
+field, and `HasFile` is implemented for `FnDecl` alone. So no diagnostic about a
+type declaration can carry a file however it is walked, and the attribution
+covers half the declarations in a program.
+
+Closing that is a real change rather than a call-site repair: a field on
+`TypeDecl`, a second loop in `stamp_file`, an impl, and one `Arc` refcount bump
+per type declaration — the same cost the fns side already pays, and the same
+shape kanso#1324 measured when it made a module's path shared. It is the next
+step on this thread.
+
+Then the goldens, which is where the reshape actually stands or falls. All 38
+movers were regenerated with the harness's own staging — `pub play` files behind
+a generated entry, everything else run in place, which is what
+`run_kanso_as_library` does — and each candidate compared to its golden with the
+`(module X)` suffix and the `-->` block removed, so the comparison is of message
+TEXT alone. Three classes came out:
+
+    30  message text identical: only the location changed
+     6  one diagnostic became two
+     2  the message text itself changed
+
+The thirty are the reshape's improvement, in bulk. The six wanted reading, and
+reading them changed the count above: they are the same diagnostic twice, at the
+same file, line and column.
+
+    error[name]: no record type has a field `name`
+      --> field_missing.kso:6:12
+    error[name]: no record type has a field `name`
+      --> field_missing.kso:6:12
+
+Two reports of one source location is a declaration present twice in the merged
+program, which is the finding the module memo turned up above — 99 of the
+corpus's 428 merged declarations are a second copy reached through a further
+qualifier. The reshape did not create those copies; it moved the check that
+walks them from per module, where each saw one copy, to once at the end, where
+one walk sees both. Under the old suffix the two reports read as different
+messages, so nothing noticed.
+
+That makes the duplicate declarations a blocker for the reshape rather than a
+performance question beside it, and it is where this thread now goes.
+
+The two are the blockers, and they are different from each other.
+
+`sub_of_none` still leaks: `sub_of_none/missing cannot derive from none yet`,
+pointing at `run_sub_of_none.kso:1:6`, the import line in the generated entry.
+That is the same class as the dispatch tie — a check that raises without a file,
+so `spelled_in` derives the qualifier from the entry and leaves the name alone.
+It is the fourth member of the class this entry already names, and it has a
+fixture, which the other three do not.
+
+`builtin_arg_type` looked like the serious one. Its own error disappeared and a
+different one took its place:
+
+    was  error[type]: `length` takes a list, a map, or a string here, not an int
+    then error[name]: `builtin_arg_type/play` is internal to the standard
+         library — import its module
+
+Diagnosed, and the first reading was wrong: this belongs to the entry below
+rather than to the reshape. `resolve_name` stripped `builtin_` from a qualified
+name, so a fixture named `builtin_arg_type` had every reference to it refused.
+That bug predates the reshape by as long as the refusal has existed; the fixture
+survived only because its own error used to be raised first and stop the compile.
+With the prefix check restricted to bare names, the fixture reports its own
+error again, and better than before:
+
+    error[type]: `length` takes a list, a map, or a string here, not an int
+      --> builtin_arg_type.kso:1:27
+
+`sub_of_none` was the other, and it is fixed: `check_sub_parents` walks
+`program.types`, `stamp_file` stamped only `program.fns`, and giving `TypeDecl`
+a file — a field, a second loop in `stamp_file`, an `impl HasFile`, and the walk
+through `diag::attributing` — makes it read `missing` at
+`sub_of_none.kso:1:6`. With that in, every one of the thirty-eight is either
+location-only (32) or the doubled report below (6). No message text is worse
+than it was.
+
+Nothing of the reshape shipped. The rules are dead code on main — no diagnostic
+carries a file until the attribution patch lands — so they belong to its bundle
+rather than to changes of their own. Five patches held; the candidates are
+written out beside them. What remains before it lands is `sub_of_none`, the
+thirty-seven goldens, and the compile veins measured for the whole bundle.
+
+## A module named for what it holds could be imported and never used
+
+`builtin_` names are how the standard library reaches the engine, and a program
+that writes one for itself is refused. `resolve_name` did that by stripping the
+prefix and asking whether what remained was a builtin. It asked the same
+question of a QUALIFIED name: `builtin_shapes/circle` became `shapes/circle`,
+which is not a builtin anyone has, so the reference was refused as internal to
+the standard library. Every use of a module whose own name began with those
+bytes met the same refusal, so such a module could be imported and never used.
+
+Reproduced on an unpatched tree, two files:
+
+    builtin_probe/builtin_probe.kso   pub hello = "hi"
+    main.kso                          import "./builtin_probe"
+
+                                      print builtin_probe/hello
+
+    error[name]: `builtin_probe/hello` is internal to the standard library
+    — import its module
+
+The check applies to bare names now. A qualified name is a declaration in
+another module, and that module's name is its own business.
+
+The fixture is `tests/golden/micro/builtin_prefixed_names_are_not_builtins.kso`,
+which the micro corpus runs twice — once directly and once as a library behind a
+generated entry, which is the path that reaches the refusal. It was watched red
+for the right reason: the library run produced empty stdout because the compile
+was refused. The whole golden suite is green with the fix, including
+`a_builtin_the_standard_library_keeps_to_itself`, the fixture that pins the bare
+case this refusal exists for.
+
+How it was found is worth recording, because the first reading was wrong. It
+turned up while regenerating the per-module reshape's error goldens, where
+`builtin_arg_type` had lost its own type error and gained this one instead — a
+diagnostic disappearing, which the entry above called a stop. The reshape had
+not lost anything. The fixture is named `builtin_arg_type`, its own error used
+to be raised first and stop the compile, and moving that check later let this
+refusal reach the reader ahead of it. The bug was already there and had been
+since the refusal was written.
+
+## 2026-09-08 — a projection off one box carries no sign
+
+The `builtin_` fix went to CI three times and the compile-instructions row said
+something different each time. Worth writing down, because the reasoning that
+produced the wrong prediction was not careless.
+
+Round one asked for the slash in front of the `BUILTINS` lookup:
+
+    name.strip_prefix("builtin_").filter(|_| !name.contains('/'))
+
+CI read 50,691,635 against a golden of 50,685,288 — a rise of **6,347**. That
+one is real work, and the diagnosis was easy: every builtin reference the
+standard library makes now scans its own name for a slash, and the library makes
+a great many.
+
+Round two moved the question onto the refusing arm, which a correct program
+never reaches. The container this was written on read 51,095,253 for that shape
+and 51,095,253 for the round-one shape — identical, to the instruction. Two
+source shapes that measure the same locally, with the work provably removed from
+the hot path, and the container's own delta against its baseline was a rise of
+**629**. So the residue was called irreducible layout and the PR body said the
+fix costs 629 instructions.
+
+CI read 50,684,921. A **fall of 367**.
+
+The magnitude was about right and the sign was backwards. Layout is a property of the toolchain and
+the host — this container is rustc 1.94.1 on glibc 2.39, the goldens are measured
+on 1.98.1 — and a layout residue measured on one box says nothing about the same
+residue on another. The correct reading of the local measurement was that the
+6,347 was gone and the remainder was unpredictable; instead it was read as a
+number.
+
+`bench/compile_instructions_golden.txt` is regenerated to 50,684,921 and the two
+`data-golden="compile.compile_instructions"` spans on the compiler page follow
+it. The rule already in CLAUDE.md — project a compile-instructions move from CI
+or take the red round, never write down that it moved before CI has said so —
+now has this as its worked example, and the sign is the part it costs a round to
+learn.
