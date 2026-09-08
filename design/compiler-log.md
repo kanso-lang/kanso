@@ -3508,12 +3508,28 @@ push site fixes it, and all four fixtures then read as the base spells them:
     in every position
       --> an_arm_set_with_no_settling_arm.kso:7:4
 
-That is a class, not one site. `check_constants` reads `arms[1].span` out of a
-slice it indexed, `check_overlapping_arms` walks a filtered `Vec<&FnDecl>`, and
-`check_overload_ranks` walks `windows(2)` — none of the three goes through the
-iterator, so none of them carries a file either. The corpus surfaced only the
-tie because only the tie has a fixture that crosses files. The other three want
-fixtures before they want fixes.
+That is a class, not one site, and the class has two halves.
+
+The near half is walks that reach declarations by index rather than through the
+iterator: `check_constants` reads `arms[1].span` out of a slice it indexed,
+`check_overlapping_arms` walks a filtered `Vec<&FnDecl>`, and
+`check_overload_ranks` walks `windows(2)`. None goes through `diag::attributing`,
+so none carries a file. The corpus surfaced only the tie because only the tie has
+a fixture that crosses files; the other three want fixtures before fixes.
+
+The far half is larger and was found by chasing the one remaining leak.
+`sub_of_none` comes from `check_sub_parents`, which walks `program.types` with a
+plain `for` — the shape `attributing` was written for. It cannot use it.
+`stamp_file` stamps `program.fns` and nothing else, `TypeDecl` has no `file`
+field, and `HasFile` is implemented for `FnDecl` alone. So no diagnostic about a
+type declaration can carry a file however it is walked, and the attribution
+covers half the declarations in a program.
+
+Closing that is a real change rather than a call-site repair: a field on
+`TypeDecl`, a second loop in `stamp_file`, an impl, and one `Arc` refcount bump
+per type declaration — the same cost the fns side already pays, and the same
+shape kanso#1324 measured when it made a module's path shared. It is the next
+step on this thread.
 
 Then the goldens, which is where the reshape actually stands or falls. All 38
 movers were regenerated with the harness's own staging — `pub play` files behind
