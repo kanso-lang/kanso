@@ -3077,10 +3077,27 @@ spec. Its anchor is `check::check_merged(&merged, true)`, which appears once —
 `check_merged` is called four times in src/lib.rs and `finish_program` many
 more, so neither of those is a guard that can refuse.
 
-**The compile row is not expected to move**, and this entry does not predict a
-number for it. compile_corpus never reaches this path, and the win here has not
-been sized; what is measured is the pass count, which is what the change is
-about.
+**The compile row was expected not to move, and it rose 502.** The reasoning
+behind the prediction was right as far as it went: compile_corpus is a module,
+so the gate's workload goes through `compile_module_loaded` and never reaches
+`compile_parsed_entry`, and none of the four deleted lines is on it. What the
+prediction left out is that the counter added to find them is. The corpus loads
+seven modules, each running the four rewrites once, so about twenty-eight
+`rewrite::pass()` calls land on the measured run at roughly eighteen
+instructions apiece. 50,685,978 -> 50,686,480, 0.00099%, and every other vein
+in the job agreed — `compile_allocs` and `compile_peak_bytes` byte-identical,
+which is what says the front end is doing the same work plus a counter.
+
+`infer::work` has counted the sibling half of the front end on the same
+always-on thread-local for as long, and its cost sits inside every compile
+number this repository has recorded. Paying the same price for the same kind of
+watch is the trade taken here, and welfare is indifferent to it: 502 on 50.7M
+is far inside the 0.001 band `welfare.kso:686` compares with, so the floor is
+untouched.
+
+The saving the change actually makes is on the entry path, and no gate holds
+it. An entry program is walked four fewer times; `tests/rewrite_passes.rs` is
+the only thing in the tree that can see it.
 
 All seven `tests/golden/errors_module` fixtures are byte-identical, and
 `all_compile.sh` reports emitted_code AGREED, compile_libraries AGREED and

@@ -965,4 +965,21 @@
 # both to the unit, which is the third reading to support the licence #1321
 # and #1323 established. This row was left for CI, as it always is: the
 # container reads it on a different rustc and a different glibc.
-compile_instructions=50685978
+#
+# 2026-09-08 (an entry program is rewritten once before it is checked, not
+# twice): 50,685,978 -> 50,686,480, a RISE of 502 or 0.00099%. The change this
+# row is measuring removed four whole-program rewrites from `compile_parsed_entry`,
+# and this gate cannot see that: `compile_corpus` is a module, so the workload
+# goes through `compile_module_loaded` and never reaches the entry path at all.
+# What the gate does see is the new `kanso::rewrite` counter, which the module
+# path pays for. The corpus loads seven modules, each running the four rewrites
+# once, so about twenty-eight `rewrite::pass()` calls land on the measured run
+# at roughly eighteen instructions each. `infer::work` has counted the sibling
+# half of the front end on the same always-on thread-local for as long, and its
+# cost is already inside every number above this line.
+#
+# The saving is real and no gate holds it: an entry program is walked four
+# fewer times, which is what tests/rewrite_passes.rs pins at 20 against the 24
+# it found. Welfare is unmoved either way — 502 on 50.7M is far inside the
+# 0.001 band welfare.kso:686 compares with, and the floor is untouched.
+compile_instructions=50686480
