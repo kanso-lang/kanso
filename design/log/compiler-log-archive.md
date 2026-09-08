@@ -50921,3 +50921,85 @@ So the 8.15% is not reachable by rearranging the library. What is left is a
 builtin that answers "the first byte here that is not one of these four" in one
 call, the way `find2` answers the quote-or-backslash question for the string
 scan. That is a new primitive for one caller, and it is a separate question.
+
+## 2026-09-06 (twenty-second) — the scalar validator's ascii bytes are too few to skip
+
+`k_utf8_bad_scalar` is 38,820,450 instructions on the merged decoder, 2.52% of
+jsonbench, over 203,700 calls — 190.58 apiece. Its byte loop runs 15.45 times a
+call and 13.72 of those go down the ascii arm:
+
+    if (b0 < 0x80) { i += 1; continue; }
+
+`K_UTF8_SCALAR_MAX` is 32, so the arm serves every string of thirty-two bytes
+or fewer that carries at least one high byte — the door answers a wholly ascii
+run without coming here at all.
+
+The obvious repair is the one the split scan took in #1269: read eight bytes,
+test them against `0x8080808080808080`, advance eight when the mask is clear.
+It is **worse by 0.2314%**: jsonbench 1,542,924,905 -> 1,546,494,665, and
+`k_utf8_bad_scalar` itself 38,820,450 -> 42,390,150. The 3,569,700 the kernel
+gains is the whole 3,569,760 the program gains.
+
+The reason is the length. A string of thirty-two bytes or fewer, with a high
+byte somewhere in it, leaves ascii runs shorter than eight between the high
+bytes and near the ends, so `i + 8 <= len` rarely holds. Every ascii byte pays
+the guard and almost none of them get the skip. The same word test that saved
+97% of readbench in #1269 loses here, because there the runs were kilobytes
+and here they are single digits.
+
+### The harness was watched red first
+
+`scripts/utf8_differential` extracts this function's text from `src/runtime.c`
+at run time and checks it against an independently written reference. With the
+skip in it reports 45,189,025 checks and 0 mismatches. Breaking the mask to
+`0x8080808080808000` — which stops the test seeing a high bit in the word's
+first byte — gives 1,816,277 mismatches and exit 1, the first at
+`59 52 f4 5f 35 71 10 1e 32 66 6e 3f`. So the gate does cover this arm, which
+is what made the measurement worth trusting.
+
+Reverted.
+
+### And the two scans over a string are not two walks
+
+The natural next thought is that the decode reads every string twice — `find2`
+looking for the closing quote or a backslash, then the validator — and that one
+pass could do both. The profile says otherwise. Neither is a per-byte loop:
+
+    k_b_find2_raw       65,892,000 over 2,521,500 calls   26.13 each, 26 instrs
+    k_b_utf8_slice_raw  86,519,850 over 1,305,300 calls   66.28 each, 94 instrs
+
+No instruction in either runs more than twice a call. `find2_raw` is SSE2 on
+x86-64 and NEON on aarch64, sixteen bytes a step, so a short string is answered
+in one step; `k_b_utf8_slice_raw` is the ascii door, and it reaches the scalar
+validator on 25,650 of its 1,305,300 calls. What both rows measure is per-call
+setup over a scan that is already vectorised or already short-circuited, so
+there is no shared walk for a fused pass to save. The saving would be one
+call's frame, not one pass over the bytes.
+
+### The decode has no deep loop left
+
+Counting, for every block over four per cent, how many of its instructions run
+more than once a call:
+
+    value_for_3'2     353,650,950   2,713,950 calls   130.3 each    27 of 489 loop
+    obj_key_start_4'2 205,282,500   1,060,050         193.7          0 of 231
+    str_run_4         122,966,100     265,950         462.4        107 of 271
+    array_step_3'2    119,421,450     410,550         290.9         82 of 124
+    string_at_4       104,138,254   1,571,250          66.3          0 of 156
+
+`obj_key_start` and `string_at` are flat: every instruction exactly once a
+call. Of the three that do loop, only `value_for`'s runs deep, and the entry
+above closes it.
+
+`array_step`'s head runs 3.48 times a call and `str_run`'s 3.57. The first is
+`array_delim` skipping the comma, newline and indent between two elements —
+the same whitespace shape as `value_for`, through a three-arm ladder rather
+than a nine-arm one, at about thirty-five instructions a blank byte. The
+second is one iteration per escape in an escaped string, about a hundred and
+thirty instructions each: 2.57 `find2` calls, a utf-8 validation and an
+append, which is the fused path doing the work it exists to do.
+
+So what remains is per-call overhead and short loops earning their keep. A
+later reading should not go looking for another `value_for`.
+
+---
