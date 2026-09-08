@@ -3015,3 +3015,76 @@ licence stands. A disagreement would have mattered more than this change does,
 which is why the round was arranged to make one visible.
 
 Welfare 60.03 -> 60.04, banked in the same PR.
+
+---
+
+## 2026-09-08 — THE ENTRY PATH REWROTE ITS PROGRAM TWICE TOO, AND NOTHING COULD SEE IT
+
+kanso#1323 deleted the doubled rewrite group from `compile_module_loaded`.
+`compile_parsed_entry` had the same shape and was not touched:
+
+    check_merged
+    finish_program                   <- first group
+    desugar_field_reads
+    prune_unused_getters
+    trmc::rewrite
+    inline_builtin_wrappers
+    if the check passed:
+        canonicalize_types
+        canonicalize_bare_aliases
+        hoist_repeated_strings
+        fuse_enumerable
+        finish_program               <- again
+        desugar_field_reads
+        prune_unused_getters
+        trmc::rewrite
+
+The first group is deleted, which leaves this path in the module path's order.
+Nothing between the two reads the first group's output except
+`inline_builtin_wrappers`, and the second group redoes all of it. It also ran
+unconditionally — including on the way to refusing a program the check had
+already rejected, where the rewrite has no reader at all. `kanso::compile`
+(src/lib.rs:28), the third compile path, already ran the group once, so this
+was `compile_parsed_entry`'s alone.
+
+### The counter exists because nothing in the tree could see this
+
+Checked rather than assumed, one gate at a time:
+
+- `compile_instructions`, `compile_allocs` and `compile_memory` read
+  `kanso check compile_corpus`. compile_corpus is a MODULE — the phase trace
+  prints `load compile_corpus` — so the gate goes through
+  `compile_module_loaded` and never reaches `compile_parsed_entry`.
+- `bench/compile_golden_modules.txt` DOES run this path: `module_entry`
+  (tests/compile_cost.rs:52) calls `kanso::compile_entry`. Its columns are
+  rounds and visits — the INFERENCE fixpoint's, which a rewrite pass does not
+  touch — and lines, calls, branches and defines, which are the emitted IR and
+  byte-identical whichever way round the passes run, because they are
+  idempotent on their own output. The right workload, the wrong dimension.
+- `emitted_code` proves the change is safe. It cannot prove the change did
+  anything.
+
+So `kanso::rewrite` counts pass invocations, the way `infer::work::passes`
+counts whole-program inferences and for the same reason its spec gives: "a new
+diagnostic that calls infer for itself raises the real cost without moving
+either number. One did, and every gate in the repository stayed green." On
+`tests/golden/compile/module/main.kso`, the sample both compile goldens already
+use, the count is 20; with the four lines restored it is 24.
+`tests/rewrite_passes.rs` pins the 20 and was watched red at 24 first.
+
+The ratchet row `entry_rewritten_twice` restores the four lines and asks that
+spec. Its anchor is `check::check_merged(&merged, true)`, which appears once —
+`check_merged` is called four times in src/lib.rs and `finish_program` many
+more, so neither of those is a guard that can refuse.
+
+**The compile row is not expected to move**, and this entry does not predict a
+number for it. compile_corpus never reaches this path, and the win here has not
+been sized; what is measured is the pass count, which is what the change is
+about.
+
+All seven `tests/golden/errors_module` fixtures are byte-identical, and
+`all_compile.sh` reports emitted_code AGREED, compile_libraries AGREED and
+compile_cost AGREED. That reading is load-bearing rather than inherited:
+`compile_parsed_entry` puts `inline_builtin_wrappers` BETWEEN the two groups
+where `compile_module_loaded` puts it before both, so #1323's emitted_code
+reading does not carry over to this one.

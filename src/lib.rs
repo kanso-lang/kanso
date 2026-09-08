@@ -158,10 +158,6 @@ fn compile_parsed_entry(
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
     let merged_diags = check::check_merged(&merged, true);
-    finish_program(&mut merged);
-    phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
-    phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
-    trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     match merged_diags.is_empty() {
         true => {
@@ -176,6 +172,35 @@ fn compile_parsed_entry(
             Ok(merged)
         }
         false => Err(diag::render(&merged_diags, file, source)),
+    }
+}
+
+/// How many times the front end rewrites the whole program.
+///
+/// `bench/compile_golden_modules.txt` counts what the emitter WROTE and what
+/// the inference fixpoint cost getting there. Neither can see a rewrite pass
+/// run twice: the passes are idempotent on their own output, so the emitted
+/// text is byte-identical, and they are not inference, so rounds and visits
+/// hold. `compile_parsed_entry` ran four of them twice for as long as anyone
+/// has looked, and every gate in the repository stayed green.
+///
+/// This is the same instrument `infer::work::passes` is, pointed at the other
+/// half of the front end. Counted per invocation rather than per expression
+/// because the question is how many times a pass is ASKED for; what one pass
+/// costs is already the fixpoint's two numbers.
+pub mod rewrite {
+    use std::cell::Cell;
+    thread_local! {
+        static PASSES: Cell<u64> = const { Cell::new(0) };
+    }
+    pub fn reset() {
+        PASSES.with(|c| c.set(0));
+    }
+    pub fn pass() {
+        PASSES.with(|c| c.set(c.get() + 1));
+    }
+    pub fn passes() -> u64 {
+        PASSES.with(Cell::get)
     }
 }
 
@@ -611,6 +636,7 @@ fn install_prelude(program: &mut ast::Program) {
 
 /// Everything the compiler adds to a parsed program before anything reads it.
 fn finish_program(program: &mut ast::Program) {
+    rewrite::pass();
     install_prelude(program);
     synthesize_getters(program);
 }
@@ -1856,6 +1882,7 @@ fn qualify(
 /// that read field syntax to say something about the field — a type conflict
 /// names the read site, and an application would have nothing to point at.
 pub fn desugar_field_reads(program: &mut ast::Program) {
+    rewrite::pass();
     // Inequality rides the same hook: it has to see every module the merge
     // produced, which is exactly what this pass already runs after.
     desugar_inequality(program);
@@ -1934,6 +1961,7 @@ fn desugar_expr(e: &mut ast::Expr) {
 /// function whose name the program does not mention — and it keeps the
 /// emitted output the size it was before accessors became functions.
 pub fn prune_unused_getters(program: &mut ast::Program) {
+    rewrite::pass();
     // The set borrows the program's own names. It used to own them, which cost
     // a String allocation per identifier OCCURRENCE — every mention in the
     // whole program, not every distinct name — and a second for each qualified
