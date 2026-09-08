@@ -9,7 +9,10 @@
 # This is a separate script because the session that produced the list
 # could not run it. A ref-deletion push from the container is refused by
 # the agent proxy with HTTP 403, so the sweep waits on a shell that can
-# push a deletion.
+# push a deletion. `.github/workflows/delete-branch.yml` is now such a
+# shell for a handful of branches named by hand: Actions runs outside the
+# proxy, where a deletion is an ordinary push. This script stays for the
+# bulk case, where a list of hundreds is what makes it worth a script.
 #
 # Every row carries the commit it pointed at, so a branch deleted here
 # comes back with `git push origin <sha>:refs/heads/<name>`.
