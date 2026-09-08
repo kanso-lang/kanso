@@ -3156,9 +3156,27 @@ lands on the offset the other two rows already carry between this box's rustc
 offset.
 
 CI's summary named exactly one failing vein and eighteen green, which is what
-round one was for. The ratchet job passed in the same run, so `library_ir`'s
-mutation applies on the runner and the row is provable there rather than only
-here.
+round one was for.
+
+**A CORRECTION, made the round after the claim.** This entry and round two's
+commit message both said the ratchet job proved `library_ir` on the runner.
+Read the job log: it did not, and could not have. The ratchet's second pass is
+`ratchet -- touched origin/main`, which selects only rows patching a file the
+branch changed, and it reported
+
+    ratchet: 1 rows patch a file this branch changed
+      the ratchet (every gate has a mutation that turns it red)
+
+-- one row, the ratchet's own. This branch touches ci.yml, CLAUDE.md, three
+gate scripts, the ratchet, the trend gate, a spec, the log and two new bench
+files, and no `src/`; `the_library_program_is_checked_twice.sh` patches
+`src/lib.rs`, so the touched guard correctly passed it over. What CI did run is
+the first pass, `every mutation still matches the source it patches`, which
+does read the new mutation's anchor against `src/lib.rs` and found it. So the
+anchor holds on the runner and the row's provability there is untested; it was
+proved in the container, 165,589,540 -> 190,698,277. The next change to
+`src/lib.rs` -- the reorder -- is the branch that will select this row and
+prove it on CI.
 
 **THE SPEC PREDICTED ITS OWN FAILURE MODE AND THIS IS THE INSTANCE.**
 `tests/the_compile_sweep_names_every_compile_gate.rs` derives the sweep's list
