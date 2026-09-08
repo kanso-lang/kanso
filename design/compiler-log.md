@@ -4449,3 +4449,28 @@ floor moving to whatever it costs. `--set` cannot lower a floor, by Clay's
 bench/welfare_floor.json by hand where a reviewer sees it in the diff. That
 comment was written after the model spent a day looking able to refuse a fix
 worth four hundredths of a per cent; this is the same shape at 0.0161%.
+
+CI's rows, and what each one is. The container's +381,600 on runbench
+transferred to the runner to the instruction, which is worth saying: the
+prediction and the sitting agree exactly, so the cost is the branch and not
+the host.
+
+    work_runbench      2,397,582,951 -> 2,397,964,551   +381,600  (+0.0159%)
+    work_encodebench   4,058,633,349 -> 4,060,329,349 +1,696,000  (+0.0418%)
+    work_livebench     3,596,075,294 -> 3,597,771,294 +1,696,000  (+0.0472%)
+    work_oneshot          21,758,011 ->    21,762,251     +4,240  (+0.0195%)
+    text                   1,470,188 ->     1,471,084       +896
+
+The two encode rows move by the same 1,696,000 because livebench runs
+encodebench's program against the library that ships rather than the frozen
+copy, so the same renders are counted twice over. The text vein is +64 bytes
+on every one of the fourteen rows, which is the branch's own code.
+
+Two counters IMPROVED and neither is this change being clever.
+`work_widebench` fell 36,127,282 -> 36,104,947, and `compile_instructions`
+19,316,711 -> 19,316,381. Both are layout: src/runtime.c is `include_str!`'d
+into the compiler, so its bytes move the binary under it, and CLAUDE.md
+records seven layout-only moves of the compile row before this one.
+Widebench's floats are mostly integral and take the fixed-point fast path
+before ryu is reached at all, so its fall cannot be the new branch executing
+less; the 22,335 is 0.062% of the row and sits where layout noise sits.
