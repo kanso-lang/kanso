@@ -49,13 +49,14 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The one open, not blocking** — the book teaching the boundary language,
+**The two open, not blocking** — the book teaching the boundary language,
 queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types gavel.
 Measured on 2026-09-08, both halves wait on the same thing: the engines still
 short-circuit at an ordinary call and `<int>effect` is not spellable, so ch04
 describes the language as it runs and compiler.html entry 23 moves with it,
-after the surface lands. The assert hako left this list by being built —
-`lib/expect`, kanso#1233, 2026-09-03.
+after the surface lands. The second is the maps parse's share of the compile
+row's drift, which had been filed under Parked without a heading. The assert
+hako left this list by being built — `lib/expect`, kanso#1233, 2026-09-03.
 
 **The July letters are closed.** C struck, `done` minted for D, G struck on the
 July provenance measurement, Z confirmed declined, AA explicit-cast only. Every
@@ -284,7 +285,7 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Four questions wait in `design/pending-gavels.md`** — three blocking, one
+**Five questions wait in `design/pending-gavels.md`** — three blocking, two
 open — each with a recommendation. Counted from the ledger on 2026-09-08 by
 reading its `###` headings, which is what this line has always claimed to do
 and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
@@ -298,8 +299,11 @@ now reads both files and fails when this sentence and the ledger disagree.
 
 The three blocking are the welfare history's baseline after the one-program
 gavel, the compile term's workload, and an infinite or nan float's rendering.
-The one open is the book teaching the boundary language, which as of
-2026-09-08 waits on the typed-effect surface in both halves rather than one.
+The two open are the book teaching the boundary language, which as of
+2026-09-08 waits on the typed-effect surface in both halves rather than one,
+and the maps parse being 100% of the compile row's binary-to-binary drift —
+which had been sitting under Parked with no heading at all, so no index and
+no session citing by heading could reach it.
 
 Rulings since the last recount: no machine-code-size term in welfare and no
 two-value chip row (both 2026-09-05); the granted-baseline question CLOSED AS

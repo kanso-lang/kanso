@@ -17,6 +17,16 @@
 //! pinned to the file it describes: the ledger's `###` headings are counted
 //! under each `##` section, and this test fails when the two disagree. The
 //! ledger stays the source of truth; STATUS.md only has to agree with it.
+//!
+//! The second test guards the hole that made the first one incomplete. On
+//! 2026-09-08 the ledger's Parked section — by its own heading "on the record,
+//! no action" — carried a full entry appended under it with no `###` heading of
+//! its own: a measurement offered to Clay, closing with "this entry is where
+//! that goes". Nothing could reach it. Sessions cite entries by heading, and
+//! STATUS.md indexes by heading, so an unheaded entry is filed and invisible at
+//! once, and the count above stays right while the ledger is wrong. Parked is a
+//! list of one-liners; anything longer belongs under a heading in one of the
+//! two live sections, or in the log.
 
 use std::path::Path;
 
@@ -77,6 +87,33 @@ fn word_before(text: &str, phrase: &str) -> String {
         .expect("a word stands before it")
         .trim_matches('*')
         .to_ascii_lowercase()
+}
+
+/// Parked is bullets. Prose appended there is an entry nothing can cite.
+#[test]
+fn the_parked_section_holds_only_its_list() {
+    let ledger =
+        std::fs::read_to_string(root().join("design/pending-gavels.md")).expect("the ledger reads");
+    let parked = ledger.split_once("## Parked").expect("the ledger has a Parked section").1;
+    let stray: Vec<&str> = parked
+        .lines()
+        .skip(1)
+        .take_while(|l| !l.starts_with("## "))
+        .filter(|l| {
+            let t = l.trim();
+            // a bullet's wrapped continuation is indented; an appended entry
+            // starts at column zero, which is the shape this catches
+            !t.is_empty() && !t.starts_with("- ") && !l.starts_with(' ')
+        })
+        .collect();
+    assert!(
+        stray.is_empty(),
+        "design/pending-gavels.md's Parked section holds prose that is not part of \
+         its list: {stray:?}. Parked is one line per parked item; an entry appended \
+         here has no `###` heading, so no session citing by heading and no index \
+         can reach it — give it a heading under Blocking or Open, or move it to the \
+         log"
+    );
 }
 
 #[test]

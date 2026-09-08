@@ -3873,4 +3873,25 @@ STATUS.md writes: the same shape as
 Watched red three ways before it passed: a stale total, a stale blocking/open
 split, and an entry leaving the ledger with STATUS.md unchanged.
 
+**A third find, from sweeping the rest of the file for the same shape.** The
+Parked section — "on the record, no action" — carried a whole entry appended
+under it with no `###` heading of its own: callgrind's attribution of the
+compile row's binary-to-binary drift to glibc's `/proc/self/maps` parse, 0.27%
+of the row and 100% of its drift, closing with "the ruling was made when the
+term was known to exist and not known to be the whole of the drift, and this
+entry is where that goes". It was filed deliberately, by the archive entry of
+the same measurement, and then nothing could reach it: sessions cite entries by
+heading, STATUS.md indexes by heading, and it had none — under a section whose
+heading says nothing there is waiting. Filed and invisible at once.
+
+It gets a heading now, under Open, with the recommendation the ledger's own
+rules require: the 2026-09-03 no-exclusion ruling stands, because it was made
+on principle and 0.27% is not a reason to reopen it; what the number changes is
+how a session reads a 2,130 move on the row, as the loader's until
+`lang_start::{{closure}}` says otherwise. Clay can close it on a word.
+
+The second test in the new spec is that hole. Parked is one line per parked
+item, so a non-blank, non-bullet line at column zero under it is an entry
+nobody can cite. Watched red by putting the block back.
+
 Nothing here is a question for Clay. The three blocking entries stand as filed.
