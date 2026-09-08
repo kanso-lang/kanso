@@ -1,0 +1,6 @@
+# A module may be named for what it holds, and `builtin_` is an ordinary
+# prefix a name may start with. The refusal that keeps a program from
+# spelling `builtin_length` itself matched the head of a QUALIFIED name too,
+# so importing a module whose own name began with those bytes refused every
+# reference to it — `builtin_shapes/circle` read as a builtin nobody has.
+pub play = print "a module may be named for what it holds"

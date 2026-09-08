@@ -3491,7 +3491,13 @@ impl<'a> Resolver<'a> {
             local.used = true;
             return;
         }
-        if let Some(stripped) = name.strip_prefix("builtin_") {
+        // Bare only. `builtin_` is a prefix on a name a program writes for
+        // itself, and a QUALIFIED name is a declaration in another module —
+        // whose own name may perfectly well start with those bytes. Matching
+        // the head of `builtin_shapes/circle` read it as a builtin nobody has,
+        // so a module named for what it holds could be imported and never
+        // used: every reference to it was refused.
+        if let Some(stripped) = name.strip_prefix("builtin_").filter(|_| !name.contains('/')) {
             match self.std_origin && BUILTINS.contains(&stripped) {
                 true => return,
                 false => {
