@@ -2885,7 +2885,22 @@ an extra parameter carried through a recursive walk over every expression in the
 program, and a shape that hangs the recorder off a walker rather than threading
 it should cost less. Two things a real implementation must handle that the probe
 did not: the reader half in check.rs, and the second caller of the same walker at
-src/lib.rs:2616, which walks with the door map. This is not a gavel: the
+src/lib.rs:2616, which walks with the door map.
+
+**And the two readers want different things, which reading `foreign_constructions`
+settles.** Its own comment states the invariant the reorder breaks, at
+check.rs:1847: "A qualified name can never be a local binding, so unlike the
+arity walk beside it this needs no shadowing set: the slash IS the foreignness."
+That holds only while every slash in the merged program was written by a person.
+After the alias pass has run a slash also means the pass put one there, and the
+check fires on `m/thing 0` -- a call of an imported function -- as though it were
+a construction of the imported type of the same name. So opacity does not want a
+spelling to quote. It wants to SKIP a head the pass rewrote, because that head
+was never a construction. Arity is the one that wants the spelling. One record,
+two uses, and a fix that handed both readers the old name would leave the opacity
+refusal exactly where it is.
+
+This is not a gavel: the
 substance was ruled in kanso#1120, a diagnostic names what the import writes, and
 which mechanism satisfies it is the implementer's.
 
