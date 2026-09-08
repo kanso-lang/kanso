@@ -46,9 +46,14 @@ type unproven
   job
   why
 
+# A finding names the gate it is about, not only the line it prints. The
+# proving pass reads that back: a host-bound row is skipped when the BASELINE
+# could not answer its gate, and proved normally when it could, which is what
+# `type bound` below has always said should happen.
 type finding
   line
   ok
+  gate
 
 # A gate whose answer is only meaningful where its golden was measured.
 #
@@ -1749,7 +1754,7 @@ fn chose_drop _ false
 
 fn unmade p r
   said = "  UNBUILT {p.job}\n    gate: {p.gate}\n"
-  finding "{said}    the baseline would not build\n{spoke r}" false
+  finding "{said}    the baseline would not build\n{spoke r}" false p.gate
 
 fn presumed p r
   told p r (host_bound? p.gate)
@@ -1757,12 +1762,12 @@ fn presumed p r
 fn told p r true
   said = "  UNPROVEN THIS RUN {p.job}\n    gate: {p.gate}\n"
   why = "{why_bound p.gate}, so this run cannot prove a row sharing it"
-  finding "{said}    {why}\n{spoke r}" true
+  finding "{said}    {why}\n{spoke r}" true p.gate
 
 fn told p r false
   said = "  ALREADY RED {p.job}\n    gate: {p.gate}\n"
   why = "red before any mutation, so no row sharing it is proof"
-  finding "{said}    {why}\n{spoke r}" false
+  finding "{said}    {why}\n{spoke r}" false p.gate
 
 fn unmutated picked pairs acc
   bad = list/to_list (list/select acc (f -> not f.ok))
@@ -1772,7 +1777,8 @@ fn unmutated picked pairs acc
 # stops it. Both go to stderr, because a row that went unproven is news.
 fn settled_base picked pairs acc true
   said = green_line pairs acc (length acc == 0)
-  io/write_err (said_with acc said) . (_ -> proving (kept_provable picked) 1 [])
+  answerable_rows = kept_provable picked acc
+  io/write_err (said_with acc said) . (_ -> proving answerable_rows 1 [])
 
 # Two numbers when any gate went unproven, because "green" would be a claim
 # about gates this runner never answered. One number when none did, which is
@@ -1793,11 +1799,49 @@ fn said_with acc said
   body = text/join lines ""
   "{said}{body}"
 
-# A row whose gate this run cannot answer is not run under mutation either:
+# A row whose gate this run COULD NOT ANSWER is not run under mutation either:
 # applying a mutation to an already-red gate and reading red is the credit the
 # baseline exists to refuse.
-fn kept_provable picked
-  list/to_list (list/select picked (r -> not host_bound? r.gate))
+#
+# Which rows those are is read off the baseline, not off the host_bound list.
+# `host_bound?` is a property of the GATE -- its golden pins exact counts and
+# the runner pool is not one machine -- and answering it says nothing about
+# whether THIS run landed on the golden's silicon. The baseline already asked
+# that question, by running the gate on an unmutated worktree, and this reads
+# its answer back.
+#
+# Keying on the static property instead meant a host-bound row was dropped on
+# every host, including the one where its gate is green, so `library_ir`,
+# `entry_ir`, `compile_ir` and `work` could be selected and never proved
+# anywhere. `type bound` above has said the opposite since kanso#1228 -- "on a
+# run that lands on the golden's silicon the row is proved normally" -- and the
+# code has never done it. kanso#1338's ratchet job is the instance: five gates
+# green before any mutation, five rows selected, and
+#
+#     ratchet: 3 rows
+#
+# with the entry and library rows gone from the report without a line. They
+# were selected for the first time on that branch, by the guard-line repair it
+# carried, and the runner had just proved it could answer both.
+fn kept_provable picked acc
+  list/to_list (list/select picked (r -> provable? r acc))
+
+fn provable? r acc
+  answerable? r acc (host_bound? r.gate)
+
+fn answerable? _ _ false
+  true
+
+# The baseline pushes a finding for every gate it could not answer, and each
+# finding names its gate. No finding for this gate means the baseline ran it
+# and it was green.
+#
+# Every finding that reaches here is a host-bound refusal: an UNBUILT setup or
+# an ALREADY RED gate carries ok = false, and `settled_base` exits on those
+# before proving starts. So this is asking exactly the question it looks like it
+# is asking, and not standing in for a wider one.
+fn answerable? r acc true
+  not list/any? acc (f -> f.gate == r.gate)
 
 fn proving list at acc
   proven list at acc (at > length list)
@@ -1849,16 +1893,17 @@ fn cleaned dir
   os/run "git" ["worktree" "remove" "--force" dir]
 
 fn red r
-  finding "  red   {r.job} — {r.claim}\n" true
+  finding "  red   {r.job} — {r.claim}\n" true r.gate
 
 fn blind r
-  finding "  BLIND {r.job} — {r.claim}: the gate stayed green\n" false
+  finding "  BLIND {r.job} — {r.claim}: the gate stayed green\n" false r.gate
 
 fn broke r
-  finding "  BROKE {r.job} — {r.claim}: the mutation would not apply\n" false
+  said = "  BROKE {r.job} — {r.claim}: the mutation would not apply\n"
+  finding said false r.gate
 
 fn unbuilt r
-  finding "  UNBUILT {r.job} — {r.claim}: it would not build\n" false
+  finding "  UNBUILT {r.job} — {r.claim}: it would not build\n" false r.gate
 
 fn reported list acc
   lines = list/to_list (list/map acc (f -> f.line))
@@ -1870,10 +1915,12 @@ fn settled list bad
   closed list bad (length bad == 0)
 
 # An empty list here is not success. When every row a branch selected shares a
-# host-bound gate, `kept_provable` drops them all and the loop has nothing to
-# run — and the old wording congratulated it, which is the false green this
-# whole pass exists to refuse. Nothing was proved, the run says so, and it does
-# not fail, because no diff could have proved them on this runner.
+# gate the baseline could not answer, `kept_provable` drops them all and the
+# loop has nothing to run — and the old wording congratulated it, which is the
+# false green this whole pass exists to refuse. Nothing was proved, the run says
+# so, and it does not fail, because no diff could have proved them on this
+# runner. A row dropped this way always has a finding above it naming its gate,
+# so the reader is never left to wonder where it went.
 fn closed list _ true
   none_left (length list == 0)
 

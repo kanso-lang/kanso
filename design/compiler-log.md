@@ -2846,3 +2846,76 @@ row in the same session. The thread goes to the back of the queue: not refuted,
 not worth building next, and no longer unpriced. What is owed first if it is
 ever picked up is recording the twin/original pairing at the `enroll_bare` clone
 site, which is the cheap half of the copy.
+
+## 2026-09-08 (tenth) — a host-bound row was dropped on every host, including the one that could prove it
+
+`type bound` in scripts/ratchet/ratchet.kso has said since kanso#1228 that a row
+sharing a host-bound gate is skipped where the runner cannot answer it and
+**"on a run that lands on the golden's silicon the row is proved normally"**. The
+code has never done the second half. `kept_provable` dropped every row whose
+gate is on the `host_bound` list, and that list is a property of the GATE — its
+golden pins exact counts and the runner pool is not one machine — which says
+nothing about whether THIS run landed on the golden's silicon.
+
+So `library_ir`, `entry_ir`, `compile_ir` and `work` could be selected and never
+proved, anywhere. Not on a container, where the gate refuses and the drop is
+right. Not on CI, where the gate compares and the drop is wrong.
+
+kanso#1338's ratchet job is the instance, and it is the first branch that could
+ever have produced one — the guard-line repair it carried is what made the two
+compile rows selectable at all:
+
+    ratchet: 5 gates green before any mutation
+    ratchet: 5 rows patch a file this branch changed
+      ... a front-end pass that owns the program's names instead of borrowing them
+      ... work on the entry path, where the compile row measures a module
+      ... work on the library path, which the entry and module rows both walk past
+      ... a number the page states about the present drifting from its golden
+      ... a name a module keeps private crossing an import anyway
+    ratchet: 3 rows
+
+Five gates green. The baseline had just run `entry_instructions.sh` and
+`library_instructions.sh` on that runner and both compared. Then three rows ran,
+and the two compile rows left the report with no line at all — not a finding, not
+a skip notice, nothing. The same job's cost-goldens run read `entry instructions`
+and `library instructions` green on their own steps, which is the same fact from
+the other side.
+
+THE BASELINE ALREADY ASKS THE RIGHT QUESTION and its answer was being thrown
+away. It runs every distinct gate on an unmutated worktree before any mutation,
+and pushes a finding for each one it could not answer. A host-bound gate with a
+finding is `UNPROVEN THIS RUN` and its row must be dropped; a host-bound gate
+with no finding was green on this machine, minutes ago, and a red under mutation
+in a sibling worktree on the same machine is the mutation's doing.
+
+`finding` gains the gate it is about, and `kept_provable` reads it back. Four
+lines of decision where there was one, and the static list keeps its job: it
+still decides whether a red baseline FAILS the run or is excused.
+
+Watched red, with the whole program rather than a piece of it. The spec copies
+scripts/ratchet to a temp directory with one constant changed — `work_gate`
+points at `scripts/gates/python_free.sh` instead of `instructions.sh` — which
+makes a two-git-grep gate host-bound, the property four callgrind gates otherwise
+have and only a runner can exercise. Then it runs the real `prove python-free`
+against a worktree of HEAD. On the old rule:
+
+    ratchet: 1 gates green before any mutation
+    ratchet: no row on this runner could be proved; none was claimed
+    ratchet: 0 rows
+
+on the new one:
+
+    ratchet: 1 gates green before any mutation
+    ratchet: 1 rows
+      red   python-free (the harnesses stay kanso) — a python call creeping back into a harness
+    ratchet: every row turned its gate red
+
+Ten seconds for the file's four fixtures. It lives beside
+`a_gate_red_before_the_mutation_is_refused_rather_than_credited`, whose baseline
+pass this reads, and shares that file's mutex because `prove` names its scratch
+worktrees by fixed paths. The other three fixtures stayed green throughout,
+which is what says the baseline pass itself did not move.
+
+What this does not do is prove a compile row on a runner. That is CI's to say,
+and the reading is in the next ratchet job on a branch touching src/: five rows
+selected should now be five rows proved.
