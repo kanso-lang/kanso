@@ -2814,3 +2814,82 @@ corruption that may or may not happen; this one is the decision that allows it.
 
 No counter moves. `kanso run`'s temp handling is not on any measured path: the
 compile veins run `kanso check`, which never reaches `cached_program_binary`.
+
+## 2026-09-08 (fifth) — the entry reorder re-derived, and the alias pass refuses a valid program
+
+Searched the log, the archive and design/ before filing: the 2026-09-08 entry
+"the entry path's reorder costs a diagnostic, and is reverted" is this same
+change, and the entry after it records the vein that now measures it. The
+archive's `canonicalize_bare_aliases` entries are about what the pass costs, not
+about when it runs. What neither has is the failure set as it stands today.
+
+**DECLINED, a second time, on wider grounds than the first.** Hoisting
+`canonicalize_types` and `canonicalize_bare_aliases` out of
+`compile_parsed_entry`'s success arm is worth, on 9ec9f7e9 in this box:
+
+    entry_instructions   164,922,557 -> 163,362,291   -1,560,266  (-0.9461%)
+    compile_instructions  49,170,337 ->  49,170,337            0
+
+against kanso#1329's -1,674,396 (-1.0136%) for the same edit a few merges
+earlier. The module row is byte-identical here, which is what a
+`compile_parsed_entry`-only edit should read; CI has not been asked, so that is
+a projection.
+
+**The failure set has moved since the revert.** `scripts/module_differential`
+reads 0 wrong on 9ec9f7e9 and 2 wrong with the reorder, and only one of the two
+is the one kanso#1329 recorded:
+
+    a call from the entry at the wrong arity
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
+      where the program says `one`
+
+    a type and a function sharing a name
+      expected it to compile; got
+      error[opacity]: `m/thing` is foreign -- only `m` builds a `thing`
+
+The sibling-arity case kanso#1329 also lost now passes. In its place is a
+program that compiled before the reorder and does not compile after it, which is
+a worse thing than a diagnostic quoting the wrong spelling. `m/b.kso` declares
+`pub fn thing _`, the entry writes `print "{thing 0}"`, and the answer should be
+`m/thing 0`.
+
+**Both objections are the alias pass, not the type pass.** Moving
+`canonicalize_bare_aliases` alone and leaving `canonicalize_types` in the success
+arm leaves the differential at the same 2 wrong, and reads slightly BETTER than
+moving both:
+
+    entry_instructions   164,922,557 -> 163,353,361   -1,569,196  (-0.9515%)
+
+8,930 better than the pair, because the alias pass deletes the twins before
+`canonicalize_types` walks them rather than after. `thing` in `print "{thing 0}"` is a CALL, so the alias pass rewrites it to
+`m/thing` like any other bare name, and the opacity check then reads a qualified
+name as a foreign type construction. One pass, one mechanism, two checks that
+read a name after something else has rewritten it.
+
+**What would make it shippable**, stated more narrowly than kanso#1329 could:
+`check_merged`'s opacity and arity checks have to see the spelling the program
+used. The obvious inverse map from `aliases` is unsound -- it is keyed by name,
+so it would also rewrite the diagnostic for a call the user really did write
+qualified -- and a per-site record costs an insert on every rewritten call to be
+read only on the error path. Neither has been measured. This is not a gavel: the
+substance was ruled in kanso#1120, a diagnostic names what the import writes, and
+which mechanism satisfies it is the implementer's.
+
+**How this came to be built twice, since the answer is a process one.** The task
+list carried it as BUILT AND PROVEN with a full `cargo test` behind it. The
+kanso#1329 entry names that exact evidence as worthless here --
+`scripts/module_differential` is a kanso program run by the diagnostics-
+differential CI job and `cargo test` never invokes it -- so the suite was green
+both times and said nothing both times. The filing search caught it before the
+branch was pushed, which is what the search is for.
+
+- **DECLINED** — the entry path's alias-pass reorder, in any shape that leaves a
+  check reading a rewritten name. Re-measured, re-refused, and this time the
+  opacity refusal is on the record beside the arity one.
+- **OPEN** — the pre-canonical spelling for `check_merged`'s two name-reading
+  checks. Worth -1,569,196 on the entry row in the alias-only shape, 0.95% of
+  it. Neither mechanism has been measured.
+- **OPEN, unchanged** — the twins inside `infer`, which is the other half of the
+  reorder's value and is blocked on a different thing: `infer` indexes
+  declarations positionally, and a group keyed by (name, arity) is a dispatch
+  group, so the twin is what lets a bare name resolve.
