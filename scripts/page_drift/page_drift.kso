@@ -24,6 +24,28 @@ fn heading? l
 fn title l
   text/slice l 5 (length l)
 
+# A ruling is not a change, and the page presents changes. Clay, 2026-09-08:
+# "there is no specific correlation between a number of log entries and
+# specific changes to the HTML." The whole-float gavel is the worked example
+# of why. It was ruled on 2026-09-06 and filed as one entry; the behaviour it
+# decided shipped in kanso#1285 as a second; the page sentence it falsified
+# was corrected in kanso#1315 as a third. One page edit was owed across the
+# three, and the ruling was not the entry that owed it — a decision documents
+# a page only once something implements it. So the rulings come out of the
+# count, and the entries recording what shipped stay in, which is where the
+# debt this gate was built to catch actually comes from.
+#
+# The marker is the heading's own convention rather than a new one: a ruling
+# reads `## <date> — gavel: ...` or `## <date> — directive: ...`. An entry
+# that merely mentions a gavel keeps its place in the count, because the
+# colon and the dash are what the convention writes and a sentence about a
+# gavel is not a ruling.
+fn ruling? t
+  has? t "— gavel:" or has? t "— directive:"
+
+fn has? t marker
+  length (text/split t marker) > 1
+
 fn indented e
   "  {e}\n"
 
@@ -61,29 +83,45 @@ fn against ""
 fn against sha
   asked ["diff" "{sha}..HEAD" "--" "design/compiler-log.md"] . counted
 
+# Both numbers are printed, always. A gate that silently drops entries is one
+# nobody can check, and the skipped count is how a reader sees that the
+# exemption did what it claims rather than swallowing the diff.
 fn counted d
-  heads = headings d.stdout
-  count = length heads
-  verdict heads count (count <= budget)
+  all = headings d.stdout
+  owed = list/to_list (list/reject all ruling?)
+  count = length owed
+  skipped = length all - count
+  verdict owed count skipped (count <= budget)
 
-fn verdict _ count true
-  io/write "page drift {count}/{budget} log entries since the page moved\n"
+fn verdict _ count skipped true
+  io/write "page drift {count}/{budget} log entries since the page moved"
+  >> io/write "{aside skipped}\n"
 
-fn verdict heads count false
-  told heads count . (_ -> os/exit 1)
+fn verdict owed count skipped false
+  told owed count skipped . (_ -> os/exit 1)
 
-fn told heads count
-  io/write "the log is {count} entries ahead, and the budget is {budget}:\n"
-  >> named heads
-  >> owed 0
+fn aside 0
+  ""
 
-fn named heads
-  io/write (text/join (list/to_list (list/map heads indented)) "")
+fn aside 1
+  " (one ruling not counted)"
+
+fn aside n
+  " ({n} rulings not counted)"
+
+fn told owed count skipped
+  io/write "the log is {count} entries ahead, and the budget is {budget}"
+  >> io/write "{aside skipped}:\n"
+  >> named owed
+  >> owes 0
+
+fn named owed
+  io/write (text/join (list/to_list (list/map owed indented)) "")
 
 # What the reader is told when the budget is spent: which file is the
 # chronology, which one they are shown, and that one entry per campaign is
 # enough — the failure being caught is a page nobody edited all day.
-fn owed _
+fn owes _
   io/write "\ndesign/compiler-log.md is the chronology and\n"
   >> io/write "docs/compiler.html is what a reader is shown. Several\n"
   >> io/write "entries with no page edit means the presented design has\n"
