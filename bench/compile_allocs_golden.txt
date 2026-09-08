@@ -289,4 +289,13 @@
 # allocate while it checks. The container is rustc=1.94.1 against this
 # row's 1.98.1 and cannot compare; 25,862 is CI's own reading from the
 # round-one job log on 31537922.
-compile_allocs=31596
+#
+# 2026-09-08 (a module is rewritten once before it is checked, not twice):
+# 31,596 -> 30,414, a FALL of 1,182 or 3.74%. `compile_module_loaded` ran
+# `finish_program`, `desugar_field_reads`, `prune_unused_getters` and
+# `trmc::rewrite` once before the whole-program check and again after it; the
+# first run is deleted. Four passes not run over the merged program is four
+# passes' worth of traffic not allocated. The container is rustc=1.94.1
+# against this row's 1.98.1 and cannot compare; 30,414 is CI's own reading
+# from the round-one job log on 8966e968.
+compile_allocs=30414
