@@ -608,6 +608,22 @@ alloc_gate = row
   (breaking "an_allocation_counter_gated_by_two_branches")
   benches
 
+str_words = row
+  "a short string built through a call"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_string_built_through_a_call")
+  benches
+
+ryu_words = row
+  "a rendered number's digits walked one at a time"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_rendered_number_s_digits_walked_one_at_a_time")
+  benches
+
 size_walk = row
   "a sizing walk that calls on every immediate"
   false
@@ -1110,7 +1126,7 @@ rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
 
 rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
 
-rows_b1m = text/concat rows_b1l [pop_deep]
+rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words]
 
 rows_b = text/concat rows_b1m [compile_mem compile_mem_host]
 

@@ -2604,6 +2604,36 @@ KValue k_float(double d) {
     KValue v; v.tag = K_FLOAT; memcpy(&v.payload, &d, 8); return v;
 }
 
+/* glibc's memcpy spends a dozen instructions deciding how to move bytes
+   before it moves any, which is most of the cost when the run is shorter
+   than a couple of words. Two overlapping loads and two overlapping stores
+   touch only bytes inside [s, s+n) and [d, d+n), so no caller needs slack
+   at either end for this to be safe. */
+static inline void k_copy_short(char* d, const char* s, long long n) {
+    if (n >= 16) { memcpy(d, s, (size_t)n); return; }
+    if (n >= 8) {
+        uint64_t a, b;
+        __builtin_memcpy(&a, s, 8);
+        __builtin_memcpy(&b, s + n - 8, 8);
+        __builtin_memcpy(d, &a, 8);
+        __builtin_memcpy(d + n - 8, &b, 8);
+    } else if (n >= 4) {
+        uint32_t a, b;
+        __builtin_memcpy(&a, s, 4);
+        __builtin_memcpy(&b, s + n - 4, 4);
+        __builtin_memcpy(d, &a, 4);
+        __builtin_memcpy(d + n - 4, &b, 4);
+    } else if (n >= 2) {
+        uint16_t a, b;
+        __builtin_memcpy(&a, s, 2);
+        __builtin_memcpy(&b, s + n - 2, 2);
+        __builtin_memcpy(d, &a, 2);
+        __builtin_memcpy(d + n - 2, &b, 2);
+    } else if (n == 1) {
+        d[0] = s[0];
+    }
+}
+
 KValue k_int(long long i) { KValue v; v.tag = K_INT; v.payload = i; return v; }
 KValue k_bool(long long b) { KValue v; v.tag = b ? K_TRUE : K_FALSE; v.payload = 0; return v; }
 KValue k_none(void) { KValue v; v.tag = K_NONE; v.payload = 0; return v; }
@@ -2674,7 +2704,7 @@ KValue k_str_n(const char* data, long long len) {
         }
     }
     KStr* s = k_str_alloc(len);
-    memcpy(s->data, data, len);
+    k_copy_short(s->data, data, len);
     s->data[len] = 0;
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
@@ -3980,7 +4010,7 @@ static long long render_ryu(double d, char* buf) {
         *o++ = dig[0];
         *o++ = '.';
         if (k > 1) {
-            for (int i = 1; i < k; i++) *o++ = dig[i];
+            k_copy_short(o, dig + 1, k - 1); o += k - 1;
         } else {
             *o++ = '0';
         }
@@ -3997,13 +4027,13 @@ static long long render_ryu(double d, char* buf) {
         for (int i = 0; i < ip; i++) *o++ = i < k ? dig[i] : '0';
         if (k > ip) {
             *o++ = '.';
-            for (int i = ip; i < k; i++) *o++ = dig[i];
+            k_copy_short(o, dig + ip, k - ip); o += k - ip;
         }
         *o = 0;
     } else {
         *o++ = '0'; *o++ = '.';
         for (int i = 0; i < -x - 1; i++) *o++ = '0';
-        for (int i = 0; i < k; i++) *o++ = dig[i];
+        k_copy_short(o, dig, k); o += k;
         *o = 0;
     }
     return (long long)(o - buf);

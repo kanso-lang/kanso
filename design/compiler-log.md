@@ -4480,3 +4480,147 @@ twice and both quotations moved with the golden. `golden_prose` is what caught
 them, on the round that had everything else right -- which is the gate working:
 a figure on the page and a figure in a golden are the same number or the page
 is wrong.
+
+## 2026-09-08 (eighth) — a short copy went through the call, twice more
+
+kanso#1317 fixed `k_b_join`'s one-byte copies and left a map of where the rest
+of runbench's `memcpy` time sits. Two of those sites are the same shape and
+neither needed a call at all.
+
+`k_str_n` builds every string the runtime does not already hold, and its copy
+went straight to libc. From `split` alone that call is reached 177,706 times a
+run at 12.9 instructions apiece; the pieces being moved are two or three bytes,
+so the call is nearly all of it. `render_ryu` writes ryū's digits into the
+output buffer with three byte loops, and clang outlines each of them into a
+`memcpy` call: 191,070 a run at 15.3.
+
+Both now go through `k_copy_short`, which moves anything under sixteen bytes as
+two overlapping loads and two overlapping stores. Reads stay inside
+`[s, s+n)` and writes inside `[d, d+n)`, so no caller needs slack at either
+end — the same idiom `k_b_utf8_slice_raw` has shipped since kanso#1294.
+
+**Measured on the container, each side rebuilt, run from the repo root, against
+the tree this lands on — main plus kanso#1319:**
+
+```
+  baseline           2,374,180,362
+  k_str_n only       2,372,135,490   -2,044,872  (-0.0861%)
+  render_ryu only    2,370,339,882   -3,840,480  (-0.1617%)
+  both               2,368,295,010   -5,885,352  (-0.2479%)
+```
+
+The two rungs are additive to the instruction: 2,044,872 + 3,840,480 =
+5,885,352. Output md5 identical on all four builds. That is 2.7x what
+kanso#1317's own change recovered, from the same map and the same reading of
+it.
+
+Of the render_ryu rung's 3,840,480, some 913,860 is render_ryu's own self cost
+falling and 2,926,620 is the `memcpy` calls it no longer makes — the figure the
+kanso#1317 map already attributed to render_ryu, to the instruction.
+
+**These two are not independent of kanso#1319, and the earlier note in this
+file saying they were is wrong.** kanso#1319 added an unsigned compare to
+`ryu_d2d`, which is inlined into `render_ryu` in every profile, and it cost
++381,600. On the patched tree it costs nothing:
+
+```
+  render_ryu self cost, no kanso#1319, byte loops        90,045,360
+                        kanso#1319,    byte loops        90,426,960   +381,600
+                        no kanso#1319, k_copy_short      89,513,100
+                        kanso#1319,    k_copy_short      89,513,100         +0
+```
+
+`both` reads 2,368,295,010 on either tree, to the instruction. So the −5,885,352
+above pays back kanso#1319's whole cost along with its own. Which transform
+folds the compare away once the digit copies are inline is not established here
+and is not guessed at: the measurement reproduces, the mechanism is open.
+
+An earlier sitting of this ladder read a baseline of 2,397,583,080 and deltas of
+1,914,270 / 3,458,430 / 5,372,700. That baseline does not reproduce: a clean
+measurement of the same tree reads 2,373,798,762, which is the figure kanso#1317
+reports for its own patched side. The table above is the sitting that survives
+re-measurement, and the earlier one is recorded here so nobody cites it.
+
+`sh scripts/gates/all_counters.sh` says the twelve cost veins and the lazy tier
+agree: no allocation counter moves, because this changes how bytes are copied
+and not how many. `sh scripts/gates/all_compile.sh` says nothing moved that
+this host can see, with four gates refusing on a host they may not compare
+against.
+
+Rows `str_words` and `ryu_words` in the ratchet, one per site. Neither was
+watched red here: `scripts/gates/instructions.sh` refuses to compare on this
+container, whose glibc and rustc are not the pair the golden names, so a local
+mutation run cannot fail for the right reason or any other. What stands behind
+the rows until CI runs them is that each mutation reverts exactly one site and
+both of the trees they produce are in the table above, millions of instructions
+from the ladder against a gate that asserts equality.
+
+**What is left of the map.** `k_closure`, `k_b_put_mut` and `k_mklist` each
+read 22.0 instructions an average call and each already carries an `n <= 4`
+element loop, so their residual is the copies longer than four `KValue`s.
+Raising that threshold is a tuning question of its own — kanso#1209 moved a
+different cap from four to eight and had to measure it — and the answer here is
+not assumed. `k_b_append_grow`'s 29.2M at 82.7 a call remains a real buffer
+copy and is not this shape.
+
+**CI's rows.** The container may not write the host-keyed veins, so these are
+the linux runner's, copied in. Twelve of the fourteen work rows moved and ten
+of them fall:
+
+```
+  jsonbench    1,487,045,449 -> 1,485,345,052   -1,700,397  (-0.1143%)
+  encodebench  4,060,329,349 -> 4,043,253,556  -17,075,793  (-0.4206%)
+  oneshot         21,762,251 ->     21,708,250      -54,001  (-0.2481%)
+  widebench       36,104,947 ->     35,967,285     -137,662  (-0.3813%)
+  pendbench      590,979,348 ->    590,971,748       -7,600  (-0.0013%)
+  scanbench      730,307,043 ->    726,019,157   -4,287,886  (-0.5871%)
+  livebench    3,597,771,294 -> 3,580,692,761  -17,078,533  (-0.4747%)
+  runbench     2,397,964,551 -> 2,392,210,251   -5,754,300  (-0.2400%)
+```
+
+`deepbench` and `escapebench` are byte-identical. The runner's runbench delta
+is 5,754,300 against the container's 5,885,352 — the same change on a different
+glibc, where the call it removes is a different call.
+
+**Four work rows RISE and are priced here by name and landed value**, as the
+trend gate asks: `basket` 34,684,338 -> 34,694,178 (+9,840, +0.0284%),
+`indexbench` 3,265,784 -> 3,265,786 (+2), `digestbench` 10,420,391 ->
+10,420,396 (+5), `readbench` 4,287,134 -> 4,287,137 (+3). The three
+single-digit moves are layout; `basket`'s 9,840 is the same, and its own
+allocation counters are byte-identical, which is what says no work was added.
+
+**All fourteen .text rows rise**, which is what inlining a copy does — the
+bytes the call used to stand for now sit at each site:
+
+```
+  jsonbench     94,962 ->  96,418  +1,456      pendbench     86,722 ->  87,666    +944
+  encodebench  115,090 -> 116,546  +1,456      indexbench    55,586 ->  56,402    +816
+  oneshot      105,986 -> 107,442  +1,456      scanbench    154,386 -> 155,602  +1,216
+  basket       109,858 -> 110,978  +1,120      digestbench  105,682 -> 106,498    +816
+  widebench    120,514 -> 121,970  +1,456      readbench     51,954 ->  52,930    +976
+  deepbench     70,482 ->  71,250    +768      livebench    106,562 -> 108,018  +1,456
+  escapebench   51,618 ->  52,386    +768      runbench     241,682 -> 243,458  +1,776
+```
+
+The 2026-09-05 gavel keeps machine-code size out of welfare and in its own
+exact vein, so these rows are recorded rather than weighed.
+
+**`compile_instructions` 19,316,381 -> 19,316,962 (+581)**, and the page's two
+`data-golden="compile.compile_instructions"` spans move with it. `kanso check
+lib/json` stops before codegen, so no decision this row counts has changed;
+`src/runtime.c` is `include_str!`'d into the compiler, so its bytes move the
+binary's layout. `compile_allocs` and `compile_peak_bytes` are byte-identical,
+which is what separates a layout move from a real one.
+
+**And the threshold is right where it is.** Raising all four element loops from
+four to eight — `k_rec`, `k_mklist`, `k_closure` and the list push — costs
+runbench 798,725 instructions, 2,368,295,010 to 2,369,093,735 (+0.0337%),
+measured on this host with each side rebuilt. kanso#1209 moved a different cap
+from four to eight and gained; this one loses, because the counts past four are
+rare enough that the extra compare on every short copy outweighs the calls it
+removes. Declined, and the four stay at four.
+
+Named by the keys the trend gate reads, each with the value it landed on:
+`work_basket` 34,694,178, `work_indexbench` 3,265,786, `work_digestbench`
+10,420,396, `work_readbench` 4,287,137, and `text` 1,471,084 -> 1,487,564,
+the sum of the fourteen rows above.
