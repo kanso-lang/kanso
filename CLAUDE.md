@@ -538,6 +538,17 @@ deliberately left the timings, with the reason in the commit.
    kq TRY.md timings, kanso-json README if it grows numbers. Three of
    these sat stale for a day because the sweep ran on recall, and a later
    sweep found five disagreeing figure sets across four pages.
+
+   **A page edit ends with `sh scripts/gates/all_pages.sh`.** Three gates read
+   the published pages and they run in three separate CI jobs: `golden_prose`
+   (the `data-golden` spans against the goldens they name), `page_drift` (the
+   log's budget of unpublished entries) and `prose_check` (the mechanically
+   detectable slop families). Only golden_prose can see a span that has drifted
+   from its golden. On kanso#1328 a session ran the other two and pushed; that
+   cost a round and took welfare with it, because welfare runs golden_prose as
+   its last step, so it reported ALREADY RED and could prove nothing about the
+   three rows sharing that gate. The sweep costs 31 seconds and reports every
+   objection rather than the first.
 2. Profile evidence in the PR (which line died, what the floor is now).
 3. **Every change carries a perf check**, not just perf PRs: re-run the
    decode floor and the compile timings, and move the published numbers

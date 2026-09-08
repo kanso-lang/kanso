@@ -2365,3 +2365,57 @@ Nothing else changes. The alias pass removes a twin only where the bare name has
 one target and no local binding, so an ambiguous bare name keeps both copies and
 `check_bare_ambiguity` still sees them. The full golden suite is green,
 including all 173 error fixtures and the micro corpus run twice.
+
+## 2026-09-08 (third) — three page gates in three CI jobs, and no sweep over them
+
+Searched the log, the archive and design/ before filing. `golden_prose` appears
+once in the live log (kanso#1300's round three, where it caught a span) and
+seventeen times in the archive; the closest entry is 2026-09-02, "the sweep the
+page owed after four twins", which is about prose figures carrying no
+`data-golden` tag at all. Neither asks whether the page gates have an entry
+point.
+
+**DONE.** `scripts/gates/all_pages.sh` runs the three gates that read the
+published pages, and `tests/every_page_gate_is_in_the_sweep.rs` pins the list to
+the tree.
+
+The three are `golden_prose` (the `data-golden` spans against the goldens they
+name), `page_drift` (docs/compiler.html against the log's budget of unpublished
+entries) and `prose_check` (the three mechanically detectable slop families over
+all 29 pages). They run in three different CI jobs — welfare, docs, and its own —
+so a session editing a page has three commands to remember and none to run.
+
+kanso#1328 is what that costs. Round two left the page's `front_end_visits` span
+at 23,723 where its golden had moved to 22,426. page_drift and prose_check both
+pass on that tree, because neither reads a `data-golden` span, and those are the
+two I ran before pushing. golden_prose turned its own job red and welfare with
+it: welfare runs golden_prose as its last step, so it reported ALREADY RED and
+could prove nothing about the three rows sharing that gate.
+
+The sweep reads all three and reports all three. Stopping at the first objection
+would rebuild the failure it exists to prevent, which is the rule
+`all_counters.sh` already carries for the same reason. It costs 31 seconds, 28 of
+them prose_check reading 29 pages through a regexp engine written in kanso; the
+figure is in the script's header so a reader waiting on it knows it has not hung.
+
+The spec is the half that does not go stale. Eight programs under scripts/ hold a
+literal `docs` path: three are the page gates and five read one for something
+that is not the prose, so each of the eight has to appear as a row or in an
+`elsewhere` list carrying a reason. `book_panels` and `book_quotes` are excused
+to `scripts/book_check.sh`, which already runs both before it replays the sample
+outputs, and the spec opens that file to check the claim rather than believing
+the comment. A fourth assertion pins the property the round actually turned on:
+something the sweep runs has to read a `data-golden` span, whatever it ends up
+being called.
+
+All four were watched red. Dropping golden_prose from the table fires two of
+them and the message names golden_prose. Claiming page_drift takes `--write`
+fires the third. Pointing book_panels' excuse at `scripts/build_wasm.sh` fires
+the fourth — and the first attempt at that mutation reported GREEN, because my
+`sed` anchor missed the row: it is the first line of the table and carries the
+`elsewhere="` prefix. I came within one command of recording a spec that cannot
+fail. A mutation is evidence only once the file has actually changed, and the
+check for that is to read the line back.
+
+Nothing in ci.yml moves. The three gates already run there, and the spec rides in
+the specs job with every other `cargo test`.
