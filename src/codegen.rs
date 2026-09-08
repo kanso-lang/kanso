@@ -1521,12 +1521,12 @@ struct Backend<'a> {
     typesets: HashMap<String, Vec<String>>,
     escape: crate::escape::EscapeInfo,
     byte_disc: crate::hash::Set<(String, usize, usize)>,
-    in_place_pushes: crate::hash::Set<(String, usize, usize)>,
-    reusable_records: crate::hash::Map<(String, usize, usize), String>,
-    builder_joins: crate::hash::Set<(String, usize, usize)>,
+    in_place_pushes: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
+    reusable_records: crate::hash::Map<(std::sync::Arc<str>, usize, usize), String>,
+    builder_joins: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     builder_params: crate::hash::Set<(String, usize, usize)>,
     /// Argument positions already carrying the builder, so no seed is needed.
-    builder_carried: crate::hash::Set<(String, usize, usize)>,
+    builder_carried: crate::hash::Set<(std::sync::Arc<str>, usize, usize)>,
     beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
@@ -1591,7 +1591,7 @@ struct FnEmit {
     /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
-    file: String,
+    file: std::sync::Arc<str>,
     /// LLVM return type of the function being emitted: `%parsed` or `%KValue`.
     ret_ty: String,
     /// Dispatcher group being emitted, for recognizing self-tail-calls.
@@ -1624,7 +1624,7 @@ impl FnEmit {
             parsed: crate::hash::Map::default(),
             origin_prefix: String::new(),
             hako: String::new(),
-            file: String::new(),
+            file: crate::ast::unstamped(),
             ret_ty: "%KValue".to_string(),
             group: String::new(),
             synthetic: false,

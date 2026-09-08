@@ -15,7 +15,7 @@ use crate::hash::{Map as HashMap, Set as HashSet};
 
 /// Push call sites, keyed `(file, line, col)`, whose list argument is uniquely
 /// owned and may be extended in place.
-pub fn in_place_pushes(program: &Program) -> HashSet<(String, usize, usize)> {
+pub fn in_place_pushes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
     let analysis = Analysis::new(program);
     let mut out = HashSet::default();
     for decl in real_fns(program) {
@@ -58,7 +58,7 @@ struct Analysis<'a> {
     types: HashSet<String>,
     /// (function name, arity, param index) positions that receive a uniquely
     /// owned list at every call site and are moved (used at most once) in body.
-    linear_params: HashSet<(String, usize, usize)>,
+    linear_params: Slots,
     /// (function name, arity) groups whose result is a freshly-built unique list.
     returns_unique: HashSet<(String, usize)>,
     /// The spellings that resolve to std/list's `fold` in this program.
@@ -503,7 +503,7 @@ fn collect_pushes(
     a: &Analysis,
     decl: &FnDecl,
     body: &[Stmt],
-    out: &mut HashSet<(String, usize, usize)>,
+    out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
 ) {
     for stmt in body {
         let e = match stmt {
@@ -521,7 +521,7 @@ fn mark_folder_body(
     a: &Analysis,
     decl: &FnDecl,
     body: &Expr,
-    out: &mut HashSet<(String, usize, usize)>,
+    out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
     acc: Option<&str>,
 ) {
     if let Expr::App { head, args, .. } = body {
@@ -562,7 +562,12 @@ fn takes_acc_first_with(args: &[Expr], acc: &str, forced_args: bool) -> bool {
     forced_args || args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() == 0
 }
 
-fn walk_for_push(a: &Analysis, decl: &FnDecl, e: &Expr, out: &mut HashSet<(String, usize, usize)>) {
+fn walk_for_push(
+    a: &Analysis,
+    decl: &FnDecl,
+    e: &Expr,
+    out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
+) {
     walk_for_push_in(a, decl, e, out, None)
 }
 
@@ -570,7 +575,7 @@ fn walk_for_push_in(
     a: &Analysis,
     decl: &FnDecl,
     e: &Expr,
-    out: &mut HashSet<(String, usize, usize)>,
+    out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
     scoped: Option<&str>,
 ) {
     if let Expr::App { head, args, span, .. } = e {
@@ -764,7 +769,7 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
 /// The runtime keeps the other half: it writes through only into a record of
 /// the same width, so a mismatch — or the shared zero-field marker — falls
 /// back to allocating.
-pub fn reusable_records(program: &Program) -> HashMap<(String, usize, usize), String> {
+pub fn reusable_records(program: &Program) -> HashMap<(std::sync::Arc<str>, usize, usize), String> {
     let analysis = Analysis::new(program);
     let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
     let mut out = HashMap::default();
@@ -785,7 +790,7 @@ fn walk_for_reuse(
     decl: &FnDecl,
     e: &Expr,
     types: &HashSet<&str>,
-    out: &mut HashMap<(String, usize, usize), String>,
+    out: &mut HashMap<(std::sync::Arc<str>, usize, usize), String>,
 ) {
     // a lambda runs when somebody else decides, so what is finished inside one
     // is not knowable from here
@@ -902,9 +907,16 @@ fn collect_idents_here(e: &Expr, out: &mut Vec<String>) {
     }
 }
 
-/// A set of source positions, or of (group, arity, index) triples — the two
-/// happen to have the same shape.
-pub type Sites = HashSet<(String, usize, usize)>;
+/// A set of source positions: the declaration's file, and a span's line and
+/// column inside it. The file is shared — `stamp_file` hands every declaration
+/// in a module the same `Rc`, so building a key is a refcount bump.
+pub type Sites = HashSet<(std::sync::Arc<str>, usize, usize)>;
+
+/// A set of (group name, arity, parameter index) triples. Kept apart from
+/// `Sites`, which it used to share an alias with on the grounds that "the two
+/// happen to have the same shape" — they do, and a blanket change of that
+/// shape compiled everywhere it should not have.
+pub type Slots = HashSet<(String, usize, usize)>;
 
 /// Where a string is built by joining onto itself, and which parameter holds
 /// the builder.
@@ -917,7 +929,7 @@ pub type Sites = HashSet<(String, usize, usize)>;
 ///
 /// Returns the join sites, and the (name, arity, index) of each accumulator so
 /// the emitter can convert the seed where a caller hands one in from outside.
-pub fn string_builders(program: &Program) -> (Sites, Sites, Sites) {
+pub fn string_builders(program: &Program) -> (Sites, Slots, Sites) {
     let analysis = Analysis::new(program);
     let mut sites = HashSet::default();
     let mut accs = HashSet::default();
@@ -947,7 +959,7 @@ pub fn string_builders(program: &Program) -> (Sites, Sites, Sites) {
 /// a carrying position is carrying one too, on the same terms the accumulator
 /// itself was granted: every caller hands it over, and the arm mentions it
 /// nowhere but that call.
-fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Sites) -> (Sites, Sites) {
+fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Slots) -> (Slots, Sites) {
     let mut carrying = accs;
     loop {
         let before = carrying.len();
@@ -1045,7 +1057,7 @@ fn param_names(decl: &FnDecl) -> Vec<(usize, String)> {
 
 /// Does this arm hand `name` on into a carrying position, and mention it
 /// nowhere else?
-fn forwards_into(carrying: &Sites, decl: &FnDecl, name: &str) -> bool {
+fn forwards_into(carrying: &Slots, decl: &FnDecl, name: &str) -> bool {
     let everywhere: usize = decl
         .body
         .iter()
@@ -1065,7 +1077,7 @@ fn forwards_into(carrying: &Sites, decl: &FnDecl, name: &str) -> bool {
     found && everywhere == 1
 }
 
-fn walk_forwards(carrying: &Sites, e: &Expr, name: &str, found: &mut bool) {
+fn walk_forwards(carrying: &Slots, e: &Expr, name: &str, found: &mut bool) {
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(callee, _) = head.as_ref() {
             for (i, arg) in args.iter().enumerate() {
@@ -1083,7 +1095,7 @@ fn walk_forwards(carrying: &Sites, e: &Expr, name: &str, found: &mut bool) {
 }
 
 fn collect_carried(
-    carrying: &Sites,
+    carrying: &Slots,
     built: &HashSet<String>,
     decl: &FnDecl,
     e: &Expr,
@@ -1116,8 +1128,8 @@ fn walk_for_builder(
     a: &Analysis,
     decl: &FnDecl,
     e: &Expr,
-    sites: &mut HashSet<(String, usize, usize)>,
-    accs: &mut HashSet<(String, usize, usize)>,
+    sites: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
+    accs: &mut Slots,
 ) {
     // a lambda runs when somebody else decides
     if matches!(e, Expr::Lambda { .. }) {

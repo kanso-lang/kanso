@@ -165,4 +165,12 @@ front_end_visits=23723
 # 17,264, which the row above already records. This container is
 # rustc=1.94.1 against the golden's 1.98.1 and refuses to compare, so
 # 724,798 is CI's own reading from the round-one job log on 31537922.
-compile_peak_bytes=789740
+#
+# 2026-09-08 (a path shared instead of copied per declaration):
+# compile_peak_bytes 789,740 -> 777,031, a FALL of 12,709 or 1.61%. One
+# `Arc<str>` per module held instead of one `String` per declaration is 803
+# copies of about seven paths the front end no longer keeps alive. rounds hold
+# at 62 and visits at 23,723, which the rows above already record. Written
+# from this container on the licence #1323 established for the two rows that
+# match the runner to the unit.
+compile_peak_bytes=777031

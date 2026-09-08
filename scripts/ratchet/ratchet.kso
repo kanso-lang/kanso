@@ -377,6 +377,14 @@ compile_ir = row
   (breaking "compile_ir_unwatched")
   release
 
+shared_path = row
+  "a path copied once per declaration instead of shared"
+  false
+  "sh scripts/gates/compile_allocs.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_path_copied_once_per_declaration")
+  release
+
 rewritten_twice = row
   "a module rewritten twice before it is checked"
   false
@@ -1136,7 +1144,9 @@ rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
 
 rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words rewritten_twice]
 
-rows_b = text/concat rows_b1m [compile_mem compile_mem_host]
+rows_b1n = text/concat rows_b1m [shared_path]
+
+rows_b = text/concat rows_b1n [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

@@ -2903,3 +2903,68 @@ every importer merges a full copy of every transitive dependency.
 
 Measured with `scripts/compile_row_probe.sh`, environment emptied and the glibc
 tunables pinned. Reverted; nothing of it is in the diff.
+
+---
+
+## 2026-09-08 — A MODULE'S PATH IS SHARED, NOT COPIED ONCE PER DECLARATION
+
+`stamp_file` wrote `decl.file = file.to_string()` — one allocation per
+declaration, for a path the corpus has about seven distinct values of. The
+declarations then get cloned by enrollment, and the sets in `linear.rs`,
+`beat.rs` and `codegen.rs` that key on `(file, line, col)` cloned the whole
+path again on every insert and lookup. `FnDecl.file` is an `Arc<str>` now:
+`stamp_file` allocates once per module and hands each declaration a refcount
+bump.
+
+    compile_allocs        30,414 ->    29,941      −473   −1.56%
+    compile_peak_bytes   789,740 ->   777,031   −12,709   −1.61%
+    compile_instructions       container −607,236  −1.164%
+
+The first two are this container's readings, which is ordinarily what the host
+gate refuses. The licence is two agreements: #1321 found that allocs and peak
+match the runner here to the unit, and #1323 confirmed it — the container read
+30,414 and so did CI. The instruction row is NOT written that way and is left
+for CI, because that one really is host-dependent: 52,170,583 here against
+CI's 50,832,220 for the same tree.
+
+**`Arc`, not `Rc`, and the reason is a thread.** The compiler looks
+single-threaded — thread-locals throughout — but `src/main.rs:379` spawns a
+scoped thread to run the interpreter on a pinned 8 MB stack, which is the
+kanso#1287 gate. The program crosses that boundary, so `Rc` does not compile
+there. `Arc`'s clone is an atomic increment where `Rc`'s is a plain one, and
+that is still far cheaper than an allocation.
+
+**The empty path had to be shared too, and the first measurement said so.**
+`String::new()` allocates nothing; `Arc::from("")` allocates. The parser builds
+every declaration with an unstamped file, so a fresh `Arc` apiece added one
+allocation per declaration where the stamp removed one — the first reading was
+30,339, a fall of 75 rather than the 473 the change is worth. `ast::unstamped()`
+hands out one shared empty `Arc` and the rest of the fall appears.
+
+### `Sites` was two keys wearing one shape
+
+The alias in `linear.rs` said it outright: "A set of source positions, or of
+(group, arity, index) triples — the two happen to have the same shape." They
+do, and a blanket change of that shape compiles almost everywhere it should
+not. `linear_params`, `byte_disc` and `builder_params` key on a declaration's
+NAME with an arity and a parameter index; `in_place_pushes`,
+`reusable_records`, `Sites` and `MutSites` key on its FILE with a span. One
+`string_builders` call returns all three of `(joins, params, carried)` — two
+file-keyed and one name-keyed — under the single alias.
+
+`Sites` is the file-and-span one now and `Slots` is the name-and-index one, so
+the next person to change either finds the compiler telling them which is
+which. This is the same class of thing as the ratchet rows that went blind
+because nothing named what they watched.
+
+The ratchet row `shared_path` restores `Arc::from(&*file)` in the stamp loop —
+a fresh path per declaration — and asks `compile_allocs`. Under it the corpus
+reads 30,309 against the 29,941 the row is pinned to, and peak 789,087 against
+777,031, so the gate goes red. The anchor is the shared bind, which appears
+once; `Arc::clone` is spelled at several sites now and a guard on it would
+refuse for the wrong reason.
+
+All seven `tests/golden/errors_module` fixtures are byte-identical and
+`all_compile.sh` reports emitted_code AGREED. An `Arc<str>` is immutable, so
+sharing a path between declarations cannot alias a write — nothing in the tree
+mutates a declaration's file after stamping it.

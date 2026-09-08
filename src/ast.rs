@@ -266,6 +266,18 @@ pub fn getter_field(name: &str) -> Option<&str> {
     name.strip_prefix("Get_")
 }
 
+/// The file a declaration has before `stamp_file` gives it a real one. An
+/// `Arc<str>` always allocates, even for the empty string, and the parser
+/// builds every declaration with an unstamped file — so this is made once and
+/// handed out, where a fresh `Arc::from("")` apiece would cost one allocation
+/// per declaration to hold nothing.
+pub fn unstamped() -> std::sync::Arc<str> {
+    thread_local! {
+        static EMPTY: std::sync::Arc<str> = std::sync::Arc::from("");
+    }
+    EMPTY.with(std::sync::Arc::clone)
+}
+
 #[derive(Clone, Debug)]
 pub struct FnDecl {
     pub name: String,
@@ -274,7 +286,7 @@ pub struct FnDecl {
     pub params: Vec<Pattern>,
     pub body: Vec<Stmt>,
     /// Source file, stamped after parsing; err origins are "{name} at {file}:{line}".
-    pub file: String,
+    pub file: std::sync::Arc<str>,
     /// True for bare-enrollment clones of imported decls (the import
     /// incarnation): real for dispatch, invisible to provenance analyses.
     pub synthetic: bool,
