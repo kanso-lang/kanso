@@ -2004,7 +2004,7 @@ mod tests {
         let (mut program, _) = compiled(src);
         let mut clone = program.fns.iter().find(|d| d.name == "go").unwrap().clone();
         clone.synthetic = true;
-        clone.file = "std/list".to_string();
+        clone.file = std::sync::Arc::from("std/list");
         program.fns.push(clone);
         let inference = infer::infer(&program);
         let beats = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
