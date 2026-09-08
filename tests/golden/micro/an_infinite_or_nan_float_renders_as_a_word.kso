@@ -1,0 +1,54 @@
+# An overflowing multiplication reaches infinity, and infinity minus itself
+# reaches nan. Neither engine had an answer for either: the interpreter asked
+# Rust for `{:e}` digits and unwrapped the `e` that `inf` does not have, so it
+# panicked, and native handed the value to the ryu digit core, which reads the
+# mantissa and exponent fields of a double the encoding does not use that way
+# and answered `1.797693134862316e+308` — the largest finite double's digits,
+# for a value that is not a double at all.
+#
+# Ruled 2026-09-08: `inf`, `-inf`, `nan`. That is C's spelling, and the `%g`
+# rule this renderer already mirrors is where the rest of its answers come
+# from.
+#
+# The language has no exponent literal, so the overflow is built by squaring.
+e30 = 1000000000000000000000000000000.0
+
+e60 = e30 * e30
+
+e120 = e60 * e60
+
+e240 = e120 * e120
+
+huge = e240 * e240
+
+# Every route to the three values, because the render is one function and the
+# arithmetic that reaches it is not: an overflow, a negation, a subtraction,
+# a division and a multiplication that carries nan along.
+words = "{huge} {0.0 - huge} {huge - huge}"
+
+more = "{0.0 - e240 * e240} {huge / huge} {huge * 0.0}"
+
+# A failure carrying one, and a container holding one, take the same path a
+# finite float takes through the renderer.
+box = [huge (0.0 - huge)]
+
+nest = { "n":(huge - huge) }
+
+held = "{box} {nest}"
+
+# The finite neighbours must not have moved.
+finite = "{e240} {0.0 - e240} {1.0 / e240}"
+
+# Native asks about these two on the arm that already existed for subnormals:
+# one unsigned compare catches both ends of the exponent field, so the values
+# below take the branch the change reordered. The last is below the smallest
+# normal double and has to keep rendering as itself.
+small = 1.0 / e240 / e60
+
+under = small / 1000000000.0
+
+edges = "{small} {under} {0.0} {0.0 - 0.0}"
+
+lines = "{words}\n{more}\n{held}\n{finite}\n{edges}"
+
+pub play = print lines

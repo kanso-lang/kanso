@@ -4393,3 +4393,59 @@ The rest is `render_ryu`, `k_b_split`, `w_klam42` and `k_stats_switch`, about
 6.95M together, worth measuring as one change on a baseline that includes this
 one. `k_b_append_grow`'s 29.2M is not that shape and is already understood:
 one first-append per escaped string, not repeated growth.
+
+## 2026-09-08 (seventh) — inf, -inf and nan are words on all three engines
+
+The 2026-09-08 gavel above ruled the three spellings; this is the build. Both
+engines were wrong before it, in different ways. The interpreter
+asked Rust for `{:e}` digits and split the answer on its `e`, which `inf` does
+not have, so `render_float` panicked at src/eval.rs:3949 — the oracle's failure
+mode for these values was a crash. Native handed them to the ryu digit core,
+which reads a double's mantissa and exponent fields; the all-ones exponent
+those encodings use means something else there, and the core answered
+`1.797693134862316e+308` for infinity and `2.696539702293474e+308` for nan.
+The first is the largest finite double's digits printed for a value that is
+not that double.
+
+The interpreter answers with two arms in front of the shortest-digits path.
+Native answers with one test in front of ryu rather than isnan() plus isinf():
+both encodings are the same exponent field, so the bits are loaded once,
+masked once and compared once, and the mantissa then says which of the two it
+is. The wasm host reuses the interpreter's `render`, so the fix reaches it
+with the oracle's.
+
+The fixture is tests/golden/micro/an_infinite_or_nan_float_renders_as_a_word,
+which the micro corpus runs on the interpreter and on native and the browser
+differential runs on wasm — the three engines the differential law names. The
+language has no exponent literal, so it reaches infinity by squaring a thirty-
+zero literal four times and once more, the same way the negative-render fixture
+next to it reaches its wide exponents. It was watched red first: native printed
+the max-double digits on every line and the interpreter panicked, while the
+finite line below agreed on both, which is what says the fixture reads the
+render and not the arithmetic.
+
+**What it costs, and why the floor moves anyway.** Every render pays the test
+that asks whether to write the word, so where the test sits is the whole
+price. Three placements were measured on the container, each side rebuilt,
+against a baseline of 2,373,798,762:
+
+```
+  in front of ryu, its own load and test    2,374,848,342   +1,049,580  (+0.0442%)
+  its own compare inside the digit core     2,374,371,162     +572,400  (+0.0241%)
+  folded into the arm already there         2,374,180,362     +381,600  (+0.0161%)
+```
+
+The third is one instruction per render and there is no shape below it: the
+field has three classes — zero, all-ones, and everything between — and no
+single test separates three classes. The 381,600 is that instruction times the
+renders runbench makes through ryu.
+
+Welfare falls by less than the two decimal places it prints and more than the
+0.001 the gate allows, so the run goes red. `scripts/welfare/welfare.kso:38`
+answers that case in its own words: a change that makes the engines agree is
+not weighed at all, and a fix for a differential-law violation ships with the
+floor moving to whatever it costs. `--set` cannot lower a floor, by Clay's
+2026-08-03 ruling, so the new value is written into
+bench/welfare_floor.json by hand where a reviewer sees it in the diff. That
+comment was written after the model spent a day looking able to refuse a fix
+worth four hundredths of a per cent; this is the same shape at 0.0161%.

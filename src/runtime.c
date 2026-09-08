@@ -3820,8 +3820,27 @@ static int ryu_d2d(double f, char* dig, int* e10) {
     uint32_t ieee_e = (uint32_t)(bits >> 52) & 0x7FF;
     int e2;
     uint64_t m2;
-    if (ieee_e == 0) { e2 = 1 - 1023 - 52 - 2; m2 = ieee_m; }
-    else { e2 = (int)ieee_e - 1023 - 52 - 2; m2 = (1ULL << 52) | ieee_m; }
+    /* Ruled 2026-09-08: `inf`, `-inf`, `nan`. Both are the all-ones exponent
+       the line above isolated, and the mantissa says which; answering zero
+       digits is the signal and dig[0] carries the word.
+       The test rides the arm that was already here. `ieee_e - 1` wraps for
+       zero, so one unsigned compare catches BOTH ends of the field — the
+       subnormals this branch existed for, and the two encodings above — and
+       the ordinary render pays exactly the compare it paid before. Asked its
+       own way it is not free: in front of ryu, as a second load of the same
+       eight bytes, it measured 1,049,580 instructions of runbench, and as its
+       own compare here 572,400. */
+    if (__builtin_expect((uint32_t)(ieee_e - 1) >= 0x7FE, 0)) {
+        if (ieee_e == 0x7FF) {
+            dig[0] = ieee_m ? 'n' : 'i';
+            return 0;
+        }
+        e2 = 1 - 1023 - 52 - 2;
+        m2 = ieee_m;
+    } else {
+        e2 = (int)ieee_e - 1023 - 52 - 2;
+        m2 = (1ULL << 52) | ieee_m;
+    }
     int even = (m2 & 1) == 0;
     int accept = even;
 
@@ -3945,6 +3964,15 @@ static long long render_ryu(double d, char* buf) {
     char dig[20];
     int e10;
     int k = ryu_d2d(d, dig, &e10);
+    if (k == 0) {
+        /* The digit core read an all-ones exponent. Any sign is already
+           written: the caller sends -inf here as +inf behind a minus, and
+           nan never takes that branch. */
+        if (dig[0] == 'n') { buf[0] = 'n'; buf[1] = 'a'; buf[2] = 'n'; }
+        else { buf[0] = 'i'; buf[1] = 'n'; buf[2] = 'f'; }
+        buf[3] = 0;
+        return 3;
+    }
     int x = e10 + k - 1; /* decimal exponent of the leading digit */
     int p = k > 15 ? k : 15;
     char* o = buf;
