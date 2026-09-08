@@ -3011,6 +3011,14 @@ Threading the module path costs almost nothing because it was already paying:
 that construction with the real one. Entry +121, compile +63 against the
 readings in the table above, both already folded in.
 
+**And the third path is now watched before it moves.** `kanso check` on a single
+library file takes `compile_library`, which still checks before it canonicalizes
+-- so both readers are right there today. c28 and c29 say so, and they were
+watched red by making exactly the reorder the OPEN item below proposes for that
+path: both go wrong together, with the same two messages. `compile_one` carries
+a byte-identical block, so the mutation is one edit applied twice and the two
+paths answer as one.
+
 **What this says about where a defect gets found.** The reorder was reverted
 twice on the entry path for objections the sweep caught within a round, because
 the entry path had cases. The same reorder shipped on the module path and its

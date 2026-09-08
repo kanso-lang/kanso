@@ -470,7 +470,23 @@ c27l = "a call from a module at the wrong arity"
 
 c27 = kase c27l [c10a c27c] "" "check refuses" arity_said
 
-cases = text/concat cases_d [c24 c25 c26 c27]
+# The same two programs asked of the THIRD compile path. `kanso check` on a
+# single library file takes `compile_library`, which merges its dependency and
+# checks BEFORE it canonicalizes -- the order the entry and module paths both
+# left. So both readers are right there today, and these two cases say so, which
+# is what makes them useful: the reorder is owed on that path too, and c26 and
+# c27 are what it broke on the other two. Watched red by making that reorder.
+c28said = "is a library — nothing to run. give the module a main.kso entry"
+
+c28l = "a bare call to a shared name, from a library file"
+
+c28 = kase c28l [c7a c7b c26c] "use.kso" "run refuses" c28said
+
+c29l = "a call from a library file at the wrong arity"
+
+c29 = kase c29l [c10a c27c] "use.kso" "check refuses" arity_said
+
+cases = text/concat cases_d [c24 c25 c26 c27 c28 c29]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written
