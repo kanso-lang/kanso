@@ -982,4 +982,17 @@
 # rise of 502, and scripts/trend_gate refused it as a pure regression. Moving
 # them to the entry call sites took the counter off the measured path
 # altogether. What is left is layout, and it happened to fall.
-compile_instructions=50685288
+# 2026-09-08, and the sign is the lesson. `resolve_name` stopped matching the
+# `builtin_` prefix against a QUALIFIED name, so a module named for what it
+# holds can be imported and used. Asked in front of the BUILTINS lookup that
+# cost 6,347 instructions — CI read 50,691,635 — because it scanned for a slash
+# on every builtin reference the standard library makes. Asked on the refusing
+# arm instead, where a correct program never goes, CI reads 50,684,921: a FALL
+# of 367.
+#
+# The container this was written on projected a RISE of 629 for the same code,
+# from the same measurement recipe, and two source shapes that read identically
+# there. Layout is a property of the toolchain and the host, so a projection off
+# one box carries no sign. That is why the row is regenerated from CI's reading
+# and never from a local one.
+compile_instructions=50684921
