@@ -4474,3 +4474,9 @@ records seven layout-only moves of the compile row before this one.
 Widebench's floats are mostly integral and take the fixed-point fast path
 before ryu is reached at all, so its fall cannot be the new branch executing
 less; the 22,335 is 0.062% of the row and sits where layout noise sits.
+
+compile_instructions is a published claim, so docs/compiler.html quotes it
+twice and both quotations moved with the golden. `golden_prose` is what caught
+them, on the round that had everything else right -- which is the gate working:
+a figure on the page and a figure in a golden are the same number or the page
+is wrong.
