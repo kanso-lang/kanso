@@ -2924,3 +2924,60 @@ branch was pushed, which is what the search is for.
   reorder's value and is blocked on a different thing: `infer` indexes
   declarations positionally, and a group keyed by (name, arity) is a dispatch
   group, so the twin is what lets a bare name resolve.
+
+## 2026-09-08 — the welfare column spans four measurement epochs and the rewrite scores them on one ruler
+
+Clay, reading kanso-lang.dev/numbers after kanso#1331 landed: "I still have
+no clear accounting of why the welfare went down and the website still does
+not look great." The account, read off the rewritten column on
+origin/perf-history:
+
+    2026-09-06 11:26   91.57 -> 58.96   -32.62   #1284  one consolidated run program
+    2026-09-08 01:53   70.03 -> 67.75    -2.27   #1321  the compile corpus is named
+    2026-09-08 10:17   67.91 -> 66.29    -1.63   #1331  the compile term sums both compiles
+
+None of the three is the compiler getting worse. Each is a change in what is
+measured, and the column still steps at each one because
+`scripts/welfare_rescore` scores every row against the single baseline the
+floor file holds today.
+
+**The mechanism.** The rewrite exists so the column is "rewritten under one
+formula whenever the formula moves, which is what makes two points on it
+comparable" (docs/numbers.html). One formula does make rows comparable when
+the WEIGHTS move. It does not when the MEASUREMENT moves, because the counters
+change magnitude while the baseline does not. Today's compile baseline is
+671,773,822, and the rows it divides come from four epochs:
+
+    epoch                           compile_instructions   ratio    term
+    lib/json, one compile                 19,316,962       34.78   0.9858
+    compile_corpus, one compile           52,603,220       12.77   0.9623
+    compile_corpus, module row            48,757,859       13.78   0.9650
+    compile_corpus, both summed          212,644,590        3.16   0.8634
+
+Adjacent epochs differ by a factor that is the workload and never the
+compiler, and the term falls across each boundary by that factor. The -2.27
+and the -1.63 are those two falls, weighted. #1331 re-based the floor so the
+row it wrote is right; it could not re-base the rows before it, because the
+rewrite has no notion of an epoch to re-base them to.
+
+**The run side is the same disease and the larger cliff.** #1284 re-based the
+run counters to parity at the changeover, so every row before it scores its
+run terms against a baseline it never carried. Clay ruled the repair on
+2026-09-07: share-weighted phases, renormalised over the phases a row carries,
+based at row 70 (2026-08-10), and the ruling closes with "the rewrite is
+cloud's." As of this entry, `scripts/` holds no share-weighted reconstruction.
+The -32.62 on the chart is that ruling unbuilt.
+
+**What makes the column flat across a change of measurement.** The rewrite
+needs an epoch table: for each change of measurement, the head it happened at
+and the per-row factor measured there. The corpus move's factors are already
+recorded in the floor file (2.7232, 2.7207, 2.1047) and the summing's is
+computed in kanso#1331. A row is then scored against the baseline scaled to its
+own epoch, which is one re-basing per epoch, applied in the rewrite rather than
+only in the floor file. It is what the three floor-file precedents did by hand
+for the current row, done for every row.
+
+**OPEN, cloud's, two items.** Build the 2026-09-07 ruling for the run side.
+Apply the same per-epoch scaling to the compile side's two changes of
+measurement. Until both land, the chart shows the history of what was measured
+rather than the history of the compiler, and no reader can tell which.
