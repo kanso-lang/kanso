@@ -2334,14 +2334,24 @@ every pass reading its results, ran over 83 declarations that were about to be
 deleted.
 
 Moving `canonicalize_types` and `canonicalize_bare_aliases` in front of the
-check:
+check, on CI:
 
-    compile_instructions   51,095,251 -> 49,162,592   -1,932,659  (-3.78%)
+    compile_instructions   50,684,921 -> 48,757,859   -1,927,062  (-3.80%)
+    compile_allocs              29,941 ->     29,606        -335  (-1.12%)
+    compile_peak_bytes         819,217 ->    773,818     -45,399  (-5.54%)
+    front_end_visits            23,723 ->     22,426      -1,297  (-5.47%)
 
-Both readings on this container, from the gate's own valgrind recipe with the
-host-comparability check removed — this box cannot be compared against CI's
-golden, but it can be compared against itself across two builds, which is what
-an A/B needs. CI's number is the one the golden takes.
+welfare 60.04 -> 60.21.
+
+The container measured the instruction row at 51,095,251 -> 49,162,592, a fall
+of 1,932,659, from the gate's own valgrind recipe minus its host-comparability
+check — this box cannot be compared against CI's golden, but it can be compared
+against itself across two builds, which is what an A/B needs. The two hosts
+disagree by 5,597 on a delta of nearly two million. On a work fall of this size
+the sign and the magnitude both carry across hosts; on the 629 the entry above
+records, neither did, and the difference is that this one is not layout. The
+allocation row agrees to the unit, 29,606 on both, because allocations count the
+compiler's own algorithm.
 
 The census that found this was looking for something else. Task #427 recorded
 "99 of 428 merged declarations are a second copy reached through a further

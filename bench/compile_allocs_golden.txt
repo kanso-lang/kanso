@@ -313,4 +313,10 @@
 # match the runner to the unit here, and #1323 confirmed it — the container
 # read 30,414 and so did CI. The instruction row is not written this way and
 # is left for CI, because that one really is host-dependent.
-compile_allocs=29941
+# 2026-09-08 (the alias pass runs before the whole-program check):
+# compile_allocs 29,941 -> 29,606, a FALL of 335 or 1.12%. The 83 bare twins
+# and everything the check builds about them are gone before the check starts.
+# CI's reading, and this container measured the same 29,606 — allocations count
+# the compiler's own algorithm, so the two hosts agree to the unit even though
+# this golden's measured-on line refuses the comparison.
+compile_allocs=29606

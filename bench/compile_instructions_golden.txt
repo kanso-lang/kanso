@@ -995,4 +995,18 @@
 # there. Layout is a property of the toolchain and the host, so a projection off
 # one box carries no sign. That is why the row is regenerated from CI's reading
 # and never from a local one.
-compile_instructions=50684921
+# 2026-09-08 (the alias pass runs before the whole-program check):
+# compile_instructions 50,684,921 -> 48,757,859, a FALL of 1,927,062 or 3.80%.
+# `enroll_bare` gives every exported declaration of an imported module a twin
+# under its short name, and `canonicalize_bare_aliases` takes those twins back
+# out — all 83 of them on this corpus, out of 394 declarations. It ran
+# seventeen lines after `check_merged`, so the whole-program check walked 83
+# declarations the next pass deleted. CI's own reading, one sha
+# (3c53d0acdbcb), which is the gate's case (1).
+#
+# The container measured 51,095,251 -> 49,162,592, a fall of 1,932,659, from
+# the same recipe minus the host-comparability check. The two boxes disagree by
+# 5,597 on a delta of nearly two million: on a WORK fall of this size the sign
+# and the magnitude both carry across hosts, where the 629 the previous entry
+# records did not. The difference is that this one is not layout.
+compile_instructions=48757859
