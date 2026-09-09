@@ -85,12 +85,7 @@ fn rescore(tag: &str, lines: &[String]) -> (bool, String) {
         .stderr(Stdio::piped())
         .spawn()
         .expect("rescore starts");
-    child
-        .stdin
-        .as_mut()
-        .expect("stdin")
-        .write_all(model().as_bytes())
-        .expect("model in");
+    child.stdin.as_mut().expect("stdin").write_all(model().as_bytes()).expect("model in");
     let done = child.wait_with_output().expect("rescore ends");
     let _ = std::fs::remove_dir_all(&dir);
     (
@@ -139,10 +134,7 @@ fn the_rescore_refuses_when_the_splice_rows_moved() {
     let moved = row("ccccccc", 1001, Some(1000), &["encode_instructions".to_string()]);
 
     let (ok, said) = rescore("moved", &[older, anchor, moved]);
-    assert!(
-        !ok,
-        "a splice onto a row that moved must be refused, not scaled:\n{said}"
-    );
+    assert!(!ok, "a splice onto a row that moved must be refused, not scaled:\n{said}");
     assert!(
         said.contains("splice rows disagree"),
         "the refusal should say what it refused:\n{said}"
