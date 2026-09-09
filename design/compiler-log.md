@@ -20,46 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## A module named for what it holds could be imported and never used
-
-`builtin_` names are how the standard library reaches the engine, and a program
-that writes one for itself is refused. `resolve_name` did that by stripping the
-prefix and asking whether what remained was a builtin. It asked the same
-question of a QUALIFIED name: `builtin_shapes/circle` became `shapes/circle`,
-which is not a builtin anyone has, so the reference was refused as internal to
-the standard library. Every use of a module whose own name began with those
-bytes met the same refusal, so such a module could be imported and never used.
-
-Reproduced on an unpatched tree, two files:
-
-    builtin_probe/builtin_probe.kso   pub hello = "hi"
-    main.kso                          import "./builtin_probe"
-
-                                      print builtin_probe/hello
-
-    error[name]: `builtin_probe/hello` is internal to the standard library
-    — import its module
-
-The check applies to bare names now. A qualified name is a declaration in
-another module, and that module's name is its own business.
-
-The fixture is `tests/golden/micro/builtin_prefixed_names_are_not_builtins.kso`,
-which the micro corpus runs twice — once directly and once as a library behind a
-generated entry, which is the path that reaches the refusal. It was watched red
-for the right reason: the library run produced empty stdout because the compile
-was refused. The whole golden suite is green with the fix, including
-`a_builtin_the_standard_library_keeps_to_itself`, the fixture that pins the bare
-case this refusal exists for.
-
-How it was found is worth recording, because the first reading was wrong. It
-turned up while regenerating the per-module reshape's error goldens, where
-`builtin_arg_type` had lost its own type error and gained this one instead — a
-diagnostic disappearing, which the entry above called a stop. The reshape had
-not lost anything. The fixture is named `builtin_arg_type`, its own error used
-to be raised first and stop the compile, and moving that check later let this
-refusal reach the reader ahead of it. The bug was already there and had been
-since the refusal was written.
-
 ## 2026-09-08 — a projection off one box carries no sign
 
 The `builtin_` fix went to CI three times and the compile-instructions row said
@@ -3306,3 +3266,110 @@ match are one design with the fused operators: each breaks binds or arms in
 kq the way #1357 did, kq's respellings live in kq, and kq is outside this
 session's reach, so they wait on that respell and their rows stay. The
 pure-fallibility rider waits on the ledger's "where the box wraps" ruling.
+
+## 2026-09-09 — records print qualified, everywhere
+
+The 2026-08-29 gavel of that name (archive), built. STATUS.md carried it as
+unbuilt: `tests/entry_file.rs` still ignored the test the gavel said would
+flip, and it still expected the unqualified form.
+
+**What was wrong.** A record printed its type's spelling as the compiler
+held it, and the compiler held two: a module reached through an import has
+its declarations qualified (`lane/slow_lane`), and the same file run directly
+does not (`slow_lane`). So `slow_lane 7` printed one way from `kanso play
+lane.kso` and another from an entry importing `lane`, and the micro and mem
+corpora carried `.imported.*` twins for exactly that divergence.
+
+**The ruling.** Go's `main.T`: a record prints its module-qualified name
+whatever the entry path, and the root module takes the name an importer
+would write for it — a file's stem, a directory's name.
+
+**How.** `ast::Program` gains `root`, set where each compile path returns:
+the entry and play paths, the library path and the module path, from the
+file's stem or the directory's name. Rendering is the only reader.
+`eval::set_root`, called when an interpreter is built over a program,
+records the root and the set of bare types the program declares;
+`eval::shown_type` qualifies a type in that set and leaves every other
+spelling alone, which is how the compiler's own `entry` record — the map
+entry, declared by no module — stays `entry` on every engine. The
+interpreter's `render` and the page's host (which renders through it) read
+that; native gets a second table beside `k_type_name`, `k_type_shown`,
+emitted by codegen and read only by `k_render_at`, so the identity the
+runtime matches on and the field-error messages are untouched. Diagnostics
+are untouched everywhere: a checker sentence names the type the author
+wrote.
+
+**Watched red.** Before the root reached the entry path, `kanso play
+alone/lane.kso` printed `slow_lane 7` while `kanso run main.kso` printed
+`lane/slow_lane 7`, on both engines; with the root threaded, both print
+`trouble: [err lane/slow_lane 7] lane/slow_lane 7`. The first cut prefixed
+every bare type, and the interpreter and the page printed `maps/entry` where
+native printed `entry` — the wasm walk caught it on `examples/maps.kso`; the
+set of declared types is the fix.
+
+**Spec.** `tests/entry_file.rs`: `a_record_prints_qualified_whatever_the_entry_path`
+replaces the ignored test, runs the fixture's direct twin (`alone/lane.kso`,
+bare statements) and its imported form on both engines, and asserts all four
+print the same qualified line. The fixture is rewritten to the modern shape:
+the old one caught its own err with an arm, which the 2026-08 err rulings
+retired, and `pub play` files refuse `kanso play`. Five example goldens
+regenerate (`build_blocks`, `field_typesets`, `markers`, `none_is_a_value`,
+`record_render`), each a prefix and nothing else; one book sample
+(`appb/wrap_err`, an unhandled `config_bad`) and its panel. The micro, mem,
+runtime and error corpora did not move: their `pub play` fixtures were
+already reached through a staged import, which is where the twins came
+from.
+
+**Verified on the container.** rustfmt, clippy, the golden suite (eleven
+tests with the twin spec), entry_file, errors_module, reexports, the unit
+tests, the wasm engine walk on a fresh blob (twelve), `book_check.sh` (every
+sample verified), the diagnostic scan (311 literal diagnostics, 0 newly
+unpinned), `all_counters.sh` (the twelve cost veins and the lazy tier agree),
+`all_pages.sh` (three gates agree).
+
+**Veins.** `emitted_code` moved on every program by two lines and nothing
+else — the decoder's `emitted_lines` 9,245 -> 9,247, the thirteen others'
+summed `emitted_other_lines` 133,275 -> 133,301 (+2 each), defines, calls
+and branches identical — and `compile_cost`'s five samples by one line
+each, `lines` 6,094 -> 6,099, with `module_lines` 5,268 -> 5,269. The lines are `k_type_shown`: a program whose
+root declares no bare type prints every record under the identity's
+spelling, so the table is an alias of `k_type_name` rather than a second
+switch, and the benchmarks are all that shape. The first cut emitted the
+switch unconditionally and cost each program a define, a branch and thirty
+to sixty lines. Every runtime vein is byte-identical: the render calls one
+table where it called the other. The host-keyed compile rows are CI's;
+`qualify` is untouched, and the same-box pair against #462's tree is below.
+
+Same-box pair, callgrind on the gate's boxes, #462's tree against this one:
+module 50,397,314 -> 50,386,179 (−11,135, −0.0221%), entry 167,533,649 ->
+167,577,852 (+44,203, +0.0264%), library 168,348,197 -> 168,341,016 (−7,181,
+−0.0043%): the root's name and the shown-name table are a few thousand
+instructions either way, inside the noise of a rustc relayout.
+
+**The build_cycle fixture is measured through the import now.** Folding
+its `.imported.mem` twin leaves `tests/golden/mem/build_cycle.mem` holding
+the numbers the staged import always produced, so the trend gate reads a
+re-basing rather than a move: `build_cycle_alloc_bytes` 2,576 -> 3,168,
+`build_cycle_perm_allocs` 7 -> 9, `build_cycle_sh_str` 1,936 -> 2,528,
+`build_cycle_sh_buf` 176 -> 208, `build_cycle_thunk_allocs`,
+`build_cycle_thunk_evals` and `build_cycle_thunk_live_exit` 0 -> 1 each,
+`build_cycle_carry_dedup` 0 -> 1. The direct route's numbers were the
+twin's other half, and the direct route is gone.
+
+**A seventh twin, met on the rebase.** #1356 landed
+`tests/golden/micro/an_err_has_readers.imported.out` while this sat in its
+worktree: the fixture printed an err's origin with its file stripped, and an
+import qualifies the raising function's name, so `boom` read
+`an_err_has_readers/boom` through the harness's staged entry. The twin
+went the way of the other six. The probe strips the module's slash too,
+since what it asks is which function raised the err, and the qualified
+spelling by route is the runtime corpus's accepted divergence, kept there
+in its `.imported.stderr` twins.
+
+One spec had pinned the old spelling for the root's own records:
+`tests/a_type_name_as_a_bare_value.rs` expected a nullary record declared
+in the entry file to print bare, `unit`. Under the ruling the root is a
+module like any other and its name is the file's, so the line reads
+`nullary_native/unit` on native and `nullary_oracle/unit` on the oracle,
+one per staged file name; the expectation moved, found when the queue was
+stacked on one worktree on 2026-09-10.

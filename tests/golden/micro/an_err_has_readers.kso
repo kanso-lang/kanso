@@ -8,7 +8,9 @@
 #
 # Settled failures only, so every engine including the page runs this one.
 # The origin names the file the err was raised in, and the harness stages a
-# copy under another path, so only the part before ` at ` is printed. json's
+# copy under another path, so only the part before ` at ` is printed; an
+# import qualifies the raising function's name, so the part after its
+# module's slash. json's
 # failure carries a record whose own field is called `reason`, which is the
 # case where a reader and a record field share a name.
 import "std/json"
@@ -22,7 +24,7 @@ fn wrapped n
   annotate (boom n) (e -> "config: {e.reason}")
 
 fn raised_in origin
-  list/first (text/split origin " at ")
+  list/last (text/split (list/first (text/split origin " at ")) "/")
 
 pub play =
   print (rescue (boom 1) (e -> e.reason))

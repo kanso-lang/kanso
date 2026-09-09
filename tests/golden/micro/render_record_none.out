@@ -1,1 +1,1 @@
-record point 3 4, absent <none>
+record render_record_none/point 3 4, absent <none>

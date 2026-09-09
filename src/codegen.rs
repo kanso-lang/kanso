@@ -2866,6 +2866,12 @@ impl<'a> Backend<'a> {
         body.push_str("define ptr @k_type_name(i64 %id) {\nentry:\n");
         let mut arms = String::new();
         let mut cases = String::new();
+        // The spelling a rendered record prints, beside the identity the
+        // runtime matches on. RULED 2026-08-29, "records print qualified,
+        // everywhere": the root's own types take the root's name.
+        let mut shown_arms = String::new();
+        let mut differs = false;
+        let root = self.program.root.clone();
         for ty in &self.program.types {
             if ty.origin.is_some() {
                 // an alias shares its origin's id; the origin owns the case
@@ -2875,15 +2881,37 @@ impl<'a> Backend<'a> {
             let (name, _len) = self.intern(&format!("{}\0", ty.name));
             let _ = writeln!(cases, "    i64 {id}, label %T{id}");
             let _ = writeln!(arms, "T{id}:\n  ret ptr @{name}");
+            let shown = match root.is_empty() || crate::ast::has_slash(&ty.name) {
+                true => name.clone(),
+                false => {
+                    differs = true;
+                    self.intern(&format!("{root}/{}\0", ty.name)).0
+                }
+            };
+            let _ = writeln!(shown_arms, "T{id}:\n  ret ptr @{shown}");
         }
         let (entry_name, _) = self.intern("entry\0");
         let _ = writeln!(cases, "    i64 0, label %T0");
         let _ = writeln!(arms, "T0:\n  ret ptr @{entry_name}");
+        let _ = writeln!(shown_arms, "T0:\n  ret ptr @{entry_name}");
         let (fallback, _) = self.intern("record\0");
         let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
         body.push_str(&arms);
         let _ = writeln!(body, "TD:\n  ret ptr @{fallback}");
         body.push_str("}\n\n");
+        // A program whose root declares no bare type prints every record
+        // under the identity's spelling, and the second table is an alias
+        // rather than a copy of the first.
+        match differs {
+            true => {
+                body.push_str("define ptr @k_type_shown(i64 %id) {\nentry:\n");
+                let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
+                body.push_str(&shown_arms);
+                let _ = writeln!(body, "TD:\n  ret ptr @{fallback}");
+                body.push_str("}\n\n");
+            }
+            false => body.push_str("@k_type_shown = alias ptr (i64), ptr @k_type_name\n\n"),
+        }
         self.body.push_str(&body);
     }
 

@@ -472,6 +472,41 @@ enum Flow {
     Tail(Rc<str>, Vec<Value>, Span),
 }
 
+thread_local! {
+    /// The root module's name and the bare types it declares, for a record's
+    /// rendered spelling. RULED 2026-08-29, "records print qualified,
+    /// everywhere": a record prints `{module}/{type}` whatever the entry
+    /// path, so the root's own types take the root's name, the one an
+    /// importer would write for it. The set is the root's declarations and
+    /// nothing else: the compiler's own `entry` record, which no module
+    /// declares, stays bare on every engine. Set when an interpreter is built
+    /// over a program, which is how the page's host learns it too.
+    static ROOT: std::cell::RefCell<(String, std::collections::HashSet<String>)> =
+        std::cell::RefCell::new((String::new(), std::collections::HashSet::new()));
+}
+
+pub fn set_root(program: &Program) {
+    let own = program
+        .types
+        .iter()
+        .filter(|t| !crate::ast::has_slash(&t.name))
+        .map(|t| t.name.clone())
+        .collect();
+    ROOT.with(|r| *r.borrow_mut() = (program.root.clone(), own));
+}
+
+/// A type as a rendered record spells it: qualified by the root's name when
+/// the declaration was the root's own and carries no module of its own.
+pub fn shown_type(ty: &str) -> String {
+    ROOT.with(|r| {
+        let (root, own) = &*r.borrow();
+        match !root.is_empty() && own.contains(ty) {
+            true => format!("{root}/{ty}"),
+            false => ty.to_string(),
+        }
+    })
+}
+
 pub fn set_foreign_call(call: ForeignCall) {
     FOREIGN_CALL.with(|slot| *slot.borrow_mut() = Some(call));
 }
@@ -1092,6 +1127,7 @@ impl ThunkStats {
 
 impl<'a> Interp<'a> {
     pub fn new(program: &'a Program) -> Self {
+        set_root(program);
         let mut fns: HashMap<&str, Vec<&FnDecl>> = HashMap::new();
         for decl in &program.fns {
             fns.entry(&decl.name).or_default().push(decl);
@@ -4208,7 +4244,7 @@ fn render_seen(
             format!("[{}]", inner.join(" "))
         }
         Value::Record { ty, fields } => match fields.borrow().is_empty() {
-            true => ty.to_string(),
+            true => shown_type(ty),
             false => {
                 let ptr = Rc::as_ptr(fields) as usize;
                 if !seen.insert(ptr) {
@@ -4217,7 +4253,7 @@ fn render_seen(
                 let inner: Vec<String> =
                     fields.borrow().iter().map(|f| render_seen(interp, f, true, seen)).collect();
                 seen.remove(&ptr);
-                format!("{} {}", ty, inner.join(" "))
+                format!("{} {}", shown_type(ty), inner.join(" "))
             }
         },
         // every engine renders a function the same way and none of them names

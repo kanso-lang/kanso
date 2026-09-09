@@ -151,6 +151,7 @@ fn compile_parsed_entry(
         types: Vec::new(),
         imports: Vec::new(),
         reexports: Vec::new(),
+        root: String::new(),
     };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
@@ -185,6 +186,7 @@ fn compile_parsed_entry(
             phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
             rewrite::pass();
             trmc::rewrite(&mut merged);
+            merged.root = root_name(std::path::Path::new(file));
             Ok(merged)
         }
         false => Err(diag::render(&merged_diags, file, source)),
@@ -379,6 +381,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
+    program.root = root_name(std::path::Path::new(file));
     Ok(program)
 }
 
@@ -472,6 +475,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
+    program.root = root_name(std::path::Path::new(file));
     Ok(program)
 }
 
@@ -878,6 +882,13 @@ fn hako_cache() -> std::path::PathBuf {
 /// qualifies as `json/...`.
 fn short_name(path: &str) -> &str {
     ast::bare_name(path)
+}
+
+/// The root module's name, the one an importer would write for it: a file's
+/// stem, a directory's name. RULED 2026-08-29, "records print qualified,
+/// everywhere": a record prints under it whatever the entry path.
+fn root_name(path: &std::path::Path) -> String {
+    path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string()
 }
 
 /// Names a pattern binds, borrowed from the program.
@@ -2511,6 +2522,7 @@ fn load_dependencies(
         types: Vec::new(),
         imports: Vec::new(),
         reexports: Vec::new(),
+        root: String::new(),
     };
     let mut exports = crate::hash::Map::default();
     let mut claims: crate::hash::Map<String, u32> = crate::hash::Map::default();
@@ -3752,6 +3764,7 @@ fn compile_module_loaded(
         types: Vec::new(),
         imports: Vec::new(),
         reexports: Vec::new(),
+        root: String::new(),
     };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
@@ -3817,6 +3830,7 @@ fn compile_module_loaded(
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
+    merged.root = root_name(&dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf()));
     Ok(merged)
 }
 

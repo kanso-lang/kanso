@@ -1,0 +1,6 @@
+# The same program as an entry file: bare statements, the root named by the
+# file. `lane/slow_lane 7` here as well, or the ruling is not built.
+type slow_lane
+  minutes
+
+print "trouble: {[(err (slow_lane 7))]} {slow_lane 7}"

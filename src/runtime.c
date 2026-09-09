@@ -3070,6 +3070,8 @@ KValue k_concat(KValue a, KValue b) {
 }
 
 extern const char* k_type_name(long long type_id);
+/* the spelling a rendered record prints; k_type_name is the identity */
+extern const char* k_type_shown(long long type_id);
 static const char* k_lazy_hint(KValue v);
 extern long long k_type_field_count(long long type_id);
 extern const char* k_type_field_name(long long type_id, long long i);
@@ -4288,7 +4290,7 @@ static KValue k_render_at(KValue v, long long quote, int held) {
                 for (int d = 0; d < k_render_depth; d++)
                     if (k_render_path[d] == r) return k_str("<cycle>");
                 if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = r;
-                KValue out = k_str(k_type_name(r->type_id));
+                KValue out = k_str(k_type_shown(r->type_id));
                 for (long long i = 0; i < r->nfields; i++) {
                     out = k_concat(out, k_str(" "));
                     out = k_concat(out, k_render_at(r->fields[i], 1, 1));
@@ -4296,7 +4298,7 @@ static KValue k_render_at(KValue v, long long quote, int held) {
                 k_render_depth--;
                 return out;
             }
-            return k_str(k_type_name(r->type_id));
+            return k_str(k_type_shown(r->type_id));
         }
         case K_DESC: return k_str("<io>");
         case K_LIST: {
