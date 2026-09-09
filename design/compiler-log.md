@@ -20,320 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-06 — gavel: one consolidated run program is the objective
-
-Asked about escapebench pinning the beat's cost and none of its
-benefit, Clay: "there shouldn't be separate benchmarks, there should
-just be one consolidated program on which we test performance across
-the board." Gaveled. The fleet of run shelves — jsonbench,
-encodebench, widebench, deepbench, pendbench, oneshot, basket, scan,
-digest, escape, index, live — stops being the objective's inputs. In
-their place:
-
-- **One consolidated run program.** Its retired instruction count is
-  the run-speed term; its peak memory is the run-memory term. The
-  workload mix is chosen deliberately to reflect real use — decode and
-  encode as the bulk, the stress shapes (wide, deep, pending, escape,
-  index, digest, scan) present at realistic proportion — and written
-  down in the program's own header so the mix is a decision on the
-  record, never an accident of accretion.
-- **Trades are seen in one place.** A mechanism's cost and its
-  benefit land in the same instruction count and the same peak; a
-  phase weighs by the work it is, so a 172x win in a phase that is 1%
-  of the program moves the total by what it is worth.
-- **Per-phase counters stay as diagnostics**: goldens per phase that
-  say where a move came from and catch a stress shape regressing
-  quietly. The sum is the objective; the terms are diagnostics, one
-  level down.
-- **Peak means peak.** The program's peak is its worst phase's, and
-  that is what "how much memory does this workload need" means; a
-  lesser phase's memory improvement reaches the objective when it
-  becomes the worst, and the per-phase peak goldens keep it visible
-  meanwhile.
-- **Adding a phase is a definition change**: the floor re-sets once,
-  with the reason, in the PR that adds it. No granted baselines, no
-  entry standing, nothing enters satiated.
-- **Superseded**: the advertised-versus-guards split of the weights
-  gavel (2026-09-02) — workloads now weigh by their share of the
-  program; the granted-baseline machinery for run counters; the
-  per-shelf entries #317 (escapebench) and #319 (entry standing),
-  which are moot under one program. The weights (0.30 / 0.26 / 0.32 /
-  0.12) and satiations stand; only what the run terms read changes.
-  The compile side already measures one program and is unchanged.
-- The switch is a definition change: recorded here, the floor re-set
-  in the same PR, and history.jsonl's welfare column rewritten once
-  per the 2026-09-03 directive.
-
-## 2026-09-06 — directive: the framework's language features wait for the language
-
-Clay, on the convention-over-configuration primitives (a function
-value that knows its name, a module's exports as a map, the route
-table as a dispatch group): defer them "until we've got the language
-as currently specified done to the best of our ability — once it's
-optimized and debugged as far as we can get it," which he estimates at
-a couple of weeks. So the parked note carries a DEFERRED marker and
-the order of work is fixed: finish and polish what is already ruled —
-the effects-are-types migration, the fused operators, whole-cohort
-block-born, the growable partial, the suffix contracts, the
-consolidated run benchmark, the clang 19 bump, the book rewrite — then
-the serve campaign and the framework primitives, reopened by Clay and
-not by a session's initiative. A session that finds itself with no
-ruled work left reports that rather than starting this.
-
-## 2026-09-07 — gavel: the welfare history's baseline, after the one-program gavel
-
-The ledger entry "The welfare history's baseline, after the one-program gavel"
-(kanso#1289) asked four questions. Clay ruled all four in one line: "I'll go
-with all your recommendations." The recommendations he took are the ones set
-out to him in chat, which differ from the ledger's on one point, and the
-difference rests on a fact the ledger got wrong, so both are recorded here.
-
-**The ledger's premise was wrong on which counters the old rows carry.** It
-said 426 of 500 rows carry `encode` alone. Read off origin/perf-history
-(history.jsonl, 500 rows): from row 70 (2026-08-10) every row carries four
-run-side instruction counters — `instructions`, which is the DECODE row and
-was never named as such, plus `encode_instructions`, `oneshot_instructions`
-and `basket_instructions`. The eight-phase set begins at row 446 (2026-09-03)
-and `run_instructions` at row 494 (2026-09-06). "Encode alone" was a key-name
-mapping error: the decode counter's unprefixed key was not recognised as a
-phase. A base built from four of the eight phases, two of them the largest
-shares of runbench, is a reconstruction; a base built from one would have been
-a guess, and that guess was the reason the ledger recommended 2026-09-03.
-
-**Rulings.**
-
-- (a) **Share-weighted.** Each phase's ratio to the anchor, weighted by
-  runbench's own measured shares, calibrated to equal runbench at the
-  changeover. A raw sum re-weights the objective away from the mix the
-  one-program gavel ruled, and hides indexbench's 488× behind encode's
-  repetition count.
-- (b) **Baseline at the earliest reconstructable row, 2026-08-10 (row 70),**
-  with the key mapping fixed: `instructions` is decode. A row's shares are
-  renormalised over the phases it carries, so a four-phase row is scored on
-  the four and an eight-phase row on the eight, and no phase is extrapolated
-  from another. The 69 rows before it carry no run counter and stay unscored.
-- (c) **`run_peak_bytes` is based at today**, and the floor file says so in a
-  comment beside the number, until runbench has peak history of its own. The
-  earliest phase peak is 2026-09-03 and has not moved, so there is nothing
-  to reconstruct.
-- (d) **The compile rows keep their accumulated baselines.** The gavel
-  re-defined the run side and said nothing about the compile side.
-
-**What follows.** The history column is rewritten once, in place, under this
-definition (the 2026-09-06 directive stands: one welfare line on the chart,
-no replayed-versus-recorded pair), the floor is re-set from the rewritten
-column, and the ledger entry leaves in this commit. The rewrite is cloud's;
-this entry is the ruling it was waiting on.
-
-## 2026-09-07 — the one-program gavel re-priced the declined queue, and one decline flips
-
-Clay asked whether declining changes one at a time strands the project on a
-local maximum, where some combination of the refusals would have paid. The
-question has a smaller population than it sounds like. Searching the log and
-the archive for changes the OBJECTIVE declined, rather than changes declined
-because they were worse on their own numbers, turns up two. Both were priced
-under the model the 2026-09-06 gavel retired: twenty-five counters over
-thirteen programs, each normalised against its own baseline and averaged.
-
-**The tag-switch widening flips.** Archive entry "BUILT, MEASURED, AND DECLINED
-BY THE OBJECTIVE — an arm that destructures stays on the cascade". Its rows
-re-priced through `bench/runbench_phases.txt`:
-
-    row              move     phase    share    contribution
-    pendbench    -2.8838%     pend     4.94%       -0.14246%
-    livebench    -0.1484%     no phase, invisible to the objective
-    basket       -0.1092%     no phase, invisible to the objective
-    oneshot      -0.0654%     no phase, invisible to the objective
-    scanbench    +1.0826%     split    4.87%       +0.05272%
-    encodebench  +0.1286%     encode  34.43%       +0.04428%
-    digestbench  +0.0427%     digest   5.05%       +0.00216%
-                                                   ---------
-    reconstructed runbench instructions             -0.04330%
-
-The change was reverted for falling. Under the objective as it now stands it
-is a win, and it wins while the reconstruction throws away three of the four
-programs it improved, because livebench, basket and oneshot have no phase.
-
-**Why it flips is the shape of the old model.** Twenty-five rows meant
-twenty-five ratios, each against its own baseline, so every row sat at its own
-point on the satiation curve and carried its own stiffness. A win on a program
-already far ahead of its baseline bought little; a loss on one sitting near its
-baseline cost a lot. pendbench's 2.88% fall was the first kind and scanbench's
-1.08% rise was the second. runbench combines its phases by measured share
-BEFORE the curve applies, so the same two moves are priced at 4.94% and 4.87%
-of one program and the larger move wins.
-
-That is most of the answer to the question as asked. The sequential-acceptance
-trap was substantially a property of the twenty-five-row model, which could
-decline a change that lowered total work because of where each row happened to
-sit. What remains is genuine complementarity: changes sharing a fixed cost, and
-changes that are prerequisites for other changes. Those the objective cannot
-see whatever its shape, and they need the combination sweep Clay described.
-
-**The other two do not flip, which is the check.** The gate widening of
-2026-08-02 cost basket allocations and arena buffer; basket has no phase, so
-the objective can now see neither its cost nor its benefit, and the entry's own
-corpus-breadth argument is what it still turns on. The unsigned-compare
-decline of the live log, "worse on nine of the thirteen benchmarks",
-re-prices to +0.87% and stays declined on every mapped phase.
-
-**WHAT THIS IS NOT.** `bench/runbench_phases.txt` licenses direction and share
-and says in its own header that the scale does not carry across. The tree has
-moved a long way since the widening was written. Nothing here is a measurement
-of today's compiler, and the widening has to be rebuilt on current main with
-runbench counted before any of it is banked. The reconstruction says the
-rebuild is worth an afternoon, and no more than that.
-
-**OPEN, and named by the widening's own entry.** A group mixing int literals
-with type patterns takes neither switch. The shape that would serve both is a
-switch on the tag whose int case holds a second switch on the payload, and it
-is what would remove the split phase's cost rather than outweigh it.
-
-## 2026-09-08 — gavel: page_drift counts the wrong thing, and the fix is cloud's
-
-`scripts/page_drift/page_drift.kso` takes the last commit that touched
-docs/compiler.html, diffs design/compiler-log.md from there to HEAD, counts the
-`## ` headings that appear in it, and fails past a budget of three. That count
-stands in for a question the gate cannot ask: has the presented design fallen
-behind what the compiler does. Clay, 2026-09-08: "there is no specific
-correlation between a number of log entries and specific changes to the HTML."
-
-There is not. A batch of gavel entries owes the page nothing and trips the
-budget; one shipped optimization can owe the page a great deal and never reach
-it. The gate's own header already names the exemption it has no way to apply --
-an entry recording a diagnosis, a revert or a handoff has no business on the
-page -- and a heading does not say which kind of entry follows it.
-
-**RULED: fix the gate rather than work around it.** Two shapes are tractable:
-count only the entries that are not rulings, or exempt a pull request whose log
-diff is entirely gavel entries. The step is not `continue-on-error` in ci.yml,
-so it fails the whole cost-goldens job rather than reporting beside it.
-
-**CLOUD'S**, per the same day's lane ruling: a gate is code. This entry is the
-filing itself, because peer messaging does not reach the cloud session from the
-chat and this repo does not use issues -- the log is where a thread left open
-goes.
-
-**What it blocked, recorded so the workaround is not mistaken for the rule.**
-This pull request adds nine log entries against a budget of three. The session
-writing it put a paragraph into docs/compiler.html to clear the gate, then wrote
-that workaround into CLAUDE.md as a standing carve-out; Clay caught it and both
-are reverted. The page paragraph is separately owed and stays owed: the ryu
-entry says the format layer "mirrors the old %g byte format exactly", and the
-2026-09-06 whole-float gavel made that false above 1e15, where the behaviour has
-shipped and `a_whole_float_keeps_its_point` already pins `1.0e+15`. Landing that
-correction is cloud's, and it was separately owed whatever happens to the gate.
-
-**A page move does not clear the count, and this entry said it would.** The
-sentence above originally read that landing the page correction "drops this
-budget to zero for anything behind it." Measured on this branch with
-origin/main merged in, it does not: `page_drift` diffs two trees rather than
-walking history, so the anchor is always a commit on the base side and a
-branch's own entries appear as additions from it whatever the page did. With
-kanso#1315 on main the old gate still read 10/3 here. The rule the old gate
-actually enforced was that a pull request adding more than three log entries
-must also edit docs/compiler.html, unconditionally. This is corrected in place
-rather than appended because the entry had not landed; the claim was never on
-main.
-
-**CLOSED by kanso#1316**, which skips a ruling and counts everything else, on
-the `— gavel:` and `— directive:` heading convention the log already writes.
-Nine of this branch's ten entries come out and it reads 1/3. The fix is cloud's
-and the spec is its own: a nine-ruling batch passes, four shipped entries still
-fail and are named, and four headings that merely mention a gavel still fail.
-
-## 2026-09-08 — gavel: the compile term reads a fixed corpus, not whatever lib/json imports
-
-Clay, 2026-09-08, taking the recommendation the ledger carried: the three
-compile gates and the objective compile a package that names its imports once,
-rather than whatever lib/json happens to import that week.
-
-The question. kanso#1291 retired lib/json's escape fold, which was its only use
-of std/list, and the import went with it. `kanso check lib/json` then compiled
-half the code it had: `compile_instructions` about 42.6M to about 19.6M,
-`compile_allocs` 25,862 to 11,613, `compile_peak_bytes` 724,798 to 375,222 on
-the container, welfare 51.95 to about 56 -- with the compiler byte-identical. By
-the objective's definition that rise was real. By what the term is for, how fast
-the compiler is, it measured nothing, and a later change re-importing std/list
-would have read as a four-point fall.
-
-**Ruled: option (b).** The corpus is lib/json plus every std module the
-benchmarks import -- list, text, testing -- named once in a package the gates
-and the objective both read. A dropped import then moves the rows by that
-import's own compile cost and nothing else, and a bare library edit reads as
-what it is. Rebased once with its own `--set`, and the history chart marks the
-day.
-
-The other two are declined with it. (a) pricing whatever lib/json imports, and
-(c) recording this rise as a re-basing while leaving the workload alone. Each
-leaves the next import change to make the same argument again.
-
-The floor kanso#1291 set stands until the rebase, per the standing rule that a
-rise is held rather than banked. Building this is cloud's.
-
-## 2026-09-08 — gavel: an infinite or nan float renders as inf, -inf and nan
-
-Clay, 2026-09-08, taking the recommendation the ledger carried: C's spelling,
-which is what the `%g` rule the renderer already mirrors produces.
-
-Neither engine had an answer and no golden in the corpus asked for one. The
-interpreter panics: `render_float` asks Rust for `{:e}` digits and expects an
-`e` in the reply, which `inf` has none of (src/eval.rs:3949). Native prints
-`1.797693134862316e+308`, the largest double's digits, for a value that is not a
-double's, and `2.696539702293474e+308` for nan. Both engines are wrong and the
-oracle's wrong is a crash, which is why this reached the ledger rather than
-being fixed where it was found.
-
-**Ruled: `inf`, `-inf`, `nan`.** Rust's `Display` for f64 prints the same three,
-so the oracle says it with one arm and native with one branch in front of ryu.
-JavaScript's `Infinity` and `NaN` were the alternative named and are declined:
-they descend from no other rule in this renderer, where the `%g` lineage
-already decides every other question it answers.
-
-A differential fixture over the three values on all three engines ships with the
-change, per the differential law. Whether `json/encode` may emit such a value at
-all belongs to that library and is not answered here. Building this is cloud's.
-## 2026-09-08 (fifth) — the drift gate counted rulings against the page
-
-`scripts/page_drift` takes the last commit that touched docs/compiler.html,
-diffs design/compiler-log.md from there to HEAD, counts the `## ` headings and
-fails past three. Clay ruled the count wrong on 2026-09-08: "there is no
-specific correlation between a number of log entries and specific changes to
-the HTML." Two shapes were named as tractable, and this is the first of them.
-
-A ruling is skipped now and everything else still counts. The marker is the
-heading convention the log already writes — `## <date> — gavel: ...` and
-`## <date> — directive: ...` — so nothing new had to be agreed. An entry that
-merely mentions a gavel keeps its place in the count, because the colon and the
-dash are what the convention writes.
-
-The whole-float gavel is why that is the right exemption. It was ruled on
-2026-09-06 and filed as one entry; the behaviour it decided shipped in
-kanso#1285 as a second; the page sentence it falsified was corrected in
-kanso#1315 as a third. One page edit was owed across the three, and the ruling
-was not the entry that owed it — a decision documents a page once something
-implements it.
-
-**Measured on the pull request it blocked.** kanso#1313 carries nine rulings
-and one entry that is not one. The old gate reads 10/3 and fails the whole
-cost-goldens job; the new one reads 1/3 and passes, printing
-`(9 rulings not counted)` so the skip is visible.
-
-**The page move alone does not clear it.** The gavel entry expected kanso#1315
-to drop the budget to zero for anything behind it. It does not. page_drift
-diffs trees rather than walking history, so a branch's own entries still appear
-as additions once the merge base moves: with origin/main merged into
-kanso#1313, the old gate still reads 10/3. Landing this fix is what unblocks
-that pull request.
-
-The gate had no spec at all before this one, which is how the defect outlived a
-redesign of the log's headings underneath it.
-`tests/a_ruling_is_not_a_page_the_log_owes.rs` builds a repository whose page
-moved once, appends entries to the log, and reads the gate's own output: the
-nine-ruling batch passes at 1/3, four entries recording shipped work still fail
-at 4/3 and are named, and four headings that mention a gavel without being one
-still fail. The first was watched red on the old gate before the fix went in.
-
 ## 2026-09-08 (sixth) — k_b_join called libc for a single byte
 
 `k_b_join` copied both the separator and each item with `memcpy`. In every
@@ -4063,3 +3749,120 @@ content; this removes the one routine way of fooling it, not the weakness.
 blob — 382 of them, 26,886,564 bytes — and removing the file from the tip does
 not shrink an existing clone. The saving is prospective: the blob stops gaining
 a version per rebuild that anyone remembers to commit.
+
+## 2026-09-09 — a row says where its run count came from, and the mark is sticky
+
+The 2026-09-09 red main was a provenance failure wearing an arithmetic
+costume. `welfare_rescore` wrote rebuilt `run_instructions` into the rows it
+handed back, ci.yml fed it `origin/perf-history:history.jsonl` — its own
+previous output — and with nothing on the row saying which counts were
+computed, the rebuilt ones read as measured and one became the splice anchor.
+kanso#1350 fixed the tool: the anchor now takes rows carrying a count and NOT
+the full phase set, and the rebuild recomputes rather than trusting what it
+finds. That closes the loop for this tool. It does not help the next reader,
+and the file still could not answer the question.
+
+It can now. A row that this tool rebuilt carries `run_source: "rebuilt"`; a row
+whose count it did not write carries `"measured"`; a row with no count carries
+nothing. Read off the live history the split is 48 rebuilt, 65 measured, 387
+unmarked, and the mark agrees with `scored_weight` on every row — all 48
+rebuilt sit at coverage 0.74, all 65 measured at 1.00, and no row has a count
+without a mark. The welfare column and every `run_instructions` are
+byte-identical to what CI wrote, and the file stays a fixed point under its own
+tool over three passes.
+
+**The mark carries no factor, and that is the design rather than an omission.**
+The compile side is RE-BASED by an exact divisor a row could name;
+this side is REBUILT from phase shares, and there is no divisor because no
+ruler moved. A `1.0000` written here for symmetry would read as "measured
+against an unmoved baseline", which is the precise misreading the mark exists
+to prevent.
+
+**THE FIRST CUT STRIPPED THE MARK AND RE-DERIVED IT, and that was wrong.** It
+looked like the welfare column, which is recomputed every pass, so it was
+treated the same way. It is not the same kind of fact. Whether a count was this
+tool's arithmetic is a fact about where the number CAME FROM, and nothing
+re-measures a commit from three weeks ago, so it cannot expire. The failure is
+visible in the degraded pass: with no row available as an anchor nothing is
+rebuilt, and a mark re-derived from scratch then sees only a row carrying a
+count and writes `"measured"` on it. Measured on a history with the anchors
+removed:
+
+    fixture            rebuilt   measured
+    the strip          0         48
+    the sticky mark    48        0
+
+Forty-eight rows relabelled from true to false, by the field whose whole job is
+to stop that confusion. The mark is sticky now: a row already claiming
+"rebuilt" keeps it, and "measured" is only ever written onto a row that has a
+count and no claim. With an anchor present the rebuild recomputes anyway, so
+the sticky path is the degraded one, and there it degrades toward the truth.
+
+`a_rebuilt_count_stays_marked_rebuilt_when_the_anchor_is_gone` pins it, entered
+through the real tool on a three-row fixture and then on the same rows with the
+anchor dropped. Watched red under the mutation that restores the strip, which
+reddens that spec and leaves the other three green.
+
+**Still owed, and it is the other half of the task.** The compile side has an
+exact per-counter divisor in `bench/compile_epochs.txt`, and a row does not yet
+name the epoch it was scored in. That wants the boundary commits tracked
+through `crossed` rather than only their product, so it is a real change and
+not a line. The two marks answer different questions and must not be made to
+look alike.
+
+---
+
+## 2026-09-09 — a row names the epoch its baseline was measured in
+
+**DONE.** `bench/compile_epochs.txt` names three commits that changed how the
+compile counters are measured. `scripts/welfare_rescore` divides the baseline
+by every factor from a row's epoch forward, so two rows either side of a
+boundary are scored against two different baselines. Which one a given row sat
+on was not written anywhere. A reader comparing a row from March against one
+from September was comparing two numbers over two rulers and had nothing on the
+page to tell them apart.
+
+Every rescored row now carries `scored_base`. The fold that computes the
+divisors already walked the boundaries; it now carries the list of boundaries
+still ahead of the row alongside the divisor map, and stamps each row with the
+first one left. A row past all three reads `as measured`.
+
+**The boundary row belongs to the NEWER epoch.** Its own factor is already
+divided out — it is the first row measured the new way — so it is named by the
+next boundary, not by itself. The first cut named from the list before the
+row's own commit was removed, and stamped row 443 `before 5f5561c` when 5f5561c
+is the commit that row IS. That reads as though the row predates a change it is
+the first to carry, which is the one misreading the column exists to prevent.
+The spec pins the whole sequence rather than a shape, so the off-by-one turns
+it red wherever it shifts.
+
+Over the live 500-row history: 442 rows `before 5f5561c`, 30 `before dfd118a`,
+9 `before 8535884`, 19 `as measured`. The boundaries land at rows 443, 473 and
+482, which cross-checks against the positions recorded independently on
+2026-09-07. Every other column is byte-identical to what the previous tool
+wrote over the same input, and the output is a fixed point under itself.
+
+**Two specs, both watched red first.** `every_row_names_the_epoch_its_baseline
+_was_measured_in` fails under the off-by-one with the whole sequence shifted by
+one row. `a_history_under_no_epochs_at_all_is_scored_as_measured` holds the
+second copy of the naming — `divisors` has an arm for a history carrying no
+boundary at all, which builds the map in one pass instead of folding across
+boundaries, and the naming is written there too. Without that spec the second
+copy could say anything.
+
+**A new column reddens seven specs in a file that pins whole rows, and that
+is the corpus working.** `tests/a_row_predating_a_counter_is_scored_on_what_it
+_has.rs` compares each rescored row byte for byte rather than reading one
+field out of it, so adding `scored_base` broke five scoring cases and both
+no-column cases at once. Nothing was wrong with those specs. The rows this
+tool writes are read by the chart and by the tool itself on its next pass, so
+a field added to them is a change to what those readers see, and a spec that
+could not tell would be the defect. Their expectations carry the new column
+now, and the file says why every fixture row in it reads `as measured`.
+
+**What this does NOT give the run side.** A rebuilt `run_instructions` has no
+factor: it is a ratio to an anchor, not a division by a recorded constant. The
+run half of this thread (kanso#1351) marks such a row `run_source: rebuilt`
+instead. Writing a fabricated `1.0000` there to make the two sides symmetric
+would read as "measured against an unmoved baseline", which is exactly the
+misreading the mark prevents.

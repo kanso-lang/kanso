@@ -15,6 +15,14 @@
 //! Five rows, and the arithmetic is done by hand in the comments below rather
 //! than read off the tool. The fixture's baselines are its own round numbers,
 //! so none of these move when a benchmark does.
+//!
+//! THE EXPECTATIONS ARE WHOLE ROWS, byte for byte, which is why a column added
+//! to the tool reddens five of them at once. That is the point: the rows the
+//! rescore writes are read by the chart and by the tool itself on its next
+//! pass, so a new field is a change to what those readers see and something
+//! must say so. `scored_base` reads `as measured` on every row here because
+//! these fixtures carry no epoch boundary, and a history under no boundary is
+//! scored against the baseline exactly as welfare measured it.
 
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -119,7 +127,7 @@ fn every_counter_present_scores_the_whole_formula() {
         rescored("whole", &[WHOLE]),
         vec![concat!(
             "{\"a\":100,\"b\":100,\"c\":100,\"commit\":\"r1\",",
-            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"1.00\",",
+            "\"scored_base\":\"as measured\",\"scored_by\":\"2026-09-02\",\"scored_weight\":\"1.00\",",
             "\"welfare\":\"41.6667\"}"
         )]
     );
@@ -131,7 +139,7 @@ fn a_term_scored_on_half_its_counters_keeps_its_weight() {
         rescored("half", &[HALF_A_TERM]),
         vec![concat!(
             "{\"a\":100,\"c\":100,\"commit\":\"r2\",",
-            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.63\",",
+            "\"scored_base\":\"as measured\",\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.63\",",
             "\"welfare\":\"41.6667\"}"
         )]
     );
@@ -146,7 +154,7 @@ fn a_term_with_no_counters_leaves_the_denominator() {
         rescored("dropped", &[NO_COMPILE_TERM]),
         vec![concat!(
             "{\"a\":100,\"b\":100,\"commit\":\"r3\",",
-            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.75\",",
+            "\"scored_base\":\"as measured\",\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.75\",",
             "\"welfare\":\"33.3333\"}"
         )]
     );
@@ -158,7 +166,7 @@ fn a_better_row_scores_higher_on_the_same_counters() {
         rescored("twice", &[TWICE_AS_GOOD]),
         vec![concat!(
             "{\"a\":50,\"b\":50,\"c\":50,\"commit\":\"r4\",",
-            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"1.00\",",
+            "\"scored_base\":\"as measured\",\"scored_by\":\"2026-09-02\",\"scored_weight\":\"1.00\",",
             "\"welfare\":\"57.5000\"}"
         )]
     );
@@ -170,7 +178,7 @@ fn a_counter_at_zero_reads_as_a_half() {
         rescored("zero", &[ONE_AT_ZERO]),
         vec![concat!(
             "{\"a\":0,\"b\":100,\"c\":100,\"commit\":\"r5\",",
-            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"1.00\",",
+            "\"scored_base\":\"as measured\",\"scored_by\":\"2026-09-02\",\"scored_weight\":\"1.00\",",
             "\"welfare\":\"66.2954\"}"
         )]
     );
@@ -232,7 +240,7 @@ fn a_row_with_no_scored_counter_gets_no_column() {
         rescored("nothing", &[NOTHING_SCORED]),
         vec![concat!(
             "{\"commit\":\"r6\",\"d\":100,",
-            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.00\"}"
+            "\"scored_base\":\"as measured\",\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.00\"}"
         )]
     );
 }
@@ -243,7 +251,7 @@ fn a_score_from_the_old_formula_is_removed_rather_than_left() {
         rescored("stale", &[STALE_COLUMN]),
         vec![concat!(
             "{\"commit\":\"r7\",\"d\":100,",
-            "\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.00\"}"
+            "\"scored_base\":\"as measured\",\"scored_by\":\"2026-09-02\",\"scored_weight\":\"0.00\"}"
         )]
     );
 }
