@@ -3337,3 +3337,29 @@ qualified name as its module's declaration, records printing qualified,
 the backends' partial over a value, block-born as the whole cohort, and the
 boundary chapter — stay in the order the list gives them; the next build is
 taken from it.
+
+**Round three: the counter the local sweep never ran.** CI's cost-goldens
+job, once the runner's apt mirror stopped returning a mismatched index, read
+`utf8_bytes` up on eight runtime veins by the size of the input each reads:
+188,698 on the decoder, encode, oneshot, wide, read, live and run programs,
+8,192 on the digest. That is the ruling's own cost made visible. `read_file`
+validates every byte it hands back now, where native used to hand bytes
+through unread, and the counter that counts validated bytes counts the input
+file. The allocation counters beside it are byte-identical. The twelve cost
+goldens were regenerated with `all_counters.sh --write` on this branch, which
+the first two rounds skipped — the emitted sweep ran and the counter sweep did
+not, and CI found the difference. The retired-instruction rows CI measured are
+copied in: runbench 2,369,642,706 -> 2,369,917,628 (+274,922, +0.0116%), the
+decoder +274,897, encode +274,968, oneshot +274,897, read +274,804, live
++274,897, wide +90,524, digest +6,153; basket, deepbench, escapebench,
+pendbench, indexbench and scanbench read no file and hold to the instruction.
+That is 1.46 instructions a byte for the validator, the word-at-a-time arm the
+2026-09-07 entry measured. Every `.text` row rose too, 1,040 bytes on the
+eight readers and about 3,056 on the six that do not read, since the reader
+pair and the refusal are runtime code every program links. The compile rows:
+compile_instructions 48,749,059 -> 48,751,741, entry 162,051,772 ->
+162,061,812, library 162,846,242 -> 162,857,425, each the two definitions
+`std/os` gained. Welfare reads 66.37 against a floor of 66.37 and holds
+inside the gate's band; had it fallen, it would have moved by hand under the
+differential-law exception welfare.kso states, since a `read_file` that
+answers the same on three engines is not a trade.
