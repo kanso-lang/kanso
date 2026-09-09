@@ -66,9 +66,8 @@ fn keys_read(block: &str) -> BTreeSet<String> {
             continue;
         }
         let rest = &block[i + 2..];
-        let end = rest
-            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-            .unwrap_or(rest.len());
+        let end =
+            rest.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).unwrap_or(rest.len());
         if end > 0 {
             out.insert(rest[..end].to_string());
         }
@@ -88,14 +87,11 @@ const NOT_COUNTERS: [&str; 2] = ["welfare", "text_bytes"];
 #[test]
 fn every_objective_counter_has_a_line() {
     let page = std::fs::read_to_string(root().join("docs/numbers.html")).unwrap();
-    let sources =
-        std::fs::read_to_string(root().join("bench/objective_sources.txt")).unwrap();
+    let sources = std::fs::read_to_string(root().join("bench/objective_sources.txt")).unwrap();
 
     let drawn = keys_read(trend_block(&page));
-    let missing: Vec<_> = objective_counters(&sources)
-        .into_iter()
-        .filter(|c| !drawn.contains(c))
-        .collect();
+    let missing: Vec<_> =
+        objective_counters(&sources).into_iter().filter(|c| !drawn.contains(c)).collect();
 
     assert!(
         missing.is_empty(),
@@ -107,8 +103,7 @@ fn every_objective_counter_has_a_line() {
 #[test]
 fn every_line_is_an_objective_counter_or_says_why_not() {
     let page = std::fs::read_to_string(root().join("docs/numbers.html")).unwrap();
-    let sources =
-        std::fs::read_to_string(root().join("bench/objective_sources.txt")).unwrap();
+    let sources = std::fs::read_to_string(root().join("bench/objective_sources.txt")).unwrap();
 
     let counters = objective_counters(&sources);
     let stale: Vec<_> = keys_read(trend_block(&page))
