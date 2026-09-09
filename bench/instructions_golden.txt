@@ -379,10 +379,10 @@
 # absolute rows cannot be taken here: it is clang 18.1.3 and would write the
 # fallback module. CI's sitting is the record.
 jsonbench 1485334799
-encodebench 3963988526
+encodebench 3990124647
 oneshot 21737118
-basket 34694178
-widebench 35332240
+basket 34694167
+widebench 35219046
 deepbench 389214232
 escapebench 85558105
 pendbench 590971748

@@ -20,60 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## Remembering a compiled module costs more than compiling it again
-
-bench/compile_corpus is a diamond. It imports std/text directly, and it imports
-std/json, which imports std/text. `KANSO_PHASES=1 kanso check bench/compile_corpus`
-prints `load std/text` twice, and the compiler really does lex, parse and check
-that module once per path to it. `visited` is a cycle stack — inserted on the way
-in, removed on the way out — so it never held an answer to hand back.
-
-The memo was built: `visited` became a `Load` carrying both the stack and a map
-from canonical path to the finished program, and a second visit returned a clone
-of the first. Every compile counter the objective weighs got worse.
-
-    counter                base         with the memo   delta
-    compile_instructions   51,094,624   51,756,188      +661,564  (+1.29%)
-    compile_allocs         29,940       32,149          +2,209    (+7.38%)
-    compile_peak_bytes     777,057      1,073,098       +296,041  (+38.10%)
-    compile_visits         23,723       23,522          -201
-    compile_rounds         62           58              -4
-
-(Read on this container, which sits about 400,000 above CI's row for the same
-tree; the comparison is against its own base.)
-
-The profile says why, frame by frame. The second compile of std/text is worth
-about 1.13 million instructions — `compile_module_loaded'2` falls 27,087,117 to
-25,961,126, `lexer::lex` 4,330,753 to 4,092,322, `parser::parse` 4,761,741 to
-4,560,696. Handing the answer back costs more than that: `Vec::clone` rises
-263,773 to 2,294,028 across its two frames and `Expr::clone` 328,175 to
-1,592,439. A module's finished program carries every declaration its own dependencies
-contributed, demoted and qualified, so the deep copy runs about 1.6 times the
-compile it replaces. The peak rise is the other half:
-one program per module stays alive for the whole build where before each one was
-dropped as its importer finished with it.
-
-The two counters that improved are not objective terms, and they say how small
-the saving is: 201 expression visits out of 23,723, and four fixpoint rounds.
-
-That number is the finding. The merged program is unchanged by the memo, and the
-reason is where the diamond's cost actually sits: in the second copy of the
-declarations, which every pass downstream then walks. Counting names in the corpus's merged program that another name
-reaches through a further qualifier (`json/text/append` beside `text/append`):
-
-    module                 declarations   reached twice
-    bench/compile_corpus   428            99
-    std/json               196            17
-
-Ninety-nine of 428. Collapsing them
-would mean making two spellings of one declaration into one name, and a
-qualified spelling is permanent identity in this compiler today. It is
-sound in principle — the lock read at the module root makes an import path
-resolve to one module for the whole build — but it changes what a qualified name
-means, so it is its own piece of work rather than a tidy on this one.
-
-Declined, reverted, nothing shipped.
-
 ## What the per-module reshape costs the diagnostics, fixture by fixture
 
 The reshape is `src/lib.rs`'s `outermost` branch: a dependency runs
@@ -3393,14 +3339,22 @@ read and a lenient one allocate alike, and a `none` arm nobody reaches
 allocates nothing. `all_pages.sh` rewrote the one page span that quotes the
 visits row; `book_check.sh` verifies every sample and the diagnostic scan
 reads 313 literal diagnostics, 0 newly unpinned. Welfare reads 66.36 on this
-host's goldens; the host-keyed rows are CI's to say. Priced for the trend
-gate, by key: `module_lines` 5,274 (the module compile golden's emitted
+host's goldens; the host-keyed rows are CI's to say. CI's sitting on the
+rebased branch: the respelled encodebench copy costs `work_encodebench`
+3,963,988,526 -> 3,990,124,647 (+0.66%: a strict `!` read tests the index
+and dies where the lenient one answered none, and the hot loop reads
+eleven of them), while widebench's copy falls 35,332,240 -> 35,219,046 and
+basket by eleven; the .text vein rises with the two copies, `text`
+1,523,196 -> 1,525,484 summed, encodebench 118,834 -> 120,418, widebench
+124,098 -> 124,770, scanbench and runbench sixteen bytes each. Priced for
+the trend gate, by key, as this entry's change alone moved them before the
+entry below: `module_lines` 5,274 (the module compile golden's emitted
 lines, up six on lib/list's bisect), `emitted_other_calls` 20,537,
 `emitted_other_branches` 12,715 and `emitted_other_lines` 133,377 (the
 twelve non-decoder programs summed: the `none` arms and strict reads the
 benchmark copies gained outweigh what the regexp respelling shed), against
 `module_visits` 2,380, `front_end_visits` 22,339 and `emitted_other_defines`
-2,351 falling.
+2,351 falling; the entry below takes the emitted rows lower than main.
 
 **The wasm backend calls what it is handed.** The four fixtures that hand
 a none to a group on purpose reach it through a closure parameter now, and
@@ -3426,7 +3380,7 @@ builtin's `text | none` and the twin's return set carries a none it never
 produces (`0b101110000`; `read_file` the same way through `found`). Closing
 the gap today would refuse eleven valid programs. The order is: infer learns
 that a catch-all `none` arm empties the none from the arms below it, then
-the pipe is checked. That is the next thread.
+the pipe is checked. That is the entry below, in this pull request.
 
 **A book sample the check refuses, found a batch late.** `scripts/book_check.sh`
 was not in the batch this was verified with, and on the branch it read ch08's
@@ -3436,3 +3390,93 @@ named it. The sample's lesson is the naming rule, so its recorded output
 keeps the three naming errors and `mark_step` gains a `none` arm answering
 false; the panel quoting the source is regenerated. Every other sample runs
 as recorded.
+
+## 2026-09-09 — a catch-all `none` arm empties the none from the arms below it, and a piped call is a call
+
+The exhaustiveness entry above left one thing open: `walk` read only
+`Expr::App { piped: false }`, so `menu["pocky"] . describe` passed where
+`describe menu["pocky"]` was refused, and closing the gap would have refused
+eleven valid programs, every one of them `os/read_file! "…" . f`. The cause
+was infer's, not the check's. `read_file!` is `builtin_read_file path . (r
+-> insisted path r)`, and `insisted path none` answers every none the
+builtin hands back before `insisted _ text` can see one; infer seeded `text`
+with the builtin's whole `text | none` all the same, so the twin's return set
+carried a none it never produces. That is the shape of every false report
+the piped gap uncovered, and of the `both`-style report the check would have
+made on any group whose first arm catches the none.
+
+**The rule.** An arm that names `none` at a position and binds anything at
+every other position takes every none handed at that position: a call with
+a none there matches it, and no later arm is more specific there, because an
+arm more specific elsewhere would tie with it and the tie is refused at
+compile time. So no other arm of the group is ever handed that none, and
+`eval_call` widens the others with the none bit off. An arm that names none
+beside something it asks more of takes nothing: `both none none` answers a
+none only beside another, so `both none 2` still hands its second arm the
+none. The arms that name none themselves keep the bit, because the group's
+joined parameter set is what codegen's dispatch reads and a none must stay
+visible there.
+
+**Where the asking lives.** The first cut built a table for every group up
+front, 97,000 instructions on compile_corpus, and asked it inside the hot
+loop, which grew `eval_call` past the budget that kept `widen_param` inlined
+and cost 72,000 more. The shipping shape asks only a group that a call hands
+a none to and that has more than one arm, caches the answer per group and a
+per-arm strip mask per declaration on the first ask, and keeps the whole
+path out of line; the plain loop is unchanged for the calls that never ask,
+which is nearly all of them. Six shapes were measured on the module row on
+this box: 50,821,172, 50,781,333, 50,736,443, 50,622,105, 50,442,823 and
+50,441,411 against 50,281,299 before the change.
+
+**What it costs, and why that is allowed.** The three compile rows rise on
+this box: module 50,281,299 -> 50,441,411 (+0.32%), entry 166,901,799 ->
+167,441,542 (+0.32%), library 167,707,877 -> 168,198,150 (+0.29%);
+`compile_allocs` 29,763 -> 29,787 and the peak byte-identical at 777,308,
+both read on the same host either side. Inclusive, infer itself is 59,463 of
+the 160,112 on the module row; the fixpoint reaches the same answers in 66
+rounds rather than 62, each of the four extra a tail sweep of one to seven
+declarations, with 206 fewer visits in total, and the remainder sits in
+frames the change does not touch, the layout term this row has recorded
+seven times. The runtime side is untouched: the twelve cost veins and the
+lazy tier agree to the counter. Projected onto CI's rows, welfare falls
+0.01 below the floor. This is a doctrine-compelled change — the
+2026-09-09 ruling says exhaustiveness on arm match "has always been the way
+the language works", and a check that reads piped calls cannot ship while
+infer hands `read_file!` a none — and the 2026-08-25 ruling is that a
+language feature is never hostage to the score: the floor moves down with
+the fall recorded and attributed, and no compensating optimization rides in
+its pull request. The floor entry is written when CI reports the rows.
+
+**What moved.** Against the exhaustiveness entry's rows, `emitted_code`:
+six programs fell, every importer of `std/os` whose `read_file!` no longer
+carries a none arm's worth of dispatch — the decoder calls 1,236 -> 1,220,
+branches 816 -> 792, lines 9,245 -> 9,136; encodebench calls 1,652 -> 1,636,
+branches 1,016 -> 992, lines 11,258 -> 11,143; oneshot calls 1,229 -> 1,213,
+lines 9,174 -> 9,065; widebench calls 1,843 -> 1,827, lines 12,240 -> 12,125;
+livebench calls 1,253 -> 1,237, lines 9,291 -> 9,182; runbench calls 5,988 ->
+5,972, branches 3,459 -> 3,435, lines 34,783 -> 34,674. The module compile
+golden's `module_visits` 2,380 -> 2,388, eight more expressions to visit with
+the sets settling later. `compile_memory`: `front_end_rounds` 62 -> 66,
+`front_end_visits` 22,339 -> 22,133, both noted in the golden; the page span
+quoting the visits is rewritten with them, because `all_pages.sh` on the
+branch read it drifted and golden_prose is the gate that would have caught
+it a round late. The corpus answers three exhaustiveness reports with the
+pipe read, and all three are error fixtures. One more program the piped gap
+had hidden turned up when the exhaustiveness entry's branch met #1355 on
+CI: `scripts/fingerprint` reads the wasm blob through `os/read_bytes!` and
+hands the bytes on to `sha256/hex`, and the none `read_bytes!` never
+produces reached the digest through `as_bytes`'s catch-all arm. The check
+refused a valid script in the asset digests job; with this entry's rule the
+script checks clean, unchanged, which is why the two rulings ride one pull
+request.
+
+**Spec.** `tests/golden/micro/a_none_arm_takes_the_none_from_the_arms_below_it.kso`
+hands `insisted` a literal none and then an int and prints `one` twice;
+refused by the old binary with the ruled sentence, run by the new one, on
+native and the oracle. `tests/golden/errors/a_piped_none_reaches_a_group_with_no_arm_for_it.kso`
+is the menu sample with the lookup piped: the old binary printed `<none>
+yen`, the new one refuses it on both routes.
+`tests/golden/errors/a_none_arm_that_asks_more_takes_nothing.kso` pins the
+condition: `both none none` above `both x _` takes nothing, and the report
+stands on both binaries; a mutation that drops the every-other-position
+test turns it green, which is how it earns its place.

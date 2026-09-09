@@ -177,6 +177,6 @@
 # 2026-09-06 (the proven-tags append, and the escape arms folded into esc_pair): the decoder carries BOTH changes -- the twin in the preamble and esc_pair from lib/json -- so defines 185 -> 187, calls 1,845 -> 1,846, branches 1,204 -> 1,209, lines 12,726 -> 12,801.
 # 2026-09-09 (the fused render-append, and a switch arm told its case's tags): the decoder has no number to encode, so this is the narrowing alone -- a force and a to_string dispatch dropped from every arm the switch proves: defines 141 -> 140, calls 1,245 -> 1,232, branches 824 -> 816, lines 9,279 -> 9,219.
 defines=142
-calls=1236
-branches=816
-lines=9245
+calls=1220
+branches=792
+lines=9136
