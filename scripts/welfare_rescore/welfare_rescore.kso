@@ -253,39 +253,52 @@ fn seeded acc key f true
 fn seeded acc key f false
   put acc key (acc[key]! * f)
 
-# A table that names three boundaries and finds two is stale, and the failure
-# it causes looks like a working answer: the rows past the missing boundary
-# stay on the wrong divisor and every number stays plausible. So a PARTIAL
-# match refuses.
+# THE BOUNDARIES A HISTORY CARRIES MUST BE A SUFFIX OF THE TABLE, and that one
+# rule covers three situations that look alike and are not.
 #
-# All-or-nothing rather than all-or-refuse, because a history that carries
-# none of the boundaries is not the history this table describes — a staged
-# fixture, which every spec over this tool writes — and scaling it by the
-# whole product would be inventing a re-basing it never had. Those get no
-# epochs at all.
+# The history file is bounded — ci.yml keeps the newest 500 rows — so the
+# oldest boundary leaves the window one day and the table still names it. That
+# is not staleness: a boundary older than every row scales no row, and dropping
+# it is the whole of the repair. Rows 446, 476 and 485 of 500 today, so the
+# first departure is 446 merges out, which is exactly long enough for the red
+# main it would otherwise cause to arrive with nobody expecting it.
 #
-# THE HOLE THIS LEAVES, said out loud: a rewrite that dropped EVERY boundary
-# commit at once would take the no-epochs arm silently. Nothing here can tell
-# that from a fixture, and the partial case is the one staleness actually
-# produces.
-fn absent? rows e
-  length (list/to_list (list/select rows (r -> r["commit"] == e[1]!))) == 0
+# A boundary missing from the MIDDLE, or the newest one missing while an older
+# one is present, is a stale table, and the answer it gives is the dangerous
+# kind: the rows past the hole sit on the wrong divisor while every number
+# stays plausible. That refuses.
+#
+# A history carrying NONE of them is the whole table fallen off the front — a
+# staged fixture, which every spec over this tool writes. It is the suffix rule
+# with an empty suffix, and it gets no epochs rather than a scaling it never
+# had.
+fn carried? rows e
+  length (list/to_list (list/select rows (r -> r["commit"] == e[1]!))) > 0
+
+# The table's own order is oldest-first, so the boundaries a history carries
+# form a suffix exactly when nothing carried comes before something missing.
+fn suffix? epochs rows
+  seen = list/fold epochs [false true] (a e -> after_gap a (carried? rows e))
+  seen[2]!
+
+fn after_gap a true
+  [true a[2]!]
+
+fn after_gap a false
+  [a[1]! (a[2]! and not a[1]!)]
 
 fn epoch_divisors rows epochs
-  gone = length (list/to_list (list/select epochs (e -> absent? rows e)))
-  divisors rows epochs (gone == 0) (gone == length epochs)
+  in_window = list/to_list (list/select epochs (e -> carried? rows e))
+  divisors rows in_window (suffix? epochs rows) (length in_window == 0)
 
-fn divisors rows epochs true false
-  start = [(oldest_divisor epochs) {}]
-  list/fold rows start (a r -> crossed a r epochs)
-
-fn divisors rows _ false true
-  [{} (no_epochs rows)]
+fn divisors rows in_window true false
+  start = [(oldest_divisor in_window) {}]
+  list/fold rows start (a r -> crossed a r in_window)
 
 fn divisors rows _ true true
   [{} (no_epochs rows)]
 
-fn divisors _ _ false false
+fn divisors _ _ false _
   err "a compile epoch names a commit no history row carries"
 
 # Every row on an empty divisor map, which `epoch_value` reads as the identity.

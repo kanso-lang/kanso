@@ -3803,21 +3803,33 @@ anybody asking whether the fold's seed was uniquely owned. With the fix,
 the digit. The table's first working run was the miscompilation's first
 reproduction.
 
-**The guard is all-or-nothing, and the middle case is the one that bites.**
-A table naming three boundaries and finding two is stale, and the answer it
-then gives is the dangerous kind: the rows past the missing boundary sit on
-the wrong divisor while every number stays plausible. That refuses. A history
-carrying NONE of them is not the history this table describes — it is a staged
-fixture, which every spec over this tool writes — and gets no epochs at all.
-The first cut refused that case too, and it turned three spec files red for a
-reason none of them was about; seventeen fixtures would have had to carry
-three commits they say nothing about, and every future one after them. The
-hole this leaves, said out loud: a rewrite dropping every boundary commit at
-once takes the no-epochs arm silently, and nothing in the tool can tell that
-from a fixture. The partial case is the one staleness actually produces.
+**The boundaries a history carries must be a SUFFIX of the table**, and that
+one rule covers three situations that look alike. It took three cuts to find.
+
+The first refused any history missing a boundary. That turned three spec files
+red for a reason none of them was about — `the_reconstruction_refuses_a_splice_that_moved`,
+`a_row_predating_a_counter_is_scored_on_what_it_has` and
+`the_score_says_what_it_was_made_of` all stage synthetic histories — and
+seventeen fixtures would have had to carry three commits they say nothing
+about, with every future one after them.
+
+The second was all-or-nothing: refuse a partial match, give a history carrying
+none of them no epochs. That is right about fixtures and wrong about the file
+CI actually rewrites. `history.jsonl` is bounded to the newest 500 rows, so the
+oldest boundary leaves the window one day while the table still names it — and
+under all-or-nothing that is a partial match, so main goes red for a file doing
+exactly what it is meant to do. Rows 446, 476 and 485 of 500 today: the first
+departure is 446 merges out, which is long enough that it would have arrived
+with nobody expecting it.
+
+So: all present, the table applies. A hole in the middle, or the newest gone
+while an older one stays, is a stale table and refuses. None at all is the
+whole table fallen off the front — a fixture — and gets no epochs. The
+boundaries that left the window are dropped from the product, because a
+boundary older than every row scales no row.
 
 **DONE — the spec, and the first cut proved nothing.**
-`tests/the_compile_epochs_flatten_their_own_boundaries.rs` holds three.
+`tests/the_compile_epochs_flatten_their_own_boundaries.rs` holds four.
 The first stages, per boundary, a fixture carrying every boundary's
 commit — so the epoch table applies at all — where only the
 pair under test holds counters: 10,000 before and 10,000 x factor
@@ -3825,8 +3837,19 @@ after, so the four-place factors make every number an exact integer and
 nothing rounds inside the fixture. The second replays the counter names
 against `bench/objective_sources.txt`, so a typo cannot sit in the
 table scaling nothing. The third leaves one boundary out of a fixture at a
-time and requires the refusal by name — watched red under a mutation that
-takes the no-epochs arm for a partial match.
+time — never the oldest, so an older one is always still present — and requires
+the refusal by name.
+
+**The fourth is the one whose first cut proved nothing, for the second time in
+this entry.** It scores the same rows twice, once against a fixture carrying
+every boundary and once against a slid window, and requires the two to agree.
+The obvious assertion was that the boundary still FLATTENS, and that survives
+the mutation the test exists to catch: if the departed boundaries keep their
+factors in the product, every divisor shifts by the same amount, so every step
+is still right and a pair either side of a boundary agrees exactly as before.
+What moves is the absolute column, against a floor that is ratcheted. Watching
+the mutation pass is what found it; the rewritten test reads 97.1221 against
+the whole-window figure and goes red.
 
 The first cut passed under a mutation that moved both numbers. The
 welfare column is a STRING — `fixed` renders it and `put` stores what

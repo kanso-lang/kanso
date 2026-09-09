@@ -12,12 +12,14 @@
 //! the next thing to go stale when a boundary is added, and the count in it
 //! would be the third count in this repo to go stale that way.
 //!
-//! EVERY BOUNDARY'S COMMIT APPEARS IN EVERY FIXTURE HERE, because the tool
-//! takes the epoch table only when it finds all of them. A history carrying
-//! SOME is a stale table and is refused; one carrying NONE is not the history
-//! the table describes — a staged fixture — and gets no epochs at all, which
-//! is what lets every other spec over this tool stage three rows and say
-//! nothing about compile epochs. The refusal has its own test below.
+//! THE BOUNDARIES A HISTORY CARRIES MUST BE A SUFFIX OF THE TABLE, and the
+//! three tests below are the three situations that rule covers. All present:
+//! the table applies. A hole in the middle, or the newest gone while an older
+//! one stays: a stale table, refused. None at all: the whole table has fallen
+//! off the front, which is a staged fixture — every other spec over this tool
+//! writes one — and gets no epochs rather than a scaling it never had. The
+//! bounded history file (ci.yml keeps the newest 500 rows) is why the oldest
+//! boundary leaving is legitimate rather than stale.
 //! The rows that are not under test carry no compile counters, so they are
 //! scored on nothing and drop their welfare column, which is the tool's own
 //! arm for a row that predates every counter.
@@ -232,27 +234,110 @@ fn two_rows_straddling_a_boundary_score_the_same() {
     }
 }
 
-/// A table naming three boundaries and finding two is stale, and the answer it
-/// then gives is the dangerous kind: the rows past the missing boundary sit on
-/// the wrong divisor and every number stays plausible. So a PARTIAL match is
-/// refused rather than scored.
+/// A boundary missing from the MIDDLE of the table, or the newest one missing
+/// while an older one is present, is a stale table, and the answer it then
+/// gives is the dangerous kind: the rows past the hole sit on the wrong divisor
+/// while every number stays plausible. So that refuses.
 ///
-/// One fixture per boundary, each carrying every commit but that one. The rows
-/// hold no counters — what is under test is the refusal, which happens before
-/// anything is scored.
+/// One fixture per boundary that is not the oldest, each carrying every commit
+/// but that one — which leaves an older one present and so is never a suffix.
+/// The rows hold no counters; what is under test is the refusal, which happens
+/// before anything is scored.
 #[test]
-fn a_history_missing_one_boundary_is_refused() {
+fn a_history_with_a_hole_in_the_table_is_refused() {
     let commits = boundaries();
-    assert!(commits.len() > 1, "a partial match needs at least two boundaries to be partial");
+    assert!(commits.len() > 1, "a hole needs at least two boundaries to be a hole");
 
-    for left_out in &commits {
+    for left_out in commits.iter().skip(1) {
         let lines: Vec<String> =
             commits.iter().filter(|c| c != &left_out).map(|c| row(c, &[])).collect();
         let said = refused(left_out, &lines);
         assert!(
             said.contains("a compile epoch names a commit no history row carries"),
-            "leaving {left_out} out should be refused by name, and the tool said:\n{said}"
+            "leaving {left_out} out leaves an older boundary present, so it should be \
+             refused by name; the tool said:\n{said}"
         );
+    }
+}
+
+/// The history file is bounded — ci.yml keeps the newest 500 rows — so the
+/// oldest boundary leaves the window one day while the table still names it.
+/// A boundary older than every row scales no row, and dropping it is the whole
+/// of the repair; refusing there would turn main red for a file doing exactly
+/// what it is meant to do. Rows 446, 476 and 485 of 500 today, so the first
+/// departure is 446 merges out.
+///
+/// THE PROPERTY IS THAT THE SURVIVORS SCORE THE SAME, not that the boundary
+/// still flattens. Flattening survives the mutation this test exists to catch:
+/// if the departed boundaries keep their factors in the product, every divisor
+/// shifts by the same amount and every STEP is still right, so a pair either
+/// side of a boundary agrees exactly as before. What moves is the absolute
+/// column — against a floor that is ratcheted, which is where the damage is.
+/// A first cut asserted flattening, and the mutation walked past it.
+///
+/// So each row is scored twice: once in a fixture carrying every boundary, and
+/// once in one carrying only the suffix. A boundary older than every scored row
+/// applies to none of them, so the two runs must agree to the digit.
+#[test]
+fn a_window_that_has_slid_past_the_oldest_boundary_scores_the_same() {
+    let all = epochs();
+    let commits = boundaries();
+
+    for start in 1..commits.len() {
+        let under_test = &commits[start];
+        let counters: Vec<(String, f64)> = all
+            .iter()
+            .filter(|(c, _, _)| c == under_test)
+            .map(|(_, name, f)| (name.clone(), *f))
+            .collect();
+        let before: Vec<(String, u64)> =
+            counters.iter().map(|(n, _)| (n.clone(), 10_000)).collect();
+        let after: Vec<(String, u64)> =
+            counters.iter().map(|(n, f)| (n.clone(), (10_000.0 * f).round() as u64)).collect();
+
+        // The same two counter-bearing rows in both fixtures; the only
+        // difference is how many older boundaries sit in front of them.
+        let staged = |from: usize| -> Vec<String> {
+            let mut lines: Vec<String> = Vec::new();
+            for commit in &commits[from..] {
+                if commit == under_test {
+                    lines.push(row("earlier", &before));
+                    lines.push(row(commit, &after));
+                } else {
+                    lines.push(row(commit, &[]));
+                }
+            }
+            lines
+        };
+
+        let whole = rescore(&format!("whole-{start}"), &staged(0));
+        let slid = rescore(&format!("slid-{start}"), &staged(start));
+
+        let pick = |out: &[String]| -> (String, String) {
+            let pair: Vec<&String> = out
+                .iter()
+                .filter(|l| l.contains("\"earlier\"") || l.contains(&format!("\"{under_test}\"")))
+                .collect();
+            assert_eq!(pair.len(), 2, "the pair under test is two rows for {under_test}");
+            (
+                welfare(pair[0]).unwrap_or_else(|| panic!("the earlier row scores: {}", pair[0])),
+                welfare(pair[1]).unwrap_or_else(|| panic!("the boundary row scores: {}", pair[1])),
+            )
+        };
+
+        let (whole_left, whole_right) = pick(&whole);
+        let (slid_left, slid_right) = pick(&slid);
+
+        assert_eq!(
+            whole_left, whole_right,
+            "{under_test} is a change of measurement, so the pair straddling it flattens"
+        );
+        assert_eq!(
+            whole_left, slid_left,
+            "the {start} oldest boundaries apply to no row here, so dropping them out of the \
+             window must not move what the earlier row scores"
+        );
+        assert_eq!(whole_right, slid_right, "nor what the boundary row scores");
     }
 }
 
