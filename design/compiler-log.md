@@ -3941,16 +3941,18 @@ build: the dot stops binding over an effect, a box where a value is expected
 is refused, and the two book chapters that teach the automatic railway (ch04's
 call-site short-circuit, ch05's "piping into an io is bind") move with it —
 the ledger's "The book teaches the boundary language" entry already holds
-that half. The ruled dotless stack from the gavel's own sample,
+that half. The ruled chain, in the shape the 2026-08-29 gavel "the chain line
+keeps its dot" gave it — "the combinators look and act like regular
+functions", so a continuation spells them `. rescue orders` like any other
+function —
 
     os/read_file! "the-orders-file-that-is-not-there.txt"
-      rescue orders
-      bind shout
-      bind print
+      . rescue orders
+      . bind shout
+      . bind print
 
-reads today as four arguments to `os/read_file!` (`error[arity]`), which is
-the line-grammar collision STATUS.md records under "It cannot start until
-Clay rules on the line grammar". Under "A ruling outranks a lead" the gavel
+parses today and dies at the executor with the handler never called, for the
+same reason as the one-line form. Under "A ruling outranks a lead" the gavel
 is at the front of the queue with item 1.
 
 **3. A stale entry in the lexer's borrowed-keyword table names `rescue`.**
