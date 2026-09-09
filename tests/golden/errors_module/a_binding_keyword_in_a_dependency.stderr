@@ -1,0 +1,4 @@
+error[name]: `let` is not a type, so a binding cannot destructure with it — a binding is `x = …`, with no keyword (module tests/golden/errors_module/a_binding_keyword_in_a_dependency/inner)
+  --> tests/golden/errors_module/a_binding_keyword_in_a_dependency/inner/core.kso:2:7
+   2 |   let x = 1
+             ^

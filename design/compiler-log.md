@@ -3268,6 +3268,244 @@ sessions: the four entries named were kanso#1341, #1343, #1344 and #1345, of
 which two are the chart campaign, so §63 was written for that campaign as the
 gate's own message invites.
 
+## 2026-09-09 (third) — a merged-check diagnostic on the module path had no location at all
+
+**DONE.** kanso#1340 refused moving `check_merged` to the root because a
+root-raised diagnostic loses the file, the span and the `(module …)` suffix,
+and named provenance on merged declarations as what the thread owed next. That
+plumbing was prototyped on 2026-09-08 and left in a scratch directory with two
+defects, both recorded on the entry above. This is the repair, and the second
+defect turned out to be worse and more useful than the record had it.
+
+**DEFECT ONE: the attribution was dynamically scoped.** The prototype read the
+file from a thread-local set by the walk, and its `Attributed` iterator held
+its last item's guard until the iterator itself dropped, so a walk outliving
+the raise site leaked one file's attribution onto a diagnostic raised somewhere
+else. `Diagnostic` now carries `file: Option<Arc<str>>` set AT THE RAISE SITE,
+from the declaration in hand, by `Diagnostic::about(&decl.file)`. A value
+passed in has no guard to outlive it. The whole golden suite passes, including
+`error_corpus_reports_each_golden_diagnostic`, the test the prototype turned
+red — so the plumbing is inert where the prototype's was not, and a check opts
+in one call at a time.
+
+**DEFECT TWO IS NOT "render_across is never called".** On the module path a
+merged-check diagnostic was formatted as kind, message and the `(module …)`
+suffix, with the span and the source line DROPPED ENTIRELY — the loop built
+that string by hand and never touched the renderer. kanso#1340's blocker was
+not a thing to build; it was sitting in `compile_module_loaded` being done.
+
+The corpus already held the proof, in a pair nobody had read side by side.
+`tests/golden/errors/let_binding` carries both variants of one program:
+
+    .stderr           error[name]: `let` is not a type …
+                        --> let_binding.kso:2:7
+                         2 |   let x = 1
+                                   ^
+    .imported.stderr  error[name]: `let` is not a type … (module let_binding)
+
+Same program, same error, two routes through the front end, and the module
+route reported no location. `compile_module_loaded` now renders through
+`render_across`, which picks each diagnostic's own source and falls back to
+naming a file with no quoted line when its text is not in hand. Where that
+source comes from is the next section: the first two answers both cost the
+objective, and the third costs nothing.
+
+The suffix stays at the end of the header line, so an existing message is
+byte-identical and simply gains the two lines under it. That is what keeps the
+blast radius small: one check wired, and exactly two goldens move, both by
+addition. Measured on a real two-file module, a dependency's error caught only
+by the merged check now reads `--> …/inner/core.kso:5:9` with the line quoted,
+where it used to read the message and nothing else.
+
+`check_binding_patterns` is the one check wired, as the caller that keeps this
+from being plumbing with nothing behind it.
+
+**Two things found on the way.** The per-file checks were never broken: the
+`unused` refusal already names a dependency's file and line correctly, so the
+loss is specific to the whole-program check over the merged program. And the
+two goldens that moved are single files compiled as modules, so they prove the
+module ROUTE gained a location and NOT that a dependency's file is named — the
+`errors_module` fixtures still pass untouched, because their errors come from
+checks not yet wired. A cross-file golden is still owed and is listed below
+rather than claimed here.
+
+OPEN, in order: `.about(&decl.file)` at the remaining raise sites in
+`check_merged_after_aliases`; the entry and library paths' merged renders,
+which have the same shape; a cross-file fixture under tests/golden/errors_module;
+the forty-four module goldens regenerated; and then the reorder this was always
+for, at kanso#1340's repricing.
+
+**AND THE SIZE OF THAT FIRST ITEM IS NOT TWENTY-TWO.** This entry said so
+until the survey behind it was redone. The driver calls 23 checks; 14 raise in
+their own body, 17 sites between them, 1 wired here, so 13 checks and 16 sites
+remain. Three have a declaration with `.file` already in hand at the raise
+site; the rest raise inside a closure.
+
+The redo also found what a count of the callees cannot see. NINE of the 23
+raise nothing themselves -- `check_boolean_equality`, `check_build_blocks`,
+`check_call_arities`, `check_call_shaped_list`, `check_decidable_failures`,
+`check_err_as_value`, `check_field_exists`, `check_if_arity` and
+`check_literal_arguments` -- and delegate to helpers that do. check.rs holds 65
+`Diagnostic::new` against the 17 inside the driver's direct callees, so wiring
+the checks is not the whole job and the helper sites need the file reaching
+them too.
+
+Two bad surveys preceded the good one, and both failed silently. The first was
+a boundary scan by line that mis-sliced any body holding a nested `fn`, and
+reported zero raise sites for four checks against 65 in the file. The second
+matched `\nfn NAME` and found NOTHING AT ALL, because the driver is `pub fn` --
+a scan that returns an empty set reads like an answer. A survey whose result
+is a count wants a total it can be checked against; 65 is that total here.
+
+**THE FIRST TWO SHAPES BOTH COST THE OBJECTIVE, AND THE THIRD IS FREE.** The
+renderer needs the text of the file a diagnostic is about, and the merge loop
+had been eating `parsed` — so the obvious repair is to keep the text across the
+merge. Round one did that, with a `Vec<(String, String)>` built as the loop
+consumed the triples, and CI turned five compile gates red:
+
+    compile_allocs          29,606 ->      29,613     +7
+    compile_peak_bytes     773,818 ->     774,847     +1,029
+    compile_instructions 48,791,172 ->  48,744,634    -46,538
+    entry_instructions  162,170,772 -> 162,528,521    +357,749
+    library_instructions 162,970,167 -> 162,823,672   -146,495
+
+The +7 is exact and derived: that vector is one allocation per module loaded,
+and `KANSO_PHASES=1 kanso check compile_corpus` prints seven `load` lines
+(compile_corpus, std/json, std/text, std/list, std/testing, std/text again,
+std/render — std/text twice because a module is compiled once per path to it,
+which "Remembering a compiled module costs more than compiling it again"
+measured and declined). This container read 29,613 and 774,847 too, agreeing
+with CI to the unit on both, as those two rows always have.
+
+The three instruction rows are layout: three routes on ONE binary sha moving
++357,749, −46,538 and −146,495 in the same job cannot be seven allocations.
+`welfare` priced the whole thing at −0.01. A fall means the change goes or the
+weights are argued, and the right answer here was a third one: the shape was
+wrong.
+
+Shape two: keep `parsed` itself alive and take each program out of it in
+place, so nothing new is allocated at all. allocations went back to 29,606 and
+peak went the OTHER way, 773,818 -> 775,730 — worse than shape one by 883
+bytes, because a `(String, String, Program)` triple is about three times the
+width of a pair and holding that vector holds the wider one. Priced on the
+objective, the 7 allocations saved are worth about a twentieth of what the 883
+bytes cost. Declined.
+
+Both shapes are answering the wrong question, and the two measurements
+together say so: the rise in each is the size of the VECTOR and not of the text
+it points at — the same files held two ways, 1,029 bytes and 1,912 bytes, where
+holding the corpus's actual source would be tens of kilobytes.
+
+Shape three ships, and it holds nothing at all. The loader is now
+`module_sources`, and
+the diagnostics branch CALLS IT AGAIN. A clean compile runs the code it always
+ran, byte for byte; a compile that is about to print an error opens its own
+files a second time, which nothing anywhere measures. On this container both
+rows read exactly main's numbers — `compile_allocs=29606`,
+`compile_peak_bytes=773818` — and `welfare` reads 66.30 against the floor of
+66.30. If the second read fails the diagnostics still print, without their
+source lines.
+
+The general form is worth keeping. A repair that hangs state on the success
+path to serve a failure that usually does not happen has bought the wrong
+thing, and doing the work again on the failing path costs nothing anyone
+measures. The three compile veins said so within a round.
+
+**CI SAID, AND THE ANSWER IS A BETTER PROOF THAN ROUND ONE'S.** All three
+instruction rows moved on the shipping shape too, and this time all three
+fell together:
+
+    row                    golden        CI            move
+    compile_instructions   48,791,172    48,746,831    -44,341   (-0.0909%)
+    entry_instructions    162,170,772   162,044,531   -126,241   (-0.0778%)
+    library_instructions  162,970,167   162,840,377   -129,790   (-0.0796%)
+    compile_allocs             29,606        29,606          0
+    compile_peak_bytes        773,818       773,818          0
+
+The last two rows are what make this worth writing down. The shipping shape
+adds NO work to any successful compile, and the two counters that measure the
+front end's work say so in the same job that counted the three that moved. So
+the layout reading is not an inference from the size of the change here; it is
+a measurement with the alternative already excluded.
+
+Round one is the control. Seven allocations and a kilobyte moved those same
+three rows -46,538, +357,749 and -146,495 -- three directions on one binary
+sha. Zero allocations moved them -44,341, -126,241 and -129,790. A row that
+answers differently to two shapes of one change while the work counters hold
+still is the compiler's own bytes, and nothing about the corpus.
+
+Summed on the objective's compile term the fall is 170,582 (-0.0809%), so
+`welfare` rose and the floor is held at 66.30 in this PR with the reason
+recorded. It is banked as layout and claimed as nothing else: the front end
+did not get faster at anything, and the next change is not free to spend this.
+
+## 2026-09-09 (fourth) — the chart drew two differently-scored populations as one line
+
+**DONE.** The design chat's entry of the same day, "the cliff is the run terms
+joining the score, and the chart draws a coverage change as a fall", diagnosed
+what Clay has been looking at and named three pieces. This is the third of
+them, the one that makes the page honest today rather than right.
+
+`scripts/welfare_rescore` scores a row on the counters it carries and
+renormalises the weights that remain, and it writes `scored_weight` into every
+row so that a reader is not fooled. The chart never read the field. Across the
+500 rows there are five runs of it and four boundaries:
+
+    rows       scored_weight   welfare
+    0..30      0.28            74.64 -> 73.77
+    31..181    0.00            no score, the line has a gap here
+    182..390   0.28            82.82 -> 89.72
+    391..438   0.44            91.67 -> 91.57
+    439..499   1.00            58.96 -> 66.30
+
+Two of those boundaries are steps in the line, and neither is the compiler.
+Compile instructions joining on 2026-09-03 takes the score 89.72 -> 91.67. The
+run counters joining on 2026-09-06 take it 91.57 -> 58.96, because the compile
+terms carry the advantage they have accumulated since august while the run
+terms start at parity against a baseline measured on the day they joined. That
+second one is the whole of the "dramatically worse" the page has been showing.
+
+The chart marks every boundary with a dashed muted rule labelled with the
+coverage to its right, and splits the welfare polyline per run, drawing it
+faded wherever the coverage is below 1.00. Each segment reaches one point into
+the next run so the step itself is drawn rather than left as a gap the eye
+closes by guessing. Coverage gets no colour of its own: it is not an entity,
+and a categorical hue would have made it an eighth series.
+
+**`scored_weight` IS TEXT, AND THE FIRST CUT OF THIS DID NOTHING.** Every row
+in the history carries the string "0.00", "0.28", "0.44" or "1.00", the same
+way `welfare` is text and has always been read through `parseFloat`. A
+`typeof r.scored_weight === 'number'` guard read all 500 rows as unscored,
+found one run, drew no rule, and split nothing -- a change that ships, passes
+its own eye test, and leaves the picture exactly as wrong as before. The runs
+are keyed on the text now, which is canonical to two places and so compares
+exactly, and the number is parsed only to decide whether the coverage is full.
+
+The spec is in the site smoke, which renders the page in a browser and reads
+the marks off the DOM. Its stub carried six rows at one coverage and could not
+have seen any of this, so it now carries the shape the real history has: four
+older rows without the run counters at 0.44, two with them at 1.00. That makes
+`missing_series` a real assertion -- [2 2 2 5 6 6 6 6], the two run lines
+short, the four old counters full, and welfare in TWO strokes -- and adds
+`missing_bounds` for the one rule and its label.
+
+Both were watched red first, and they fail differently, which is what says
+they are testing two things. Under the `typeof` guard: `marks: []` and series
+[2,2,6,6,6,6,6], both checks red, the real bug reproduced. With the split
+removed but the guard correct: series red, `marks: ["coverage 1.00"]` still
+right. Restored, green.
+
+The prose said the score falls "from about 75 to about 52" and the column has
+read 91.57 -> 58.96 since the compile epochs moved under it. Corrected, with
+both steps named. `sh scripts/gates/all_pages.sh` green on all three. The
+labels were checked for collision rather than eyeballed: four rules, tightest
+gap 16px, right edge 1097 of 1200.
+
+OPEN, both the chat's and both still cloud's: reconstructing the run terms for
+the 439 earlier rows so they score on all five, and the compile-side epoch
+table. When those land the boundaries stop being steps and these rules stop
+having anything to mark.
+
 ## 2026-09-09 — the cliff is the run terms joining the score, and the chart draws a coverage change as a fall
 
 Clay, 2026-09-09: "the latest welfare metric still looks like it has gotten
@@ -3333,3 +3571,45 @@ them.
 
 **OPEN, all three cloud's.** The rescore and the chart are code and the page
 is cloud's surface.
+
+## 2026-09-09 — the merged check has four routes, and the fourth is the repl
+
+§60 and CLAUDE.md both say `kanso check` routes a single file by content and
+that the three routes are three compiles: a DIRECTORY is a module, a file of
+bare STATEMENTS is an entry, a file of DEFINITIONS alone is a library. That is
+true of `kanso check` and it is not the whole census.
+`check::check_merged_after_aliases` has FOUR call sites in src/lib.rs:
+
+    line   caller                    route
+     168   compile_parsed_entry      entry      (a file with bare statements)
+     372   compile_one               THE REPL   (not reachable from kanso check)
+     465   compile_library           library    (a file of definitions alone)
+    3666   compile_module_loaded     module     (a directory)
+
+`compile_one` has one caller, `compile_repl`, which has one caller,
+src/repl.rs:290. Its own doc comment says it serves both `kanso play` — the
+playground's convention — and the repl prompt, assembling imports and units
+into one source. So the fourth route is a user-facing surface that the website
+runs, and no census keyed on `kanso check` could see it, which is why three
+separate readings of this code have said three.
+
+**The module row's name is one level off too.** CLAUDE.md says the module route
+takes `compile_module_inner`. It does — but the raise site is
+`compile_module_loaded`, which `compile_module_inner` calls at src/lib.rs:3375.
+The entry point and the raise site are different functions, and a survey
+grepping for the raise site finds the second name while the doc names the first.
+
+**What this owes.** kanso#1346 repaired the attribution on the module path and
+wired one check (`check_binding_patterns`); the `.about()` wide pass is 13
+checks and 16 sites. This adds a fourth render to that pass rather than three,
+and the repl's is the one with a user watching: a diagnostic in the playground
+that loses its file and span loses it in a browser. Not measured yet — whether
+the repl route renders locations today is the next question, and it is asked
+here rather than assumed either way.
+
+**How the count went wrong before.** Recorded on 2026-09-08 in this log: a
+survey whose product is a count wants a total to check against, because an
+empty or short result set reads like an answer. The route census had a total
+available and did not use it — `kanso check`'s three branches — and the
+function has four callers. Grep for the callee, count the call sites, and
+reconcile against the routes; do not derive the call sites from the routes.

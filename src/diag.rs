@@ -18,11 +18,41 @@ pub struct Diagnostic {
     pub kind: &'static str,
     pub message: String,
     pub span: Span,
+    /// The file this diagnostic is ABOUT, when that is not the file being
+    /// rendered against. `None` means the rendering file, which is every
+    /// per-file check: the caller already knows what it handed in.
+    ///
+    /// A check over a MERGED program is the case that needs it. The merge
+    /// holds every dependency's declarations, so a whole-program check walks
+    /// files the caller never named, and a diagnostic raised there was
+    /// reported against whatever file the caller happened to be rendering.
+    ///
+    /// It is set AT THE RAISE SITE, from the declaration in hand. A 2026-09-08
+    /// prototype read it from a thread-local the walk set instead, and a
+    /// thread-local names whoever is iterating rather than what the diagnostic
+    /// is about: its guard outlived the raise site and leaked one file's
+    /// attribution onto a diagnostic raised somewhere else entirely. A value
+    /// passed in at the raise site cannot do that, which is the whole reason
+    /// this is a field rather than an ambient.
+    ///
+    /// It does not ride on `Span`: kanso#1135 made a span two u32 for a 7.1%
+    /// peak win, and an `Arc<str>` there hands that back on every span in the
+    /// tree. A diagnostic is built only when a compile is already failing, so
+    /// the pointer costs nothing that matters.
+    pub file: Option<std::sync::Arc<str>>,
 }
 
 impl Diagnostic {
     pub fn new(kind: &'static str, message: String, span: Span) -> Self {
-        Diagnostic { kind, message, span }
+        Diagnostic { kind, message, span, file: None }
+    }
+
+    /// The same diagnostic, about a named file rather than the one being
+    /// rendered. Hand it the declaration the check has in hand — never a file
+    /// read from anywhere else, which is the mistake this replaced.
+    pub fn about(mut self, file: &std::sync::Arc<str>) -> Self {
+        self.file = Some(file.clone());
+        self
     }
 }
 
@@ -90,12 +120,36 @@ fn header_rest(text: &str) -> Option<&str> {
 }
 
 pub fn render(diags: &[Diagnostic], file: &str, source: &str) -> String {
-    let lines: Vec<&str> = source.lines().collect();
+    render_across(diags, file, source, &[])
+}
+
+/// Render diagnostics that may be about files other than the one handed in.
+///
+/// `sources` is every other file whose text is in hand, by name. A diagnostic
+/// naming one of them quotes ITS line; one naming a file that is not in hand
+/// still reports against that file and simply quotes nothing, because the
+/// header is the half a reader needs and quoting the wrong file's line at the
+/// same number would be worse than quoting none.
+pub fn render_across(
+    diags: &[Diagnostic],
+    file: &str,
+    source: &str,
+    sources: &[(&str, &str)],
+) -> String {
     let mut out = String::new();
     for d in diags {
+        let (name, text) = match d.file.as_deref() {
+            None => (file, source),
+            Some(own) if own == file => (file, source),
+            Some(own) => match sources.iter().find(|(f, _)| *f == own) {
+                Some((f, s)) => (*f, *s),
+                None => (own, ""),
+            },
+        };
         out.push_str(&format!("error[{}]: {}\n", d.kind, d.message));
-        out.push_str(&format!("  --> {}:{}:{}\n", file, d.span.line, d.span.col));
+        out.push_str(&format!("  --> {}:{}:{}\n", name, d.span.line, d.span.col));
         let line = d.span.line as usize;
+        let lines: Vec<&str> = text.lines().collect();
         if line >= 1 && line <= lines.len() {
             let src_line = lines[line - 1];
             let num = format!("{:>4}", d.span.line);

@@ -2326,14 +2326,14 @@ fn merge_ambient_arms_with(
             } else {
                 format!("what `{}` means for a primitive is fixed", decl.name)
             };
-            diags.push(diag::Diagnostic {
-                kind: "ownership",
-                message: format!(
+            diags.push(diag::Diagnostic::new(
+                "ownership",
+                format!(
                     "an arm of `{}` must match on a type this module defines — {what}; wrap the value in your own type",
                     decl.name
                 ),
-                span: decl.span,
-            });
+                decl.span,
+            ));
             continue;
         }
         if renders {
@@ -3377,12 +3377,15 @@ fn compile_module_inner(
     loaded
 }
 
-fn compile_module_loaded(
+// The files a module is made of, in the order they are merged. Called once to
+// compile the module, and a second time only if the merged check raises: a
+// located diagnostic needs the text of the file it is about, and holding that
+// text across the merge for the compiles that never fail costs the front end
+// bytes at its peak. The error path pays instead, where nothing is hot.
+fn module_sources(
     dir: &std::path::Path,
-    require_entry: bool,
-    visited: &mut crate::hash::Set<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
-) -> Result<ast::Program, String> {
+) -> Result<Vec<(String, String)>, String> {
     let mut sources: Vec<(String, String)> = match embedded {
         Some(files) => files.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect(),
         // A module is a directory of files sharing one namespace, and one file
@@ -3429,6 +3432,16 @@ fn compile_module_loaded(
             dir.display()
         ));
     }
+    Ok(sources)
+}
+
+fn compile_module_loaded(
+    dir: &std::path::Path,
+    require_entry: bool,
+    visited: &mut crate::hash::Set<std::path::PathBuf>,
+    embedded: Option<&[(&str, &str)]>,
+) -> Result<ast::Program, String> {
+    let mut sources = module_sources(dir, embedded)?;
     let mut parsed = Vec::new();
     for (file, source) in sources.drain(..) {
         let lexed = phase::watched("lex", || lexer::lex(&source))
@@ -3662,9 +3675,34 @@ fn compile_module_loaded(
         // settles both: the extension is a fact about storage.
         let named = dir.to_string_lossy();
         let named = named.strip_suffix(".kso").unwrap_or(&named);
+        // A diagnostic that knows the file it is about gets a location and its
+        // source line, the way every per-file diagnostic already does. One
+        // that does not keeps the older shape: kind, message, and the module
+        // suffix, which was all any of them had.
+        // Read a second time, on the path that is about to fail. Holding the
+        // first read across the merge would cost every clean compile the bytes
+        // at its peak; a module that is about to print an error can afford to
+        // open its own files again. If the second read fails the diagnostics
+        // still print, without their source lines.
+        let reread = module_sources(dir, embedded).unwrap_or_default();
+        let borrowed: Vec<(&str, &str)> =
+            reread.iter().map(|(f, s)| (f.as_str(), s.as_str())).collect();
         let rendered: Vec<String> = diags
             .iter()
-            .map(|d| format!("error[{}]: {} (module {named})\n", d.kind, d.message))
+            .map(|d| match d.file.as_deref() {
+                // The suffix stays where it has always been, at the end of the
+                // header line, and the location and quoted line are added
+                // under it. So an existing message reads the same and simply
+                // gains the two lines that say where it is.
+                Some(_) => {
+                    let body = diag::render_across(std::slice::from_ref(d), named, "", &borrowed);
+                    match body.find('\n') {
+                        Some(at) => format!("{} (module {named}){}", &body[..at], &body[at..]),
+                        None => format!("{body} (module {named})\n"),
+                    }
+                }
+                None => format!("error[{}]: {} (module {named})\n", d.kind, d.message),
+            })
             .collect();
         return Err(rendered.join(""));
     }

@@ -55,6 +55,124 @@ went to the log rather than here.
 implementer's, per this file's own charter. The log carries the
 research mandate it left with.)
 
+### The reconstruction the 2026-09-07 ruling ordered has two usable phases, not four, for 376 of the 439 rows
+
+**Cited: the ruling itself, design/compiler-log.md, "the welfare
+history's baseline" (kanso#1313), rulings (a) share-weighted and (b)
+baseline at the earliest reconstructable row, shares renormalised over
+the phases a row carries, no phase extrapolated from another. Also
+`bench/runbench_phases.txt`, whose header states which benchmarks have no
+phase, and the 2026-09-07 entry "the one-program gavel re-priced the
+declined queue", which uses this machinery for a single re-pricing.
+Nothing in a design doc or a spec speaks to the coverage question below.**
+
+**The ruling's premise about the inputs is off by two.** It reads: "from
+row 70 (2026-08-10) every row carries four run-side instruction counters
+— `instructions`, which is the DECODE row, plus `encode_instructions`,
+`oneshot_instructions` and `basket_instructions`." Two of those four map
+to no phase. `bench/runbench_phases.txt` says so in its own header:
+"widebench, livebench, readbench, oneshot and basket have no phase:
+runbench does not do their work." So a row the ruling counted as
+four-phase is a TWO-phase row — decode and encode, 68.97% of runbench's
+measured mix — and 31.03% of the mix has nothing to reconstruct it from.
+
+Read off origin/perf-history (history.jsonl, 500 rows), by phase counters
+actually present:
+
+    rows        n   phases carried                     coverage of the mix
+    0..14      15   none                               0%      (stay unscored)
+    15..390   376   decode, encode                     68.97%
+    391..438   48   all eight                          99.98%
+    439..499   61   real run_instructions              —
+
+(The ruling's "row 70" and "69 rows before it" are that same boundary
+under a different index; the date, 2026-08-10, agrees to the day.)
+
+**Renormalising over the carried phases is extrapolation when the missing
+phases move differently, and rows 439..499 are where that can be
+checked.** Those 61 rows carry decode and encode AND the real
+`run_instructions`, so the ruled construction can be run against the
+answer:
+
+    two-phase reconstruction vs real run_instructions, rows 439..499
+      movement to track            27.24%
+      movement recovered            4.42%
+      max |error|                  17.73%   (row 474, 61f0540)
+      mean |error|                 14.88%
+
+It recovers about a sixth of the movement. The reason is visible in the
+log: over that window the wins were the freeze, the drift-gated chain
+step, the tenure walk — deep, escape, index, pend, split — and decode and
+encode barely moved. A reconstruction blind to six phases is blind to the
+work.
+
+**The same experiment on the eight-phase rows says the mechanism is
+sound and the coverage is what fails.** Dropping the same six phases from
+rows 391..438, where all eight are present, costs max 5.04% and mean
+2.78% against 31.66% of movement. Same construction, same six phases
+dropped, 3.5x smaller error — because in that window the missing phases
+moved less. **So the two-phase error is not a fixed property to correct
+for; it is proportional to how much the unrepresented 31% moved in the
+window, and for rows 15..390 nothing in the data says how much that was.**
+
+**What this does NOT block, and what it does NOT fix.** Rows 391..438 carry
+99.98% of the mix and have essentially nothing to extrapolate. That
+reconstruction is inside the ruling as written, needs no further
+decision, and is built — measured through the real pipeline (`welfare
+--model` into `welfare_rescore`), 48 rows changed and not one outside
+them, coverage 0.44 -> 0.74, and the segment reads 65.66 rising to 67.96
+across 2026-09-03..09-06 where it read a flat 91.67.
+
+**It moves the cliff rather than removing it, and an earlier draft of
+this entry said otherwise.** Measured both ways:
+
+    boundary     before      after
+    390 -> 391   +1.9461    -24.0580
+    438 -> 439  -32.6152     -9.0038
+    row 390 to row 439, total   -30.7615 both ways
+
+The total is IDENTICAL because it is caused by the 376 rows below, which
+is the half this entry is about. Half the ruling does not half-fix the
+picture: it redistributes one step into an earlier one. What remains at
+438 -> 439 is -9.00, and that is `run_peak_bytes` joining — the term
+ruling (c) says has nothing to reconstruct.
+
+It ships anyway, and the reason is per-row truth rather than the
+picture: those 48 rows now carry the term the objective actually weighs,
+and the +1.95 at 2026-09-03 that currently reads as the compiler getting
+better was a coverage change wearing a rise. Every boundary is drawn and
+labelled either way (kanso#1346). **The fall Clay is looking at is
+entirely the 376 rows' — it cannot be answered without ruling this
+entry.**
+
+**THE QUESTION, for rows 15..390 only.** The ruling says reconstruct and
+says no phase is extrapolated from another. Under the corrected input
+count those two cannot both hold for these rows.
+
+- **(1) Leave them unscored, as rows 0..14 already are.** The chart keeps
+  a boundary rule at 2026-09-03 and the line starts there.
+- **(2) Score them from two phases and label them.** A third `scored_by`
+  value marking the rows reconstructed at 68.97% coverage, drawn
+  distinctly, with the 14.88% mean error recorded beside it.
+- **(3) Re-measure instead of reconstruct.** Replay today's runbench
+  against each old commit's compiler. This invents nothing, and it is the
+  only route that produces a real number. Cost is a compiler build per
+  sampled commit, and it is unproven that a 2026-08 compiler compiles
+  today's runbench at all — untested, because the ruled method needed no
+  build.
+
+**RECOMMENDATION: (1).** The reason is `scripts/welfare_rescore`'s own
+header — "Nothing is invented, and nothing is fetched at view time." A
+line that recovers a sixth of the movement is not a faithful line, and
+labelling it does not make a reader's eye discount it correctly; the
+label would sit under a curve whose shape is wrong. Option (2)'s appeal
+is that the chart looks continuous, which is the wrong thing to buy.
+Option (3) is the honest way to get those rows and is worth doing on its
+own schedule if the old-compiler question comes back yes — filed as a
+lead, not as a condition on this entry. With the eight-phase half built,
+the unscored region is the flat early history rather than the interesting
+part.
+
 ## Open, not blocking
 
 
