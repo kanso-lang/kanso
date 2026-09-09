@@ -3658,13 +3658,30 @@ about it and this is exactly where they had drifted:
             && self.unique_in(&args[1], ctx, scoped)
     }
 
-**What it costs: nothing measurable.** `sh scripts/gates/all_counters.sh` reads
-the twelve cost veins and the lazy tier and every one is byte-identical, so no
-in-place site in the benchmarked code was standing on a non-unique seed. The
-compile sweep says nothing moved that this host can see, with six of the nine
-gates host-bound; `compile_instructions` is a layout vein and src/linear.rs is
-the compiler, so CI may read it moved and the row is ratcheted to whatever CI
-says rather than projected from here.
+**What it costs: nothing on the runtime side, and three layout-sized falls on
+the compile side.** `sh scripts/gates/all_counters.sh` reads the twelve cost
+veins and the lazy tier and every one is byte-identical, so no in-place site in
+the benchmarked code was standing on a non-unique seed. The compile sweep saw
+nothing move on this host, with six of the nine gates host-bound. CI then read
+all three instruction rows:
+
+    counter                golden          CI            delta
+    compile_instructions   48,746,831      48,746,192      -639   (-0.0013%)
+    entry_instructions    162,044,531     162,042,653    -1,878   (-0.0012%)
+    library_instructions  162,840,377     162,839,321    -1,056   (-0.0006%)
+
+with `compile_allocs` 29,606, `compile_peak_bytes` 773,818 and the machine-code
+row byte-identical beside them. Welfare's floor rises 66.3039170230475 ->
+66.30393941879086 and is ratcheted in this PR.
+
+**The direction is not evidence the fix is cheaper, and the entry says so.**
+Two mechanisms could each produce a move this size, and 639 instructions cannot
+separate them: the analysis does MORE work at every fold site (one extra
+`unique_in` on the seed) and LESS at a site the new condition rejects, because
+the marking walk then never descends into the folder's body. A condition that
+is strictly added cannot make the analysis cheaper on its own. The work
+counters staying put is the usual layout signature, and that is what the rows
+are recorded as.
 
 **The fixture** is `tests/golden/micro/a_folds_seed_is_held_by_something_else`,
 which `micro_corpus_agrees_across_engines` runs on native and on the oracle
