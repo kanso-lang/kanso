@@ -662,7 +662,15 @@ fn gathered _ _ acc true
 
 fn gathered paths at acc false
   on = (body -> read_each paths (at + 1) (text/concat acc [body]))
-  os/read_file! paths[at]! . on
+  read_one paths[at]! . on
+
+# The engine is bytes and everything else is text; read_file refuses bytes
+# that are not text, on every engine, so the module is read as what it is.
+fn read_one "docs/kanso.wasm"
+  os/read_bytes! "docs/kanso.wasm"
+
+fn read_one path
+  os/read_file! path
 
 fn with_all bodies
   header = bodies[5]!
