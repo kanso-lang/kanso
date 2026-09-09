@@ -62,6 +62,10 @@ pub type scoring
   base
   formula
 
+pub type splice
+  counters
+  target
+
 pub play = io/stdin . (model -> with_model model)
 
 fn with_model model
@@ -113,10 +117,114 @@ fn one_base line
   halves = text/split (text/slice line 6 (length line)) "="
   [halves[1]! (text/to_int halves[2]!)]
 
+# --- the run term for a row measured before runbench existed ----------------
+# Ruling of 2026-09-07, "the welfare history's baseline" (kanso#1313): each
+# phase's ratio to the anchor, weighted by runbench's own measured shares,
+# calibrated to equal runbench at the changeover, with a row's shares
+# renormalised over the phases it carries and no phase extrapolated from
+# another.
+#
+# ONLY ROWS CARRYING EVERY PHASE ARE REBUILT, and that is narrower than the
+# ruling as written. The ruling read the old rows as carrying four run-side
+# counters. Two of the four map to no phase -- bench/runbench_phases.txt says
+# in its own header that oneshot and basket have none, because runbench does
+# not do their work -- so the rows below 2026-09-03 carry decode and encode
+# alone, 68.97% of the mix, and renormalising over two phases IS extrapolating
+# from them onto the missing 31%. That is measurable, because the rows from
+# 2026-09-06 carry decode and encode AND the real run_instructions: over those
+# 61 rows the two-phase reconstruction recovers 4.42% of 27.24% of movement,
+# 14.88% mean error. The same six phases dropped where all eight are present
+# costs 2.78%. The error tracks how much the unrepresented phases moved, which
+# no row records, so those rows stay unscored and the question is Clay's.
+# design/pending-gavels.md carries it.
+#
+# THE SPLICE IS CHECKED, NOT ASSUMED. The last all-phase row and the first row
+# carrying run_instructions are different commits, and the reconstruction is
+# only continuous across them if they do the same runtime work. Every phase
+# counter the two share must agree exactly or this refuses: a reconstruction
+# spliced onto a row that moved would slide all forty-eight by that move, and
+# it would look like history rather than like a bug.
+#
+# ON TODAY'S HISTORY THAT IS ONE COUNTER, and saying so is the point of writing
+# it down. The phase map names the PRE-GAVEL row spellings, and of those eight
+# a modern row carries only `encode_instructions` -- `decode_instructions` stops
+# at 2026-09-06 with the other six. So the check that runs is encode's alone.
+# The bare `instructions` key, which the ruling identifies as the decode row,
+# also agrees across the splice (1,526,907,200 either side, read off
+# origin/perf-history), and the two commits are 4a5253d and d106a74, the second
+# of which moved the objective and not the runtime. That is a hand check, not
+# one this tool makes, and a future row pair could agree on encode and diverge
+# elsewhere. tests/the_reconstruction_refuses_a_splice_that_moved.rs holds the
+# refusal red.
+fn phase_map raw
+  rows = list/select (text/split raw "\n") phase_line?
+  list/to_list (list/map rows one_phase)
+
+fn phase_line? l
+  length l > 0 and text/slice l 1 1 != "#"
+
+fn one_phase line
+  parts = text/split line " "
+  [parts[2]! (text/to_float parts[3]!)]
+
+fn carries_all? row phases
+  here = list/to_list (list/select phases (p -> row[p[1]!] != none))
+  length here == length phases
+
+fn anchor rows phases
+  eights = list/to_list (list/select rows (r -> carries_all? r phases))
+  runs = list/to_list (list/select rows (r -> r["run_instructions"] != none))
+  calibrated eights runs phases (length eights == 0 or length runs == 0)
+
+# No all-phase row, or no measured row to calibrate against. Nothing to
+# reconstruct and nothing wrong: every row keeps what it carries.
+fn calibrated _ _ _ true
+  none
+
+fn calibrated eights runs phases false
+  last = eights[length eights]!
+  first = runs[1]!
+  both = list/to_list (list/select phases (p -> first[p[1]!] != none))
+  agreed = list/to_list (list/select both (p -> last[p[1]!] == first[p[1]!]))
+  checked last first (length agreed == length both)
+
+fn checked _ _ false
+  err "the splice rows disagree on a phase they share"
+
+fn checked last first true
+  splice last first["run_instructions"]!
+
+fn wants_run? row a phases
+  a != none and row["run_instructions"] == none and carries_all? row phases
+
+fn reconstructed row a phases
+  rebuilt row a phases (wants_run? row a phases)
+
+fn rebuilt row _ _ false
+  row
+
+fn rebuilt row a phases true
+  factor = moved row a.counters phases
+  put row "run_instructions" (math/round (1.0 * a.target * factor))
+
+# The share-weighted ratio to the anchor. Renormalised over the phases the row
+# carries, which for every row this reaches is all of them.
+fn weighed_ratio p tot row anchored
+  p[2]! / tot * (1.0 * row[p[1]!] / anchored[p[1]!])
+
+fn moved row anchored phases
+  tot = list/sum (list/to_list (list/map phases (p -> p[2]!)))
+  each = list/map phases (p -> weighed_ratio p tot row anchored)
+  list/sum (list/to_list each)
+
 # --- the rewrite ------------------------------------------------------------
 fn over_rows m given
   path = where given
-  os/read_file! path . (raw -> written m raw)
+  phases = "bench/runbench_phases.txt"
+  os/read_file! phases . (t -> with_phases m (phase_map t) path)
+
+fn with_phases m phases path
+  os/read_file! path . (raw -> written m phases raw)
 
 fn where given
   chosen given (length given == 0)
@@ -127,13 +235,15 @@ fn chosen _ true
 fn chosen given false
   given[1]!
 
-fn written m raw
+fn written m phases raw
   lines = list/select (text/split raw "\n") (l -> length l > 0)
-  rows = list/to_list (list/map lines (l -> rescored m l))
+  decoded = list/to_list (list/map lines json/decode)
+  a = anchor decoded phases
+  built = list/map decoded (r -> rescored m (reconstructed r a phases))
+  rows = list/to_list built
   io/write "{text/join rows "\n"}\n"
 
-fn rescored m line
-  row = json/decode line
+fn rescored m row
   weight = covered row m.terms m.base
   told = columned row m.terms m.base (weight == 0.0)
   by = put told "scored_by" m.formula
