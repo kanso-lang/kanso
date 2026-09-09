@@ -56412,3 +56412,75 @@ compile_cost AGREED. That reading is load-bearing rather than inherited:
 `compile_parsed_entry` puts `inline_builtin_wrappers` BETWEEN the two groups
 where `compile_module_loaded` puts it before both, so #1323's emitted_code
 reading does not carry over to this one.
+## Checking and rewriting once at the top: six passes have to stay where they are
+
+The idea was that `compile_module_loaded` does the whole-program check and the
+eight rewrites once per module, on a growing prefix of the program, and that
+the outermost compile could do all of it once on everything. An ablation had
+put the saving at 10,632,023 instructions, 20.38% of the compile row.
+
+Gated on `DEPTH <= 1 && !ENTRY_COMPILE`, the change builds, and `tests/golden` goes red
+in three tests. The smallest reduction says why:
+
+    printf 'import "./trmc_count"\n\ntrmc_count/play\n' > main.kso
+    kanso run main.kso
+    error[runtime]: the program ran out of stack: recursion went deeper than
+    the stack holds
+
+`src/trmc.rs:185` declines the group:
+
+    if crate::ast::has_slash(name) || *arity == 0 { continue; }
+
+A dependency's declarations are qualified on the way in, so `count` reaches the
+top as `trmc_count/count` and trmc will not touch it. The accumulating tail
+call stays a tail call, and a million frames overflow the stack. trmc only ever
+rewrote a dependency because it ran inside that dependency's own compile, while
+the names were still bare.
+
+It is a family. Six passes skip qualified declarations by construction:
+`trmc::rewrite`, `typeset_constructions` (check.rs:1768),
+`foreign_constructions` (check.rs:1820), `check_bare_ambiguity` (check.rs:2957,
+at two sites) and `canonicalize_bare_aliases` (lib.rs:929). Each is about a
+module's OWN declarations — what this module constructs, which bare name its
+arms make ambiguous, which aliases it spells short. Run once at the top they
+apply to the root's declarations and skip every dependency's. Four of the six
+are checks, so the failure mode is a refusal that stops being raised.
+
+So a large part of the 10.6M is not redundant work removed. It is work that
+stops happening, and an ablation that does not keep those six passes per module
+measures the wrong thing. The number was real; the inference from it was not.
+
+**The same conclusion was reached in kanso#1003** and withdrawn there as "the
+per-dependency check_merged is not redundant". That entry did not name the
+mechanism, which is why the route was open to walk a second time. The mechanism
+is `has_slash`, and it is written down now.
+
+What survives is most of it, and callgrind on the fixed corpus says how much.
+On the container with the tunables pinned, against 51.6M total:
+
+    kanso::main                         51,094,622   99.09%
+    check::check_merged                 19,092,779   37.03%
+      infer::infer                      11,803,600   22.89%
+      check::check_file_shadow           1,812,314    3.51%
+      the four guarded checks             under 0.02%
+    canonicalize_bare_aliases            1,651,829    3.20%  (guarded)
+    trmc::rewrite                          504,558    0.98%  (guarded)
+
+The four guarded passes inside `check_merged` cost almost nothing —
+`foreign_constructions::walk` is 8,301 instructions across both call sites and
+the other three fall below the threshold — so keeping them per module is free
+and the rest of `check_merged` can move. `infer`, the largest piece, carries no
+`has_slash` at all. The two guarded REWRITES are what has to stay: 1,651,829
+and 504,558, 2,156,387 together.
+
+So the reachable win is about 8.5 million instructions, roughly 16.5% of the
+row, against the 10,632,023 the ablation reported. The change is viable at that
+size, with `canonicalize_bare_aliases` and `trmc::rewrite` left per module and
+the four guarded checks kept as a small pass beside them. An ablation that does
+not keep those measures the wrong thing again.
+
+The peak term was priced before any of this and was never the obstacle: even a
+29% rise in `compile_peak_bytes` leaves a 10.6M fall ahead of the floor
+(60.04 -> 60.12), and the realistic 32,851 bytes of carried sources score
+60.70.
+

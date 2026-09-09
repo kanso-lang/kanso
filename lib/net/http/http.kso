@@ -69,11 +69,24 @@ fn present _ false
   ""
 
 pub fn rendered r
-  "HTTP/1.1 {r.status} {r.reason}\r\n{header_block r}\r\n{r.body}"
+  "{preamble r}{r.body}"
+
+# The status line and the headers, up to and including the blank line. A
+# text body rides in the same string; a bytes body -- the playground's wasm
+# module, read with os/read_bytes -- is written after it on its own, since
+# interpolating bytes would render them as a list.
+fn preamble r
+  "HTTP/1.1 {r.status} {r.reason}\r\n{header_block r}\r\n"
 
 fn header_block r
-  sized = text/concat r.headers ["content-length: {length (text/bytes r.body)}"]
+  sized = text/concat r.headers ["content-length: {length (as_bytes r.body)}"]
   "{text/join sized "\r\n"}\r\n"
+
+fn as_bytes body:string
+  text/bytes body
+
+fn as_bytes body
+  body
 
 # One request, answered by the handler it is given. `serve_once` is the whole
 # of what a harness needs: a server that answers and stops.
@@ -87,7 +100,16 @@ fn answered c handler
   net/read c . (raw -> replied c handler raw) . (_ -> net/close_conn c)
 
 fn replied c handler raw
-  net/write c (rendered (handler (parsed raw)))
+  written c (handler (parsed raw))
+
+fn written c r
+  delivered c (preamble r) r.body
+
+fn delivered c h body:string
+  net/write c "{h}{body}"
+
+fn delivered c h body
+  net/write c h . (_ -> net/write c body)
 
 # Many requests, folded. The handler answers a `turn`: the response, and what
 # to carry to the next request. Carrying a `done` closes the door, and what it
@@ -167,9 +189,7 @@ fn counted parts true
 
 fn answered_with c handler carried raw
   took = handler (parsed raw) carried
-  net/write c (rendered took.answer)
-    . (_ -> net/close_conn c)
-    . (_ -> took.carried)
+  written c took.answer . (_ -> net/close_conn c) . (_ -> took.carried)
 
 fn more l _ (done value)
   net/close_listener l . (_ -> value)

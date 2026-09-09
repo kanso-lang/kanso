@@ -24,6 +24,12 @@ tests/golden/runtime/run_cannot_start.kso	the playground cannot start processes:
 # find it absent, so it says why rather than reporting the absence.
 tests/golden/runtime/read_missing_file.kso	the playground has no filesystem: cannot read /no/such/file
 
+# And the same missing filesystem on the two readers' fixture: a page cannot
+# open the five-byte file to refuse it as text, let alone hand its bytes back,
+# so the first read halts the program with the capability refusal and the
+# `read_bytes` line beneath it is never reached there.
+tests/golden/micro/a_file_that_is_not_text.kso	the playground has no filesystem: cannot read not_text.bin
+
 # `is_dir` reads false in a page for the same reason `exists` does — there is
 # no filesystem to ask — so the golden's first answer differs there.
 tests/golden/micro/is_dir.kso	false

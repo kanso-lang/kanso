@@ -100,6 +100,10 @@ impl Executor for CollectExecutor {
         kanso::eval::read_file_text(path)
     }
 
+    fn read_bytes(&mut self, path: &str) -> Result<Option<Vec<u8>>, String> {
+        kanso::eval::read_file_bytes(path)
+    }
+
     /// The same process the other engines start. The corpus only reaches for
     /// POSIX binaries every machine running this suite already has, so the
     /// comparison stays a comparison of engines rather than of installs.

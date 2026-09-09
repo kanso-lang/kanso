@@ -226,6 +226,8 @@ KValue k_thunk_release_unless(KValue cell, KValue result) {
 }
 
 KValue k_render(KValue v, long long quote);
+static KValue k_bytes_view(const unsigned char* data, long long len);
+static KValue k_utf8_bad(const char* data, long long len, const char* origin);
 static KValue k_render_at(KValue v, long long quote, int held);
 KValue k_b_render_value(KValue v) {
     return k_render(v, 0);
@@ -356,7 +358,7 @@ struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
-   18 is_dir, 26 start, 27 kill, 29 rescue */
+   18 is_dir, 26 start, 27 kill, 29 rescue, 30 read_bytes */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -4726,6 +4728,16 @@ KValue k_b_read_file(KValue path) {
     return k_mkdesc(4, path, k_none());
 }
 
+/* The other reader, per the 2026-08-29 ruling: `read_file` is text and
+   refuses bytes that are not, `read_bytes` hands the bytes back as they are.
+   Rust ships fs::read beside fs::read_to_string and Go os.ReadFile beside an
+   explicit conversion; two readers, each naming what it reads. */
+KValue k_b_read_bytes(KValue path) {
+    if (!k_not_failure(path)) return path;
+    if (path.tag != K_STR) k_die("read_bytes takes a path string");
+    return k_mkdesc(30, path, k_none());
+}
+
 /* argv is a kanso list of strings; the description carries it whole so the
    process is not started until the description runs. */
 /* Sockets and running children live for the process. A program holds a
@@ -4829,7 +4841,7 @@ KValue k_b_net_read(KValue conn) {
 KValue k_b_net_write(KValue conn, KValue text) {
     if (!k_not_failure(conn)) return conn;
     if (!k_not_failure(text)) return text;
-    if (conn.tag != K_INT || text.tag != K_STR)
+    if (conn.tag != K_INT || (text.tag != K_STR && text.tag != K_BYTES))
         k_die("net_write takes a connection and a string");
     return k_mkdesc(23, conn, text);
 }
@@ -4913,7 +4925,7 @@ KValue k_b_make_dir(KValue path) {
 KValue k_b_write_file(KValue path, KValue content) {
     if (!k_not_failure(path)) return path;
     if (!k_not_failure(content)) return content;
-    if (path.tag != K_STR || content.tag != K_STR)
+    if (path.tag != K_STR || (content.tag != K_STR && content.tag != K_BYTES))
         k_die("write_file takes a path and content strings");
     return k_mkdesc(5, path, content);
 }
@@ -5181,9 +5193,42 @@ static KValue k_exec(KDesc* d) {
             char* data = malloc(size + 1);
             size_t got = fread(data, 1, size, fh);
             fclose(fh);
+            /* A file that is there, readable and not text is a failure on
+               every engine, worded as the interpreter's read_file_text words
+               it. Ruled 2026-08-29: read_file is text; the bytes are
+               read_bytes's to hand back. Until 2026-09-09 native read any
+               file and printed its bytes back unchanged, the one divergence
+               the differential law let stand only for a refusal. */
+            if (k_utf8_bad(data, (long long)got, NULL).tag == K_ERR) {
+                free(data);
+                return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
+                                      k_str(": the bytes are not text")), NULL);
+            }
             KValue out = k_str_n(data, (long long)got);
             free(data);
             return out;
+        }
+        case 30: {
+            /* The same three answers as case 4 -- the bytes, none for a file
+               that is not there, an err for anything else -- with no test
+               of what the bytes are. They go straight into the arena, the
+               way to_bytes builds a value, so nothing is copied twice. */
+            KStr* p = k_as_str(d->x);
+            FILE* fh = fopen(p->data, "rb");
+            if (!fh) {
+                if (errno == ENOENT || errno == ENOTDIR) {
+                    return k_none();
+                }
+                return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
+                                      k_str(": unreadable")), NULL);
+            }
+            fseek(fh, 0, SEEK_END);
+            long size = ftell(fh);
+            fseek(fh, 0, SEEK_SET);
+            unsigned char* data = (unsigned char*)k_alloc((size_t)(size > 0 ? size : 1));
+            size_t got = fread(data, 1, (size_t)size, fh);
+            fclose(fh);
+            return k_bytes_view(data, (long long)got);
         }
         case 20: {
             int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -5228,10 +5273,20 @@ static KValue k_exec(KDesc* d) {
         case 23: {
             int fd = k_socket_of(d->x.payload);
             if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
-            KStr* t = k_as_str(d->y);
+            const char* tdata;
+            long long tlen;
+            if (d->y.tag == K_BYTES) {
+                KBytes* b = k_as_bytes(d->y);
+                tdata = (const char*)b->data;
+                tlen = b->len;
+            } else {
+                KStr* t = k_as_str(d->y);
+                tdata = t->data;
+                tlen = t->len;
+            }
             long long sent = 0;
-            while (sent < t->len) {
-                ssize_t n = write(fd, t->data + sent, (size_t)(t->len - sent));
+            while (sent < tlen) {
+                ssize_t n = write(fd, tdata + sent, (size_t)(tlen - sent));
                 if (n <= 0) return k_err(k_str("cannot write"), NULL);
                 sent += n;
             }
@@ -5268,12 +5323,19 @@ static KValue k_exec(KDesc* d) {
         }
         case 5: {
             KStr* p = k_as_str(d->x);
-            KStr* c = k_as_str(d->y);
             FILE* fh = fopen(p->data, "wb");
             if (!fh) {
                 return k_err(k_concat(k_str("cannot write "), d->x), NULL);
             }
-            fwrite(c->data, 1, c->len, fh);
+            /* text or bytes: what read_bytes handed back writes back as it
+               was, which is how the site's wasm module is digested */
+            if (d->y.tag == K_BYTES) {
+                KBytes* b = k_as_bytes(d->y);
+                fwrite(b->data, 1, (size_t)b->len, fh);
+            } else {
+                KStr* c = k_as_str(d->y);
+                fwrite(c->data, 1, c->len, fh);
+            }
             fclose(fh);
             return k_none();
         }

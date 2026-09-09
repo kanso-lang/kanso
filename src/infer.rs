@@ -1037,6 +1037,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 // `file_not_found`; the text arm keeps its type, which the loop
                 // analyses read
                 Expr::Ident(n, _) if base(n) == "read_file" => STR | NONE,
+                // the same absence, and the bytes as they are
+                Expr::Ident(n, _) if base(n) == "read_bytes" => BYTES | NONE,
                 Expr::Ident(n, _) if base(n) == "stdin" => STR,
                 // status, stdout, stderr — the std wrapper reads them into a record
                 Expr::Ident(n, _) if base(n) == "run" => LIST,
@@ -1135,9 +1137,10 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         // a worded chain step answers a description when its subject is one,
         // and whatever its callback answers when the subject has settled
         "bind" | "rescue" | "annotate" => TOP,
-        "read_file" | "write" | "write_err" | "write_file" | "make_dir" | "sleep" | "random"
-        | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" | "start" | "kill"
-        | "listen" | "net_port" | "accept" | "net_read" | "net_write" | "net_close" => DESC | fails,
+        "read_file" | "read_bytes" | "write" | "write_err" | "write_file" | "make_dir"
+        | "sleep" | "random" | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run"
+        | "start" | "kill" | "listen" | "net_port" | "accept" | "net_read" | "net_write"
+        | "net_close" => DESC | fails,
         _ => TOP,
     }
 }

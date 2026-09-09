@@ -20,78 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## Checking and rewriting once at the top: six passes have to stay where they are
-
-The idea was that `compile_module_loaded` does the whole-program check and the
-eight rewrites once per module, on a growing prefix of the program, and that
-the outermost compile could do all of it once on everything. An ablation had
-put the saving at 10,632,023 instructions, 20.38% of the compile row.
-
-Gated on `DEPTH <= 1 && !ENTRY_COMPILE`, the change builds, and `tests/golden` goes red
-in three tests. The smallest reduction says why:
-
-    printf 'import "./trmc_count"\n\ntrmc_count/play\n' > main.kso
-    kanso run main.kso
-    error[runtime]: the program ran out of stack: recursion went deeper than
-    the stack holds
-
-`src/trmc.rs:185` declines the group:
-
-    if crate::ast::has_slash(name) || *arity == 0 { continue; }
-
-A dependency's declarations are qualified on the way in, so `count` reaches the
-top as `trmc_count/count` and trmc will not touch it. The accumulating tail
-call stays a tail call, and a million frames overflow the stack. trmc only ever
-rewrote a dependency because it ran inside that dependency's own compile, while
-the names were still bare.
-
-It is a family. Six passes skip qualified declarations by construction:
-`trmc::rewrite`, `typeset_constructions` (check.rs:1768),
-`foreign_constructions` (check.rs:1820), `check_bare_ambiguity` (check.rs:2957,
-at two sites) and `canonicalize_bare_aliases` (lib.rs:929). Each is about a
-module's OWN declarations — what this module constructs, which bare name its
-arms make ambiguous, which aliases it spells short. Run once at the top they
-apply to the root's declarations and skip every dependency's. Four of the six
-are checks, so the failure mode is a refusal that stops being raised.
-
-So a large part of the 10.6M is not redundant work removed. It is work that
-stops happening, and an ablation that does not keep those six passes per module
-measures the wrong thing. The number was real; the inference from it was not.
-
-**The same conclusion was reached in kanso#1003** and withdrawn there as "the
-per-dependency check_merged is not redundant". That entry did not name the
-mechanism, which is why the route was open to walk a second time. The mechanism
-is `has_slash`, and it is written down now.
-
-What survives is most of it, and callgrind on the fixed corpus says how much.
-On the container with the tunables pinned, against 51.6M total:
-
-    kanso::main                         51,094,622   99.09%
-    check::check_merged                 19,092,779   37.03%
-      infer::infer                      11,803,600   22.89%
-      check::check_file_shadow           1,812,314    3.51%
-      the four guarded checks             under 0.02%
-    canonicalize_bare_aliases            1,651,829    3.20%  (guarded)
-    trmc::rewrite                          504,558    0.98%  (guarded)
-
-The four guarded passes inside `check_merged` cost almost nothing —
-`foreign_constructions::walk` is 8,301 instructions across both call sites and
-the other three fall below the threshold — so keeping them per module is free
-and the rest of `check_merged` can move. `infer`, the largest piece, carries no
-`has_slash` at all. The two guarded REWRITES are what has to stay: 1,651,829
-and 504,558, 2,156,387 together.
-
-So the reachable win is about 8.5 million instructions, roughly 16.5% of the
-row, against the 10,632,023 the ablation reported. The change is viable at that
-size, with `canonicalize_bare_aliases` and `trmc::rewrite` left per module and
-the four guarded checks kept as a small pass beside them. An ablation that does
-not keep those measures the wrong thing again.
-
-The peak term was priced before any of this and was never the obstacle: even a
-29% rise in `compile_peak_bytes` leaves a 10.6M fall ahead of the floor
-(60.04 -> 60.12), and the realistic 32,851 bytes of carried sources score
-60.70.
-
 ## The corpus says the reshape is not ready, and the earlier reading hid it
 
 Applied on top of e12bfaba and built, `cargo test --release --test golden` reports
@@ -3343,3 +3271,113 @@ a compiler whose emitter grew: `compile_instructions` 48,746,192 ->
 with it, `text` 1,487,564 -> 1,494,508 summed over the fourteen binaries,
 6,944 bytes for the fused door and its fallback twin. Welfare 66.30 ->
 66.37, banked.
+
+## 2026-09-09 — read_file is text and read_bytes is bytes, on every engine
+
+**Built:** the 2026-08-29 ruling (archive, "gavel: read_file is text,
+read_bytes is bytes, per precedent"), after eleven days on the unbuilt list.
+`read_file` refuses a file whose bytes are not utf-8, with one sentence on
+all three engines: `cannot read {path}: the bytes are not text`. Until now
+native handed the bytes through as a string and the interpreter refused them
+with its own words, so the same program answered differently by engine.
+`read_bytes` is the other reader: it hands the bytes back as they are, and
+takes the same two doors as `read_file` — `read_bytes` answers
+`file_not_found` as data and `read_bytes!` insists. `write_file` and
+`net_write` accept bytes, so a program can read a binary and write it back
+or serve it.
+
+**Where the bytes go.** The http library's `rendered` interpolated the body
+into one string, which renders a bytes body as a list. The status line and
+headers are now a preamble, `delivered` writes a string body in one write
+and a bytes body in two, and the content-length is measured on `as_bytes`,
+which is a text body's utf-8 or a bytes body itself. The browser differential
+and the fingerprint script read `docs/kanso.wasm` through `read_bytes!`
+rather than through a text read that only worked because nothing checked.
+
+**Fixtures.** `tests/golden/micro/a_file_that_is_not_text.kso` reads a
+five-byte file — `ff fe 00 41 80`, the first byte one no utf-8 sequence
+begins with — both ways and prints the refusal and the five bytes; the
+harness runs it on both engines and through a release build.
+`tests/golden/runtime/read_bytes_takes_a_path_string.kso` pins the builtin's
+own refusal of a non-string path, reached through a binding the check cannot
+see through. The 63-entry arity table, the 59-name builtin list and the
+56-call codegen table each grew by one, and the descriptor tag is 30.
+
+**Two things found on the way.** A definition added to `std/os` above
+`insisted` moved the line four runtime goldens quote (`os.kso:113`), so the
+new readers sit below it. And a helper named `head` in `lib/net/http`
+collided with four parameters of that name; the check refuses the shadowing,
+which is the right answer, and the helper is `preamble`.
+
+**The emitted code moved, and the sweep saw it.** `all_compile.sh` read
+`emitted_code` MOVED on eight programs, every one that imports `std/os`: the
+decoder itself in `bench/emitted_golden.txt` (defines 140 -> 142, calls
+1,232 -> 1,236, lines 9,219 -> 9,245) and seven of the thirteen in
+`bench/emitted_golden_others.txt` — encodebench, oneshot, widebench,
+digestbench, readbench, livebench and runbench — each up two defines, four
+to six calls and 26 to 28 lines, with every branch count identical. The two
+defines are `read_bytes` and `read_bytes!`, which a program importing the
+module carries whether or not it calls them; none of the eight does. A rise
+on this vein is a regression to explain, and this is the explanation: the
+library grew two definitions and the emitter carries a module's every
+definition, as it did when lib/json dropped std/list and the veins halved.
+Both goldens are regenerated with their headers kept. The first reading of
+the sweep's output saw only the second file's diff and wrote that the
+decoder had not moved; the re-run after regenerating that file said
+otherwise, which is what the re-run is for.
+
+**Rulings weighed.** STATUS.md's "Ruled, unbuilt" list (kanso#1353) holds
+twelve rows. This is the smallest that touches every engine, and the one a
+reader hits first: the book's boundary chapter cannot describe two readers
+until both exist, and `read_file` handing bytes through on native while the
+interpreter refused them was a divergence the differential law forbids. The
+other eleven — effects as types, err readers, the fused chain operators,
+pure fallibility boxed, `done`, exhaustiveness without the flag, a
+qualified name as its module's declaration, records printing qualified,
+the backends' partial over a value, block-born as the whole cohort, and the
+boundary chapter — stay in the order the list gives them; the next build is
+taken from it.
+
+**Round three: the counter the local sweep never ran.** CI's cost-goldens
+job, once the runner's apt mirror stopped returning a mismatched index, read
+`utf8_bytes` up on eight runtime veins by the size of the input each reads:
+188,698 on the decoder, encode, oneshot, wide, read, live and run programs,
+8,192 on the digest. That is the ruling's own cost made visible. `read_file`
+validates every byte it hands back now, where native used to hand bytes
+through unread, and the counter that counts validated bytes counts the input
+file. The allocation counters beside it are byte-identical. The twelve cost
+goldens were regenerated with `all_counters.sh --write` on this branch, which
+the first two rounds skipped — the emitted sweep ran and the counter sweep did
+not, and CI found the difference. The retired-instruction rows CI measured are
+copied in: runbench 2,369,642,706 -> 2,369,917,628 (+274,922, +0.0116%), the
+decoder +274,897, encode +274,968, oneshot +274,897, read +274,804, live
++274,897, wide +90,524, digest +6,153; basket, deepbench, escapebench,
+pendbench, indexbench and scanbench read no file and hold to the instruction.
+That is 1.46 instructions a byte for the validator, the word-at-a-time arm the
+2026-09-07 entry measured. Every `.text` row rose too, 1,040 bytes on the
+eight readers and about 3,056 on the six that do not read, since the reader
+pair and the refusal are runtime code every program links. The compile rows:
+compile_instructions 48,749,059 -> 48,751,741, entry 162,051,772 ->
+162,061,812, library 162,846,242 -> 162,857,425, each the two definitions
+`std/os` gained. Welfare reads 66.3705 against a floor of 66.3715, a fall
+of 0.0009 that the gate's band holds; the floor is re-set to it with
+`--set` all the same, because the trend gate's pure-regression rule reads
+this branch as worse on twenty-six counters and better on none, and lets
+that through only when welfare_floor.json's history names the change that
+spent it. It is the differential-law exception welfare.kso states: a
+`read_file` that answers the same on three engines is not a trade.
+
+**Priced, row by row, for the trend gate.** The counters the branch moved and
+the values they landed on: `utf8_bytes` 11,164,198, `run_utf8_bytes`
+24,415,348, `encode_utf8_bytes` 75,741,068, `live_utf8_bytes` 75,741,068,
+`oneshot_utf8_bytes` 450,566, `wide_utf8_bytes` 289,183, `read_utf8_bytes`
+188,698, `digest_utf8_bytes` 8,192; `work_jsonbench` 1,485,334,799,
+`work_encodebench` 3,963,988,526, `work_oneshot` 21,737,118, `work_widebench`
+35,332,240, `work_digestbench` 10,426,549, `work_readbench` 4,561,941,
+`work_livebench` 3,481,899,703, `work_runbench` 2,369,917,628;
+`emitted_defines` 142, `emitted_calls` 1,236, `emitted_lines` 9,245,
+`emitted_other_defines` 2,353, `emitted_other_calls` 20,516,
+`emitted_other_lines` 133,241; `text` 1,523,196; `compile_instructions`
+48,751,741, `entry_instructions` 162,061,812, `library_instructions`
+162,857,425. Each is the validator, the two readers or the refusal, and the
+paragraph above says which.

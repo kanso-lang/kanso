@@ -1,0 +1,9 @@
+# The same refusal read_file makes, from the other reader (ruled 2026-08-29):
+# a literal is refused at compile time, so this hands the builtin a value
+# through a binding the check cannot see through, which is the only route
+# left to the builtin's own refusal.
+import "std/os"
+
+pub play =
+  n = 5
+  os/read_bytes n

@@ -127,6 +127,10 @@ impl Executor for BrowserExecutor {
         Err(format!("the playground has no filesystem: cannot read {path}"))
     }
 
+    fn read_bytes(&mut self, path: &str) -> Result<Option<Vec<u8>>, String> {
+        Err(format!("the playground has no filesystem: cannot read {path}"))
+    }
+
     fn run(&mut self, cmd: &str, _args: &[String]) -> Result<(i64, String, String), String> {
         Err(format!("the playground cannot start processes: cannot run {cmd}"))
     }
