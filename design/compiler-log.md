@@ -3461,7 +3461,20 @@ the language works", and a check that reads piped calls cannot ship while
 infer hands `read_file!` a none — and the 2026-08-25 ruling is that a
 language feature is never hostage to the score: the floor moves down with
 the fall recorded and attributed, and no compensating optimization rides in
-its pull request. The floor entry is written when CI reports the rows.
+its pull request. **CI's rows, and the floor.** On the rebased branch CI
+reads `compile_instructions` 48,820,126 -> 49,966,233 (+2.35%),
+`entry_instructions` 162,734,847 -> 165,870,534 (+1.93%),
+`library_instructions` 163,022,357 -> 166,638,016 (+2.22%),
+`compile_allocs` 29,714 -> 29,895 and `compile_peak_bytes` 773,818 ->
+777,308, the exhaustiveness check running on every compile and this rule
+asked of every group a call hands a none to, summed; the `text` vein falls
+1,525,484 -> 1,524,428 as the six `std/os` importers shed the dispatch, and
+the work rows do not move. Welfare reads 66.31 against the 66.36 floor, a
+fall of 0.0533 the two rulings pay in compile cost, so the floor moves by
+hand to the reading, 66.3063, in `bench/welfare_floor.json` with its
+history entry — `--set` refuses a fall of this size by design and names the
+file as the door — and the two page spans quoting the compile rows are
+rewritten by golden_prose.
 
 **What moved.** Against the exhaustiveness entry's rows, `emitted_code`:
 six programs fell, every importer of `std/os` whose `read_file!` no longer

@@ -201,4 +201,4 @@ front_end_visits=22133
 # are gone before the check starts, so the front end holds less at its peak.
 # Written from this container, which this golden's host gate admits for these
 # three rows.
-compile_peak_bytes=773818
+compile_peak_bytes=777308
