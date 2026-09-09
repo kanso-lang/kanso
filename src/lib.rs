@@ -2326,14 +2326,14 @@ fn merge_ambient_arms_with(
             } else {
                 format!("what `{}` means for a primitive is fixed", decl.name)
             };
-            diags.push(diag::Diagnostic {
-                kind: "ownership",
-                message: format!(
+            diags.push(diag::Diagnostic::new(
+                "ownership",
+                format!(
                     "an arm of `{}` must match on a type this module defines — {what}; wrap the value in your own type",
                     decl.name
                 ),
-                span: decl.span,
-            });
+                decl.span,
+            ));
             continue;
         }
         if renders {
@@ -3637,7 +3637,12 @@ fn compile_module_loaded(
     };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
-    for (_, _, program) in parsed {
+    // The module's own files, kept for the diagnostics below. The merge
+    // consumes `parsed`, and a check over the merged program can raise about
+    // any file in it, so the text has to outlive the loop that eats it.
+    let mut sources: Vec<(String, String)> = Vec::with_capacity(parsed.len());
+    for (file, source, program) in parsed {
+        sources.push((file, source));
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
@@ -3662,9 +3667,28 @@ fn compile_module_loaded(
         // settles both: the extension is a fact about storage.
         let named = dir.to_string_lossy();
         let named = named.strip_suffix(".kso").unwrap_or(&named);
+        // A diagnostic that knows the file it is about gets a location and its
+        // source line, the way every per-file diagnostic already does. One
+        // that does not keeps the older shape: kind, message, and the module
+        // suffix, which was all any of them had.
+        let borrowed: Vec<(&str, &str)> =
+            sources.iter().map(|(f, s)| (f.as_str(), s.as_str())).collect();
         let rendered: Vec<String> = diags
             .iter()
-            .map(|d| format!("error[{}]: {} (module {named})\n", d.kind, d.message))
+            .map(|d| match d.file.as_deref() {
+                // The suffix stays where it has always been, at the end of the
+                // header line, and the location and quoted line are added
+                // under it. So an existing message reads the same and simply
+                // gains the two lines that say where it is.
+                Some(_) => {
+                    let body = diag::render_across(std::slice::from_ref(d), named, "", &borrowed);
+                    match body.find('\n') {
+                        Some(at) => format!("{} (module {named}){}", &body[..at], &body[at..]),
+                        None => format!("{body} (module {named})\n"),
+                    }
+                }
+                None => format!("error[{}]: {} (module {named})\n", d.kind, d.message),
+            })
             .collect();
         return Err(rendered.join(""));
     }

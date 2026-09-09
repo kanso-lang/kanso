@@ -3267,3 +3267,74 @@ supposed to stay level with. And the budget is genuinely cumulative across
 sessions: the four entries named were kanso#1341, #1343, #1344 and #1345, of
 which two are the chart campaign, so §63 was written for that campaign as the
 gate's own message invites.
+
+## 2026-09-09 (third) — a merged-check diagnostic on the module path had no location at all
+
+**DONE.** kanso#1340 refused moving `check_merged` to the root because a
+root-raised diagnostic loses the file, the span and the `(module …)` suffix,
+and named provenance on merged declarations as what the thread owed next. That
+plumbing was prototyped on 2026-09-08 and left in a scratch directory with two
+defects, both recorded on the entry above. This is the repair, and the second
+defect turned out to be worse and more useful than the record had it.
+
+**DEFECT ONE: the attribution was dynamically scoped.** The prototype read the
+file from a thread-local set by the walk, and its `Attributed` iterator held
+its last item's guard until the iterator itself dropped, so a walk outliving
+the raise site leaked one file's attribution onto a diagnostic raised somewhere
+else. `Diagnostic` now carries `file: Option<Arc<str>>` set AT THE RAISE SITE,
+from the declaration in hand, by `Diagnostic::about(&decl.file)`. A value
+passed in has no guard to outlive it. The whole golden suite passes, including
+`error_corpus_reports_each_golden_diagnostic`, the test the prototype turned
+red — so the plumbing is inert where the prototype's was not, and a check opts
+in one call at a time.
+
+**DEFECT TWO IS NOT "render_across is never called".** On the module path a
+merged-check diagnostic was formatted as kind, message and the `(module …)`
+suffix, with the span and the source line DROPPED ENTIRELY — the loop built
+that string by hand and never touched the renderer. kanso#1340's blocker was
+not a thing to build; it was sitting in `compile_module_loaded` being done.
+
+The corpus already held the proof, in a pair nobody had read side by side.
+`tests/golden/errors/let_binding` carries both variants of one program:
+
+    .stderr           error[name]: `let` is not a type …
+                        --> let_binding.kso:2:7
+                         2 |   let x = 1
+                                   ^
+    .imported.stderr  error[name]: `let` is not a type … (module let_binding)
+
+Same program, same error, two routes through the front end, and the module
+route reported no location. `compile_module_loaded` now keeps its `(file,
+source)` pairs — the merge loop consumed `parsed`, so the text has to be taken
+before it is eaten — and renders through `render_across`, which picks each
+diagnostic's own source and falls back to naming a file with no quoted line
+when its text is not in hand.
+
+The suffix stays at the end of the header line, so an existing message is
+byte-identical and simply gains the two lines under it. That is what keeps the
+blast radius small: one check wired, and exactly two goldens move, both by
+addition. Measured on a real two-file module, a dependency's error caught only
+by the merged check now reads `--> …/inner/core.kso:5:9` with the line quoted,
+where it used to read the message and nothing else.
+
+`check_binding_patterns` is the one check wired, as the caller that keeps this
+from being plumbing with nothing behind it.
+
+**Two things found on the way.** The per-file checks were never broken: the
+`unused` refusal already names a dependency's file and line correctly, so the
+loss is specific to the whole-program check over the merged program. And the
+two goldens that moved are single files compiled as modules, so they prove the
+module ROUTE gained a location and NOT that a dependency's file is named — the
+`errors_module` fixtures still pass untouched, because their errors come from
+checks not yet wired. A cross-file golden is still owed and is listed below
+rather than claimed here.
+
+OPEN, in order: `.about(&decl.file)` at the raise sites of the other
+twenty-two checks in `check_merged_after_aliases`, several of which raise
+inside a nested `walk` closure and need the file threaded in; the entry and
+library paths' merged renders, which have the same shape; a cross-file fixture
+under tests/golden/errors_module; the forty-four module goldens regenerated;
+and then the reorder this was always for, at kanso#1340's repricing.
+
+`compile_instructions` is a layout vein and this touches src/, so it may move;
+CI says whether it did.
