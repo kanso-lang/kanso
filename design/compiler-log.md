@@ -3329,12 +3329,33 @@ module ROUTE gained a location and NOT that a dependency's file is named — the
 checks not yet wired. A cross-file golden is still owed and is listed below
 rather than claimed here.
 
-OPEN, in order: `.about(&decl.file)` at the raise sites of the other
-twenty-two checks in `check_merged_after_aliases`, several of which raise
-inside a nested `walk` closure and need the file threaded in; the entry and
-library paths' merged renders, which have the same shape; a cross-file fixture
-under tests/golden/errors_module; the forty-four module goldens regenerated;
-and then the reorder this was always for, at kanso#1340's repricing.
+OPEN, in order: `.about(&decl.file)` at the remaining raise sites in
+`check_merged_after_aliases`; the entry and library paths' merged renders,
+which have the same shape; a cross-file fixture under tests/golden/errors_module;
+the forty-four module goldens regenerated; and then the reorder this was always
+for, at kanso#1340's repricing.
+
+**AND THE SIZE OF THAT FIRST ITEM IS NOT TWENTY-TWO.** This entry said so
+until the survey behind it was redone. The driver calls 23 checks; 14 raise in
+their own body, 17 sites between them, 1 wired here, so 13 checks and 16 sites
+remain. Three have a declaration with `.file` already in hand at the raise
+site; the rest raise inside a closure.
+
+The redo also found what a count of the callees cannot see. NINE of the 23
+raise nothing themselves -- `check_boolean_equality`, `check_build_blocks`,
+`check_call_arities`, `check_call_shaped_list`, `check_decidable_failures`,
+`check_err_as_value`, `check_field_exists`, `check_if_arity` and
+`check_literal_arguments` -- and delegate to helpers that do. check.rs holds 65
+`Diagnostic::new` against the 17 inside the driver's direct callees, so wiring
+the checks is not the whole job and the helper sites need the file reaching
+them too.
+
+Two bad surveys preceded the good one, and both failed silently. The first was
+a boundary scan by line that mis-sliced any body holding a nested `fn`, and
+reported zero raise sites for four checks against 65 in the file. The second
+matched `\nfn NAME` and found NOTHING AT ALL, because the driver is `pub fn` --
+a scan that returns an empty set reads like an answer. A survey whose result
+is a count wants a total it can be checked against; 65 is that total here.
 
 **THE FIRST TWO SHAPES BOTH COST THE OBJECTIVE, AND THE THIRD IS FREE.** The
 renderer needs the text of the file a diagnostic is about, and the merge loop
