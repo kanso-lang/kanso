@@ -3055,3 +3055,110 @@ counters at coverage 0.28, 48 on three at 0.44, 57 on all five at 1.00, and 151
 with none. The paragraph is restated in dates rather than counts. Those counts
 perish on the next merge — the file grows a row per commit, and "the five
 hundred rows" was already a number waiting to go stale.
+
+## 2026-09-09 (third) — the entry row and the library row are the same measurement
+
+`bench/objective_sources.txt` said the instruction term "sums BOTH compile
+paths: `kanso check <dir>` is a module and `kanso check <file>` is an entry".
+`kanso check <file>` is TWO paths — it routes by content, and a file of
+definitions alone is a library taking compile_library — so the sentence names
+two of three and the term takes two of three, which is right for a different
+reason than the one written down.
+
+Whether the library row should join is answered by measurement rather than by
+a gavel. Callgrind on this container, `kanso check` on each corpus:
+
+    frame                     module        entry       library
+    kanso::main           49,226,188  163,918,585  164,230,408
+    load_dependencies     29,179,760  112,141,854  112,163,002
+    compile_module_inner  41,345,039  100,795,947  100,804,487
+    check_merged_after..  17,585,954   62,110,471   62,242,504
+    infer::infer          10,931,355   36,679,783   36,496,937
+
+bench/entry_corpus and bench/library_corpus name the IDENTICAL ten imports —
+bits, io, json, list, math, path, regexp, render, sha256, text — and the two
+totals sit 311,823 apart out of 164M, which is 0.19%. Their dependency loads
+agree to 21,148, which is 0.019%. Every shared frame agrees to under half a
+per cent; the paths diverge only in the roughly 21M above load_dependencies,
+where compile_parsed_entry reads 142.58M against compile_library's 143.18M.
+
+The term is already 66% dependency loading: 29.2M for the module corpus's four
+imports and 112.1M for the entry corpus's ten, out of 213.1M. Admitting the
+library row would count that same 112.1M a third time and weight loading three
+to one against the compiler's own passes, for a dimension the entry row already
+carries. The module row is redundant with neither, at four imports against ten
+and 49.2M against 164M.
+
+`bench/library_instructions_golden.txt` is unaffected and still fails CI when
+it moves. A vein the objective does not weigh is still a vein — that is what
+kanso#1337 opened it for.
+
+**THE ATTRIBUTION PLUMBING §59 OWES WAS ALREADY PROTOTYPED, and the prototype
+lives nowhere the tree can see.** kanso#1340 refuted moving check_merged to the
+root because a root-raised diagnostic loses the file, the span and the
+`(module …)` suffix, and named provenance on merged declarations as what the
+thread owes next. That session built the plumbing and left it in a scratch
+directory: a `diag::HasFile` trait implemented for `ast::FnDecl` that returns
+`&self.file`, and a `diag::attributing(&program.fns)` wrapper standing in for
+`&program.fns` at each per-declaration check, so a diagnostic raised inside the
+loop carries the declaration's own file. Both patches are stale against main —
+they fail at src/check.rs:724 and src/lib.rs:3578, where kanso#1338's reorder
+moved under them — so what survives is the shape, which is written down here
+because a container is not a record.
+
+Four facts make that shape the right one, and they were checked rather than
+assumed. `FnDecl` already carries `file: Arc<str>` and `span`, so the
+provenance is in the tree. The merge does not re-stamp it: `stamp_file` runs
+per parse, per file, and the merges are plain `extend`, so a merged
+dependency's declaration keeps its own file. The file cannot ride on `Span`,
+because kanso#1135 made a span two u32 for a 7.1% peak win and an `Arc<str>`
+there hands it back; `Diagnostic` is the place, since diagnostics are built
+only on errors. And the `(module …)` suffix needs no new state at all —
+`split_qual` on the merged declaration's qualified name recovers it.
+
+The scope is 23 checks in `check_merged_after_aliases` and 65 `Diagnostic::new`
+sites in check.rs. The prize is the ceiling kanso#1340 repriced: −18.33% on the
+module row and −23.30% on the library row.
+
+**A CORRECTION, WRITTEN THE SAME NIGHT.** The paragraph above says the patches
+fail "at src/check.rs:724 and src/lib.rs:3578". That conflates two of them:
+`419_attribution.patch` fails only at check.rs:724, in four hunks that are all
+the same substitution, and the lib.rs failure belongs to the wider
+`419_all_six.patch`. Rebasing the first is mechanical — four lines — and it
+builds.
+
+Building it says the shape is further from shipping than the paragraph above
+implies, in two specific ways, and both were found by running the suite rather
+than by reading.
+
+THE PROTOTYPE IS NOT INERT. The obvious shipping order — land the attribution
+first, doing nothing until `check_merged` moves to the root, then move it —
+does not work: `cargo test --release --test golden` goes red on
+`error_corpus_reports_each_golden_diagnostic`.
+
+    fixture: tests/golden/errors/a_reexport_of_a_name_nothing_offers.kso
+    got:  error[name]: no import offers a pub `nonexistent` to re-export
+            --> std/text/text.kso:3:5
+    want: error[name]: no import offers a pub `nonexistent` to re-export
+            --> a_reexport_of_a_name_nothing_offers.kso:3:5
+             3 | pub nonexistent
+                       ^
+
+THE ATTRIBUTION IS DYNAMICALLY SCOPED, so it names whoever is iterating rather
+than what the diagnostic is about. That refusal is raised at src/lib.rs:3348,
+about a re-export in the user's own file, and it came out attributed to
+std/text. The `Attributed` iterator holds its last item's guard until the
+iterator itself drops, so a walk whose iterator outlives the raise site leaks
+its attribution forward. A thread-local read by a constructor cannot tell the
+declaration in hand from the declaration some other loop last held.
+
+AND `render_across` IS NEVER CALLED. The lib.rs half of the patch is a single
+`Diagnostic::new` conversion; no call site passes it the sources map. Every
+cross-file attribution therefore renders against an empty map, which is the
+second half of that fixture's diff — the quoted source line is gone.
+
+So the next step is not a rebase and a measurement. It is: attribute at the
+raise site rather than through a thread-local, and wire `render_across` at the
+`compile_*` call sites. Then the reorder is measurable. kanso#1340 called this
+"a larger piece of work than a two-way split" and was right; this is what it
+consists of.
