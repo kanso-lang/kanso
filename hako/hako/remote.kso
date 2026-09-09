@@ -39,14 +39,22 @@ fn bare tag
   parts[1]!
 
 fn highest tags
-  releases = list/reject tags unreleased?
-  list/fold releases none later
+  best (list/to_list (list/reject tags unreleased?))
+
+# No release is none; otherwise the fold starts from the first release and
+# `further` keeps whichever of two is ahead, so the seed is never a none the
+# comparison would have to ask about.
+fn best releases
+  picked (length releases == 0) releases
+
+fn picked true _
+  none
+
+fn picked false releases
+  list/fold releases releases[1]! further
 
 fn unreleased? pair
   not release? pair[1]!
-
-fn later seen pair
-  if (seen == none) pair (further seen pair)
 
 fn further seen pair
   if (after? pair[1]! seen[1]!) pair seen

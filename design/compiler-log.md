@@ -3391,6 +3391,19 @@ keeps the three naming errors and `mark_step` gains a `none` arm answering
 false; the panel quoting the source is regenerated. Every other sample runs
 as recorded.
 
+**A second one, found a batch later still.** CI's macOS job ran
+tests/hako.rs, which the verification batch had not: the hako package
+manager's `highest` folded the remote's releases from a `none` seed,
+`list/fold releases none later`, with `later` asking `seen == none` to take
+the first one. A literal none handed to a group with no `none` arm is what
+the check refuses, and `list/fold`'s seed position has none. It folds from
+the first release now, with `further` alone, and answers none for an empty
+list before the fold rather than through it; `list/reject`'s lazy sequence
+is materialised first, since `length` and a strict read want a list. Twelve
+of twelve hako specs pass. The batch ran the golden and engine suites and
+not the crate's full `cargo test`, which is where hako lives; the full run
+is in the batch now.
+
 ## 2026-09-09 — a catch-all `none` arm empties the none from the arms below it, and a piped call is a call
 
 The exhaustiveness entry above left one thing open: `walk` read only
