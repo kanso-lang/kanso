@@ -135,6 +135,44 @@ implementer's to sharpen.
 The archive entry "gavel: read_file is text, read_bytes is bytes, per
 precedent". Not in lib/os.
 
+### A qualified name is its module's declaration (2026-08-29)
+
+The archive entry of that name: `dep/join` is dep's own `pub fn join`, never
+a clone of an import's arm, and declaring a name an import happens to export
+is unconditional. Probed 2026-09-09: a module declaring `pub fn join` while
+importing std/text is still refused with `error[opacity]: dep declares join
+pub, but an import of dep exports join too and took the name`, the
+pre-ruling message.
+
+### Records print qualified, everywhere (2026-08-29)
+
+The archive entry of that name: `slow_lane 7` prints `lane/slow_lane 7` in
+both entry paths, and tests/entry_file.rs "flips its expectation to the
+qualified form and stops being ignored". On 2026-09-09 that test still
+carries `#[ignore = "the two conventions collide; the rule is a gavel, not a
+fix"]` and still expects the unqualified form.
+
+### The backends build the partial over a value (2026-08-29)
+
+The archive entry of that name, Clay: "BUILD IT." On 2026-09-09
+src/codegen.rs still refuses with "native backend: `name` is a value here,
+and a partial over a value settles its arity when the arguments arrive", and
+src/wasm_backend.rs carries the same refusal. The correction entry beneath
+the gavel is the rule for every row here: a feature the language has
+admitted is finished on every engine, or the decision was not made.
+
+### Two rulings of 2026-08-29 not yet probed
+
+"Block-born is the whole cohort" and "arms travel with the type, under the
+ownership rule" are recorded once each in the archive and never mentioned in
+the log again. Neither has a grep-visible surface, so neither is claimed
+here as built or unbuilt; each needs a program run against the interpreter
+to say which. Everything else ruled between 2026-08-15 and 2026-09-08 was
+checked: the rest is either built (the bang chooses the channel, one row one
+value, the consolidated run program, the whole-float rendering, clang 19,
+the fixed compile corpus, the epoch table, page_drift, inf and nan) or closes
+a question with nothing to build.
+
 ### The book teaches the boundary language (queued P1, 2026-08-26)
 
 Held in the ledger's "Open, not blocking" until the effect type exists; the
@@ -259,8 +297,12 @@ session is itself such a call, so Clay starts one when he wants one. The queue
 drains and refills in the meantime; it is not a boundary the session can act
 on by itself.
 
-**The biggest buildable thing is now the err spelling, and it is ruled.**
-Gaveled 2026-08-26 and on main since #1112:
+**What to build next is chosen from the "Ruled, unbuilt" section above,
+never from this one.** What follows is the 2026-08-29 snapshot of the err
+spelling's landing and is kept as history of that build; the rulings that
+superseded it the same afternoon and on 2026-08-31 are rows above. The
+original opener read "the biggest buildable thing is now the err spelling,
+and it is ruled", gaveled 2026-08-26 and on main since #1112:
 
     io/read_file path
     bind     (text -> json/parse text)
