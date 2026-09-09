@@ -161,13 +161,14 @@ src/wasm_backend.rs carries the same refusal. The correction entry beneath
 the gavel is the rule for every row here: a feature the language has
 admitted is finished on every engine, or the decision was not made.
 
-### Two rulings of 2026-08-29 not yet probed
+### One ruling of 2026-08-29 not yet probed
 
-"Block-born is the whole cohort" and "arms travel with the type, under the
-ownership rule" are recorded once each in the archive and never mentioned in
-the log again. Neither has a grep-visible surface, so neither is claimed
-here as built or unbuilt; each needs a program run against the interpreter
-to say which. Everything else ruled between 2026-08-15 and 2026-09-08 was
+"Block-born is the whole cohort" is recorded once in the archive and never
+mentioned in the log again; it has no grep-visible surface and needs a
+program with an aliased knot run against the interpreter to say whether it
+is built. "Arms travel with the type, under the ownership rule" was probed
+the same way on 2026-09-09 and is built: a module declaring `type money` and
+`to_string m:money` renders `¥350` in an importer that wrote no arm. Everything else ruled between 2026-08-15 and 2026-09-08 was
 checked: the rest is either built (the bang chooses the channel, one row one
 value, the consolidated run program, the whole-float rendering, clang 19,
 the fixed compile corpus, the epoch table, page_drift, inf and nan) or closes
