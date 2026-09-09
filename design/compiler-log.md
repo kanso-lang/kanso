@@ -3484,3 +3484,69 @@ OPEN, both the chat's and both still cloud's: reconstructing the run terms for
 the 439 earlier rows so they score on all five, and the compile-side epoch
 table. When those land the boundaries stop being steps and these rules stop
 having anything to mark.
+
+## 2026-09-09 — the cliff is the run terms joining the score, and the chart draws a coverage change as a fall
+
+Clay, 2026-09-09: "the latest welfare metric still looks like it has gotten
+dramatically worse. I do not understand this. the only things you should have
+done recently to the corpus had to do with applying the metric consistently.
+that shouldn't have had anything to do with the compiler being worse in any
+kind of way."
+
+He is right, and the column agrees with him: it reads 66.30 across the last
+fourteen commits with every counter byte-identical. What looks dramatically
+worse is the shape, a peak of 91.67 on 2026-09-03 and 66.30 today, and the
+whole of that gap is the step at 2026-09-06 11:26. This entry corrects the
+mechanism the 2026-09-08 entry gave for that step, because the correction
+changes what a reader should conclude from the picture.
+
+**The 91 was never a score of the compiler.** `scripts/welfare_rescore` scores
+a row on the counters it carries, drops a term whose counters are absent, and
+renormalises the weights that remain; its own header says a row scoring well
+on what it has "reads the same as a full row scoring well." `run_instructions`
+and `run_peak_bytes` exist in none of the 439 rows before 2026-09-06 11:26 and
+in all 61 after. So every earlier row is scored on the two compile terms alone,
+at `scored_weight` 0.44, and reads high because the compile ratios are large.
+The first row after carries all five at `scored_weight` 1.00, and the run terms
+enter at parity, r = 1 against satiation 2.0, so each contributes a third of
+its weight and pulls the total down:
+
+    2026-09-06 09:43   scored_weight 0.44   welfare 91.57   compile terms only
+    2026-09-06 11:26   scored_weight 1.00   welfare 58.96   all five, run at parity
+
+The 2026-09-08 entry said the earlier rows "score against a baseline they never
+carried." They do not score the run terms at all. The remedy is unchanged; the
+reading is different. The chart draws two differently-scored populations as one
+line.
+
+**The page already says this, and the chart does not.** docs/numbers.html:
+"read `scored_weight` before reading a step in the line ... the step where the
+run counters arrive is a change in what was recorded rather than in what the
+compiler costs." That sentence is correct, and finding it is the reader's job.
+The line draws 288 rows at coverage 0.28 or 0.44 and 61 at 1.00 in one stroke,
+one colour, with no mark at the boundary. The rescore writes `scored_weight`
+into every row so that, in its own words, "a reader needs to not be fooled,"
+and the chart does not read the field. That is why the site does not look
+right: the safeguard is in the data and in the prose and nowhere in the
+picture. The prose is also stale, "from about 75 to about 52," against a column
+that now reads 91.57 to 58.96, because the compile epochs moved under it.
+
+**What Clay's principle requires, in three pieces.** A change in what is
+measured is neutral to the score, so the line is flat across every one of
+them.
+
+1. The run side: the 2026-09-07 ruling, still unbuilt. Reconstruct the run
+   terms for the 439 earlier rows from the per-benchmark counters they do
+   carry (`instructions` and `encode_instructions` in 424 of them),
+   share-weighted, based at 2026-08-10, so those rows score on all five terms
+   and the boundary disappears.
+2. The compile side: the epoch table from the 2026-09-08 entry, so each of
+   the four compile epochs is scored against a baseline scaled to its own
+   measurement.
+3. The chart: draw `scored_weight`. A lighter or dashed stroke below 1.00, or
+   a marker at each coverage boundary, so that until 1 and 2 land a step that
+   is a coverage change looks like one. This is an afternoon, and it makes the
+   page honest today; 1 and 2 make it right.
+
+**OPEN, all three cloud's.** The rescore and the chart are code and the page
+is cloud's surface.
