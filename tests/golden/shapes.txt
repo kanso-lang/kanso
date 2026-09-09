@@ -26,7 +26,7 @@ Upcast	examples/subtypes.kso tests/golden/micro/an_upcast_names_a_type_the_modul
 Build	many
 Guard	many
 p:IntLit	many
-p:StrLit	tests/golden/micro/a_conditional_accumulator_across_nested_binds.kso tests/golden/micro/a_tail_chain_of_five_parameter_arms.kso tests/golden/micro/a_thunk_capture_survives_the_cohort.kso
+p:StrLit	many
 p:Nullary	many
 p:Var	many
 p:Wildcard	many

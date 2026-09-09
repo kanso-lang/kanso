@@ -1063,4 +1063,20 @@
 # rows at -46,538, +357,749 and -146,495 -- three directions on one binary.
 # Seven allocations cannot do that, and zero allocations cannot do this. Both
 # rounds are the compiler's own bytes moving under an edit to src/.
-compile_instructions=48746831
+# 2026-09-09 (kanso#1349): compile_instructions=48,746,192, a FALL of 639
+# (-0.0013%) from 48,746,831.
+#
+# The fold-seed uniqueness condition in src/linear.rs. Two mechanisms could
+# each produce a move this size and 639 instructions cannot separate them.
+# The analysis does MORE work at every fold site -- one extra `unique_in` on
+# the seed -- and LESS at a site the new condition rejects, because the
+# marking walk then never descends into the folder's body. The corpus has
+# folds on both sides of that.
+#
+# It is read as layout on the usual evidence: compile_allocs 29,606 and
+# compile_peak_bytes 773,818 are byte-identical to main in the same job, the
+# machine-code row agrees, and all three instruction rows fell together at
+# roughly the same tiny scale. The DIRECTION is not evidence the fix is
+# cheaper -- a condition that is strictly added cannot be -- and this note
+# says so rather than banking a win the change did not make.
+compile_instructions=48746192

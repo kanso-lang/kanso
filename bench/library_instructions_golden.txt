@@ -79,4 +79,13 @@
 # row alone. This is the third kind, and the most useful one for the prior:
 # a change that provably adds NO work still moved all three rows, which is
 # what makes the layout reading a measurement here rather than an inference.
-library_instructions=162840377
+# 2026-09-09 (kanso#1349): library_instructions=162,839,321, a FALL of 1,056
+# (-0.0006%) from 162,840,377.
+#
+# The fold-seed uniqueness condition. Layout, on the reading written on the
+# other two rows. This row moved LEAST of the three in relative terms, 0.0006%
+# against 0.0013% and 0.0012%, which is what a layout move looks like and not
+# what a change in the work would look like: the library and entry corpora
+# name the identical ten imports and compile the same declarations, so a real
+# change in analysis work would move them together.
+library_instructions=162839321

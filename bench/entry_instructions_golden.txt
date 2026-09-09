@@ -90,4 +90,16 @@
 # +357,749, with the module and library rows falling. A row that moves in
 # both directions across two shapes of one change, while the counters that
 # measure work stay put, is the layout vein and nothing else.
-entry_instructions=162044531
+# 2026-09-09 (kanso#1349): entry_instructions=162,042,653, a FALL of 1,878
+# (-0.0012%) from 162,044,531.
+#
+# The fold-seed uniqueness condition, read as layout on the evidence written
+# on the module row: the work counters are byte-identical to main in the job
+# that counted this, and all three instruction rows fell together at the same
+# thousandth-of-a-per-cent scale.
+#
+# Beside the note above it, this is a fourth kind: a change that provably adds
+# a test on every fold site, where the row fell anyway. The prior that this
+# vein moves under any src/ edit now has a case in each direction with the
+# work counters green throughout.
+entry_instructions=162042653
