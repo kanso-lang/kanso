@@ -130,11 +130,6 @@ arm has always been the way the language works." The flag comes out; the
 group-level return set the campaign's last report blamed is the
 implementer's to sharpen.
 
-### `read_bytes` beside `read_file` (2026-08-29)
-
-The archive entry "gavel: read_file is text, read_bytes is bytes, per
-precedent". Not in lib/os.
-
 ### A qualified name is its module's declaration (2026-08-29)
 
 The archive entry of that name: `dep/join` is dep's own `pub fn join`, never
