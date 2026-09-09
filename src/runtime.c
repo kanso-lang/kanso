@@ -82,6 +82,7 @@ static long long k_stat_ryu_renders = 0;
 static long long k_stat_utf8_bytes = 0;
 static long long k_stat_find2_calls = 0;
 static long long k_stat_append_fast = 0;
+static long long k_stat_append_rendered = 0;
 static long long k_stat_append_grow = 0;
 /* The tenure allocator mallocs outside every other accounting: its blocks
    move no allocation counter, no arena counter and no peak. So a change that
@@ -492,13 +493,15 @@ static void k_stats_dump(void) {
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
         "el_parses=%lld\nryu_renders=%lld\nutf8_bytes=%lld\n"
         "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
+        "append_rendered=%lld\n"
         "utf8_zerocopy=%lld\ncarry_dedup=%lld\nbytes_malloc=%lld\nbytes_freed=%lld\n"
         "perm_live_bytes=%lld\nperm_peak_bytes=%lld\n",
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
         k_stat_thunk_frees, k_stat_thunk_escaped,
         k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
-        k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
+        k_stat_append_fast, k_stat_append_grow, k_stat_append_rendered,
+        k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed,
         k_perm_live, k_perm_peak);
     fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\n",
@@ -4169,29 +4172,12 @@ long long k_render_dispatchable(KValue v) {
    endpoint and took the successes with it. Native was alone in that: the
    interpreter and wasm both answer through `eval::render`, which has only the
    nested case. */
-KValue k_render(KValue v, long long quote) { return k_render_at(v, quote, 0); }
-
-static KValue k_render_at(KValue v, long long quote, int held) {
-    if (v.tag == K_ERR && !held) return v;
-    if (v.tag == K_SUB) return k_render_at(k_sub_base(v), quote, held);
-    /* Output is the demand, so rendering forces what it prints. The oracle
-       answers the same way. */
-    if (v.tag == K_THUNK) {
-        KThunk* cell = (KThunk*)(intptr_t)v.payload;
-        for (int d = 0; d < k_render_depth; d++)
-            if (k_render_path[d] == cell) return k_str("<cycle>");
-        if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
-        /* the wire is the demand: output forces what it prints, and the path
-           above is what stops a knot walking round */
-        KValue out = k_render_at(k_force(v), quote, held);
-        if (k_render_depth > 0) k_render_depth--;
-        return out;
-    }
-    char buf[64];
-    /* The two number arms write their digits into `buf` and set `nlen`, then
-       leave the switch by the one exit below. They shared a `k_str(buf)` per
-       return until the length came back from the writers; five k_str_n bodies
-       inlined there is 1,264 bytes of .text where one is 253. */
+/* The digits of an int or a float, written into `buf` (64 bytes is enough
+   for either) with the length returned and no string built. k_render_at is
+   one reader; `append acc "{n}"` is the other, since 2026-09-09, and it
+   copies the digits into the accumulator straight from here rather than
+   through a KStr it would drop on the next line. */
+static inline __attribute__((always_inline)) long long k_render_number(KValue v, char* buf) {
     long long nlen;
     switch (v.tag) {
         case K_INT:
@@ -4236,6 +4222,41 @@ static KValue k_render_at(KValue v, long long quote, int held) {
             }
             break;
         }
+        default:
+            k_die("k_render_number: not a number");
+    }
+    return nlen;
+}
+
+KValue k_render(KValue v, long long quote) { return k_render_at(v, quote, 0); }
+
+static KValue k_render_at(KValue v, long long quote, int held) {
+    if (v.tag == K_ERR && !held) return v;
+    if (v.tag == K_SUB) return k_render_at(k_sub_base(v), quote, held);
+    /* Output is the demand, so rendering forces what it prints. The oracle
+       answers the same way. */
+    if (v.tag == K_THUNK) {
+        KThunk* cell = (KThunk*)(intptr_t)v.payload;
+        for (int d = 0; d < k_render_depth; d++)
+            if (k_render_path[d] == cell) return k_str("<cycle>");
+        if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
+        /* the wire is the demand: output forces what it prints, and the path
+           above is what stops a knot walking round */
+        KValue out = k_render_at(k_force(v), quote, held);
+        if (k_render_depth > 0) k_render_depth--;
+        return out;
+    }
+    char buf[64];
+    /* The two number arms write their digits into `buf` and set `nlen`, then
+       leave the switch by the one exit below. They shared a `k_str(buf)` per
+       return until the length came back from the writers; five k_str_n bodies
+       inlined there is 1,264 bytes of .text where one is 253. */
+    long long nlen;
+    switch (v.tag) {
+        case K_INT:
+        case K_FLOAT:
+            nlen = k_render_number(v, buf);
+            break;
         case K_TRUE: return k_str("true");
         case K_FALSE: return k_str("false");
         case K_NONE: return k_str("<none>");
@@ -7642,8 +7663,8 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
 
 static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
                                                         KValue x, int mutate);
-KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
-                        long long n, int mutate);
+static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
+                                      long long n, int mutate);
 
 /* A comma, a colon, a brace: three quarters of the appends the encoder makes
    are one byte into spare capacity, and this is the whole of that case.
@@ -7711,8 +7732,8 @@ static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
 /* The copy itself, once the source is a pointer and a length. `append_wide`
    reaches it after unpacking a value; `append_slice` reaches it with a range
    of a bytes value it never boxed. */
-KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
-                        long long n, int mutate) {
+static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
+                                      long long n, int mutate) {
     long long acap = a->cap < 0 ? -a->cap : a->cap;
     if (acap) {
         KBuf* buf = ((KBuf*)a->data) - 1;
@@ -7849,6 +7870,45 @@ KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
     }
     return k_b_append_range(acc, a, src->data + (from - 1), to - from + 1,
                             (int)mutate);
+}
+
+/* `append acc "{x}"` where `x` is an int or a float. The template rendered
+   `x` into a KStr and the append copied that string into `acc`, so every
+   scalar the JSON encoder wrote was built once to be copied once: 379,530
+   strings a runbench, 5.5% of its instructions in the render alone. This
+   writes the digits into a stack buffer and hands k_b_append_range the
+   pointer and the length, so nothing is allocated for them. Any other
+   value takes the road it always took, through k_render, so the two
+   spellings cannot disagree on a byte. */
+KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
+    if (!k_not_failure(acc)) return acc;
+    if (v.tag != K_INT && v.tag != K_FLOAT) {
+        return k_b_append_into(acc, k_render(v, 0), (int)mutate);
+    }
+    if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
+    char buf[64];
+    long long n = k_render_number(v, buf);
+    k_stat_append_rendered++;
+    KBytes* a = k_as_bytes(acc);
+    long long acap = a->cap < 0 ? -a->cap : a->cap;
+    if (acap) {
+        KBuf* kb = ((KBuf*)a->data) - 1;
+        /* A number is at most 24 bytes (`-1.7976931348623157e308`), and buf
+           holds 64, so where the accumulator has 24 to spare the copy is
+           three words whatever the length, and the call into memcpy for a
+           handful of digits is not made. */
+        if (kb->used == a->len && a->len + 24 <= acap) {
+            k_stat_append_fast++;
+            memcpy((unsigned char*)a->data + a->len, buf, 24);
+            kb->used = a->len + n;
+            if (mutate) {
+                a->len += n;
+                return acc;
+            }
+            return k_bytes_owned(a->len + n, a->data, a->cap);
+        }
+    }
+    return k_b_append_range(acc, a, (const unsigned char*)buf, n, (int)mutate);
 }
 
 /* find2 with a floor: also stops at the first byte below `lim`. Escape

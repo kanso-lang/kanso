@@ -434,6 +434,22 @@ entry_rewritten_twice = row
   (breaking "an_entry_program_rewritten_twice_before_it_is_checked")
   release
 
+append_rendered = row
+  "a scalar rendered into a string and copied again"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_scalar_rendered_into_a_string_and_copied_again")
+  benches
+
+arm_narrowed = row
+  "an arm not told what the switch decided"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_arm_not_told_what_the_switch_decided")
+  benches
+
 shared_path = row
   "a path copied once per declaration instead of shared"
   false
@@ -1205,7 +1221,9 @@ rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words rewritten_twice]
 
 rows_b1n = text/concat rows_b1m [shared_path entry_rewritten_twice]
 
-rows_b = text/concat rows_b1n [compile_mem compile_mem_host]
+rows_b1o = text/concat rows_b1n [append_rendered arm_narrowed]
+
+rows_b = text/concat rows_b1o [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

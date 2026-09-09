@@ -20,641 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 (sixth) — k_b_join called libc for a single byte
-
-`k_b_join` copied both the separator and each item with `memcpy`. In every
-shipped caller measured both are one byte or none: `join [s s] ""` gives a
-zero-length separator, and `join digits " "` joins one-byte strings with a
-one-byte separator.
-
-**Attributed before it was built.** The whole program's
-`__memcpy_avx_unaligned_erms` is 55,344,167 instructions, 2.33% of runbench,
-and the per-caller breakdown sums to it exactly:
-
-```
-     Ir      calls   Ir/call  caller
- 29,208,336  353,394     82.7  k_b_append_grow
-  9,472,765  400,019     23.7  k_b_join
-  9,306,956  130,618     71.3  main
-  2,926,620  191,070     15.3  render_ryu
-  2,296,030  177,706     12.9  k_b_split
-```
-
-Through the call a one-byte separator costs 16.0 instructions and a one-byte
-item 23.6. Storing the byte where the length says one saves 5.5 on an average
-call.
-
-**The earlier ceiling estimate was wrong by 7.6x, and the reason is worth
-keeping.** It priced a one-byte copy at the whole-program memcpy average, about
-forty instructions. The distribution above is bimodal — `k_b_append_grow`'s 82.7
-per call is a real buffer copy and drags the mean far above what a short copy
-costs — so the average describes no call site in the program. A per-site figure
-is the only one that means anything here. The same error nearly shipped a second
-time in this change's own source comment and was caught before the commit.
-
-**On CI.** runbench 2,398,991,511 -> 2,397,582,951 (−0.0587%), and pendbench
-596,612,948 -> 590,979,348 (**−0.9443%**), which is where join's one-byte
-separators live: 199,900 separator calls and 199,973 item calls of the 400,019.
-The local reading was −0.0930% of runbench against a different baseline.
-
-**The compile row moved, as it was warned it might.** compile_instructions
-19,315,772 -> 19,316,711, a rise of 939. `src/runtime.c` is `include_str!`'d
-into the compiler, so its bytes shift the binary's layout even though
-`kanso check lib/json` stops before codegen — the eighth layout-only move that
-row has recorded. It could not be settled before CI: this container refuses to
-compare that vein at all, its golden measured on glibc 2.39-0ubuntu8.8 and
-rustc 1.98.1 against the container's 2.39-0ubuntu8.7 and 1.94.1. The five
-.text rows that carry the extra branch grew 64 bytes each, so the text vein
-sums 1,469,868 -> 1,470,188. The first round of this change said three rows
-and updated three; the two it missed were found by comparing all fourteen
-against CI's output rather than by eye.
-
-Welfare 66.00 -> 66.01, and the floor is ratcheted in the same change. The sum
-rises with the compile term's 939 counted against it, which is the trade the
-weights exist to make.
-
-**What this closes and what it leaves.** The short-copy regime (callers under
-about 25 instructions a call, where the call dominates the copy) is 16.4M of
-that 55.3M, and join was 9.47M of it — the largest single site by three times.
-The rest is `render_ryu`, `k_b_split`, `w_klam42` and `k_stats_switch`, about
-6.95M together, worth measuring as one change on a baseline that includes this
-one. `k_b_append_grow`'s 29.2M is not that shape and is already understood:
-one first-append per escaped string, not repeated growth.
-
-## 2026-09-08 (seventh) — inf, -inf and nan are words on all three engines
-
-The 2026-09-08 gavel above ruled the three spellings; this is the build. Both
-engines were wrong before it, in different ways. The interpreter
-asked Rust for `{:e}` digits and split the answer on its `e`, which `inf` does
-not have, so `render_float` panicked at src/eval.rs:3949 — the oracle's failure
-mode for these values was a crash. Native handed them to the ryu digit core,
-which reads a double's mantissa and exponent fields; the all-ones exponent
-those encodings use means something else there, and the core answered
-`1.797693134862316e+308` for infinity and `2.696539702293474e+308` for nan.
-The first is the largest finite double's digits printed for a value that is
-not that double.
-
-The interpreter answers with two arms in front of the shortest-digits path.
-Native answers with one test in front of ryu rather than isnan() plus isinf():
-both encodings are the same exponent field, so the bits are loaded once,
-masked once and compared once, and the mantissa then says which of the two it
-is. The wasm host reuses the interpreter's `render`, so the fix reaches it
-with the oracle's.
-
-The fixture is tests/golden/micro/an_infinite_or_nan_float_renders_as_a_word,
-which the micro corpus runs on the interpreter and on native and the browser
-differential runs on wasm — the three engines the differential law names. The
-language has no exponent literal, so it reaches infinity by squaring a thirty-
-zero literal four times and once more, the same way the negative-render fixture
-next to it reaches its wide exponents. It was watched red first: native printed
-the max-double digits on every line and the interpreter panicked, while the
-finite line below agreed on both, which is what says the fixture reads the
-render and not the arithmetic.
-
-**What it costs, and why the floor moves anyway.** Every render pays the test
-that asks whether to write the word, so where the test sits is the whole
-price. Three placements were measured on the container, each side rebuilt,
-against a baseline of 2,373,798,762:
-
-```
-  in front of ryu, its own load and test    2,374,848,342   +1,049,580  (+0.0442%)
-  its own compare inside the digit core     2,374,371,162     +572,400  (+0.0241%)
-  folded into the arm already there         2,374,180,362     +381,600  (+0.0161%)
-```
-
-The third is one instruction per render and there is no shape below it: the
-field has three classes — zero, all-ones, and everything between — and no
-single test separates three classes. The 381,600 is that instruction times the
-renders runbench makes through ryu.
-
-Welfare falls by less than the two decimal places it prints and more than the
-0.001 the gate allows, so the run goes red. `scripts/welfare/welfare.kso:38`
-answers that case in its own words: a change that makes the engines agree is
-not weighed at all, and a fix for a differential-law violation ships with the
-floor moving to whatever it costs. `--set` cannot lower a floor, by Clay's
-2026-08-03 ruling, so the new value is written into
-bench/welfare_floor.json by hand where a reviewer sees it in the diff. That
-comment was written after the model spent a day looking able to refuse a fix
-worth four hundredths of a per cent; this is the same shape at 0.0161%.
-
-CI's rows, and what each one is. The container's +381,600 on runbench
-transferred to the runner to the instruction, which is worth saying: the
-prediction and the sitting agree exactly, so the cost is the branch and not
-the host.
-
-    work_runbench      2,397,582,951 -> 2,397,964,551   +381,600  (+0.0159%)
-    work_encodebench   4,058,633,349 -> 4,060,329,349 +1,696,000  (+0.0418%)
-    work_livebench     3,596,075,294 -> 3,597,771,294 +1,696,000  (+0.0472%)
-    work_oneshot          21,758,011 ->    21,762,251     +4,240  (+0.0195%)
-    text                   1,470,188 ->     1,471,084       +896
-
-The two encode rows move by the same 1,696,000 because livebench runs
-encodebench's program against the library that ships rather than the frozen
-copy, so the same renders are counted twice over. The text vein is +64 bytes
-on every one of the fourteen rows, which is the branch's own code.
-
-Two counters IMPROVED and neither is this change being clever.
-`work_widebench` fell 36,127,282 -> 36,104,947, and `compile_instructions`
-19,316,711 -> 19,316,381. Both are layout: src/runtime.c is `include_str!`'d
-into the compiler, so its bytes move the binary under it, and CLAUDE.md
-records seven layout-only moves of the compile row before this one.
-Widebench's floats are mostly integral and take the fixed-point fast path
-before ryu is reached at all, so its fall cannot be the new branch executing
-less; the 22,335 is 0.062% of the row and sits where layout noise sits.
-
-compile_instructions is a published claim, so docs/compiler.html quotes it
-twice and both quotations moved with the golden. `golden_prose` is what caught
-them, on the round that had everything else right -- which is the gate working:
-a figure on the page and a figure in a golden are the same number or the page
-is wrong.
-
-## 2026-09-08 (eighth) — a short copy went through the call, twice more
-
-kanso#1317 fixed `k_b_join`'s one-byte copies and left a map of where the rest
-of runbench's `memcpy` time sits. Two of those sites are the same shape and
-neither needed a call at all.
-
-`k_str_n` builds every string the runtime does not already hold, and its copy
-went straight to libc. From `split` alone that call is reached 177,706 times a
-run at 12.9 instructions apiece; the pieces being moved are two or three bytes,
-so the call is nearly all of it. `render_ryu` writes ryū's digits into the
-output buffer with three byte loops, and clang outlines each of them into a
-`memcpy` call: 191,070 a run at 15.3.
-
-Both now go through `k_copy_short`, which moves anything under sixteen bytes as
-two overlapping loads and two overlapping stores. Reads stay inside
-`[s, s+n)` and writes inside `[d, d+n)`, so no caller needs slack at either
-end — the same idiom `k_b_utf8_slice_raw` has shipped since kanso#1294.
-
-**Measured on the container, each side rebuilt, run from the repo root, against
-the tree this lands on — main plus kanso#1319:**
-
-```
-  baseline           2,374,180,362
-  k_str_n only       2,372,135,490   -2,044,872  (-0.0861%)
-  render_ryu only    2,370,339,882   -3,840,480  (-0.1617%)
-  both               2,368,295,010   -5,885,352  (-0.2479%)
-```
-
-The two rungs are additive to the instruction: 2,044,872 + 3,840,480 =
-5,885,352. Output md5 identical on all four builds. That is 2.7x what
-kanso#1317's own change recovered, from the same map and the same reading of
-it.
-
-Of the render_ryu rung's 3,840,480, some 913,860 is render_ryu's own self cost
-falling and 2,926,620 is the `memcpy` calls it no longer makes — the figure the
-kanso#1317 map already attributed to render_ryu, to the instruction.
-
-**These two are not independent of kanso#1319, and the earlier note in this
-file saying they were is wrong.** kanso#1319 added an unsigned compare to
-`ryu_d2d`, which is inlined into `render_ryu` in every profile, and it cost
-+381,600. On the patched tree it costs nothing:
-
-```
-  render_ryu self cost, no kanso#1319, byte loops        90,045,360
-                        kanso#1319,    byte loops        90,426,960   +381,600
-                        no kanso#1319, k_copy_short      89,513,100
-                        kanso#1319,    k_copy_short      89,513,100         +0
-```
-
-`both` reads 2,368,295,010 on either tree, to the instruction. So the −5,885,352
-above pays back kanso#1319's whole cost along with its own. Which transform
-folds the compare away once the digit copies are inline is not established here
-and is not guessed at: the measurement reproduces, the mechanism is open.
-
-An earlier sitting of this ladder read a baseline of 2,397,583,080 and deltas of
-1,914,270 / 3,458,430 / 5,372,700. That baseline does not reproduce: a clean
-measurement of the same tree reads 2,373,798,762, which is the figure kanso#1317
-reports for its own patched side. The table above is the sitting that survives
-re-measurement, and the earlier one is recorded here so nobody cites it.
-
-`sh scripts/gates/all_counters.sh` says the twelve cost veins and the lazy tier
-agree: no allocation counter moves, because this changes how bytes are copied
-and not how many. `sh scripts/gates/all_compile.sh` says nothing moved that
-this host can see, with four gates refusing on a host they may not compare
-against.
-
-Rows `str_words` and `ryu_words` in the ratchet, one per site. Neither was
-watched red here: `scripts/gates/instructions.sh` refuses to compare on this
-container, whose glibc and rustc are not the pair the golden names, so a local
-mutation run cannot fail for the right reason or any other. What stands behind
-the rows until CI runs them is that each mutation reverts exactly one site and
-both of the trees they produce are in the table above, millions of instructions
-from the ladder against a gate that asserts equality.
-
-**What is left of the map.** `k_closure`, `k_b_put_mut` and `k_mklist` each
-read 22.0 instructions an average call and each already carries an `n <= 4`
-element loop, so their residual is the copies longer than four `KValue`s.
-Raising that threshold is a tuning question of its own — kanso#1209 moved a
-different cap from four to eight and had to measure it — and the answer here is
-not assumed. `k_b_append_grow`'s 29.2M at 82.7 a call remains a real buffer
-copy and is not this shape.
-
-**CI's rows.** The container may not write the host-keyed veins, so these are
-the linux runner's, copied in. Twelve of the fourteen work rows moved and ten
-of them fall:
-
-```
-  jsonbench    1,487,045,449 -> 1,485,345,052   -1,700,397  (-0.1143%)
-  encodebench  4,060,329,349 -> 4,043,253,556  -17,075,793  (-0.4206%)
-  oneshot         21,762,251 ->     21,708,250      -54,001  (-0.2481%)
-  widebench       36,104,947 ->     35,967,285     -137,662  (-0.3813%)
-  pendbench      590,979,348 ->    590,971,748       -7,600  (-0.0013%)
-  scanbench      730,307,043 ->    726,019,157   -4,287,886  (-0.5871%)
-  livebench    3,597,771,294 -> 3,580,692,761  -17,078,533  (-0.4747%)
-  runbench     2,397,964,551 -> 2,392,210,251   -5,754,300  (-0.2400%)
-```
-
-`deepbench` and `escapebench` are byte-identical. The runner's runbench delta
-is 5,754,300 against the container's 5,885,352 — the same change on a different
-glibc, where the call it removes is a different call.
-
-**Four work rows RISE and are priced here by name and landed value**, as the
-trend gate asks: `basket` 34,684,338 -> 34,694,178 (+9,840, +0.0284%),
-`indexbench` 3,265,784 -> 3,265,786 (+2), `digestbench` 10,420,391 ->
-10,420,396 (+5), `readbench` 4,287,134 -> 4,287,137 (+3). The three
-single-digit moves are layout; `basket`'s 9,840 is the same, and its own
-allocation counters are byte-identical, which is what says no work was added.
-
-**All fourteen .text rows rise**, which is what inlining a copy does — the
-bytes the call used to stand for now sit at each site:
-
-```
-  jsonbench     94,962 ->  96,418  +1,456      pendbench     86,722 ->  87,666    +944
-  encodebench  115,090 -> 116,546  +1,456      indexbench    55,586 ->  56,402    +816
-  oneshot      105,986 -> 107,442  +1,456      scanbench    154,386 -> 155,602  +1,216
-  basket       109,858 -> 110,978  +1,120      digestbench  105,682 -> 106,498    +816
-  widebench    120,514 -> 121,970  +1,456      readbench     51,954 ->  52,930    +976
-  deepbench     70,482 ->  71,250    +768      livebench    106,562 -> 108,018  +1,456
-  escapebench   51,618 ->  52,386    +768      runbench     241,682 -> 243,458  +1,776
-```
-
-The 2026-09-05 gavel keeps machine-code size out of welfare and in its own
-exact vein, so these rows are recorded rather than weighed.
-
-**`compile_instructions` 19,316,381 -> 19,316,962 (+581)**, and the page's two
-`data-golden="compile.compile_instructions"` spans move with it. `kanso check
-lib/json` stops before codegen, so no decision this row counts has changed;
-`src/runtime.c` is `include_str!`'d into the compiler, so its bytes move the
-binary's layout. `compile_allocs` and `compile_peak_bytes` are byte-identical,
-which is what separates a layout move from a real one.
-
-**And the threshold is right where it is.** Raising all four element loops from
-four to eight — `k_rec`, `k_mklist`, `k_closure` and the list push — costs
-runbench 798,725 instructions, 2,368,295,010 to 2,369,093,735 (+0.0337%),
-measured on this host with each side rebuilt. kanso#1209 moved a different cap
-from four to eight and gained; this one loses, because the counts past four are
-rare enough that the extra compare on every short copy outweighs the calls it
-removes. Declined, and the four stay at four.
-
-Named by the keys the trend gate reads, each with the value it landed on:
-`work_basket` 34,694,178, `work_indexbench` 3,265,786, `work_digestbench`
-10,420,396, `work_readbench` 4,287,137, and `text` 1,471,084 -> 1,487,564,
-the sum of the fourteen rows above.
-
-## 2026-09-08 (ninth) — the compile term is measured on a workload it names
-
-Ruled on 2026-09-08: the compile term reads a fixed corpus rather than
-lib/json. The reason is kanso#1291. That change retired the escape fold,
-`lib/json` stopped importing `std/list`, and all three compile rows roughly
-halved — with the compiler byte-identical. By the objective's arithmetic that
-was a four-point rise. By what the term is for, how expensive the compiler is
-to run, it measured nothing at all.
-
-`bench/compile_corpus` is a package that names its imports: `std/json`,
-`std/list`, `std/testing`, `std/text`, each used, because an unused import is
-a refusal. `scripts/gates/compile_allocs.sh`, `compile_memory.sh` and
-`compile_instructions.sh` check it instead of lib/json, and
-`scripts/compile_row_probe.sh` follows so the probe answers the same question
-the gates do. lib/json is still most of what gets compiled, since the corpus
-imports it; what changed is that a row now moves by a compiler change or by an
-edit to the corpus, and not by a library changing its mind about a dependency.
-
-**`library_box.sh` stages `lib/` and nothing else**, so a gate asked for
-`compile_corpus` would have found no such package. It gains one `cp -R` line.
-The corpus lives under `bench/` rather than `lib/` because a benchmark is not
-the library — which is exactly why the line is needed.
-
-**The rows this host may write.** `front_end_rounds` 35 -> 62 and
-`front_end_visits` 9,884 -> 23,723. Those two count the compiler's own
-algorithm and are the same on every host, so `compile_memory.sh` compares them
-before it reaches its host check and this container may measure them.
-`compile_peak_bytes`, `compile_allocs` and `compile_instructions` are
-host-keyed, so round one of this PR left them at their lib/json values and went
-to CI RED on all three by design: `host_gate.sh` exists because "a container's
-numbers going into a golden over the runner's is the exact accident measured_on
-was written after", and its refusal prints the sitting to copy.
-
-**The rows CI wrote.** `compile_allocs` 11,613 -> 31,596, `compile_peak_bytes`
-375,222 -> 789,740, `compile_instructions` 19,316,962 -> 52,603,220. Every
-runtime vein stayed green in that round, which is the evidence that a corpus
-change does not reach the runtime. `front_end_rounds` 35 -> 62 and
-`front_end_visits` 9,884 -> 23,723 were already written here, from this
-container, for the reason above.
-
-Worth recording: `compile_allocs` 31,596 and `compile_peak_bytes` 789,740 are
-what this container read, to the unit. Only `compile_instructions` was
-genuinely host-dependent — the container had 52,608,ish against the runner's
-52,603,220 — so of the three rows the host gate refuses to let a container
-write, two would have been right anyway. That is not an argument for relaxing
-the gate; it is a note that the gate's cost is one row, not three.
-
-The corpus is a bigger program, so the compile terms rise and welfare falls:
-66.02 -> 59.74.
-
-**The floor moves DOWN by hand, and that is a re-basing rather than a
-regression.** `--set` cannot lower a floor — Clay's 2026-08-03 ruling — so the
-new value goes into `bench/welfare_floor.json` where a reviewer sees it in the
-diff. CLAUDE.md says moving the floor to accommodate a change while leaving the
-weights alone is declaring the objective wrong without saying so. That rule is
-about a change that makes the COMPILER worse. This one does not touch the
-compiler; it changes what the term is measured on, which is the third state the
-trend gate already models: a re-basing counts toward neither side, because a
-ratio between two definitions cannot say which way the compiler went. The
-authority is the ruling.
-
-**Two things a reader should see rather than discover.**
-
-`std/testing` is imported today by `lib/json/json_test.kso` and by nothing
-else, and `library_box.sh` DELETES every `*_test.kso` before measuring. So the
-compile rows have never compiled `std/testing`, and naming it in the corpus adds
-a module they have never counted. The 2026-08-25 fault that `library_box.sh`
-was written after was incidental drift — a test file's imports leaking into the
-measurement. This is the opposite: the workload is named on purpose. Built as
-ruled, stated here so the addition is visible.
-
-And the ruling names list, text and testing, while the benchmarks import more
-than that: runbench alone pulls `std/json`, `std/list`, `std/text`,
-`std/regexp`, `std/sha256`, `std/io` and `std/os`. Built as ruled; the wider
-set is recorded rather than assumed either way.
-
-**A one-word edit could revert all of this silently** — `compile_corpus` back
-to `lib/json` in any one gate — and every golden would simply be re-based to the
-new workload and agree with itself. `tests/the_compile_term_reads_the_fixed_corpus.rs`
-asserts the workload by name in all four readers, that the box stages it, and
-that the corpus still names the four modules. All three assertions were watched
-red first: a gate reverted, the staging line deleted, and an import dropped.
-
-**The welfare BASELINE does not move with the workload, and here is why that
-was checked.** `bench/welfare_floor.json` carries a baseline for each term —
-`compile_allocs` 62,110, `compile_instructions` 56,563,967,
-`compile_peak_bytes` 819,217 — all measured on lib/json. The obvious worry is
-that scoring a corpus reading against a library baseline compares two
-different programs, and that the baseline has to be re-measured too. It does
-not. CLAUDE.md settles it: the number "is an index, not a percentage — the
-ceiling is a hundred, where every term costs nothing, and the origin is
-arbitrary. Only its direction and the size of its moves mean anything." An
-arbitrary origin stays where it is; the term's value falls once, the floor
-absorbs that fall, and every move after it means what it always did. Moving the
-baseline as well would hide the fall rather than record it.
-
----
-
-## 2026-09-08 — A MODULE WAS REWRITTEN TWICE BEFORE IT WAS CHECKED, AND ONCE IS ENOUGH
-
-`compile_module_loaded` ran four rewrite passes, checked the merged program,
-and then ran the same four passes again:
-
-    finish_program
-    desugar_field_reads
-    prune_unused_getters
-    trmc::rewrite
-    check_merged                     <- the whole-program check
-    canonicalize_types
-    canonicalize_bare_aliases
-    hoist_repeated_strings
-    fuse_enumerable
-    finish_program                   <- again
-    desugar_field_reads              <- again
-    prune_unused_getters             <- again
-    trmc::rewrite                    <- again
-
-The second run is the one the emitter reads, because the four passes between
-them can produce work for all four. The first run's output is read by
-`check_merged` and by nothing else, and `check_merged` does not require any of
-it: the four passes rewrite field reads into getter calls, drop getters
-nothing calls, and turn tail-recursive modulo cons into a loop, none of which
-the check asks about. So the first run is deleted and the check reads the
-merged program as merged.
-
-    compile_corpus  53,949,299 -> 52,170,583   −1,778,716   −3.30%
-
-read with `scripts/compile_row_probe.sh` on this container, environment
-emptied and the glibc tunables pinned, so the two sittings differ only in the
-compiler. The row this host may not write is CI's to re-sit.
-
-**The risk here was ordering, not cost, and `emitted_code` answers it.** Four
-passes moved from before a check to after four other passes is a
-reordering, and a reordering can change what the emitter is handed even when
-every pass is individually sound. `all_compile.sh` reports `emitted_code`
-AGREED, byte for byte, along with `compile_libraries` and `compile_cost`, and
-"compile veins: nothing moved that this host can see". The same bytes come out
-of a compiler doing less work to produce them, which is the whole claim.
-
-Diagnostics are unmoved: all seven `tests/golden/errors_module` fixtures are
-byte-identical. That is the corpus that would have caught a check reading a
-differently-shaped tree, and it is quiet.
-
-The ratchet row `rewritten_twice` restores the four deleted lines and asks
-`compile_instructions`. The mutated tree measures 53,936,404 against the
-52,170,583 the row is pinned to, so the gate goes red — the only witness a
-repeated rewrite leaves, since it emits the same bytes.
-
-**The mutation anchors on the check line, not the pass it inserts before.**
-`inline::inline_builtin_wrappers(&mut merged);` appears twice in `src/lib.rs` —
-the single-file compile paths call it too — so a `grep -cF` guard on it
-refuses. `phase::watched("check_merged", ...)` appears once, and the guard
-asserts that before inserting. Written into the mutation's own comment so the
-next person to touch it does not rediscover it.
-
-OPEN, and larger: `check_merged` still runs once per dependency rather than
-once for the program. Seven calls walking 803 declarations, 394 distinct, 409
-of them repeats — 53,949,299 -> 44,637,899 with the per-dependency calls
-gated off, −17.26%. It is not a deletion, because two error fixtures depend on
-it: `field_read_in_a_deep_library` loses its diagnostic entirely and
-`deep_library_error` attributes the fault to `mid` instead of `deep`. The
-blocker is `desugar_expr` at `src/lib.rs:1917`, which rewrites every
-`Expr::Field` into a getter call, so `check_field_exists` — which matches on
-`Expr::Field` — sees nothing after it has run. Making the whole-program check
-carry those two diagnostics is a design question and goes to the ledger, not
-into this entry.
-
----
-
-## 2026-09-08 — CI'S ROWS FOR THE SINGLE REWRITE, AND THE DIAMOND MEMO DECLINED
-
-CI re-sat the two compile veins the container may not compare:
-
-    compile_instructions   52,603,220 -> 50,832,211   −1,771,009   −3.3668%
-    compile_allocs             31,596 ->     30,414       −1,182   −3.74%
-
-Both FALL. `compile_peak_bytes` is byte-identical at 789,740, and every other
-vein in the cost-goldens summary reads `:success`. The container had predicted
-−1,778,716 on the instruction row with the tunables pinned, which is the same
-number to four digits on a different toolchain.
-
-`compile_allocs` is the row worth pausing on, because nothing in the tree could
-see it before CI did. The host gate refuses to let a container compare it, so
-`all_compile.sh` reported "nothing moved that this host can see" while the row
-had in fact fallen 3.74%. #1321 found that this container reads
-`compile_allocs` and `compile_peak_bytes` exactly as the runner does, and this
-round is the case where knowing that would have saved a red one: the gate's
-refusal is about the instruction row, and it takes the other two down with it.
-
-Welfare 59.74 -> 59.95, ratcheted in the same PR.
-
-### The diamond memo, built and declined
-
-`std/text` is compiled twice on the fixed corpus — once under `std/json`, once
-under the corpus — because `compile_module_inner` has no memo and `visited` is
-a cycle guard that empties as each module returns. A thread-local
-`Map<PathBuf, Program>` keyed the way the cycle guard keys, cleared by a
-`fresh_build()` that all four roots go through, with `ast::Program` given
-`Clone`:
-
-    baseline                      52,170,583
-    memo written, never read      55,185,945   +3,015,362   seven clones
-    memo written and read         53,908,630   +1,738,047
-
-It is correct — `std/text` loads once and all seven `tests/golden/errors_module`
-fixtures stay byte-identical — and it costs 431,000 instructions a module to
-keep a program that only one of them is ever asked for twice. The saved
-recompile is real and worth 1,940,015, which the clones spend twice over.
-
-Reversing the memo does not fix it. A module is not known to be shared until
-the second importer asks, and the first compile's program is gone by then, so
-keeping it costs one deep clone per module compiled whether or not anything
-reuses it. `Rc<Program>` does not help either: every importer calls `qualify`,
-which renames the dependency's declarations into that importer's namespace, so
-each importer needs an owned copy regardless.
-
-Two shapes would win, neither small. One is an import-graph pre-pass that
-counts importers before compiling, so only shared modules are kept — it has to
-duplicate the whole resolution surface, hako pins and embedded modules and
-handed sources and the `./` forms, which is where it stops being cheap. The
-other is to cache each module's OWN declarations rather than its merged
-program; the clone then scales with the module instead of with its whole
-dependency closure, which is why `std/json`'s costs 431,000 in the first place.
-That second shape also reaches the reason the diamond is expensive at all:
-every importer merges a full copy of every transitive dependency.
-
-Measured with `scripts/compile_row_probe.sh`, environment emptied and the glibc
-tunables pinned. Reverted; nothing of it is in the diff.
-
----
-
-## 2026-09-08 — A MODULE'S PATH IS SHARED, NOT COPIED ONCE PER DECLARATION
-
-`stamp_file` wrote `decl.file = file.to_string()` — one allocation per
-declaration, for a path the corpus has about seven distinct values of. The
-declarations then get cloned by enrollment, and the sets in `linear.rs`,
-`beat.rs` and `codegen.rs` that key on `(file, line, col)` cloned the whole
-path again on every insert and lookup. `FnDecl.file` is an `Arc<str>` now:
-`stamp_file` allocates once per module and hands each declaration a refcount
-bump.
-
-    compile_allocs        30,414 ->    29,941      −473   −1.56%
-    compile_peak_bytes   789,740 ->   777,031   −12,709   −1.61%
-    compile_instructions       container −607,236  −1.164%
-
-The first two are this container's readings, which is ordinarily what the host
-gate refuses. The licence is two agreements: #1321 found that allocs and peak
-match the runner here to the unit, and #1323 confirmed it — the container read
-30,414 and so did CI. The instruction row is NOT written that way and is left
-for CI, because that one really is host-dependent: 52,170,583 here against
-CI's 50,832,211 for the same tree.
-
-**`Arc`, not `Rc`, and the reason is a thread.** The compiler looks
-single-threaded — thread-locals throughout — but `src/main.rs:379` spawns a
-scoped thread to run the interpreter on a pinned 8 MB stack, which is the
-kanso#1287 gate. The program crosses that boundary, so `Rc` does not compile
-there. `Arc`'s clone is an atomic increment where `Rc`'s is a plain one, and
-that is still far cheaper than an allocation.
-
-**The empty path had to be shared too, and the first measurement said so.**
-`String::new()` allocates nothing; `Arc::from("")` allocates. The parser builds
-every declaration with an unstamped file, so a fresh `Arc` apiece added one
-allocation per declaration where the stamp removed one — the first reading was
-30,339, a fall of 75 rather than the 473 the change is worth. `ast::unstamped()`
-hands out one shared empty `Arc` and the rest of the fall appears.
-
-### `Sites` was two keys wearing one shape
-
-The alias in `linear.rs` said it outright: "A set of source positions, or of
-(group, arity, index) triples — the two happen to have the same shape." They
-do, and a blanket change of that shape compiles almost everywhere it should
-not. `linear_params`, `byte_disc` and `builder_params` key on a declaration's
-NAME with an arity and a parameter index; `in_place_pushes`,
-`reusable_records`, `Sites` and `MutSites` key on its FILE with a span. One
-`string_builders` call returns all three of `(joins, params, carried)` — two
-file-keyed and one name-keyed — under the single alias.
-
-`Sites` is the file-and-span one now and `Slots` is the name-and-index one, so
-the next person to change either finds the compiler telling them which is
-which. This is the same class of thing as the ratchet rows that went blind
-because nothing named what they watched.
-
-The ratchet row `shared_path` restores `Arc::from(&*file)` in the stamp loop —
-a fresh path per declaration — and asks `compile_allocs`. Under it the corpus
-reads 30,309 against the 29,941 the row is pinned to, and peak 789,087 against
-777,031, so the gate goes red. The anchor is the shared bind, which appears
-once; `Arc::clone` is spelled at several sites now and a guard on it would
-refuse for the wrong reason.
-
-All seven `tests/golden/errors_module` fixtures are byte-identical and
-`all_compile.sh` reports emitted_code AGREED. An `Arc<str>` is immutable, so
-sharing a path between declarations cannot alias a write — nothing in the tree
-mutates a declaration's file after stamping it.
-
-One spec moved, and repairing its number was the wrong repair.
-`tests/import_order.rs` pinned the peak difference between two modules that
-declare the same two functions and differ only in which file names `std/list`.
-It read seventeen bytes; on this host it now reads fifteen, so the pin was
-moved to fifteen and pushed.
-
-The arm64 runner had been refusing it since the FIRST push of this branch, on
-the pin of seventeen, and it read TWENTY-THREE. Three rounds went by with
-`the other host` red before that log was opened, because the row this change
-was about was on the x86 side and the macos job was read as one more thing
-still running. Repairing a two-host pin from one host's reading is the error,
-and it is a larger one than the number: the second reading was sitting in a
-job log the whole time.
-
-Both hosts are deterministic and both are right. `compile_peak_bytes` reports what the allocator holds, and glibc and
-macOS round a merge of the same declarations differently, so the residual is
-not a property of the compiler at all. Seventeen agreeing on both hosts before
-this change was luck.
-
-So the spec asserts the ORDER now, which is what it was always about — its own
-title says which file names a dependency must not change what checking costs,
-and `import_list.sort_by` in `load_dependencies` is the line that makes it
-true. Removing that line is the mutation, and under it the two modules load
-`list, text, render` and `text, list, render`, with the second's peak going to
-512,480 against the first's 483,682. Watched red exactly there and green with
-the sort restored. The peaks are still read, so a module that stops checking
-still fails, but nothing pins their difference: a number that moves with the
-allocator was pinning the wrong thing, and this is a repair rather than a band.
-
-**CI's rows, and the licence's third reading.** The runner counted
-`compile_instructions` 50,685,978 against the 50,832,211 the golden held — a
-FALL of 146,233, or 0.2877%. What went is the copying itself: 803 path copies
-on the fixed corpus, and the byte comparisons the `(file, line, col)` keys no
-longer do on every insert and lookup. The row is the front end doing less
-rather than the layout vein moving, and `compile_allocs` falling beside it is
-what says so.
-
-Both rows written from this container came back from CI unchanged —
-`compile_allocs` 29,941 and `compile_peak_bytes` 777,031, the second read back
-verbatim in the job log as `front end holds 777031 bytes; golden 777031`. That
-is the third agreement, after #1321 and #1323, and the first one where the
-container wrote the rows into the branch before CI had said anything. The
-licence stands. A disagreement would have mattered more than this change does,
-which is why the round was arranged to make one visible.
-
-Welfare 60.03 -> 60.04, banked in the same PR.
-
----
-
 ## 2026-09-08 — THE ENTRY PATH REWROTE ITS PROGRAM TWICE TOO, AND NOTHING COULD SEE IT
 
 kanso#1323 deleted the doubled rewrite group from `compile_module_loaded`.
@@ -3866,3 +3231,83 @@ run half of this thread (kanso#1351) marks such a row `run_source: rebuilt`
 instead. Writing a fabricated `1.0000` there to make the two sides symmetric
 would read as "measured against an unmoved baseline", which is exactly the
 misreading the mark prevents.
+The two rises read 0.28 -> 0.74 with the score 88.28 -> 62.67, and 0.74 ->
+1.00 with 64.95 -> 56.73, measured against origin/perf-history rescored by
+this tree — which is what CI writes on the next push to main.
+
+## 2026-09-09 — a number is written into the accumulator, and an arm is told what the switch decided
+
+**DONE.** `append acc "{n}"` is how the JSON encoder writes every number, and
+the template rendered `n` into a string for the one purpose of copying its
+bytes into `acc` and dropping it: 379,530 strings a runbench, built to be
+copied once. The render alone was 5.50% of the run program's instructions
+(`k_b_render_value` inclusive, 130.1M), and the ryū and itoa digit cores
+under it are about 111M of that and stay — what goes is the string around
+them, the dispatch that reached it and the copy out of it.
+
+Two changes, and the first does nothing without the second.
+
+**The emitter fuses the pair.** `append acc "{x}"` with `x` proved a number
+emits one call to `k_b_append_rendered`, which writes the digits into a
+64-byte stack buffer through `k_render_number` — the int and float arms of
+`k_render_at`, extracted so the render and the door share one writer — and
+copies them into the accumulator from there. Where the accumulator has 24
+bytes to spare the copy is three words whatever the length (a number is at
+most 24 bytes, `-1.7976931348623157e308`, and the buffer holds 64), so the
+call into memcpy for a handful of digits is not made. A value the ambient
+`render/to_string` group could claim keeps the dispatch the template would
+have made, so a user arm is never skipped, and every other tag the door
+hands to `k_render` itself, so the bytes cannot differ from the unfused
+spelling; the differential goldens hold that across all three engines.
+
+**An arm is told what the switch decided.** The first build of the fusion
+emitted zero fused sites on runbench. `encode_onto`'s `n:int` arm is reached
+through the tag switch (§ the tag switch, 2026-09-05), which has already
+proved the tag is 0 — and inside the arm the discriminator still carried the
+whole group's set, REC and DESC and THUNK included. So the body forced `n`
+again, asked whether a user `to_string` arm could claim it, and took the
+generic door on every builtin it handed `n` to. `arm_tags_set` now records
+the case's tags as the discriminator's set for the arm's body — INT for the
+int arm, FLOAT for the float arm, REC for a record arm, the nullary's tag for
+its arm — and restores the whole set after. Both number arms fuse, and the
+`k_force_fast` in front of each is gone.
+
+On the container: runbench **2,368,295,010 -> 2,347,625,055** (−20,669,955, −0.8728%),
+the same bytes out, `append_rendered` 379,530, and `append_fast`,
+`append_grow`, `ryu_renders` and every allocation and peak counter identical.
+The two mutations measured alone say which half is which: the fusion off
+with the arms narrowed reads 2,366,863,311 (−1,431,699, the narrowing's
+own gain on the rest of the program: the forces and dispatches it removes
+from every switch arm), and the arms un-narrowed with the fusion on reads
+2,368,105,221 (−189,789) — with the whole set inside the arm the fusion is
+never eligible and every site takes the fallback, which is the byte twin the
+generic path always took. Neither half is the win; the pair is, because the
+first cannot fire until the second tells it the tag.
+
+**Two wrong cuts on the way, both in the profile.** The first build read
++0.15%: `k_render_number` and `k_b_append_range` were both out of line, so
+the fused door paid two calls where the old path paid one, and
+`k_b_append_range` alone rose 3.2M -> 22.2M. Both inline now. The second was
+the fallback arm — the door the fusion takes when the value is not a number
+or a user arm could claim it — which called `k_b_append_mut` directly and
+paid 22,789,710 in `k_b_append_wide` on runbench, where the generic path
+would have reached the byte twin, whose string arm copies inline. The
+fallback takes the twin. Neither mutation could be read until that was
+fixed: both mutants measured +0.9% over main, the same 21M, for a reason
+that had nothing to do with what they mutate.
+
+**Rows and pricing.** `append_rendered` joins the trend gate's higher-is-
+better list beside `append_fast`. Ratchet rows `append_rendered` and
+`arm_narrowed`, mutations `a_scalar_rendered_into_a_string_and_copied_again`
+(the fusion predicate reads false) and `an_arm_not_told_what_the_switch_
+decided` (the narrowing filters to nothing), both on the instructions gate.
+
+**What #456 found, recorded here because this is its first consequence.**
+Read against the objective's own marginals, the queue since 2026-09-08 had
+been working the dimension holding a tenth of the headroom. A ten per cent
+improvement is worth 0.76 points on run speed, 0.64 on run memory, 0.19 on
+compile speed and 0.19 on compile memory; the remaining points are 18.34,
+9.70, 3.46 and 2.20. The last 26 merges moved welfare 0.1115 in total, and
+25 of them were compile-side. The run program's profile puts 23.2% of its
+instructions in two loops, `encode_onto` (13.38%) and `value_for` (9.86%),
+and this entry is the first of what that map says to do.

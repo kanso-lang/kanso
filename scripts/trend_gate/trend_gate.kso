@@ -166,7 +166,11 @@ lower_mn = text/concat lower_m lower_n
 
 lower_cost = text/concat lower_k (text/concat lower_l lower_mn)
 
-higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
+# `append_rendered` is a number written straight into the accumulator by the
+# fused `append acc "{x}"` door, where the unfused pair renders it into a
+# string first and copies that; more of them is more of the work taking the
+# short road, and a site that falls back moves it down.
+higher_a = ["el_parses" "ryu_renders" "append_fast" "append_rendered" "utf8_zerocopy"]
 
 higher_b = ["buf_reuse" "thunk_frees" "ten_frees"]
 

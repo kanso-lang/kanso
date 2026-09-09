@@ -25,6 +25,7 @@ utf8_bytes=13536
 find2_calls=0
 append_fast=1299
 append_grow=301
+append_rendered=0
 utf8_zerocopy=110
 carry_dedup=0
 bytes_malloc=301
