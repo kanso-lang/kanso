@@ -3571,3 +3571,45 @@ them.
 
 **OPEN, all three cloud's.** The rescore and the chart are code and the page
 is cloud's surface.
+
+## 2026-09-09 — the merged check has four routes, and the fourth is the repl
+
+§60 and CLAUDE.md both say `kanso check` routes a single file by content and
+that the three routes are three compiles: a DIRECTORY is a module, a file of
+bare STATEMENTS is an entry, a file of DEFINITIONS alone is a library. That is
+true of `kanso check` and it is not the whole census.
+`check::check_merged_after_aliases` has FOUR call sites in src/lib.rs:
+
+    line   caller                    route
+     168   compile_parsed_entry      entry      (a file with bare statements)
+     372   compile_one               THE REPL   (not reachable from kanso check)
+     465   compile_library           library    (a file of definitions alone)
+    3666   compile_module_loaded     module     (a directory)
+
+`compile_one` has one caller, `compile_repl`, which has one caller,
+src/repl.rs:290. Its own doc comment says it serves both `kanso play` — the
+playground's convention — and the repl prompt, assembling imports and units
+into one source. So the fourth route is a user-facing surface that the website
+runs, and no census keyed on `kanso check` could see it, which is why three
+separate readings of this code have said three.
+
+**The module row's name is one level off too.** CLAUDE.md says the module route
+takes `compile_module_inner`. It does — but the raise site is
+`compile_module_loaded`, which `compile_module_inner` calls at src/lib.rs:3375.
+The entry point and the raise site are different functions, and a survey
+grepping for the raise site finds the second name while the doc names the first.
+
+**What this owes.** kanso#1346 repaired the attribution on the module path and
+wired one check (`check_binding_patterns`); the `.about()` wide pass is 13
+checks and 16 sites. This adds a fourth render to that pass rather than three,
+and the repl's is the one with a user watching: a diagnostic in the playground
+that loses its file and span loses it in a browser. Not measured yet — whether
+the repl route renders locations today is the next question, and it is asked
+here rather than assumed either way.
+
+**How the count went wrong before.** Recorded on 2026-09-08 in this log: a
+survey whose product is a count wants a total to check against, because an
+empty or short result set reads like an answer. The route census had a total
+available and did not use it — `kanso check`'s three branches — and the
+function has four callers. Grep for the callee, count the call sites, and
+reconcile against the routes; do not derive the call sites from the routes.
