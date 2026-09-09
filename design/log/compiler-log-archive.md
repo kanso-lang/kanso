@@ -56609,3 +56609,31 @@ found; `render_across` quotes the right file's line and `render` delegates to
 it with an empty map. A field nothing reads is weight, and nothing reads it
 while the checks stay per module.
 
+## The check verb infers twice, and nothing sets the toggle that would skip it
+
+`kanso check` runs `infer::infer` over the whole program a second time, at
+`src/main.rs:275`, after the front end has already inferred it inside
+`check_merged`. The second one is not a duplicate — it is taken after the
+rewrites, so its answer differs — and its only reader is the provenance refusal
+three lines below it.
+
+The obvious tidy is to move it inside that reader's guard, so a run with
+`KANSO_NO_PROV` set does not infer for nobody. That was written and built. It is
+not being shipped, because the guard's condition is dead:
+
+    $ grep -rn KANSO_NO_PROV --include=*.sh --include=*.yml --include=*.rs \
+        --include=*.kso --include=*.toml .
+    ./src/main.rs:276:        if std::env::var_os("KANSO_NO_PROV").is_none() {
+
+Read in one place, set in none. No gate, no script, no test, no benchmark takes
+that path, so the change saves nothing anything in this repository ever runs,
+while still moving `src/main.rs` — and kanso#1325 spent two rounds learning that
+an edit to the compiler's Rust moves `compile_instructions` by layout alone,
+where a rise with nothing falling is a pure regression the trend gate refuses.
+A coin flip on a round, for a win of zero.
+
+So it stays out until either something sets the toggle or the second inference
+can be made to pay for itself some other way. The 11,803,600 instructions that
+`infer::infer` costs on the fixed corpus are what makes the second call worth
+returning to; the toggle is not the way in.
+

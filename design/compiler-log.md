@@ -20,34 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## The check verb infers twice, and nothing sets the toggle that would skip it
-
-`kanso check` runs `infer::infer` over the whole program a second time, at
-`src/main.rs:275`, after the front end has already inferred it inside
-`check_merged`. The second one is not a duplicate — it is taken after the
-rewrites, so its answer differs — and its only reader is the provenance refusal
-three lines below it.
-
-The obvious tidy is to move it inside that reader's guard, so a run with
-`KANSO_NO_PROV` set does not infer for nobody. That was written and built. It is
-not being shipped, because the guard's condition is dead:
-
-    $ grep -rn KANSO_NO_PROV --include=*.sh --include=*.yml --include=*.rs \
-        --include=*.kso --include=*.toml .
-    ./src/main.rs:276:        if std::env::var_os("KANSO_NO_PROV").is_none() {
-
-Read in one place, set in none. No gate, no script, no test, no benchmark takes
-that path, so the change saves nothing anything in this repository ever runs,
-while still moving `src/main.rs` — and kanso#1325 spent two rounds learning that
-an edit to the compiler's Rust moves `compile_instructions` by layout alone,
-where a rise with nothing falling is a pure regression the trend gate refuses.
-A coin flip on a round, for a win of zero.
-
-So it stays out until either something sets the toggle or the second inference
-can be made to pay for itself some other way. The 11,803,600 instructions that
-`infer::infer` costs on the fixed corpus are what makes the second call worth
-returning to; the toggle is not the way in.
-
 ## Remembering a compiled module costs more than compiling it again
 
 bench/compile_corpus is a diamond. It imports std/text directly, and it imports
@@ -3315,3 +3287,152 @@ language clause applies, so the floor moves down to the reading, 66.3596,
 by hand in `bench/welfare_floor.json` with its history entry (`--set` refuses
 a fall of this size by design, and says the file is the door), and no
 optimisation rides along to hide the price.
+
+## The possible-none check runs without its flag, and two masks it read as proof
+
+Built: the 2026-09-09 ruling "Exhaustiveness on arm match, without the flag"
+(STATUS.md, now removed; the ruling is in the entry "an explanation of the
+error model, checked against the interpreter, found three gaps", point 1).
+`check_none_exhaustive` ran only under `KANSO_EXHAUSTIVE`; the gate is gone,
+and a call handing a provable none to a group with no `none` arm is refused
+at check on every route.
+
+**The first measurement, and what it was counting.** With the gate removed
+and nothing else changed, the tree answered 131 reports: every module under
+lib/ was clean, and the reports sat in the scripts, the two benchmark copies
+of the json library, the book's ch08 sample, and a handful of fixtures.
+Nineteen of them named `regexp/open_start?`, one per program importing the
+regexp library, at the call `open_start? prog.starters …`. That one is worth
+writing down because it shows what the check took for proof. `prog.starters`
+is a field read, and infer types a field read through a variable as TOP, the
+mask with every bit set. The check asked only whether the group's joined
+return set carried the none bit, and TOP does; so a group that hands a field
+back read as proof of a none it never produces. The same shape, one bit
+narrower, was the strict index: `xs[i]!` is typed as every value bit except
+the thunk bit, and a group returning one read the same way. The welfare
+script's `as_ratio (live base[c]!)` was that case.
+
+So the sharpening the 2026-07-24 campaign left for "whoever ungates it" was
+not per-arm return sets. It was this: a set holding every value bit is the
+unknown, and the unknown is not proof. The check now ignores a return set
+whose value bits are all set. That took 131 reports to 48, and the regexp
+family and every script report but four went with it, at no cost in what the
+check can see: a group that answers `none` on one arm and an int on another
+still has a set narrower than the unknown, and is still refused.
+
+**The 48 that remained were real, and fell into five shapes.** Each is spelled
+the way the campaign's verdict says: strict `!` where a guard proves the
+bounds, a `none` arm where the none is real.
+
+- The two benchmark copies of the json library (encodebench and widebench
+  carry the same four files) had drifted from lib/json, which was respelled
+  in July. Eleven guarded reads take the `!` the guard earns (`xs[i]` under
+  `length xs < i`, `xs[1]` under `length xs == 0`, `cs[p]` under `p > q`),
+  and `hex_digit` and `expect_check` gain the `none` arm the library gives
+  them. widebench's pretty printer and streamer had the same four guarded
+  reads.
+- The book's ch08 sample decodes four hex digits; the four reads say so with
+  `!`, in the sample and in the page's panel.
+- The browser differential's two map reads of a result's `kind` are strict,
+  because every result the tab reports carries one; `matches?` gains a
+  second `none` arm for a tab that answered no text. The rescore script's
+  `epoch_value` took a none and a boolean saying it was one; now it takes
+  the none. The trace demo's `argv[1]` under `length argv == 0` is strict.
+- The twin fixture that reads out of range on purpose gives `shown` the
+  `none` arm it needs, most-specific first.
+- Four fixtures hand a none to a group deliberately, to pin what the runtime
+  says: `step none`, `shown none`, `text/to_float none`, `list/map … none`.
+  Under the ruling every one is refused, which is the point. They hand
+  `(_ -> none) 0` instead, a lambda's answer, which the check does not look
+  into; the runtime sentences they pin are unchanged.
+
+**Two things the library route taught.** The first attempt at those four
+fixtures routed the none through a field read, `h.it`, since infer types
+that as TOP on the play route. Through an import it was refused: the module
+route rewrites field reads into getter calls before it checks (the entry
+"a module is rewritten once before it is checked, not twice"), and the
+synthesized `Get_it` returns exactly the none its one construction stored.
+The play route checks before that rewrite. So the same program is checked
+against two shapes of itself, and the fixtures are written for the stricter
+one. The second was `both[1].x` in a mem fixture: on the module route that is
+`Get_x both[1]`, a lenient read handed to a synthesized getter, and the check
+refused it while the play route ran it. Nobody can give a getter an arm, so
+the check skips the synthesized getters; a field read of a none stays the
+runtime's sentence on every route. Both are the route asymmetry that
+kanso#1334 declined to remove, seen from the check's side.
+
+**The refusal has a fixture.** `tests/golden/errors/a_none_reaches_a_group_with_no_arm_for_it.kso`
+is the book's menu sample with its `none` arm deleted, the program the
+ruling's entry used. On the pre-change binary it prints `<none> yen` and
+exits 0; now it is refused with the ruled sentence on both the direct and the
+imported route, and the diagnostic's `(in …)` clause names a file outside
+lib/ by its own name, because the corpus stages a fixture into a temporary
+directory before it runs and a golden quoting that path would pin the run.
+
+**What moved.** `all_compile.sh` on the branch, rebased onto #1356:
+`emitted_code` and `compile_memory` MOVED, `compile_libraries`,
+`compile_cost` and the decoder's emitted row AGREED, and six refused on this
+host (`machine_code compile_allocs compile_instructions entry_instructions
+library_instructions`, and the peak row of `compile_memory`). Eight of the
+thirteen programs in `bench/emitted_golden_others.txt` moved, two ways at
+once. encodebench rose (calls 1,638 -> 1,652, branches 1,010 -> 1,016, lines
+11,195 -> 11,258) and widebench with it (calls 1,826 -> 1,843, branches
+1,098 -> 1,107, lines 12,155 -> 12,240): the `none` arms and the strict
+reads are code the copies did not carry. scanbench and runbench fell
+(scanbench defines 333 -> 332, calls 3,274 -> 3,269, lines 19,752 ->
+19,729; runbench defines 593 -> 592, calls 5,993 -> 5,988, lines 34,806 ->
+34,783): the regexp library lost the `or_blank` pair and `latest` starts
+from `""`. basket, deepbench, pendbench and digestbench rose seven to
+thirteen lines each on lib/list's bisect, which carries an index and a
+`found_at` arm now. The front end's visits on compile_corpus fell 22,426 ->
+22,339, rounds hold at 62, and the module compile golden's visits fell
+2,409 -> 2,380 with its emitted lines up 5,268 -> 5,274; both are the
+corpus's own respelling, since the check visits nothing the fixpoint counts.
+`all_counters.sh`: the twelve cost veins and the lazy tier agree — a strict
+read and a lenient one allocate alike, and a `none` arm nobody reaches
+allocates nothing. `all_pages.sh` rewrote the one page span that quotes the
+visits row; `book_check.sh` verifies every sample and the diagnostic scan
+reads 313 literal diagnostics, 0 newly unpinned. Welfare reads 66.36 on this
+host's goldens; the host-keyed rows are CI's to say. Priced for the trend
+gate, by key: `module_lines` 5,274 (the module compile golden's emitted
+lines, up six on lib/list's bisect), `emitted_other_calls` 20,537,
+`emitted_other_branches` 12,715 and `emitted_other_lines` 133,377 (the
+twelve non-decoder programs summed: the `none` arms and strict reads the
+benchmark copies gained outweigh what the regexp respelling shed), against
+`module_visits` 2,380, `front_end_visits` 22,339 and `emitted_other_defines`
+2,351 falling.
+
+**The wasm backend calls what it is handed.** The four fixtures that hand
+a none to a group on purpose reach it through a closure parameter now, and
+the inliner turns `list/map [1 2] (unseen (_ -> none))` into a call whose
+head is itself a call. The backend refused that with `unsupported call head`:
+it emitted a name, a lambda or a value keyword in call position and nothing
+else. Any head that is not a name is a value, computed and then called, and
+the runtime names what it cannot call, so the refusal is gone and the branch
+that handled a lambda handles every non-name head. The wasm walk ran the
+fixture and agreed with native on it, which is the spec.
+
+**Open, mine.** A piped call is not checked: `walk` reads only
+`Expr::App { piped: false }`, so `menu["pocky"] . describe` passes where
+`describe menu["pocky"]` is refused. Measured by flipping the two `piped:
+false` reads to any: the tree answers 13 reports where it answers 1 (the
+new fixture), and every one of the twelve is the same false family.
+`os/read_file! "…" . announce` is the shape, at the book's ch04 and ch05
+samples, five benchmark entries, the trace demo and make_jsonbench.
+`read_file!` is `builtin_read_file path . (r -> insisted path r)`, and
+`insisted path none` catches the none before `insisted _ text` can see it;
+infer does not subtract the earlier arm, so `text` is seeded with the
+builtin's `text | none` and the twin's return set carries a none it never
+produces (`0b101110000`; `read_file` the same way through `found`). Closing
+the gap today would refuse eleven valid programs. The order is: infer learns
+that a catch-all `none` arm empties the none from the arms below it, then
+the pipe is checked. That is the next thread.
+
+**A book sample the check refuses, found a batch late.** `scripts/book_check.sh`
+was not in the batch this was verified with, and on the branch it read ch08's
+`numbers` sample as gaining a fourth diagnostic: `mark_from` hands `cs[p]` to
+`mark_step`, an index past the end answers none, and no arm of `mark_step`
+named it. The sample's lesson is the naming rule, so its recorded output
+keeps the three naming errors and `mark_step` gains a `none` arm answering
+false; the panel quoting the source is regenerated. Every other sample runs
+as recorded.
