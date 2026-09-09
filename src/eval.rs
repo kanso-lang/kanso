@@ -2107,7 +2107,10 @@ impl<'a> Interp<'a> {
                                     "`.` reads a field of a record, not {}",
                                     render(self, &value, true)
                                 ),
-                                _ => format!("no overload of `{name}` matches these arguments"),
+                                _ => format!(
+                                    "no overload of `{}` matches these arguments",
+                                    crate::ast::spoken(&name)
+                                ),
                             },
                             span,
                         }),

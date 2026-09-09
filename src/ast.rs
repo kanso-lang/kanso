@@ -185,10 +185,10 @@ pub const ENTRY: &str = "Entry";
 /// How a declaration names itself in an err's trace. The entry is the
 /// compiler's, so a reader shown its internal name would be shown a
 /// declaration they never wrote.
-pub fn frame_name(name: &str) -> &str {
+pub fn frame_name(name: &str) -> std::borrow::Cow<'_, str> {
     match name == ENTRY {
-        true => "the entry",
-        false => name,
+        true => std::borrow::Cow::Borrowed("the entry"),
+        false => spoken(name),
     }
 }
 
@@ -258,6 +258,28 @@ pub fn bare_name(name: &str) -> &str {
 
 pub fn getter_name(field: &str) -> String {
     format!("Get_{field}")
+}
+
+/// The mark that puts a name in a module's bare overload space, where a bare
+/// call inside the module dispatches over its own arms and its imports'
+/// together (RULED 2026-08-29, "a qualified name is its module's
+/// declaration"). The lexer never makes `~` part of a name, so no consumer
+/// can write `dep/~join`, and `dep/join` stays the module's own arms.
+pub const BARE_MARK: char = '~';
+
+/// `dep/~join`: the bare overload space of `join` inside module `dep`.
+pub fn bare_space(qual: &str, name: &str) -> String {
+    format!("{qual}/{BARE_MARK}{name}")
+}
+
+/// A name as a reader may see it: the bare-space mark comes off, so a
+/// sentence about `dep/~join` says `dep/join`, which is what the author
+/// wrote at the call site the sentence points at.
+pub fn spoken(text: &str) -> std::borrow::Cow<'_, str> {
+    match text.contains(BARE_MARK) {
+        true => std::borrow::Cow::Owned(text.replace(&format!("/{BARE_MARK}"), "/")),
+        false => std::borrow::Cow::Borrowed(text),
+    }
 }
 
 /// The field a getter reads, for diagnostics: a dispatch failure on `Get_name`

@@ -3375,7 +3375,8 @@ impl<'a> Backend<'a> {
         f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
         self.emit_ret_failure(&mut f, name, arity, &hopped);
         f.start_block(&die);
-        let msg = format!("no overload of `{name}` matches these arguments\0");
+        let msg =
+            format!("no overload of `{}` matches these arguments\0", crate::ast::spoken(name));
         let (m, _len) = self.intern(&msg);
         f.line(&format!("call void @k_die(ptr @{m})"));
         f.line("unreachable");
@@ -3690,7 +3691,10 @@ impl<'a> Backend<'a> {
                 }
             }
             _ => {
-                let msg = format!("no overload of `{name}` matches these arguments");
+                let msg = format!(
+                    "no overload of `{}` matches these arguments",
+                    crate::ast::spoken(name)
+                );
                 let (m, _len) = self.intern(&format!("{msg}\0"));
                 f.line(&format!("call void @k_die(ptr @{m})"));
             }
@@ -6252,7 +6256,8 @@ impl<'a> Backend<'a> {
         // the same moment rather than refusing to build a program the oracle
         // executes.
         if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
-            let msg = format!("no overload of `{name}` matches these arguments");
+            let msg =
+                format!("no overload of `{}` matches these arguments", crate::ast::spoken(name));
             let (m, _) = self.intern(&format!("{msg}\0"));
             f.line(&format!("call void @k_die(ptr @{m})"));
             f.line("unreachable");

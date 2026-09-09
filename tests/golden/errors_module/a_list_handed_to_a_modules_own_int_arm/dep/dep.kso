@@ -1,0 +1,7 @@
+import "std/text"
+
+pub fn join a:int b:int
+  "OWN({a},{b})"
+
+pub fn inside _
+  join ["x" "y"] "-"

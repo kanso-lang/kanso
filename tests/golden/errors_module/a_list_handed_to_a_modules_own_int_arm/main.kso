@@ -1,0 +1,4 @@
+import "./dep"
+
+print (dep/inside 0)
+print (dep/join ["x" "y"] "-")

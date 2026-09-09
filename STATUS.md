@@ -126,15 +126,6 @@ arm has always been the way the language works." The flag comes out; the
 group-level return set the campaign's last report blamed is the
 implementer's to sharpen.
 
-### A qualified name is its module's declaration (2026-08-29)
-
-The archive entry of that name: `dep/join` is dep's own `pub fn join`, never
-a clone of an import's arm, and declaring a name an import happens to export
-is unconditional. Probed 2026-09-09: a module declaring `pub fn join` while
-importing std/text is still refused with `error[opacity]: dep declares join
-pub, but an import of dep exports join too and took the name`, the
-pre-ruling message.
-
 ### Records print qualified, everywhere (2026-08-29)
 
 The archive entry of that name: `slow_lane 7` prints `lane/slow_lane 7` in

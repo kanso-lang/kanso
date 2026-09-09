@@ -20,189 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## What the per-module reshape costs the diagnostics, fixture by fixture
-
-The reshape is `src/lib.rs`'s `outermost` branch: a dependency runs
-`check::check_own_declarations` — the three checks that skip any name carrying a
-slash — plus `canonicalize_bare_aliases`, `finish_program` and `trmc::rewrite`,
-and hands its declarations up. Everything else runs once, at the outermost
-compile. Against the 193 fixtures in `tests/golden/errors`, run as libraries
-behind a generated entry the way `tests/golden.rs` drives them:
-
-    155 agree   38 move   0 without a golden
-
-Thirty-one of the thirty-eight carry an `.imported.stderr` golden, which the
-corpus already keeps for fixtures whose names spell qualified through an import.
-The seven with a plain golden are the ones worth reading, and they are two
-kinds.
-
-Three are an improvement. `a_wall_whose_right_side_is_a_name`,
-`fields_that_no_one_record_declares` and `sequencing_takes_two_descriptions`
-traded the `(module X)` suffix for a `--> X.kso:line:col`, which is the
-attribution work doing what it was written to do.
-
-Four print a qualified name where the old output printed a short one:
-
-    fixture                          was                 is now
-    constructor_in_a_list            `point`             `constructor_in_a_list/point`
-    an_arm_set_with_no_settling_arm  `open_start?`       `an_arm_set_with_no_settling_arm/open_start?`
-    field_of_the_wrong_record        `point`             `field_of_the_wrong_record/point`
-    field_of_an_annotated_parameter  `money`             `field_of_an_annotated_parameter/money`
-
-Measured both ways on the same fixtures rather than inferred: the base binary
-prints the short name for all four when they run as libraries, so the reshape
-introduces this and does not inherit it.
-
-The mechanism is the reshape itself. Today a module's own `check_merged` runs
-inside its own compile, before its declarations are qualified for an importer,
-so a message that names a declaration reads the spelling the source wrote. Move
-that check to the outermost compile and the same message sees the name after
-qualification.
-
-Where a fix goes. Every diagnostic now carries the file it belongs to, and a
-module's qualifier is that module's short name, so one rule at render time
-covers it: print a name without the qualifier that names the diagnostic's own
-module, since that is the spelling the file being pointed at uses. One site,
-one rule.
-
-It does not cover all four. `an_arm_set_with_no_settling_arm` attributes to
-`run_an_arm_set_with_no_settling_arm.kso`, the generated entry, because a
-dispatch tie is reported at a call rather than at the arms it is about. The
-qualifier there is not the diagnostic's own module and the rule would leave it
-alone. That is a second defect, in where a tie points, and it wants its own
-fixture.
-
-That rule was then written and measured. `diag::spelled_in` runs at the one
-place a message is rendered: it derives the qualifier from the path the
-diagnostic points at — the file's stem and its parent directory's name, which
-covers a module that is a directory and a module that is one file — and removes
-that qualifier inside backticks only. A message quotes a name in them and a
-single span can hold more than the bare name (`(mod/point …)` and `&mod/point`
-are both how a message spells the fix), so the span is what it works on; prose
-outside the backticks is left alone.
-
-Three of the four then read exactly as the base spells them, spelling for
-spelling:
-
-    error[name]: `point` has no field `name`
-      --> field_of_the_wrong_record.kso:21:12
-
-The fourth is unchanged, as predicted. `an_arm_set_with_no_settling_arm` still
-says `an_arm_set_with_no_settling_arm/open_start?` because the diagnostic points
-at the generated entry, so the qualifier it carries is not the one this rule
-derives. Where a dispatch tie points is the second defect, and it stays open.
-
-The whole corpus was re-run with the rule in: 155 agree, 38 move, the same
-numbers as without it. It repairs three messages and moves nothing else.
-
-Then the fourth. The tie's span was already an arm's — `b.span`, the second of
-the pair — so the file it named was wrong rather than the line. The walk reaches
-`program.fns` by index, through a group table built earlier, and the attribution
-the walks carry rides on `diag::attributing`, an iterator. An indexed walk never
-touches it, so the diagnostic reads whatever attribution was last set and the
-render falls back to the file it was handed. Taking `b`'s file explicitly at the
-push site fixes it, and all four fixtures then read as the base spells them:
-
-    error[dispatch]: these `open_start?` arms tie: each is the more specific one
-    somewhere, and a call could match both — write the arm that is most specific
-    in every position
-      --> an_arm_set_with_no_settling_arm.kso:7:4
-
-That is a class, not one site, and the class has two halves.
-
-The near half is walks that reach declarations by index rather than through the
-iterator: `check_constants` reads `arms[1].span` out of a slice it indexed,
-`check_overlapping_arms` walks a filtered `Vec<&FnDecl>`, and
-`check_overload_ranks` walks `windows(2)`. None goes through `diag::attributing`,
-so none carries a file. The corpus surfaced only the tie because only the tie has
-a fixture that crosses files; the other three want fixtures before fixes.
-
-The far half is larger and was found by chasing the one remaining leak.
-`sub_of_none` comes from `check_sub_parents`, which walks `program.types` with a
-plain `for` — the shape `attributing` was written for. It cannot use it.
-`stamp_file` stamps `program.fns` and nothing else, `TypeDecl` has no `file`
-field, and `HasFile` is implemented for `FnDecl` alone. So no diagnostic about a
-type declaration can carry a file however it is walked, and the attribution
-covers half the declarations in a program.
-
-Closing that is a real change rather than a call-site repair: a field on
-`TypeDecl`, a second loop in `stamp_file`, an impl, and one `Arc` refcount bump
-per type declaration — the same cost the fns side already pays, and the same
-shape kanso#1324 measured when it made a module's path shared. It is the next
-step on this thread.
-
-Then the goldens, which is where the reshape actually stands or falls. All 38
-movers were regenerated with the harness's own staging — `pub play` files behind
-a generated entry, everything else run in place, which is what
-`run_kanso_as_library` does — and each candidate compared to its golden with the
-`(module X)` suffix and the `-->` block removed, so the comparison is of message
-TEXT alone. Three classes came out:
-
-    30  message text identical: only the location changed
-     6  one diagnostic became two
-     2  the message text itself changed
-
-The thirty are the reshape's improvement, in bulk. The six wanted reading, and
-reading them changed the count above: they are the same diagnostic twice, at the
-same file, line and column.
-
-    error[name]: no record type has a field `name`
-      --> field_missing.kso:6:12
-    error[name]: no record type has a field `name`
-      --> field_missing.kso:6:12
-
-Two reports of one source location is a declaration present twice in the merged
-program, which is the finding the module memo turned up above — 99 of the
-corpus's 428 merged declarations are a second copy reached through a further
-qualifier. The reshape did not create those copies; it moved the check that
-walks them from per module, where each saw one copy, to once at the end, where
-one walk sees both. Under the old suffix the two reports read as different
-messages, so nothing noticed.
-
-That makes the duplicate declarations a blocker for the reshape rather than a
-performance question beside it, and it is where this thread now goes.
-
-The two are the blockers, and they are different from each other.
-
-`sub_of_none` still leaks: `sub_of_none/missing cannot derive from none yet`,
-pointing at `run_sub_of_none.kso:1:6`, the import line in the generated entry.
-That is the same class as the dispatch tie — a check that raises without a file,
-so `spelled_in` derives the qualifier from the entry and leaves the name alone.
-It is the fourth member of the class this entry already names, and it has a
-fixture, which the other three do not.
-
-`builtin_arg_type` looked like the serious one. Its own error disappeared and a
-different one took its place:
-
-    was  error[type]: `length` takes a list, a map, or a string here, not an int
-    then error[name]: `builtin_arg_type/play` is internal to the standard
-         library — import its module
-
-Diagnosed, and the first reading was wrong: this belongs to the entry below
-rather than to the reshape. `resolve_name` stripped `builtin_` from a qualified
-name, so a fixture named `builtin_arg_type` had every reference to it refused.
-That bug predates the reshape by as long as the refusal has existed; the fixture
-survived only because its own error used to be raised first and stop the compile.
-With the prefix check restricted to bare names, the fixture reports its own
-error again, and better than before:
-
-    error[type]: `length` takes a list, a map, or a string here, not an int
-      --> builtin_arg_type.kso:1:27
-
-`sub_of_none` was the other, and it is fixed: `check_sub_parents` walks
-`program.types`, `stamp_file` stamped only `program.fns`, and giving `TypeDecl`
-a file — a field, a second loop in `stamp_file`, an `impl HasFile`, and the walk
-through `diag::attributing` — makes it read `missing` at
-`sub_of_none.kso:1:6`. With that in, every one of the thirty-eight is either
-location-only (32) or the doubled report below (6). No message text is worse
-than it was.
-
-Nothing of the reshape shipped. The rules are dead code on main — no diagnostic
-carries a file until the attribution patch lands — so they belong to its bundle
-rather than to changes of their own. Five patches held; the candidates are
-written out beside them. What remains before it lands is `sub_of_none`, the
-thirty-seven goldens, and the compile veins measured for the whole bundle.
-
 ## A module named for what it holds could be imported and never used
 
 `builtin_` names are how the standard library reaches the engine, and a program
@@ -3348,3 +3165,99 @@ the runtime side did. Welfare reads 66.3596 either side, a fall of 0.00002
 that the trend gate reads as a pure regression, so the fall is recorded in
 bench/welfare_floor.json's history under the 2026-08-25 language clause,
 the floor 66.35962 -> 66.35960.
+
+## 2026-09-09 — a qualified name is its module's declaration
+
+The 2026-08-29 ruling of that name (archive), built. STATUS.md carried it as
+unbuilt; the log's 2026-09-08 entry "the reorder refuses a valid program"
+declined it twice for want of the mechanism, and module_differential carried
+the shape as its one `known_wrong` entry.
+
+**What was wrong.** A module that declares `pub fn join` while importing
+`std/text` holds two kinds of declaration under the bare name: its own arms and
+the bare-enrollment twin of text's `join`. The loader qualified both to
+`dep/join`, first writer won, and the first writer was the twin whenever the
+import loaded first — so the module's own `pub` read as private from outside,
+and the compiler's answer to that was an opacity refusal, "an import of `dep`
+exports `join` too and took the name". With the refusal lifted the hazard was
+worse than the refusal: a consumer's `dep/join ["x" "y"] "-"` reached std's arm
+under dep's name and answered `x-y`, while dep's own arm could never be reached
+at all.
+
+**What the ruling says.** `dep/join` is dep's own `join`, and only that. Inside
+dep, a bare `join` still dispatches over dep's own arms and the import's
+together, because that is what an import is for.
+
+**How.** The bare overload space of a mixed name moves to a spelling no
+consumer can write: `dep/~join`, `ast::bare_space`, the mark being `~`, a
+character the lexer never makes part of a name. In `qualify`: the module's own
+bare declarations and its imports' twins are collected, `mixed` is their
+intersection, and `owned` becomes a map from a bare name to the spelling its
+call sites are rewritten into — `dep/~join` for a mixed name, `dep/join` for
+every other. A twin in a mixed group takes the bare-space spelling, loses
+`pub`, and holds no claim on the qualified one; the module's own arm keeps
+`dep/join` and gets a synthetic non-pub clone in the bare space, so an
+inside call finds both. The two-claims bookkeeping (`shadowed`, the
+"took the name" message, the `Some(false), false` arm) goes, and `Loaded`
+loses its third element. `Diagnostic::new` runs every message through
+`ast::spoken`, which strips the mark, so a sentence about the bare-space
+group says `dep/join`, which is what the author wrote.
+
+**Spec, watched red on the pre-ruling compiler.** module_differential's
+`known_wrong` is empty for the first time; its one entry is now case c30, a
+module's own pub sharing a name with a dependency's, printing `OWN(x,y)` on
+both engines. Two cases beside it: c31, a list handed to `dep/join` where dep's
+arm takes an int, refused by the check as `no arm of `dep/join` takes a list
+here (arms take int)` rather than dispatched into the import; and c32, a bare
+call inside the module reaching the import's arm (`x-y`) beside the qualified
+call reaching dep's own (`OWN(1,2)`). On the pre-ruling compiler all three fail
+with the opacity refusal, 32 modules 3 wrong. The same hazard is pinned byte
+for byte in `tests/golden/errors_module/a_list_handed_to_a_modules_own_int_arm`,
+two diagnostics at columns 17 and 27, where the old compiler wrote the opacity
+refusal at column 8. The page's §12 paragraph, which described the "took the
+name" diagnostic as the settled answer, now describes the ruling.
+
+**Verified on the container.** clippy, rustfmt, the errors_module corpus, the
+golden suite, reexports, the wasm engine walk on a fresh blob, the unit tests,
+the diagnostic scan (311 literal diagnostics, two fewer: the opacity refusal
+and its "took the name" clause are gone, 0 newly unpinned), `all_counters.sh`
+(the twelve cost veins and the lazy tier agree), `all_pages.sh` (three gates
+agree; the §12 paragraph is the page edit), module_differential 33 modules 0
+wrong.
+
+**Veins.** `emitted_code` moved on two of the thirteen others, scanbench
+19,752 -> 19,761 and runbench 34,806 -> 34,815 lines (the summed key
+`emitted_other_lines` 133,241 -> 133,259), defines, calls and
+branches identical on both. The lines are the string table: `std/regexp`
+declares private `first`, `spread` and `repeat` while importing `std/list`,
+which exports all three, so those are mixed groups now, and the own-only
+`regexp/spread` group's name and dispatch sentence are interned beside the
+bare-space group's. Before the scrub the same table carried `regexp/~first`
+and `no overload of `regexp/~first` matches these arguments`, which is how
+the mark was found to reach a message a program can print. The decoder's
+golden did not move. The host-keyed compile rows are CI's: `qualify` walks
+one more set per module and clones an arm per mixed name, and the same-box
+pair below is the container's projection, not the row.
+
+Same-box pair, callgrind on the gate's boxes, #461's tree against this one:
+module 50,441,411 -> 50,397,314 (−44,097, −0.0874%), entry 167,441,542 ->
+167,533,649 (+92,107, +0.0550%), library 168,198,150 -> 168,348,197
+(+150,047, +0.0892%); `compile_allocs` 29,714 -> 29,249 (−465), the
+two-claims bookkeeping and the `shadowed` set gone, `compile_alloc_bytes`
+4,806,203 -> 4,826,630 (+20,427, the clones), `compile_peak_bytes` 777,308
+identical, rounds 66 and visits 22,133 identical. The allocation fall is
+worth about 0.03 on the index by the per-term arithmetic in the 2026-09-09
+read_bytes entry and the instruction move is inside the band, so the
+projection is a small rise, to be banked with `--set` once CI's rows are in.
+
+**What stays in STATUS.md's "Ruled, unbuilt", and why.** Read whole before
+this PR was chosen: block-born landed in #1359; this row, records printing
+qualified and the partial over a value are a stack of three, built and
+verified in worktrees, landing in that order; `done` and the fused chain
+operators follow, with the plain dot untouched. Three rows are built and
+cannot open yet. The effect type's two halves (the plain dot as an
+application, the `<t>effect` spelling) and the exhaustiveness check on arm
+match are one design with the fused operators: each breaks binds or arms in
+kq the way #1357 did, kq's respellings live in kq, and kq is outside this
+session's reach, so they wait on that respell and their rows stay. The
+pure-fallibility rider waits on the ledger's "where the box wraps" ruling.

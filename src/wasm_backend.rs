@@ -475,7 +475,10 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_NO_FIELD);
             }
             _ => {
-                let msg = self.str_lit(&format!("no overload of `{name}` matches these arguments"));
+                let msg = self.str_lit(&format!(
+                    "no overload of `{}` matches these arguments",
+                    crate::ast::spoken(name)
+                ));
                 ctx.body.i32_const(msg as i64);
                 ctx.body.call(RT_DIE);
             }
@@ -1070,7 +1073,10 @@ impl<'a> WasmBackend<'a> {
             body.ret();
             body.end();
         }
-        let msg = self.str_lit(&format!("no overload of `{name}` matches these arguments"));
+        let msg = self.str_lit(&format!(
+            "no overload of `{}` matches these arguments",
+            crate::ast::spoken(name)
+        ));
         body.i32_const(msg as i64);
         body.call(RT_DIE);
         body.unreachable();
