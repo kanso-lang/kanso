@@ -284,7 +284,7 @@ else. Chains that tested for `none` after an effect migrate.
   - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
-**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+**Four questions wait in `design/pending-gavels.md`** — one blocking, three
 open — each with a recommendation. Counted from the ledger on 2026-09-09 by
 reading its `###` headings, which is what this line has always claimed to do
 and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
