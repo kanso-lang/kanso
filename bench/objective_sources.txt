@@ -47,10 +47,35 @@ run_peak_bytes run_arena_peak_bytes
 run_peak_bytes run_held_peak_bytes
 run_peak_bytes run_perm_peak_bytes
 
-# what compiling costs. The instruction term sums BOTH compile paths:
-# `kanso check <dir>` is a module and `kanso check <file>` is an entry, they
-# take different code, and until the entry vein opened on 2026-09-08 the
-# objective could see only the first.
+# what compiling costs. The instruction term sums TWO OF THE THREE compile
+# paths. `kanso check` routes a single file by its content, and the three
+# routes are three different compiles: a DIRECTORY is a module and takes
+# compile_module_inner, a file of bare STATEMENTS is an entry and takes
+# compile_parsed_entry, and a file of DEFINITIONS alone is a library and takes
+# compile_library. Until the entry vein opened on 2026-09-08 the objective
+# could see only the first.
+#
+# THE LIBRARY ROW IS LEFT OUT BY MEASUREMENT, not by oversight.
+# bench/entry_corpus and bench/library_corpus name the identical ten imports,
+# and under callgrind the two compiles are the same measurement:
+#
+#     frame                     module        entry       library
+#     kanso::main           49,226,188  163,918,585  164,230,408
+#     load_dependencies     29,179,760  112,141,854  112,163,002
+#     compile_module_inner  41,345,039  100,795,947  100,804,487
+#     check_merged_after..  17,585,954   62,110,471   62,242,504
+#     infer::infer          10,931,355   36,679,783   36,496,937
+#
+# 311,823 apart out of 164M, which is 0.19%, and their dependency loads agree
+# to 21,148, which is 0.019%. The term is already 66% dependency loading --
+# 29.2M for the module corpus's four imports and 112.1M for the entry corpus's
+# ten -- so admitting the library row would count that same 112.1M a third
+# time and weight loading three to one against the compiler's own passes, for
+# a dimension the entry row already carries. The module row is redundant with
+# neither: four imports against ten, 49.2M against 164M.
+#
+# bench/library_instructions_golden.txt is unaffected and still fails CI when
+# it moves. A vein the objective does not weigh is still a vein.
 compile_instructions compile_instructions
 compile_instructions entry_instructions
 compile_allocs compile_allocs
