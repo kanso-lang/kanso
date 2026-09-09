@@ -173,8 +173,25 @@ fn carries_all? row phases
 
 fn anchor rows phases
   eights = list/to_list (list/select rows (r -> carries_all? r phases))
-  runs = list/to_list (list/select rows (r -> r["run_instructions"] != none))
+  runs = list/to_list (list/select rows (r -> measured_run? r phases))
   calibrated eights runs phases (length eights == 0 or length runs == 0)
+
+# A MEASURED run count, which is not the same as a row that carries one.
+#
+# This tool WRITES its rebuilt counts into the rows it hands back, and ci.yml
+# feeds it `origin/perf-history:history.jsonl` — its own previous output — on
+# every push to main. So a rebuilt count comes back as an input, and a row that
+# carries one is not evidence anybody measured it.
+#
+# A row carrying every phase is from before runbench existed, when the eight
+# phases WERE the measurement; the consolidated count did not exist to be
+# taken. So it cannot have a measured one, and a run count sitting on such a
+# row is this tool's own arithmetic. Checked against the record rather than
+# asserted: across three successive history files, no row carried both, until
+# the run that rebuilt forty-eight of them at once and made every later run
+# refuse.
+fn measured_run? row phases
+  row["run_instructions"] != none and not carries_all? row phases
 
 # No all-phase row, or no measured row to calibrate against. Nothing to
 # reconstruct and nothing wrong: every row keeps what it carries.
@@ -194,8 +211,13 @@ fn checked _ _ false
 fn checked last first true
   splice last first["run_instructions"]!
 
+# Rebuilt from the anchor every run, rather than only when the row has no
+# count. A count this tool wrote on an earlier run is not an answer to keep: it
+# was scored against whatever anchor that run picked, and holding it would let
+# one run's arithmetic outlive the reasoning behind it. Recomputing also
+# repairs a file that already carries the rebuilt counts, with no hand edit.
 fn wants_run? row a phases
-  a != none and row["run_instructions"] == none and carries_all? row phases
+  a != none and carries_all? row phases
 
 fn reconstructed row a phases
   rebuilt row a phases (wants_run? row a phases)

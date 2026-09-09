@@ -3894,3 +3894,64 @@ reads `docs/kanso.wasm` and hands the bytes back, the oracle refuses with "the
 bytes are not text". Reduced to seven lines, that is the whole of it. Whether
 `read_file` should be byte-transparent on every engine is filed as a design
 question and is not re-asked here.
+
+## 2026-09-09 — the rescore read its own arithmetic back as a measurement
+
+Main went red at 06:48 on the `perf history` job, one of nineteen, and
+stayed red: `the splice rows disagree on a phase they share`. The cause
+is kanso#1346, merged the run before.
+
+`scripts/welfare_rescore` rebuilds `run_instructions` for the rows
+measured before runbench existed, and it WRITES the rebuilt count into
+the row it hands back. ci.yml feeds it
+`origin/perf-history:history.jsonl` — its own previous output — appends
+one row and rescores the lot. So a rebuilt count comes back as an input,
+and nothing in the file says which counts were measured.
+
+The numbers, read off three successive history files:
+
+    file       all-eight rows   run-bearing   carry BOTH
+    dc658d65   48 (last 438)    62 (first 439)     0
+    81ffc9e5   48 (last 437)    63 (first 438)     0
+    22ca0fb3   48 (last 436)   112 (first 389)    48
+
+The first two are the design: the phases were the measurement until
+runbench arrived, the consolidated count took over, and the two sets
+meet without overlapping. The third is one run later. Forty-eight rows
+gained a rebuilt count at once, the oldest of them became the splice
+anchor at line 389, and it was compared against the newest all-phase row
+at 436 — forty-seven commits apart, so of course every phase disagreed.
+The refusal was right. What it was refusing was this tool's own output.
+
+**DONE — a measured run count is not the same as a row carrying one.**
+A row carrying every phase is from before runbench, when the phases WERE
+the measurement and the consolidated count did not exist to be taken, so
+a count sitting on such a row is this tool's arithmetic. The splice
+anchor now selects rows that carry a count and NOT the full phase set.
+That is checkable against the record rather than asserted, which is what
+the table above is for.
+
+**And the rebuild recomputes rather than trusting what it finds.** A
+count written on an earlier run was scored against whatever anchor that
+run picked, and keeping it lets one run's arithmetic outlive the
+reasoning behind it. Recomputing also repairs the file already carrying
+the rebuilt counts, with no hand edit: the corrupted history rescores
+clean, and a second pass over that output is byte-identical.
+
+**The property is idempotence, and it is what CI relies on.** "Rewrite
+the whole column every push" is only safe if feeding the tool its own
+output gives the same answer, and nothing asserted that. The spec is in
+`tests/the_reconstruction_refuses_a_splice_that_moved.rs` beside the
+refusal it belongs with: rescore a three-row history, feed the output
+back, require success and an identical column. It reproduces main's
+failure message in a postcard, and it would have caught this on the day
+kanso#1346 landed rather than one merge later.
+
+**What generalises.** A tool whose output is its own next input needs
+that property pinned, and this one had a guard against exactly the error
+it went on to commit — the splice check exists because a rebuilt row
+spliced onto a row that moved slides the whole history smoothly and
+plausibly. The guard fired correctly and pointed at the wrong culprit,
+because the file it reads cannot say which numbers were measured. A row
+that does not record where its number came from will eventually be asked
+to answer for it.
