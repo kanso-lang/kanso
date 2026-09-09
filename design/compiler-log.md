@@ -3674,11 +3674,19 @@ the native run, and `left: "first: 2"` against `right: "first: 1"`. Its last
 line is the legitimate case — a seed born at the call, which the fold may still
 write through — so a licence simply switched off would not satisfy it.
 
-**OPEN: the same question about `push` and `append`.** This entry fixes the
-grant that covers all three, since the grant is per-fold rather than per-write,
-but the fixture exercises `put`. Whether a list or byte accumulator can be
-reached the same way is not measured, and a corpus fixture for each is the
-cheap way to find out.
+**All three accumulator kinds were reachable, and the fixture carries all
+three.** The grant is per fold rather than per write, so one hole covered
+`put`, `push` and `append` — but that is a claim about the code, and the
+cheap way to settle it is to write the other two and look. Built, and on the
+unfixed compiler native answered every one of them wrong:
+
+    kind    native            the oracle
+    map     first: 2          first: 1
+    list    first: [1 9]      first: [1]
+    bytes   first: [120 121]  first: [120]
+
+A fixture exercising one of the three would have left the other two resting on
+the claim.
 
 **What generalises.** A two-part condition split across two call sites is one
 edit away from disagreeing, and nothing here would have caught the disagreement:

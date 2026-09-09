@@ -1,25 +1,32 @@
 # A fold writes into its seed on the first step, so licensing that write in
 # place needs the SEED to be uniquely owned as well as the folder to be
 # well shaped. Until 2026-09-09 the licence in src/linear.rs asked only about
-# the folder, and a seed something else still held was written through: this
-# program printed `first: 2` on native against the interpreter's `first: 1`.
+# the folder, and a seed something else still held was written through. All
+# three accumulator kinds were reachable, and native printed all three wrong:
 #
-# THE SHAPE THAT REACHES IT is an outer fold whose accumulator carries both a
-# map and a record of what that map held at each step. On a step with nothing
-# to do the inner fold hands the map straight back, so the stored copy IS the
-# accumulator, and the next step's write lands in both. Neither fold on its own
-# does it: a write outside a loop can be traced to a literal, and a folder
-# whose seed is built where it stands owns it.
+#     kind    native          the oracle
+#     map     first: 2        first: 1
+#     list    first: [1 9]    first: [1]
+#     bytes   first: [120 121]  first: [120]
+#
+# THE SHAPE THAT REACHES IT is an outer fold whose accumulator carries both the
+# value and a record of what that value held at each step. On a step with
+# nothing to do the inner fold hands the value straight back, so the stored
+# copy IS the accumulator, and the next step's write lands in both. Neither
+# fold on its own does it: a write outside a loop can be traced to a literal,
+# and a folder whose seed is built where it stands owns it.
+#
+# ALL THREE KINDS ARE HERE because the licence is granted per fold rather than
+# per write, so one grant covers `put`, `push` and `append` — and a fixture
+# exercising one of the three would have left the other two resting on the
+# claim that they are the same code path.
 #
 # THE LAST LINE IS THE CASE THAT MUST STAY IN PLACE. A seed born at the call is
 # nobody else's and the fold may write through it, which is what the encode
 # path's byte builder depends on. Without it this fixture would pass under a
 # licence that had simply been switched off.
 import "std/list"
-
-fn stepped acc k
-  now = list/fold (bump_on k) acc[1]! (m _ -> put m "n" 2)
-  [now (put acc[2]! k now)]
+import "std/text"
 
 fn bump_on "b"
   ["once"]
@@ -27,19 +34,31 @@ fn bump_on "b"
 fn bump_on _
   []
 
-seed = [(put {} "n" 1) {}]
+fn map_step acc k
+  now = list/fold (bump_on k) acc[1]! (m _ -> put m "n" 2)
+  [now (put acc[2]! k now)]
 
-walked = list/fold ["a" "b"] seed stepped
+fn list_step acc k
+  now = list/fold (bump_on k) acc[1]! (l _ -> push l 9)
+  [now (put acc[2]! k now)]
 
-held = walked[2]!
+fn byte_step acc k
+  now = list/fold (bump_on k) acc[1]! (b _ -> append b "y")
+  [now (put acc[2]! k now)]
 
-first = held["a"]!
+maps = (list/fold ["a" "b"] [(put {} "n" 1) {}] map_step)[2]!
 
-second = held["b"]!
+lists = (list/fold ["a" "b"] [(push [] 1) {}] list_step)[2]!
+
+bytes = (list/fold ["a" "b"] [(append (text/bytes "x") "") {}] byte_step)[2]!
+
+kept = maps["a"]!
 
 fresh = list/fold ["once"] (put {} "n" 1) (m _ -> put m "n" 2)
 
 pub play =
-  print "first: {first["n"]!}"
-  print "second: {second["n"]!}"
+  print "maps: {maps}"
+  print "lists: {lists}"
+  print "bytes: {bytes}"
+  print "kept: {kept["n"]!}"
   print "fresh: {fresh["n"]!}"
