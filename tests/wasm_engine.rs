@@ -33,47 +33,35 @@ fn root() -> PathBuf {
 #[derive(Default, Clone)]
 struct Dispatch(Rc<RefCell<Option<Table>>>);
 
-/// `docs/kanso.wasm` is a build artifact that is also committed, so a stale
-/// one would let this whole file pass while proving nothing about the source.
-/// Compare it against everything it is built from rather than trusting it is
-/// current. CI rebuilds it in this job for the same reason: a fresh clone
-/// stamps every file with the checkout time, and an artifact that is merely
-/// as old as the source is not evidence about the source.
+/// `docs/kanso.wasm` is a build artifact, and every spec in this file runs it.
+/// It is no longer committed, so a tree that has not built one has no blob at
+/// all, and a blob built before the last edit to `src/` is older than the
+/// compiler it stands for. Both are refusals: neither file is evidence about
+/// this source. The check lives in `Toolchain::load` rather than at the call
+/// sites because it was written at two of them and there are eleven.
 fn freshness() -> Result<(), String> {
     let art = root().join("docs/kanso.wasm");
     let Ok(built) = art.metadata().and_then(|m| m.modified()) else {
         return Err("docs/kanso.wasm is missing".to_string());
     };
-    let (mut newer, mut total, mut widest) = (Vec::new(), 0, std::time::Duration::ZERO);
+    let mut newer = Vec::new();
     for entry in std::fs::read_dir(root().join("src")).map_err(|e| e.to_string())? {
         let path = entry.map_err(|e| e.to_string())?.path();
         if path.extension().is_none_or(|x| x != "rs") {
             continue;
         }
-        total += 1;
         let touched = path.metadata().and_then(|m| m.modified()).map_err(|e| e.to_string())?;
         if touched > built {
-            widest = widest.max(touched.duration_since(built).unwrap_or_default());
             newer.push(path.file_name().unwrap_or_default().to_string_lossy().to_string());
         }
     }
     if newer.is_empty() {
         return Ok(());
     }
-    // A checkout writes the whole tree at once, in path order, and `docs/`
-    // sorts before `src/`: measured in a fresh worktree, the blob lands 28ms
-    // before every source file. So EVERY fresh clone trips this, and saying
-    // the blob "predates" the sources sends the reader looking for an edit
-    // that never happened — the same wrong reason kanso#1084 and kanso#1086
-    // took out of two other refusals. The refusal itself is right either way:
-    // the blob is not known to match these sources.
-    if newer.len() == total && widest < std::time::Duration::from_secs(1) {
-        return Err(format!(
-            "docs/kanso.wasm is {}ms older than all {total} sources, which is what a \
-             checkout looks like rather than an edit",
-            widest.as_millis()
-        ));
-    }
+    // read_dir answers in whatever order the filesystem holds, so the refusal
+    // named the same files in a different sequence on each run and two reports
+    // of one failure did not compare.
+    newer.sort();
     Err(format!("docs/kanso.wasm predates {}", newer.join(", ")))
 }
 
@@ -85,6 +73,9 @@ struct Toolchain {
 
 impl Toolchain {
     fn load() -> Toolchain {
+        if let Err(stale) = freshness() {
+            panic!("{stale} — run scripts/build_wasm.sh before this can prove anything");
+        }
         let engine = Engine::default();
         let bytes = std::fs::read(root().join("docs/kanso.wasm")).expect("the wasm artifact reads");
         let module = Module::new(&engine, &bytes[..]).expect("the artifact is a wasm module");
@@ -433,9 +424,6 @@ fn natively(path: &Path) -> (i32, String) {
 /// the native engine answers — the differential law, inside cargo test.
 #[test]
 fn the_wasm_engine_agrees_with_the_golden_corpus() {
-    if let Err(stale) = freshness() {
-        panic!("{stale} — run scripts/build_wasm.sh before this can prove anything");
-    }
     let gaps = known_gaps();
     let mut toolchain = Toolchain::load();
     let (mut ran, mut met) = (0, 0);
@@ -604,9 +592,6 @@ fn std_surface() -> Vec<(String, String, usize)> {
 /// the same thing when a program asks a std function for the wrong thing.
 #[test]
 fn the_wasm_engine_complains_the_way_the_others_do() {
-    if let Err(stale) = freshness() {
-        panic!("{stale} — run scripts/build_wasm.sh before this can prove anything");
-    }
     let work = std::env::temp_dir().join("kanso-wasm-diagnostics");
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).expect("a directory of its own");

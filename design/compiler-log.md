@@ -3987,3 +3987,65 @@ are unwatched.
 The two rises read 0.28 -> 0.74 with the score 88.28 -> 62.67, and 0.74 ->
 1.00 with 64.95 -> 56.73, measured against origin/perf-history rescored by
 this tree — which is what CI writes on the next push to main.
+
+## 2026-09-09 — the blob stops being committed, and the guard covered two entries of eleven
+
+`docs/kanso.wasm` is what the playground runs and what every spec in
+`tests/wasm_engine.rs` runs, and it was a build artifact that was also
+committed. It is not committed any more, and the guard that was supposed to
+make that safe was covering two of the eleven places the artifact is opened.
+
+**The criterion was already written down and the answer was already in.**
+ci.yml carried a step, deliberately not a gate, whose own comment said: "Once
+a few runs have said the same thing, the answer decides whether this becomes a
+gate or the committed blob stops being committed." It has said DIFFERS every
+time. The measurement is not needed to reach that answer either — the
+committed blob's last commit is `6f8c876e`, from 2026-09-06, and main has
+merged past it many times since, so it is built from older source and cannot
+reproduce whatever the toolchain does. Rebuilt on this container it is
+1,736,492 bytes against the committed 1,719,102, a difference of 17,390. Both
+steps are gone; the rebuild that every job already ran stays.
+
+**Nothing read the committed copy.** Five sites rebuild it before anything
+reads it — ci.yml's specs, other-host and site jobs, pages.yml, and
+`scripts/browser_differential.sh` for the browser job — and those five cover
+every consumer: `site_smoke`, `browser_differential_run`, `fingerprint` (which
+reads `_site`, built after the rebuild) and the cargo specs.
+
+**The guard was at two call sites and there are eleven.** `freshness()` was
+called from `the_wasm_engine_agrees_with_the_golden_corpus` and
+`the_wasm_engine_complains_the_way_the_others_do`. The other nine —
+four playground-prompt specs, two page-failure specs, the builtin-count
+refusal, the error corpus and the partial-over-a-value limit — called
+`Toolchain::load` with no check at all, so a stale blob let nine specs run an
+old engine and pass. The guard's own doc comment said a stale artifact "would
+let this whole file pass while proving nothing about the source"; that was
+true of nine twelfths of the file it was written in.
+
+Measured rather than reasoned: with the blob moved aside, the suite reported
+eleven failures, two of them naming `scripts/build_wasm.sh` and nine saying
+only "the wasm artifact reads". The check now lives in `Toolchain::load`,
+where all eleven pass, and re-running with the blob absent gives the same
+sentence eleven times.
+
+**The checkout arm is deleted with the thing that caused it.** kanso#1180 added
+an arm for the case where the blob is a few milliseconds older than every
+source file, because a fresh clone writes `docs/` before `src/` and so tripped
+the guard on every checkout. A checkout no longer writes the blob, so that arm
+cannot fire; keeping it would leave a paragraph of explanation for a state the
+tree can no longer reach.
+
+**And it closes the mtime guard's most common false pass.** kanso#107 kept the
+guard an mtime comparison and wrote down that content it cannot see may be
+stale. The way that bit in practice was `git checkout -- docs/kanso.wasm`,
+which stamps a NEW mtime on OLD bytes: the guard then passes and the engine
+runs a blob built from an older compiler. kanso#1350's own validation
+paragraph is a case of it — two wasm specs failing on this container for
+exactly that reason. With no committed copy there is nothing to restore, so
+that trigger is gone. The guard is still mtime-based and still cannot see
+content; this removes the one routine way of fooling it, not the weakness.
+
+**What this does not claim.** The pack keeps every historical version of the
+blob — 382 of them, 26,886,564 bytes — and removing the file from the tip does
+not shrink an existing clone. The saving is prospective: the blob stops gaining
+a version per rebuild that anyone remembers to commit.
