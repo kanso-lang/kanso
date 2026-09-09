@@ -3319,3 +3319,23 @@ compile speed and 0.19 on compile memory; the remaining points are 18.34,
 25 of them were compile-side. The run program's profile puts 23.2% of its
 instructions in two loops, `encode_onto` (13.38%) and `value_for` (9.86%),
 and this entry is the first of what that map says to do.
+
+**The round CI returned, and the sweep defect under it.** Three jobs went
+red on the first run. The cost goldens read `46a47 > sh_bytes=...` on all
+twelve: main had gained `sh_bytes` between the branch and the merge, the
+merge kept this branch's goldens, and `all_counters.sh --write` then reported
+`rewrote` twelve times and changed no file. Its rewrite replaced data rows
+line for line and stopped at the golden's last row, so a counter the runtime
+had just gained — one more row than the golden held — was dropped, silently.
+The rewrite is now `scripts/gates/keep_header.sh`, which appends the measured
+file's remaining rows, and `tests/the_sweep_write_keeps_a_new_row.rs` runs it
+on a postcard-sized golden and was watched red on exactly that case. The
+book's two counters panels drifted by the `append_rendered` row and are
+rewritten. The diagnostic scan found `k_render_number: not a number` with no
+golden; it is the render's `default:` arm and neither caller can reach it,
+so it is listed in `tests/golden/unpinned_diagnostics.txt` with the control-
+flow argument. CI's rows: runbench 2,392,210,251 -> 2,369,642,706 (−0.9434%),
+encodebench −1.9672%, livebench −2.7667%, oneshot −1.1334%, widebench
+−2.0173%, jsonbench −0.0192%; the three compile rows rose 2,867 / 9,119 /
+6,921, layout moves on a compiler whose emitter grew. Welfare 66.30 -> 66.37,
+banked.

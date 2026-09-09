@@ -44,3 +44,4 @@ sh_str=37039216
 sh_rec=1552
 sh_buf=24105200
 sh_map=0
+sh_bytes=0

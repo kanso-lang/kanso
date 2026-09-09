@@ -61,11 +61,10 @@ for row in $veins; do
   echo "=== $vein ($golden)"
   diff "$want" "$got" || true
   if [ "$write" -eq 1 ]; then
-    # keep the header: replace the data rows in place, line for line
-    awk -v got="$got" '
-      /^#/ || /^[[:space:]]*$/ { print; next }
-      { if ((getline line < got) > 0) print line; else print }
-    ' "$golden" > "$golden.new" && mv "$golden.new" "$golden"
+    # keep the header: replace the data rows in place, line for line, and
+    # append any row the measured file holds beyond the golden's last
+    sh scripts/gates/keep_header.sh "$golden" "$got" > "$golden.new" \
+      && mv "$golden.new" "$golden"
     echo "--- rewrote $golden"
   fi
   rm -f "$got" "$want"

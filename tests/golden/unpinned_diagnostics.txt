@@ -517,3 +517,13 @@ a beat mark and the arena disagree about the room that is left
 # records a day of wedged suites for. tests/many_handles.rs is the regression
 # test, and it asserts the message never appears.
 too many processes at once
+
+# THE RENDER'S DEFAULT ARM, dead by construction, and the argument is control
+# flow. `k_render_number` has two callers, k_render_at and k_b_append_rendered.
+# The first reaches it only from the K_INT and K_FLOAT arms of its own switch,
+# and the second returns through k_b_append_into for any value whose tag is
+# not K_INT or K_FLOAT before it calls. So the `default:` arm that raises this
+# is entered by no tag either caller can hand it; it stays because a switch
+# over a tag must answer every tag, and a fall-through into the return would
+# hand back an uninitialised length.
+k_render_number: not a number
