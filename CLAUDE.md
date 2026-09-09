@@ -77,6 +77,20 @@ id, because task numbers resolve nowhere outside the session that made them. A
 question that has already been ruled is never re-asked. A performance question
 with no surface area is the implementer's and does not go to Clay at all.
 
+**A ruling outranks a lead.** A gavel whose implementation is cloud's goes to
+the front of cloud's queue the day it is recorded, ahead of every thread cloud
+generated for itself, and stays there until it is built or Clay retires it.
+Learned on 2026-09-09: the 2026-09-07 reconstruction ruling sat unbuilt for two
+days while 26 pull requests landed on self-chosen work, and the chart Clay
+reads stayed wrong the whole time. His words: "it's just bizarre that I'm
+literally waiting days for this and it's just working continuously all day."
+The log records a ruling. Nothing in it schedules one: an OPEN entry marked
+cloud's is read when cloud next reads the log, and cloud reads its own last
+pull request's open-items list first. So a pull request opened on a
+self-generated lead while a ruled item stands unbuilt says so in its body and
+says why the lead came first, and the chat names every unbuilt ruling at the
+top of each check-in until it lands.
+
 **GITHUB API ACCESS DEPENDS ON HOW A SESSION WAS STARTED, NOT ON ITS AGE.**
 Established 2026-09-08 by comparing four sessions in one environment:
 
