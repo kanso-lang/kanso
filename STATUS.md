@@ -281,7 +281,6 @@ else. Chains that tested for `none` after an effect migrate.
   - the one blocking question, what a digest costs, filed with its measurement
   - `delete_branch_on_merge=true` and the 324-branch purge (task #109), both
     checked from here on two days and both refused by the tooling
-  - the chain-line grammar above, which stands before the 346-site respelling
   - whether an err gains readers a lambda callback can use
 
 **Three questions wait in `design/pending-gavels.md`** — one blocking, two

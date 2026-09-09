@@ -175,7 +175,6 @@ part.
 
 ## Open, not blocking
 
-
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
 
 **RE-PREMISED AGAIN 2026-08-29 by the effects-are-types gavel, which
