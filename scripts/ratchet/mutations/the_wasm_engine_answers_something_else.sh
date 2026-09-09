@@ -12,6 +12,14 @@
 # reaches every program should be reported for every program.
 set -e
 f=src/wasm.rs
+# THE PATH IS SPELLED ON A GUARD LINE, and that is load-bearing rather than
+# decorative. The ratchet's `touched` pass selects the rows a branch could have
+# made blind by intersecting the files a branch changed with the paths each
+# mutation names on a guard line. Every assertion below reaches the file
+# through "$f", so the path appeared on no guard line and this row was
+# invisible to that pass whatever a branch touched -- the same defect
+# kanso#1338 repaired on the two compile-path mutations.
+grep -q 'kanso_exec_main' src/wasm.rs
 grep -qF '    let (status, text) = crate::wasm_rt::exec_main(h);' "$f" || {
   echo "the wasm entry point moved; this mutation needs rewriting" >&2
   exit 1
