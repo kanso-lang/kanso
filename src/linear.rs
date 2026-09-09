@@ -243,7 +243,7 @@ impl<'a> Analysis<'a> {
                 && args.len() == 3
             {
                 if let (Expr::Lambda { params, body, .. }, true) =
-                    (&args[2], self.folder_is_unique(&args[2], ctx, scoped))
+                    (&args[2], self.fold_owns_accumulator(args, ctx, scoped))
                 {
                     let inner = params.first().map(|(n, _)| n.as_str());
                     // `scoped` says the ACCUMULATOR is unique, which is the
@@ -368,6 +368,27 @@ impl<'a> Analysis<'a> {
             },
             _ => false,
         }
+    }
+
+    /// May a write inside this fold's folder be made in place?
+    ///
+    /// Two conditions, and only the first was ever asked. The folder must hand
+    /// back a uniquely-owned value from a uniquely-owned first argument, AND
+    /// the SEED must be uniquely owned, because step one writes into the seed
+    /// itself. `unique_in_with`'s own fold arm has always asked both, so the
+    /// question "is the fold's RESULT unique" was answered correctly while the
+    /// question "may the folder write" was not.
+    ///
+    /// A seed something else still holds is corrupted by that write, and
+    /// silently: an outer fold storing its accumulator once a step, with an
+    /// inner fold writing into it, gave every stored copy the last step's
+    /// value. tests/golden/micro/a_folds_seed_is_held_by_something_else.kso
+    /// holds that red.
+    ///
+    /// Asked in one place because the licence walk and the marking walk must
+    /// agree about it, and this is exactly where they had drifted apart.
+    fn fold_owns_accumulator(&self, args: &[Expr], ctx: &FnDecl, scoped: Option<&str>) -> bool {
+        self.folder_is_unique(&args[2], ctx, scoped) && self.unique_in(&args[1], ctx, scoped)
     }
 
     fn unique_in(&self, e: &Expr, ctx: &FnDecl, scoped: Option<&str>) -> bool {
@@ -598,7 +619,7 @@ fn walk_for_push_in(
         // own parameter, and every push or append there is on a unique value
         if matches!(head.as_ref(), Expr::Ident(n, _) if a.folds.contains(n.as_str()))
             && args.len() == 3
-            && a.folder_is_unique(&args[2], decl, scoped)
+            && a.fold_owns_accumulator(args, decl, scoped)
         {
             if let Expr::Lambda { params, body, .. } = &args[2] {
                 let inner = params.first().map(|(n, _)| n.as_str());

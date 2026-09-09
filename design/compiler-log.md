@@ -3613,3 +3613,76 @@ empty or short result set reads like an answer. The route census had a total
 available and did not use it — `kanso check`'s three branches — and the
 function has four callers. Grep for the callee, count the call sites, and
 reconcile against the routes; do not derive the call sites from the routes.
+
+---
+
+## 2026-09-09 — a fold's in-place write was licensed without asking about its seed
+
+**DONE.** Native disagreed with the interpreter on a fifteen-line program, and
+the disagreement was silent: a stale value, printed as an answer.
+
+**How it surfaced.** Building the compile epoch table (kanso#1347 item 2),
+`scripts/welfare_rescore` walks the five hundred history rows carrying a
+per-counter divisor and stores each row's divisor in a map keyed by commit. It
+read 1.0 for every row. The rescored file came back byte-identical to the one
+the old tool wrote, which is what sent me looking: a change that does arithmetic
+on every row and moves no digit is either a no-op or a lie.
+
+**The defect.** `src/linear.rs` decides which `put` and `push` sites may write
+in place. Inside a fold it grants the folder's own accumulator parameter that
+licence, on the strength of `folder_is_unique` — which inspects the LAMBDA and
+nothing else. A fold writes into its SEED on the first step, so the licence also
+needs the seed to be uniquely owned, and that half was never asked. Both grant
+sites had the hole: the licence walk (`callsites_unique_in`) and the marking
+walk (`walk_for_push_in`).
+
+`unique_in_with`'s own fold arm has always asked both, so "is this fold's RESULT
+unique" was answered correctly the whole time while "may this folder write" was
+not. The two questions sit forty lines apart in the same file.
+
+**The shape that reaches it** needs two folds. An outer fold's accumulator
+carries a value and a record of that value at each step; the inner fold hands
+the value straight back on a step with nothing to do, so the stored copy IS the
+accumulator; the next step's write lands in both. Neither fold alone does it — a
+write outside a loop traces back to a literal, and a folder whose seed is built
+where it stands owns it.
+
+    native: first: 2   second: 2   fresh: 2
+    interp: first: 1   second: 2   fresh: 2
+
+**The fix** asks both conditions, in one place, because the two walks must agree
+about it and this is exactly where they had drifted:
+
+    fn fold_owns_accumulator(&self, args, ctx, scoped) -> bool {
+        self.folder_is_unique(&args[2], ctx, scoped)
+            && self.unique_in(&args[1], ctx, scoped)
+    }
+
+**What it costs: nothing measurable.** `sh scripts/gates/all_counters.sh` reads
+the twelve cost veins and the lazy tier and every one is byte-identical, so no
+in-place site in the benchmarked code was standing on a non-unique seed. The
+compile sweep says nothing moved that this host can see, with six of the nine
+gates host-bound; `compile_instructions` is a layout vein and src/linear.rs is
+the compiler, so CI may read it moved and the row is ratcheted to whatever CI
+says rather than projected from here.
+
+**The fixture** is `tests/golden/micro/a_folds_seed_is_held_by_something_else`,
+which `micro_corpus_agrees_across_engines` runs on native and on the oracle
+against one golden, and the wasm and browser sweeps run on the third engine.
+Watched red through that harness before the fix landed: it named the fixture,
+the native run, and `left: "first: 2"` against `right: "first: 1"`. Its last
+line is the legitimate case — a seed born at the call, which the fold may still
+write through — so a licence simply switched off would not satisfy it.
+
+**OPEN: the same question about `push` and `append`.** This entry fixes the
+grant that covers all three, since the grant is per-fold rather than per-write,
+but the fixture exercises `put`. Whether a list or byte accumulator can be
+reached the same way is not measured, and a corpus fixture for each is the
+cheap way to find out.
+
+**What generalises.** A two-part condition split across two call sites is one
+edit away from disagreeing, and nothing here would have caught the disagreement:
+the analysis has no differential of its own, and the corpus had no program whose
+answer depended on it. The counters could not see it either — an unsound licence
+makes a program FASTER and wrong. What found it was arithmetic that had to move
+and did not.
