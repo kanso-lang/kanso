@@ -14,29 +14,34 @@ description: "one row per merged commit: what a run costs, what compiling costs,
 
 <p>an older row holds fewer counters than the formula reads, because the counter set grew with the project. each term is scored on the counters the row carries; a term with none of them is dropped and the remaining weights are renormalized, so a row that scores well on what it has reads like a full row that scores well. a row carrying none of the counters any term reads gets no welfare column at all, and the line has a gap where it sits. every row records the two things that say what scored it: <code>scored_by</code> names the formula, and <code>scored_weight</code> gives the share of that formula's weight the row's counters cover.</p>
 
-<p>read <code>scored_weight</code> before reading a step in the line. the formula reads five counters. two of them are the run program's retired instructions and its peak bytes, first recorded on 2026-09-06, when the objective's run side became one consolidated program; the other three are what compiling costs, recorded on every row but the 151 between 2026-08-13 and 2026-08-24 that the miscompilation below cost. so 349 of the five hundred rows are scored on the compile counters alone, at coverage 0.28 or 0.44, and the other 151 carry none of the five and have no score at all. the step where the run counters arrive is a change in what was recorded rather than in what the compiler costs: the compile terms carry the advantage they have accumulated since august, while the run terms start at parity against a baseline measured on the day they joined, so the score falls from about 75 to about 52 with nothing in the compiler moving. every other fall in the file is a counter that got worse.</p>
+<p>read <code>scored_weight</code> before reading a step in the line. the formula reads five counters and an older row carries fewer of them. compile allocations and compile memory go back to the first row, 2026-08-09, minus the stretch between 2026-08-13 and 2026-08-24 that the miscompilation below cost; compile instructions joins on 2026-09-03; the run program's retired instructions and its peak bytes join on 2026-09-06, when the objective's run side became one consolidated program. a row holding two of the five is scored at coverage 0.28, three at 0.44, all five at 1.00, and a row holding none of them has no score at all. the step where the run counters arrive is a change in what was recorded rather than in what the compiler costs: the compile terms carry the advantage they have accumulated since august, while the run terms start at parity against a baseline measured on the day they joined, so the score falls from about 75 to about 52 with nothing in the compiler moving. every other fall in the file is a counter that got worse.</p>
 
 <p>a change to the scoring function is a change to what the project says it wants, and it is the one thing allowed to lower the number. every such change is in the history of <code>bench/welfare_floor.json</code> with the reason written beside it.</p>
 
-<p>each line is scaled to its own range, because an instruction count and a byte peak cannot share an axis and stay readable. what the chart shows is shape — which way a number went and when it stepped. the horizontal axis is commit order, because commits are what the ratchet acts on. a line starts where its counters start, and the schema grew with the project, so the compile lines reach back to the first recorded row and the run lines do not.</p>
+<p>each line is scaled to its own range, because an instruction count and a byte peak cannot share an axis and stay readable. what the chart shows is shape — which way a number went and when it stepped. the horizontal axis is commit order, because commits are what the ratchet acts on. a line starts where its counters start, and the schema grew with the project, so compile allocations and compile memory reach back to the first recorded row, compile instructions reaches back to 2026-09-03, and the two run lines to 2026-09-06.</p>
 
 <p>two of these lines have a gap in them. the run-memory and compile-memory series were blank for a stretch because the program that writes these rows was miscompiled: an interpolation shared one buffer across a loop, so five groups of counters left it with their key names run together into a single key each. the rows were written, the job was green, and the chart simply could not find the numbers. the compiler bug is fixed, and so is the reason nothing caught it — the row is now checked against the same lists on the way out as on the way in, and the check runs on every pull request rather than only after a merge. a completeness check on the inputs is not one on the outputs.</p>
 
 <div id="trend-chart"><p class="perf-loading">loading the chart…</p></div>
 
 <p class="chart-legend">how each line is derived, from the code that draws it.
-<strong>run instructions</strong> is <code>instructions + encode_instructions</code>
-in thousands — retired instructions for the decode and encode veins, counted
-under callgrind and pinned in <code>bench/instructions_golden.txt</code>. it is
-what a run costs. <strong>run memory</strong> is
-<code>oneshot_arena_peak_bytes</code>, the high-water mark of the one-shot
-vein's arena. <strong>binary size</strong> is the decoder's <code>.text</code>
-section in bytes, from <code>bench/text_golden.txt</code> — its own only, since
-every binary links the same runtime and summing them would count it four times.
-<strong>compile work</strong> is
-<code>compile_rounds + compile_visits + emitted_lines</code> — fixpoint rounds,
-expressions the fixpoint looked at, and lines the emitter wrote.
-<strong>compile memory</strong> is <code>compile_peak_bytes</code>.
+the first five are the counters the welfare formula reads, one line each;
+<code>bench/objective_sources.txt</code> is that list and a spec replays it
+against the code below. <strong>run instructions</strong> is
+<code>run_instructions</code>, retired instructions for the one consolidated
+run program, counted under callgrind. <strong>run memory</strong> is
+<code>run_peak_bytes</code>, that program's arena, held and permanent peaks
+summed. <strong>compile instructions</strong>, <strong>compile
+allocations</strong> and <strong>compile memory</strong> are
+<code>compile_instructions</code>, <code>compile_allocs</code> and
+<code>compile_peak_bytes</code> — what deciding and emitting cost, in retired
+instructions, allocator calls, and peak bytes held. <strong>binary size</strong>
+is the decoder's <code>.text</code> section in bytes, from
+<code>bench/text_golden.txt</code> — its own only, since every binary links the
+same runtime and summing them would count it four times. it is drawn in grey
+because it is the one line the score does not read: a machine-code-size term
+was ruled out of welfare on 2026-09-05, and <code>.text</code> kept its own
+exact vein instead.
 <strong>welfare</strong> is the row's <code>welfare</code> column, written by
 <code>scripts/welfare_rescore</code> under the formula
 <code>scripts/welfare</code> emits: for every term the row can be scored on,
@@ -151,28 +156,38 @@ divided by the weight those terms carry, times a hundred.</p>
   // The chart reads the same rows as the panel below it. Drawing it here
   // rather than committing an svg is what lets the series extend without a
   // write: ci appends a row to the history branch and the next reader sees it.
+  //
+  // THE FIVE COUNTERS THE OBJECTIVE READS EACH GET A LINE. That list lives in
+  // bench/objective_sources.txt, and tests/the_chart_draws_the_objective.rs
+  // replays it against this array, in both directions: a counter that joins
+  // the objective and is not drawn turns it red, and so does a line here that
+  // reads a counter the objective does not.
+  //
+  // Until 2026-09-09 five of the six lines drew counters the objective had
+  // stopped reading. The run side -- instructions + encode_instructions and
+  // oneshot_arena_peak_bytes -- was retired by the 2026-09-06 gavel that made
+  // the objective's runtime one consolidated program, and the compile-work sum
+  // of rounds, visits and emitted lines by the 2026-09-03 rebuild before it.
+  // run_instructions and run_peak_bytes, which every row has carried since
+  // 2026-09-06, were drawn nowhere at all, and the retired arena peak had two
+  // distinct values across the rows that hold it, so it drew as a flat line.
   const TREND = [
-    // Scaled down so it shares an axis with the others; only shape is read.
-    ['#fb7185', 'run instructions',
-     (r) => (r.instructions == null || r.encode_instructions == null
-       ? null
-       : Math.round((r.instructions + r.encode_instructions) / 1000))],
-    ['#a78bfa', 'run memory', (r) => r.oneshot_arena_peak_bytes],
-    // The decoder's machine code. Only its own, because every binary links
-    // the same runtime and summing them would count it four times.
-    ['#facc15', 'binary size', (r) => r.text_bytes],
-    ['#38bdf8', 'compile work',
-     (r) => sum(sum(r.compile_rounds, r.compile_visits), r.emitted_lines)],
+    ['#fb7185', 'run instructions', (r) => r.run_instructions],
+    ['#a78bfa', 'run memory', (r) => r.run_peak_bytes],
+    ['#38bdf8', 'compile instructions', (r) => r.compile_instructions],
+    ['#facc15', 'compile allocations', (r) => r.compile_allocs],
     ['#fb923c', 'compile memory', (r) => r.compile_peak_bytes],
+    // The decoder's machine code. Only its own, because every binary links
+    // the same runtime and summing them would count it four times. Grey, and
+    // last, because the score does not read it: a machine-code-size term was
+    // ruled out of welfare on 2026-09-05 and .text kept its own exact vein.
+    ['#94a3b8', 'binary size', (r) => r.text_bytes],
     // In hundredths, so integer scaling keeps a real move visible. One line:
     // the column is rewritten under one formula whenever the formula moves,
     // which is what makes two points on it comparable.
     ['#4ade80', 'welfare',
      (r) => (r.welfare == null ? null : Math.round(parseFloat(r.welfare) * 100))],
   ];
-  function sum(a, b) {
-    return a == null || b == null ? null : a + b;
-  }
   function drawTrend(rows) {
     const host = document.getElementById('trend-chart');
     if (!host) return;
