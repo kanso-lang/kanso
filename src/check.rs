@@ -1349,10 +1349,12 @@ fn check_predicates(
 fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
     let scan = FieldScan {
         program,
+        // an err answers its three readers whatever the program declares
         declared: program
             .types
             .iter()
             .flat_map(|t| t.fields.iter().map(|(f, _, _)| f.as_str()))
+            .chain(crate::ast::ERR_READERS)
             .collect(),
         plain: program
             .types

@@ -1957,10 +1957,43 @@ pub fn desugar_field_reads(program: &mut ast::Program) {
     // Inequality rides the same hook: it has to see every module the merge
     // produced, which is exactly what this pass already runs after.
     desugar_inequality(program);
+    synthesize_reader_groups(program);
     for decl in &mut program.fns {
         for stmt in &mut decl.body {
             desugar_stmt(stmt);
         }
+    }
+}
+
+/// An err answers `.reason`, `.cause` and `.origin` whatever the program
+/// declares, and a read desugars to the getter's name, so the group has to
+/// exist when no record declares the field. This arm makes it exist. The
+/// reader hole at every dispatcher's entry answers an err before any arm is
+/// tried, so the arm is never reached by one; a record reaching it matches
+/// nothing and gets the field error every other getter gives.
+///
+/// Once, over the merged program: synthesised per module, every module
+/// carried an identical arm and the merge refused them as overlapping.
+fn synthesize_reader_groups(program: &mut ast::Program) {
+    for field in ast::ERR_READERS {
+        let name = ast::getter_name(field);
+        if program.fns.iter().any(|f| f.name == name) {
+            continue;
+        }
+        let span = crate::diag::Span::at(0, 0);
+        program.fns.push(ast::FnDecl {
+            name,
+            is_pub: true,
+            span,
+            params: vec![ast::Pattern::Ctor {
+                ty: Name::new("err"),
+                fields: vec![ast::Pattern::Var(Name::new(ast::GETTER_BINDER), span)],
+                whole: None,
+            }],
+            body: vec![ast::Stmt::Expr(ast::Expr::Ident(Name::new(ast::GETTER_BINDER), span))],
+            file: crate::ast::unstamped(),
+            synthetic: false,
+        });
     }
 }
 

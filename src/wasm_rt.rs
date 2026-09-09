@@ -683,6 +683,17 @@ pub extern "C" fn rt_err_hop(h: u32, name_lit: u32) -> u32 {
     }
 }
 
+/// One of an err's three readers, at a reader getter's entry: the piece for
+/// an err, the handle untouched for anything else so the arms run as usual.
+#[no_mangle]
+pub extern "C" fn rt_err_read(h: u32, name_lit: u32) -> u32 {
+    let Value::Str(field) = val(name_lit) else { die("field name must be a string".to_string()) };
+    match val(h) {
+        Value::ErrV(info) => push(Slot::V(crate::eval::err_read(&info, &field))),
+        _ => h,
+    }
+}
+
 /// Origin for errs born inside an rt call (division, indexing, fallible
 /// builtins): the compiled site stamps the fresh err it gets back.
 #[no_mangle]

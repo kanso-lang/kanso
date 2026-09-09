@@ -3381,3 +3381,46 @@ the values they landed on: `utf8_bytes` 11,164,198, `run_utf8_bytes`
 48,751,741, `entry_instructions` 162,061,812, `library_instructions`
 162,857,425. Each is the validator, the two readers or the refusal, and the
 paragraph above says which.
+
+## 2026-09-09 — an err answers `.reason`, `.cause` and `.origin`, on every engine
+
+The 2026-08-29 gavel "an err has readers" (archive), built. STATUS.md had
+carried it as unbuilt since the sitting: `annotate e (err -> "config:
+{err.reason}")` — the gavels' own sample — was refused at check time with
+`no record type has a field reason`, and a callback holding an err could
+look at nothing inside it.
+
+**Built.** A field read desugars to a getter call, `Get_reason e`, as every
+field read does, so the reader lives where a getter is entered. Each engine's
+dispatcher answers an err at its ENTRY, before any arm is tried: the
+interpreter in `dispatch_loop_inner`, native in the prologue `emit_reader_hole`
+writes for both dispatcher shapes (`k_is_err` then `k_err_read`), the page
+with `rt_err_read` in `emit_dispatcher`. `reason` is the value the err was
+raised with; `cause` the err it wrapped, or none; `origin` the "{fn} at
+{file}:{line}" it was born at, or none for an executor-born one. The
+interpreter's `err_read` is the oracle and the wasm host calls it; native's
+`k_err_read` mirrors it arm for arm. The entry is the only place that works:
+a placeholder arm `(err Read)` matched a foreign err before the failure
+pass-through and would have answered the reason to `.cause`, and an
+own-hako err is one no arm may see, where a reader has to see both.
+
+**The group has to exist.** A read of a field no record declares resolves to
+no getter at all, so `desugar_field_reads` now synthesises one arm per reader
+field nobody declares. Synthesised per module, as the record getters are, it
+produced one identical arm in every module and the merge refused the overlap;
+it runs once over the merged program instead. The checker's declared-field
+set gains the three names so the read passes the `no record type has a field`
+fence, and a record reaching a reader group still gets the field error every
+getter gives.
+
+**Fixture.** `tests/golden/micro/an_err_has_readers.kso`, settled failures
+only, so the page runs it too: a plain err's reason, an annotated err's reason
+and its cause's reason, `.cause` of an unwrapped err (`<none>`), a cause read
+through a second `rescue`, the origin's function name on both, and json's
+decode failure read as `e.reason.reason` — the case where a reader and a
+record field share a name. Watched red on the checker first. The origin names
+the raising function qualified when the program is imported, so the fixture
+carries an `.imported.out` twin like the record-printing ones. Two things the
+fixture taught while it was being written: `print none` writes `<none>`, and a
+named group handed the err passes it through as ever, so the readers are
+applied inside the lambda and the group gets the piece.

@@ -156,6 +156,25 @@ pub fn err_value(reason: Value, raised: Raised) -> Value {
     }))
 }
 
+/// What an err answers to one of its three readers: `reason` is the value it
+/// was raised with, `cause` the err it wrapped or none, `origin` the
+/// "{fn} at {file}:{line}" it was born at, or none for an executor-born one.
+/// The one place all three engines read an err's parts — the wasm host calls
+/// it, and native's `k_err_read` mirrors it arm for arm.
+pub fn err_read(info: &ErrInfo, field: &str) -> Value {
+    match field {
+        "reason" => info.reason.clone(),
+        "cause" => match &info.cause {
+            Some(cause) => Value::ErrV(cause.clone()),
+            None => Value::NoneV,
+        },
+        _ => match &info.origin {
+            Some(origin) => Value::Str(origin.to_string()),
+            None => Value::NoneV,
+        },
+    }
+}
+
 /// A byte list (the scanner's `bytes`/`slice` view) as its utf-8 text, so a
 /// number can be parsed straight from bytes without first materializing a
 /// string. None when the bytes aren't valid utf-8 byte values.
@@ -2007,6 +2026,18 @@ impl<'a> Interp<'a> {
         let mut args = args;
         let mut span = span;
         loop {
+            // The second hole in an err's infectiousness: a reader's getter
+            // answers the piece before any arm is tried, so an own-hako err
+            // and a foreign one read alike, and a getter arm never sees one.
+            if let Some(field) = crate::ast::err_reader(&name) {
+                if let [arg] = args.as_mut_slice() {
+                    let taken = std::mem::replace(arg, Value::NoneV);
+                    *arg = self.force_thunk(taken)?;
+                    if let Value::ErrV(info) = arg {
+                        return Ok(err_read(info, field));
+                    }
+                }
+            }
             let args_len = args.len();
             // A position is scrutinized when any arity-matching arm inspects
             // it (anything but a bare Var/Wildcard); thunks force before

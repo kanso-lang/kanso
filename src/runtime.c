@@ -2910,6 +2910,22 @@ KValue k_field(KValue v, long long i) {
 }
 KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
+/* An err's three readers, `.reason`, `.cause` and `.origin` — the second
+   deliberate hole in infectiousness beside `wrap_err`'s second argument. The
+   dispatcher of a reader's getter calls this at its entry, before any arm,
+   and only for an err; the interpreter's `err_read` is the oracle. */
+long long k_is_err(KValue v) { return v.tag == K_ERR; }
+KValue k_err_read(KValue v, const char* field) {
+    KErrBox* box = k_err_box(v);
+    if (field[0] == 'r') return box->reason;
+    if (field[0] == 'c') {
+        if (!box->cause) return k_none();
+        KValue out; out.tag = K_ERR; out.payload = k_ptr(box->cause); return out;
+    }
+    if (!box->origin) return k_none();
+    return k_str(box->origin);
+}
+
 /* pattern checks: nonzero on match */
 long long k_check_tag(KValue v, long long tag) { return v.tag == tag; }
 /* `some` is a value that is not none. A failure is neither, and answering

@@ -1,0 +1,8 @@
+config missing 1
+config: config missing 2
+config missing 3
+<none>
+cause: config missing 5
+boom
+wrapped
+unexpected end of input
