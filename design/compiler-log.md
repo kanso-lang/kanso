@@ -3299,3 +3299,19 @@ carries an `.imported.out` twin like the record-printing ones. Two things the
 fixture taught while it was being written: `print none` writes `<none>`, and a
 named group handed the err passes it through as ever, so the readers are
 applied inside the lambda and the group gets the piece.
+
+**Veins, CI's rows.** The readers sit at every dispatcher's entry and the
+checker's field set grew by three names, so the front end carries them:
+`compile_allocs` 29,606 -> 29,714 (+108), `compile_instructions` 48,751,741 ->
+48,820,126 (+68,385, +0.14%), `entry_instructions` 162,061,812 -> 162,734,847
+(+673,035, +0.42%), `library_instructions` 162,857,425 -> 163,022,357
+(+164,932, +0.10%). The compile peak (773,818), every runtime vein, the
+emitted, text and machine-code rows are byte-identical. Priced, row by row,
+for the trend gate: `compile_allocs` 29,714, `compile_instructions`
+48,820,126, `entry_instructions` 162,734,847, `library_instructions`
+163,022,357. Welfare reads 66.36 against the 66.37 floor, a fall of 0.01 the
+readers pay in compile cost with nothing offsetting it; the 2026-08-25 ruling's
+language clause applies, so the floor moves down to the reading, 66.3596,
+by hand in `bench/welfare_floor.json` with its history entry (`--set` refuses
+a fall of this size by design, and says the file is the door), and no
+optimisation rides along to hide the price.
