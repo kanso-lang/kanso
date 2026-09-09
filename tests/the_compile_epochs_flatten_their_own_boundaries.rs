@@ -363,3 +363,79 @@ fn every_epoch_counter_is_one_the_objective_weighs() {
         );
     }
 }
+
+/// The string a rescored row names its epoch with.
+fn scored_base(row: &str) -> String {
+    let at = row
+        .find("\"scored_base\":\"")
+        .unwrap_or_else(|| panic!("a rescored row names the epoch it was scored in: {row}"))
+        + "\"scored_base\":\"".len();
+    let rest = &row[at..];
+    rest[..rest.find('"').expect("the column is closed")].to_string()
+}
+
+/// The divisor a row is scored on is the product of every factor from the next
+/// boundary AHEAD of it forward, so what a row's baseline stands for is "the
+/// counters as they were measured before that boundary". Nothing said so. A
+/// reader looking at two rows either side of a boundary saw two welfare values
+/// on two different baselines and no column distinguishing them.
+///
+/// THE ROW ON THE BOUNDARY BELONGS TO THE NEWER EPOCH. Its own factor is
+/// already divided out — it is the first row measured the new way — so it is
+/// named by the NEXT boundary, not by itself. A first cut named every row from
+/// the list before its own commit was removed and stamped each boundary row
+/// `before <itself>`, which reads as though the row predates a change it is
+/// the first to carry.
+///
+/// THE NAMES ARE EXACT, not a shape. One row before every boundary, one on
+/// each, one past them all: the whole sequence is pinned, so a mutation that
+/// shifts the naming by one row turns this red wherever it shifts it.
+#[test]
+fn every_row_names_the_epoch_its_baseline_was_measured_in() {
+    let commits = boundaries();
+    assert!(!commits.is_empty(), "the epoch table names at least one boundary");
+
+    // The rows carry no counters: what is under test is the naming, which the
+    // tool decides before it scores anything.
+    let mut lines = vec![row("earlier", &[])];
+    for commit in &commits {
+        lines.push(row(commit, &[]));
+    }
+    lines.push(row("modern", &[]));
+
+    let out = rescore("epoch-names", &lines);
+    assert_eq!(out.len(), lines.len(), "every row in, every row out");
+
+    let mut want: Vec<String> = vec![format!("before {}", commits[0])];
+    for next in commits.iter().skip(1) {
+        want.push(format!("before {next}"));
+    }
+    want.push("as measured".to_string());
+    want.push("as measured".to_string());
+
+    let seen: Vec<String> = out.iter().map(|r| scored_base(r)).collect();
+    assert_eq!(
+        seen, want,
+        "each row is scored against the baseline as it stood before the next boundary ahead \
+         of it, and a row past every boundary against the baseline as measured"
+    );
+}
+
+/// A row with no epoch table to sit under is scored on the baseline exactly as
+/// welfare measured it, and must say that rather than naming a boundary it
+/// never crossed. This is the staged-fixture case every other spec over this
+/// tool writes, and it takes a different arm of `divisors` — one that builds
+/// the whole map at once instead of folding across boundaries, so the naming
+/// is written twice and only this holds the second copy.
+#[test]
+fn a_history_under_no_epochs_at_all_is_scored_as_measured() {
+    let out = rescore("epoch-none", &[row("solo", &[]), row("other", &[])]);
+    assert_eq!(out.len(), 2, "every row in, every row out");
+    for r in &out {
+        assert_eq!(
+            scored_base(r),
+            "as measured",
+            "no boundary applies to this row, so its baseline is the measured one: {r}"
+        );
+    }
+}

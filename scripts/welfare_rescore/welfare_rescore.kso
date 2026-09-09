@@ -353,25 +353,51 @@ fn epoch_divisors rows epochs
   divisors rows in_window (suffix? epochs rows) (length in_window == 0)
 
 fn divisors rows in_window true false
-  start = [(oldest_divisor in_window) {}]
+  start = [(oldest_divisor in_window) {} (ahead_of in_window)]
   list/fold rows start (a r -> crossed a r in_window)
 
 fn divisors rows _ true true
-  [{} (no_epochs rows)]
+  [{} (no_epochs rows) []]
+
+# The boundary commits, oldest first, with each named once.
+fn ahead_of epochs
+  list/fold epochs [] (acc e -> once acc e[1]!)
+
+fn once acc c
+  added acc c (length (list/to_list (list/select acc (x -> x == c))) > 0)
+
+fn added acc _ true
+  acc
+
+fn added acc c false
+  push acc c
 
 fn divisors _ _ false _
   err "a compile epoch names a commit no history row carries"
 
 # Every row on an empty divisor map, which `epoch_value` reads as the identity.
 fn no_epochs rows
-  list/fold rows {} (m r -> put m r["commit"] {})
+  list/fold rows {} (m r -> put m r["commit"] [{} "as measured"])
 
 # The divisor drops by a boundary's factor at the first row measured the new
 # way and holds until the next boundary.
 fn crossed a row epochs
   here = list/to_list (list/select epochs (e -> e[1]! == row["commit"]))
   now = list/fold here a[1]! (m e -> put m e[2]! (m[e[2]!]! / e[3]!))
-  [now (put a[2]! row["commit"] now)]
+  left = list/to_list (list/select a[3]! (c -> c != row["commit"]))
+  [now (put a[2]! row["commit"] [now (epoch_name left)]) left]
+
+# A row is scored against the baseline as it stood BEFORE the next boundary
+# ahead of it, so that boundary names its epoch. A row past every boundary is
+# scored against the baseline as measured and says so.
+fn epoch_name ahead
+  epoch_named ahead (length ahead == 0)
+
+fn epoch_named _ true
+  "as measured"
+
+fn epoch_named ahead false
+  "before {ahead[1]!}"
 
 # The baseline as a row's own epoch would have measured it.
 fn rebased base d
@@ -387,7 +413,8 @@ fn epoch_value v f false
   math/round (1.0 * v / f)
 
 fn at_row m divs row
-  scoring m.terms (rebased m.base divs[row["commit"]]!) m.formula
+  found = divs[row["commit"]]!
+  scoring m.terms (rebased m.base found[1]!) m.formula
 
 # --- the rewrite ------------------------------------------------------------
 fn over_rows m given
@@ -421,13 +448,15 @@ fn written m phases epochs raw
   io/write "{text/join rows "\n"}\n"
 
 fn scored_row m divs r a phases
-  rescored (at_row m divs r) (reconstructed r a phases)
+  found = divs[r["commit"]]!
+  rescored (at_row m divs r) (reconstructed r a phases) found[2]!
 
-fn rescored m row
+fn rescored m row epoch
   weight = covered row m.terms m.base
   told = columned row m.terms m.base (weight == 0.0)
   by = put told "scored_by" m.formula
-  json/encode (put by "scored_weight" (fixed weight 2))
+  wt = put by "scored_weight" (fixed weight 2)
+  json/encode (put wt "scored_base" epoch)
 
 # A row carrying no counter ANY term reads gets no welfare column. There is no
 # denominator left to renormalize onto, so there is no arithmetic that could
