@@ -3871,21 +3871,27 @@ misreading the mark prevents.
 
 ## 2026-09-09 — an explanation of the error model, checked against the interpreter, found three gaps
 
-OPEN, all three cloud's; two of them are rulings unbuilt. Clay asked for a written explanation of how failure
+OPEN, all three cloud's; the first two are the language as designed, not shipping. Clay asked for a written explanation of how failure
 works in kanso for a friend. Every claim in it was run through
 `target/release/kanso play` before it went out, and three did not hold as the
 design says they should. None of them is in the book, which uses only the
 spellings that work; each is a place where a reader who trusts a ruling
 rather than a page gets a wrong answer.
 
-**1. The possible-none check is off by default, and the ruling that would make
-it standard is unbuilt.** `check_none_exhaustive` in src/check.rs is the
+**1. The possible-none check is gated behind an environment variable, and
+the gate is the defect.** `check_none_exhaustive` in src/check.rs is the
 diagnostic the book's own story implies — "this can be a none and `describe`
 has no arm for it — resolve it here, or give `describe` a `none` arm" — and it
-runs only under `KANSO_EXHAUSTIVE`, where the 2026-07-24 none campaign left it
-waiting on per-arm return sets. The program the explanation used is the book's
-menu sample with the `none` arm deleted and the call moved into a function
-body:
+runs only under `KANSO_EXHAUSTIVE`, where the 2026-07-24 none campaign left
+it while it waited on per-arm return sets. Clay, on reading that here:
+"KANSO_EXHAUSTIVE is of course total nonsense. you're just describing how the
+language works. the exhaustiveness when you're looking for a match on an arm
+has always been the way the language works since like the first couple of
+days of designing it." So there is nothing to rule and nothing to wait for:
+a call whose argument can be a none, made to a group with no `none` arm, is
+refused at check, and the flag comes out. The program the explanation used is
+the book's menu sample with the `none` arm deleted and the call moved into a
+function body:
 
     fn describe price
       "{price} yen"
@@ -3898,17 +3904,19 @@ body:
     kanso play                       <none> yen, exit 0
     KANSO_EXHAUSTIVE=1 kanso play    error[exhaustive] at the argument, exit 2
 
-With the arm typed `price:int` the bare run instead dies at execution time:
-`error[runtime]: no overload of `describe` matches these arguments`. A literal
-`none` handed to that typed arm fails the same way at runtime, where a literal
-string handed to it is refused at check (`literal_arg_type`). Clay ruled the
-shape on 2026-08-15, "8: exhaustiveness dissolves into per-call coverage
-(ruled)": no group-level annotation; each call's inferred value set is checked
-for an unambiguously matching arm, provable gaps are compile diagnostics,
-unprovable calls keep the runtime err. The flagged checker is most of that
-already. Under "A ruling outranks a lead" this is at the front of the queue,
-and the explanation as sent says the check "sits behind a flag" so that it does
-not claim more than the compiler does.
+The second line is the language; the first is what ships. With the arm typed
+`price:int` the bare run instead dies at execution time: `error[runtime]: no
+overload of `describe` matches these arguments`, and a literal `none` handed
+to that typed arm fails the same way at runtime, where a literal string
+handed to it is refused at check (`literal_arg_type`). The 2026-08-15 sitting
+recorded the same rule as "8: exhaustiveness dissolves into per-call
+coverage": each call's inferred value set is checked for an unambiguously
+matching arm, provable gaps are compile diagnostics, unprovable calls keep
+the runtime err. The 2026-07-24 entry "what the last exhaustiveness report
+is, and is not" says the one false report left was a group-level return set
+where a per-arm one would be exact, and that is an implementation detail for
+whoever ungates it. The explanation as sent states the check as the language,
+without the flag.
 
 **2. The 2026-08-29 gavel "effects are types, and the words are the only
 doors" is unbuilt on the point measured: a `.` over an io still binds
