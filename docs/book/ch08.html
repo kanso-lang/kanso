@@ -359,6 +359,9 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">101</span> _ _
   <span class="f">true</span>
 
+<span class="k">fn</span> <span class="f">mark_step</span> _ none _ _
+  <span class="f">false</span>
+
 <span class="k">fn</span> <span class="f">mark_step</span> cs _ p q
   <span class="f">mark_from</span> cs (p <span class="o">+</span> <span class="n">1</span>) q
 
