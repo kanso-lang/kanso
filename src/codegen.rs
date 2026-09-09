@@ -1186,6 +1186,7 @@ declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)
+declare %KValue @k_b_append_rendered(%KValue, %KValue, i64)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
 declare %KValue @k_b_to_float(%KValue, ptr)
@@ -1993,6 +1994,9 @@ fn rsym(name: &str, arity: usize) -> String {
     quoted(&format!("r_{name}_{arity}"))
 }
 
+/// The ambient group an interpolated value may dispatch to.
+const RENDER_GROUP: &str = "render/to_string";
+
 fn dsym(name: &str, arity: usize) -> String {
     quoted(&format!("d_{name}_{arity}"))
 }
@@ -2373,6 +2377,37 @@ impl<'a> Backend<'a> {
         f.line(&format!("{t} = call %KValue @k_force_unless_black(%KValue {value})"));
         f.record(&t, if post == 0 { crate::infer::TOP } else { post | crate::infer::THUNK });
         t
+    }
+
+    /// Whether a rendered value goes through the ambient `render/to_string`
+    /// group: a set carrying REC may hit a user arm, so it is routed there.
+    /// Primitive-only sets keep the direct call — coherence proves no arm can
+    /// exist for them (design/render-plan.md).
+    fn render_dispatchable(&self, f: &FnEmit, value: &str) -> bool {
+        f.set_of(value) & (REC | NONE | DESC) != 0
+            && self.program.fns.iter().any(|d| d.name == RENDER_GROUP)
+    }
+
+    /// The string an interpolated `value` renders to, and the fail set it
+    /// adds: only an err propagates out of an interpolation (a none renders
+    /// `<none>`, so it is not a fail), and a dispatched arm may fail on its
+    /// own.
+    fn render_interp(&self, f: &mut FnEmit, value: &str) -> (String, Set) {
+        let mut fails = f.set_of(value) & ERR;
+        let dispatchable = self.render_dispatchable(f, value);
+        let t = f.tmp();
+        let value = self.as_value(f, value);
+        match dispatchable {
+            true => {
+                f.line(&format!(
+                    "{t} = call tailcc %KValue @{}(%KValue {value})",
+                    dsym(RENDER_GROUP, 1)
+                ));
+                fails |= ERR;
+            }
+            false => f.line(&format!("{t} = call %KValue @k_render(%KValue {value}, i64 0)")),
+        }
+        (t, fails)
     }
 
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
@@ -2983,6 +3018,38 @@ impl<'a> Backend<'a> {
         }
     }
 
+    /// The set a discriminator carries inside one arm of a switch dispatcher:
+    /// the tags the arm's case names, as inference spells them. `None` for an
+    /// arm the default reaches, whose value the switch proved nothing about.
+    fn arm_tags_set(&self, p: &Pattern, by_tag: bool) -> Option<Set> {
+        let tag_set = |t: i64| match t {
+            0 => INT,
+            1 => FLOAT,
+            2 => infer::TRUE,
+            3 => infer::FALSE,
+            4 => NONE,
+            6 => STR,
+            9 => LIST,
+            10 => MAP,
+            _ => TOP,
+        };
+        match by_tag {
+            true => match self.arm_case(p)? {
+                ArmCase::Tags(tags) => Some(tags.into_iter().fold(0, |acc, t| acc | tag_set(t))),
+                ArmCase::Rec(..) => Some(REC),
+            },
+            false => match p {
+                Pattern::IntLit(..) => Some(INT),
+                Pattern::Nullary(nm, _) => Some(match nm.as_str() {
+                    "true" => infer::TRUE,
+                    "false" => infer::FALSE,
+                    _ => NONE,
+                }),
+                _ => None,
+            },
+        }
+    }
+
     /// A group whose arms discriminate on one parameter by the kind of value it
     /// is compiles to a switch on the tag instead of a cascade of checks. The
     /// cascade tests arms in order, so the switch is only the same program when
@@ -3325,7 +3392,19 @@ impl<'a> Backend<'a> {
                     _ => {}
                 }
             }
+            // And the body is told what the switch decided. Until 2026-09-09
+            // the discriminator kept the whole group's set inside every arm,
+            // so `n:int`'s body forced `n` again, asked whether a user
+            // to_string arm could claim it, and took the generic door on
+            // every builtin it handed `n` to. The case that reached this arm
+            // is the proof, so the set inside it is the case's tags.
+            let narrowed = self.arm_tags_set(&decl.params[disc], by_tag);
+            let whole = f.set_of(&format!("%x{disc}"));
+            if let Some(set) = narrowed {
+                f.record(&format!("%x{disc}"), set);
+            }
             self.emit_fn_body(&mut f, &decl.body)?;
+            f.record(&format!("%x{disc}"), whole);
         }
         let _ = writeln!(
             self.body,
@@ -4277,30 +4356,8 @@ impl<'a> Backend<'a> {
                         TemplatePart::Interp(inner) => {
                             let value = self.emit_expr(f, inner)?;
                             let value = self.maybe_force(f, value);
-                            // only an err propagates out of interpolation; a none
-                            // renders `<none>` via k_render, so it is not a fail
-                            fails |= f.set_of(&value) & ERR;
-                            // a set carrying REC may hit a user to_string arm:
-                            // route through the ambient group. Primitive-only
-                            // sets keep the direct call — coherence proves no
-                            // arm can exist for them (design/render-plan.md).
-                            let group = "render/to_string";
-                            let dispatchable = f.set_of(&value) & (REC | NONE | DESC) != 0
-                                && self.program.fns.iter().any(|d| d.name == group);
-                            let t = f.tmp();
-                            let value = self.as_value(f, &value);
-                            match dispatchable {
-                                true => {
-                                    f.line(&format!(
-                                        "{t} = call tailcc %KValue @{}(%KValue {value})",
-                                        dsym(group, 1)
-                                    ));
-                                    fails |= ERR;
-                                }
-                                false => f.line(&format!(
-                                    "{t} = call %KValue @k_render(%KValue {value}, i64 0)"
-                                )),
-                            }
+                            let (t, failed) = self.render_interp(f, &value);
+                            fails |= failed;
                             t
                         }
                     };
@@ -5857,6 +5914,62 @@ impl<'a> Backend<'a> {
                         f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), sliced]));
                         return Ok(t);
                     }
+                }
+            }
+        }
+        // `append acc "{x}"` where `x` is a number: the template rendered
+        // `x` into a string for the one purpose of copying its bytes into
+        // `acc` and dropping it, which is every scalar the JSON encoder
+        // writes. The fused door renders the digits into a stack buffer and
+        // copies them from there, so no string is built. A value the ambient
+        // to_string group could claim keeps the dispatch the template would
+        // have made, so a user arm is never skipped; every other tag the door
+        // hands to k_render itself, the same call the template makes, so the
+        // bytes cannot differ. Same wrapper-spelling rule as the pair above.
+        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
+            if let Expr::Str(parts, _) = &args[1] {
+                if let [TemplatePart::Interp(inner)] = parts.as_slice() {
+                    let acc = self.emit_expr(f, &args[0])?;
+                    let acc = self.maybe_force(f, acc);
+                    let value = self.emit_expr(f, inner)?;
+                    let value = self.maybe_force(f, value);
+                    let mutate = self.in_place_pushes.contains(&(
+                        f.file.clone(),
+                        span.line as usize,
+                        span.col as usize,
+                    ));
+                    let fusable = !self.render_dispatchable(f, &value);
+                    let fuse_render = f.set_of(&value) & (INT | FLOAT) != 0 && fusable;
+                    let t = f.tmp();
+                    let rendered_set = match fuse_render {
+                        true => {
+                            let fails = f.set_of(&value) & ERR;
+                            let value = self.as_value(f, &value);
+                            f.line(&format!(
+                                "{t} = call %KValue @k_b_append_rendered(%KValue {acc}, %KValue {value}, i64 {})",
+                                i64::from(mutate)
+                            ));
+                            STR | fails
+                        }
+                        false => {
+                            // both operands are already emitted, so the call
+                            // the generic path would have made is made here:
+                            // the byte twin, whose string arm copies inline.
+                            // The first cut called k_b_append_mut instead and
+                            // paid 22,789,710 in k_b_append_wide on runbench.
+                            let (rendered, fails) = self.render_interp(f, &value);
+                            let sym = match mutate {
+                                true => "k_b_append_mut_byte",
+                                false => "k_b_append_byte",
+                            };
+                            f.line(&format!(
+                                "{t} = call %KValue @{sym}(%KValue {acc}, %KValue {rendered})"
+                            ));
+                            STR | fails
+                        }
+                    };
+                    f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), rendered_set]));
+                    return Ok(t);
                 }
             }
         }
