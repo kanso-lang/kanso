@@ -4,9 +4,11 @@
 //!
 //! Which leaves one literal to be careful about. `fn kind 256` is an arm no
 //! byte can ever reach, and a program may write it: the interpreter runs the
-//! generic arm for a `none`, because 256 is not a byte and the arm is simply
-//! dead. Fold the sentinel and the literal into one switch and that dead arm
-//! catches every read past the end instead.
+//! `none` arm for a read past the end, because 256 is not a byte and the arm
+//! is simply dead. Fold the sentinel and the literal into one switch and that
+//! dead arm catches every read past the end instead. The group names `none`
+//! because the possible-none check asks it to (RULED 2026-09-09): a lenient
+//! read handed to a group with no `none` arm is refused at check.
 //!
 //! Watched red against the first draft of the raw switch, which had no range
 //! guard: native answered "a byte that cannot be" where the interpreter
@@ -50,6 +52,9 @@ fn kind 91
 fn kind 256
   "a byte that cannot be"
 
+fn kind none
+  "the end"
+
 fn kind _
   "some other byte"
 
@@ -73,7 +78,7 @@ fn an_arm_naming_256_does_not_catch_the_end_of_the_input() {
         "the engines disagree about an arm no byte can reach:\nnative:\n{native}\noracle:\n{oracle}"
     );
     assert_eq!(
-        oracle, "bracket\nquote\nsome other byte\n",
+        oracle, "bracket\nquote\nthe end\n",
         "a read past the end took an arm that names 256: {oracle}"
     );
 }

@@ -3400,9 +3400,12 @@ the check refuses, and `list/fold`'s seed position has none. It folds from
 the first release now, with `further` alone, and answers none for an empty
 list before the fold rather than through it; `list/reject`'s lazy sequence
 is materialised first, since `length` and a strict read want a list. Twelve
-of twelve hako specs pass. The batch ran the golden and engine suites and
-not the crate's full `cargo test`, which is where hako lives; the full run
-is in the batch now.
+of twelve hako specs pass. The full run then read one more: the byte-arm
+fixture in tests/a_byte_arm_no_byte_can_reach.rs reads past the end of a
+byte string on purpose and let a catch-all arm answer the none; its group
+names `none` now, and the arm that names 256 is still the one the test is
+about. The batch ran the golden and engine suites and not the crate's full
+`cargo test`, which is where both live; the full run is in the batch now.
 
 ## 2026-09-09 — a catch-all `none` arm empties the none from the arms below it, and a piped call is a call
 
