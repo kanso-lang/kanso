@@ -76,6 +76,58 @@ whose log entry ends "That is a gavel." A sweep that reads only prose cannot
 see a question a test is holding. And an entry **carries a recommendation**,
 because a question with no proposed answer turns one sitting into ten.
 
+## Ruled, unbuilt
+
+Rulings Clay has made that no pull request has yet built. Cloud reads this
+whole section before choosing what to build next, and chooses with
+discretion; a pull request on something else says which of these it weighed.
+The chat adds a row the day a ruling lands and removes it the day the build
+lands on main. Verified against the tree on 2026-09-09 by probing the
+compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
+not audited.
+
+### Effects are types, and the words are the only doors (2026-08-29)
+
+The archive entry of that name. No `<t>effect` type exists; a `.` over an io
+still binds automatically, so `effect . rescue orders` parses and its handler
+never runs. Owes: the type, the refusal of a box where a value is expected,
+the end of the automatic bind, and ch04/ch05 moving with it.
+
+### An err has readers (2026-08-29)
+
+The archive entry of that name. `.reason`, `.cause` and `.origin` on an err,
+the second deliberate hole in infectiousness. No reader exists in the
+evaluator.
+
+### The chain line keeps its dot, and the lambda steps respell as `bind` (2026-08-29)
+
+The archive entry "gavel: the chain line keeps its dot". 305 `. (lambda)`
+steps still stand in lib/ and scripts/ on 2026-09-09.
+
+### `done` is minted (2026-08-26)
+
+The archive entry "gavel: the July letters close", letter D: a succeeded
+effect yields `done`, never `none`. No such value exists.
+
+### Exhaustiveness on arm match, without the flag (recorded 2026-08-15; the language since its first days)
+
+`check_none_exhaustive` runs only under `KANSO_EXHAUSTIVE`, where the
+2026-07-24 none campaign left it to measure the migration before imposing it.
+Clay, 2026-09-09: "the exhaustiveness when you're looking for a match on an
+arm has always been the way the language works." The flag comes out; the
+group-level return set the campaign's last report blamed is the
+implementer's to sharpen.
+
+### `read_bytes` beside `read_file` (2026-08-29)
+
+The archive entry "gavel: read_file is text, read_bytes is bytes, per
+precedent". Not in lib/os.
+
+### The book teaches the boundary language (queued P1, 2026-08-26)
+
+Held in the ledger's "Open, not blocking" until the effect type exists; the
+row is here so the dependency is visible from the list cloud reads.
+
 ## In flight
 
 Nothing. Every branch this session opened is merged and verified on

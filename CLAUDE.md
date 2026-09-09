@@ -77,19 +77,26 @@ id, because task numbers resolve nowhere outside the session that made them. A
 question that has already been ruled is never re-asked. A performance question
 with no surface area is the implementer's and does not go to Clay at all.
 
-**A ruling outranks a lead.** A gavel whose implementation is cloud's goes to
-the front of cloud's queue the day it is recorded, ahead of every thread cloud
-generated for itself, and stays there until it is built or Clay retires it.
-Learned on 2026-09-09: the 2026-09-07 reconstruction ruling sat unbuilt for two
-days while 26 pull requests landed on self-chosen work, and the chart Clay
-reads stayed wrong the whole time. His words: "it's just bizarre that I'm
-literally waiting days for this and it's just working continuously all day."
-The log records a ruling. Nothing in it schedules one: an OPEN entry marked
-cloud's is read when cloud next reads the log, and cloud reads its own last
-pull request's open-items list first. So a pull request opened on a
-self-generated lead while a ruled item stands unbuilt says so in its body and
-says why the lead came first, and the chat names every unbuilt ruling at the
-top of each check-in until it lands.
+**Every unbuilt ruling stays in view, and cloud chooses among them.** Cloud
+has discretion over the order it builds things in. What it may not do is take
+the next item off its own last pull request's open-items list without having
+read the whole list of rulings that stand unbuilt. That list is the "Ruled,
+unbuilt" section of STATUS.md, one heading per ruling with the date and the
+log entry that recorded it; the chat keeps it current, adds a row the day a
+ruling lands, and removes the row the day the build lands on main. Cloud reads
+the whole section at every check-in and before opening any pull request, and
+the body of a pull request on a self-generated lead says which rulings it
+weighed and why the lead came first. A row that has sat for a week gets a
+sentence in the log saying why. Learned on 2026-09-09: the 2026-08-29 sitting
+ruled the effect type, the err readers and the bind respelling, the 2026-08-26
+sitting minted `done`, and the 2026-08-15 sitting recorded per-call
+exhaustiveness; by 2026-09-09 none of the five was built, 296 pull requests
+had landed, and Clay was reading a chart that was wrong the whole time. His
+words: "it needs to have discretion over the order. but it just needs to be
+able to see and consider the entire list to do that, not just take the next
+thing." Nothing in the log schedules a ruling, and an OPEN entry is read when
+cloud next reads the log, which is why the list lives in STATUS.md and not in
+the log.
 
 **GITHUB API ACCESS DEPENDS ON HOW A SESSION WAS STARTED, NOT ON ITS AGE.**
 Established 2026-09-08 by comparing four sessions in one environment:
