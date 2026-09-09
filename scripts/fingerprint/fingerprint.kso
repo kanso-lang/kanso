@@ -54,6 +54,14 @@ fn one_asset _ _ _ asset _ false
   io/write_err "missing asset: {asset}\n" . (_ -> os/exit 1)
 
 fn one_asset site at names asset source true
+  reading site at names asset source (path/extension asset == "wasm")
+
+# The wasm module is bytes and names no asset, so it is read as bytes and
+# digested as it is; a text asset is read as text and may be rewritten first.
+fn reading site at names asset source true
+  os/read_bytes! source . (raw -> digested site at names asset raw)
+
+fn reading site at names asset source false
   os/read_file! source . (raw -> rewritten site at names asset source raw)
 
 # A javascript asset names the ones digested before it, so its own text is
@@ -81,7 +89,7 @@ fn quoting raw names at false
   self_references swapped names (at + 1)
 
 fn digested site at names asset raw
-  short = text/slice (sha256/hex (text/bytes raw)) 1 16
+  short = text/slice (sha256/hex (as_bytes raw)) 1 16
   stem = path/stem asset
   name = "{stem}-{short}.{path/extension asset}"
   on = (_ -> over_assets site (at + 1) (push names (named asset name)))
@@ -204,3 +212,9 @@ fn padding s false
   padded "{s} "
 
 pub play = os/args . (given -> with_args given)
+
+fn as_bytes raw:string
+  text/bytes raw
+
+fn as_bytes raw
+  raw

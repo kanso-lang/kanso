@@ -1123,6 +1123,7 @@ declare %KValue @k_b_utf8(%KValue, ptr)
 declare %KValue @k_desc_args()
 declare %KValue @k_desc_stdin()
 declare %KValue @k_b_read_file(%KValue)
+declare %KValue @k_b_read_bytes(%KValue)
 declare %KValue @k_b_write(%KValue)
 declare %KValue @k_b_write_err(%KValue)
 declare %KValue @k_b_env(%KValue)
@@ -1215,7 +1216,7 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [&str; 55] = [
+pub(crate) const BUILTIN_CALLS: [&str; 56] = [
     "net_port",
     "start",
     "kill",
@@ -1230,6 +1231,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 55] = [
     "rescue",
     "annotate",
     "read_file",
+    "read_bytes",
     "write",
     "write_err",
     "env",

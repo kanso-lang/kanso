@@ -1,0 +1,2 @@
+read_file: cannot read not_text.bin: the bytes are not text
+read_bytes: 5 [255 254 0 65 128]

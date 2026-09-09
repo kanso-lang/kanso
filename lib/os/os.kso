@@ -115,6 +115,16 @@ fn insisted path none
 fn insisted _ text
   text
 
+# The other reader. `read_file` is text and refuses bytes that are not;
+# `read_bytes` hands the bytes back as they are, the way Rust ships fs::read
+# beside fs::read_to_string and Go os.ReadFile beside an explicit conversion
+# (ruled 2026-08-29). The same two answers for absence and insistence.
+pub fn read_bytes path
+  builtin_read_bytes path . (r -> found path r)
+
+pub fn read_bytes! path
+  builtin_read_bytes path . (r -> insisted path r)
+
 # Starting a process is a description like any other effect. The answer is
 # three things, so the wrapper reads the builtin's list into a record: a
 # builtin cannot name a type that is declared here.

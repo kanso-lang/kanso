@@ -263,6 +263,8 @@ pub enum Desc {
     Args,
     Stdin,
     ReadFile(String),
+    /// the same read with no test of what the bytes are (ruled 2026-08-29)
+    ReadBytes(String),
     Write(String),
     WriteErr(String),
     Env(String),
@@ -272,6 +274,8 @@ pub enum Desc {
     Now,
     MakeDir(String),
     WriteFile(String, String),
+    /// what read_bytes handed back, written as it was
+    WriteBytes(String, Rc<Vec<u8>>),
     Run(String, Vec<String>),
     Start(String, Vec<String>),
     Kill(i64),
@@ -292,6 +296,7 @@ pub enum Desc {
     Accept(i64),
     Receive(i64),
     Send(i64, String),
+    SendBytes(i64, Rc<Vec<u8>>),
     CloseSocket(i64),
     Sleep(u64),
     Random(u64),
@@ -496,6 +501,9 @@ pub trait Executor {
     /// what the program did not plan for — a permission, a device, bytes that
     /// are not text.
     fn read_file(&mut self, path: &str) -> Result<Option<String>, String>;
+    /// The same three answers with no test of what the bytes are (ruled
+    /// 2026-08-29: read_file is text, read_bytes is bytes, per precedent).
+    fn read_bytes(&mut self, path: &str) -> Result<Option<Vec<u8>>, String>;
     /// Start a process and wait for it. The answer is what it wrote and the
     /// status it ended with; a non-zero status is an outcome, not a failure,
     /// because a caller usually wants to read it rather than be stopped by
@@ -538,6 +546,12 @@ pub trait Executor {
     /// already exists — a generator run twice is the ordinary case.
     fn make_dir(&mut self, path: &str) -> Result<(), String>;
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
+    /// Bytes written back as they were read. Defaults to refusing the way the
+    /// engine refuses text, since an engine with no files has none for bytes.
+    fn write_bytes(&mut self, path: &str, raw: &[u8]) -> Result<(), String> {
+        let _ = raw;
+        self.write_file(path, "")
+    }
     /// A socket listening on a port, answering the handle a later accept
     /// names. Every engine that has a filesystem has these; the browser has
     /// neither, and says so.
@@ -560,6 +574,9 @@ pub trait Executor {
         Err("this engine has no sockets".to_string())
     }
     fn send(&mut self, _conn: i64, _text: &str) -> Result<(), String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn send_bytes(&mut self, _conn: i64, _raw: &[u8]) -> Result<(), String> {
         Err("this engine has no sockets".to_string())
     }
     fn close_socket(&mut self, _handle: i64) -> Result<(), String> {
@@ -744,17 +761,11 @@ impl Executor for RealExecutor {
     }
 
     fn send(&mut self, conn: i64, text: &str) -> Result<(), String> {
-        use std::io::Write;
-        let mut stream = SOCKETS.with(|s| {
-            let s = s.borrow();
-            let found = s.conns.get(&conn);
-            found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
-        })?;
-        let Some(stream) = stream.as_mut() else {
-            return Err("that is not a connection".to_string());
-        };
-        stream.write_all(text.as_bytes()).map_err(|e| format!("cannot write: {e}"))?;
-        stream.flush().map_err(|e| format!("cannot write: {e}"))
+        send_raw(conn, text.as_bytes())
+    }
+
+    fn send_bytes(&mut self, conn: i64, raw: &[u8]) -> Result<(), String> {
+        send_raw(conn, raw)
     }
 
     fn close_socket(&mut self, handle: i64) -> Result<(), String> {
@@ -837,6 +848,10 @@ impl Executor for RealExecutor {
         read_file_text(path)
     }
 
+    fn read_bytes(&mut self, path: &str) -> Result<Option<Vec<u8>>, String> {
+        read_file_bytes(path)
+    }
+
     fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
         let done = std::process::Command::new(cmd)
             .args(args)
@@ -860,6 +875,10 @@ impl Executor for RealExecutor {
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
         std::fs::write(path, content).map_err(|_| format!("cannot write {path}"))
     }
+
+    fn write_bytes(&mut self, path: &str, raw: &[u8]) -> Result<(), String> {
+        std::fs::write(path, raw).map_err(|_| format!("cannot write {path}"))
+    }
 }
 
 /// Reading a file, worded once. The native runtime has a fixed message and
@@ -869,6 +888,33 @@ impl Executor for RealExecutor {
 /// `no such file or unreadable`. The fixed wording is also the only one that
 /// does not change with the host's libc or this compiler's version, which a
 /// reproducible diagnostic cannot afford.
+/// The bytes on a socket, whichever value they came from: a string writes its
+/// utf-8, a bytes value writes itself, and the socket sees no difference.
+fn send_raw(conn: i64, raw: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let mut stream = SOCKETS.with(|s| {
+        let s = s.borrow();
+        let found = s.conns.get(&conn);
+        found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
+    })?;
+    let Some(stream) = stream.as_mut() else {
+        return Err("that is not a connection".to_string());
+    };
+    stream.write_all(raw).map_err(|e| format!("cannot write: {e}"))?;
+    stream.flush().map_err(|e| format!("cannot write: {e}"))
+}
+
+/// The other reader (ruled 2026-08-29): the same three answers as
+/// `read_file_text`, with no test of what the bytes are. There is no
+/// `InvalidData` arm because there is nothing the bytes can fail to be.
+pub fn read_file_bytes(path: &str) -> Result<Option<Vec<u8>>, String> {
+    match std::fs::read(path) {
+        Ok(raw) => Ok(Some(raw)),
+        Err(why) if why.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err(format!("cannot read {path}: unreadable")),
+    }
+}
+
 pub fn read_file_text(path: &str) -> Result<Option<String>, String> {
     match std::fs::read_to_string(path) {
         Ok(text) => Ok(Some(text)),
@@ -967,6 +1013,11 @@ impl Executor for ScriptedExecutor {
         Ok(self.files.get(path).cloned())
     }
 
+    fn read_bytes(&mut self, path: &str) -> Result<Option<Vec<u8>>, String> {
+        self.transcript.push(format!("read_bytes {path:?}"));
+        Ok(self.files.get(path).map(|text| text.as_bytes().to_vec()))
+    }
+
     fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
         self.transcript.push(format!("run {cmd:?} {args:?}"));
         Ok((0, String::new(), String::new()))
@@ -979,6 +1030,11 @@ impl Executor for ScriptedExecutor {
 
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
         self.transcript.push(format!("write_file {path:?} {content:?}"));
+        Ok(())
+    }
+
+    fn write_bytes(&mut self, path: &str, raw: &[u8]) -> Result<(), String> {
+        self.transcript.push(format!("write_file {path:?} {} bytes", raw.len()));
         Ok(())
     }
 }
@@ -2207,6 +2263,16 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::ReadFile(path))))
             }
+            "read_bytes" => {
+                let [path] = arity(args, name, span)?;
+                let Value::Str(path) = path else {
+                    return Err(RuntimeError {
+                        message: "read_bytes takes a path string".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::ReadBytes(path))))
+            }
             "write" => {
                 let [content] = arity(args, name, span)?;
                 let Value::Str(content) = content else {
@@ -2312,13 +2378,19 @@ impl<'a> Interp<'a> {
             }
             "net_write" => {
                 let [conn, text] = arity(args, name, span)?;
-                let (Value::Int(conn), Value::Str(text)) = (&conn, &text) else {
-                    return Err(RuntimeError {
+                match (&conn, &text) {
+                    (Value::Int(conn), Value::Str(text)) => Ok(Value::Desc(Rc::new(Desc::Send(
+                        conn.to_i64().unwrap_or(-1),
+                        text.clone(),
+                    )))),
+                    (Value::Int(conn), Value::Bytes(raw)) => Ok(Value::Desc(Rc::new(
+                        Desc::SendBytes(conn.to_i64().unwrap_or(-1), raw.clone()),
+                    ))),
+                    _ => Err(RuntimeError {
                         message: "net_write takes a connection and a string".to_string(),
                         span,
-                    });
-                };
-                Ok(Value::Desc(Rc::new(Desc::Send(conn.to_i64().unwrap_or(-1), text.clone()))))
+                    }),
+                }
             }
             "net_close" => {
                 let [handle] = arity(args, name, span)?;
@@ -2332,13 +2404,20 @@ impl<'a> Interp<'a> {
             }
             "write_file" => {
                 let [path, content] = arity(args, name, span)?;
-                let (Value::Str(path), Value::Str(content)) = (&path, &content) else {
-                    return Err(RuntimeError {
+                match (&path, &content) {
+                    (Value::Str(path), Value::Str(content)) => {
+                        Ok(Value::Desc(Rc::new(Desc::WriteFile(path.clone(), content.clone()))))
+                    }
+                    // bytes write back as they were read: the site's wasm
+                    // module is read, digested and written under its new name
+                    (Value::Str(path), Value::Bytes(raw)) => {
+                        Ok(Value::Desc(Rc::new(Desc::WriteBytes(path.clone(), raw.clone()))))
+                    }
+                    _ => Err(RuntimeError {
                         message: "write_file takes a path and content strings".to_string(),
                         span,
-                    });
-                };
-                Ok(Value::Desc(Rc::new(Desc::WriteFile(path.clone(), content.clone()))))
+                    }),
+                }
             }
             "sleep" => {
                 let [ms] = arity(args, name, span)?;
@@ -4161,6 +4240,11 @@ impl<'a> Interp<'a> {
                 Ok(found) => read_value(found),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
+            Desc::ReadBytes(path) => Ok(match executor.read_bytes(path) {
+                Ok(Some(raw)) => Value::Bytes(Rc::new(raw)),
+                Ok(None) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+            }),
             // three answers in a list, which the std wrapper turns into a
             // record: a builtin cannot name a type declared in kanso.
             Desc::Run(cmd, argv) => Ok(match executor.run(cmd, argv) {
@@ -4206,6 +4290,10 @@ impl<'a> Interp<'a> {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
+            Desc::WriteBytes(path, raw) => Ok(match executor.write_bytes(path, raw) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+            }),
             Desc::Start(cmd, argv) => Ok(match executor.start(cmd, argv) {
                 Ok(handle) => Value::Int(handle.into()),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
@@ -4236,6 +4324,10 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), Raised::default()),
+            }),
+            Desc::SendBytes(conn, raw) => Ok(match executor.send_bytes(*conn, raw) {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
@@ -4488,6 +4580,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Opti
         Desc::Args => out.push_str("  args\n"),
         Desc::Stdin => out.push_str("  stdin\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
+        Desc::ReadBytes(path) => out.push_str(&format!("  read_bytes {path:?}\n")),
         Desc::Run(cmd, argv) => out.push_str(&format!("  run {cmd:?} {argv:?}\n")),
         Desc::Start(cmd, argv) => out.push_str(&format!("  start {cmd:?} {argv:?}\n")),
         Desc::Kill(handle) => out.push_str(&format!("  kill {handle}\n")),
@@ -4501,11 +4594,13 @@ pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Opti
         Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
         Desc::MakeDir(path) => out.push_str(&format!("  make_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
+        Desc::WriteBytes(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Listen(port) => out.push_str(&format!("  listen {port}\n")),
         Desc::SocketPort(l) => out.push_str(&format!("  port {l}\n")),
         Desc::Accept(listener) => out.push_str(&format!("  accept {listener}\n")),
         Desc::Receive(conn) => out.push_str(&format!("  receive {conn}\n")),
         Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
+        Desc::SendBytes(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),
         Desc::Bind(inner, _) => {
             render_plan(inner, out, force);

@@ -107,6 +107,7 @@ fn the_reading_finds_every_effect_builtin() {
             "now",
             "print",
             "random",
+            "read_bytes",
             "read_file",
             "run",
             "sleep",

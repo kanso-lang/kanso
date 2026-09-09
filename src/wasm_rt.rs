@@ -1351,6 +1351,10 @@ impl Executor for RtExecutor {
         Err(format!("the playground has no filesystem: cannot read {path}"))
     }
 
+    fn read_bytes(&mut self, path: &str) -> Result<Option<Vec<u8>>, String> {
+        Err(format!("the playground has no filesystem: cannot read {path}"))
+    }
+
     fn make_dir(&mut self, path: &str) -> Result<(), String> {
         Err(format!("the playground has no filesystem: cannot make {path}"))
     }

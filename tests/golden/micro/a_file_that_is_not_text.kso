@@ -1,0 +1,17 @@
+# Two readers, each naming what it reads (ruled 2026-08-29, per Rust's
+# fs::read beside fs::read_to_string and Go's os.ReadFile). `read_file` is
+# text and refuses a file whose bytes are not, on every engine with the same
+# words; `read_bytes` hands the same file back as it is. not_text.bin is five
+# bytes, and the first is one no utf-8 sequence starts with.
+import "std/io"
+import "std/os"
+
+fn refused (err e)
+  io/write "read_file: {e}\n"
+
+fn counted b
+  io/write "read_bytes: {length b} {b}\n"
+
+pub play =
+  rescue (os/read_file! "not_text.bin") refused
+  >> os/read_bytes! "not_text.bin" . counted

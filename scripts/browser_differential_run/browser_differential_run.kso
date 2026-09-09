@@ -135,7 +135,7 @@ fn counted progs
 fn with_page progs
   page = page_for progs
   on = (w -> with_engine progs page w)
-  os/read_file! "docs/kanso.wasm" . on
+  os/read_bytes! "docs/kanso.wasm" . on
 
 fn with_engine progs page w
   set = served page w
@@ -294,7 +294,9 @@ machine_calls = ["os/read_file" "os/write_file" "os/args" "io/stdin"]
 
 more_calls = ["os/list_dir" "os/run" "os/make_dir" "os/exists" "os/is_dir"]
 
-needs_a_machine = text/concat machine_calls more_calls
+byte_calls = ["os/read_bytes"]
+
+needs_a_machine = text/concat machine_calls (text/concat more_calls byte_calls)
 
 fn names_any? src needles at
   hunted? src needles at (at > length needles)
