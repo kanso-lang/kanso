@@ -3119,3 +3119,46 @@ only on errors. And the `(module …)` suffix needs no new state at all —
 The scope is 23 checks in `check_merged_after_aliases` and 65 `Diagnostic::new`
 sites in check.rs. The prize is the ceiling kanso#1340 repriced: −18.33% on the
 module row and −23.30% on the library row.
+
+**A CORRECTION, WRITTEN THE SAME NIGHT.** The paragraph above says the patches
+fail "at src/check.rs:724 and src/lib.rs:3578". That conflates two of them:
+`419_attribution.patch` fails only at check.rs:724, in four hunks that are all
+the same substitution, and the lib.rs failure belongs to the wider
+`419_all_six.patch`. Rebasing the first is mechanical — four lines — and it
+builds.
+
+Building it says the shape is further from shipping than the paragraph above
+implies, in two specific ways, and both were found by running the suite rather
+than by reading.
+
+THE PROTOTYPE IS NOT INERT. The obvious shipping order — land the attribution
+first, doing nothing until `check_merged` moves to the root, then move it —
+does not work: `cargo test --release --test golden` goes red on
+`error_corpus_reports_each_golden_diagnostic`.
+
+    fixture: tests/golden/errors/a_reexport_of_a_name_nothing_offers.kso
+    got:  error[name]: no import offers a pub `nonexistent` to re-export
+            --> std/text/text.kso:3:5
+    want: error[name]: no import offers a pub `nonexistent` to re-export
+            --> a_reexport_of_a_name_nothing_offers.kso:3:5
+             3 | pub nonexistent
+                       ^
+
+THE ATTRIBUTION IS DYNAMICALLY SCOPED, so it names whoever is iterating rather
+than what the diagnostic is about. That refusal is raised at src/lib.rs:3348,
+about a re-export in the user's own file, and it came out attributed to
+std/text. The `Attributed` iterator holds its last item's guard until the
+iterator itself drops, so a walk whose iterator outlives the raise site leaks
+its attribution forward. A thread-local read by a constructor cannot tell the
+declaration in hand from the declaration some other loop last held.
+
+AND `render_across` IS NEVER CALLED. The lib.rs half of the patch is a single
+`Diagnostic::new` conversion; no call site passes it the sources map. Every
+cross-file attribution therefore renders against an empty map, which is the
+second half of that fixture's diff — the quoted source line is gone.
+
+So the next step is not a rebase and a measurement. It is: attribute at the
+raise site rather than through a thread-local, and wire `render_across` at the
+`compile_*` call sites. Then the reorder is measurable. kanso#1340 called this
+"a larger piece of work than a two-way split" and was right; this is what it
+consists of.
