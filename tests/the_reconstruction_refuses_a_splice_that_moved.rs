@@ -206,7 +206,7 @@ fn a_rebuilt_count_stays_marked_rebuilt_when_the_anchor_is_gone() {
     // Drop the measured row. Nothing can serve as an anchor now, so nothing is
     // rebuilt on this pass — and the two rows must still say where their
     // counts came from.
-    let (ok, said) = rescore("sticky-two", &first[..2].to_vec());
+    let (ok, said) = rescore("sticky-two", &first[..2]);
     assert!(ok, "a history with no anchor still scores:\n{said}");
     let second: Vec<String> =
         said.lines().filter(|l| l.starts_with('{')).map(str::to_string).collect();
