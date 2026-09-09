@@ -79,3 +79,8 @@ indexbench.ll
 /livebench
 /runbench
 run_counters.txt
+
+# The playground's engine. Every job and every spec that runs it builds it
+# first (scripts/build_wasm.sh), so a committed copy was only ever the older
+# source somebody last remembered to rebuild.
+docs/kanso.wasm

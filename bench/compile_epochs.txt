@@ -1,0 +1,58 @@
+# THE COMPILE TERM'S CHANGES OF MEASUREMENT, AND WHAT EACH ONE MOVED BY.
+#
+# `<commit> <counter> <factor>`, one counter a line. The commit is the FIRST
+# history row measured the new way, and the factor is that row's reading over
+# the previous row's: 2.7232 means the new measurement reads 2.7232 times the
+# old one for the same compiler.
+#
+# WHAT READS IT. scripts/welfare_rescore scales the baseline before it scores a
+# row: a row in an older epoch is scored against the baseline divided by every
+# factor between that epoch and today's. Without it a row is scored against a
+# baseline measured on a workload the row never compiled, and the welfare
+# column steps where the ruler moved rather than where the compiler did.
+#
+# THE 2026-09-08 LOG ENTRY SAYS TWO CHANGES OF MEASUREMENT. There are three.
+# Scanning all five hundred rows for a compile counter moving more than 20%
+# between adjacent rows finds 5f5561c as well as the two that entry names, and
+# the entry supplies the reason it counts: "a term measured on a library moves
+# whenever that library changes what it imports: #1291 dropped std/list from
+# lib/json and halved the compile veins with the compiler untouched." That is
+# the same disease #1321 was opened to cure, so it owes a factor like the other
+# two.
+#
+# THE FIRST BOUNDARY IS NOT A CLEAN RE-BASING and the other two are. dfd118a
+# and 8535884 touch no src/ and no lib/, so their whole jump is the ruler.
+# 5f5561c also edits src/beat.rs, and compile_instructions is a layout vein --
+# it moves on a src/ edit the compile never executes. So a layout-sized part of
+# 0.4586 is the compiler rather than the workload.
+#
+# THE THIRD BOUNDARY LEAVES TWO COUNTERS ALONE, and they are written here at
+# 1.0000 rather than left out. #1331 made the instruction term the sum of the
+# module and entry compiles; bench/objective_sources.txt gives allocations and
+# peak one gate key each, so there was nothing to sum, and the two rows either
+# side are byte-identical on both. A missing line and a line reading 1.0000
+# score the same, and only one of them says the question was asked.
+#
+# HOW A FACTOR IS MEASURED: read the counter either side of the boundary row on
+# the perf-history branch and divide. The middle boundary's three reproduce the
+# figures another session wrote into the floor file on the day of the change --
+# 2.7232, 2.7207, 2.1047 -- which is the check that reading them back off the
+# history recovers what was measured at the time.
+#
+# WHAT IS NOT A BOUNDARY. compile_allocs and compile_peak_bytes are absent from
+# rows 30 to 180 and come back 2.1165x smaller. That gap is 151 rows of real
+# compiler work with nothing recorded, not one commit changing the ruler, and
+# no factor can be attributed to it.
+#
+# tests/the_compile_epochs_flatten_their_own_boundaries.rs holds the property
+# this file exists for: two rows straddling a boundary, in the ratio recorded
+# here, score the same.
+5f5561c compile_instructions 0.4586
+5f5561c compile_allocs 0.4490
+5f5561c compile_peak_bytes 0.5177
+dfd118a compile_instructions 2.7232
+dfd118a compile_allocs 2.7207
+dfd118a compile_peak_bytes 2.1047
+8535884 compile_instructions 4.3612
+8535884 compile_allocs 1.0000
+8535884 compile_peak_bytes 1.0000

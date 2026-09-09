@@ -173,8 +173,25 @@ fn carries_all? row phases
 
 fn anchor rows phases
   eights = list/to_list (list/select rows (r -> carries_all? r phases))
-  runs = list/to_list (list/select rows (r -> r["run_instructions"] != none))
+  runs = list/to_list (list/select rows (r -> measured_run? r phases))
   calibrated eights runs phases (length eights == 0 or length runs == 0)
+
+# A MEASURED run count, which is not the same as a row that carries one.
+#
+# This tool WRITES its rebuilt counts into the rows it hands back, and ci.yml
+# feeds it `origin/perf-history:history.jsonl` — its own previous output — on
+# every push to main. So a rebuilt count comes back as an input, and a row that
+# carries one is not evidence anybody measured it.
+#
+# A row carrying every phase is from before runbench existed, when the eight
+# phases WERE the measurement; the consolidated count did not exist to be
+# taken. So it cannot have a measured one, and a run count sitting on such a
+# row is this tool's own arithmetic. Checked against the record rather than
+# asserted: across three successive history files, no row carried both, until
+# the run that rebuilt forty-eight of them at once and made every later run
+# refuse.
+fn measured_run? row phases
+  row["run_instructions"] != none and not carries_all? row phases
 
 # No all-phase row, or no measured row to calibrate against. Nothing to
 # reconstruct and nothing wrong: every row keeps what it carries.
@@ -194,8 +211,13 @@ fn checked _ _ false
 fn checked last first true
   splice last first["run_instructions"]!
 
+# Rebuilt from the anchor every run, rather than only when the row has no
+# count. A count this tool wrote on an earlier run is not an answer to keep: it
+# was scored against whatever anchor that run picked, and holding it would let
+# one run's arithmetic outlive the reasoning behind it. Recomputing also
+# repairs a file that already carries the rebuilt counts, with no hand edit.
 fn wants_run? row a phases
-  a != none and row["run_instructions"] == none and carries_all? row phases
+  a != none and carries_all? row phases
 
 fn reconstructed row a phases
   rebuilt row a phases (wants_run? row a phases)
@@ -217,6 +239,119 @@ fn moved row anchored phases
   each = list/map phases (p -> weighed_ratio p tot row anchored)
   list/sum (list/to_list each)
 
+# --- the compile term's epochs ----------------------------------------------
+# bench/compile_epochs.txt names each commit that changed HOW the compile
+# counters are measured, and by how much. Scoring divides the baseline by every
+# factor from a row's own epoch forward, so a row measured on a smaller
+# workload is asked about a smaller baseline.
+#
+# WITHOUT IT the welfare column steps at three commits where nothing about the
+# compiler moved. The largest of the three multiplies the compile term by 4.36
+# and the file's own header says where each factor was read.
+#
+# KEYED BY COMMIT, NOT BY POSITION OR DATE. The rows are chronological and
+# their dates are not -- six adjacent pairs go backwards, because the branch
+# records some commits in UTC and some at an offset -- so position is the only
+# ordering the file has, and a commit is the only name a row gives a position.
+fn epoch_map raw
+  rows = list/select (text/split raw "\n") phase_line?
+  list/to_list (list/map rows one_epoch)
+
+fn one_epoch line
+  parts = text/split line " "
+  [parts[1]! parts[2]! (text/to_float parts[3]!)]
+
+# The divisor the OLDEST epoch carries: every boundary's factor multiplied,
+# per counter.
+fn oldest_divisor epochs
+  fold epochs {} (acc e -> multiplied acc e[2]! e[3]!)
+
+fn multiplied acc key f
+  seeded acc key f (acc[key] == none)
+
+fn seeded acc key f true
+  put acc key f
+
+fn seeded acc key f false
+  put acc key (acc[key]! * f)
+
+# THE BOUNDARIES A HISTORY CARRIES MUST BE A SUFFIX OF THE TABLE, and that one
+# rule covers three situations that look alike and are not.
+#
+# The history file is bounded — ci.yml keeps the newest 500 rows — so the
+# oldest boundary leaves the window one day and the table still names it. That
+# is not staleness: a boundary older than every row scales no row, and dropping
+# it is the whole of the repair. Read on 2026-09-09 the three sat at rows 444,
+# 474 and 483 of 500, so the first departure was 444 merges out — long enough
+# for the red main it would otherwise cause to arrive with nobody expecting it.
+# That position drops by one with every merge, so the date is the point of the
+# sentence and the number is not.
+#
+# A boundary missing from the MIDDLE, or the newest one missing while an older
+# one is present, is a stale table, and the answer it gives is the dangerous
+# kind: the rows past the hole sit on the wrong divisor while every number
+# stays plausible. That refuses.
+#
+# A history carrying NONE of them is the whole table fallen off the front — a
+# staged fixture, which every spec over this tool writes. It is the suffix rule
+# with an empty suffix, and it gets no epochs rather than a scaling it never
+# had.
+fn carried? rows e
+  length (list/to_list (list/select rows (r -> r["commit"] == e[1]!))) > 0
+
+# The table's own order is oldest-first, so the boundaries a history carries
+# form a suffix exactly when nothing carried comes before something missing.
+fn suffix? epochs rows
+  seen = list/fold epochs [false true] (a e -> after_gap a (carried? rows e))
+  seen[2]!
+
+fn after_gap a true
+  [true a[2]!]
+
+fn after_gap a false
+  [a[1]! (a[2]! and not a[1]!)]
+
+fn epoch_divisors rows epochs
+  in_window = list/to_list (list/select epochs (e -> carried? rows e))
+  divisors rows in_window (suffix? epochs rows) (length in_window == 0)
+
+fn divisors rows in_window true false
+  start = [(oldest_divisor in_window) {}]
+  list/fold rows start (a r -> crossed a r in_window)
+
+fn divisors rows _ true true
+  [{} (no_epochs rows)]
+
+fn divisors _ _ false _
+  err "a compile epoch names a commit no history row carries"
+
+# Every row on an empty divisor map, which `epoch_value` reads as the identity.
+fn no_epochs rows
+  list/fold rows {} (m r -> put m r["commit"] {})
+
+# The divisor drops by a boundary's factor at the first row measured the new
+# way and holds until the next boundary.
+fn crossed a row epochs
+  here = list/to_list (list/select epochs (e -> e[1]! == row["commit"]))
+  now = list/fold here a[1]! (m e -> put m e[2]! (m[e[2]!]! / e[3]!))
+  [now (put a[2]! row["commit"] now)]
+
+# The baseline as a row's own epoch would have measured it.
+fn rebased base d
+  fold (entries base) {} (acc e -> at_epoch acc e d)
+
+fn at_epoch acc (entry k v) d
+  put acc k (epoch_value v d[k] (d[k] == none))
+
+fn epoch_value v _ true
+  v
+
+fn epoch_value v f false
+  math/round (1.0 * v / f)
+
+fn at_row m divs row
+  scoring m.terms (rebased m.base divs[row["commit"]]!) m.formula
+
 # --- the rewrite ------------------------------------------------------------
 fn over_rows m given
   path = where given
@@ -224,7 +359,11 @@ fn over_rows m given
   os/read_file! phases . (t -> with_phases m (phase_map t) path)
 
 fn with_phases m phases path
-  os/read_file! path . (raw -> written m phases raw)
+  epochs = "bench/compile_epochs.txt"
+  os/read_file! epochs . (t -> with_epochs m phases (epoch_map t) path)
+
+fn with_epochs m phases epochs path
+  os/read_file! path . (raw -> written m phases epochs raw)
 
 fn where given
   chosen given (length given == 0)
@@ -235,13 +374,17 @@ fn chosen _ true
 fn chosen given false
   given[1]!
 
-fn written m phases raw
+fn written m phases epochs raw
   lines = list/select (text/split raw "\n") (l -> length l > 0)
   decoded = list/to_list (list/map lines json/decode)
   a = anchor decoded phases
-  built = list/map decoded (r -> rescored m (reconstructed r a phases))
+  divs = (epoch_divisors decoded epochs)[2]!
+  built = list/map decoded (r -> scored_row m divs r a phases)
   rows = list/to_list built
   io/write "{text/join rows "\n"}\n"
+
+fn scored_row m divs r a phases
+  rescored (at_row m divs r) (reconstructed r a phases)
 
 fn rescored m row
   weight = covered row m.terms m.base

@@ -18,6 +18,17 @@
 //! half the anchor's value, so its share-weighted ratio is exactly 0.5 whatever
 //! the shares are, and against a measured 1,000 it must read 500. The anchor
 //! rebuilds to 1,000 itself, which is the splice.
+//!
+//! AND THE TOOL READS ITS OWN OUTPUT, every run. ci.yml takes
+//! `origin/perf-history:history.jsonl` — the previous run's output — appends
+//! one row and rescores the lot, so a rebuilt `run_instructions` written into
+//! a row comes back as an input. On 2026-09-09 that turned main red: the
+//! forty-eight all-phase rows gained a rebuilt count, the next run read them
+//! as MEASURED rows, and the oldest of them became the splice anchor — forty-
+//! seven commits older than the row it was compared against, so of course they
+//! disagreed and the tool refused. Before that run no row carried both a full
+//! phase set and a run count, in three successive files. The third test below
+//! holds the property that would have caught it on the day.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -122,6 +133,37 @@ fn a_row_carrying_every_phase_is_rebuilt_against_the_measured_row() {
         "the anchor rebuilds to the measured row, which is the splice:\n{}",
         out[1]
     );
+}
+
+/// Feeding the tool its own output must give the same answer. That is not a
+/// nicety here: it is exactly what CI does on every push to main, and the one
+/// property under which "rewrite the whole column every time" is safe.
+///
+/// The second run is the one that matters. On the first, the older row has no
+/// run count and is rebuilt to 500; the output carries that 500. On the second
+/// that row looks measured, and a tool that cannot tell a rebuilt count from a
+/// measured one picks it as the splice anchor and refuses.
+#[test]
+fn the_rescore_is_idempotent_over_its_own_output() {
+    let ph = phase_counters();
+    let older = row("aaaaaaa", 500, None, &ph);
+    let anchor = row("bbbbbbb", 1000, None, &ph);
+    let modern = row("ccccccc", 1000, Some(1000), &["encode_instructions".to_string()]);
+
+    let (ok, said) = rescore("once", &[older, anchor, modern]);
+    assert!(ok, "the first pass should hold:\n{said}");
+    let first: Vec<String> =
+        said.lines().filter(|l| l.starts_with('{')).map(str::to_string).collect();
+    assert_eq!(first.len(), 3, "three rows in, three out:\n{said}");
+
+    let (ok, said) = rescore("twice", &first);
+    assert!(
+        ok,
+        "the tool reads its own output on every CI run, so a second pass must hold:\n{said}"
+    );
+    let second: Vec<String> =
+        said.lines().filter(|l| l.starts_with('{')).map(str::to_string).collect();
+    assert_eq!(second, first, "a second pass must not move a single row");
 }
 
 #[test]
