@@ -76,6 +76,117 @@ whose log entry ends "That is a gavel." A sweep that reads only prose cannot
 see a question a test is holding. And an entry **carries a recommendation**,
 because a question with no proposed answer turns one sitting into ten.
 
+## Ruled, unbuilt
+
+Rulings Clay has made that no pull request has yet built. Cloud reads this
+whole section before choosing what to build next, and chooses with
+discretion; a pull request on something else says which of these it weighed.
+The chat adds a row the day a ruling lands and removes it the day the build
+lands on main. Verified against the tree on 2026-09-09 by probing the
+compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
+not audited.
+
+### Effects are types, and the words are the only doors (2026-08-29)
+
+The archive entry of that name. No `<t>effect` type exists; a `.` over an io
+still binds automatically, so `effect . rescue orders` parses and its handler
+never runs. Owes: the type, the refusal of a box where a value is expected,
+the end of the automatic bind, and ch04/ch05 moving with it.
+
+### An err has readers (2026-08-29)
+
+The archive entry of that name. `.reason`, `.cause` and `.origin` on an err,
+the second deliberate hole in infectiousness. No reader exists in the
+evaluator.
+
+### The fused chain operators `.>` `.!` `.?` (2026-08-31)
+
+The archive entry "gavel: the fused chain operators": `x .> f` IS `bind x f`,
+`.!` annotate, `.?` rescue, bare-function right-hand sides, and in chain
+position the fused form is the only spelling (superseding the 2026-08-29
+keep-the-dot ruling for the three combinators; plain `.` untouched). Not in
+the lexer, the parser or any fixture. The 305 `. (lambda)` steps standing in
+lib/ and scripts/ on 2026-09-09 respell as `.>` under it.
+
+### Pure fallibility is boxed too (2026-08-31)
+
+The archive entry "rider: pure fallibility is boxed too": any operation whose
+answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
+box; `foo["bar"]` stays the data form. Rides with the effect type above and
+is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
+promises is visible as owed.
+
+### `done` is minted (2026-08-26)
+
+The archive entry "gavel: the July letters close", letter D: a succeeded
+effect yields `done`, never `none`. No such value exists.
+
+### Exhaustiveness on arm match, without the flag (recorded 2026-08-15; the language since its first days)
+
+`check_none_exhaustive` runs only under `KANSO_EXHAUSTIVE`, where the
+2026-07-24 none campaign left it to measure the migration before imposing it.
+Clay, 2026-09-09: "the exhaustiveness when you're looking for a match on an
+arm has always been the way the language works." The flag comes out; the
+group-level return set the campaign's last report blamed is the
+implementer's to sharpen.
+
+### `read_bytes` beside `read_file` (2026-08-29)
+
+The archive entry "gavel: read_file is text, read_bytes is bytes, per
+precedent". Not in lib/os.
+
+### A qualified name is its module's declaration (2026-08-29)
+
+The archive entry of that name: `dep/join` is dep's own `pub fn join`, never
+a clone of an import's arm, and declaring a name an import happens to export
+is unconditional. Probed 2026-09-09: a module declaring `pub fn join` while
+importing std/text is still refused with `error[opacity]: dep declares join
+pub, but an import of dep exports join too and took the name`, the
+pre-ruling message.
+
+### Records print qualified, everywhere (2026-08-29)
+
+The archive entry of that name: `slow_lane 7` prints `lane/slow_lane 7` in
+both entry paths, and tests/entry_file.rs "flips its expectation to the
+qualified form and stops being ignored". On 2026-09-09 that test still
+carries `#[ignore = "the two conventions collide; the rule is a gavel, not a
+fix"]` and still expects the unqualified form.
+
+### The backends build the partial over a value (2026-08-29)
+
+The archive entry of that name, Clay: "BUILD IT." On 2026-09-09
+src/codegen.rs still refuses with "native backend: `name` is a value here,
+and a partial over a value settles its arity when the arguments arrive", and
+src/wasm_backend.rs carries the same refusal. The correction entry beneath
+the gavel is the rule for every row here: a feature the language has
+admitted is finished on every engine, or the decision was not made.
+
+### Block-born is the whole cohort (2026-08-29)
+
+The archive entry of that name, Clay: "okay whole cohort it is." Anything the
+checker can prove was born in the block can be knotted, through aliases,
+conditionals, indexes of block-born collections and fields of block-born
+nodes. Probed 2026-09-09 with the book's own knot: `twin = ada` inside the
+build, then `twin.partner = bob`, is refused with `error[build]: twin is not
+a construction made in this build block`, the syntactic fence the ruling
+retired; `ring[1].partner = bob` on a block-born list does not parse. The
+alias-of-an-older-cohort fixtures (`build_write_alias`,
+`build_write_older_cohort`) are the escape cases that stay refused.
+
+"Arms travel with the type, under the ownership rule" (2026-08-29) was probed
+the same way and is built: a module declaring `type money` and `to_string
+m:money` renders `¥350` in an importer that wrote no arm. Everything else
+ruled between 2026-08-15 and 2026-09-08 was checked: the rest is either
+built (the bang chooses the channel, one row one value, the consolidated run
+program, the whole-float rendering, clang 19, the fixed compile corpus, the
+epoch table, page_drift, inf and nan) or closes a question with nothing to
+build.
+
+### The book teaches the boundary language (queued P1, 2026-08-26)
+
+Held in the ledger's "Open, not blocking" until the effect type exists; the
+row is here so the dependency is visible from the list cloud reads.
+
 ## In flight
 
 Nothing. Every branch this session opened is merged and verified on
@@ -195,8 +306,12 @@ session is itself such a call, so Clay starts one when he wants one. The queue
 drains and refills in the meantime; it is not a boundary the session can act
 on by itself.
 
-**The biggest buildable thing is now the err spelling, and it is ruled.**
-Gaveled 2026-08-26 and on main since #1112:
+**What to build next is chosen from the "Ruled, unbuilt" section above,
+never from this one.** What follows is the 2026-08-29 snapshot of the err
+spelling's landing and is kept as history of that build; the rulings that
+superseded it the same afternoon and on 2026-08-31 are rows above. The
+original opener read "the biggest buildable thing is now the err spelling,
+and it is ruled", gaveled 2026-08-26 and on main since #1112:
 
     io/read_file path
     bind     (text -> json/parse text)
