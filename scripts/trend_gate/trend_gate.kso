@@ -170,9 +170,9 @@ lower_cost = text/concat lower_k (text/concat lower_l lower_mn)
 # fused `append acc "{x}"` door, where the unfused pair renders it into a
 # string first and copies that; more of them is more of the work taking the
 # short road, and a site that falls back moves it down.
-higher_a = ["el_parses" "ryu_renders" "append_fast" "append_rendered" "utf8_zerocopy"]
+higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
 
-higher_b = ["buf_reuse" "thunk_frees" "ten_frees"]
+higher_b = ["append_rendered" "buf_reuse" "thunk_frees" "ten_frees"]
 
 # The fast halves, and two reclaim counters. `bytes_freed` is malloc-backed
 # storage given back, which is what `bytes_malloc` in `lower` is measured

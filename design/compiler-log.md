@@ -3336,6 +3336,10 @@ golden; it is the render's `default:` arm and neither caller can reach it,
 so it is listed in `tests/golden/unpinned_diagnostics.txt` with the control-
 flow argument. CI's rows: runbench 2,392,210,251 -> 2,369,642,706 (−0.9434%),
 encodebench −1.9672%, livebench −2.7667%, oneshot −1.1334%, widebench
-−2.0173%, jsonbench −0.0192%; the three compile rows rose 2,867 / 9,119 /
-6,921, layout moves on a compiler whose emitter grew. Welfare 66.30 -> 66.37,
-banked.
+−2.0173%, jsonbench −0.0192%. The three compile rows rose, layout moves on
+a compiler whose emitter grew: `compile_instructions` 48,746,192 ->
+48,749,059, `entry_instructions` 162,042,653 -> 162,051,772,
+`library_instructions` 162,839,321 -> 162,846,242. The machine code grew
+with it, `text` 1,487,564 -> 1,494,508 summed over the fourteen binaries,
+6,944 bytes for the fused door and its fallback twin. Welfare 66.30 ->
+66.37, banked.
