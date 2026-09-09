@@ -7,6 +7,11 @@
 # the `<none>` and the `é` below check.
 import "std/text"
 
+# An out-of-range read answers none, and a none handed to a group is a case
+# the group has to name.
+fn shown none
+  "<none>"
+
 fn shown v
   "{v}"
 

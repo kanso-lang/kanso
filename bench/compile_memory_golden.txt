@@ -129,7 +129,14 @@ front_end_rounds=62
 # twins back out — 83 of the corpus's 394 declarations, all of them, on this
 # corpus. That pass used to run seventeen lines AFTER `check_merged`, so the
 # whole-program check visited 83 declarations the next pass deleted. Banked.
-front_end_visits=22426
+#
+# 2026-09-09 (the possible-none check runs without its flag): visits
+# 22,426 -> 22,339, a FALL of 87, and rounds hold at 62. The check itself
+# visits nothing the fixpoint counts; the fall is the corpus's own
+# respelling. lib/regexp lost the `or_blank` pair and lib/list's bisect
+# carries an index instead of a slice, so the front end has 87 fewer
+# expressions to visit. Banked.
+front_end_visits=22339
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

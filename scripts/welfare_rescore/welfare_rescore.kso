@@ -404,12 +404,12 @@ fn rebased base d
   fold (entries base) {} (acc e -> at_epoch acc e d)
 
 fn at_epoch acc (entry k v) d
-  put acc k (epoch_value v d[k] (d[k] == none))
+  put acc k (epoch_value v d[k])
 
-fn epoch_value v _ true
+fn epoch_value v none
   v
 
-fn epoch_value v f false
+fn epoch_value v f
   math/round (1.0 * v / f)
 
 fn at_row m divs row

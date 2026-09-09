@@ -142,8 +142,8 @@ basket defines=142 calls=1272 branches=804 lines=8049
 widebench defines=201 calls=1826 branches=1098 lines=12155
 deepbench defines=116 calls=845 branches=585 lines=5936
 escapebench defines=51 calls=117 branches=122 lines=1636
-pendbench defines=131 calls=1208 branches=676 lines=7027
-scanbench defines=333 calls=3274 branches=2120 lines=19752
+pendbench defines=131 calls=1208 branches=676 lines=7034
+scanbench defines=332 calls=3269 branches=2117 lines=19729
 indexbench defines=57 calls=158 branches=139 lines=1952
 digestbench defines=197 calls=1537 branches=913 lines=10073
 readbench defines=62 calls=166 branches=152 lines=2195

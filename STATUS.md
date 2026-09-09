@@ -115,15 +115,6 @@ promises is visible as owed.
 The archive entry "gavel: the July letters close", letter D: a succeeded
 effect yields `done`, never `none`. No such value exists.
 
-### Exhaustiveness on arm match, without the flag (recorded 2026-08-15; the language since its first days)
-
-`check_none_exhaustive` runs only under `KANSO_EXHAUSTIVE`, where the
-2026-07-24 none campaign left it to measure the migration before imposing it.
-Clay, 2026-09-09: "the exhaustiveness when you're looking for a match on an
-arm has always been the way the language works." The flag comes out; the
-group-level return set the campaign's last report blamed is the
-implementer's to sharpen.
-
 ### A qualified name is its module's declaration (2026-08-29)
 
 The archive entry of that name: `dep/join` is dep's own `pub fn join`, never
