@@ -88,6 +88,8 @@ const RT_DIE_DESTRUCTURE: u32 = 40;
 const RT_BIND: u32 = 41;
 const RT_RESCUE: u32 = 42;
 const RT_ANNOTATE: u32 = 43;
+/// An err's three readers, at a reader getter's entry.
+const RT_ERR_READ: u32 = 44;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -135,6 +137,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_bind", params: 2, returns: true },
         Import { name: "rt_rescue", params: 2, returns: true },
         Import { name: "rt_annotate", params: 3, returns: true },
+        Import { name: "rt_err_read", params: 2, returns: true },
     ]
 }
 
@@ -423,6 +426,22 @@ impl<'a> WasmBackend<'a> {
                 _ => String::new(),
             },
         };
+        // The second hole in an err's infectiousness: a reader's getter answers
+        // the piece before any arm is tried. The other two engines do the same
+        // at their dispatcher's entry.
+        if let Some(field) = crate::ast::err_reader(name) {
+            if arity == 1 {
+                let lit = self.str_lit(field);
+                ctx.body.local_get(0);
+                ctx.body.call(RT_IS_FAILURE);
+                ctx.body.if_void();
+                ctx.body.local_get(0);
+                ctx.body.i32_const(lit as i64);
+                ctx.body.call(RT_ERR_READ);
+                ctx.body.ret();
+                ctx.body.end();
+            }
+        }
         for decl in decls {
             ctx.scope.clear();
             ctx.prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);

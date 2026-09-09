@@ -1,0 +1,35 @@
+# `.reason`, `.cause` and `.origin` read an err instead of propagating it —
+# the second deliberate hole in infectiousness, beside `wrap_err`'s second
+# argument. Every other operation on an err still passes it through, which
+# is why the callback below reads the cause with a second `rescue` rather
+# than an interpolation: `"{e.cause}"` would answer the cause itself, and a
+# named group handed the err would pass it through, so the readers are
+# applied inside the lambda and the group gets the piece.
+#
+# Settled failures only, so every engine including the page runs this one.
+# The origin names the file the err was raised in, and the harness stages a
+# copy under another path, so only the part before ` at ` is printed. json's
+# failure carries a record whose own field is called `reason`, which is the
+# case where a reader and a record field share a name.
+import "std/json"
+import "std/list"
+import "std/text"
+
+fn boom n
+  err "config missing {n}"
+
+fn wrapped n
+  annotate (boom n) (e -> "config: {e.reason}")
+
+fn raised_in origin
+  list/first (text/split origin " at ")
+
+pub play =
+  print (rescue (boom 1) (e -> e.reason))
+  >> print (rescue (wrapped 2) (e -> e.reason))
+  >> print (rescue (wrapped 3) (e -> e.cause.reason))
+  >> print (rescue (boom 4) (e -> e.cause))
+  >> print (rescue (wrapped 5) (e -> rescue e.cause (c -> "cause: {c.reason}")))
+  >> print (rescue (boom 6) (e -> raised_in e.origin))
+  >> print (rescue (wrapped 7) (e -> raised_in e.origin))
+  >> print (rescue (json/decode "[1, 2") (e -> e.reason.reason))

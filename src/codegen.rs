@@ -1080,6 +1080,8 @@ declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_b_field(%KValue, ptr)
 declare void @k_no_field(%KValue, ptr)
 declare %KValue @k_field_forced(%KValue, ptr)
+declare %KValue @k_err_read(%KValue, ptr)
+declare i64 @k_is_err(%KValue)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare i64 @k_check_some(%KValue)
 declare i64 @k_not_own_err(%KValue, ptr)
@@ -3142,6 +3144,7 @@ impl<'a> Backend<'a> {
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
+        self.emit_reader_hole(&mut f, name, arity)?;
         self.record_param_sets(&mut f, name, arity);
         // any non-discriminator failure means no arm can match: propagate leftmost
         let mut all_ok: Option<String> = None;
@@ -3554,6 +3557,38 @@ impl<'a> Backend<'a> {
         Ok(())
     }
 
+    /// The second hole in an err's infectiousness: a reader's getter answers
+    /// the piece at the dispatcher's entry, before any arm is tried, which is
+    /// where the other two engines answer it too. A getter's parameter is
+    /// boxed and its body is a bare binder, so the read needs no convention
+    /// of its own — and a reader group that grew a `%parsed` return would be
+    /// one this hole cannot serve, so that is refused rather than skipped.
+    fn emit_reader_hole(&mut self, f: &mut FnEmit, name: &str, arity: usize) -> Result<(), String> {
+        let Some(field) = crate::ast::err_reader(name) else {
+            return Ok(());
+        };
+        if arity != 1 {
+            return Ok(());
+        }
+        if f.ret_ty != "%KValue" {
+            return Err(format!("the reader `{name}` returns a parsed record"));
+        }
+        let (lit, _) = self.intern(&format!("{field}\0"));
+        let is = f.tmp();
+        f.line(&format!("{is} = call i64 @k_is_err(%KValue %x0)"));
+        let err = f.tmp();
+        f.line(&format!("{err} = icmp ne i64 {is}, 0"));
+        let read = f.label();
+        let arms = f.label();
+        f.line(&format!("br i1 {err}, label %{read}, label %{arms}"));
+        f.start_block(&read);
+        let got = f.tmp();
+        f.line(&format!("{got} = call %KValue @k_err_read(%KValue %x0, ptr @{lit})"));
+        f.line(&format!("ret %KValue {got}"));
+        f.start_block(&arms);
+        Ok(())
+    }
+
     fn emit_dispatcher_as(
         &mut self,
         sym_hdr: &str,
@@ -3577,6 +3612,7 @@ impl<'a> Backend<'a> {
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
+        self.emit_reader_hole(&mut f, name, arity)?;
         self.record_param_sets(&mut f, name, arity);
         // A `%parsed` and a `%KValue` share a `{i64,i64}` layout: reinterpret the
         // parameter's two words as the discriminator KValue once, so the arms can

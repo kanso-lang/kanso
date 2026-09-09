@@ -20,131 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## The corpus says the reshape is not ready, and the earlier reading hid it
-
-Applied on top of e12bfaba and built, `cargo test --release --test golden` reports
-nine of ten tests passing and one failing. That reads like one fixture and it is
-not: `error_corpus_reports_each_golden_diagnostic` asserts inside a loop, so it
-stops at the first mismatch and says nothing about the rest. Driving all 193
-fixtures by hand — the same staged-entry harness the test uses — puts the count
-at **44 changed, 149 byte-identical**, in three classes.
-
-**31 carry an `.imported.stderr` golden** and simply move from the loader's
-`(module X)` suffix to the `--> file:line:col` form. That is the reshape working
-as designed: the check now runs at the top, so the whole-program renderer writes
-the diagnostic instead of the module one. (The comment above that test says 23
-fixtures gain the suffix. There are 34 on disk. The comment is stale.)
-
-**Four leak a qualified name into the message a user reads.** At the top a
-dependency's declarations carry their module prefix, and these messages print
-the declaration's name:
-
-    golden:  `point` takes 2 argument(s), and a list element is one atom …
-    actual:  `constructor_in_a_list/point` takes 2 argument(s), …
-
-    golden:  these `open_start?` arms tie …
-    actual:  these `an_arm_set_with_no_settling_arm/open_start?` arms tie …
-
-with `field_of_the_wrong_record/point` and
-`field_of_an_annotated_parameter/money` the same shape. The user wrote `point`.
-
-**Three name the wrong file outright**, which is worse:
-
-    golden:  no import offers a pub `nonexistent` to re-export
-             --> a_reexport_of_a_name_nothing_offers.kso:3:5
-    actual:  no import offers a pub `nonexistent` to re-export
-             --> std/text/text.kso:3:5
-
-The line and column are the user's; only the file name is wrong, so the excerpt
-quoted underneath is std/text's line 3 under the user's error. `a_wall_whose_
-right_side_is_a_name` lands on `std/io/io.kso:10:27` the same way.
-
-The attribution patch is what should have prevented this, and the way it fails
-is worse than not attributing at all. It hangs a file on each diagnostic through
-`diag::attributing(&program.fns)`, a guard held while walking one declaration.
-Every site that raises inside a `fn` walk is attributed and lands on the right
-file — which is why the 31 above are correct.
-
-The re-export check raises outside any walk, and it does not fall back: it
-INHERITS. `render_across` prefers `d.file` whenever it is set, and the
-thread-local still holds whatever the last walk left in it. Reproduced directly
-on the smallest program — an entry importing the fixture — with the phase report
-beside it:
-
-    load a_reexport_of_a_name_nothing_offers.kso
-    load std/text
-
-    error[name]: no import offers a pub `nonexistent` to re-export
-      --> std/text/text.kso:3:5
-
-The name is the LAST MODULE LOADED. A guard that had simply been absent would
-have left the file the renderer was handed standing; a leaked one overwrites it
-with an unrelated library, and quotes std/text's line 3 underneath the user's
-error. `src/lib.rs:3287` and `src/lib.rs:3206` are the two sites, both inside
-`apply_reexport` under the re-export elevation.
-
-So the fix is not "attribute these two sites". Reading the guard says why it
-leaks, and it is a drop-order bug rather than a missing feature.
-`Attributed::next` is
-
-    self.held = Some(attributed_to(item.file()));
-
-and the right-hand side runs first. `attributed_to` sets the thread-local to
-this item's file and captures the PREVIOUS one; only then is the old guard in
-`self.held` dropped, and its `Drop` writes ITS previous back. Item one sets the
-file to A with previous None. Item two sets it to B with previous A, then drops
-guard one — which restores None. The thread-local oscillates through the walk,
-and when the iterator itself drops at the end it restores whatever the last
-guard happened to be holding rather than what was live before the walk began.
-That is how a std/ path is still standing when the re-export check runs.
-
-One guard for the whole walk fixes it: `attributing` reads what is attributed
-before it starts, `next` just sets the current file, and `Attributed`'s own
-`Drop` restores the value it captured. A walk that ends, or returns from inside
-the loop, then leaves exactly what it found — None at the top level, which makes
-the re-export diagnostic fall back to the file the renderer was handed.
-
-BUILT AND MEASURED. The corpus goes from 44 changed to 38, and all three
-wrong-file fixtures come back byte-identical:
-
-    error[name]: no import offers a pub `nonexistent` to re-export
-      --> a_reexport_of_a_name_nothing_offers.kso:3:5
-       3 | pub nonexistent
-
-I had expected the fallback to name the generated `run_<fixture>.kso` and said
-so. It does not: the re-export check runs during the fixture module's OWN
-compile, where the file the renderer is handed is already the fixture. The stale
-attribution was overriding a correct answer, not standing in for a missing one.
-
-What is left is 38, and it divides cleanly. THIRTY-FOUR are the designed move
-from the loader's `(module X)` suffix to `--> file:line:col` — 31 carrying an
-`.imported.stderr` golden and three (`a_wall_whose_right_side_is_a_name`,
-`fields_that_no_one_record_declares`, `sequencing_takes_two_descriptions`) whose
-plain golden holds the module suffix without an imported twin, which is corpus
-bookkeeping rather than a compiler question. FOUR are the qualified-name leak,
-and that is the whole of what is still wrong:
-
-    `constructor_in_a_list/point`            for `point`
-    `an_arm_set_with_no_settling_arm/open_start?`  for `open_start?`
-    `field_of_the_wrong_record/point`        for `point`
-    `field_of_an_annotated_parameter/money`  for `money`
-
-The guard fix is held as $S/419_guard_fix.patch.
-
-So two bounded gaps stand between the reshape and a corpus that agrees: attribute
-the module-level check sites the way the declaration walks already are, and print
-a declaration's name as the user wrote it rather than as the merge qualified it.
-Neither is a performance question, and neither was visible while the golden test
-stopped at the first of forty-four.
-
-The diagnostic attribution built alongside it changes no output today and is
-held rather than shipped. `Diagnostic` gains an optional file filled from a
-thread-local; `diag::attributing` is an iterator that holds the attribution
-guard and replaces it per item, so a walk that returns early restores what it
-found; `render_across` quotes the right file's line and `render` delegates to
-it with an empty map. A field nothing reads is weight, and nothing reads it
-while the checks stay per module.
-
 ## The check verb infers twice, and nothing sets the toggle that would skip it
 
 `kanso check` runs `infer::infer` over the whole program a second time, at
@@ -3381,3 +3256,62 @@ the values they landed on: `utf8_bytes` 11,164,198, `run_utf8_bytes`
 48,751,741, `entry_instructions` 162,061,812, `library_instructions`
 162,857,425. Each is the validator, the two readers or the refusal, and the
 paragraph above says which.
+
+## 2026-09-09 — an err answers `.reason`, `.cause` and `.origin`, on every engine
+
+The 2026-08-29 gavel "an err has readers" (archive), built. STATUS.md had
+carried it as unbuilt since the sitting: `annotate e (err -> "config:
+{err.reason}")` — the gavels' own sample — was refused at check time with
+`no record type has a field reason`, and a callback holding an err could
+look at nothing inside it.
+
+**Built.** A field read desugars to a getter call, `Get_reason e`, as every
+field read does, so the reader lives where a getter is entered. Each engine's
+dispatcher answers an err at its ENTRY, before any arm is tried: the
+interpreter in `dispatch_loop_inner`, native in the prologue `emit_reader_hole`
+writes for both dispatcher shapes (`k_is_err` then `k_err_read`), the page
+with `rt_err_read` in `emit_dispatcher`. `reason` is the value the err was
+raised with; `cause` the err it wrapped, or none; `origin` the "{fn} at
+{file}:{line}" it was born at, or none for an executor-born one. The
+interpreter's `err_read` is the oracle and the wasm host calls it; native's
+`k_err_read` mirrors it arm for arm. The entry is the only place that works:
+a placeholder arm `(err Read)` matched a foreign err before the failure
+pass-through and would have answered the reason to `.cause`, and an
+own-hako err is one no arm may see, where a reader has to see both.
+
+**The group has to exist.** A read of a field no record declares resolves to
+no getter at all, so `desugar_field_reads` now synthesises one arm per reader
+field nobody declares. Synthesised per module, as the record getters are, it
+produced one identical arm in every module and the merge refused the overlap;
+it runs once over the merged program instead. The checker's declared-field
+set gains the three names so the read passes the `no record type has a field`
+fence, and a record reaching a reader group still gets the field error every
+getter gives.
+
+**Fixture.** `tests/golden/micro/an_err_has_readers.kso`, settled failures
+only, so the page runs it too: a plain err's reason, an annotated err's reason
+and its cause's reason, `.cause` of an unwrapped err (`<none>`), a cause read
+through a second `rescue`, the origin's function name on both, and json's
+decode failure read as `e.reason.reason` — the case where a reader and a
+record field share a name. Watched red on the checker first. The origin names
+the raising function qualified when the program is imported, so the fixture
+carries an `.imported.out` twin like the record-printing ones. Two things the
+fixture taught while it was being written: `print none` writes `<none>`, and a
+named group handed the err passes it through as ever, so the readers are
+applied inside the lambda and the group gets the piece.
+
+**Veins, CI's rows.** The readers sit at every dispatcher's entry and the
+checker's field set grew by three names, so the front end carries them:
+`compile_allocs` 29,606 -> 29,714 (+108), `compile_instructions` 48,751,741 ->
+48,820,126 (+68,385, +0.14%), `entry_instructions` 162,061,812 -> 162,734,847
+(+673,035, +0.42%), `library_instructions` 162,857,425 -> 163,022,357
+(+164,932, +0.10%). The compile peak (773,818), every runtime vein, the
+emitted, text and machine-code rows are byte-identical. Priced, row by row,
+for the trend gate: `compile_allocs` 29,714, `compile_instructions`
+48,820,126, `entry_instructions` 162,734,847, `library_instructions`
+163,022,357. Welfare reads 66.36 against the 66.37 floor, a fall of 0.01 the
+readers pay in compile cost with nothing offsetting it; the 2026-08-25 ruling's
+language clause applies, so the floor moves down to the reading, 66.3596,
+by hand in `bench/welfare_floor.json` with its history entry (`--set` refuses
+a fall of this size by design, and says the file is the door), and no
+optimisation rides along to hide the price.

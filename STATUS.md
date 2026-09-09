@@ -93,12 +93,6 @@ still binds automatically, so `effect . rescue orders` parses and its handler
 never runs. Owes: the type, the refusal of a box where a value is expected,
 the end of the automatic bind, and ch04/ch05 moving with it.
 
-### An err has readers (2026-08-29)
-
-The archive entry of that name. `.reason`, `.cause` and `.origin` on an err,
-the second deliberate hole in infectiousness. No reader exists in the
-evaluator.
-
 ### The fused chain operators `.>` `.!` `.?` (2026-08-31)
 
 The archive entry "gavel: the fused chain operators": `x .> f` IS `bind x f`,

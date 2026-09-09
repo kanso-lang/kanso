@@ -266,6 +266,17 @@ pub fn getter_field(name: &str) -> Option<&str> {
     name.strip_prefix("Get_")
 }
 
+/// The three fields an err answers to: `.reason`, `.cause` and `.origin`.
+/// Reading one is the second deliberate hole in an err's infectiousness —
+/// `wrap_err`'s second argument is the first — so the getter hands back the
+/// piece instead of passing the failure through. Ruled 2026-08-29.
+pub const ERR_READERS: [&str; 3] = ["cause", "origin", "reason"];
+
+/// The err field a getter reads, when it is one of the three.
+pub fn err_reader(name: &str) -> Option<&str> {
+    getter_field(name).filter(|field| ERR_READERS.contains(field))
+}
+
 /// The file a declaration has before `stamp_file` gives it a real one. An
 /// `Arc<str>` always allocates, even for the empty string, and the parser
 /// builds every declaration with an unstamped file — so this is made once and
