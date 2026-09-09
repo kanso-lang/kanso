@@ -81,7 +81,10 @@ fn keys_read(block: &str) -> BTreeSet<String> {
 /// `welfare` is the score itself rather than a counter it reads. `text_bytes`
 /// is the decoder's machine code, ruled out of the objective on 2026-09-05 --
 /// no machine-code-size term in welfare, and `.text` keeps its own exact vein
-/// -- and the page says as much beside the line, which is why it is drawn grey.
+/// -- and the page says as much beside the line, which is why it is drawn
+/// dashed. It was drawn grey until 2026-09-09: grey said the same thing and
+/// failed the palette's chroma floor, a line with no colour in it reading as
+/// part of the grid rather than as a series.
 const NOT_COUNTERS: [&str; 2] = ["welfare", "text_bytes"];
 
 #[test]

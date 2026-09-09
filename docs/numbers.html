@@ -38,7 +38,7 @@ allocations</strong> and <strong>compile memory</strong> are
 instructions, allocator calls, and peak bytes held. <strong>binary size</strong>
 is the decoder's <code>.text</code> section in bytes, from
 <code>bench/text_golden.txt</code> — its own only, since every binary links the
-same runtime and summing them would count it four times. it is drawn in grey
+same runtime and summing them would count it four times. it is drawn dashed
 because it is the one line the score does not read: a machine-code-size term
 was ruled out of welfare on 2026-09-05, and <code>.text</code> kept its own
 exact vein instead.
@@ -55,7 +55,7 @@ divided by the weight those terms carry, times a hundred.</p>
 
 <h2 id="counters"><span class="sec-num">counters</span>what every commit costs</h2>
 
-<p>the chart shows shape; these are the numbers themselves, as ci recorded them on the last push to main. each is deterministic, so a change here is somebody's deliberate edit rather than weather. select a row to read what the counter measures and why it is worth watching.</p>
+<p>the chart shows shape; these are the numbers themselves, as ci recorded them on the last push to main. each is deterministic, so a change here is somebody's deliberate edit rather than weather. the panel opens with the seven lines the chart draws, in the chart's order, so a line you cannot pick out up there can be read off down here.</p>
 
 <p>the numbers above were measured by hand on a named day. these are measured by ci on every push to main, and they are the deterministic ones — allocation counts, arena blocks, rewind iterations, kernel presence, and what the compiler spent deciding and emitting. a noisy runner cannot move any of them, so a change in this panel is somebody's deliberate edit rather than weather. select a row to read what the counter measures and why it is worth watching.</p>
 
@@ -66,6 +66,38 @@ divided by the weight those terms carry, times a hundred.</p>
 <p>the counts rise across the span because the corpus does: the basket gained a hundred-thousand-element accumulator and a fifty-kilobyte text workload, the encode vein gained lib/json, and each widening was re-baselined so the score read the same either side. these are the cost of the work as it stands each day, not of a frozen file.</p>
 
 <style>
+/* The seven series. One palette was drawn on both surfaces until 2026-09-09,
+   and it was picked for the dark one: on the light page every line sat under
+   3:1 against #fcfbf7, yellow at 1.48, and three of the seven crowded the blue
+   band. These are stepped for each surface separately and validated as a set
+   against the surface they are actually drawn on -- worst adjacent pair 9.2
+   under simulated colour-vision deficiency in both modes, and 9.2 again among
+   the three compile lines, which is the comparison a reader of this chart
+   makes. Compile allocations, run instructions and binary size still sit under
+   3:1 on the light page; the table below the chart is what makes that legal,
+   so it carries a row for every line up here.
+   Order is the safety mechanism, not decoration -- adjacent hues are what the
+   check measures -- so recolouring one line means re-running the whole set. */
+:root {
+  --series-run-instructions: #eda100;
+  --series-run-memory: #2a78d6;
+  --series-compile-instructions: #eb6834;
+  --series-compile-allocations: #1baf7a;
+  --series-compile-memory: #4a3aa7;
+  --series-binary-size: #e87ba4;
+  --series-welfare: #008300;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-run-instructions: #c98500;
+    --series-run-memory: #3987e5;
+    --series-compile-instructions: #d95926;
+    --series-compile-allocations: #199e70;
+    --series-compile-memory: #9085e9;
+    --series-binary-size: #d55181;
+    --series-welfare: #008300;
+  }
+}
 #trend-chart { margin: 1.6rem 0; }
 .trend { display: block; height: auto; width: 100%; }
 .perf-loading { color: var(--muted); font-size: 0.9rem; }
@@ -172,21 +204,38 @@ divided by the weight those terms carry, times a hundred.</p>
   // 2026-09-06, were drawn nowhere at all, and the retired arena peak had two
   // distinct values across the rows that hold it, so it drew as a flat line.
   const TREND = [
-    ['#fb7185', 'run instructions', (r) => r.run_instructions],
-    ['#a78bfa', 'run memory', (r) => r.run_peak_bytes],
-    ['#38bdf8', 'compile instructions', (r) => r.compile_instructions],
-    ['#facc15', 'compile allocations', (r) => r.compile_allocs],
-    ['#fb923c', 'compile memory', (r) => r.compile_peak_bytes],
-    // The decoder's machine code. Only its own, because every binary links
-    // the same runtime and summing them would count it four times. Grey, and
-    // last, because the score does not read it: a machine-code-size term was
-    // ruled out of welfare on 2026-09-05 and .text kept its own exact vein.
-    ['#94a3b8', 'binary size', (r) => r.text_bytes],
-    // In hundredths, so integer scaling keeps a real move visible. One line:
-    // the column is rewritten under one formula whenever the formula moves,
-    // which is what makes two points on it comparable.
-    ['#4ade80', 'welfare',
-     (r) => (r.welfare == null ? null : Math.round(parseFloat(r.welfare) * 100))],
+    { token: 'run_instructions', hue: 'var(--series-run-instructions)',
+      label: 'run instructions', read: (r) => r.run_instructions,
+      note: 'Instructions retired by the one consolidated run program \u2014 every benchmark in a single binary, counted once under callgrind. It is the objective\u2019s whole view of what running kanso costs, and the heaviest term in the score.' },
+    { token: 'run_peak_bytes', hue: 'var(--series-run-memory)',
+      label: 'run memory', read: (r) => r.run_peak_bytes,
+      note: 'That program\u2019s high-water mark: the arena, what it holds, and its permanent peak, summed. Flat memory here is a guarantee rather than an average, so this moves when a program starts keeping something it used to discard.' },
+    { token: 'compile_instructions', hue: 'var(--series-compile-instructions)',
+      label: 'compile instructions', read: (r) => r.compile_instructions,
+      note: 'Instructions to compile the sample corpus, summed over the two paths <code>kanso check</code> takes on it: a directory as a module, and a file of definitions alone as a library. Deciding and emitting both land here.' },
+    { token: 'compile_allocs', hue: 'var(--series-compile-allocations)',
+      label: 'compile allocations', read: (r) => r.compile_allocs,
+      note: 'Blocks the front end asked the allocator for while compiling. It follows the shape of the compiler rather than the size of the program \u2014 a table rebuilt once per declaration shows up here long before it shows up in a timing.' },
+    { token: 'compile_peak_bytes', hue: 'var(--series-compile-memory)',
+      label: 'compile memory', read: (r) => r.compile_peak_bytes,
+      note: 'Peak bytes the compiler held. The pair to compile allocations: a change can spend one to buy the other, and reading them apart is how you tell which happened.' },
+    // The decoder's machine code. Only its own, because every binary links the
+    // same runtime and summing them would count it four times. Dashed, and
+    // second to last, because the score does not read it: a machine-code-size
+    // term was ruled out of welfare on 2026-09-05 and .text kept its own exact
+    // vein. It was grey until 2026-09-09, which said the same thing but failed
+    // the palette's chroma floor -- a grey line reads as part of the grid.
+    { token: 'text_bytes', hue: 'var(--series-binary-size)', dashed: true,
+      label: 'binary size', read: (r) => r.text_bytes,
+      note: 'The decoder\u2019s <code>.text</code> section in bytes, from <code>bench/text_golden.txt</code> \u2014 its own only, since every binary links the same runtime. Drawn dashed because it is the one line up there the score does not read.' },
+    // The score itself, unscaled: the chart's vertical axis is per-series and
+    // floating, so nothing here needs it in hundredths. It was rounded to
+    // hundredths until 2026-09-09 to survive a Math.round that has since gone,
+    // and rounding cost the panel below the last two digits of every move.
+    { token: 'welfare', hue: 'var(--series-welfare)',
+      label: 'welfare', read: (r) => (r.welfare == null ? null : parseFloat(r.welfare)),
+      show: (v) => v.toFixed(4),
+      note: 'The score the five terms roll up into. It is an index and not a percentage \u2014 the ceiling is a hundred, where every term costs nothing, and the origin is arbitrary. Only its direction and the size of its moves mean anything.' },
   ];
   function drawTrend(rows) {
     const host = document.getElementById('trend-chart');
@@ -194,16 +243,15 @@ divided by the weight those terms carry, times a hundred.</p>
     const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
     const total = rows.length;
     const at = (i) => PAD + (i * (W - 2 * PAD)) / Math.max(total - 1, 1);
-    const read = ([, , fn]) => {
+    const read = (series) => {
       const pts = [];
       rows.forEach((r, i) => {
-        const v = fn(r);
+        const v = series.read(r);
         if (typeof v === 'number' && !Number.isNaN(v)) pts.push([i, v]);
       });
       return pts;
     };
     const parts = TREND.map((series) => {
-      const [colour] = series;
       const pts = read(series);
       if (!pts.length) return '';
       const vals = pts.map((p) => p[1]);
@@ -216,18 +264,24 @@ divided by the weight those terms carry, times a hundred.</p>
       const mid = (lo + hi) / 2, low = mid - span / 2;
       const y = (v) => (span === 0 ? H / 2 : TOP + USABLE - ((v - low) * USABLE) / span);
       const coords = pts.map(([i, v]) => `${Math.round(at(i))},${Math.round(y(v))}`).join(' ');
-      return `<polyline fill="none" stroke="${colour}" stroke-width="2" points="${coords}"/>`;
+      const dash = series.dashed ? ' stroke-dasharray="7 5"' : '';
+      return `<polyline fill="none" stroke="${series.hue}" stroke-width="2"${dash} points="${coords}"/>`;
     });
     // The keys are spaced by how many there are. A fixed pitch fit five and
     // ran off the right edge at six, and the next line added would do it again.
     const perRow = Math.min(TREND.length, 4);
     const pitch = (W - 2 * PAD) / perRow;
     const rows_ = Math.ceil(TREND.length / perRow);
-    const keys = TREND.map(([colour, label], i) => {
+    // The key is drawn as the mark it stands for, dash and all, so a reader
+    // matching a line to a label never has to decide whether the dashes mean
+    // something the swatch is not saying.
+    const keys = TREND.map((series, i) => {
       const x = PAD + (i % perRow) * pitch;
       const ky = H - 16 - (rows_ - 1 - Math.floor(i / perRow)) * 22;
-      return `<rect x="${x}" y="${ky - 9}" width="22" height="3" fill="${colour}"/>` +
-        `<text x="${x + 30}" y="${ky}" class="trend-key">${label}</text>`;
+      const dash = series.dashed ? ' stroke-dasharray="5 4"' : '';
+      return `<line x1="${x}" y1="${ky - 7}" x2="${x + 22}" y2="${ky - 7}" ` +
+        `stroke="${series.hue}" stroke-width="3"${dash}/>` +
+        `<text x="${x + 30}" y="${ky}" class="trend-key">${series.label}</text>`;
     });
     host.innerHTML = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" ` +
       `aria-label="${TREND.length} measures across ${total} commits">` +
@@ -248,8 +302,8 @@ divided by the weight those terms carry, times a hundred.</p>
   drawTrend(rows);
   const last = rows[rows.length - 1];
   const prev = rows.length > 1 ? rows[rows.length - 2] : null;
-  const spark = (key) => {
-    const series = rows.slice(-40).map((r) => r[key]).filter((v) => typeof v === 'number');
+  const spark = (read) => {
+    const series = rows.slice(-40).map(read).filter((v) => typeof v === 'number');
     if (series.length < 2) return '<span class="perf-flat">one commit so far</span>';
     const lo = Math.min(...series), hi = Math.max(...series), span = hi - lo;
     // a run that never moved has no shape to show; draw it down the middle
@@ -260,31 +314,45 @@ divided by the weight those terms carry, times a hundred.</p>
       .join(' ');
     return `<svg class="perf-spark" viewBox="0 0 110 30" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${points}"/></svg>`;
   };
+  // The chart's seven series lead the panel, built from TREND rather than
+  // listed again here. The table is what makes the chart legal on the light
+  // page -- three of the seven lines sit under 3:1 against it, and a faint
+  // line is readable only if its numbers are written down somewhere -- so a
+  // series that had no row would be a series a reader could not check. Taking
+  // the rows from TREND is what keeps that true without a second list to
+  // remember: the spec that pins TREND to the objective pins these with it.
+  const PANEL = [
+    ['the chart above, line by line', null, null],
+    ...TREND.map((t) => [t.token, t.label, t.note, t.read, t.show]),
+    ...WATCHED,
+  ];
   const cells = [];
   let shown = 0;
-  for (const [key, label, note] of WATCHED) {
+  for (const [key, label, note, reader, format] of PANEL) {
     // a three-field entry with no label is a section heading, not a counter
     if (label === null) {
       cells.push(`<tr class="perf-head"><th colspan="4">${key}</th></tr>`);
       continue;
     }
-    if (typeof last[key] !== 'number') continue;
-    const now = last[key];
+    const read = reader || ((r) => r[key]);
+    const show = format || ((v) => v.toLocaleString());
+    if (typeof read(last) !== 'number') continue;
+    const now = read(last);
     let delta = '<span class="perf-flat">first record</span>';
-    if (prev && typeof prev[key] === 'number') {
-      if (prev[key] === now) {
+    if (prev && typeof read(prev) === 'number') {
+      if (read(prev) === now) {
         // an unchanged counter is the normal case and the point of the panel;
         // say so, or a blank cell reads as a number nobody measured
         delta = '<span class="perf-flat">unchanged</span>';
       } else {
-        const up = now > prev[key];
-        const diff = now - prev[key];
-        const share = prev[key] === 0 ? 0 : (diff / prev[key]) * 100;
+        const up = now > read(prev);
+        const diff = now - read(prev);
+        const share = read(prev) === 0 ? 0 : (diff / read(prev)) * 100;
         // a real move on a large counter rounds to 0.0% and then reads as no
         // move at all, so fall back to the count when the share disappears
         const size = Math.abs(share) >= 0.05
           ? `${up ? '+' : ''}${share.toFixed(1)}%`
-          : `${up ? '+' : ''}${diff.toLocaleString()}`;
+          : `${up ? '+' : ''}${show(diff)}`;
         delta = `<span class="${up ? 'delta-up' : 'delta-down'}">${up ? '\u25b2' : '\u25bc'} ${size}</span>`;
       }
     }
@@ -292,7 +360,7 @@ divided by the weight those terms carry, times a hundred.</p>
     cells.push(
       `<tr class="perf-row" tabindex="0" role="button" aria-expanded="false" aria-controls="${id}">` +
         `<td><span class="perf-caret" aria-hidden="true">\u203a</span>${label}</td>` +
-        `<td class="n">${now.toLocaleString()}</td><td>${delta}</td><td>${spark(key)}</td></tr>`,
+        `<td class="n">${show(now)}</td><td>${delta}</td><td>${spark(read)}</td></tr>`,
       `<tr class="perf-note" id="${id}" hidden><td colspan="4"><code>${key}</code> — ${note}</td></tr>`
     );
   }
