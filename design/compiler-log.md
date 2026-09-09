@@ -3960,3 +3960,30 @@ plausibly. The guard fired correctly and pointed at the wrong culprit,
 because the file it reads cannot say which numbers were measured. A row
 that does not record where its number came from will eventually be asked
 to answer for it.
+
+**And the page was describing a coverage level that no longer exists.**
+`docs/numbers.html` said a row holding three of the five counters scores
+0.74 — it said 0.44, and named the two rises as 0.28 to 0.44 and 0.44 to
+1.00. Read off the file today the levels are 0.00 (151 rows), 0.28 (237),
+0.74 (48) and 1.00 (64), and what each holds is:
+
+    0.28   compile_allocs, compile_peak_bytes
+    0.74   those two, compile_instructions, run_instructions
+    1.00   those four and run_peak_bytes
+
+The forty-eight at 0.74 are the reconstructed rows. kanso#1346 gave them a
+rebuilt run count, which took them from three of five to four, and the prose
+was not followed — the same omission that let the rebuilt counts be read back
+as measurements. The figures moved twice over: once when the reconstruction
+landed and again under the epoch table.
+
+**None of the four is a `data-golden` span**, so `golden_prose` cannot see
+them and CI stays green with the page wrong. That is the gap kanso#1338 closed
+for the library row by wiring it into the gate, and it is still open for
+everything the chart's prose quotes. The figures are dated in the sentence
+now, which is a weaker guard than a span and the honest one to have while they
+are unwatched.
+
+The two rises read 0.28 -> 0.74 with the score 88.28 -> 62.67, and 0.74 ->
+1.00 with 64.95 -> 56.73, measured against origin/perf-history rescored by
+this tree — which is what CI writes on the next push to main.
