@@ -150,6 +150,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # jekyll copies ./docs into ./_site, and the fingerprinter refuses a site
+      # with no engine in it ("missing asset: kanso.wasm"), so the blob has to
+      # exist before the copy rather than before the fingerprint. It is not
+      # committed, so every job that needs it builds it.
+      - name: rebuild the engine the site ships
+        run: |
+          rustup target add wasm32-unknown-unknown
+          sh scripts/build_wasm.sh
       - uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs

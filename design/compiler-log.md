@@ -4006,11 +4006,25 @@ reproduce whatever the toolchain does. Rebuilt on this container it is
 1,736,492 bytes against the committed 1,719,102, a difference of 17,390. Both
 steps are gone; the rebuild that every job already ran stays.
 
-**Nothing read the committed copy.** Five sites rebuild it before anything
-reads it — ci.yml's specs, other-host and site jobs, pages.yml, and
-`scripts/browser_differential.sh` for the browser job — and those five cover
-every consumer: `site_smoke`, `browser_differential_run`, `fingerprint` (which
-reads `_site`, built after the rebuild) and the cargo specs.
+**Four jobs rebuilt it and a fifth read it, and the first sweep here said
+five and called that every consumer.** ci.yml's specs, other-host and site
+jobs, pages.yml and `scripts/browser_differential.sh` do rebuild. The asset
+digests job does NOT: it runs jekyll over `./docs` and fingerprints the `_site`
+that copy produces, with no rebuild anywhere in it. So the sentence "fingerprint
+reads `_site`, built after the rebuild" was true of pages.yml and false of the
+job in ci.yml with the same shape.
+
+Found by running it rather than by reading it. A `_site` copied from a `docs/`
+with no blob gives `missing asset: kanso.wasm` and exit 1 out of
+`scripts/fingerprint`, and `undigested_references.sh` then fails behind it on
+five surviving references. That would have been a red round. The job rebuilds
+first now — before jekyll rather than before the fingerprint, because jekyll is
+what copies the file — and the repaired sequence reads fingerprint exit 0 and
+gate exit 0 on a staged `_site`.
+
+The lesson is the one the tree keeps relearning: a list of consumers assembled
+by grep names the files that mention the artifact, and the job that breaks is
+the one that reads it through something else.
 
 **The guard was at two call sites and there are eleven.** `freshness()` was
 called from `the_wasm_engine_agrees_with_the_golden_corpus` and
