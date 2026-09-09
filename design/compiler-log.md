@@ -3239,3 +3239,31 @@ exactly two begin "re-basing, not a gain"; both join to their rows through the
 `kanso#NNNN` in their prose, which works and breaks silently. The version worth
 building stamps the baseline into the row itself, beside `scored_by` and
 `scored_weight`, and back-fills the two historical steps once.
+
+## 2026-09-09 (second) — page_drift reads committed history, so it under-reports on a dirty tree
+
+**DONE.** kanso#1345 ran `sh scripts/gates/all_pages.sh` twice before pushing and
+both times read `page drift 3/3` — at the budget, green. CI on the same content
+read `the log is 4 entries ahead, and the budget is 3` and failed the
+cost-goldens job, taking `welfare` with it as a skip.
+
+Neither reading is wrong. The gate asks git for the last commit that touched
+`docs/compiler.html` and diffs that commit against HEAD, so it sees only what
+is COMMITTED. Locally the new log entry was still in the working tree, so it
+was not in the diff and the count was the three that came before it. The commit
+turned the same tree into 4/3.
+
+It cuts both ways, and the second direction is the one that costs a round: an
+uncommitted page edit does not discharge the debt either. Adding §63 to
+docs/compiler.html and re-running the sweep still reported the failure, because
+the edit was not yet a commit. Run this gate after committing, or read its
+number as a lower bound.
+
+Two other things this found. The gate keys on `docs/compiler.html` alone, so
+editing docs/numbers.html — which is what kanso#1345 did, twice over — moves no
+count at all. That is the gate working as written rather than a defect: the two
+pages are different things, and the settled-design page is the one the log is
+supposed to stay level with. And the budget is genuinely cumulative across
+sessions: the four entries named were kanso#1341, #1343, #1344 and #1345, of
+which two are the chart campaign, so §63 was written for that campaign as the
+gate's own message invites.
