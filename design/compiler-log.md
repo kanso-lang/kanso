@@ -3162,3 +3162,80 @@ raise site rather than through a thread-local, and wire `render_across` at the
 `compile_*` call sites. Then the reorder is measurable. kanso#1340 called this
 "a larger piece of work than a two-way split" and was right; this is what it
 consists of.
+
+## 2026-09-09 — the chart's palette was picked for one of the two pages it is drawn on
+
+**DONE.** kanso#1343 fixed *which* counters the trend chart draws and left
+*how* it draws them alone. Clay, on the result: "both blue lines have gone up."
+The rise was real and already answered — two corpus re-basings, kanso#1321 and
+kanso#1331, with the baseline moving under them so the floor went 59.74 →
+66.3024 — but the reading was harder than it needed to be, because three of the
+seven lines were in the blue band. This is the colour half.
+
+Colour on a categorical chart is computable, so it was computed. Run against
+the two surfaces the page actually paints (`--bg`, light `#fcfbf7` and dark
+`#0c0c0f`), the shipped palette failed four checks:
+
+    lightness band      all seven outside it
+    chroma floor        #94a3b8 at 0.035 — reads as grey, so as gridline
+    CVD separation      #38bdf8 <-> #a78bfa, 5.2 deutan against a floor of 8
+    normal-vision floor #fb923c <-> #facc15, 14.6 against a floor of 15
+
+And the finding nobody had looked for: **one palette was shipped for two
+surfaces, and it had been chosen for the dark one.** On the light page every
+one of the seven lines sat under 3:1 — yellow at 1.48:1. The blue-band
+collision was the visible half of that; the light page was worse and unremarked.
+The grey was mine, from #1343, and it was the chroma failure.
+
+Each mode now takes its own steps, validated against its own surface. The
+ordering was searched rather than chosen: of the 5,040 orderings of seven hues,
+536 clear the adjacent-pair gates in both modes, and 216 of those also clear
+them among the three compile lines taken all-pairs — which is the comparison a
+reader of this chart makes, and which the adjacent pairlist does not cover. The
+one kept scores 9.2 worst-case either way (OKLab ΔE ×100, floor 8) with a
+within-group normal-vision margin of 24.6 against a floor of 15.
+
+Two orderings show why the second gate was worth adding. `aqua blue orange
+violet yellow magenta green` passes the adjacent gate identically — 16.3 light,
+13.0 dark — and puts orange beside yellow *inside* the compile group, where
+they separate by 4.8 under deuteranopia and 10.6 under normal vision. The
+adjacent check cannot see it, because those two lines are not adjacent. Every
+ordering that moves yellow onto binary size, which is where the weakest-contrast
+hue belongs, drops the adjacent margin to 6.9 — the warn band. That refinement
+was rejected: it costs more than it buys.
+
+Binary size draws dashed instead of grey. The dash says what the grey was
+trying to say — this is the one line the score does not read — without failing
+the chroma floor. The legend key is drawn as the mark, dash included.
+
+Three light-mode steps still sit under 3:1 (#1baf7a 2.72, #eda100 2.09,
+#e87ba4 2.60). That is a documented relief rather than a pass, and the relief
+has to be real: a faint line is readable only if its number is written down
+somewhere. It was not. **The panel under the chart carried no row for any of
+the seven series** — it listed `compile_rounds`, `compile_visits` and
+`emitted_lines`, three counters the 2026-09-03 rebuild retired from the
+objective, and nothing the chart drew. So the panel now leads with the chart's
+lines, built from `TREND` rather than from a second list written by hand, in the
+chart's own order.
+
+Two specs, both watched red first.
+`tests/the_chart_palette_is_the_one_that_was_measured.rs` pins the steps and
+the sequence in both modes and refuses a raw hex in `TREND` — four assertions,
+each shown failing on its own, including the hex one, which the token assertion
+short-circuits past under the obvious mutation. `missing_panel_rows` in
+scripts/site_smoke reads both the chart's keys and the panel's rows off the
+rendered page in a browser and asserts they are equal: dropping the spread
+turns it red, and so does reversing it, since containment would let the two
+orders drift while a reader matches a faint line to its number by position.
+
+Also here: welfare's chart reader stops rounding to hundredths. The rounding
+existed to survive a `Math.round` the vertical axis never needed — the axis is
+per-series and floating — and it cost the panel the last two digits of every
+move.
+
+OPEN, unchanged by this: whether a chart row should mark the commits where the
+baseline was re-based. `bench/welfare_floor.json` holds 224 history entries and
+exactly two begin "re-basing, not a gain"; both join to their rows through the
+`kanso#NNNN` in their prose, which works and breaks silently. The version worth
+building stamps the baseline into the row itself, beside `scored_by` and
+`scored_weight`, and back-fills the two historical steps once.

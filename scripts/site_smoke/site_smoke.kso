@@ -271,12 +271,28 @@ trend = """
                       .split(' ').filter(Boolean).length)
         .sort((a, b) => a - b);
     };
+    // The panel under the chart is what makes the chart legal on the light
+    // page: three of the seven lines sit under 3:1 against it, and the relief
+    // for that is the reader being able to look the number up. So the panel's
+    // first rows ARE the chart's lines, in the chart's order, and this reads
+    // both sides off the rendered page rather than off the source.
+    // A panel label is the text node after the caret span, so it is read off
+    // the node rather than by stripping a character out of the cell.
+    const chart = () => [...document.querySelectorAll('#trend-chart .trend-key')]
+      .map((t) => t.textContent.trim());
+    const panel = () => [...document.querySelectorAll('#perf-panel .perf-row')]
+      .map((tr) => tr.querySelector('td').lastChild.textContent.trim());
     for (let i = 0; i < 600; i++) \{
       const got = await counts();
-      if (got) return \{series: got};
+      const keys = chart();
+      const rows = panel();
+      if (got && keys.length && rows.length) \{
+        return \{series: got, keys: keys, panel_head: rows.slice(0, keys.length)};
+      }
       await new Promise((r) => setTimeout(r, 250));
     }
-    return \{series: [], stubbed: window.__chart.stub,
+    return \{series: [], keys: [], panel_head: ['the page never finished drawing'],
+            stubbed: window.__chart.stub,
             why: window.__chart.err || 'the chart never drew'};
   };
   </script>
@@ -489,7 +505,8 @@ fn charted failures report
 
 fn read_chart failures report
   read = json/decode report
-  finished (missing_series read failures) report
+  a = missing_series read failures
+  finished (missing_panel_rows read a) report
 
 # Seven series, six points each, because six rows were fed to it. A presence
 # check would pass on an empty canvas, which is the failure this exists to
@@ -503,6 +520,16 @@ fn drew? none
 
 fn drew? series
   series == [6 6 6 6 6 6 6]
+
+# The panel leads with the chart's own lines, in the chart's own order, because
+# it is built from the same list rather than from a second one written by hand.
+# Asserting equality rather than containment is what makes that true: a panel
+# that merely mentions every line would still let the two orders drift, and a
+# reader matching a faint line to its number reads down the panel in the order
+# the key gave them.
+fn missing_panel_rows read acc
+  why = "the panel does not lead with the chart's own lines, in order"
+  noted acc why (read["keys"] == read["panel_head"])
 
 fn missing_panels read acc
   why = "no panel in chapter 04 became runnable"
