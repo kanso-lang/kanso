@@ -3866,3 +3866,104 @@ run half of this thread (kanso#1351) marks such a row `run_source: rebuilt`
 instead. Writing a fabricated `1.0000` there to make the two sides symmetric
 would read as "measured against an unmoved baseline", which is exactly the
 misreading the mark prevents.
+
+---
+
+## 2026-09-09 — an explanation of the error model, checked against the interpreter, found three gaps
+
+OPEN, all three cloud's. Clay asked for a written explanation of how failure
+works in kanso for a friend. Every claim in it was run through
+`target/release/kanso play` before it went out, and three did not hold as the
+design says they should. None of them is in the book, which uses only the
+spellings that work; each is a place where a reader who trusts a ruling
+rather than a page gets a wrong answer.
+
+**1. The possible-none check is off by default, and the ruling that would make
+it standard is unbuilt.** `check_none_exhaustive` in src/check.rs is the
+diagnostic the book's own story implies — "this can be a none and `describe`
+has no arm for it — resolve it here, or give `describe` a `none` arm" — and it
+runs only under `KANSO_EXHAUSTIVE`, where the 2026-07-24 none campaign left it
+waiting on per-arm return sets. The program the explanation used is the book's
+menu sample with the `none` arm deleted and the call moved into a function
+body:
+
+    fn describe price
+      "{price} yen"
+
+    fn quote menu
+      describe menu["pocky"]
+
+    print (quote { "dango":350 "taiyaki":500 })
+
+    kanso play                       <none> yen, exit 0
+    KANSO_EXHAUSTIVE=1 kanso play    error[exhaustive] at the argument, exit 2
+
+With the arm typed `price:int` the bare run instead dies at execution time:
+`error[runtime]: no overload of `describe` matches these arguments`. A literal
+`none` handed to that typed arm fails the same way at runtime, where a literal
+string handed to it is refused at check (`literal_arg_type`). Clay ruled the
+shape on 2026-08-15, "8: exhaustiveness dissolves into per-call coverage
+(ruled)": no group-level annotation; each call's inferred value set is checked
+for an unambiguously matching arm, provable gaps are compile diagnostics,
+unprovable calls keep the runtime err. The flagged checker is most of that
+already. Under "A ruling outranks a lead" this is at the front of the queue,
+and the explanation as sent says the check "sits behind a flag" so that it does
+not claim more than the compiler does.
+
+**2. `rescue` and `annotate` work only in prefix position; in a `.` step they
+silently do not fire.** The 2026-08-26 rider "effect first, callback second"
+says a chain line spelling only the callback gets the effect supplied as its
+first argument by the chain rule. For `bind` that is what happens, because a
+`.` over an io IS bind. For the other two words it is the reason they cannot
+work there: the step synthesises a bind around `rescue orders`, bind skips on
+failure, and the callback is never called.
+
+    os/read_file! "no-such-file.txt" . rescue orders . print
+      error[endpoint]: unhandled err reached the executor: "cannot read ..."
+
+    rescue (os/read_file! "no-such-file.txt") orders . print
+      no orders yet
+
+Both parse. The first is the ruled spelling and does nothing; the second is
+what every fixture and both book chapters use. Nothing published is wrong, and
+a reader who writes the chain the rider describes gets a program that looks
+handled and is not. Either the rider is built — a `.` step whose head is
+`rescue` or `annotate` reads the failure channel — or it is retired and the
+words are documented as prefix-only. That is Clay's to say and is filed in the
+ledger; the defect that a legal spelling silently loses its handler is cloud's
+either way.
+
+**3. A stale entry in the lexer's borrowed-keyword table names `rescue`.**
+`kanso_form_for` in src/lexer.rs lists `try | catch | except | rescue` with the
+message "a failure rides the same rails as a value; an arm names the err",
+written when the language had no such word. The table is consulted by the
+needless-continuation check, so a statement headed by `rescue` and continued
+on `.` lines that would fit in eighty characters reports `error[syntax]: kanso
+has no `rescue``. Lengthen the first line past the fold and the same program
+runs:
+
+    rescue (os/read_file! "the-orders-file-that-is-not-there.txt") orders
+      . shout
+      . banner
+      . print
+
+    *** no orders yet!! ***
+
+Remove `rescue` from that arm of the table; `try`, `catch` and `except` stay.
+The error corpus has no fixture for a worded step at a statement head, which is
+why the message survived the word's arrival.
+
+**One thing the check confirmed rather than broke**, recorded because it is
+the sharpest demonstration of the own-err rule found so far and belongs in the
+book's boundary chapter when that is written. Annotating a foreign failure
+makes it yours:
+
+    rescue (annotate (os/read_file! "no-such-file.txt") said) orders . print
+      error[endpoint]: unhandled err reached the executor: "orders file: ..."
+        born in the entry at s2.kso:13
+        passed through orders
+
+The raw read error was foreign and `orders`' `(err _)` arm caught it a line
+earlier. `annotate` raised a new err in the entry's own module, so the same arm
+is now walked past. That is the rule working exactly as ruled, and it is the
+example to teach it with.
