@@ -3871,7 +3871,7 @@ misreading the mark prevents.
 
 ## 2026-09-09 — an explanation of the error model, checked against the interpreter, found three gaps
 
-OPEN, all three cloud's. Clay asked for a written explanation of how failure
+OPEN, all three cloud's; two of them are rulings unbuilt. Clay asked for a written explanation of how failure
 works in kanso for a friend. Every claim in it was run through
 `target/release/kanso play` before it went out, and three did not hold as the
 design says they should. None of them is in the book, which uses only the
@@ -3910,13 +3910,16 @@ already. Under "A ruling outranks a lead" this is at the front of the queue,
 and the explanation as sent says the check "sits behind a flag" so that it does
 not claim more than the compiler does.
 
-**2. `rescue` and `annotate` work only in prefix position; in a `.` step they
-silently do not fire.** The 2026-08-26 rider "effect first, callback second"
-says a chain line spelling only the callback gets the effect supplied as its
-first argument by the chain rule. For `bind` that is what happens, because a
-`.` over an io IS bind. For the other two words it is the reason they cannot
-work there: the step synthesises a bind around `rescue orders`, bind skips on
-failure, and the callback is never called.
+**2. The 2026-08-29 gavel "effects are types, and the words are the only
+doors" is unbuilt on the point measured: a `.` over an io still binds
+automatically, so a `.` step headed by `rescue` or `annotate` is swallowed.**
+The ruling: there is NO automatic bind; `<t>effect` is a box that can be
+passed as data; `bind`, `annotate` and `rescue` are the sole eliminators,
+ordinary functions taking the effect first. Under it, `effect . rescue orders`
+is the ordinary pipe supplying the first argument — `rescue effect orders` —
+because the dot no longer opens the box. On the shipped interpreter the dot
+still opens it: the step synthesises a bind around `rescue orders`, bind skips
+on failure, and the callback is never called.
 
     os/read_file! "no-such-file.txt" . rescue orders . print
       error[endpoint]: unhandled err reached the executor: "cannot read ..."
@@ -3924,14 +3927,31 @@ failure, and the callback is never called.
     rescue (os/read_file! "no-such-file.txt") orders . print
       no orders yet
 
-Both parse. The first is the ruled spelling and does nothing; the second is
-what every fixture and both book chapters use. Nothing published is wrong, and
-a reader who writes the chain the rider describes gets a program that looks
-handled and is not. Either the rider is built — a `.` step whose head is
-`rescue` or `annotate` reads the failure channel — or it is retired and the
-words are documented as prefix-only. That is Clay's to say and is filed in the
-ledger; the defect that a legal spelling silently loses its handler is cloud's
-either way.
+    os/read_file! "/etc/hostname" . shout . print
+      vm!!                       (the retired automatic bind, still shipping)
+
+Both of the first two parse. The first is what the ruling describes and its
+handler never runs; the second is what every fixture and both book chapters
+use, and it is also the ruled prefix form, so nothing published is wrong. An
+earlier draft of this entry filed the piped form as a fresh ledger question,
+"build the rider or retire it"; Clay's correction the same hour — "we got rid
+of that rule when we agreed that you have to use explicit combinators" — is
+the gavel above, and a ruled question is never re-asked. What is owed is the
+build: the dot stops binding over an effect, a box where a value is expected
+is refused, and the two book chapters that teach the automatic railway (ch04's
+call-site short-circuit, ch05's "piping into an io is bind") move with it —
+the ledger's "The book teaches the boundary language" entry already holds
+that half. The ruled dotless stack from the gavel's own sample,
+
+    os/read_file! "the-orders-file-that-is-not-there.txt"
+      rescue orders
+      bind shout
+      bind print
+
+reads today as four arguments to `os/read_file!` (`error[arity]`), which is
+the line-grammar collision STATUS.md records under "It cannot start until
+Clay rules on the line grammar". Under "A ruling outranks a lead" the gavel
+is at the front of the queue with item 1.
 
 **3. A stale entry in the lexer's borrowed-keyword table names `rescue`.**
 `kanso_form_for` in src/lexer.rs lists `try | catch | except | rescue` with the

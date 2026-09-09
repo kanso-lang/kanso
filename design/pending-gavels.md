@@ -175,49 +175,6 @@ part.
 
 ## Open, not blocking
 
-### `rescue` and `annotate` in a `.` step: build the 2026-08-27 rider or retire it
-
-**Cited: the archive's 2026-08-26 "amendment: bind is a word too" (`.`
-retires from chain-step position, a chain is a stack of worded steps) and
-its "rider: effect first, callback second" (a chain line spelling only the
-callback is the chain rule supplying the effect as first argument); the
-2026-08-29 "the executor gains a door", which built the three words as
-prefix functions and records that a `.` step over an effect synthesises a
-bind whose failure never reaches the callback; and the 2026-09-09 log
-entry "an explanation of the error model, checked against the
-interpreter, found three gaps", which measured the spelling below. ch05
-and every fixture use the prefix form. Nothing in a design doc names the
-piped form as either supported or refused.**
-
-Measured on `target/release/kanso` at 5635d85c:
-
-    os/read_file! "no-such-file.txt" . rescue orders . print
-      error[endpoint]: unhandled err reached the executor: "cannot read ..."
-
-    rescue (os/read_file! "no-such-file.txt") orders . print
-      no orders yet
-
-Both parse. The first is what the rider describes and its handler never
-runs, because the `.` over an io is `bind` and bind skips on failure. So a
-reader who writes the chain the ruling describes gets a program that looks
-handled and is not, with no diagnostic.
-
-- **(1) Build the rider.** A `.` step whose head is `rescue` or `annotate`
-  reads the failure channel: the step becomes the word's own description
-  rather than a bind around it. `bind` is already what a bare `.` means, so
-  the three words then have one spelling in prefix and one in a chain.
-- **(2) Retire the rider for these two words.** `rescue` and `annotate`
-  are prefix-only; the checker refuses `. rescue` and `. annotate` with a
-  diagnostic naming the prefix form, so the silent case becomes a red one.
-
-**RECOMMENDATION: (2).** The prefix form is what the book teaches, what
-every fixture uses, and what reads correctly: `rescue` wraps the effect it
-guards, the way the word is used in prose. Option (1) buys a second
-spelling of the same program and asks every reader to know that `.` means
-bind except in front of two words. Either way the silent case must end;
-the refusal in (2) is a checker arm and a corpus fixture, which is cloud's
-whichever way this is ruled.
-
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
 
 **RE-PREMISED AGAIN 2026-08-29 by the effects-are-types gavel, which
