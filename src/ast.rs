@@ -390,4 +390,4 @@ pub struct Import {
     pub renames: Vec<(String, String)>,
 }
 
-pub const NULLARY: [&str; 3] = ["false", "none", "true"];
+pub const NULLARY: [&str; 4] = ["done", "false", "none", "true"];

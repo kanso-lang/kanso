@@ -1,0 +1,4 @@
+error[name]: `done` is already a declaration; rename the binding
+  --> done_is_a_value_not_a_name.kso:2:3
+   2 |   done = 3
+         ^

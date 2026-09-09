@@ -1,0 +1,3 @@
+pub play =
+  done = 3
+  print "{done}"

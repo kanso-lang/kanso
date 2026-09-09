@@ -129,7 +129,7 @@ front_end_rounds=62
 # twins back out — 83 of the corpus's 394 declarations, all of them, on this
 # corpus. That pass used to run seventeen lines AFTER `check_merged`, so the
 # whole-program check visited 83 declarations the next pass deleted. Banked.
-front_end_visits=22426
+front_end_visits=22562
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

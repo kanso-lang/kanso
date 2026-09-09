@@ -1,0 +1,18 @@
+# A succeeded effect yields `done`, never `none`: `none` means absence and
+# nothing else, so a chain that binds a print's yield sees the one value
+# that means "finished". It renders `<done>`, equals itself, is not none,
+# and an arm can name it.
+import "std/io"
+
+fn shown done
+  "the arm took done"
+
+fn shown _
+  "the arm took something else"
+
+fn tell r
+  print "{r} {r == done} {r == none} {shown r} {shown 3}"
+
+pub play =
+  print "first" . tell
+  >> io/write "" . tell

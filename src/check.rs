@@ -1161,7 +1161,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
 }
 
 /// Builtin type words legal as typeset members alongside declared types.
-const TYPESET_BUILTINS: [&str; 5] = ["bool", "float64", "int", "none", "string"];
+const TYPESET_BUILTINS: [&str; 6] = ["bool", "done", "float64", "int", "none", "string"];
 
 /// A multi-member field typeset enumerates concrete types: each member must
 /// name a declared type or a builtin type word.
@@ -2346,7 +2346,7 @@ fn type_admits(ty: &str, kind: LitKind, types: &HashMap<&str, &TypeDecl>) -> boo
         // whatever arithmetic does with the two together
         "float64" => kind == LitKind::Float,
         "string" => kind == LitKind::Str,
-        "bool" | "none" | "err" => false,
+        "bool" | "none" | "done" | "err" => false,
         "some" | "any" => true,
         other => match types.get(other) {
             // a typeset admits what any member admits; a subtype admits what
@@ -3054,8 +3054,8 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// The type names no declaration provides. Two readers ask this — the walk
 /// over patterns below, and the resolver, which is where an upcast's target
 /// is reached — so the list lives here rather than at either of them.
-const BUILT_IN_TYPES: [&str; 8] =
-    ["int", "float64", "string", "bool", "none", "err", "some", "any"];
+const BUILT_IN_TYPES: [&str; 9] =
+    ["int", "float64", "string", "bool", "none", "done", "err", "some", "any"];
 
 /// The names in an annotation that no type answers to. A qualified name is
 /// the import resolver's to answer for.

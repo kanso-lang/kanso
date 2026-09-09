@@ -138,16 +138,16 @@
 # 2026-09-09 (the fused render-append, and a switch arm told its case's tags): every program with a switch-dispatched group loses a force and a dispatch per proved arm, and the encoders lose the render-then-append pair for a single call; see bench/emitted_golden.txt.
 # 2026-09-10 (a qualified name is its module's declaration): scanbench 19,752 -> 19,764 and runbench 34,806 -> 34,828 lines, runbench +1 define +1 call. The string table interns each mixed group's bare-space name beside its spoken form (std/regexp's first, spread and repeat; scanbench's split; runbench's total), and runbench carries a second unreferenced copy of the thunk for pend's `cards -> spent cards`. Dead text on every count; see the log entry.
 # 2026-09-10 (records print qualified): every program +2 lines, defines, calls and branches identical: k_type_shown, an alias of k_type_name in a program whose root declares no bare type. See bench/emitted_golden.txt.
-encodebench defines=185 calls=1638 branches=1010 lines=11197
+encodebench defines=185 calls=1607 branches=1002 lines=11105
 oneshot defines=142 calls=1229 branches=805 lines=9176
-basket defines=142 calls=1272 branches=804 lines=8051
-widebench defines=201 calls=1826 branches=1098 lines=12157
-deepbench defines=116 calls=845 branches=585 lines=5938
+basket defines=142 calls=1241 branches=796 lines=7959
+widebench defines=201 calls=1795 branches=1090 lines=12065
+deepbench defines=116 calls=814 branches=577 lines=5846
 escapebench defines=51 calls=117 branches=122 lines=1638
-pendbench defines=131 calls=1208 branches=676 lines=7029
-scanbench defines=333 calls=3274 branches=2120 lines=19766
+pendbench defines=131 calls=1168 branches=667 lines=6926
+scanbench defines=333 calls=3243 branches=2112 lines=19674
 indexbench defines=57 calls=158 branches=139 lines=1954
-digestbench defines=197 calls=1537 branches=913 lines=10075
+digestbench defines=197 calls=1500 branches=905 lines=9977
 readbench defines=62 calls=166 branches=152 lines=2197
 livebench defines=143 calls=1253 branches=819 lines=9293
-runbench defines=594 calls=5994 branches=3462 lines=34830
+runbench defines=594 calls=5954 branches=3453 lines=34727
