@@ -15,6 +15,14 @@
 # on which host it runs.
 set -e
 f=src/runtime.c
+# THE PATH IS SPELLED ON A GUARD LINE, and that is load-bearing rather than
+# decorative. The ratchet's `touched` pass selects the rows a branch could have
+# made blind by intersecting the files a branch changed with the paths each
+# mutation names on a guard line. Every assertion below reaches the file
+# through "$f", so the path appeared on no guard line and this row was
+# invisible to that pass whatever a branch touched -- the same defect
+# kanso#1338 repaired on the two compile-path mutations.
+grep -q 'k_utf8_check' src/runtime.c
 grep -qF 'if (len == 1) return (uint8_t)data[0] < 0x80;' "$f" || {
   echo "the ascii predicate moved; this mutation needs rewriting" >&2
   exit 1

@@ -2998,3 +2998,59 @@ kanso#1003 walked this route once and withdrew it as "the per-dependency
 check_merged is not redundant" without naming what made it so. §59 named one
 thing. There are three, and they are written down now. Nothing shipped: the
 probe is reverted and the page is corrected to say what the tree says.
+
+## 2026-09-09 — the touched pass could not see eight mutations, in three different ways
+
+kanso#1338 repaired two mutations the ratchet's `touched` pass could never
+select and counted eight more in the same position. Reading all eight says they
+are not one kind, which is why a repair that treats them alike would have been
+wrong.
+
+The pass selects the rows a branch could have blinded by intersecting the files
+the branch changed with the paths each mutation names on a guard line, and
+`guarding` recognised one spelling of grep.
+
+**THREE guarded correctly and were still invisible.**
+`a_module_rewritten_twice_before_it_is_checked`, `a_path_copied_once_per_declaration`
+and `an_entry_program_rewritten_twice_before_it_is_checked` all do this:
+
+    n=$(grep -cF "$target" src/lib.rs)
+    [ "$n" -eq 1 ] || { echo "moved or multiplied ($n)" >&2; exit 1; }
+
+src/lib.rs is spelled right there, on a grep line. That guard is STRICTER than
+the `grep -q` its neighbours use — it catches the anchor multiplying as well as
+vanishing — and `guarding` keyed on the literal `grep -q`, so the three
+mutations that guard best were the three it could not read.
+
+Widening the predicate to `grep -q` or `grep -c` is measured rather than
+assumed: over the 112 mutations on disk it takes the satisfying count from 69
+to 72, and the three are exactly the three that were blind. Nothing else moves,
+so it cannot over-select. That is the whole repair for this shape, and it is one
+line rather than three edited scripts.
+
+**THREE reach their file through a variable** — `grep -qF '<anchor>' "$f"` with
+`f=src/runtime.c` or `f=src/wasm.rs`. A grep line with no path on it. Exactly the
+shape kanso#1338 repaired, repaired the same way: one guard line spelling the
+path.
+
+**TWO carry no grep at all**, because they append rather than anchor:
+`clippy_bait` and `misformatted_source` both `printf ... >> src/lib.rs`. They
+cannot go stale the way an anchored mutation does, which is why they had no
+guard — and they are NOT exempt. An `allow(clippy::ptr_arg)` anywhere in
+src/lib.rs makes the bait inert with the gate green, and a crate-level rustfmt
+escape does the same to the other. Both now assert the escape hatch is absent,
+which is a guard worth having on its own and puts the path where the pass can
+read it.
+
+77 of 77 mutations naming a src/ file now name it on a guard line.
+
+**The spec asserts the property, not the list.** kanso#1338 wrote the
+list-shaped version, watched it red naming ten, and declined to ship it: with
+the ten repaired it would have been a green list, and a list goes stale the next
+time somebody adds a mutation.
+`tests/every_mutation_names_its_file_on_a_guard.rs` reads the directory off
+disk. Watched red on one of each repairable shape, naming both by file and by
+path:
+
+    a_validator_that_skips_its_tail.sh names ["src/runtime.c"] and guards none of them
+    clippy_bait.sh names ["src/lib.rs"] and guards none of them

@@ -1580,8 +1580,26 @@ fn read_it mode files list at acc r s
   hit = list/any? files (f -> at_risk? guards f)
   reaches mode files list at acc r hit
 
+# A GUARD IS ANY GREP THAT WOULD FAIL WHEN THE ANCHOR MOVES, and there are two
+# spellings of it in the mutations on disk. `grep -q '<anchor>' <file>` under
+# `set -e` is the common one. The other counts and asserts the count:
+#
+#     n=$(grep -cF "$target" src/lib.rs)
+#     [ "$n" -eq 1 ] || { echo "moved or multiplied ($n)" >&2; exit 1; }
+#
+# which is a STRICTER guard than the first -- it catches the anchor multiplying
+# as well as vanishing -- and this read `grep -q` only, so three mutations that
+# guard better than their neighbours were the ones it could not see.
+#
+# Widening it is measured, not assumed: over the 112 mutations on disk it takes
+# the count that satisfies the predicate from 69 to 72, and the three are
+# exactly the three that were blind. Nothing else changes, so this cannot
+# over-select.
 fn guarding s
-  list/select (text/split s "\n") (l -> spells? l "grep -q")
+  list/select (text/split s "\n") (l -> guard? l)
+
+fn guard? l
+  spells? l "grep -q" or spells? l "grep -c"
 
 fn at_risk? guards f
   source? f and list/any? guards (l -> spells? l f)
