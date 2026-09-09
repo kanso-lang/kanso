@@ -3674,6 +3674,18 @@ with `compile_allocs` 29,606, `compile_peak_bytes` 773,818 and the machine-code
 row byte-identical beside them. Welfare's floor rises 66.3039170230475 ->
 66.30393941879086 and is ratcheted in this PR.
 
+**Ratcheting a golden is a page edit.** The three rows are quoted by five
+`data-golden` spans in compiler.html, and moving the goldens without walking the
+pages left all five stale — `golden_prose` caught it as the LAST step of the
+welfare job, so the job read red with the number itself green at 66.30 and its
+floor met. CLAUDE.md's rule says a page edit ends with
+`sh scripts/gates/all_pages.sh`; the trigger is wider than the rule's wording,
+because a golden that moves silently re-points every span that quotes it. One of
+the five needed prose rather than a swap: the sentence said the library vein
+"fell 1,282,921 instructions, or 0.78%, to" that row, and a row that moves again
+makes the arithmetic false. The landing is now a fixed figure and the span
+carries today's reading beside it.
+
 **The direction is not evidence the fix is cheaper, and the entry says so.**
 Two mechanisms could each produce a move this size, and 639 instructions cannot
 separate them: the analysis does MORE work at every fold site (one extra
