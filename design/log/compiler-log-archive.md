@@ -55265,3 +55265,79 @@ weigh one. A weight guessed rather than argued from cases would price
 every future inline decision by the guess. If cases accumulate, the
 way in is a satiation and a weight argued from them, as a weights
 change. The ledger entry leaves with this commit.
+
+## 2026-09-05 — gavel: one row, one value, and every move is the compiler's
+
+On "Should a chip row still be allowed to pin two values?", Clay
+declined both the pinned pair and the proposed binary-sha stamp, and
+set the model the vein works under: "you have done enough work in the
+process to be confident that it is deterministic and so you treat it
+as such. if it got better then good if it got worse then bad and you
+assume it's always because of the compiler. but then of course you
+always just check to see if it's consistent. and if it's not you say
+okay well now we have to look for other sources of inconsistency and
+get ourselves back to a state where we're confident we've nailed them
+all."
+
+The ruling:
+
+- **One row, one value.** The pinned-pair mechanism and the per-chip
+  key retire. `bench/compile_instructions_by_cpu.txt` collapses to a
+  single number; the gate refuses any second value.
+- **Every move is attributed to the change under test.** A rise is a
+  regression to explain, a fall is a win to bank — the ordinary
+  ratchet — with no category of "the measurement drifted." The
+  measurement was made consistent (the row counts from the runtime's
+  entry closure inclusive, loader and stack guard excluded, per the
+  2026-09-04 build) and seven chip keys across two binaries agree to
+  the instruction on it; that is the evidence the model rests on.
+- **Consistency is checked, not assumed silently**: the same build
+  must reproduce its number on any runner and any run. A
+  reproduction failure — the number moving with no compiler change,
+  or two chips disagreeing on one binary — is not a mode to record
+  and not a pair to pin; it halts the vein and is hunted until the
+  source is found and removed, as the /proc/self/maps term was. The
+  vein returns to service when reproduction holds again.
+- No binary-sha stamp: under this model there is nothing for it to
+  distinguish. A move with no compiler change is by definition a
+  consistency failure, and the response to that is the hunt above.
+
+The entry leaves the ledger with this commit; its contradiction about
+the 508 (one binary or two) becomes moot, since neither reading
+licenses a pair.
+
+## 2026-09-06 — gavel: bump clang to 19, with feature detection
+
+On #290's toolchain path, Clay: "yes bump clang." CI's pinned compiler
+moves from Ubuntu clang 18.1.3 to LLVM 19 or later so the emitter can
+use `preserve_none`, the calling convention built for the shape of
+kanso's hot dispatchers (tail-call-heavy, paying a callee-saved
+prologue on every entry): priced at 2.84% of encodebench and the named
+remedy for the prologue cost in both `encode_onto` and `parse_value`.
+Two conditions ride with it:
+
+- **Feature detection, so no user gains a requirement.** The emitter
+  uses `preserve_none` only when the clang it invokes accepts it, and
+  falls back to the current convention otherwise. A user on clang 18
+  still builds and only misses the 2.84%. The bump is CI's and the
+  goldens', never the language's.
+- **Every compile vein re-sits in the one PR that bumps**, with the
+  sentence the veins' own headers require for a toolchain move, and
+  every measured-on line updated. Instruction and machine-code rows
+  will move together; that is the expected shape and is said once.
+
+## 2026-09-06 — gavel: a whole float keeps its point at every magnitude
+
+On #300 (a whole float above 1e15 renders as an integer), Clay: "yes
+float point at all magnitudes." The rule "a whole float renders as its
+digits and `.0`" — the golden's own name — held only below 1e15, where
+the integer cast is exact; above that the shortest-round-trip path
+printed `1000000000000000` with no point, and the value's identity as
+a float vanished at an implementation boundary. Ruled: a float's
+rendering always carries a `.` or an `e`, whatever its magnitude.
+Where the shortest form has neither, `.0` is appended. Both engines
+already agreed on the old behaviour, so this is a surface change
+pinned by a differential golden across all three, and
+`a_whole_float_keeps_its_point` extends past the boundary it was
+named for. The filing for #300 is owed to the ledger by heading; this
+entry stands as its ruling regardless.
