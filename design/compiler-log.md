@@ -2978,3 +2978,80 @@ path:
 
     a_validator_that_skips_its_tail.sh names ["src/runtime.c"] and guards none of them
     clippy_bait.sh names ["src/lib.rs"] and guards none of them
+
+## 2026-09-09 (second) — the chart drew the counters the objective had stopped reading
+
+docs/numbers.html is the long view: one row per merged commit, and a chart over
+it whose own subject line reads "what a run costs, what compiling costs, and the
+welfare score they roll up into". Five of its six lines drew counters the
+objective had retired.
+
+    line              read                                        status
+    run instructions  instructions + encode_instructions          retired 09-06
+    run memory        oneshot_arena_peak_bytes                    retired 09-06
+    binary size       text_bytes                                  never a term
+    compile work      compile_rounds+compile_visits+emitted_lines retired 09-03
+    compile memory    compile_peak_bytes                          a term
+    welfare           welfare                                     the score
+
+The 2026-09-06 gavel made the objective's runtime one consolidated program, and
+`run_instructions` and `run_peak_bytes` replaced the thirteen work rows and
+twelve memory rows the run side used to weigh. The 2026-09-03 rebuild had
+already retired fixpoint rounds, expression visits and emitted lines.
+`scripts/perf_record` writes a row's objective counters straight out of
+`welfare --counters`, unfiltered, so both counters the gavel minted have been in
+every row written since that day. Neither had a line.
+
+Read off the five hundred rows on the history branch:
+
+    counter                     rows   from         distinct   span
+    run_instructions              57   2026-09-06         18   3.04e9 -> 2.39e9
+    run_peak_bytes                57   2026-09-06          5   156.8 -> 46.7 MB
+    compile_instructions         105   2026-09-03         52
+    compile_allocs               349   2026-08-09         45
+    compile_peak_bytes           349   2026-08-09         22
+    oneshot_arena_peak_bytes     349   2026-08-09          2   the drawn one
+
+The last row is what a reader was looking at. `run memory` took two values, 2
+MiB and 3 MiB, across every row that holds it, so that line was flat with one
+step in it over the span where the counter the score reads fell 3.4x.
+
+**THE CHART DRAWS THE OBJECTIVE'S FIVE TERMS NOW**, in the order
+`bench/objective_sources.txt` lists them, plus welfare and plus binary size.
+`.text` stays because the page has nowhere else to show it and the 2026-09-05
+ruling is a fact worth publishing: no machine-code-size term in welfare, and
+`.text` keeps its own exact vein. It is drawn grey and the legend says why.
+
+`tests/the_chart_draws_the_objective.rs` replays `bench/objective_sources.txt`
+against the TREND array in both directions, and was watched red on the old page
+naming exactly the two failures:
+
+    the objective reads ["compile_allocs", "compile_instructions",
+      "run_instructions", "run_peak_bytes"] and the chart draws no line for them
+
+    the chart draws ["compile_rounds", "compile_visits", "emitted_lines",
+      "encode_instructions", "instructions", "oneshot_arena_peak_bytes"],
+      which the objective does not read
+
+Two keys are allowed past the second test by name, each with its reason written
+beside it: `welfare` is the score rather than a counter it reads, and
+`text_bytes` carries the 2026-09-05 ruling. A third arriving without a reason
+turns the spec red.
+
+THE SITE SMOKE FIXTURE HAD GONE STALE THE SAME WAY. Its stub history was six
+hand-picked rows, and the keys picked were the ones the chart happened to read
+in august: on 2026-09-09 it held neither `run_instructions` nor `run_peak_bytes`
+and could not have caught a chart that drew neither. It is generated from the
+newest real row now, every key of it, each value stepped so no series can draw
+flat and pass for a drawn one. The count it asserts went from six series to
+seven, and the protective property was watched: dropping `run_instructions` from
+one stub row alone reads `[5,6,6,6,6,6,6]` and fails.
+
+THE PAGE'S ROW ACCOUNTING WAS WRONG, and it is the same kind of error one layer
+up. It said 349 of the five hundred rows are scored on the compile counters
+alone and the other 151 have no score at all, which accounts for every row and
+leaves out the 57 that are scored on all five. The real shape is 244 rows on two
+counters at coverage 0.28, 48 on three at 0.44, 57 on all five at 1.00, and 151
+with none. The paragraph is restated in dates rather than counts. Those counts
+perish on the next merge — the file grows a row per commit, and "the five
+hundred rows" was already a number waiting to go stale.
