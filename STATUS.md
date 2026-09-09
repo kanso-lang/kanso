@@ -99,10 +99,22 @@ The archive entry of that name. `.reason`, `.cause` and `.origin` on an err,
 the second deliberate hole in infectiousness. No reader exists in the
 evaluator.
 
-### The chain line keeps its dot, and the lambda steps respell as `bind` (2026-08-29)
+### The fused chain operators `.>` `.!` `.?` (2026-08-31)
 
-The archive entry "gavel: the chain line keeps its dot". 305 `. (lambda)`
-steps still stand in lib/ and scripts/ on 2026-09-09.
+The archive entry "gavel: the fused chain operators": `x .> f` IS `bind x f`,
+`.!` annotate, `.?` rescue, bare-function right-hand sides, and in chain
+position the fused form is the only spelling (superseding the 2026-08-29
+keep-the-dot ruling for the three combinators; plain `.` untouched). Not in
+the lexer, the parser or any fixture. The 305 `. (lambda)` steps standing in
+lib/ and scripts/ on 2026-09-09 respell as `.>` under it.
+
+### Pure fallibility is boxed too (2026-08-31)
+
+The archive entry "rider: pure fallibility is boxed too": any operation whose
+answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
+box; `foo["bar"]` stays the data form. Rides with the effect type above and
+is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
+promises is visible as owed.
 
 ### `done` is minted (2026-08-26)
 
