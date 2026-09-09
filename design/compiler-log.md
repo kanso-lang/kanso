@@ -3304,11 +3304,11 @@ The corpus already held the proof, in a pair nobody had read side by side.
     .imported.stderr  error[name]: `let` is not a type … (module let_binding)
 
 Same program, same error, two routes through the front end, and the module
-route reported no location. `compile_module_loaded` now keeps its `(file,
-source)` pairs — the merge loop consumed `parsed`, so the text has to be taken
-before it is eaten — and renders through `render_across`, which picks each
-diagnostic's own source and falls back to naming a file with no quoted line
-when its text is not in hand.
+route reported no location. `compile_module_loaded` now renders through
+`render_across`, which picks each diagnostic's own source and falls back to
+naming a file with no quoted line when its text is not in hand. Where that
+source comes from is the next section: the first two answers both cost the
+objective, and the third costs nothing.
 
 The suffix stays at the end of the header line, so an existing message is
 byte-identical and simply gains the two lines under it. That is what keeps the
@@ -3336,5 +3336,60 @@ library paths' merged renders, which have the same shape; a cross-file fixture
 under tests/golden/errors_module; the forty-four module goldens regenerated;
 and then the reorder this was always for, at kanso#1340's repricing.
 
-`compile_instructions` is a layout vein and this touches src/, so it may move;
-CI says whether it did.
+**THE FIRST TWO SHAPES BOTH COST THE OBJECTIVE, AND THE THIRD IS FREE.** The
+renderer needs the text of the file a diagnostic is about, and the merge loop
+had been eating `parsed` — so the obvious repair is to keep the text across the
+merge. Round one did that, with a `Vec<(String, String)>` built as the loop
+consumed the triples, and CI turned five compile gates red:
+
+    compile_allocs          29,606 ->      29,613     +7
+    compile_peak_bytes     773,818 ->     774,847     +1,029
+    compile_instructions 48,791,172 ->  48,744,634    -46,538
+    entry_instructions  162,170,772 -> 162,528,521    +357,749
+    library_instructions 162,970,167 -> 162,823,672   -146,495
+
+The +7 is exact and derived: that vector is one allocation per module loaded,
+and `KANSO_PHASES=1 kanso check compile_corpus` prints seven `load` lines
+(compile_corpus, std/json, std/text, std/list, std/testing, std/text again,
+std/render — std/text twice because a module is compiled once per path to it,
+which "Remembering a compiled module costs more than compiling it again"
+measured and declined). This container read 29,613 and 774,847 too, agreeing
+with CI to the unit on both, as those two rows always have.
+
+The three instruction rows are layout: three routes on ONE binary sha moving
++357,749, −46,538 and −146,495 in the same job cannot be seven allocations.
+`welfare` priced the whole thing at −0.01. A fall means the change goes or the
+weights are argued, and the right answer here was a third one: the shape was
+wrong.
+
+Shape two: keep `parsed` itself alive and take each program out of it in
+place, so nothing new is allocated at all. allocations went back to 29,606 and
+peak went the OTHER way, 773,818 -> 775,730 — worse than shape one by 883
+bytes, because a `(String, String, Program)` triple is about three times the
+width of a pair and holding that vector holds the wider one. Priced on the
+objective, the 7 allocations saved are worth about a twentieth of what the 883
+bytes cost. Declined.
+
+Both shapes are answering the wrong question, and the two measurements
+together say so: the rise in each is the size of the VECTOR and not of the text
+it points at — the same files held two ways, 1,029 bytes and 1,912 bytes, where
+holding the corpus's actual source would be tens of kilobytes.
+
+Shape three ships, and it holds nothing at all. The loader is now
+`module_sources`, and
+the diagnostics branch CALLS IT AGAIN. A clean compile runs the code it always
+ran, byte for byte; a compile that is about to print an error opens its own
+files a second time, which nothing anywhere measures. On this container both
+rows read exactly main's numbers — `compile_allocs=29606`,
+`compile_peak_bytes=773818` — and `welfare` reads 66.30 against the floor of
+66.30. If the second read fails the diagnostics still print, without their
+source lines.
+
+The general form is worth keeping. A repair that hangs state on the success
+path to serve a failure that usually does not happen has bought the wrong
+thing, and doing the work again on the failing path costs nothing anyone
+measures. The three compile veins said so within a round.
+
+`compile_instructions` is a layout vein and this touches src/, so it may still
+move on the shape that ships; CI says whether it did, and this entry does not
+project it.

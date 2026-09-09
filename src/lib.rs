@@ -3377,12 +3377,15 @@ fn compile_module_inner(
     loaded
 }
 
-fn compile_module_loaded(
+// The files a module is made of, in the order they are merged. Called once to
+// compile the module, and a second time only if the merged check raises: a
+// located diagnostic needs the text of the file it is about, and holding that
+// text across the merge for the compiles that never fail costs the front end
+// bytes at its peak. The error path pays instead, where nothing is hot.
+fn module_sources(
     dir: &std::path::Path,
-    require_entry: bool,
-    visited: &mut crate::hash::Set<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
-) -> Result<ast::Program, String> {
+) -> Result<Vec<(String, String)>, String> {
     let mut sources: Vec<(String, String)> = match embedded {
         Some(files) => files.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect(),
         // A module is a directory of files sharing one namespace, and one file
@@ -3429,6 +3432,16 @@ fn compile_module_loaded(
             dir.display()
         ));
     }
+    Ok(sources)
+}
+
+fn compile_module_loaded(
+    dir: &std::path::Path,
+    require_entry: bool,
+    visited: &mut crate::hash::Set<std::path::PathBuf>,
+    embedded: Option<&[(&str, &str)]>,
+) -> Result<ast::Program, String> {
+    let mut sources = module_sources(dir, embedded)?;
     let mut parsed = Vec::new();
     for (file, source) in sources.drain(..) {
         let lexed = phase::watched("lex", || lexer::lex(&source))
@@ -3637,12 +3650,7 @@ fn compile_module_loaded(
     };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
-    // The module's own files, kept for the diagnostics below. The merge
-    // consumes `parsed`, and a check over the merged program can raise about
-    // any file in it, so the text has to outlive the loop that eats it.
-    let mut sources: Vec<(String, String)> = Vec::with_capacity(parsed.len());
-    for (file, source, program) in parsed {
-        sources.push((file, source));
+    for (_, _, program) in parsed {
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
@@ -3671,8 +3679,14 @@ fn compile_module_loaded(
         // source line, the way every per-file diagnostic already does. One
         // that does not keeps the older shape: kind, message, and the module
         // suffix, which was all any of them had.
+        // Read a second time, on the path that is about to fail. Holding the
+        // first read across the merge would cost every clean compile the bytes
+        // at its peak; a module that is about to print an error can afford to
+        // open its own files again. If the second read fails the diagnostics
+        // still print, without their source lines.
+        let reread = module_sources(dir, embedded).unwrap_or_default();
         let borrowed: Vec<(&str, &str)> =
-            sources.iter().map(|(f, s)| (f.as_str(), s.as_str())).collect();
+            reread.iter().map(|(f, s)| (f.as_str(), s.as_str())).collect();
         let rendered: Vec<String> = diags
             .iter()
             .map(|d| match d.file.as_deref() {
