@@ -3723,3 +3723,151 @@ the analysis has no differential of its own, and the corpus had no program whose
 answer depended on it. The counters could not see it either — an unsound licence
 makes a program FASTER and wrong. What found it was arithmetic that had to move
 and did not.
+
+## 2026-09-09 — the compile side has three changes of measurement, not two
+
+The 2026-09-08 entry on the compile term said the workload had been
+re-measured twice, and named a four-row table whose third row was a
+compiler change rather than a change of measurement. Scanning all 500
+rows of the perf history for an adjacent move over 20% in
+`compile_instructions` finds three:
+
+    row  commit    what happened                     instr    allocs    peak
+    446  5f5561c   #1291: lib/json drops std/list   0.4586   0.4490   0.5177
+    476  dfd118a   #1321: lib/json -> corpus        2.7232   2.7207   2.1047
+    485  8535884   #1331: sums both compile paths   4.3612   1.0000   1.0000
+
+The middle row reproduces the three factors already recorded in the
+floor file, to the digit, which is what says the factors can be read
+off the history at all. The last row moves `compile_instructions`
+alone, as `bench/objective_sources.txt` implies — one gate key each
+for allocs and peak, two for instructions.
+
+The first row is the one nobody wrote down, and the 2026-09-08 entry
+supplies its own reason for counting it: "a term measured on a library
+moves whenever that library changes what it imports: #1291 dropped
+std/list from lib/json and halved the compile veins with the compiler
+untouched." That is the disease #1321 was opened to cure, so it owes a
+factor like the other two.
+
+The record already disagreed with the entry. kanso#1347 item 2 asks
+for "the epoch table from the 2026-09-08 entry, so each of the FOUR
+compile epochs is scored against a baseline scaled to its own
+measurement" — and four epochs need three boundaries. The count was
+wrong against the record before it was wrong against the measurement,
+which is the cheaper of the two to check.
+
+**DONE — `bench/compile_epochs.txt`**, one boundary a line in
+`bench/runbench_phases.txt`'s style, read by `scripts/welfare_rescore`
+and applied to the baseline before the compile term is scored. Four
+epochs: A rows 0..445 (lib/json with std/list), B 446..475 (without),
+C 476..484 (compile_corpus, module row alone), D 485..499 (module and
+entry summed, today's). A row's divisor is the product of the factors
+of every boundary at or after it.
+
+Either side of each boundary, welfare before the table and after it:
+
+    boundary                     before             after
+    a23b005 -> 5f5561c    59.0275 -> 61.0313   56.7964 -> 57.0280
+       step                     +2.0038             +0.2316
+    e12a68e -> dfd118a    70.0258 -> 67.7549   66.0242 -> 66.0242
+       step                     -2.2709             +0.0000
+    fd3144d -> 8535884    67.9134 -> 66.2874   66.2875 -> 66.2874
+       step                     -1.6260             -0.0001
+
+The two pure re-basings flatten. dfd118a and 8535884 touch no src/ and
+no lib/, and their steps go to zero; the -0.0001 is the floor file's
+four-place 2.7207, which is the precision the factor was recorded at.
+
+**The first boundary keeps +0.2316, and that is the answer rather
+than a residual.** 5f5561c is #1291, which halved the compile workload
+and made the escape scan skip-then-iterate for runbench -3.3884%.
+Taking the ruler out leaves the runtime win standing. A boundary that
+flattened to zero here would have been the table erasing a real
+improvement.
+
+**One part of this is independent evidence and the rest is not.** The
+446 and 485 factors were derived from the counter jumps, so applying
+them and recovering 1.0000 is the same arithmetic inverted. The 476
+factors were measured by another session at the time of the change and
+written into the floor file; they land at 1.0000 against numbers they
+were never fitted to. That is the check worth having.
+
+**The table could not be measured at all until the fold-seed
+miscompilation was fixed** (kanso#1349, same day). The divisor map read
+1.0 for all 500 rows because every stored divisor aliased the last one:
+`list/fold`'s folder was granted an in-place write licence without
+anybody asking whether the fold's seed was uniquely owned. With the fix,
+`oldest_divisor` reads compile_allocs 1.2215943, compile_instructions
+5.446526138624, compile_peak_bytes 1.08960319 — the products above, to
+the digit. The table's first working run was the miscompilation's first
+reproduction.
+
+**The guard is all-or-nothing, and the middle case is the one that bites.**
+A table naming three boundaries and finding two is stale, and the answer it
+then gives is the dangerous kind: the rows past the missing boundary sit on
+the wrong divisor while every number stays plausible. That refuses. A history
+carrying NONE of them is not the history this table describes — it is a staged
+fixture, which every spec over this tool writes — and gets no epochs at all.
+The first cut refused that case too, and it turned three spec files red for a
+reason none of them was about; seventeen fixtures would have had to carry
+three commits they say nothing about, and every future one after them. The
+hole this leaves, said out loud: a rewrite dropping every boundary commit at
+once takes the no-epochs arm silently, and nothing in the tool can tell that
+from a fixture. The partial case is the one staleness actually produces.
+
+**DONE — the spec, and the first cut proved nothing.**
+`tests/the_compile_epochs_flatten_their_own_boundaries.rs` holds three.
+The first stages, per boundary, a fixture carrying every boundary's
+commit — so the epoch table applies at all — where only the
+pair under test holds counters: 10,000 before and 10,000 x factor
+after, so the four-place factors make every number an exact integer and
+nothing rounds inside the fixture. The second replays the counter names
+against `bench/objective_sources.txt`, so a typo cannot sit in the
+table scaling nothing. The third leaves one boundary out of a fixture at a
+time and requires the refusal by name — watched red under a mutation that
+takes the no-epochs arm for a partial match.
+
+The first cut passed under a mutation that moved both numbers. The
+welfare column is a STRING — `fixed` renders it and `put` stores what
+it rendered — and the helper walked digits from the colon, hit the
+opening quote, and answered the empty string for every row: the
+comparison was `"" == ""`. The helper now reads between the quotes and
+asserts what it read is a number. The mutation that works is
+`epoch_value v d[k] true` in `at_epoch`, which takes the identity arm
+for every counter and still compiles; `1.0 * v / 1.0` does not, because
+`f` goes unused and the tool dies before reading stdin, which the spec
+then reported as a broken pipe rather than as the tool's own
+diagnostic. The harness lets that write fail and prints what the tool
+said.
+
+**OPEN — the re-basing marks (task #449).** Stamping the baseline into
+each row and marking where it moved cannot be derived from the
+counters, and the measurement says why: the compile side has three
+adjacent moves over 20% and the run side has ZERO across
+`run_instructions`, `instructions` and `encode_instructions` over all
+500 rows. The run baseline did move — kanso#1284 re-based the run
+counters to parity, which is the -32.62 step — and no counter moved
+with it, because only the ruler changed. A workload change shows up in
+the rows and a baseline reset does not, so deriving the marks from the
+counters would find three of the four and silently miss the largest.
+Queued behind this entry because it edits the same file.
+
+**Owed from kanso#1346, recorded here (closes the kanso#1339 thread).**
+The ratchet's touched pass selected ELEVEN rows on kanso#1346's branch,
+against kanso#1338's five selected and three proved. kanso#1346 merged
+without recording it.
+
+**ANSWERED — what else the fold-seed hole reached.** `scripts/welfare_rescore`
+was miscompiled and nothing pinned its output, so the question is whether any
+other tool in `scripts/` was in the same position. Fourteen were run on native
+and on the oracle and their output compared: `welfare`, `page_drift`,
+`golden_prose`, `diagnostic_coverage`, `fingerprint`, `book_quotes`,
+`grammar_check`, `stale_a_panel`, `perf_record`, `trend_gate` and `ratchet`
+agree byte for byte. `prose_check` and `book_panels` were not compared — the
+oracle does not finish either inside five minutes. `site_smoke` disagrees, and
+it is the divergence `tests/a_file_that_is_not_text.rs` already pins: native
+reads `docs/kanso.wasm` and hands the bytes back, the oracle refuses with "the
+bytes are not text". Reduced to seven lines, that is the whole of it. Whether
+`read_file` should be byte-transparent on every engine is filed as a design
+question and is not re-asked here.

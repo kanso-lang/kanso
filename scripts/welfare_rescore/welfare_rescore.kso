@@ -217,6 +217,104 @@ fn moved row anchored phases
   each = list/map phases (p -> weighed_ratio p tot row anchored)
   list/sum (list/to_list each)
 
+# --- the compile term's epochs ----------------------------------------------
+# bench/compile_epochs.txt names each commit that changed HOW the compile
+# counters are measured, and by how much. Scoring divides the baseline by every
+# factor from a row's own epoch forward, so a row measured on a smaller
+# workload is asked about a smaller baseline.
+#
+# WITHOUT IT the welfare column steps at three commits where nothing about the
+# compiler moved. The largest of the three multiplies the compile term by 4.36
+# and the file's own header says where each factor was read.
+#
+# KEYED BY COMMIT, NOT BY POSITION OR DATE. The rows are chronological and
+# their dates are not -- six adjacent pairs go backwards, because the branch
+# records some commits in UTC and some at an offset -- so position is the only
+# ordering the file has, and a commit is the only name a row gives a position.
+fn epoch_map raw
+  rows = list/select (text/split raw "\n") phase_line?
+  list/to_list (list/map rows one_epoch)
+
+fn one_epoch line
+  parts = text/split line " "
+  [parts[1]! parts[2]! (text/to_float parts[3]!)]
+
+# The divisor the OLDEST epoch carries: every boundary's factor multiplied,
+# per counter.
+fn oldest_divisor epochs
+  fold epochs {} (acc e -> multiplied acc e[2]! e[3]!)
+
+fn multiplied acc key f
+  seeded acc key f (acc[key] == none)
+
+fn seeded acc key f true
+  put acc key f
+
+fn seeded acc key f false
+  put acc key (acc[key]! * f)
+
+# A table that names three boundaries and finds two is stale, and the failure
+# it causes looks like a working answer: the rows past the missing boundary
+# stay on the wrong divisor and every number stays plausible. So a PARTIAL
+# match refuses.
+#
+# All-or-nothing rather than all-or-refuse, because a history that carries
+# none of the boundaries is not the history this table describes — a staged
+# fixture, which every spec over this tool writes — and scaling it by the
+# whole product would be inventing a re-basing it never had. Those get no
+# epochs at all.
+#
+# THE HOLE THIS LEAVES, said out loud: a rewrite that dropped EVERY boundary
+# commit at once would take the no-epochs arm silently. Nothing here can tell
+# that from a fixture, and the partial case is the one staleness actually
+# produces.
+fn absent? rows e
+  length (list/to_list (list/select rows (r -> r["commit"] == e[1]!))) == 0
+
+fn epoch_divisors rows epochs
+  gone = length (list/to_list (list/select epochs (e -> absent? rows e)))
+  divisors rows epochs (gone == 0) (gone == length epochs)
+
+fn divisors rows epochs true false
+  start = [(oldest_divisor epochs) {}]
+  list/fold rows start (a r -> crossed a r epochs)
+
+fn divisors rows _ false true
+  [{} (no_epochs rows)]
+
+fn divisors rows _ true true
+  [{} (no_epochs rows)]
+
+fn divisors _ _ false false
+  err "a compile epoch names a commit no history row carries"
+
+# Every row on an empty divisor map, which `epoch_value` reads as the identity.
+fn no_epochs rows
+  list/fold rows {} (m r -> put m r["commit"] {})
+
+# The divisor drops by a boundary's factor at the first row measured the new
+# way and holds until the next boundary.
+fn crossed a row epochs
+  here = list/to_list (list/select epochs (e -> e[1]! == row["commit"]))
+  now = list/fold here a[1]! (m e -> put m e[2]! (m[e[2]!]! / e[3]!))
+  [now (put a[2]! row["commit"] now)]
+
+# The baseline as a row's own epoch would have measured it.
+fn rebased base d
+  fold (entries base) {} (acc e -> at_epoch acc e d)
+
+fn at_epoch acc (entry k v) d
+  put acc k (epoch_value v d[k] (d[k] == none))
+
+fn epoch_value v _ true
+  v
+
+fn epoch_value v f false
+  math/round (1.0 * v / f)
+
+fn at_row m divs row
+  scoring m.terms (rebased m.base divs[row["commit"]]!) m.formula
+
 # --- the rewrite ------------------------------------------------------------
 fn over_rows m given
   path = where given
@@ -224,7 +322,11 @@ fn over_rows m given
   os/read_file! phases . (t -> with_phases m (phase_map t) path)
 
 fn with_phases m phases path
-  os/read_file! path . (raw -> written m phases raw)
+  epochs = "bench/compile_epochs.txt"
+  os/read_file! epochs . (t -> with_epochs m phases (epoch_map t) path)
+
+fn with_epochs m phases epochs path
+  os/read_file! path . (raw -> written m phases epochs raw)
 
 fn where given
   chosen given (length given == 0)
@@ -235,13 +337,17 @@ fn chosen _ true
 fn chosen given false
   given[1]!
 
-fn written m phases raw
+fn written m phases epochs raw
   lines = list/select (text/split raw "\n") (l -> length l > 0)
   decoded = list/to_list (list/map lines json/decode)
   a = anchor decoded phases
-  built = list/map decoded (r -> rescored m (reconstructed r a phases))
+  divs = (epoch_divisors decoded epochs)[2]!
+  built = list/map decoded (r -> scored_row m divs r a phases)
   rows = list/to_list built
   io/write "{text/join rows "\n"}\n"
+
+fn scored_row m divs r a phases
+  rescored (at_row m divs r) (reconstructed r a phases)
 
 fn rescored m row
   weight = covered row m.terms m.base
