@@ -20,129 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 — THE ENTRY PATH REWROTE ITS PROGRAM TWICE TOO, AND NOTHING COULD SEE IT
-
-kanso#1323 deleted the doubled rewrite group from `compile_module_loaded`.
-`compile_parsed_entry` had the same shape and was not touched:
-
-    check_merged
-    finish_program                   <- first group
-    desugar_field_reads
-    prune_unused_getters
-    trmc::rewrite
-    inline_builtin_wrappers
-    if the check passed:
-        canonicalize_types
-        canonicalize_bare_aliases
-        hoist_repeated_strings
-        fuse_enumerable
-        finish_program               <- again
-        desugar_field_reads
-        prune_unused_getters
-        trmc::rewrite
-
-The first group is deleted, which leaves this path in the module path's order.
-Nothing between the two reads the first group's output except
-`inline_builtin_wrappers`, and the second group redoes all of it. It also ran
-unconditionally — including on the way to refusing a program the check had
-already rejected, where the rewrite has no reader at all. `kanso::compile`
-(src/lib.rs:28), the third compile path, already ran the group once, so this
-was `compile_parsed_entry`'s alone.
-
-### The counter exists because nothing in the tree could see this
-
-Checked rather than assumed, one gate at a time:
-
-- `compile_instructions`, `compile_allocs` and `compile_memory` read
-  `kanso check compile_corpus`. compile_corpus is a MODULE — the phase trace
-  prints `load compile_corpus` — so the gate goes through
-  `compile_module_loaded` and never reaches `compile_parsed_entry`.
-- `bench/compile_golden_modules.txt` DOES run this path: `module_entry`
-  (tests/compile_cost.rs:52) calls `kanso::compile_entry`. Its columns are
-  rounds and visits — the INFERENCE fixpoint's, which a rewrite pass does not
-  touch — and lines, calls, branches and defines, which are the emitted IR and
-  byte-identical whichever way round the passes run, because they are
-  idempotent on their own output. The right workload, the wrong dimension.
-- `emitted_code` proves the change is safe. It cannot prove the change did
-  anything.
-
-So `kanso::rewrite` counts pass invocations, the way `infer::work::passes`
-counts whole-program inferences and for the same reason its spec gives: "a new
-diagnostic that calls infer for itself raises the real cost without moving
-either number. One did, and every gate in the repository stayed green." On
-`tests/golden/compile/module/main.kso`, the sample both compile goldens already
-use, the count is 20; with the four lines restored it is 24.
-`tests/rewrite_passes.rs` pins the 20 and was watched red at 24 first.
-
-The ratchet row `entry_rewritten_twice` restores the four lines and asks that
-spec. Its anchor is `check::check_merged(&merged, true)`, which appears once —
-`check_merged` is called four times in src/lib.rs and `finish_program` many
-more, so neither of those is a guard that can refuse.
-
-**The compile row was expected not to move; it rose 502, and the trend gate
-refused that.** Two things were wrong in sequence, and the second is the one
-worth writing down.
-
-The prediction's reasoning was right as far as it went: compile_corpus is a
-module, so the gate's workload goes through `compile_module_loaded` and never
-reaches `compile_parsed_entry`, and none of the four deleted lines is on it.
-What it left out is that the counter added to find them was. `rewrite::pass()`
-sat inside `finish_program`, `desugar_field_reads`, `prune_unused_getters` and
-`trmc::rewrite` — the same four the module path calls. Seven modules on the
-corpus, four rewrites each, about twenty-eight bumps at roughly eighteen
-instructions apiece: 50,685,978 -> 50,686,480. Every other vein agreed, with
-`compile_allocs` and `compile_peak_bytes` byte-identical, which is what says
-the front end was doing the same work plus a counter.
-
-The wrong response was to regenerate the golden and write a note explaining the
-rise. `scripts/trend_gate` refused it:
-
-    worsened: compile_instructions 50,685,978 -> 50,686,480
-    FAIL  a pure regression: something got worse and nothing got better.
-
-That gate is right and the reasoning behind the regeneration was not. Welfare
-being indifferent — 502 on 50.7M sits inside the 0.001 band `welfare.kso:686`
-compares with — is not a licence, because the trend gate is a separate and
-stricter rule: a counter may rise when something else falls, and here nothing
-fell. Paying 502 instructions on every module compile for a number only a spec
-reads is a bad trade however small it is.
-
-So the counter moved to the four call sites in `compile_parsed_entry`, which
-takes it off the measured path altogether: the gate checks a module and enters
-neither the deleted rewrites nor the bumps that replaced them.
-`tests/rewrite_passes.rs` now pins 4 rather than 20 — the entry group alone, not
-the entry group plus every module's — and was watched red at 8 under the
-restored group before it was believed.
-
-The row did not come back to where it started. CI read **50,685,288**, a FALL of
-690 from main's 50,685,978, with `compile_allocs` and `compile_peak_bytes`
-byte-identical. Nothing the gate executes changed, so this is the layout vein
-that this golden's own history records moving seven times before on edits to the
-compiler's Rust. It is an improvement rather than a cost, `scripts/trend_gate`
-reads it as one, and the golden is regenerated down with that reason written in.
-The three readings together are the useful record: 50,685,978 with no counter,
-50,686,480 with it inside the four functions, 50,685,288 with it at the entry
-call sites.
-
-**The placement costs something and the spec says so.** `infer::work` counts
-inside `infer`, which catches any caller anywhere; that is the property its own
-comment was written for. This counter catches a fifth rewrite added to the
-entry group and does not catch one added by some other caller. That gap is
-real, it is written in the spec's header and in the mutation, and it is the
-price of not charging every module compile for the watch.
-
-The saving the change makes is on the entry path and no gate holds it: an entry
-program is walked four fewer times, and `tests/rewrite_passes.rs` is the only
-thing in the tree that can see it.
-
-All seven `tests/golden/errors_module` fixtures are byte-identical, and
-`all_compile.sh` reports emitted_code AGREED, compile_libraries AGREED and
-compile_cost AGREED. That reading is load-bearing rather than inherited:
-`compile_parsed_entry` puts `inline_builtin_wrappers` BETWEEN the two groups
-where `compile_module_loaded` puts it before both, so #1323's emitted_code
-reading does not carry over to this one.
-
-
 ## Checking and rewriting once at the top: six passes have to stay where they are
 
 The idea was that `compile_module_loaded` does the whole-program check and the
@@ -3231,6 +3108,137 @@ run half of this thread (kanso#1351) marks such a row `run_source: rebuilt`
 instead. Writing a fabricated `1.0000` there to make the two sides symmetric
 would read as "measured against an unmoved baseline", which is exactly the
 misreading the mark prevents.
+
+---
+
+## 2026-09-09 — an explanation of the error model, checked against the interpreter, found three gaps
+
+OPEN, all three cloud's; the first two are the language as designed, not shipping. Clay asked for a written explanation of how failure
+works in kanso for a friend. Every claim in it was run through
+`target/release/kanso play` before it went out, and three did not hold as the
+design says they should. None of them is in the book, which uses only the
+spellings that work; each is a place where a reader who trusts a ruling
+rather than a page gets a wrong answer.
+
+**1. The possible-none check is gated behind an environment variable, and
+the gate is the defect.** `check_none_exhaustive` in src/check.rs is the
+diagnostic the book's own story implies — "this can be a none and `describe`
+has no arm for it — resolve it here, or give `describe` a `none` arm" — and it
+runs only under `KANSO_EXHAUSTIVE`, where the 2026-07-24 none campaign left
+it while it waited on per-arm return sets. Clay, on reading that here:
+"KANSO_EXHAUSTIVE is of course total nonsense. you're just describing how the
+language works. the exhaustiveness when you're looking for a match on an arm
+has always been the way the language works since like the first couple of
+days of designing it." So there is nothing to rule and nothing to wait for:
+a call whose argument can be a none, made to a group with no `none` arm, is
+refused at check, and the flag comes out. The program the explanation used is
+the book's menu sample with the `none` arm deleted and the call moved into a
+function body:
+
+    fn describe price
+      "{price} yen"
+
+    fn quote menu
+      describe menu["pocky"]
+
+    print (quote { "dango":350 "taiyaki":500 })
+
+    kanso play                       <none> yen, exit 0
+    KANSO_EXHAUSTIVE=1 kanso play    error[exhaustive] at the argument, exit 2
+
+The second line is the language; the first is what ships. With the arm typed
+`price:int` the bare run instead dies at execution time: `error[runtime]: no
+overload of `describe` matches these arguments`, and a literal `none` handed
+to that typed arm fails the same way at runtime, where a literal string
+handed to it is refused at check (`literal_arg_type`). The 2026-08-15 sitting
+recorded the same rule as "8: exhaustiveness dissolves into per-call
+coverage": each call's inferred value set is checked for an unambiguously
+matching arm, provable gaps are compile diagnostics, unprovable calls keep
+the runtime err. The 2026-07-24 entry "what the last exhaustiveness report
+is, and is not" says the one false report left was a group-level return set
+where a per-arm one would be exact, and that is an implementation detail for
+whoever ungates it. The explanation as sent states the check as the language,
+without the flag.
+
+**2. The 2026-08-29 gavel "effects are types, and the words are the only
+doors" is unbuilt on the point measured: a `.` over an io still binds
+automatically, so a `.` step headed by `rescue` or `annotate` is swallowed.**
+The ruling: there is NO automatic bind; `<t>effect` is a box that can be
+passed as data; `bind`, `annotate` and `rescue` are the sole eliminators,
+ordinary functions taking the effect first. Under it, `effect . rescue orders`
+is the ordinary pipe supplying the first argument — `rescue effect orders` —
+because the dot no longer opens the box. On the shipped interpreter the dot
+still opens it: the step synthesises a bind around `rescue orders`, bind skips
+on failure, and the callback is never called.
+
+    os/read_file! "no-such-file.txt" . rescue orders . print
+      error[endpoint]: unhandled err reached the executor: "cannot read ..."
+
+    rescue (os/read_file! "no-such-file.txt") orders . print
+      no orders yet
+
+    os/read_file! "/etc/hostname" . shout . print
+      vm!!                       (the retired automatic bind, still shipping)
+
+Both of the first two parse. The first is what the ruling describes and its
+handler never runs; the second is what every fixture and both book chapters
+use, and it is also the ruled prefix form, so nothing published is wrong. An
+earlier draft of this entry filed the piped form as a fresh ledger question,
+"build the rider or retire it"; Clay's correction the same hour — "we got rid
+of that rule when we agreed that you have to use explicit combinators" — is
+the gavel above, and a ruled question is never re-asked. What is owed is the
+build: the dot stops binding over an effect, a box where a value is expected
+is refused, and the two book chapters that teach the automatic railway (ch04's
+call-site short-circuit, ch05's "piping into an io is bind") move with it —
+the ledger's "The book teaches the boundary language" entry already holds
+that half. The ruled chain, in the shape the 2026-08-29 gavel "the chain line
+keeps its dot" gave it — "the combinators look and act like regular
+functions", so a continuation spells them `. rescue orders` like any other
+function —
+
+    os/read_file! "the-orders-file-that-is-not-there.txt"
+      . rescue orders
+      . bind shout
+      . bind print
+
+parses today and dies at the executor with the handler never called, for the
+same reason as the one-line form. Under "A ruling outranks a lead" the gavel
+is at the front of the queue with item 1.
+
+**3. A stale entry in the lexer's borrowed-keyword table names `rescue`.**
+`kanso_form_for` in src/lexer.rs lists `try | catch | except | rescue` with the
+message "a failure rides the same rails as a value; an arm names the err",
+written when the language had no such word. The table is consulted by the
+needless-continuation check, so a statement headed by `rescue` and continued
+on `.` lines that would fit in eighty characters reports `error[syntax]: kanso
+has no `rescue``. Lengthen the first line past the fold and the same program
+runs:
+
+    rescue (os/read_file! "the-orders-file-that-is-not-there.txt") orders
+      . shout
+      . banner
+      . print
+
+    *** no orders yet!! ***
+
+Remove `rescue` from that arm of the table; `try`, `catch` and `except` stay.
+The error corpus has no fixture for a worded step at a statement head, which is
+why the message survived the word's arrival.
+
+**One thing the check confirmed rather than broke**, recorded because it is
+the sharpest demonstration of the own-err rule found so far and belongs in the
+book's boundary chapter when that is written. Annotating a foreign failure
+makes it yours:
+
+    rescue (annotate (os/read_file! "no-such-file.txt") said) orders . print
+      error[endpoint]: unhandled err reached the executor: "orders file: ..."
+        born in the entry at s2.kso:13
+        passed through orders
+
+The raw read error was foreign and `orders`' `(err _)` arm caught it a line
+earlier. `annotate` raised a new err in the entry's own module, so the same arm
+is now walked past. That is the rule working exactly as ruled, and it is the
+example to teach it with.
 The two rises read 0.28 -> 0.74 with the score 88.28 -> 62.67, and 0.74 ->
 1.00 with 64.95 -> 56.73, measured against origin/perf-history rescored by
 this tree — which is what CI writes on the next push to main.
