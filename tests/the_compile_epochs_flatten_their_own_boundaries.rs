@@ -264,8 +264,9 @@ fn a_history_with_a_hole_in_the_table_is_refused() {
 /// oldest boundary leaves the window one day while the table still names it.
 /// A boundary older than every row scales no row, and dropping it is the whole
 /// of the repair; refusing there would turn main red for a file doing exactly
-/// what it is meant to do. Rows 446, 476 and 485 of 500 today, so the first
-/// departure is 446 merges out.
+/// what it is meant to do. Read on 2026-09-09 the three sat at rows 444, 474
+/// and 483 of 500, a position that drops by one with every merge, so the first
+/// departure was 444 merges out.
 ///
 /// THE PROPERTY IS THAT THE SURVIVORS SCORE THE SAME, not that the boundary
 /// still flattens. Flattening survives the mutation this test exists to catch:

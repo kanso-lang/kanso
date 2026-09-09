@@ -281,9 +281,11 @@ fn seeded acc key f false
 # The history file is bounded — ci.yml keeps the newest 500 rows — so the
 # oldest boundary leaves the window one day and the table still names it. That
 # is not staleness: a boundary older than every row scales no row, and dropping
-# it is the whole of the repair. Rows 446, 476 and 485 of 500 today, so the
-# first departure is 446 merges out, which is exactly long enough for the red
-# main it would otherwise cause to arrive with nobody expecting it.
+# it is the whole of the repair. Read on 2026-09-09 the three sat at rows 444,
+# 474 and 483 of 500, so the first departure was 444 merges out — long enough
+# for the red main it would otherwise cause to arrive with nobody expecting it.
+# That position drops by one with every merge, so the date is the point of the
+# sentence and the number is not.
 #
 # A boundary missing from the MIDDLE, or the newest one missing while an older
 # one is present, is a stale table, and the answer it gives is the dangerous

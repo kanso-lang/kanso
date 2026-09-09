@@ -3818,9 +3818,14 @@ none of them no epochs. That is right about fixtures and wrong about the file
 CI actually rewrites. `history.jsonl` is bounded to the newest 500 rows, so the
 oldest boundary leaves the window one day while the table still names it — and
 under all-or-nothing that is a partial match, so main goes red for a file doing
-exactly what it is meant to do. Rows 446, 476 and 485 of 500 today: the first
-departure is 446 merges out, which is long enough that it would have arrived
-with nobody expecting it.
+exactly what it is meant to do. Read off origin/perf-history on 2026-09-09
+the three sit at rows 444, 474 and 483 of 500, so the first departure is 444
+merges out — long enough that it would have arrived with nobody expecting it.
+The position DROPS BY ONE WITH EVERY MERGE, because the window keeps the newest
+five hundred, which is why this reading is dated: it was 446/476/485 two merges
+earlier, and a fixed count written down here is a count that goes stale between
+the measuring and the writing. It already did once, in this entry's own first
+draft.
 
 So: all present, the table applies. A hole in the middle, or the newest gone
 while an older one stays, is a stale table and refuses. None at all is the
