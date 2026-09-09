@@ -225,10 +225,10 @@ story = """
 # missing a key the chart reads draws that line short, and the count below is
 # what says so.
 history = """
-  \{"alloc_bytes": 251150048, "allocs": 4734015, "arena_blocks": 2, "basket_allocs": 28169, "basket_arena_blocks": 2, "basket_arena_peak_bytes": 2097152, "basket_beat_iters": 114007, "basket_held_peak_bytes": 71136, "basket_instructions": 34694178, "basket_utf8_bytes": 48893, "beat_iters": 151, "commit": "c0ffee0", "compile_alloc_bytes": 2063381, "compile_allocs": 29606, "compile_instructions": 210961944, "compile_passes": 5, "compile_peak_bytes": 773818, "compile_rounds": 12, "compile_visits": 115, "date": "2026-09-01T12:00:00-07:00", "el_parses": 318450, "emitted_branches": 387, "emitted_calls": 233, "emitted_defines": 204, "emitted_lines": 6094, "encode_allocs": 9246225, "encode_append_fast": 42312800, "encode_append_grow": 5200, "encode_arena_blocks": 4, "encode_held_peak_bytes": 719516, "encode_instructions": 4043253556, "encode_ryu_renders": 849200, "encode_utf8_zerocopy": 400, "find2_calls": 2521500, "held_peak_bytes": 0, "instructions": 1485345052, "oneshot_allocs": 60088, "oneshot_arena_blocks": 2, "oneshot_arena_peak_bytes": 2097152, "oneshot_held_peak_bytes": 645048, "oneshot_instructions": 21708250, "perm_allocs": 5, "run_instructions": 2392210251, "run_peak_bytes": 46682840, "scored_by": "2026-09-06", "scored_weight": "1.00", "subject": "a change that moved something (0)", "text_bytes": 96418, "utf8_bytes": 10975500, "welfare": "66.3024"}
-  \{"alloc_bytes": 251175163, "allocs": 4734488, "arena_blocks": 3, "basket_allocs": 28171, "basket_arena_blocks": 3, "basket_arena_peak_bytes": 2097361, "basket_beat_iters": 114018, "basket_held_peak_bytes": 71143, "basket_instructions": 34697647, "basket_utf8_bytes": 48897, "beat_iters": 152, "commit": "c0ffee1", "compile_alloc_bytes": 2063587, "compile_allocs": 29608, "compile_instructions": 210983040, "compile_passes": 6, "compile_peak_bytes": 773895, "compile_rounds": 13, "compile_visits": 116, "date": "2026-09-02T12:00:00-07:00", "el_parses": 318481, "emitted_branches": 388, "emitted_calls": 234, "emitted_defines": 205, "emitted_lines": 6095, "encode_allocs": 9247149, "encode_append_fast": 42317031, "encode_append_grow": 5201, "encode_arena_blocks": 5, "encode_held_peak_bytes": 719587, "encode_instructions": 4043657881, "encode_ryu_renders": 849284, "encode_utf8_zerocopy": 401, "find2_calls": 2521752, "held_peak_bytes": 1, "instructions": 1485493586, "oneshot_allocs": 60094, "oneshot_arena_blocks": 3, "oneshot_arena_peak_bytes": 2097361, "oneshot_held_peak_bytes": 645112, "oneshot_instructions": 21710420, "perm_allocs": 6, "run_instructions": 2392449472, "run_peak_bytes": 46687508, "scored_by": "2026-09-06", "scored_weight": "1.00", "subject": "a change that moved something (1)", "text_bytes": 96427, "utf8_bytes": 10976597, "welfare": "66.3124"}
-  \{"alloc_bytes": 251200278, "allocs": 4734961, "arena_blocks": 4, "basket_allocs": 28173, "basket_arena_blocks": 4, "basket_arena_peak_bytes": 2097570, "basket_beat_iters": 114029, "basket_held_peak_bytes": 71150, "basket_instructions": 34701116, "basket_utf8_bytes": 48901, "beat_iters": 153, "commit": "c0ffee2", "compile_alloc_bytes": 2063793, "compile_allocs": 29610, "compile_instructions": 211004136, "compile_passes": 7, "compile_peak_bytes": 773972, "compile_rounds": 14, "compile_visits": 117, "date": "2026-09-03T12:00:00-07:00", "el_parses": 318512, "emitted_branches": 389, "emitted_calls": 235, "emitted_defines": 206, "emitted_lines": 6096, "encode_allocs": 9248073, "encode_append_fast": 42321262, "encode_append_grow": 5202, "encode_arena_blocks": 6, "encode_held_peak_bytes": 719658, "encode_instructions": 4044062206, "encode_ryu_renders": 849368, "encode_utf8_zerocopy": 402, "find2_calls": 2522004, "held_peak_bytes": 2, "instructions": 1485642120, "oneshot_allocs": 60100, "oneshot_arena_blocks": 4, "oneshot_arena_peak_bytes": 2097570, "oneshot_held_peak_bytes": 645176, "oneshot_instructions": 21712590, "perm_allocs": 7, "run_instructions": 2392688693, "run_peak_bytes": 46692176, "scored_by": "2026-09-06", "scored_weight": "1.00", "subject": "a change that moved something (2)", "text_bytes": 96436, "utf8_bytes": 10977694, "welfare": "66.3224"}
-  \{"alloc_bytes": 251225393, "allocs": 4735434, "arena_blocks": 5, "basket_allocs": 28175, "basket_arena_blocks": 5, "basket_arena_peak_bytes": 2097779, "basket_beat_iters": 114040, "basket_held_peak_bytes": 71157, "basket_instructions": 34704585, "basket_utf8_bytes": 48905, "beat_iters": 154, "commit": "c0ffee3", "compile_alloc_bytes": 2063999, "compile_allocs": 29612, "compile_instructions": 211025232, "compile_passes": 8, "compile_peak_bytes": 774049, "compile_rounds": 15, "compile_visits": 118, "date": "2026-09-04T12:00:00-07:00", "el_parses": 318543, "emitted_branches": 390, "emitted_calls": 236, "emitted_defines": 207, "emitted_lines": 6097, "encode_allocs": 9248997, "encode_append_fast": 42325493, "encode_append_grow": 5203, "encode_arena_blocks": 7, "encode_held_peak_bytes": 719729, "encode_instructions": 4044466531, "encode_ryu_renders": 849452, "encode_utf8_zerocopy": 403, "find2_calls": 2522256, "held_peak_bytes": 3, "instructions": 1485790654, "oneshot_allocs": 60106, "oneshot_arena_blocks": 5, "oneshot_arena_peak_bytes": 2097779, "oneshot_held_peak_bytes": 645240, "oneshot_instructions": 21714760, "perm_allocs": 8, "run_instructions": 2392927914, "run_peak_bytes": 46696844, "scored_by": "2026-09-06", "scored_weight": "1.00", "subject": "a change that moved something (3)", "text_bytes": 96445, "utf8_bytes": 10978791, "welfare": "66.3324"}
+  \{"alloc_bytes": 251150048, "allocs": 4734015, "arena_blocks": 2, "basket_allocs": 28169, "basket_arena_blocks": 2, "basket_arena_peak_bytes": 2097152, "basket_beat_iters": 114007, "basket_held_peak_bytes": 71136, "basket_instructions": 34694178, "basket_utf8_bytes": 48893, "beat_iters": 151, "commit": "c0ffee0", "compile_alloc_bytes": 2063381, "compile_allocs": 29606, "compile_instructions": 210961944, "compile_passes": 5, "compile_peak_bytes": 773818, "compile_rounds": 12, "compile_visits": 115, "date": "2026-09-01T12:00:00-07:00", "el_parses": 318450, "emitted_branches": 387, "emitted_calls": 233, "emitted_defines": 204, "emitted_lines": 6094, "encode_allocs": 9246225, "encode_append_fast": 42312800, "encode_append_grow": 5200, "encode_arena_blocks": 4, "encode_held_peak_bytes": 719516, "encode_instructions": 4043253556, "encode_ryu_renders": 849200, "encode_utf8_zerocopy": 400, "find2_calls": 2521500, "held_peak_bytes": 0, "instructions": 1485345052, "oneshot_allocs": 60088, "oneshot_arena_blocks": 2, "oneshot_arena_peak_bytes": 2097152, "oneshot_held_peak_bytes": 645048, "oneshot_instructions": 21708250, "perm_allocs": 5, "scored_by": "2026-09-06", "scored_weight": "0.44", "subject": "a change that moved something (0)", "text_bytes": 96418, "utf8_bytes": 10975500, "welfare": "66.3024"}
+  \{"alloc_bytes": 251175163, "allocs": 4734488, "arena_blocks": 3, "basket_allocs": 28171, "basket_arena_blocks": 3, "basket_arena_peak_bytes": 2097361, "basket_beat_iters": 114018, "basket_held_peak_bytes": 71143, "basket_instructions": 34697647, "basket_utf8_bytes": 48897, "beat_iters": 152, "commit": "c0ffee1", "compile_alloc_bytes": 2063587, "compile_allocs": 29608, "compile_instructions": 210983040, "compile_passes": 6, "compile_peak_bytes": 773895, "compile_rounds": 13, "compile_visits": 116, "date": "2026-09-02T12:00:00-07:00", "el_parses": 318481, "emitted_branches": 388, "emitted_calls": 234, "emitted_defines": 205, "emitted_lines": 6095, "encode_allocs": 9247149, "encode_append_fast": 42317031, "encode_append_grow": 5201, "encode_arena_blocks": 5, "encode_held_peak_bytes": 719587, "encode_instructions": 4043657881, "encode_ryu_renders": 849284, "encode_utf8_zerocopy": 401, "find2_calls": 2521752, "held_peak_bytes": 1, "instructions": 1485493586, "oneshot_allocs": 60094, "oneshot_arena_blocks": 3, "oneshot_arena_peak_bytes": 2097361, "oneshot_held_peak_bytes": 645112, "oneshot_instructions": 21710420, "perm_allocs": 6, "scored_by": "2026-09-06", "scored_weight": "0.44", "subject": "a change that moved something (1)", "text_bytes": 96427, "utf8_bytes": 10976597, "welfare": "66.3124"}
+  \{"alloc_bytes": 251200278, "allocs": 4734961, "arena_blocks": 4, "basket_allocs": 28173, "basket_arena_blocks": 4, "basket_arena_peak_bytes": 2097570, "basket_beat_iters": 114029, "basket_held_peak_bytes": 71150, "basket_instructions": 34701116, "basket_utf8_bytes": 48901, "beat_iters": 153, "commit": "c0ffee2", "compile_alloc_bytes": 2063793, "compile_allocs": 29610, "compile_instructions": 211004136, "compile_passes": 7, "compile_peak_bytes": 773972, "compile_rounds": 14, "compile_visits": 117, "date": "2026-09-03T12:00:00-07:00", "el_parses": 318512, "emitted_branches": 389, "emitted_calls": 235, "emitted_defines": 206, "emitted_lines": 6096, "encode_allocs": 9248073, "encode_append_fast": 42321262, "encode_append_grow": 5202, "encode_arena_blocks": 6, "encode_held_peak_bytes": 719658, "encode_instructions": 4044062206, "encode_ryu_renders": 849368, "encode_utf8_zerocopy": 402, "find2_calls": 2522004, "held_peak_bytes": 2, "instructions": 1485642120, "oneshot_allocs": 60100, "oneshot_arena_blocks": 4, "oneshot_arena_peak_bytes": 2097570, "oneshot_held_peak_bytes": 645176, "oneshot_instructions": 21712590, "perm_allocs": 7, "scored_by": "2026-09-06", "scored_weight": "0.44", "subject": "a change that moved something (2)", "text_bytes": 96436, "utf8_bytes": 10977694, "welfare": "66.3224"}
+  \{"alloc_bytes": 251225393, "allocs": 4735434, "arena_blocks": 5, "basket_allocs": 28175, "basket_arena_blocks": 5, "basket_arena_peak_bytes": 2097779, "basket_beat_iters": 114040, "basket_held_peak_bytes": 71157, "basket_instructions": 34704585, "basket_utf8_bytes": 48905, "beat_iters": 154, "commit": "c0ffee3", "compile_alloc_bytes": 2063999, "compile_allocs": 29612, "compile_instructions": 211025232, "compile_passes": 8, "compile_peak_bytes": 774049, "compile_rounds": 15, "compile_visits": 118, "date": "2026-09-04T12:00:00-07:00", "el_parses": 318543, "emitted_branches": 390, "emitted_calls": 236, "emitted_defines": 207, "emitted_lines": 6097, "encode_allocs": 9248997, "encode_append_fast": 42325493, "encode_append_grow": 5203, "encode_arena_blocks": 7, "encode_held_peak_bytes": 719729, "encode_instructions": 4044466531, "encode_ryu_renders": 849452, "encode_utf8_zerocopy": 403, "find2_calls": 2522256, "held_peak_bytes": 3, "instructions": 1485790654, "oneshot_allocs": 60106, "oneshot_arena_blocks": 5, "oneshot_arena_peak_bytes": 2097779, "oneshot_held_peak_bytes": 645240, "oneshot_instructions": 21714760, "perm_allocs": 8, "scored_by": "2026-09-06", "scored_weight": "0.44", "subject": "a change that moved something (3)", "text_bytes": 96445, "utf8_bytes": 10978791, "welfare": "66.3324"}
   \{"alloc_bytes": 251250508, "allocs": 4735907, "arena_blocks": 6, "basket_allocs": 28177, "basket_arena_blocks": 6, "basket_arena_peak_bytes": 2097988, "basket_beat_iters": 114051, "basket_held_peak_bytes": 71164, "basket_instructions": 34708054, "basket_utf8_bytes": 48909, "beat_iters": 155, "commit": "c0ffee4", "compile_alloc_bytes": 2064205, "compile_allocs": 29614, "compile_instructions": 211046328, "compile_passes": 9, "compile_peak_bytes": 774126, "compile_rounds": 16, "compile_visits": 119, "date": "2026-09-05T12:00:00-07:00", "el_parses": 318574, "emitted_branches": 391, "emitted_calls": 237, "emitted_defines": 208, "emitted_lines": 6098, "encode_allocs": 9249921, "encode_append_fast": 42329724, "encode_append_grow": 5204, "encode_arena_blocks": 8, "encode_held_peak_bytes": 719800, "encode_instructions": 4044870856, "encode_ryu_renders": 849536, "encode_utf8_zerocopy": 404, "find2_calls": 2522508, "held_peak_bytes": 4, "instructions": 1485939188, "oneshot_allocs": 60112, "oneshot_arena_blocks": 6, "oneshot_arena_peak_bytes": 2097988, "oneshot_held_peak_bytes": 645304, "oneshot_instructions": 21716930, "perm_allocs": 9, "run_instructions": 2393167135, "run_peak_bytes": 46701512, "scored_by": "2026-09-06", "scored_weight": "1.00", "subject": "a change that moved something (4)", "text_bytes": 96454, "utf8_bytes": 10979888, "welfare": "66.3424"}
   \{"alloc_bytes": 251275623, "allocs": 4736380, "arena_blocks": 7, "basket_allocs": 28179, "basket_arena_blocks": 7, "basket_arena_peak_bytes": 2098197, "basket_beat_iters": 114062, "basket_held_peak_bytes": 71171, "basket_instructions": 34711523, "basket_utf8_bytes": 48913, "beat_iters": 156, "commit": "c0ffee5", "compile_alloc_bytes": 2064411, "compile_allocs": 29616, "compile_instructions": 211067424, "compile_passes": 10, "compile_peak_bytes": 774203, "compile_rounds": 17, "compile_visits": 120, "date": "2026-09-06T12:00:00-07:00", "el_parses": 318605, "emitted_branches": 392, "emitted_calls": 238, "emitted_defines": 209, "emitted_lines": 6099, "encode_allocs": 9250845, "encode_append_fast": 42333955, "encode_append_grow": 5205, "encode_arena_blocks": 9, "encode_held_peak_bytes": 719871, "encode_instructions": 4045275181, "encode_ryu_renders": 849620, "encode_utf8_zerocopy": 405, "find2_calls": 2522760, "held_peak_bytes": 5, "instructions": 1486087722, "oneshot_allocs": 60118, "oneshot_arena_blocks": 7, "oneshot_arena_peak_bytes": 2098197, "oneshot_held_peak_bytes": 645368, "oneshot_instructions": 21719100, "perm_allocs": 10, "run_instructions": 2393406356, "run_peak_bytes": 46706180, "scored_by": "2026-09-06", "scored_weight": "1.00", "subject": "a change that moved something (5)", "text_bytes": 96463, "utf8_bytes": 10980985, "welfare": "66.3524"}
 """
@@ -280,6 +280,13 @@ trend = """
     // the node rather than by stripping a character out of the cell.
     const chart = () => [...document.querySelectorAll('#trend-chart .trend-key')]
       .map((t) => t.textContent.trim());
+    // The scoring-coverage boundaries. The stub's four older rows predate the
+    // run counters and carry coverage 0.44, the way every row before
+    // 2026-09-06 does; the last two carry 1.00. So the chart owes exactly one
+    // rule, labelled with the coverage to its right, and the welfare line owes
+    // two segments where the other six are single strokes.
+    const bounds = () => [...document.querySelectorAll('#trend-chart .trend-bound-key')]
+      .map((t) => t.textContent.trim());
     const panel = () => [...document.querySelectorAll('#perf-panel .perf-row')]
       .map((tr) => tr.querySelector('td').lastChild.textContent.trim());
     for (let i = 0; i < 600; i++) \{
@@ -287,12 +294,13 @@ trend = """
       const keys = chart();
       const rows = panel();
       if (got && keys.length && rows.length) \{
-        return \{series: got, keys: keys, panel_head: rows.slice(0, keys.length)};
+        return \{series: got, keys: keys, panel_head: rows.slice(0, keys.length),
+                marks: bounds()};
       }
       await new Promise((r) => setTimeout(r, 250));
     }
     return \{series: [], keys: [], panel_head: ['the page never finished drawing'],
-            stubbed: window.__chart.stub,
+            marks: [], stubbed: window.__chart.stub,
             why: window.__chart.err || 'the chart never drew'};
   };
   </script>
@@ -506,20 +514,41 @@ fn charted failures report
 fn read_chart failures report
   read = json/decode report
   a = missing_series read failures
-  finished (missing_panel_rows read a) report
+  b = missing_panel_rows read a
+  finished (missing_bounds read b) report
 
-# Seven series, six points each, because six rows were fed to it. A presence
-# check would pass on an empty canvas, which is the failure this exists to
-# catch.
+# Eight strokes for seven series, because the stub carries the shape the real
+# history has. Its four older rows predate the run counters and carry coverage
+# 0.44; the last two carry all five and 1.00. So the two run lines draw two
+# points each, the four counters that go back to the first row draw six, and
+# welfare draws TWO strokes -- five points to the boundary and two after it,
+# the segment reaching one point into the next run so the step itself is drawn
+# rather than left as a gap the eye closes by guessing.
+#
+# A presence check would pass on an empty canvas, which is the failure this
+# exists to catch, and the earlier flat [6 6 6 6 6 6 6] could not have caught
+# a welfare line drawn as one stroke across a coverage change -- which is what
+# it was until 2026-09-09, and what made the page read a change in what was
+# recorded as thirty-two points off the compiler.
 fn missing_series read acc
-  why = "the chart did not draw seven series of six points"
+  why = "the chart did not draw the seven series at their recorded lengths"
   noted acc why (drew? read["series"])
 
 fn drew? none
   false
 
 fn drew? series
-  series == [6 6 6 6 6 6 6]
+  series == [2 2 2 5 6 6 6 6]
+
+# One coverage change in the stub is one rule on the chart, labelled with the
+# share the rows to its right are scored on. `scored_weight` arrives as TEXT in
+# every row of the real history -- "0.00", "0.28", "0.44", "1.00" -- and a
+# `typeof === 'number'` guard read every row as unscored and drew no rule at
+# all. This is the check that would have caught it: a silent no-op leaves the
+# list empty.
+fn missing_bounds read acc
+  why = "the chart did not mark the coverage change, or labelled it wrong"
+  noted acc why (read["marks"] == ["coverage 1.00"])
 
 # The panel leads with the chart's own lines, in the chart's own order, because
 # it is built from the same list rather than from a second one written by hand.

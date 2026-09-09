@@ -3417,3 +3417,70 @@ Summed on the objective's compile term the fall is 170,582 (-0.0809%), so
 `welfare` rose and the floor is held at 66.30 in this PR with the reason
 recorded. It is banked as layout and claimed as nothing else: the front end
 did not get faster at anything, and the next change is not free to spend this.
+
+## 2026-09-09 (fourth) — the chart drew two differently-scored populations as one line
+
+**DONE.** The design chat's entry of the same day, "the cliff is the run terms
+joining the score, and the chart draws a coverage change as a fall", diagnosed
+what Clay has been looking at and named three pieces. This is the third of
+them, the one that makes the page honest today rather than right.
+
+`scripts/welfare_rescore` scores a row on the counters it carries and
+renormalises the weights that remain, and it writes `scored_weight` into every
+row so that a reader is not fooled. The chart never read the field. Across the
+500 rows there are five runs of it and four boundaries:
+
+    rows       scored_weight   welfare
+    0..30      0.28            74.64 -> 73.77
+    31..181    0.00            no score, the line has a gap here
+    182..390   0.28            82.82 -> 89.72
+    391..438   0.44            91.67 -> 91.57
+    439..499   1.00            58.96 -> 66.30
+
+Two of those boundaries are steps in the line, and neither is the compiler.
+Compile instructions joining on 2026-09-03 takes the score 89.72 -> 91.67. The
+run counters joining on 2026-09-06 take it 91.57 -> 58.96, because the compile
+terms carry the advantage they have accumulated since august while the run
+terms start at parity against a baseline measured on the day they joined. That
+second one is the whole of the "dramatically worse" the page has been showing.
+
+The chart marks every boundary with a dashed muted rule labelled with the
+coverage to its right, and splits the welfare polyline per run, drawing it
+faded wherever the coverage is below 1.00. Each segment reaches one point into
+the next run so the step itself is drawn rather than left as a gap the eye
+closes by guessing. Coverage gets no colour of its own: it is not an entity,
+and a categorical hue would have made it an eighth series.
+
+**`scored_weight` IS TEXT, AND THE FIRST CUT OF THIS DID NOTHING.** Every row
+in the history carries the string "0.00", "0.28", "0.44" or "1.00", the same
+way `welfare` is text and has always been read through `parseFloat`. A
+`typeof r.scored_weight === 'number'` guard read all 500 rows as unscored,
+found one run, drew no rule, and split nothing -- a change that ships, passes
+its own eye test, and leaves the picture exactly as wrong as before. The runs
+are keyed on the text now, which is canonical to two places and so compares
+exactly, and the number is parsed only to decide whether the coverage is full.
+
+The spec is in the site smoke, which renders the page in a browser and reads
+the marks off the DOM. Its stub carried six rows at one coverage and could not
+have seen any of this, so it now carries the shape the real history has: four
+older rows without the run counters at 0.44, two with them at 1.00. That makes
+`missing_series` a real assertion -- [2 2 2 5 6 6 6 6], the two run lines
+short, the four old counters full, and welfare in TWO strokes -- and adds
+`missing_bounds` for the one rule and its label.
+
+Both were watched red first, and they fail differently, which is what says
+they are testing two things. Under the `typeof` guard: `marks: []` and series
+[2,2,6,6,6,6,6], both checks red, the real bug reproduced. With the split
+removed but the guard correct: series red, `marks: ["coverage 1.00"]` still
+right. Restored, green.
+
+The prose said the score falls "from about 75 to about 52" and the column has
+read 91.57 -> 58.96 since the compile epochs moved under it. Corrected, with
+both steps named. `sh scripts/gates/all_pages.sh` green on all three. The
+labels were checked for collision rather than eyeballed: four rules, tightest
+gap 16px, right edge 1097 of 1200.
+
+OPEN, both the chat's and both still cloud's: reconstructing the run terms for
+the 439 earlier rows so they score on all five, and the compile-side epoch
+table. When those land the boundaries stop being steps and these rules stop
+having anything to mark.

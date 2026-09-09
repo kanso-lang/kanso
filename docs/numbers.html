@@ -14,7 +14,7 @@ description: "one row per merged commit: what a run costs, what compiling costs,
 
 <p>an older row holds fewer counters than the formula reads, because the counter set grew with the project. each term is scored on the counters the row carries; a term with none of them is dropped and the remaining weights are renormalized, so a row that scores well on what it has reads like a full row that scores well. a row carrying none of the counters any term reads gets no welfare column at all, and the line has a gap where it sits. every row records the two things that say what scored it: <code>scored_by</code> names the formula, and <code>scored_weight</code> gives the share of that formula's weight the row's counters cover.</p>
 
-<p>read <code>scored_weight</code> before reading a step in the line. the formula reads five counters and an older row carries fewer of them. compile allocations and compile memory go back to the first row, 2026-08-09, minus the stretch between 2026-08-13 and 2026-08-24 that the miscompilation below cost; compile instructions joins on 2026-09-03; the run program's retired instructions and its peak bytes join on 2026-09-06, when the objective's run side became one consolidated program. a row holding two of the five is scored at coverage 0.28, three at 0.44, all five at 1.00, and a row holding none of them has no score at all. the step where the run counters arrive is a change in what was recorded rather than in what the compiler costs: the compile terms carry the advantage they have accumulated since august, while the run terms start at parity against a baseline measured on the day they joined, so the score falls from about 75 to about 52 with nothing in the compiler moving. every other fall in the file is a counter that got worse.</p>
+<p>read <code>scored_weight</code> before reading a step in the line. the formula reads five counters and an older row carries fewer of them. compile allocations and compile memory go back to the first row, 2026-08-09, minus the stretch between 2026-08-13 and 2026-08-24 that the miscompilation below cost; compile instructions joins on 2026-09-03; the run program's retired instructions and its peak bytes join on 2026-09-06, when the objective's run side became one consolidated program. a row holding two of the five is scored at coverage 0.28, three at 0.44, all five at 1.00, and a row holding none of them has no score at all. the chart marks every one of those changes with a dashed rule and draws the score faded wherever the coverage is below 1.00, because a step across one of them is a change in what was recorded rather than in what the compiler costs. there are two. compile instructions joining on 2026-09-03 takes 0.28 to 0.44 and the score from 89.72 to 91.67. the run counters joining on 2026-09-06 take 0.44 to 1.00 and the score from 91.57 to 58.96, because the compile terms carry the advantage they have accumulated since august while the run terms start at parity against a baseline measured on the day they joined. neither is the compiler. every other fall in the file is a counter that got worse.</p>
 
 <p>a change to the scoring function is a change to what the project says it wants, and it is the one thing allowed to lower the number. every such change is in the history of <code>bench/welfare_floor.json</code> with the reason written beside it.</p>
 
@@ -24,7 +24,7 @@ description: "one row per merged commit: what a run costs, what compiling costs,
 
 <div id="trend-chart"><p class="perf-loading">loading the chart…</p></div>
 
-<p class="chart-legend">how each line is derived, from the code that draws it.
+<p class="chart-legend">a dashed vertical rule marks each change in scoring coverage, labelled with the share of the formula the rows to its right are scored on; the welfare line is drawn faded wherever that share is below 1.00. how each line is derived, from the code that draws it.
 the first five are the counters the welfare formula reads, one line each;
 <code>bench/objective_sources.txt</code> is that list and a spec replays it
 against the code below. <strong>run instructions</strong> is
@@ -103,6 +103,8 @@ divided by the weight those terms carry, times a hundred.</p>
 .perf-loading { color: var(--muted); font-size: 0.9rem; }
 .chart-legend { color: var(--muted); font-size: 0.86rem; line-height: 1.7; }
 .trend-key { fill: var(--muted); font-size: 15px; letter-spacing: 0.02em; }
+.trend-bound { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 5; opacity: 0.55; }
+.trend-bound-key { fill: var(--muted); font-size: 12px; letter-spacing: 0.02em; opacity: 0.85; }
 .perf-panel { border: 1px solid var(--line); border-radius: 10px; margin: 1.5rem 0; padding: 1.1rem 1.3rem; }
 .perf-panel table { border-collapse: collapse; font-family: var(--font-mono); font-size: 0.9rem; width: 100%; }
 .perf-panel th { color: var(--muted); font-weight: 500; text-align: left; }
@@ -232,17 +234,66 @@ divided by the weight those terms carry, times a hundred.</p>
     // floating, so nothing here needs it in hundredths. It was rounded to
     // hundredths until 2026-09-09 to survive a Math.round that has since gone,
     // and rounding cost the panel below the last two digits of every move.
-    { token: 'welfare', hue: 'var(--series-welfare)',
+    // Split at every change in `scored_weight` and faded below 1.00, because
+    // this is the only line whose value depends on how many of the formula's
+    // terms the row could be scored on. Drawn as one stroke it told a reader
+    // that the compiler got 32 points worse on 2026-09-06, when what changed
+    // was that the run terms started being recorded.
+    { token: 'welfare', hue: 'var(--series-welfare)', byCoverage: true,
       label: 'welfare', read: (r) => (r.welfare == null ? null : parseFloat(r.welfare)),
       show: (v) => v.toFixed(4),
       note: 'The score the five terms roll up into. It is an index and not a percentage \u2014 the ceiling is a hundred, where every term costs nothing, and the origin is arbitrary. Only its direction and the size of its moves mean anything.' },
   ];
+  // Where the share of the formula a row's counters cover changes. A step in
+  // the welfare line across one of these is a change in what was recorded and
+  // not in what the compiler costs, and until every row is scored on all five
+  // terms the chart has to say which kind of step a reader is looking at. The
+  // page has said it in prose since the rescore landed; prose is not where a
+  // reader looks when a line falls thirty points.
+  // `scored_weight` arrives as text, the same way `welfare` does -- every row
+  // in the history carries the string "0.00", "0.28", "0.44" or "1.00", and a
+  // `typeof === 'number'` guard here read every row as unscored and drew no
+  // boundary at all. The runs are keyed on that text, which is canonical to
+  // two places, so the comparison is exact rather than a float compare, and
+  // the number is only ever parsed to decide whether the coverage is full.
+  const coverageOf = (r) =>
+    (r.scored_weight === null || r.scored_weight === undefined
+      ? null
+      : String(r.scored_weight));
+  const fullCoverage = (w) => w !== null && parseFloat(w) === 1;
+  function coverageRuns(rows) {
+    const runs = [];
+    rows.forEach((r, i) => {
+      const w = coverageOf(r);
+      if (!runs.length || runs[runs.length - 1].weight !== w) {
+        runs.push({ weight: w, from: i, to: i });
+      } else {
+        runs[runs.length - 1].to = i;
+      }
+    });
+    return runs;
+  }
   function drawTrend(rows) {
     const host = document.getElementById('trend-chart');
     if (!host) return;
     const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
     const total = rows.length;
     const at = (i) => PAD + (i * (W - 2 * PAD)) / Math.max(total - 1, 1);
+    const runs = coverageRuns(rows);
+    const weightAt = (i) => {
+      const run = runs.find((r) => i >= r.from && i <= r.to);
+      return run ? run.weight : null;
+    };
+    // Drawn first, so every series sits on top of them. Muted and dashed,
+    // because a boundary is a fact about the measurement rather than another
+    // measure: it must be findable and must not read as an eighth line.
+    const bounds = runs.slice(1).map((run) => {
+      const x = Math.round((at(run.from - 1) + at(run.from)) / 2);
+      const label = run.weight === null || parseFloat(run.weight) === 0
+        ? 'no score' : `coverage ${run.weight}`;
+      return `<line class="trend-bound" x1="${x}" y1="${TOP}" x2="${x}" y2="${TOP + USABLE}"/>` +
+        `<text class="trend-bound-key" x="${x + 4}" y="${TOP - 4}">${label}</text>`;
+    });
     const read = (series) => {
       const pts = [];
       rows.forEach((r, i) => {
@@ -263,9 +314,28 @@ divided by the weight those terms carry, times a hundred.</p>
       const span = Math.max(hi - lo, floorSpan);
       const mid = (lo + hi) / 2, low = mid - span / 2;
       const y = (v) => (span === 0 ? H / 2 : TOP + USABLE - ((v - low) * USABLE) / span);
-      const coords = pts.map(([i, v]) => `${Math.round(at(i))},${Math.round(y(v))}`).join(' ');
       const dash = series.dashed ? ' stroke-dasharray="7 5"' : '';
-      return `<polyline fill="none" stroke="${series.hue}" stroke-width="2"${dash} points="${coords}"/>`;
+      const line = (run, fade) =>
+        `<polyline fill="none" stroke="${series.hue}" stroke-width="2"${dash}` +
+        `${fade ? ' stroke-opacity="0.42"' : ''} points="${run}"/>`;
+      const xy = ([i, v]) => `${Math.round(at(i))},${Math.round(y(v))}`;
+      // Only the score is split. The other six are counts, and a count means
+      // the same thing however many terms the formula happened to read that
+      // day; the score is the one line whose value depends on the coverage.
+      if (!series.byCoverage) return line(pts.map(xy).join(' '), false);
+      const out = [];
+      let head = 0;
+      for (let k = 1; k <= pts.length; k++) {
+        if (k === pts.length || weightAt(pts[k][0]) !== weightAt(pts[head][0])) {
+          // The segment reaches one point into the next run, so the step
+          // itself is drawn rather than left as a gap the eye closes by
+          // guessing. It is drawn faded, at the coverage it comes from.
+          const span = pts.slice(head, Math.min(k + 1, pts.length));
+          out.push(line(span.map(xy).join(' '), !fullCoverage(weightAt(pts[head][0]))));
+          head = k;
+        }
+      }
+      return out.join('\n');
     });
     // The keys are spaced by how many there are. A fixed pitch fit five and
     // ran off the right edge at six, and the next line added would do it again.
@@ -284,8 +354,9 @@ divided by the weight those terms carry, times a hundred.</p>
         `<text x="${x + 30}" y="${ky}" class="trend-key">${series.label}</text>`;
     });
     host.innerHTML = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" ` +
-      `aria-label="${TREND.length} measures across ${total} commits">` +
-      parts.join('\n') + '\n' + keys.join('\n') + '</svg>';
+      `aria-label="${TREND.length} measures across ${total} commits, ` +
+      `${runs.length} scoring-coverage runs">` +
+      bounds.join('\n') + '\n' + parts.join('\n') + '\n' + keys.join('\n') + '</svg>';
   }
   const host = document.getElementById('trend-chart');
   let rows;
