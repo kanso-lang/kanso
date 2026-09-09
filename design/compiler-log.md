@@ -3390,6 +3390,30 @@ path to serve a failure that usually does not happen has bought the wrong
 thing, and doing the work again on the failing path costs nothing anyone
 measures. The three compile veins said so within a round.
 
-`compile_instructions` is a layout vein and this touches src/, so it may still
-move on the shape that ships; CI says whether it did, and this entry does not
-project it.
+**CI SAID, AND THE ANSWER IS A BETTER PROOF THAN ROUND ONE'S.** All three
+instruction rows moved on the shipping shape too, and this time all three
+fell together:
+
+    row                    golden        CI            move
+    compile_instructions   48,791,172    48,746,831    -44,341   (-0.0909%)
+    entry_instructions    162,170,772   162,044,531   -126,241   (-0.0778%)
+    library_instructions  162,970,167   162,840,377   -129,790   (-0.0796%)
+    compile_allocs             29,606        29,606          0
+    compile_peak_bytes        773,818       773,818          0
+
+The last two rows are what make this worth writing down. The shipping shape
+adds NO work to any successful compile, and the two counters that measure the
+front end's work say so in the same job that counted the three that moved. So
+the layout reading is not an inference from the size of the change here; it is
+a measurement with the alternative already excluded.
+
+Round one is the control. Seven allocations and a kilobyte moved those same
+three rows -46,538, +357,749 and -146,495 -- three directions on one binary
+sha. Zero allocations moved them -44,341, -126,241 and -129,790. A row that
+answers differently to two shapes of one change while the work counters hold
+still is the compiler's own bytes, and nothing about the corpus.
+
+Summed on the objective's compile term the fall is 170,582 (-0.0809%), so
+`welfare` rose and the floor is held at 66.30 in this PR with the reason
+recorded. It is banked as layout and claimed as nothing else: the front end
+did not get faster at anything, and the next change is not free to spend this.

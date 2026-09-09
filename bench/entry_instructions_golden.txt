@@ -75,4 +75,19 @@
 # level offset between toolchains and does not carry to a delta, which is the
 # reason only CI writes this row.
 
-entry_instructions=162170772
+# 2026-09-09 (kanso#1346): entry_instructions=162,044,531, a FALL of 126,241
+# (-0.0778%) from 162,170,772.
+#
+# Layout, with the work counters green beside it. The shipping shape of that
+# change adds nothing to any successful compile -- the module loader is called
+# a second time only on the branch that is about to print a diagnostic -- and
+# compile_allocs and compile_peak_bytes both read main's numbers in the job
+# that counted this row. All three instruction rows fell together: -44,341
+# here on the module row, -126,241 on this one and -129,790 on the library
+# row.
+#
+# Round one of the same PR is the control and went the other way on this row,
+# +357,749, with the module and library rows falling. A row that moves in
+# both directions across two shapes of one change, while the counters that
+# measure work stay put, is the layout vein and nothing else.
+entry_instructions=162044531

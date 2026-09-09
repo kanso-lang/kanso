@@ -67,4 +67,16 @@
 # 162.2M. This row sits beside the entry row because the two corpora are the
 # same shape and both paths merge the dependency program before checking it.
 
-library_instructions=162970167
+# 2026-09-09 (kanso#1346): library_instructions=162,840,377, a FALL of 129,790
+# (-0.0796%) from 162,970,167.
+#
+# Layout. The reading is the one written on the other two rows: the shipping
+# shape adds no work to a successful compile, compile_allocs and
+# compile_peak_bytes are byte-identical to main in this job, and all three
+# instruction rows fell together.
+#
+# The note above this one recorded a change small enough to leave the module
+# row alone. This is the third kind, and the most useful one for the prior:
+# a change that provably adds NO work still moved all three rows, which is
+# what makes the layout reading a measurement here rather than an inference.
+library_instructions=162840377

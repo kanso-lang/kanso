@@ -1047,4 +1047,20 @@
 # right order, 7,526 high -- it OVERSTATED this cost as it understated the
 # entry gain, so both of its errors ran against the change.
 
-compile_instructions=48791172
+# 2026-09-09 (kanso#1346): compile_instructions=48,746,831, a FALL of 44,341
+# (-0.0909%) from 48,791,172.
+#
+# LAYOUT, and this round proves it rather than arguing it. The change adds no
+# work to any compile path at all: the loader is called a second time only on
+# the branch that is about to print an error, so a clean compile runs what it
+# always ran. The two counters that measure the front end's WORK say so --
+# compile_allocs 29,606 and compile_peak_bytes 773,818, both byte-identical to
+# main in the same job, both green. And the three instruction rows moved
+# anyway, all three together and all three down.
+#
+# Round one of this PR held the file text across the merge instead, and that
+# round is the control: allocs +7 and peak +1,029 with the three instruction
+# rows at -46,538, +357,749 and -146,495 -- three directions on one binary.
+# Seven allocations cannot do that, and zero allocations cannot do this. Both
+# rounds are the compiler's own bytes moving under an edit to src/.
+compile_instructions=48746831
