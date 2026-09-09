@@ -166,6 +166,59 @@ fn the_rescore_is_idempotent_over_its_own_output() {
     assert_eq!(second, first, "a second pass must not move a single row");
 }
 
+/// A count this tool computed is its arithmetic forever. Nothing re-measures a
+/// commit from three weeks ago, so `run_source` is a fact about where a number
+/// came from and cannot expire — which makes it unlike the welfare column
+/// beside it, and the first cut of the mark got that wrong by treating them
+/// alike.
+///
+/// The degraded pass is where it shows. With no row available as a splice
+/// anchor nothing is rebuilt, and a mark re-derived from scratch then reads
+/// every previously-rebuilt row as MEASURED, because all it can see is a row
+/// carrying a count. That is precisely the confusion the mark exists to
+/// prevent, written by the mark itself. Watched red: restoring the strip turns
+/// both rebuilt rows into "measured" here.
+#[test]
+fn a_rebuilt_count_stays_marked_rebuilt_when_the_anchor_is_gone() {
+    let ph = phase_counters();
+    let older = row("aaaaaaa", 500, None, &ph);
+    let anchor = row("bbbbbbb", 1000, None, &ph);
+    let modern = row("ccccccc", 1000, Some(1000), &["encode_instructions".to_string()]);
+
+    let (ok, said) = rescore("sticky-one", &[older, anchor, modern]);
+    assert!(ok, "the first pass should hold:\n{said}");
+    let first: Vec<String> =
+        said.lines().filter(|l| l.starts_with('{')).map(str::to_string).collect();
+    assert_eq!(first.len(), 3, "three rows in, three out:\n{said}");
+    assert!(
+        first[0].contains("\"run_source\":\"rebuilt\"")
+            && first[1].contains("\"run_source\":\"rebuilt\""),
+        "the two phase-carrying rows are rebuilt and say so:\n{}\n{}",
+        first[0],
+        first[1]
+    );
+    assert!(
+        first[2].contains("\"run_source\":\"measured\""),
+        "the row whose count this tool did not write is measured:\n{}",
+        first[2]
+    );
+
+    // Drop the measured row. Nothing can serve as an anchor now, so nothing is
+    // rebuilt on this pass — and the two rows must still say where their
+    // counts came from.
+    let (ok, said) = rescore("sticky-two", &first[..2].to_vec());
+    assert!(ok, "a history with no anchor still scores:\n{said}");
+    let second: Vec<String> =
+        said.lines().filter(|l| l.starts_with('{')).map(str::to_string).collect();
+    for line in &second {
+        assert!(
+            line.contains("\"run_source\":\"rebuilt\""),
+            "a rebuilt count does not become measured because this pass could not \
+             rebuild it:\n{line}"
+        );
+    }
+}
+
 #[test]
 fn the_rescore_refuses_when_the_splice_rows_moved() {
     let ph = phase_counters();

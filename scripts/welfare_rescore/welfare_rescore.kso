@@ -219,15 +219,52 @@ fn checked last first true
 fn wants_run? row a phases
   a != none and carries_all? row phases
 
+# A row's run count is either this tool's arithmetic or somebody's
+# measurement, and until now the file did not say which. That is not a nicety:
+# it is the whole of the 2026-09-09 red main. This tool wrote rebuilt counts
+# into rows, ci.yml fed it its own output on the next push, and with nothing on
+# the row to tell them apart the rebuilt ones read as measured and one became
+# the splice anchor. The code fix closes the loop for this tool. The mark
+# closes it for every later reader, which is the wider repair.
+#
+# It carries no factor, and that is deliberate. The compile side is RE-BASED by
+# an exact divisor a row can name; this side is REBUILT from phase shares, and
+# there is no divisor because no ruler moved. A 1.0000 written here for
+# symmetry would read as "measured against an unmoved baseline", which is the
+# precise misreading the mark exists to prevent.
+#
+# THE MARK IS STICKY, and the first cut of it was not. It looked right to strip
+# the mark and re-derive it every pass, the way the welfare column is. It is
+# not the same kind of fact. Whether a count was this tool's arithmetic is a
+# fact about where that number CAME FROM, and nothing later re-measures a
+# commit from three weeks ago, so it cannot expire. Stripping it meant that a
+# run with no usable anchor -- nothing rebuilt this pass -- relabelled all
+# forty-eight rebuilt rows "measured", which is the exact lie the mark exists
+# to prevent, written by the mark itself.
+#
+# So a row that already claims "rebuilt" keeps it, and "measured" is only ever
+# written onto a row that has a count and no claim. With the anchor present the
+# rebuild recomputes anyway (kanso#1350), so the sticky case is the degraded
+# one, and there it degrades to the truth rather than away from it.
 fn reconstructed row a phases
   rebuilt row a phases (wants_run? row a phases)
 
 fn rebuilt row _ _ false
-  row
+  sourced row (row["run_instructions"] != none) (row["run_source"] == none)
 
 fn rebuilt row a phases true
   factor = moved row a.counters phases
-  put row "run_instructions" (math/round (1.0 * a.target * factor))
+  built = put row "run_instructions" (math/round (1.0 * a.target * factor))
+  put built "run_source" "rebuilt"
+
+fn sourced row false true
+  row
+
+fn sourced row true true
+  put row "run_source" "measured"
+
+fn sourced row _ false
+  row
 
 # The share-weighted ratio to the anchor. Renormalised over the phases the row
 # carries, which for every row this reaches is all of them.

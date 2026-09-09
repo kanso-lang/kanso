@@ -4063,3 +4063,63 @@ content; this removes the one routine way of fooling it, not the weakness.
 blob — 382 of them, 26,886,564 bytes — and removing the file from the tip does
 not shrink an existing clone. The saving is prospective: the blob stops gaining
 a version per rebuild that anyone remembers to commit.
+
+## 2026-09-09 — a row says where its run count came from, and the mark is sticky
+
+The 2026-09-09 red main was a provenance failure wearing an arithmetic
+costume. `welfare_rescore` wrote rebuilt `run_instructions` into the rows it
+handed back, ci.yml fed it `origin/perf-history:history.jsonl` — its own
+previous output — and with nothing on the row saying which counts were
+computed, the rebuilt ones read as measured and one became the splice anchor.
+kanso#1350 fixed the tool: the anchor now takes rows carrying a count and NOT
+the full phase set, and the rebuild recomputes rather than trusting what it
+finds. That closes the loop for this tool. It does not help the next reader,
+and the file still could not answer the question.
+
+It can now. A row that this tool rebuilt carries `run_source: "rebuilt"`; a row
+whose count it did not write carries `"measured"`; a row with no count carries
+nothing. Read off the live history the split is 48 rebuilt, 65 measured, 387
+unmarked, and the mark agrees with `scored_weight` on every row — all 48
+rebuilt sit at coverage 0.74, all 65 measured at 1.00, and no row has a count
+without a mark. The welfare column and every `run_instructions` are
+byte-identical to what CI wrote, and the file stays a fixed point under its own
+tool over three passes.
+
+**The mark carries no factor, and that is the design rather than an omission.**
+The compile side is RE-BASED by an exact divisor a row could name;
+this side is REBUILT from phase shares, and there is no divisor because no
+ruler moved. A `1.0000` written here for symmetry would read as "measured
+against an unmoved baseline", which is the precise misreading the mark exists
+to prevent.
+
+**THE FIRST CUT STRIPPED THE MARK AND RE-DERIVED IT, and that was wrong.** It
+looked like the welfare column, which is recomputed every pass, so it was
+treated the same way. It is not the same kind of fact. Whether a count was this
+tool's arithmetic is a fact about where the number CAME FROM, and nothing
+re-measures a commit from three weeks ago, so it cannot expire. The failure is
+visible in the degraded pass: with no row available as an anchor nothing is
+rebuilt, and a mark re-derived from scratch then sees only a row carrying a
+count and writes `"measured"` on it. Measured on a history with the anchors
+removed:
+
+    fixture            rebuilt   measured
+    the strip          0         48
+    the sticky mark    48        0
+
+Forty-eight rows relabelled from true to false, by the field whose whole job is
+to stop that confusion. The mark is sticky now: a row already claiming
+"rebuilt" keeps it, and "measured" is only ever written onto a row that has a
+count and no claim. With an anchor present the rebuild recomputes anyway, so
+the sticky path is the degraded one, and there it degrades toward the truth.
+
+`a_rebuilt_count_stays_marked_rebuilt_when_the_anchor_is_gone` pins it, entered
+through the real tool on a three-row fixture and then on the same rows with the
+anchor dropped. Watched red under the mutation that restores the strip, which
+reddens that spec and leaves the other three green.
+
+**Still owed, and it is the other half of the task.** The compile side has an
+exact per-counter divisor in `bench/compile_epochs.txt`, and a row does not yet
+name the epoch it was scored in. That wants the boundary commits tracked
+through `crossed` rather than only their product, so it is a real change and
+not a line. The two marks answer different questions and must not be made to
+look alike.
