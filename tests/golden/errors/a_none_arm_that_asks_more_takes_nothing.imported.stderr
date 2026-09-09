@@ -1,0 +1,1 @@
+error[exhaustive]: this can be a none and `shown` has no arm for it — resolve it here, or give `shown` a `none` arm (in a_none_arm_that_asks_more_takes_nothing.kso) (module a_none_arm_that_asks_more_takes_nothing)

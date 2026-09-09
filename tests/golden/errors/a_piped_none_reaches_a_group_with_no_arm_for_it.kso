@@ -1,0 +1,9 @@
+# The menu sample again, with the lookup piped into `describe`. A piped call
+# is a call, and the none it hands is the same none.
+fn describe price
+  "{price} yen"
+
+fn quote menu
+  menu["pocky"] . describe
+
+pub play = print (quote { "dango":350 "taiyaki":500 })

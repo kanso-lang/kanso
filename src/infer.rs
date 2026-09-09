@@ -91,6 +91,17 @@ struct Ctx<'a> {
     /// every call the pass inferred, 2,693 heap blocks on `lib/json`.
     groups: HashMap<(&'a str, usize), (u32, u32)>,
     group_members: Vec<usize>,
+    /// `none_takers`' answer per group, indexed by the group's `start` and
+    /// filled the first time a call hands the group a none; `u64::MAX` is
+    /// not yet asked. Asked 440 times on compile_corpus at 214 instructions
+    /// a walk, and the answer never changes.
+    takers: Vec<u64>,
+    /// Per declaration, the positions `widen_keeping_none` strips the none
+    /// from: the group's taken positions, less the ones this arm names none
+    /// at itself. Filled with `takers`, so an ask after the first is a shift
+    /// and a mask per position rather than a pattern test with a string
+    /// compare in it; asked as it was, 302 asks cost 184,693 instructions.
+    strip: Vec<u64>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
@@ -273,6 +284,8 @@ pub fn infer(program: &Program) -> Inference {
         field_readers,
         groups,
         group_members,
+        takers: vec![u64::MAX; program.fns.len() + 1],
+        strip: vec![0; program.fns.len()],
         yields: HashMap::default(),
         type_names,
         params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
@@ -559,6 +572,88 @@ fn bind_pattern<'a>(
     }
 }
 
+/// An arm that answers a none at this position by name: `fn f none` or
+/// `fn f (x: none)`. The exhaustiveness check counts the same two.
+fn names_none(pat: &Pattern) -> bool {
+    match pat {
+        Pattern::Nullary(name, _) => name == "none",
+        Pattern::Annotated { ty, .. } => ty == "none",
+        _ => false,
+    }
+}
+
+/// A bit per position where some arm of the group names `none` and binds
+/// anything at every other position. Such an arm takes every none handed at
+/// that position, so no other arm of the group is ever handed one, and
+/// `eval_call` widens the others with the none bit off. Without this
+/// `insisted _ text` was seeded with the builtin's `text | none` and
+/// `read_file!` read as able to answer a none that `insisted path none` had
+/// already caught. Asked only of a group a call hands a none to, and once:
+/// a table built for every group up front cost 97,000 instructions on
+/// compile_corpus, most of them for groups nothing hands a none.
+/// The widening of a group a call hands a none to, with the none kept off
+/// every arm that a catch-all `none` arm stands in front of. `None` when no
+/// arm of the group takes a none that way, and the caller's plain loop runs.
+#[cold]
+#[inline(never)]
+fn widen_keeping_none(
+    ctx: &mut Ctx<'_>,
+    start: usize,
+    end: usize,
+    arg_sets: &[Set],
+) -> Option<Set> {
+    if ctx.takers[start] == u64::MAX {
+        let arms = &ctx.group_members[start..end];
+        let taken = none_takers(&ctx.program.fns, arms);
+        ctx.takers[start] = taken;
+        for &i in arms {
+            let names = ctx.program.fns[i].params.iter().enumerate().take(64).fold(
+                0u64,
+                |acc, (p, pat)| match names_none(pat) {
+                    true => acc | 1 << p,
+                    false => acc,
+                },
+            );
+            ctx.strip[i] = taken & !names;
+        }
+    }
+    if ctx.takers[start] == 0 {
+        return None;
+    }
+    let mut out: Set = 0;
+    for k in start..end {
+        let i = ctx.group_members[k];
+        let strip = ctx.strip[i];
+        for (p, set) in arg_sets.iter().enumerate() {
+            let narrowed = match p < 64 && strip >> p & 1 == 1 {
+                true => *set & !NONE,
+                false => *set,
+            };
+            widen_param(ctx, i, p, narrowed);
+        }
+        mark_reader(ctx, i);
+        out |= ctx.returns[i];
+    }
+    Some(out)
+}
+
+fn none_takers(fns: &[crate::ast::FnDecl], arms: &[usize]) -> u64 {
+    let mut taken = 0u64;
+    for &i in arms {
+        let params = &fns[i].params;
+        let mut closed = params
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| !matches!(p, Pattern::Var(..) | Pattern::Wildcard(..)));
+        if let (Some((pos, pat)), None) = (closed.next(), closed.next()) {
+            if pos < 64 && names_none(pat) {
+                taken |= 1u64 << pos;
+            }
+        }
+    }
+    taken
+}
+
 fn pattern_catches(pat: &Pattern) -> Set {
     match pat {
         Pattern::Nullary(name, _) if name == "none" => NONE,
@@ -821,6 +916,7 @@ fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
     ctx.readers[at] |= 1u64 << (ctx.current_index % 64);
 }
 
+#[inline(always)]
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     let at = ctx.param_starts[decl] as usize + param;
     if ctx.params[at] | set != ctx.params[at] {
@@ -935,6 +1031,19 @@ fn eval_call<'a>(
                 acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
             });
             out |= (arg & FAIL) & !caught;
+        }
+        // A none handed where a catch-all `none` arm stands reaches that arm
+        // and no other: the arms that bind the position by name are widened
+        // without it, which is what lets `insisted _ text` answer `text`.
+        // Most calls hand no none, and a one-arm group has no other arm to
+        // keep one from; both take the plain loop below, and the arms are
+        // asked only past those two tests. The asking is out of line: with
+        // it inlined here `eval_call` outgrew the budget that kept
+        // `widen_param` inlined, which cost 72,000 instructions on its own.
+        if end - start > 1 && arg_sets.iter().any(|s| s & NONE != 0) {
+            if let Some(joined) = widen_keeping_none(ctx, start, end, arg_sets) {
+                return joined | piped_bits;
+            }
         }
         for k in start..end {
             let i = ctx.group_members[k];

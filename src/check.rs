@@ -638,7 +638,7 @@ fn check_none_exhaustive(
         match e {
             Expr::Index { strict: false, .. } => true,
             Expr::Ident(name, _) => name == "none",
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+            Expr::App { head, args, .. } => match head.as_ref() {
                 Expr::Ident(name, _) => returns
                     .get(&(name.as_str(), args.len()))
                     .is_some_and(|s| s & NONE != 0 && !unknown(*s)),
@@ -648,8 +648,11 @@ fn check_none_exhaustive(
         }
     };
 
+    // A piped call is a call: `menu["pocky"] . describe` hands the same
+    // none as `describe menu["pocky"]`, and the parser puts the piped value
+    // first, where the arms expect it.
     let walk = |e: &Expr, diags: &mut Vec<Diagnostic>, owner: &str| {
-        let Expr::App { head, args, piped: false, .. } = e else { return };
+        let Expr::App { head, args, .. } = e else { return };
         let Expr::Ident(name, _) = head.as_ref() else { return };
         if !returns.contains_key(&(name.as_str(), args.len())) {
             return;
