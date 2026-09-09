@@ -3359,7 +3359,25 @@ eight readers and about 3,056 on the six that do not read, since the reader
 pair and the refusal are runtime code every program links. The compile rows:
 compile_instructions 48,749,059 -> 48,751,741, entry 162,051,772 ->
 162,061,812, library 162,846,242 -> 162,857,425, each the two definitions
-`std/os` gained. Welfare reads 66.37 against a floor of 66.37 and holds
-inside the gate's band; had it fallen, it would have moved by hand under the
-differential-law exception welfare.kso states, since a `read_file` that
-answers the same on three engines is not a trade.
+`std/os` gained. Welfare reads 66.3705 against a floor of 66.3715, a fall
+of 0.0009 that the gate's band holds; the floor is re-set to it with
+`--set` all the same, because the trend gate's pure-regression rule reads
+this branch as worse on twenty-six counters and better on none, and lets
+that through only when welfare_floor.json's history names the change that
+spent it. It is the differential-law exception welfare.kso states: a
+`read_file` that answers the same on three engines is not a trade.
+
+**Priced, row by row, for the trend gate.** The counters the branch moved and
+the values they landed on: `utf8_bytes` 11,164,198, `run_utf8_bytes`
+24,415,348, `encode_utf8_bytes` 75,741,068, `live_utf8_bytes` 75,741,068,
+`oneshot_utf8_bytes` 450,566, `wide_utf8_bytes` 289,183, `read_utf8_bytes`
+188,698, `digest_utf8_bytes` 8,192; `work_jsonbench` 1,485,334,799,
+`work_encodebench` 3,963,988,526, `work_oneshot` 21,737,118, `work_widebench`
+35,332,240, `work_digestbench` 10,426,549, `work_readbench` 4,561,941,
+`work_livebench` 3,481,899,703, `work_runbench` 2,369,917,628;
+`emitted_defines` 142, `emitted_calls` 1,236, `emitted_lines` 9,245,
+`emitted_other_defines` 2,353, `emitted_other_calls` 20,516,
+`emitted_other_lines` 133,241; `text` 1,523,196; `compile_instructions`
+48,751,741, `entry_instructions` 162,061,812, `library_instructions`
+162,857,425. Each is the validator, the two readers or the refusal, and the
+paragraph above says which.
