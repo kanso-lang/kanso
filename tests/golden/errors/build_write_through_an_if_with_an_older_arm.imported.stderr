@@ -1,0 +1,1 @@
+error[build]: `chosen.link = ...` writes only block-born values: `chosen` is not a construction made in this `build` block, so it stays immutable (module build_write_through_an_if_with_an_older_arm)

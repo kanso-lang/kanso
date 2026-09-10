@@ -150,18 +150,6 @@ src/wasm_backend.rs carries the same refusal. The correction entry beneath
 the gavel is the rule for every row here: a feature the language has
 admitted is finished on every engine, or the decision was not made.
 
-### Block-born is the whole cohort (2026-08-29)
-
-The archive entry of that name, Clay: "okay whole cohort it is." Anything the
-checker can prove was born in the block can be knotted, through aliases,
-conditionals, indexes of block-born collections and fields of block-born
-nodes. Probed 2026-09-09 with the book's own knot: `twin = ada` inside the
-build, then `twin.partner = bob`, is refused with `error[build]: twin is not
-a construction made in this build block`, the syntactic fence the ruling
-retired; `ring[1].partner = bob` on a block-born list does not parse. The
-alias-of-an-older-cohort fixtures (`build_write_alias`,
-`build_write_older_cohort`) are the escape cases that stay refused.
-
 "Arms travel with the type, under the ownership rule" (2026-08-29) was probed
 the same way and is built: a module declaring `type money` and `to_string
 m:money` renders `¥350` in an importer that wrote no arm. Everything else

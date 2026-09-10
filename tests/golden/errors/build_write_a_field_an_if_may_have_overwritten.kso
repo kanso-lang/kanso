@@ -1,0 +1,21 @@
+type cell
+  tag
+  link
+
+fn attack old
+  build
+    young = cell "young" none
+    other = cell "other" young
+    chosen = if (old.tag == "old") other young
+    chosen.link = old
+    held = other.link
+    held.link = young
+  young
+
+fn go _
+  build
+    c = cell "old" none
+  a = attack c
+  a.tag
+
+pub play = print "{go 0}"
