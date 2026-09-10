@@ -102,4 +102,4 @@
 # a test on every fold site, where the row fell anyway. The prior that this
 # vein moves under any src/ edit now has a case in each direction with the
 # work counters green throughout.
-entry_instructions=162434379
+entry_instructions=162730512

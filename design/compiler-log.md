@@ -3235,10 +3235,12 @@ pend's `cards -> spent cards`, the lambda in `pend/total`, whose twin sits in
 runbench's `~total` group, and neither copy is named either. `emitted_other_defines`
 2,353 -> 2,354 and `emitted_other_calls` 20,516 -> 20,517 are that thunk.
 Defines, calls and branches hold on scanbench. For the trend gate, the landed
-host rows, CI's sitting on round one's commit: `compile_instructions`
-48,820,567 -> 48,784,668 (−35,899, −0.0735%), `entry_instructions`
-162,736,962 -> 162,434,379 (−302,583, −0.1859%), `library_instructions`
-163,024,919 -> 163,223,647 (+198,728, +0.1219%). The lines are the string table: `std/regexp`
+host rows, CI's sitting on round two's commit: `compile_instructions`
+48,820,567 -> 48,849,164 (+28,597, +0.0586%), `entry_instructions`
+162,736,962 -> 162,730,512 (−6,450, −0.0040%), `library_instructions`
+163,024,919 -> 163,431,666 (+406,747, +0.2495%). Round one's sitting read
+48,784,668, 162,434,379 and 163,223,647; the reorder and the file test cost
+the difference. The lines are the string table: `std/regexp`
 declares private `first`, `spread` and `repeat` while importing `std/list`,
 which exports all three, so those are mixed groups now, and the own-only
 `regexp/spread` group's name and dispatch sentence are interned beside the
@@ -3291,9 +3293,7 @@ does not own, `own_files` being the files of its non-synthetic bare
 declarations; the wrapper keeps its qualified spelling and gets its clone
 like any own arm. c36 pins it, a counted recursion inside a module called bare
 a million deep, red under the reorder alone. The three compile rows below are
-CI's reading of round one's commit, copied in; this commit moves src/lib.rs
-and src/check.rs, so they are expected red once more and copied again from
-that sitting.
+CI's reading of round two's commit, copied in.
 
 **What stays in STATUS.md's "Ruled, unbuilt", and why.** Read whole before
 this PR was chosen: block-born landed in #1359; this row, records printing
