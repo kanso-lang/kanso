@@ -2504,10 +2504,8 @@ fn dedup_join(mut names: Vec<String>) -> String {
 /// cycle inside one birth cohort.
 fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
     let mut scan = BuildScan {
-        types: program.types.iter().map(|t| (t.name.as_str(), t)).collect(),
+        type_names: program.types.iter().map(|t| t.name.as_str()).collect(),
         born: None,
-        cohort: Cohort::default(),
-        conditional: 0,
         diags,
     };
     for decl in &program.fns {
@@ -2520,154 +2518,44 @@ fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
-/// One value the walk has proved born in the enclosing `build`, by its index
-/// in the cohort. A name holds one; so does a field or an element the walk
-/// has followed.
-type Born = usize;
-
-/// What the walk knows about a born value. A construction knows which of its
-/// fields hold born values and, for a list or map literal, what its elements
-/// share. A value chosen by an `if` is the meet of its two arms: a field or
-/// an element is read through to both, so a later write to either arm is
-/// seen, and a write made through the choice itself is laid over the top,
-/// since it reached whichever arm was taken.
-enum Birth<'a> {
-    Made { fields: Vec<(&'a str, Born)>, elems: Option<Born> },
-    Either { left: Born, right: Born, writes: Vec<(&'a str, Option<Born>)> },
-}
-
-#[derive(Default)]
-struct Cohort<'a> {
-    entries: Vec<Birth<'a>>,
-}
-
-impl<'a> Cohort<'a> {
-    fn made(&mut self, fields: Vec<(&'a str, Born)>, elems: Option<Born>) -> Born {
-        self.entries.push(Birth::Made { fields, elems });
-        self.entries.len() - 1
-    }
-
-    /// The value one of two arms answers.
-    fn either(&mut self, left: Born, right: Born) -> Born {
-        if left == right {
-            return left;
-        }
-        self.entries.push(Birth::Either { left, right, writes: Vec::new() });
-        self.entries.len() - 1
-    }
-
-    fn field(&mut self, of: Born, name: &str) -> Option<Born> {
-        let (left, right, written) = match &self.entries[of] {
-            Birth::Made { fields, .. } => {
-                return fields.iter().find(|(f, _)| *f == name).map(|(_, b)| *b);
-            }
-            Birth::Either { left, right, writes } => {
-                (*left, *right, writes.iter().find(|(f, _)| *f == name).map(|(_, w)| *w))
-            }
-        };
-        if let Some(written) = written {
-            return written;
-        }
-        let left = self.field(left, name)?;
-        let right = self.field(right, name)?;
-        Some(self.either(left, right))
-    }
-
-    fn element(&mut self, of: Born) -> Option<Born> {
-        let (left, right) = match &self.entries[of] {
-            Birth::Made { elems, .. } => return *elems,
-            Birth::Either { left, right, .. } => (*left, *right),
-        };
-        let left = self.element(left)?;
-        let right = self.element(right)?;
-        Some(self.either(left, right))
-    }
-
-    /// A write settles what the field holds from here on: a born value, or
-    /// nothing the walk can vouch for. Through a choice the write reached
-    /// whichever arm was taken, so both arms forget the field and the choice
-    /// remembers the write.
-    fn write(&mut self, of: Born, name: &'a str, value: Option<Born>) {
-        let (left, right) = match &mut self.entries[of] {
-            Birth::Made { fields, .. } => {
-                fields.retain(|(f, _)| *f != name);
-                if let Some(value) = value {
-                    fields.push((name, value));
-                }
-                return;
-            }
-            Birth::Either { left, right, writes } => {
-                writes.retain(|(f, _)| *f != name);
-                writes.push((name, value));
-                (*left, *right)
-            }
-        };
-        self.write(left, name, None);
-        self.write(right, name, None);
-    }
-}
-
-/// The field a synthesised getter reads, whether the name arrives bare or
-/// qualified by the module that declared the type.
-fn getter_of(name: &str) -> Option<&str> {
-    getter_field(name.rsplit('/').next().unwrap_or(name))
-}
-
-/// `born` maps each name the enclosing `build` block has proved born to its
-/// cohort entry, and its absence means no `build` encloses these statements
-/// at all. That distinction is the whole rule: outside a build a field write
-/// is refused, inside one it is refused unless the target was born there.
+/// `born` names what the enclosing `build` block has constructed so far, and
+/// its absence means no `build` encloses these statements at all. That
+/// distinction is the whole rule: outside a build a field write is refused,
+/// inside one it is refused unless the target was made there.
 ///
-/// Birth is a dataflow property, not a spelling. A construction is born; so
-/// is a name that aliases one, the value an `if` chooses when both arms are
-/// born, an element of a list or map literal whose every element is born, and
-/// a field of a born value that a construction argument or a later write
-/// filled with a born value. Anything else — a parameter, a value a call
-/// answers, a name from an enclosing or an earlier block — is not proved, and
-/// the theorem's obligation is a proof.
-///
-/// The fields travel together because this walk reaches every expression
+/// The three fields travel together because this walk reaches every expression
 /// the front end holds, and it descends through `for_each_child`, whose
 /// callback is a `&mut dyn FnMut` — one indirect call per child. A closure
-/// capturing several references writes a word for each at every one of those
-/// calls; a method on this struct captures one. Carrying the state as free
-/// variables instead cost 7,602 retired instructions in the callback alone on
+/// capturing three references writes three words at every one of those calls; a
+/// method on this struct captures one. Carrying the state as free variables
+/// instead cost 7,602 retired instructions in the callback alone on
 /// `kanso check lib/json`, measured.
 struct BuildScan<'a, 'd> {
-    types: HashMap<&'a str, &'a TypeDecl>,
-    born: Option<HashMap<&'a str, Born>>,
-    cohort: Cohort<'a>,
-    /// How many `if` arms enclose the statement being read. A write made in
-    /// one may not have happened, so it takes the field's proof away rather
-    /// than supplying one.
-    conditional: usize,
+    type_names: HashSet<&'a str>,
+    born: Option<HashSet<&'a str>>,
     diags: &'d mut Vec<Diagnostic>,
 }
 
 impl<'a> BuildScan<'a, '_> {
-    /// A statement list, in order. A binding proves a name born the statements
-    /// below it may write, so the map grows as the walk goes, and a write above
-    /// the binding that gives it is refused — which is what reading in order
-    /// buys.
+    /// A statement list, in order. A construction binds a name the statements
+    /// below it may write, so the set grows as the walk goes, and a write above
+    /// the construction that gives it is refused — which is what reading in
+    /// order buys.
     fn body(&mut self, stmts: &'a [Stmt]) {
         for stmt in stmts {
             match stmt {
                 Stmt::Bind { pattern, expr } => {
                     self.expr(expr);
-                    if self.born.is_some() {
-                        let birth = self.born_of(expr);
-                        self.bind(pattern, birth);
+                    if let (Some(born), Pattern::Var(name, _)) = (self.born.as_mut(), pattern) {
+                        if constructs(expr, &self.type_names) {
+                            born.insert(name);
+                        }
                     }
                 }
                 Stmt::Expr(expr) => self.expr(expr),
                 Stmt::Set { target, field, value, span } => {
                     self.wrote_a_field(target, field, *span);
                     self.expr(value);
-                    let of = self.born.as_ref().and_then(|b| b.get(target.as_str()).copied());
-                    if let Some(of) = of {
-                        let value = if self.conditional > 0 { None } else { self.born_of(value) };
-                        self.cohort.write(of, field.as_str(), value);
-                    }
                 }
             }
         }
@@ -2684,7 +2572,7 @@ impl<'a> BuildScan<'a, '_> {
                 ),
                 span,
             )),
-            Some(born) if !born.contains_key(target) => self.diags.push(Diagnostic::new(
+            Some(born) if !born.contains(target) => self.diags.push(Diagnostic::new(
                 "build",
                 format!(
                     "`{target}.{field} = ...` writes only block-born values: \
@@ -2697,142 +2585,12 @@ impl<'a> BuildScan<'a, '_> {
         }
     }
 
-    /// The names a pattern binds take the birth of what it took apart: the
-    /// whole value for a plain name, a field's for a constructor pattern's
-    /// positions.
-    fn bind(&mut self, pattern: &'a Pattern, birth: Option<Born>) {
-        match pattern {
-            Pattern::Var(name, _) | Pattern::Annotated { name, .. } => {
-                let born = self.born.as_mut().expect("a binding inside a build");
-                match birth {
-                    Some(birth) => {
-                        born.insert(name.as_str(), birth);
-                    }
-                    None => {
-                        born.remove(name.as_str());
-                    }
-                }
-            }
-            Pattern::Ctor { ty, fields, whole } => {
-                if let Some(named) = whole {
-                    let born = self.born.as_mut().expect("a binding inside a build");
-                    match birth {
-                        Some(birth) => {
-                            born.insert(named.0.as_str(), birth);
-                        }
-                        None => {
-                            born.remove(named.0.as_str());
-                        }
-                    }
-                }
-                let declared = self.types.get(ty.as_str()).copied();
-                for (i, sub) in fields.iter().enumerate() {
-                    let inner = match (birth, declared.and_then(|t| t.fields.get(i))) {
-                        (Some(birth), Some((field, _, _))) => self.cohort.field(birth, field),
-                        _ => None,
-                    };
-                    self.bind(sub, inner);
-                }
-            }
-            Pattern::IntLit(..)
-            | Pattern::StrLit(..)
-            | Pattern::Nullary(..)
-            | Pattern::Wildcard(..)
-            | Pattern::Keyed { .. } => {}
-        }
-    }
-
-    /// The cohort entry an expression's value is proved to be, if any.
-    fn born_of(&mut self, expr: &'a Expr) -> Option<Born> {
-        match expr {
-            Expr::Ident(name, _) => self.born.as_ref()?.get(name.as_str()).copied(),
-            Expr::App { head, args, .. } => match head.as_ref() {
-                Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
-                    let left = self.born_of(&args[1]);
-                    let right = self.born_of(&args[2]);
-                    Some(self.cohort.either(left?, right?))
-                }
-                // The module route rewrites `x.name` to its getter before
-                // this walk runs, and the play route after it, so a field
-                // read arrives in both spellings.
-                Expr::Ident(name, _) if args.len() == 1 && getter_of(name.as_str()).is_some() => {
-                    let field = getter_of(name.as_str())?;
-                    let base = self.born_of(&args[0])?;
-                    self.cohort.field(base, field)
-                }
-                // A call that merely returns a record may hand back something
-                // older; a constructor makes the record here, and its fields
-                // hold what its arguments were.
-                Expr::Ident(name, _) => {
-                    let decl = *self.types.get(name.as_str())?;
-                    let mut fields = Vec::new();
-                    for ((field, _, _), arg) in decl.fields.iter().zip(args) {
-                        if let Some(birth) = self.born_of(arg) {
-                            fields.push((field.as_str(), birth));
-                        }
-                    }
-                    Some(self.cohort.made(fields, None))
-                }
-                _ => None,
-            },
-            Expr::Field { base, name, .. } => {
-                let base = self.born_of(base)?;
-                self.cohort.field(base, name)
-            }
-            Expr::Index { base, .. } => {
-                let base = self.born_of(base)?;
-                self.cohort.element(base)
-            }
-            Expr::List(items, _) => {
-                let shared = self.shared(items.iter());
-                Some(self.cohort.made(Vec::new(), shared))
-            }
-            Expr::MapLit(entries, _) => {
-                let shared = self.shared(entries.iter().map(|(_, value)| value));
-                Some(self.cohort.made(Vec::new(), shared))
-            }
-            Expr::Upcast { expr, .. } => self.born_of(expr),
-            Expr::Block(stmts, _) => {
-                let outer = self.born.clone();
-                let mut last = None;
-                for stmt in stmts {
-                    match stmt {
-                        Stmt::Bind { pattern, expr } => {
-                            let birth = self.born_of(expr);
-                            self.bind(pattern, birth);
-                            last = None;
-                        }
-                        Stmt::Expr(expr) => last = self.born_of(expr),
-                        Stmt::Set { .. } => last = None,
-                    }
-                }
-                self.born = outer;
-                last
-            }
-            _ => None,
-        }
-    }
-
-    /// What every element of a literal shares: born only when each one is,
-    /// and an empty literal has nothing to share.
-    fn shared(&mut self, items: impl Iterator<Item = &'a Expr>) -> Option<Born> {
-        let mut shared = None;
-        for item in items {
-            let birth = self.born_of(item)?;
-            shared = Some(match shared {
-                Some(so_far) => self.cohort.either(so_far, birth),
-                None => birth,
-            });
-        }
-        shared
-    }
-
     fn expr(&mut self, expr: &'a Expr) {
         match expr {
             // a `build` opens the one scope a field write may live in, and it
             // opens it with nothing born
             Expr::Build(stmts, _) => {
-                let outer = self.born.replace(HashMap::default());
+                let outer = self.born.replace(HashSet::default());
                 self.body(stmts);
                 self.born = outer;
             }
@@ -2846,9 +2604,7 @@ impl<'a> BuildScan<'a, '_> {
             // invariant somewhere that could not enforce it.
             Expr::Block(stmts, _) => {
                 let outer = self.born.clone();
-                self.conditional += 1;
                 self.body(stmts);
-                self.conditional -= 1;
                 self.born = outer;
             }
             Expr::Guard { cond, early, rest, .. } => {
@@ -2861,6 +2617,12 @@ impl<'a> BuildScan<'a, '_> {
             _ => crate::for_each_child(expr, |child| self.expr(child)),
         }
     }
+}
+
+/// A call that merely returns a record may hand back something older.
+fn constructs(expr: &Expr, type_names: &HashSet<&str>) -> bool {
+    matches!(expr, Expr::App { head, .. }
+        if matches!(&**head, Expr::Ident(name, _) if type_names.contains(name.as_str())))
 }
 
 /// Every name a module's own declarations put in scope, borrowed from the
