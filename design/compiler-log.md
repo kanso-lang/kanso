@@ -20,6 +20,34 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
+## The check verb infers twice, and nothing sets the toggle that would skip it
+
+`kanso check` runs `infer::infer` over the whole program a second time, at
+`src/main.rs:275`, after the front end has already inferred it inside
+`check_merged`. The second one is not a duplicate — it is taken after the
+rewrites, so its answer differs — and its only reader is the provenance refusal
+three lines below it.
+
+The obvious tidy is to move it inside that reader's guard, so a run with
+`KANSO_NO_PROV` set does not infer for nobody. That was written and built. It is
+not being shipped, because the guard's condition is dead:
+
+    $ grep -rn KANSO_NO_PROV --include=*.sh --include=*.yml --include=*.rs \
+        --include=*.kso --include=*.toml .
+    ./src/main.rs:276:        if std::env::var_os("KANSO_NO_PROV").is_none() {
+
+Read in one place, set in none. No gate, no script, no test, no benchmark takes
+that path, so the change saves nothing anything in this repository ever runs,
+while still moving `src/main.rs` — and kanso#1325 spent two rounds learning that
+an edit to the compiler's Rust moves `compile_instructions` by layout alone,
+where a rise with nothing falling is a pure regression the trend gate refuses.
+A coin flip on a round, for a win of zero.
+
+So it stays out until either something sets the toggle or the second inference
+can be made to pay for itself some other way. The 11,803,600 instructions that
+`infer::infer` costs on the fixed corpus are what makes the second call worth
+returning to; the toggle is not the way in.
+
 ## Remembering a compiled module costs more than compiling it again
 
 bench/compile_corpus is a diamond. It imports std/text directly, and it imports
@@ -3288,72 +3316,35 @@ by hand in `bench/welfare_floor.json` with its history entry (`--set` refuses
 a fall of this size by design, and says the file is the door), and no
 optimisation rides along to hide the price.
 
-## 2026-09-09 — block-born is a proof, not a spelling
+---
 
-Built: the 2026-08-29 ruling "block-born is the whole cohort" (STATUS.md,
-now removed; the archive entry of that name, Clay: "okay whole cohort it
-is"). A field write's target had to be a name bound directly to a
-construction in the same `build`; `twin = ada` followed by `twin.partner =
-bob` was refused with the syntactic fence, and the 2026-07-28 measurement
-found the same refusal on a node chosen by an `if`, a node taken out of a
-list the block built, and a node reached through a field. The theorem never
-asked for the fence. It asks that the cohort be closed, and every one of
-those four values is inside it.
+## 2026-09-10 — gavel: rows 15..390 stay unscored, and re-measurement is a lead with a probe in front of it
 
-**What the checker proves now.** `check_build_blocks` used to carry a set
-of names; it carries a cohort. Each value the walk proves born is an entry,
-and a name, a field or an element holds an entry. A construction is born,
-and its entry records which of its fields hold born values, read off the
-constructor's arguments by position. A name bound to a born name shares the
-entry, which is what makes an alias an alias: a write through `twin` is a
-write to `ada`'s entry, and `ada.partner` read afterwards is the value that
-was written. A list or map literal is born, and its elements share what
-every element has; an empty literal shares nothing. An index of a born
-literal is that shared entry, a field of a born value is the field's entry,
-and a constructor pattern hands each position the matching field. An `if`
-whose arms are both born is the meet of the two: a field or an element read
-through it is read through to both arms and is born only when both answer,
-so a later write to either arm is seen. A write made through the choice
-reached whichever arm was taken, so both arms forget the field and the
-choice remembers the write. That last rule is the one a reader is likely
-to question, and `build_write_a_field_an_if_may_have_overwritten` pins it:
-`other = cell "other" young`, then `chosen = if … other young` and
-`chosen.link = old`, and `other.link` is no longer proved, because at run
-time it may hold `old`.
+On "The reconstruction the 2026-09-07 ruling ordered has two usable phases,
+not four, for 376 of the 439 rows", Clay: "I'm okay being pragmatic and
+taking the first one." Ruled: option (1). Rows 15..390 carry no run terms and
+get none reconstructed; they stay scored on the compile terms they carry, at
+the coverage the rescore already stamps on them, and the chart keeps drawing
+the coverage boundary at 2026-09-03 the way kanso#1346 draws every boundary.
+The eight-phase half (rows 391..438) is built and stays. Nothing further is
+owed on this entry; it leaves the ledger with this ruling.
 
-A write inside an `if` arm's statement list may not have happened, so it
-takes the field's proof away rather than supplying one. Anything a call
-answers is not proved, a parameter is not, a name from an enclosing block
-or an earlier iteration is not, and the six escape fixtures from July stand
-unchanged beside four new ones: an `if` with an older arm, an element
-beside an older one, a field a constructor filled with an older value, and
-the overwritten field above.
-
-**Two spellings of a field read.** The module route rewrites `b.up` to its
-getter, `Get_up b`, before the check runs, and the play route after it, so
-the walk reads both: `kanso check` on the fixture said ok while the same
-program imported was refused at `over.id = 10`, and the getter arm is why
-it is not.
-
-**The write form is unchanged.** `target.field = value` with a name on the
-left is still the one form, per the 2026-07-19 design; what widened is how
-the name's birthday is proven. `ring[2]!.id = 20` does not parse and does
-not need to: `middle = ring[2]!` then `middle.id = 20` is the same write.
-
-**What it does not reach, and what that leaves.** Every algorithm the
-2026-07-28 entry named — union-find's path compression, an e-graph's
-rewire, unification binding the variable it found — reaches its node
-through a call: `find` is a recursive function and its node is a parameter.
-The four flows admit the shapes the entry measured and not the algorithms,
-and design/memory-frontier-research.md's 4.4 row says so. Birth flowing
-through a call is the next widening of this analysis, mine, and it is not a
-new question.
-
-**Spec.** `tests/golden/micro/a_build_writes_what_it_can_prove_was_born`
-runs on all three engines: the alias, the field a constructor filled, the
-field a write set, the indexed element and the chosen node, each written
-through, then printed. Refused by the old compiler at the first of them.
-The four escape fixtures are in the error corpus with their imported twins.
-The diagnostic scan reads 313, none newly unpinned; the message is the one
-July wrote, since a parameter is still not a construction made in the
-block.
+Clay's second sentence is a question, and it is answered here so it is not
+re-derived: "isn't it pretty trivial to just rerun the current metrics on the
+old versions?" Mechanical, not trivial, and one unknown decides whether it is
+possible at all. The mechanics: for each of 376 commits, `cargo build
+--release` at that commit, `kanso build bench/runbench` with the compiler it
+produced, one callgrind run for `run_instructions` and one counters run for
+`run_peak_bytes`, on ONE host in ONE sitting that also re-measures HEAD, so
+every row is on the same ruler by construction. About four minutes a commit
+with a warm cargo cache, so a day of serial machine time for all 376, or an
+afternoon sampling every fourth. The unknown: whether a compiler from
+2026-08-10 accepts today's bench/runbench source. The surface moved between
+then and now — the bang choosing the channel, `done`, the consolidated run
+program itself — and nobody has tried. So the lead is filed with its probe
+first: build the compiler at row 15's commit, compile today's runbench with
+it, and read the answer. Yes means the sweep is a script and the rows come
+back as `run_source: remeasured`. No means a runbench pinned to the old
+surface, which measures a different program and would need its own ruling.
+This is a lead, not a ruling: it goes on cloud's list as a lead and stays
+off the "Ruled, unbuilt" section unless Clay says the word.
