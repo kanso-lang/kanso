@@ -395,16 +395,23 @@
 # `next` used to answer is a word now, so a program pays the fall in proportion
 # to how many sources it drains. pendbench drains one per pending cell, which
 # is why it takes 1.22% where the rest take a handful of instructions.
+# 2026-09-10 (a constructor no longer builds into a record it is about to
+# hold): CI's sitting, four rows fall and ten are byte-identical. basket
+# 34,690,245 -> 34,690,216 (-29), pendbench 583,758,224 -> 583,755,724
+# (-2,500), scanbench 726,019,079 -> 726,018,879 (-200), runbench
+# 2,367,877,484 -> 2,367,876,664 (-820). lib/json's `fail` emits k_rec
+# instead of the wider constructor, so the four programs that reach that
+# shape at run time do slightly less work; the other ten never call it.
 jsonbench 1485334791
 encodebench 3963988451
 oneshot 21737110
-basket 34690245
+basket 34690216
 widebench 35268161
 deepbench 387470234
 escapebench 85558105
-pendbench 583758224
+pendbench 583755724
 indexbench 3265786
-scanbench 726019079
+scanbench 726018879
 digestbench 10426515
 readbench 4561933
 livebench 3481899695
@@ -465,4 +472,4 @@ livebench 3481899695
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2367877484
+runbench 2367876664

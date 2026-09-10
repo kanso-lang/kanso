@@ -3784,3 +3784,36 @@ each; defines, calls and branches hold, because the `k_rec_reuse` declare
 that goes is not a define and its call is replaced by a `k_rec` call. The
 six host-keyed compile rows are refused on this container and copied from
 CI's sitting.
+
+**CI's five host-keyed rows, and what each one says.** The container refuses
+five of the veins this change moves, so round one was red on all five and CI's
+sitting is what lands. Two go down and three go up.
+
+The runtime rows fall in four of fourteen programs and hold in ten: basket
+34,690,245 -> 34,690,216 (-29), pendbench 583,758,224 -> 583,755,724 (-2,500),
+scanbench 726,019,079 -> 726,018,879 (-200), runbench 2,367,877,484 ->
+2,367,876,664 (-820). Machine code falls in nine and holds in five, jsonbench
+100,434 -> 100,130 the largest at -304. NINE against the emitted vein's EIGHT:
+basket loses sixteen bytes of text without losing an emitted line, because the
+`k_rec_reuse` declare it drops was already text some other program shared.
+
+The three compile rows RISE, together and by nearly the same fraction:
+compile_instructions 48,393,437 -> 48,412,144 (+18,707, +0.0387%),
+entry_instructions 161,314,264 -> 161,360,451 (+46,187, +0.0286%),
+library_instructions 162,023,537 -> 162,069,092 (+45,555, +0.0281%). That is
+the price of the answer. `sole_finished_record` used to count mentions, which
+costs nothing; `field_reads_in` asks of each mention whether it is the base of
+a field read, which walks. Every compile route runs the linear pass, so all
+three rows move, and a per-declaration check that moves them by the same
+fraction is what a uniform cost looks like.
+
+**The trade, and the objective's verdict.** A rise anywhere is a thing to
+state rather than defend, and this one is real: the compiler does 110,449 more
+instructions summed across the three routes to buy 3,549 fewer at run time on
+the four programs that reach the shape. Stated that way it sounds like a bad
+bargain, and by the raw counts it is. The objective disagrees, because the
+counts are not what it weighs: welfare reads **66.42 against a floor of 66.42,
+held exactly**, since a 0.03% rise on a compile term measured in hundreds of
+millions moves the saturating curve by less than the floor's own precision.
+The change is a MISCOMPILATION fix besides — a program that came out cyclic
+now does not — and that is not a term the objective has at all.

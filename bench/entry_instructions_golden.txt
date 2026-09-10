@@ -140,4 +140,11 @@
 # The fused chain operators. See bench/compile_instructions_golden.txt for the
 # reading: layout, with compile_allocs, compile_peak_bytes and the .text vein
 # all byte-identical in the same job.
-entry_instructions=161314264
+# 2026-09-10 (a constructor no longer builds into a record it is about to
+# hold): CI's sitting, 161,314,264 -> 161,360,451 (+46,187 / +0.0286%).
+# src/linear.rs asks `field_reads_in` of every mention a candidate
+# constructor makes, where counting mentions asked nothing; the walk is
+# the price of the answer. The three compile rows rise together and by
+# nearly the same fraction, which is what a per-declaration check looks
+# like when every route runs it.
+entry_instructions=161360451
