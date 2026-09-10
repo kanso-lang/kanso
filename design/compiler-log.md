@@ -3621,10 +3621,67 @@ visits before it asks the host anything, because those count the compiler's
 own algorithm and are the same everywhere, and only its `compile_peak_bytes`
 row refused.
 
-Welfare reads 66.38 on this host's goldens against the 66.37657452327063 floor this change opens against, held and not re-set: the five terms the objective weighs are all read from goldens this host either does not move or may not measure, so the reading is main's and CI's compile rows decide the real one. SEVEN veins are CI's
-and are expected red in round one: the four host-keyed compile rows
-(`compile_instructions`, `entry_instructions`, `library_instructions`,
-`compile_allocs`), `compile_memory`'s peak, and -- because this change edits
-src/runtime.c, which is `include_str!`'d into the compiler AND links into
-every program -- `machine_code` and the `text` vein with it. kanso#1362
-predicted the compile rows alone and CI named five veins.
+**CI's sitting, and a prediction that was six-sevenths right.** Round one named
+SEVEN veins and this entry had named six of them: the four host-keyed compile
+rows, `compile_memory`'s peak, and `machine_code`. The seventh was `work`, the
+runtime instruction vein, and the miss is instructive because the entry's own
+record implies it: a change that removes one allocation per drained source
+removes the instructions that allocation cost. The seventh name written above
+was the `text` vein, which is not a seventh gate at all -- `machine_code.sh`
+diffs bench/text_golden.txt, so the two are one. Six gates predicted, seven
+named, and the arithmetic was wrong in both directions at once.
+
+Every one of the thirty-nine moved keys, by name:
+
+    work           encodebench 3,963,988,518 -> 3,963,988,451        -67
+                   basket         34,694,178 ->     34,690,245     -3,933  -0.0113%
+                   widebench      35,268,228 ->     35,268,161        -67
+                   deepbench     387,470,247 ->    387,470,234        -13
+                   pendbench     590,970,940 ->    583,758,224 -7,212,716  -1.2205%
+                   scanbench     726,019,157 ->    726,019,079        -78
+                   digestbench    10,426,541 ->     10,426,515        -26
+                   runbench    2,369,679,773 ->  2,367,877,484 -1,802,289  -0.0761%
+
+    text           encodebench       120,930 ->        120,098       -832
+                   basket            114,226 ->        113,170     -1,056
+                   widebench         126,194 ->        125,362       -832
+                   deepbench          76,402 ->         75,538       -864
+                   pendbench          92,834 ->         91,346     -1,488
+                   scanbench         160,738 ->        159,842       -896
+                   digestbench       111,650 ->        110,530     -1,120
+                   runbench          247,954 ->        246,402     -1,552
+                   jsonbench         100,418 ->        100,434        +16
+                   oneshot           112,290 ->        112,306        +16
+                   escapebench        57,874 ->         57,890        +16
+                   indexbench         61,890 ->         61,906        +16
+                   readbench          58,402 ->         58,418        +16
+                   livebench         112,866 ->        112,882        +16
+
+    compile_allocs                     29,276 ->        29,000       -276  -0.9427%
+    compile_instructions           48,879,362 ->    48,572,851   -306,511  -0.6271%
+    entry_instructions            162,822,303 ->   161,836,689   -985,614  -0.6053%
+    library_instructions          163,543,712 ->   162,541,723 -1,001,989  -0.6127%
+    compile_peak_bytes                773,818 ->       769,071     -4,747  -0.6135%
+    front_end_visits                   22,426 ->        22,562       +136  +0.6064%
+
+jsonbench, oneshot, escapebench, indexbench, readbench and livebench do not
+move on the work vein at all, and they are the six that rise exactly 16 bytes
+on the text vein. That is the whole shape of the change in two lines: the +16
+is `K_DONE`, the tag appended after `K_SUB` in src/runtime.c, which links into
+every program whether or not the program can produce the value; the eight that
+fall are the eight that import std/list, where eleven arms match a tag instead
+of destructuring a one-field record. pendbench takes 1.22% of the work vein
+because it drains one source per pending cell, where the rest drain a handful.
+
+The five compile rows fall in one band -- 0.9427%, 0.6271%, 0.6053%, 0.6127%,
+0.6135% -- which reads as work removed rather than as the layout move the
+compile-row notes usually record: a declaration the front end used to lex,
+parse, infer and check is gone. `front_end_visits` goes the other way by 136,
+and that is deliberate: `DONE` is a bit the inference fixpoint carries where a
+record was a type it did not, so a nullary in an arm is a cheaper emit and a
+slightly longer inference. Only the peak is a welfare term.
+
+Welfare 66.38 -> 66.42, banked with `--set` in this same PR. All five terms
+improved: `run_instructions` and `compile_peak_bytes` by the deletions above,
+`compile_instructions` (the objective's sum of the module, entry and library
+rows) by 2,294,114, and `compile_allocs` by 276.

@@ -126,4 +126,11 @@
 # 0.0429% where the module row rises 0.0266%, which is the split those rows
 # already record: the two corpora that merge a dependency program pay the
 # larger share.
-entry_instructions=162822303
+
+# 2026-09-10 (kanso#1363): entry_instructions=161,836,689, a FALL of 985,614
+# (-0.6053%) from 162,822,303.
+#
+# `done` is minted and std/list's one-field `done` record is deleted. See
+# bench/compile_instructions_golden.txt for the reading: five compile rows fall
+# together in one band, which is work removed rather than layout.
+entry_instructions=161836689

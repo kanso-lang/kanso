@@ -1114,4 +1114,14 @@
 # 0.0429% where the module row rises 0.0266%, which is the split those rows
 # already record: the two corpora that merge a dependency program pay the
 # larger share.
-compile_instructions=48879362
+
+# 2026-09-10 (kanso#1363): compile_instructions=48,572,851, a FALL of 306,511
+# (-0.6271%) from 48,879,362.
+#
+# `done` is minted and std/list's one-field `done` record is deleted. The three
+# instruction rows fall in one band -- 0.6271%, 0.6053%, 0.6127% -- with
+# compile_allocs falling 0.9427% and compile_peak_bytes 0.6135% beside them.
+# Five rows moving together and in proportion is the shape of real work
+# removed, not the layout reading the notes above record: a declaration the
+# front end used to lex, parse, infer and check is gone.
+compile_instructions=48572851

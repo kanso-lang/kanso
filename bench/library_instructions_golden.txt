@@ -112,4 +112,12 @@
 # 0.0429% where the module row rises 0.0266%, which is the split those rows
 # already record: the two corpora that merge a dependency program pay the
 # larger share.
-library_instructions=163543712
+
+# 2026-09-10 (kanso#1363): library_instructions=162,541,723, a FALL of
+# 1,001,989 (-0.6127%) from 163,543,712.
+#
+# `done` is minted and std/list's one-field `done` record is deleted. This row
+# and the entry row move together again, 0.6127% against 0.6053%, the split the
+# notes above already record: the two corpora that merge a dependency program
+# pay the larger share, and here they save it.
+library_instructions=162541723
