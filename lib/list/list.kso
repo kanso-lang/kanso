@@ -133,6 +133,16 @@ pub fn fold (capped left (cursor at source)) init f
 pub fn fold (bounded at stop source) init f
   bounded_flat source init f at stop
 
+# A cap around a count is a range: the elements are `left` integers from `at`,
+# and handing each one over builds nothing. The general arm below rebuilds a
+# count, a step, a cap and another step for every element, four records read
+# once and dropped.
+pub fn fold (capped left (counting at)) init f
+  counted_flat init f at left
+
+fn counted_flat acc f at left
+  if (left < 1) acc (counted_flat (f acc at) f (at + 1) (left - 1))
+
 fn bounded_flat source acc f i stop
   if (stop < i) acc (bounded_more source acc f i stop)
 

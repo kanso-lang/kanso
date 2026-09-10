@@ -129,7 +129,18 @@ front_end_rounds=62
 # twins back out — 83 of the corpus's 394 declarations, all of them, on this
 # corpus. That pass used to run seventeen lines AFTER `check_merged`, so the
 # whole-program check visited 83 declarations the next pass deleted. Banked.
-front_end_visits=22562
+# 2026-09-10 (three library shapes off the run program's profile): the front
+# end's visits on compile_corpus 22,562 -> 22,727 (+165, +0.7313%). Three new
+# arms is three more declarations to visit -- the counted fold in std/list, the
+# byte class in std/regexp, and the colon in lib/json -- and the fixpoint visits
+# each of them and everything they dirty. rounds hold at 62, which is the shape
+# of the win: the arms are wider, not deeper, so nothing re-converges.
+# The 22,727 is THIS container's reading and the gate refuses the file here
+# (measured-on rustc=1.98.1, this host 1.94.1). Visits count the compiler's
+# own algorithm and so are the same on every host, which is why the number is
+# written down rather than left for CI -- but the file's other row is host-
+# keyed, so round one confirms it and CI's sitting is what stands.
+front_end_visits=22727
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -196,4 +207,4 @@ front_end_visits=22562
 # type it did not, so a nullary in an arm is a cheaper emit and a slightly
 # longer inference. The two go opposite ways on purpose and the welfare
 # objective weighs only the peak.
-compile_peak_bytes=769071
+compile_peak_bytes=774660

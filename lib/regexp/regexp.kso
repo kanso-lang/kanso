@@ -700,7 +700,19 @@ fn read_repeat chars at
 fn at_quantifier? chars at
   at <= length chars and in? "*+?\{" chars[at]!
 
+# Whether the one-character string `c` is in `set`. A character one byte wide
+# is found by its byte: a member wider than a byte has no byte below 128 in
+# it, so a hit is that character and nothing else. Splitting the set on the
+# character built a list and two pieces to answer the same question, once per
+# position a class is asked at. A wider character still takes the split.
 fn in? set c
+  cb = text/bytes c
+  member? set c (text/bytes set) cb (length cb == 1)
+
+fn member? _ _ bs cb true
+  text/find2 bs 1 cb[1]! cb[1]! <= length bs
+
+fn member? set c _ _ false
   length (text/split set c) > 1
 
 fn suffixed _ base false

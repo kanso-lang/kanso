@@ -147,16 +147,34 @@
 # constructor, which is one line shorter and the same call. The six that do
 # not move do not reach that shape. Measured on the picked tree over
 # origin/main 32080acf.
-encodebench defines=185 calls=1607 branches=1002 lines=11104
-oneshot defines=142 calls=1229 branches=805 lines=9175
-basket defines=142 calls=1241 branches=796 lines=7959
-widebench defines=201 calls=1795 branches=1090 lines=12064
-deepbench defines=116 calls=814 branches=577 lines=5846
+# 2026-09-10 (three library shapes off the run program's profile): three source
+# arms, and the rows fall into three shapes.
+#   +1 define +27 calls +18 branches +128 lines: encodebench, widebench,
+#   deepbench -- the counted fold in std/list, `fold (capped left (counting
+#   at))` and its `counted_flat`.
+#   +1 define +24 calls +12 branches +103 lines: basket, pendbench -- the same
+#   arm, three calls and six branches smaller. Both write fewer fold shapes
+#   than the three above, so fewer sites survive the prune.
+#   -10 calls +3 branches +26 lines, defines held: oneshot, livebench -- the
+#   colon arm in lib/json, the shape bench/emitted_golden.txt describes for the
+#   decoder.
+#   scanbench +3 +37 +31 +249 and runbench +3 +27 +28 +253 carry more than one
+#   of the three: scanbench the byte class in std/regexp, runbench all of them.
+#   escapebench, indexbench, digestbench and readbench are byte-identical --
+#   they reach none of the three.
+# More code written, much less allocated: pendbench allocates 79.86% fewer
+# blocks for its 103 extra lines. Measured on the merged tree over origin/main
+# ef2f4ea4.
+encodebench defines=186 calls=1634 branches=1020 lines=11232
+oneshot defines=142 calls=1219 branches=808 lines=9201
+basket defines=143 calls=1265 branches=808 lines=8062
+widebench defines=202 calls=1822 branches=1108 lines=12192
+deepbench defines=117 calls=841 branches=595 lines=5974
 escapebench defines=51 calls=117 branches=122 lines=1638
-pendbench defines=131 calls=1168 branches=667 lines=6925
-scanbench defines=333 calls=3243 branches=2112 lines=19673
+pendbench defines=132 calls=1192 branches=679 lines=7028
+scanbench defines=336 calls=3280 branches=2143 lines=19922
 indexbench defines=57 calls=158 branches=139 lines=1954
-digestbench defines=197 calls=1500 branches=905 lines=9977
+digestbench defines=198 calls=1527 branches=923 lines=10105
 readbench defines=62 calls=166 branches=152 lines=2197
-livebench defines=143 calls=1253 branches=819 lines=9292
-runbench defines=594 calls=5954 branches=3453 lines=34726
+livebench defines=143 calls=1243 branches=822 lines=9318
+runbench defines=597 calls=5981 branches=3481 lines=34979

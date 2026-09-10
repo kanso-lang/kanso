@@ -147,4 +147,4 @@
 # the price of the answer. The three compile rows rise together and by
 # nearly the same fraction, which is what a per-declaration check looks
 # like when every route runs it.
-entry_instructions=161360451
+entry_instructions=164041672

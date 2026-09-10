@@ -3726,6 +3726,7 @@ Welfare 66.42 held and re-set: the objective's compile term sums the three rows,
 so it takes the whole 1,220,025, and the rise is under a hundredth of a point.
 Five compiler.html spans quoting the three rows were rewritten by
 `golden_prose --write`.
+
 ## 2026-09-10 — a record built into its own first field
 
 Found while writing a mem fixture for the carry tier: a loop that chains
@@ -3817,3 +3818,152 @@ held exactly**, since a 0.03% rise on a compile term measured in hundreds of
 millions moves the saturating curve by less than the floor's own precision.
 The change is a MISCOMPILATION fix besides — a program that came out cyclic
 now does not — and that is not a term the objective has at all.
+
+## 2026-09-10 — three library shapes off the run program's profile
+
+Three arms, each one a shape the profile pointed at, each one measured on
+today's main rather than on the base they were first cut against.
+
+**A cap around a count is a range.** pendbench's churn fuses to a fold over
+`take naturals n`, and the general capped arm pulled every element through
+`next`, building a count, a step, a cap and another step apiece — four records
+read once and dropped. `fold (capped left (counting at))` counts instead, the
+sibling of the window arm already beside it.
+
+**A class asks by the byte.** std/regexp's character classes walked a string
+per candidate; the arm reads the byte.
+
+**The colon is the arm before the error.** lib/json's `obj_key` ran `skip_ws`
+to the colon, took back only its position, and then had `expect_char` load the
+same byte a second time to compare it. `obj_key_end` is the shape `array_delim`
+and `obj_delim` already take: the colon is an arm, the whitespace is the arm
+before it, and the error is the arm after.
+
+**A deletion at the head of a library file moves every diagnostic below it.**
+Dropping `import "std/text"`, `expect_char` and both `expect_check` arms takes
+eleven lines off the top of lib/json/scan.kso, so `fail` moves from line 13 to
+line 2 and the endpoint diagnostic that names its birthplace moves with it:
+`tests/golden/runtime/a_lone_surrogate_is_half_a_character.stderr` now reads
+`born in json/fail at std/json/scan.kso:2`. Two tests read that one golden —
+`runtime_corpus_reports_endpoint_violations` in tests/golden.rs and
+`interpreter_reports_each_runtime_endpoint_violation` in tests/oracle.rs — and
+both went red until it was regenerated. Nothing else in the tree quotes a
+scan.kso line. Worth writing down because no counter, gate or sweep can see it:
+the change is a deletion of dead helpers, and it moved a user-visible sentence.
+
+**What they cost, on this tree over origin/main ef2f4ea4.** The arms were cut
+against 32080acf and re-measured after #1366 merged in. Not one runtime counter
+moved between the two bases: #1366 changed which constructor `fail` emits, not
+what anything allocates.
+
+    pendbench   allocs      4,007,349 ->   807,149   (-79.86%)
+                alloc_bytes   257 MB  ->     65 MB   (-74.66%)
+                arena peak      2 MB  ->      1 MB
+                sh_rec    192,067,248 ->    54,448   (-99.97%)
+    scanbench   allocs      3,975,884 -> 3,011,152   (-24.26%)
+                arena peak    198 MB  ->    161 MB   (-18.52%)
+                sh_str     37,039,216 ->     1,632
+    runbench    allocs      6,936,517 -> 5,958,961   (-14.09%)
+                arena peak   45.9 MB  ->   39.7 MB   (-13.70%)
+
+`sh_rec` falling by a factor of three and a half thousand on pendbench is the
+counted fold: those four records an element were most of what the benchmark
+allocated. `sh_str` on scanbench is the byte class, which is why that row goes
+to almost nothing rather than down a fraction.
+
+**And the instructions, which this container could not see at all.** The work
+vein is host-keyed and refused here, so welfare read main's row and reported
+the floor merely held; CI's sitting is where the change actually shows.
+
+    pendbench    583,755,724 ->   226,874,035   -356,881,689  -61.1355%
+    scanbench    726,018,879 ->   587,488,478   -138,530,401  -19.0808%
+    runbench   2,367,876,664 -> 2,262,265,575   -105,611,089   -4.4602%
+    jsonbench  1,485,334,791 -> 1,470,973,791    -14,361,000   -0.9669%
+    oneshot       21,737,110 ->    21,641,370        -95,740   -0.4404%
+    deepbench    387,470,234 ->   387,090,234       -380,000   -0.0981%
+    basket        34,690,216 ->    34,672,719        -17,497   -0.0504%
+    livebench  3,481,899,695 -> 3,481,803,955        -95,740   -0.0027%
+
+Eight of the fourteen fall and none rises. The other six are byte-identical:
+encodebench, widebench, escapebench, indexbench, digestbench and readbench
+reach none of the three arms. pendbench losing three fifths of its instructions
+is the counted fold alone -- the four records an element were not only
+allocated but walked.
+
+**Welfare 66.42 -> 67.56**, the largest single move since the 2026-09-03
+rebuild, banked with `--set` in this same PR. Both the allocation terms and
+run_instructions pay for it; the container's blind reading had put the gain at
+0.86 and the whole of that was the memory side.
+
+**The compile side pays, and the emitted code grows.** Three new arms is three
+more declarations for the front end to visit: front_end_visits 22,562 -> 22,727
+(+165, +0.7313%) with rounds holding at 62, the arms being wider rather than
+deeper so nothing re-converges. Every program that compiles std/list carries
+the counted arm, so the emitted rows rise across the board — encodebench 11,104
+-> 11,232 lines, scanbench 19,673 -> 19,922, runbench 34,726 -> 34,979. The
+decoder is the one row that gains lines while LOSING calls: 9,246 -> 9,272 with
+calls 1,236 -> 1,226, because it reaches the colon arm and neither of the other
+two. Four rows are byte-identical — escapebench, indexbench, digestbench and
+readbench reach none of the three. That is the trade stated plainly: more code
+written, much less allocated.
+
+**Every counter that went the wrong way, with the value it landed on.**
+
+The byte class trades string work for byte work, so two counters that were
+zero on scanbench are no longer zero and the same pair rises on runbench, which
+runs split: `scan_find2_calls` 0 -> **501,505**, `scan_sh_bytes` 0 ->
+**24,072,240**, `run_find2_calls` 3,017,520 -> **3,109,759**, `run_sh_bytes`
+36,862,800 -> **41,290,272**. Against them `scan_sh_str` falls 37,039,216 ->
+1,632 and `scan_sh_buf` 24,105,200 -> 33,024. The bytes a class reads are the
+bytes it used to read as a string, and it stops copying them.
+
+The compile-module vein carries the three new declarations: `module_defines`
+100 -> **101**, `module_calls` 727 -> **754**, `module_branches` 430 -> **446**,
+`module_lines` 5,177 -> **5,304**, `module_visits` 2,471 -> **2,534**, beside
+`front_end_visits` 22,562 -> **22,727**.
+
+Three more declarations cost the compiler itself, and these are CI's rows:
+`compile_instructions` 48,412,144 -> **49,091,884** (+679,740, +1.4040%),
+`entry_instructions` 161,360,451 -> **164,041,672** (+2,681,221, +1.6616%),
+`library_instructions` 162,069,092 -> **164,324,373** (+2,255,281, +1.3910%),
+`compile_allocs` 29,000 -> **29,350**, `compile_peak_bytes` 769,071 ->
+**774,660** (+5,589, +0.7267%). The objective's compile term is module plus
+entry, 209,772,595 -> 213,133,556, a rise of 1.60% against a run-instruction
+fall of 4.46% on a term that satiates late; the trade is not close.
+
+The `text` vein sums 1,543,836 -> **1,547,852** across the fourteen, and it
+moves both ways by families: **+800 or so** where the
+counted fold lands (deepbench 75,538 -> 76,338, digestbench 110,530 ->
+111,330, encodebench 119,826 -> 120,642, widebench 125,090 -> 125,906,
+runbench 246,082 -> 246,914, pendbench 91,090 -> 91,778, basket 113,154 ->
+113,650), **-400** where the colon arm does (jsonbench 100,130 -> 99,730,
+oneshot 112,002 -> 111,602, livebench 112,578 -> 112,178), and scanbench
+159,602 -> **159,570**, the one row that carries the byte class and comes out
+32 bytes smaller. escapebench, indexbench and readbench are byte-identical.
+The machine code grows where an arm is added and shrinks where three helpers
+go, which is what the emitted vein says in lines.
+
+The emitted veins are the same three arms written out: `emitted_branches` 816
+-> **819** and `emitted_lines` 9,246 -> **9,272** on the decoder;
+`emitted_other_defines` 2,354 -> **2,366**, `emitted_other_calls` 20,245 ->
+**20,445**, `emitted_other_branches` 12,639 -> **12,800**, `emitted_other_lines`
+132,530 -> **133,802** across the thirteen beside it. `emitted_calls` on the
+decoder FALLS, 1,236 -> 1,226.
+
+Two rows of the inner-beat tenure fixture move with the counted fold, which is
+what that fixture folds:
+
+    an_inner_beat_opens_its_tenure_in_the_block_outside_survive_slots 2,004 -> 32,404
+    an_inner_beat_opens_its_tenure_in_the_block_outside_ten_frees 3 -> 2
+
+with `ten_blocks` 3 -> 2 beside them. The fold stops building four records an
+element, so far less
+is allocated inside the beat (allocs 512,494 -> 177,420, alloc_bytes 41.2 MB ->
+16.9 MB) and the beat runs a third as many iterations (158 -> 68); what survives
+a longer-lived block is counted in more slots and freed in one fewer.
+
+**Five veins are CI's.** machine_code, compile_allocs, compile_instructions,
+entry_instructions and library_instructions are refused on this container, and
+compile_memory_golden.txt is refused whole (measured-on rustc=1.98.1, here
+1.94.1) even though the visits row it carries is host-invariant. Round one is
+red on those and CI's sitting is what lands.
