@@ -138,16 +138,32 @@
 # 2026-09-09 (the fused render-append, and a switch arm told its case's tags): every program with a switch-dispatched group loses a force and a dispatch per proved arm, and the encoders lose the render-then-append pair for a single call; see bench/emitted_golden.txt.
 # 2026-09-10 (a qualified name is its module's declaration): scanbench 19,752 -> 19,764 and runbench 34,806 -> 34,828 lines, runbench +1 define +1 call. The string table interns each mixed group's bare-space name beside its spoken form (std/regexp's first, spread and repeat; scanbench's split; runbench's total), and runbench carries a second unreferenced copy of the thunk for pend's `cards -> spent cards`. Dead text on every count; see the log entry.
 # 2026-09-10 (records print qualified): every program +2 lines, defines, calls and branches identical: k_type_shown, an alias of k_type_name in a program whose root declares no bare type. See bench/emitted_golden.txt.
+# 2026-09-10 (the plain dot is an application): four programs fall and nine
+# hold. escapebench 51/117/122/1638 -> 48/106/120/1584, scanbench
+# 333/3243/2112/19674 -> 328/3228/2105/19573, indexbench 57/158/139/1954 ->
+# 54/146/135/1893, runbench 594/5954/3453/34727 -> 591/5941/3446/34653
+# (defines/calls/branches/lines). A `.` step used to set piped=true, and
+# emit_call_full's piped arm builds a one-parameter closure over the target
+# and calls k_maybe_bind with it when the subject's set carries DESC. The
+# step is an ordinary application now, so the closure, its wrapper and the
+# call go: k_maybe_bind is 2 -> 0 in escapebench, 3 -> 0 in scanbench, 2 -> 0
+# in indexbench and 11 -> 10 in runbench, and escapebench and indexbench also
+# lose `d_render/to_string_1` -- the target's own definition, which the
+# closure needed as a value and the direct call does not. Measured by
+# reverting the two piped flags in src/parser.rs and rebuilding: the old side
+# reproduces this golden's previous rows exactly. The nine that hold still
+# carry k_maybe_bind (encodebench 3, oneshot 3, digestbench 3) because a `.>`
+# step stays piped, which is what it is for. Banked.
 encodebench defines=185 calls=1607 branches=1002 lines=11105
 oneshot defines=142 calls=1229 branches=805 lines=9176
 basket defines=142 calls=1241 branches=796 lines=7959
 widebench defines=201 calls=1795 branches=1090 lines=12065
 deepbench defines=116 calls=814 branches=577 lines=5846
-escapebench defines=51 calls=117 branches=122 lines=1638
+escapebench defines=48 calls=106 branches=120 lines=1584
 pendbench defines=131 calls=1168 branches=667 lines=6926
-scanbench defines=333 calls=3243 branches=2112 lines=19674
-indexbench defines=57 calls=158 branches=139 lines=1954
+scanbench defines=328 calls=3228 branches=2105 lines=19573
+indexbench defines=54 calls=146 branches=135 lines=1893
 digestbench defines=197 calls=1500 branches=905 lines=9977
 readbench defines=62 calls=166 branches=152 lines=2197
 livebench defines=143 calls=1253 branches=819 lines=9293
-runbench defines=594 calls=5954 branches=3453 lines=34727
+runbench defines=591 calls=5941 branches=3446 lines=34653

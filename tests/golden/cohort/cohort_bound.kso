@@ -8,7 +8,7 @@ import "std/os"
 
 fn pick n
   source = if (n > 0) (os/read_file! "escapes.json") io/stdin
-  source . report
+  source .> report
 
 fn report text
   doc = json/decode text

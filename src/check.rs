@@ -690,6 +690,167 @@ fn check_none_exhaustive(
     }
 }
 
+/// A box where a value is expected. An effect is `<t>effect`, the unresolved
+/// outcome of an operation, and the three words are its only doors (the
+/// 2026-08-29 gavel): holding one is fine, so a parameter that binds
+/// anything takes it, and so does `print`, which renders it as `<io>`. What
+/// is refused is handing one to something that reads the value inside —
+/// an operator, an index, a field read, `if`'s condition, a builtin that
+/// takes values, or a group none of whose arms binds anything at that
+/// position. Only what is provable: a group whose joined return set holds
+/// the description bit and no value bit, a `.>` step over such a subject,
+/// or a wall.
+fn check_box_where_value(
+    program: &Program,
+    inference: &crate::infer::Inference,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
+    let mut returns: crate::hash::Map<(&str, usize), Set> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    let mut binds: crate::hash::Map<(&str, usize, usize), bool> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for (i, d) in program.fns.iter().enumerate() {
+        let key = (d.name.as_str(), d.params.len());
+        *returns.entry(key).or_insert(0) |= inference.returns[i];
+        for (pos, param) in d.params.iter().enumerate() {
+            let anything = matches!(param, Pattern::Var(..) | Pattern::Wildcard(..));
+            *binds.entry((d.name.as_str(), d.params.len(), pos)).or_insert(false) |= anything;
+        }
+    }
+    let values = TOP & !FAIL & !THUNK & !DESC;
+    let boxed = |s: Set| s & DESC != 0 && s & values == 0;
+    // a name the declaration binds itself — a parameter, a binding, a
+    // lambda's parameter — is that binding, whatever declaration shares
+    // its spelling; `fn either ... args` reads its own list, not `os/args`
+    fn yields_box(
+        e: &Expr,
+        returns: &crate::hash::Map<(&str, usize), Set>,
+        bound: &HashSet<&str>,
+        boxed: &dyn Fn(Set) -> bool,
+    ) -> bool {
+        match e {
+            // a `.>` step answers the chain its subject opened
+            Expr::App { args, piped: true, .. } => {
+                args.first().is_some_and(|a| yields_box(a, returns, bound, boxed))
+            }
+            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(name, _) if !bound.contains(name.as_str()) => {
+                    returns.get(&(name.as_str(), args.len())).is_some_and(|s| boxed(*s))
+                }
+                _ => false,
+            },
+            Expr::Ident(name, _) if !bound.contains(name.as_str()) => {
+                returns.get(&(name.as_str(), 0)).is_some_and(|s| boxed(*s))
+            }
+            Expr::Seq(..) | Expr::Join { .. } => true,
+            _ => false,
+        }
+    }
+    // the builtins that read a value. The words take the box; `print` and an
+    // interpolation render it; `is_desc` asks about it; `push` and `put`
+    // store it, which is holding; `err` and `wrap_err` carry it as a reason
+    let reads_value = |name: &str| {
+        BUILTINS.contains(&name)
+            && !matches!(
+                name,
+                "annotate"
+                    | "bind"
+                    | "rescue"
+                    | "print"
+                    | "is_desc"
+                    | "push"
+                    | "put"
+                    | "err"
+                    | "wrap_err"
+            )
+    };
+    let refuse = |diags: &mut Vec<Diagnostic>, who: &str, at: Span| {
+        diags.push(Diagnostic::new(
+            "effect",
+            format!(
+                "this is an effect — a box the words open — and {who} takes a value; \
+                 open it with `.>`"
+            ),
+            at,
+        ));
+    };
+    let site = |e: &Expr, bound: &HashSet<&str>, diags: &mut Vec<Diagnostic>| {
+        let is_box = |e: &Expr| yields_box(e, &returns, bound, &boxed);
+        match e {
+            Expr::BinOp { op, lhs, rhs, .. } => {
+                for side in [lhs, rhs] {
+                    if is_box(side) {
+                        refuse(diags, &format!("`{op}`"), side.span());
+                    }
+                }
+            }
+            Expr::Index { base, index, .. } => {
+                if is_box(base) {
+                    refuse(diags, "an index", base.span());
+                }
+                if is_box(index) {
+                    refuse(diags, "an index", index.span());
+                }
+            }
+            Expr::Field { base, name, .. } => {
+                if is_box(base) {
+                    refuse(diags, &format!("`.{name}`"), base.span());
+                }
+            }
+            Expr::App { head, args, piped: false, .. } => {
+                let Expr::Ident(name, _) = head.as_ref() else { return };
+                if name == "if" {
+                    if let Some(cond) = args.first() {
+                        if is_box(cond) {
+                            refuse(diags, "`if`", cond.span());
+                        }
+                    }
+                    return;
+                }
+                let group = returns.contains_key(&(name.as_str(), args.len()));
+                if !group && !reads_value(name.as_str()) {
+                    return;
+                }
+                for (pos, arg) in args.iter().enumerate() {
+                    if !is_box(arg) {
+                        continue;
+                    }
+                    if group && *binds.get(&(name.as_str(), args.len(), pos)).unwrap_or(&false) {
+                        continue;
+                    }
+                    refuse(diags, &format!("`{name}`"), arg.span());
+                }
+            }
+            _ => {}
+        }
+    };
+    let mut stack: Vec<&Expr> = Vec::new();
+    let mut bound: HashSet<&str> = HashSet::default();
+    for decl in &program.fns {
+        bound.clear();
+        for param in &decl.params {
+            for_each_param_name(param, &mut |n| {
+                bound.insert(n);
+            });
+        }
+        for stmt in &decl.body {
+            bound_in_stmt(stmt, &mut bound);
+        }
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            stack.clear();
+            stack.push(e);
+            while let Some(cur) = stack.pop() {
+                site(cur, &bound, diags);
+                crate::for_each_child(cur, |c| stack.push(c));
+            }
+        }
+    }
+}
+
 /// A lookup answers "not found" with a none, so a collection that could
 /// hold one would make every lenient read ambiguous. A record field is
 /// different: it is known to exist, so a none there means the value is
@@ -1744,6 +1905,7 @@ pub fn check_merged_after_aliases(
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
     }
+    check_box_where_value(program, &inference, &mut diags);
     if require_entry {
         check_entry(program, &mut diags);
     }

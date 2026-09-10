@@ -7,7 +7,7 @@
 import "std/os"
 import "std/text"
 
-os/read_file! "reading_insisted.kso" . fed
+os/read_file! "reading_insisted.kso" .> fed
 
 fn fed cs
   print "tallied {tally cs 200 0}"
