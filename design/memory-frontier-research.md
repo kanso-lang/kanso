@@ -22,7 +22,7 @@ this says only which of them are in the tree.
 | 4.1 | static reuse-in-place inside the build-block | **declined**, measured |
 | 4.2 | tag-hoist under monomorphism speculation | **half harvested**, corrected 2026-09-02 — harvested for a value's tag in a numeric loop, and NOT for a callable's tag at a dispatch, which was worth 1.096% of oneshot and shipped in #1210 |
 | 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
-| 4.4 | build-blocks hosting in-place graph algorithms | **not expressible today** — the blocker is the block-born rule, not the theorem |
+| 4.4 | build-blocks hosting in-place graph algorithms | **the rule is widened** (2026-09-09): born flows through aliases, `if`, indexes and fields; a node reached through a call is still not proved, so the traversal algorithms wait on that flow |
 | 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
 | 5.1 | copy-or-pin for survivors | **its premise is gone** (rechecked 2026-08-24) — one-shot's evacuation is 3 allocations, not 63,967; #868 deleted the copy-out this was going to delete. Reposed below against where evacuation actually lives now |
 | 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |
@@ -478,10 +478,14 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
   the enabling work is to make block-born a dataflow property (flowing
   through aliases, conditionals, indexes of block-born collections and
   fields of block-born nodes) instead of a syntactic one on the binding.
-  That is scoped compiler work, not a research question, and it is what
-  4.4 is waiting on. Clay's call, since it widens what the checker
-  admits — filed 2026-08-25 in design/pending-gavels.md as **Block-born
-  as a dataflow property**.
+  Ruled 2026-08-29 ("block-born is the whole cohort") and built
+  2026-09-09: the checker proves birth through those four flows now, and
+  the four shapes measured above are admitted. What it still cannot prove
+  is a value a call answers, and every traversal algorithm named here
+  reaches its nodes through one — union-find's `find` is a recursive
+  function whose node is a parameter. So 4.4 waits on birth flowing
+  through a call, which is the next widening of the same analysis, not a
+  new question.
   (Interaction nets stay REFUTED: ~10x slower on numeric code — Asperti's own
   retrospective; no polynomial bookkeeping bound; flat-freeze kills the sharing.)
 - **e-graph fusion over pure IR — DECLINED for want of a customer

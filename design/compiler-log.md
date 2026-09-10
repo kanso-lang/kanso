@@ -20,88 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## The check verb infers twice, and nothing sets the toggle that would skip it
-
-`kanso check` runs `infer::infer` over the whole program a second time, at
-`src/main.rs:275`, after the front end has already inferred it inside
-`check_merged`. The second one is not a duplicate — it is taken after the
-rewrites, so its answer differs — and its only reader is the provenance refusal
-three lines below it.
-
-The obvious tidy is to move it inside that reader's guard, so a run with
-`KANSO_NO_PROV` set does not infer for nobody. That was written and built. It is
-not being shipped, because the guard's condition is dead:
-
-    $ grep -rn KANSO_NO_PROV --include=*.sh --include=*.yml --include=*.rs \
-        --include=*.kso --include=*.toml .
-    ./src/main.rs:276:        if std::env::var_os("KANSO_NO_PROV").is_none() {
-
-Read in one place, set in none. No gate, no script, no test, no benchmark takes
-that path, so the change saves nothing anything in this repository ever runs,
-while still moving `src/main.rs` — and kanso#1325 spent two rounds learning that
-an edit to the compiler's Rust moves `compile_instructions` by layout alone,
-where a rise with nothing falling is a pure regression the trend gate refuses.
-A coin flip on a round, for a win of zero.
-
-So it stays out until either something sets the toggle or the second inference
-can be made to pay for itself some other way. The 11,803,600 instructions that
-`infer::infer` costs on the fixed corpus are what makes the second call worth
-returning to; the toggle is not the way in.
-
-## Remembering a compiled module costs more than compiling it again
-
-bench/compile_corpus is a diamond. It imports std/text directly, and it imports
-std/json, which imports std/text. `KANSO_PHASES=1 kanso check bench/compile_corpus`
-prints `load std/text` twice, and the compiler really does lex, parse and check
-that module once per path to it. `visited` is a cycle stack — inserted on the way
-in, removed on the way out — so it never held an answer to hand back.
-
-The memo was built: `visited` became a `Load` carrying both the stack and a map
-from canonical path to the finished program, and a second visit returned a clone
-of the first. Every compile counter the objective weighs got worse.
-
-    counter                base         with the memo   delta
-    compile_instructions   51,094,624   51,756,188      +661,564  (+1.29%)
-    compile_allocs         29,940       32,149          +2,209    (+7.38%)
-    compile_peak_bytes     777,057      1,073,098       +296,041  (+38.10%)
-    compile_visits         23,723       23,522          -201
-    compile_rounds         62           58              -4
-
-(Read on this container, which sits about 400,000 above CI's row for the same
-tree; the comparison is against its own base.)
-
-The profile says why, frame by frame. The second compile of std/text is worth
-about 1.13 million instructions — `compile_module_loaded'2` falls 27,087,117 to
-25,961,126, `lexer::lex` 4,330,753 to 4,092,322, `parser::parse` 4,761,741 to
-4,560,696. Handing the answer back costs more than that: `Vec::clone` rises
-263,773 to 2,294,028 across its two frames and `Expr::clone` 328,175 to
-1,592,439. A module's finished program carries every declaration its own dependencies
-contributed, demoted and qualified, so the deep copy runs about 1.6 times the
-compile it replaces. The peak rise is the other half:
-one program per module stays alive for the whole build where before each one was
-dropped as its importer finished with it.
-
-The two counters that improved are not objective terms, and they say how small
-the saving is: 201 expression visits out of 23,723, and four fixpoint rounds.
-
-That number is the finding. The merged program is unchanged by the memo, and the
-reason is where the diamond's cost actually sits: in the second copy of the
-declarations, which every pass downstream then walks. Counting names in the corpus's merged program that another name
-reaches through a further qualifier (`json/text/append` beside `text/append`):
-
-    module                 declarations   reached twice
-    bench/compile_corpus   428            99
-    std/json               196            17
-
-Ninety-nine of 428. Collapsing them
-would mean making two spellings of one declaration into one name, and a
-qualified spelling is permanent identity in this compiler today. It is
-sound in principle — the lock read at the module root makes an import path
-resolve to one module for the whole build — but it changes what a qualified name
-means, so it is its own piece of work rather than a tidy on this one.
-
-Declined, reverted, nothing shipped.
-
 ## What the per-module reshape costs the diagnostics, fixture by fixture
 
 The reshape is `src/lib.rs`'s `outermost` branch: a dependency runs
@@ -3348,3 +3266,73 @@ back as `run_source: remeasured`. No means a runbench pinned to the old
 surface, which measures a different program and would need its own ruling.
 This is a lead, not a ruling: it goes on cloud's list as a lead and stays
 off the "Ruled, unbuilt" section unless Clay says the word.
+
+## 2026-09-09 — block-born is a proof, not a spelling
+
+Built: the 2026-08-29 ruling "block-born is the whole cohort" (STATUS.md,
+now removed; the archive entry of that name, Clay: "okay whole cohort it
+is"). A field write's target had to be a name bound directly to a
+construction in the same `build`; `twin = ada` followed by `twin.partner =
+bob` was refused with the syntactic fence, and the 2026-07-28 measurement
+found the same refusal on a node chosen by an `if`, a node taken out of a
+list the block built, and a node reached through a field. The theorem never
+asked for the fence. It asks that the cohort be closed, and every one of
+those four values is inside it.
+
+**What the checker proves now.** `check_build_blocks` used to carry a set
+of names; it carries a cohort. Each value the walk proves born is an entry,
+and a name, a field or an element holds an entry. A construction is born,
+and its entry records which of its fields hold born values, read off the
+constructor's arguments by position. A name bound to a born name shares the
+entry, which is what makes an alias an alias: a write through `twin` is a
+write to `ada`'s entry, and `ada.partner` read afterwards is the value that
+was written. A list or map literal is born, and its elements share what
+every element has; an empty literal shares nothing. An index of a born
+literal is that shared entry, a field of a born value is the field's entry,
+and a constructor pattern hands each position the matching field. An `if`
+whose arms are both born is the meet of the two: a field or an element read
+through it is read through to both arms and is born only when both answer,
+so a later write to either arm is seen. A write made through the choice
+reached whichever arm was taken, so both arms forget the field and the
+choice remembers the write. That last rule is the one a reader is likely
+to question, and `build_write_a_field_an_if_may_have_overwritten` pins it:
+`other = cell "other" young`, then `chosen = if … other young` and
+`chosen.link = old`, and `other.link` is no longer proved, because at run
+time it may hold `old`.
+
+A write inside an `if` arm's statement list may not have happened, so it
+takes the field's proof away rather than supplying one. Anything a call
+answers is not proved, a parameter is not, a name from an enclosing block
+or an earlier iteration is not, and the six escape fixtures from July stand
+unchanged beside four new ones: an `if` with an older arm, an element
+beside an older one, a field a constructor filled with an older value, and
+the overwritten field above.
+
+**Two spellings of a field read.** The module route rewrites `b.up` to its
+getter, `Get_up b`, before the check runs, and the play route after it, so
+the walk reads both: `kanso check` on the fixture said ok while the same
+program imported was refused at `over.id = 10`, and the getter arm is why
+it is not.
+
+**The write form is unchanged.** `target.field = value` with a name on the
+left is still the one form, per the 2026-07-19 design; what widened is how
+the name's birthday is proven. `ring[2]!.id = 20` does not parse and does
+not need to: `middle = ring[2]!` then `middle.id = 20` is the same write.
+
+**What it does not reach, and what that leaves.** Every algorithm the
+2026-07-28 entry named — union-find's path compression, an e-graph's
+rewire, unification binding the variable it found — reaches its node
+through a call: `find` is a recursive function and its node is a parameter.
+The four flows admit the shapes the entry measured and not the algorithms,
+and design/memory-frontier-research.md's 4.4 row says so. Birth flowing
+through a call is the next widening of this analysis, mine, and it is not a
+new question.
+
+**Spec.** `tests/golden/micro/a_build_writes_what_it_can_prove_was_born`
+runs on all three engines: the alias, the field a constructor filled, the
+field a write set, the indexed element and the chosen node, each written
+through, then printed. Refused by the old compiler at the first of them.
+The four escape fixtures are in the error corpus with their imported twins.
+The diagnostic scan reads 313, none newly unpinned; the message is the one
+July wrote, since a parameter is still not a construction made in the
+block.
