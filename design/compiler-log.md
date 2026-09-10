@@ -3395,3 +3395,10 @@ twice since, at #1330 for the entry row and #1337 for the library row, and
 #1337 paid a round for the omission; the glob is what stops a third.
 `compile_allocs` stays deliberately red this round, and round two prints the
 number this one could only have guessed.
+
+`tests/the_job_log_prints_every_got_file.rs` pins the property rather than
+the glob: every `*_got.txt` any script under scripts/gates writes must be one
+the printing step will cat. Watched red with the hand list restored, where it
+names both files that list missed, `allocs_got.txt` and
+`compile_libraries_got.txt`. The glob satisfies the property today; what the
+spec is for is the next session writing the list out by hand again.
