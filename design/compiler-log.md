@@ -4091,6 +4091,92 @@ NULL since harness.c calls it with two arguments. 45,189,025 cases and
 
 ---
 
+## 2026-09-10 — the plain dot is an application, and a box where a value is expected is refused
+
+Built: the first half of the 2026-08-29 gavel "effects are types, and the
+words are the only doors" (archive; STATUS.md's row, now shortened to what
+is still owed). Two things the row measured as unbuilt on 2026-09-09: the
+automatic bind, and the refusal of a box where a value is expected.
+
+**The plain dot opens nothing.** `x . f a` is `f x a`, an ordinary
+application — the parser folds a `.` step into the same node the prefix
+spelling makes, so a box handed through it arrives as a box, a settled
+failure handed through it dispatches to the arm that names it as a prefix
+call would, and `.>` is the one step that binds. That is the whole of the
+change in the parser, and it changed no program's meaning: the previous
+entry respelled every step the compiler bound automatically as `.>`, keyed
+on infer's own judgement, so no plain-dot step over a description was left
+for this to change. That is true now and was not on the first build here:
+`build_benchmarks.sh` died inside `make_jsonbench` with `write_file` handed
+a box, because the benchmark sources are built by that script and compiled
+by nothing the census ran, and the 44 dots the previous entry now records
+were found and respelled from this branch before anything else was
+measured. Three consequences fell out. `effect . rescue orders`,
+the sentence STATUS.md held up as the ruling's unbuilt point, is refused
+in chain position by the previous entry and spelled `effect .? orders`,
+which works. The enumerable fusion no longer needs its piped copy for a
+plain chain: `xs . list/map f . list/length` is the prefix chain now and
+fuses through the plain path, where before it took `try_fuse_piped`'s
+`is_desc` test and a second copy of the chain. And the beat reads the
+piped node as the loop step it always was, since only `.>` makes one.
+
+**A box where a value is expected is refused.** `check_box_where_value`
+reads infer's return sets the way the none check does. A box is provable
+when a group's joined return set holds the description bit and no value
+bit, when a `.>` step's subject is one, when the expression is a wall, or
+when a constant holds one — `os/args`, `math/random 6`, `io/write "x"`.
+Handing one to an operator, an index, a field read, `if`'s condition, a
+builtin that reads values, or a group none of whose arms binds anything at
+that position is refused with one sentence: `this is an effect — a box the
+words open — and `length` takes a value; open it with `.>``, the reader
+named. Holding is not opening, so a parameter that binds anything takes the
+box (`held e` above), `print` and an interpolation render it as `<io>`,
+`is_desc` asks about it, `push` and `put` store it, and `err` and
+`wrap_err` carry it as a reason. A name the declaration binds itself is that
+binding whatever declaration shares its spelling: the first cut refused
+`length args` in scripts/welfare, where `args` is a parameter and the
+constant it shadows is `os/args`.
+
+**What the tree said.** Under the check, every scripts/ directory, hako,
+the library tests, the golden corpora and the play files (through `kanso
+play`) answered twelve refusals, all deliberate: eleven runtime fixtures
+that hand a description to an operator, an index, a field, `if` or a
+comparison to pin the runtime's sentence, and one micro fixture handing
+one to `push`. `push` holds, so that one passes as written. The eleven
+now route the box through a list — `opaque v` answers `(push [] v)[1]!`,
+and a strict index is every value but a thunk, which no check can call a
+box — so the runtime sentences they pin stay pinned on every engine, and
+the errors corpus gains `a_box_where_a_value_is_expected`: six readers
+refused in one file, and the two holders that pass beside them.
+
+**What moved.** `emitted_code`, and down: a plain-dot step over a value
+used to lower through the piped node's runtime test of its subject, and
+it is a direct call now. `escapebench` defines 51 → 48, calls 117 → 106,
+branches 122 → 120, lines 1,638 → 1,584; `scanbench` defines 336 → 331,
+calls 3,280 → 3,265, branches 2,143 → 2,136, lines 19,922 → 19,821;
+`indexbench` defines 57 → 54, calls 158 → 146, branches 139 → 135, lines
+1,954 → 1,893; `runbench` defines 597 → 594, calls 5,981 → 5,968, branches
+3,481 → 3,474, lines 34,979 → 34,905. These are this branch's sitting on
+3c1b9e59; an earlier draft carried the same deltas read against an older
+main, and the deltas are what transfer. The decoder's row and the other nine
+are byte-identical, and the twelve cost veins and the lazy tier agree with
+their goldens: the runtime work is the same because the test those defines
+carried always answered the same way. The host-keyed compile rows are
+CI's to measure; parser.rs and check.rs both change.
+
+**Spec.** `tests/golden/micro/a_plain_dot_hands_the_box_over.kso` on native
+and the oracle: `math/random 6 . held` rendered as `held <io>`, the same
+box bound with `.>` after the plain step, and a missing file's read handed
+through `held` and rescued with `.?`. The error fixture above. The eleven
+runtime fixtures, rewritten, and the pre-change binary's answers on the
+micro fixture and the error fixture are the watched-red half.
+
+**Owed.** The `<t>effect` spelling, which the canonical-spacing rule refuses
+today; ch04 and ch05, per the ledger's "The book teaches the boundary
+language"; and the drop question the gavel filed.
+
+---
+
 ## 2026-09-11 — the ledger forked onto feature branches, and the queue's three language rows wait on one branch
 
 **design/pending-gavels.md had an empty Blocking section on main while two
