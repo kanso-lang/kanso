@@ -3396,6 +3396,36 @@ twice since, at #1330 for the entry row and #1337 for the library row, and
 `compile_allocs` stays deliberately red this round, and round two prints the
 number this one could only have guessed.
 
+**Round two read the number, and found four refusals beside it.**
+`compile_allocs` 29,262 -> 29,276 (+14, +0.0478%): the root's own String and
+the set of declared bare types, paid once per compile. That row compared. The
+four beside it did not. Rounds two and three landed on a runner whose
+toolchain the goldens do not name, and `library_instructions` says so in its
+own words -- "the sitting above was counted on a toolchain
+bench/library_instructions_golden.txt does not name, so it is not a
+reproduction of the recorded build and says nothing about the value". The
+tell is arithmetic rather than prose: `compile_instructions` measured
+48,866,385 against a golden holding 48,866,385 and still failed, and
+`entry_instructions` and `library_instructions` did the same. A gate whose
+measured value equals its golden and still fails is refusing, not
+disagreeing.
+
+Which gates refuse follows from what each golden names.
+`bench/instructions_golden.txt` names glibc; the three compile-instruction
+goldens name glibc and rustc; `compile_allocs` and `compile_memory` name
+rustc alone. Every glibc-keyed gate refused on this runner and both
+rustc-keyed gates compared, which is the split the measured-on machinery is
+for. So the work vein did not move: `deepbench` 389,214,251 and `runbench`
+2,369,917,611 are that runner's sitting, not a regression, and
+`bench/instructions_golden.txt` is left alone.
+
+Round one landed on a runner the goldens do name -- its three compile rows
+came back as real comparisons, "counted X against Y", and those are the rows
+copied above. The refusal is not this change's and no edit here can clear it:
+the remedy the gate names is to re-measure every row on the new image in one
+go and update the measured-on lines, which is its own change and not a ruling
+this PR should fold in.
+
 `tests/the_job_log_prints_every_got_file.rs` pins the property rather than
 the glob: every `*_got.txt` any script under scripts/gates writes must be one
 the printing step will cat. Watched red with the hand list restored, where it
