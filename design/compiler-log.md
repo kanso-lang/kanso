@@ -3336,3 +3336,12 @@ The four escape fixtures are in the error corpus with their imported twins.
 The diagnostic scan reads 313, none newly unpinned; the message is the one
 July wrote, since a parameter is still not a construction made in the
 block.
+
+**Veins.** CI's sitting on the host-keyed compile rows, copied in:
+`compile_instructions` 48,820,126 -> 48,820,567 (+441, +0.0009%),
+`entry_instructions` 162,734,847 -> 162,736,962 (+2,115, +0.0013%),
+`library_instructions` 163,022,357 -> 163,024,919 (+2,562, +0.0016%). The
+cohort walk is a few hundred instructions more than the set walk on every
+build block the corpus compiles, and the three routes carry the same
+checker. `compile_allocs` and `compile_peak_bytes` did not move; nothing on
+the runtime side did. Welfare holds the floor to the fourth place.
