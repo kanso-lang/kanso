@@ -57055,3 +57055,60 @@ check for that is to read the line back.
 Nothing in ci.yml moves. The three gates already run there, and the spec rides in
 the specs job with every other `cargo test`.
 
+## 2026-09-08 (fourth) — the entry path's reorder costs a diagnostic, and is reverted
+
+Searched the log, the archive and design/ before filing: the 2026-09-08 entry
+above records the same reorder on the MODULE path (kanso#1328), and kanso#1120
+records the rule this breaks — a module is named the way an import writes it.
+Neither anticipates the interaction.
+
+**REVERTED.** `compile_parsed_entry` has the same ordering kanso#1328 fixed on
+the module path, and moving its alias pass in front of the whole-program check
+is worth 1,674,396 instructions. It also renames a diagnostic, so it does not
+ship in that shape.
+
+The measurement first, because it is real and the idea is worth returning to.
+`enroll_bare` is called at src/lib.rs:2477, inside `load_dependencies`, so
+`dep_program` carries a synthetic twin for every exported declaration of every
+import — and both paths merge that program. On the entry path the twins landed
+in `merged`, `check_merged` walked them, and `canonicalize_bare_aliases` deleted
+them four lines later. Hoisting the two canonicalize calls out of the success
+arm reads, in the box:
+
+    entry_instructions   165,184,791 -> 163,510,395   -1,674,396  (-1.0136%)
+
+and CI counted 162,218,854 against the container on the same tree, the two boxes
+0.79% apart where the module row sits 0.81% apart on that pair.
+
+**What it costs.** `scripts/module_differential` went from 0 wrong to 2:
+
+    a call from the entry at the wrong arity
+      refused, but not with 'error[arity]: no 2-argument arm of `one` (arms take 1)':
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
+
+The alias pass rewrites a bare reference to its qualified spelling, so once it
+runs before the check, the arity refusal quotes `m/one` where the program says
+`one`. That is a diagnostic naming a spelling the user did not write, which
+kanso#1120 settled the other way, and it is a worse trade than a per-cent of
+compile work is worth. Reverting the reorder alone takes the differential back
+to 0 wrong, which is what says the reorder is the whole cause.
+
+The module path does not have this problem because a dependency's own call
+sites are already qualified by the time they are merged; the entry's are the
+ones the user wrote. That asymmetry is why one of the two reorders shipped.
+
+**A GREEN SUITE SAID NOTHING ABOUT IT, and the reason is worth having.** Before
+pushing I ran the error corpus, both micro corpora, the .mem vein and
+tests/reexports.rs, all green, and reported that as the correctness evidence.
+`scripts/module_differential` is a kanso program run by the diagnostics-
+differential CI job; `cargo test` does not run it, so no amount of the suite
+would have found this. It is the same shape as the page gates — a check that
+lives outside the harness a session reaches for by habit. The nine differential
+sweeps each have this property.
+
+What would make the reorder shippable is deciding what the arity refusal should
+quote when the pass that rewrote the name has already run: either the check
+reads the pre-canonical spelling, or the pass records what it rewrote. That is a
+design question about diagnostics rather than about ordering, and it is where
+this thread now sits.
+

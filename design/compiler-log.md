@@ -20,63 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 (fourth) — the entry path's reorder costs a diagnostic, and is reverted
-
-Searched the log, the archive and design/ before filing: the 2026-09-08 entry
-above records the same reorder on the MODULE path (kanso#1328), and kanso#1120
-records the rule this breaks — a module is named the way an import writes it.
-Neither anticipates the interaction.
-
-**REVERTED.** `compile_parsed_entry` has the same ordering kanso#1328 fixed on
-the module path, and moving its alias pass in front of the whole-program check
-is worth 1,674,396 instructions. It also renames a diagnostic, so it does not
-ship in that shape.
-
-The measurement first, because it is real and the idea is worth returning to.
-`enroll_bare` is called at src/lib.rs:2477, inside `load_dependencies`, so
-`dep_program` carries a synthetic twin for every exported declaration of every
-import — and both paths merge that program. On the entry path the twins landed
-in `merged`, `check_merged` walked them, and `canonicalize_bare_aliases` deleted
-them four lines later. Hoisting the two canonicalize calls out of the success
-arm reads, in the box:
-
-    entry_instructions   165,184,791 -> 163,510,395   -1,674,396  (-1.0136%)
-
-and CI counted 162,218,854 against the container on the same tree, the two boxes
-0.79% apart where the module row sits 0.81% apart on that pair.
-
-**What it costs.** `scripts/module_differential` went from 0 wrong to 2:
-
-    a call from the entry at the wrong arity
-      refused, but not with 'error[arity]: no 2-argument arm of `one` (arms take 1)':
-      error[arity]: no 2-argument arm of `m/one` (arms take 1)
-
-The alias pass rewrites a bare reference to its qualified spelling, so once it
-runs before the check, the arity refusal quotes `m/one` where the program says
-`one`. That is a diagnostic naming a spelling the user did not write, which
-kanso#1120 settled the other way, and it is a worse trade than a per-cent of
-compile work is worth. Reverting the reorder alone takes the differential back
-to 0 wrong, which is what says the reorder is the whole cause.
-
-The module path does not have this problem because a dependency's own call
-sites are already qualified by the time they are merged; the entry's are the
-ones the user wrote. That asymmetry is why one of the two reorders shipped.
-
-**A GREEN SUITE SAID NOTHING ABOUT IT, and the reason is worth having.** Before
-pushing I ran the error corpus, both micro corpora, the .mem vein and
-tests/reexports.rs, all green, and reported that as the correctness evidence.
-`scripts/module_differential` is a kanso program run by the diagnostics-
-differential CI job; `cargo test` does not run it, so no amount of the suite
-would have found this. It is the same shape as the page gates — a check that
-lives outside the harness a session reaches for by habit. The nine differential
-sweeps each have this property.
-
-What would make the reorder shippable is deciding what the arity refusal should
-quote when the pass that rewrote the name has already run: either the check
-reads the pre-canonical spelling, or the pass records what it rewrote. That is a
-design question about diagnostics rather than about ordering, and it is where
-this thread now sits.
-
 ## 2026-09-08 (fifth) — the entry path compiles and nothing counted it
 
 Searched the log, the archive and design/ before filing: `compile_parsed_entry`
@@ -3783,3 +3726,94 @@ Welfare 66.42 held and re-set: the objective's compile term sums the three rows,
 so it takes the whole 1,220,025, and the rise is under a hundredth of a point.
 Five compiler.html spans quoting the three rows were rewritten by
 `golden_prose --write`.
+## 2026-09-10 — a record built into its own first field
+
+Found while writing a mem fixture for the carry tier: a loop that chains
+records, `grow (node n i) (i + 1)`, came out cyclic on native and correct on
+the oracle, on main as on the branch. The emitter builds a constructor into
+a record the arm has finished with — `shift (n - 1) (point (p.x + 1) p.y)`
+reads every field it needs before the constructor runs, so by then `p` is
+done with and its storage is free — and `sole_finished_record` judged
+finished by counting mentions: the parameter read in this constructor's
+arguments and nowhere else in the arm, and handed over by every caller. A
+bare mention counted as a read. `node n i` mentions `n` once, in the
+constructor, and every caller hands it over; the emitter passed it to
+`k_rec_reuse` as the victim, and the runtime overwrote the victim's fields
+with arguments the first of which was the victim. The new node's `next`
+pointed at its own storage, and `show` walked it until the stack ran out.
+
+**The fix** is in the analysis. Finished means read from, and a field read
+is the only read that leaves nothing behind: `field_reads_in` counts the
+mentions that are the base of a `var.x`, and a parameter whose mentions in
+the arguments are not all field reads is not a victim. A bare mention stores
+the record itself, whether directly or inside another constructor, and a
+record something is about to hold is not free. The runtime is unchanged;
+`k_rec_reuse` still trusts its caller, which is the arrangement the
+2026-09-04 attribution (k_rec 30.39% of pendbench) chose.
+
+The first cut of that rule declined every reuse in the tree — basket's
+`sh_rec` 130,192 -> 386,192, `record_reuse_shape`'s 4,006 allocations back
+where 3 had been — and the reason is worth a line for the next pass written
+against this AST. `desugar_field_reads` runs before the linear analysis,
+and after it there is no `Expr::Field` anywhere: `p.x` is `Get_x p`, the
+getter applied to the record. A count of `Expr::Field` reads zero on every
+program. `field_reads_in` reads both spellings now, the getter application
+by `getter_field` on the head's name, and the veins agree.
+
+One site in the tree was the defect's shape and never showed it.
+lib/json/scan.kso's `fail p reason` builds `err (parse_failure p reason)`,
+and `reason` — mentioned once, bare, in the constructor's arguments, handed
+over by every caller — was the victim at that site. It is a string at every
+call, and `k_rec_reuse` allocates fresh when the victim is not a record of
+the constructor's width, so the program was right by the runtime's guard
+rather than by the analysis; a caller passing a two-field record as the
+reason would have built the failure into its own `reason` field. The site
+emits `k_rec` now, which is the one line the emitted veins lose.
+
+**Spec.** `tests/golden/micro/a_loop_that_chains_records_keeps_each_node`
+on all three engines, `3>2>1>0>end`; watched red on native (the stack ran
+out) with the oracle green before the fix, both green after.
+
+**Cost.** None at run time: `all_counters.sh` reads the twelve cost veins
+and the lazy tier agreeing with their goldens, and welfare holds at 66.31.
+The emitted veins each lose the `k_rec_reuse` line at lib/json's `fail`,
+landed at: emitted_lines 9,135 (from 9,136), and in the others vein
+encodebench 11,142, oneshot 9,064, widebench 12,124, pendbench 7,033,
+scanbench 19,728, livebench 9,181 and runbench 34,673 lines, one fewer
+each; defines, calls and branches hold, because the `k_rec_reuse` declare
+that goes is not a define and its call is replaced by a `k_rec` call. The
+six host-keyed compile rows are refused on this container and copied from
+CI's sitting.
+
+**CI's five host-keyed rows, and what each one says.** The container refuses
+five of the veins this change moves, so round one was red on all five and CI's
+sitting is what lands. Two go down and three go up.
+
+The runtime rows fall in four of fourteen programs and hold in ten: basket
+34,690,245 -> 34,690,216 (-29), pendbench 583,758,224 -> 583,755,724 (-2,500),
+scanbench 726,019,079 -> 726,018,879 (-200), runbench 2,367,877,484 ->
+2,367,876,664 (-820). Machine code falls in nine and holds in five, jsonbench
+100,434 -> 100,130 the largest at -304. NINE against the emitted vein's EIGHT:
+basket loses sixteen bytes of text without losing an emitted line, because the
+`k_rec_reuse` declare it drops was already text some other program shared.
+
+The three compile rows RISE, together and by nearly the same fraction:
+compile_instructions 48,393,437 -> 48,412,144 (+18,707, +0.0387%),
+entry_instructions 161,314,264 -> 161,360,451 (+46,187, +0.0286%),
+library_instructions 162,023,537 -> 162,069,092 (+45,555, +0.0281%). That is
+the price of the answer. `sole_finished_record` used to count mentions, which
+costs nothing; `field_reads_in` asks of each mention whether it is the base of
+a field read, which walks. Every compile route runs the linear pass, so all
+three rows move, and a per-declaration check that moves them by the same
+fraction is what a uniform cost looks like.
+
+**The trade, and the objective's verdict.** A rise anywhere is a thing to
+state rather than defend, and this one is real: the compiler does 110,449 more
+instructions summed across the three routes to buy 3,549 fewer at run time on
+the four programs that reach the shape. Stated that way it sounds like a bad
+bargain, and by the raw counts it is. The objective disagrees, because the
+counts are not what it weighs: welfare reads **66.42 against a floor of 66.42,
+held exactly**, since a 0.03% rise on a compile term measured in hundreds of
+millions moves the saturating curve by less than the floor's own precision.
+The change is a MISCOMPILATION fix besides — a program that came out cyclic
+now does not — and that is not a term the objective has at all.

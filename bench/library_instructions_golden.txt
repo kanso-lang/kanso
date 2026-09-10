@@ -128,4 +128,11 @@
 # entry row move together again -- 0.3188% against 0.3228% -- which is the pair
 # these notes keep recording: the two corpora are the same shape and both merge
 # a dependency program before checking it.
-library_instructions=162023537
+# 2026-09-10 (a constructor no longer builds into a record it is about to
+# hold): CI's sitting, 162,023,537 -> 162,069,092 (+45,555 / +0.0281%).
+# src/linear.rs asks `field_reads_in` of every mention a candidate
+# constructor makes, where counting mentions asked nothing; the walk is
+# the price of the answer. The three compile rows rise together and by
+# nearly the same fraction, which is what a per-declaration check looks
+# like when every route runs it.
+library_instructions=162069092

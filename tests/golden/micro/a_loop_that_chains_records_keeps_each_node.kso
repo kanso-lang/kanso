@@ -1,0 +1,23 @@
+# A loop that builds a chain of records, each new node holding the one
+# before it. The emitter may build a constructor into a record the arm has
+# finished with, and the previous node looked finished here: read once, in
+# this constructor, and handed over by every caller. It is not finished --
+# it is the new node's first field -- and building into its storage made
+# the chain point at itself. On native the walk below never reached the
+# end; the oracle answered `3>2>1>0>end` all along.
+type node
+  next
+  i
+
+fn grow n i
+  if (i > 3) n (grow (node n i) (i + 1))
+
+fn show 0
+  "end"
+
+fn show n
+  "{n.i}>{show n.next}"
+
+chain = grow (node 0 0) 1
+
+pub play = print (show chain)
