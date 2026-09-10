@@ -1166,6 +1166,11 @@ declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_call2(%KValue, %KValue, %KValue)
 declare %KValue @k_call3(%KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_call4(%KValue, %KValue, %KValue, %KValue, %KValue)
+declare %KValue @k_partial0(%KValue)
+declare %KValue @k_partial1(%KValue, %KValue)
+declare %KValue @k_partial2(%KValue, %KValue, %KValue)
+declare %KValue @k_partial3(%KValue, %KValue, %KValue, %KValue)
+declare %KValue @k_partial4(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
 declare %KValue @k_b_filter(%KValue, %KValue)
@@ -4296,22 +4301,11 @@ impl<'a> Backend<'a> {
             seen.dedup();
             seen
         };
-        // Two different things emptied that list, and one message spoke for
-        // both. A name no declaration answers to is not a mistake here — the
-        // front door refuses an unknown name before this runs — so what is
-        // left is a name bound to a VALUE: a parameter holding a function, a
-        // local, a builtin, a record's constructor. The interpreter takes a
-        // partial over a value and settles its arity when the arguments
-        // arrive; `tests/partial.rs` specifies that. This backend writes a
-        // closure whose parameter count is fixed where the closure is, so it
-        // cannot. Saying "no `f` takes more" put that on the program.
-        if !self.program.fns.iter().any(|d| d.name == name) {
-            return Err(format!(
-                "native backend: `{name}` is a value here, and a partial over a value settles \
-                 its arity when its arguments arrive — this backend fixes it where the closure \
-                 is written"
-            ));
-        }
+        // A name no declaration answers to is a VALUE here — a parameter
+        // holding a function, a local, a builtin, a record's constructor —
+        // and the callers route that to `emit_partial_value` before asking
+        // for a lambda, so what reaches this point is a declared group.
+        debug_assert!(self.program.fns.iter().any(|d| d.name == name));
         // Currying past every arm is the one real error: `&` supplies without
         // running, so supplying an arm's last argument is a partial like any
         // other — the value waits to be called rather than being a call. What
@@ -4346,11 +4340,51 @@ impl<'a> Backend<'a> {
         Ok(Expr::Lambda { params, body: Box::new(body), span })
     }
 
+    /// Whether a name is a declared group, which is what decides how `&` over
+    /// it lowers: a group's arities are known here, a value's are not.
+    fn declared(&self, name: &str) -> bool {
+        self.program.fns.iter().any(|d| d.name == name)
+    }
+
+    /// `&f 2` where `f` is a VALUE — a parameter, a local, a builtin handed
+    /// out, a constructor. Its arity is settled when the arguments arrive,
+    /// which is the interpreter's rule and one a lambda cannot follow, since a
+    /// lambda fixes its count where it is written. The runtime holds the
+    /// callee and the supplied arguments in a body-less closure and settles
+    /// the count at each call; `k_partial{n}` builds one.
+    fn emit_partial_value(
+        &mut self,
+        f: &mut FnEmit,
+        name: &Name,
+        supplied: &[Expr],
+        span: Span,
+    ) -> Result<String, String> {
+        let callee = self.emit_expr(f, &Expr::Ident(name.clone(), span))?;
+        let mut held: Vec<String> = Vec::new();
+        for a in supplied {
+            held.push(self.emit_expr(f, a)?);
+        }
+        let n = held.len();
+        if n > 4 {
+            return Err(format!(
+                "native backend: a partial over a value holds at most 4 arguments, got {n}"
+            ));
+        }
+        let arg_ir: String = held.iter().map(|v| format!(", %KValue {v}")).collect();
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue @k_partial{n}(%KValue {callee}{arg_ir})"));
+        f.record(&t, TOP);
+        Ok(t)
+    }
+
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
             // the interpreter is the oracle for `&`; the backends reject it out
             // loud rather than lowering something that would diverge
             Expr::Partial(name, span) => {
+                if !self.declared(name) {
+                    return self.emit_partial_value(f, name, &[], *span);
+                }
                 let lambda = self.partial_lambda(name, &[], *span)?;
                 self.emit_expr(f, &lambda)
             }
@@ -4612,15 +4646,24 @@ impl<'a> Backend<'a> {
                 // call it means. Dispatch then happens on the total count, which
                 // is what the oracle does and what makes `(&roll 4) 5 6` reach
                 // the three-argument arm rather than any arm chosen at the `&`.
+                // A partial over a VALUE is not flattened: its arity is
+                // the callee's at run time, so the held arguments build the
+                // runtime partial and the rest reach it through `k_call`,
+                // which is where the count is settled.
                 if let Expr::App { head: inner, args: held, .. } = head.as_ref() {
                     if let Expr::Partial(name, nspan) = inner.as_ref() {
-                        let mut all = held.clone();
-                        all.extend(args.iter().cloned());
-                        let callee = Expr::Ident(name.clone(), *nspan);
-                        return self.emit_call_full(f, &Box::new(callee), &all, *piped, *span);
+                        if self.declared(name) {
+                            let mut all = held.clone();
+                            all.extend(args.iter().cloned());
+                            let callee = Expr::Ident(name.clone(), *nspan);
+                            return self.emit_call_full(f, &Box::new(callee), &all, *piped, *span);
+                        }
                     }
                 }
                 if let Expr::Partial(name, _) = head.as_ref() {
+                    if !self.declared(name) {
+                        return self.emit_partial_value(f, name, args, *span);
+                    }
                     let lambda = self.partial_lambda(name, args, *span)?;
                     return self.emit_expr(f, &lambda);
                 }

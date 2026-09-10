@@ -1,0 +1,11 @@
+# A partial over a VALUE handed more arguments than any arm of its callee
+# takes. Nothing can finish it, and the sentence names the arities that
+# exist — the interpreter's, now said by native and the page too (RULED
+# 2026-08-29, "the backends build the partial over a value").
+fn plus a b
+  a + b
+
+fn over f
+  &f 1
+
+pub play = print "{(over plus) 2 3}"

@@ -1071,26 +1071,18 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
 }
 
 /// The page's half of the partial contract. `tests/partial.rs` holds the
-/// interpreter — the oracle runs a partial whose callee is a value and settles
-/// its arity when the arguments arrive — and the native backend, which
-/// declines it as a limit of its own. This is the third engine saying the same
-/// thing, so "the two backends decline it out loud" is a claim with a spec
-/// under it on both rather than on one.
+/// interpreter and native; this is the third engine running the program the
+/// two of them agree on (RULED 2026-08-29, "the backends build the partial
+/// over a value"). Until then the page declined it as a limit of its own, and
+/// this spec pinned the refusal.
 #[test]
-fn the_page_declines_a_partial_over_a_value_as_its_own_limit() {
+fn the_page_builds_a_partial_over_a_value() {
     let mut toolchain = Toolchain::load();
-    let said = match toolchain.run(
-        "of_param.kso",
-        "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\npub play = print \"{(foo add) 5 7}\"\n",
-    ) {
-        Answer::Declined(said) => said,
-        Answer::Ran(code, out) => panic!("the page ran it: {code} {out:?}"),
+    let program =
+        "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\npub play = print \"{(foo add) 5 7}\"\n";
+    match toolchain.run("of_param.kso", program) {
+        Answer::Ran(code, out) => assert_eq!((code, out.as_str()), (0, "14\n")),
+        Answer::Declined(said) => panic!("the page still declines it: {said}"),
         Answer::CompileError(said) => panic!("the front door refused it: {said}"),
-    };
-    assert!(
-        said.contains("`f` is a value here")
-            && said.contains("settles its arity when its arguments arrive"),
-        "the page did not name its own limit: {said}"
-    );
-    assert!(!said.contains("takes more"), "the refusal reads as the program's mistake: {said}");
+    }
 }

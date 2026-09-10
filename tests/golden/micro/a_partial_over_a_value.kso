@@ -1,0 +1,29 @@
+# RULED 2026-08-29, "the backends build the partial over a value": `&f 2`
+# where `f` is a parameter, a local or a lambda settles its arity when the
+# arguments arrive, on every engine. Until then native and the page refused
+# it as a limit of their own, because a partial lowered to a lambda has to fix
+# its count where it is written. The runtime keeps the callee and the held
+# arguments instead, and the count is settled at each call: equal dispatches,
+# short grows, and `()` runs what is complete.
+fn add a b c
+  a + b + c
+
+fn plus a b
+  a + b
+
+fn over f
+  &f 2
+
+fn twice f
+  &f 1 2
+
+pub play =
+  three = over add
+  two = over plus
+  grown = three 5
+  done = twice plus
+  sub = (a b -> a - b)
+  print "{three 5 7} {two 40}"
+  print "{grown 7}"
+  print "{done()} {three}"
+  print "{(&sub 10) 3}"

@@ -126,24 +126,6 @@ arm has always been the way the language works." The flag comes out; the
 group-level return set the campaign's last report blamed is the
 implementer's to sharpen.
 
-### The backends build the partial over a value (2026-08-29)
-
-The archive entry of that name, Clay: "BUILD IT." On 2026-09-09
-src/codegen.rs still refuses with "native backend: `name` is a value here,
-and a partial over a value settles its arity when the arguments arrive", and
-src/wasm_backend.rs carries the same refusal. The correction entry beneath
-the gavel is the rule for every row here: a feature the language has
-admitted is finished on every engine, or the decision was not made.
-
-"Arms travel with the type, under the ownership rule" (2026-08-29) was probed
-the same way and is built: a module declaring `type money` and `to_string
-m:money` renders `¥350` in an importer that wrote no arm. Everything else
-ruled between 2026-08-15 and 2026-09-08 was checked: the rest is either
-built (the bang chooses the channel, one row one value, the consolidated run
-program, the whole-float rendering, clang 19, the fixed compile corpus, the
-epoch table, page_drift, inf and nan) or closes a question with nothing to
-build.
-
 ### The book teaches the boundary language (queued P1, 2026-08-26)
 
 Held in the ledger's "Open, not blocking" until the effect type exists; the

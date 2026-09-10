@@ -20,45 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 — a projection off one box carries no sign
-
-The `builtin_` fix went to CI three times and the compile-instructions row said
-something different each time. Worth writing down, because the reasoning that
-produced the wrong prediction was not careless.
-
-Round one asked for the slash in front of the `BUILTINS` lookup:
-
-    name.strip_prefix("builtin_").filter(|_| !name.contains('/'))
-
-CI read 50,691,635 against a golden of 50,685,288 — a rise of **6,347**. That
-one is real work, and the diagnosis was easy: every builtin reference the
-standard library makes now scans its own name for a slash, and the library makes
-a great many.
-
-Round two moved the question onto the refusing arm, which a correct program
-never reaches. The container this was written on read 51,095,253 for that shape
-and 51,095,253 for the round-one shape — identical, to the instruction. Two
-source shapes that measure the same locally, with the work provably removed from
-the hot path, and the container's own delta against its baseline was a rise of
-**629**. So the residue was called irreducible layout and the PR body said the
-fix costs 629 instructions.
-
-CI read 50,684,921. A **fall of 367**.
-
-The magnitude was about right and the sign was backwards. Layout is a property of the toolchain and
-the host — this container is rustc 1.94.1 on glibc 2.39, the goldens are measured
-on 1.98.1 — and a layout residue measured on one box says nothing about the same
-residue on another. The correct reading of the local measurement was that the
-6,347 was gone and the remainder was unpredictable; instead it was read as a
-number.
-
-`bench/compile_instructions_golden.txt` is regenerated to 50,684,921 and the two
-`data-golden="compile.compile_instructions"` spans on the compiler page follow
-it. The rule already in CLAUDE.md — project a compile-instructions move from CI
-or take the red round, never write down that it moved before CI has said so —
-now has this as its worked example, and the sign is the part it costs a round to
-learn.
-
 ## 2026-09-08 — the whole-program check ran over declarations the next pass deletes
 
 `enroll_bare` gives every exported declaration of every imported module a twin
@@ -3478,3 +3439,79 @@ would pin a glibc package revision into the floor, so a pool that rolled back
 would read fractionally under it and redden CI for a reason no pull request
 caused. The rule that a rise is banked is for a gain a change earned; this one
 is left where it is, said out loud here rather than passed over.
+
+
+## 2026-09-09 — the backends build the partial over a value
+
+Built: the 2026-08-29 ruling "the backends build the partial over a value"
+(STATUS.md, now removed; the archive entry of that name, Clay: "BUILD IT").
+`&f 2` where `f` is a parameter, a local or a lambda settles its arity when
+the arguments arrive, on every engine. Until now native and the page refused
+it as a limit of their own — "`f` is a value here, and a partial over a
+value settles its arity when its arguments arrive — this backend fixes it
+where the closure is written" — because both lowered a partial to the lambda
+it is equivalent to, and a lambda fixes its parameter count where it is
+written. tests/partial.rs and tests/wasm_engine.rs each pinned that refusal
+as a limit rather than a judgement about the program; both specs are flipped
+to agreement with the oracle.
+
+**Native.** A partial over a value is a closure with no body: `arity` is -1,
+which marks it, and the environment holds the callee first and the held
+arguments after it, `ncaps` counting both, so the copy and tenure walks that
+size an environment by `ncaps` carry it unchanged. `k_partial0..4` build one
+— `&f a b` evaluates the callee and then each argument and the first failure
+among them is the answer, callee first, the interpreter's order in its
+App-with-Partial arm; a bare `&f` wraps whatever `f` holds. `k_call0..4`
+gain one branch in front of their arity test: a body-less closure gathers
+held and fresh, asks the callee's arity (a closure's field, a fnref's field,
+anything else answers nothing, which is what the interpreter's `arities_of`
+answers for a partial over a partial or a value that is not callable), and
+dispatches through `k_callN` when the count is an arm's, grows when it is
+short, and dies past every arm with the oracle's sentence, `no 3-argument
+arm of `<fn>` (arms take 2)`. `()` on one runs it or says how many it is
+short by, `this function takes 1 argument(s), got 0`, zero when it holds
+more than the callee takes, as the oracle says it. `k_call_decided` routes
+a partial to `k_call1` for the same reason the oracle's decided path reaches
+`call`. The emitter's inlined fast arm tests `arity == n` before it calls,
+so a partial never reaches a body through it and the hot path is
+byte-identical: `all_compile.sh` on the branch reads nothing moved that this
+host can see, and `all_counters.sh` agrees to the counter.
+
+**The emitter.** `partial_lambda` no longer refuses a value; the two call
+sites that reach it — `Expr::Partial` and an application whose head is one
+— ask `declared` first and route a value to `emit_partial_value`, which
+emits the callee as a value, the supplied arguments, and one call to
+`k_partial{n}`. The flattening of `(&f 2) 5` into one call, which is right
+for a declared group because dispatch happens on the total count, is kept
+for groups only: over a value the total is the callee's to settle at run
+time, so the held arguments build the partial and the rest reach it through
+`k_call`, which is where the count is settled.
+
+**The page.** `rt_partial` builds a slot the same shape — `Slot::C` with a
+`PARTIAL` arity of -4, the environment holding the callee and the held
+arguments — and `call_closure` and `call_decided` route it to
+`partial_apply`, the interpreter's `apply_partial` and `run_partial` in one
+function. A group or builtin handed out as a value used to carry arity -1,
+which told a partial nothing about when it was finished, so the wrapper
+now carries the counts its arms take as a mask below `MASKED_ARITY`
+(-1000): `arities_of` reads the bits back, a lambda answers its one count,
+and a partial or a cell answers nothing. `call_closure`'s own arity test
+reads `arity >= 0`, so a masked wrapper still dispatches on the count it is
+handed, as it did.
+
+**Spec.** `tests/golden/micro/a_partial_over_a_value.kso` runs on all three
+engines: a parameter holding a three-arm group finished in one call and in
+two steps, a two-arm group, `()` on a complete partial, a partial rendered
+as `<fn>`, and a lambda held in a local as the callee. Two runtime fixtures
+pin the two sentences on native and the oracle:
+`a_partial_over_a_value_past_every_arm` and `a_partial_over_a_value_run_short`.
+tests/partial.rs gains the four run-time shapes on both engines, and the
+page's flipped spec runs the program the two of them agree on and reads
+`14`. The two refusal sentences leave the diagnostic scan.
+
+**The page's call head, met on the rebase.** The page had declined any call
+whose head is not a name, a keyword or a lambda with `unsupported call head`,
+which is exactly the shape a partial over a value arrives in: `(foo add) 5
+7`, a call whose answer is the callee. The backend now computes any such head
+as a value and calls it, the runtime naming what it cannot call, so the two
+page specs and the runtime fixture run on the third engine.

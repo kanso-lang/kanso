@@ -90,6 +90,12 @@ const RT_RESCUE: u32 = 42;
 const RT_ANNOTATE: u32 = 43;
 /// An err's three readers, at a reader getter's entry.
 const RT_ERR_READ: u32 = 44;
+/// `&f 2` over a VALUE: the callee and the held arguments go to the host,
+/// which settles the count when the rest arrive.
+const RT_PARTIAL: u32 = 45;
+/// A group handed out as a value carries every count its arms take, as bits
+/// below this base: `MASKED - mask`. Paired with `MASKED` in wasm_rt.
+const MASKED_ARITY: i64 = -1000;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -138,6 +144,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_rescue", params: 2, returns: true },
         Import { name: "rt_annotate", params: 3, returns: true },
         Import { name: "rt_err_read", params: 2, returns: true },
+        Import { name: "rt_partial", params: 2, returns: true },
     ]
 }
 
@@ -187,19 +194,9 @@ fn partial_lambda(
         .collect();
     arities.sort_unstable();
     arities.dedup();
-    // The same two things emptied this list, and the same one message spoke
-    // for both — see the note in codegen.rs. A name no declaration answers to
-    // is refused at the front door, so what reaches here is a name bound to a
-    // VALUE, and a partial over a value settles its arity when the arguments
-    // arrive. The interpreter does that and `tests/partial.rs` specifies it;
-    // a closure fixes its count where it is written.
-    if !program.fns.iter().any(|d| d.name == name) {
-        return Err(format!(
-            "browser backend: `{name}` is a value here, and a partial over a value settles \
-             its arity when its arguments arrive — this backend fixes it where the closure \
-             is written"
-        ));
-    }
+    // A name no declaration answers to is a VALUE here, and the two callers
+    // route that to `emit_partial_value` before asking for a lambda.
+    debug_assert!(program.fns.iter().any(|d| d.name == name));
     // `&` supplies without running, so an arm's last argument is a partial
     // like any other and the value waits to be called. Only more arguments
     // than any arm accepts is unfinishable.
@@ -726,9 +723,32 @@ impl<'a> WasmBackend<'a> {
         Ok(())
     }
 
+    /// `&f 2` where `f` is a VALUE. The held arguments and the callee go to
+    /// the host, which keeps them in a partial slot and settles the count when
+    /// the rest arrive — the interpreter's rule, which a lambda cannot follow.
+    fn emit_partial_value(
+        &mut self,
+        ctx: &mut Ctx,
+        name: &Name,
+        supplied: &[Expr],
+        span: crate::diag::Span,
+    ) -> Result<(), String> {
+        for arg in supplied {
+            self.emit_expr(ctx, arg, false)?;
+            ctx.body.call(RT_ARG);
+        }
+        self.emit_expr(ctx, &Expr::Ident(name.clone(), span), false)?;
+        ctx.body.i32_const(supplied.len() as i64);
+        ctx.body.call(RT_PARTIAL);
+        Ok(())
+    }
+
     fn emit_expr(&mut self, ctx: &mut Ctx, expr: &Expr, tail: bool) -> Result<(), String> {
         match expr {
             Expr::Partial(name, span) => {
+                if !self.program.fns.iter().any(|d| d.name == *name) {
+                    return self.emit_partial_value(ctx, name, &[], *span);
+                }
                 let lambda = partial_lambda(self.program, name, &[], *span)?;
                 return self.emit_expr(ctx, &lambda, false);
             }
@@ -890,6 +910,19 @@ impl<'a> WasmBackend<'a> {
                     unreachable!()
                 };
                 let Expr::Partial(name, nspan) = inner.as_ref() else { unreachable!() };
+                // Over a VALUE the count is the callee's at run time, so the
+                // held arguments build the host's partial and the rest reach
+                // it through `rt_call`, which settles the count.
+                if !self.program.fns.iter().any(|d| d.name == *name) {
+                    for arg in args {
+                        self.emit_expr(ctx, arg, false)?;
+                        ctx.body.call(RT_ARG);
+                    }
+                    self.emit_partial_value(ctx, name, held, *nspan)?;
+                    ctx.body.i32_const(args.len() as i64);
+                    ctx.body.call(RT_CALL);
+                    return Ok(());
+                }
                 let mut all = held.clone();
                 all.extend(args.iter().cloned());
                 let callee = Expr::Ident(name.clone(), *nspan);
@@ -899,6 +932,9 @@ impl<'a> WasmBackend<'a> {
             }
             Expr::App { head, args, span, .. } if matches!(head.as_ref(), Expr::Partial(..)) => {
                 let Expr::Partial(name, _) = head.as_ref() else { unreachable!() };
+                if !self.program.fns.iter().any(|d| d.name == *name) {
+                    return self.emit_partial_value(ctx, name, args, *span);
+                }
                 let lambda = partial_lambda(self.program, name, args, *span)?;
                 return self.emit_expr(ctx, &lambda, false);
             }
@@ -1019,14 +1055,23 @@ impl<'a> WasmBackend<'a> {
                 let widx = self.builtin_wrapper(bare, arity)?;
                 ctx.body.i32_const(widx as i64);
                 ctx.body.i32_const(0);
-                ctx.body.i32_const(-1);
+                ctx.body.i32_const(MASKED_ARITY - (1i64 << arity));
                 ctx.body.call(RT_MKCLOSURE);
             }
             _ if self.program.fns.iter().any(|d| d.name == name) => {
                 let widx = self.fn_wrapper(name)?;
+                // The wrapper dispatches on the count it is handed, and a
+                // partial over it needs to know which counts finish it: the
+                // arities ride along as a mask below MASKED_ARITY.
+                let mask = self
+                    .program
+                    .fns
+                    .iter()
+                    .filter(|d| d.name == name)
+                    .fold(0i64, |m, d| m | (1i64 << d.params.len().min(30)));
                 ctx.body.i32_const(widx as i64);
                 ctx.body.i32_const(0);
-                ctx.body.i32_const(-1);
+                ctx.body.i32_const(MASKED_ARITY - mask);
                 ctx.body.call(RT_MKCLOSURE);
             }
             _ => return Err(format!("unsupported name `{name}`")),
@@ -1299,21 +1344,25 @@ impl<'a> WasmBackend<'a> {
         // position; it is an ordinary closure, built then applied. A value
         // keyword arrives the same way — inlining `list/map [1 2] none` puts
         // `none` where the callee goes — and the runtime names what it cannot
-        // call, which is the sentence the other two engines print.
+        // call, which is the sentence the other two engines print. A call
+        // whose answer is the callee, `(foo add) 5 7` with `foo` handing back
+        // a partial, is the same case once more: any head that is not a name
+        // is a value, computed and then called, and the runtime names what it
+        // cannot call.
         let keyword_head =
             matches!(head, Expr::Ident(n, _) if matches!(n.as_str(), "true" | "false" | "none"));
-        if keyword_head || matches!(head, Expr::Lambda { .. }) {
-            for arg in args {
-                self.emit_expr(ctx, arg, false)?;
-                ctx.body.call(RT_ARG);
+        let name = match head {
+            Expr::Ident(name, _) if !keyword_head => name,
+            _ => {
+                for arg in args {
+                    self.emit_expr(ctx, arg, false)?;
+                    ctx.body.call(RT_ARG);
+                }
+                self.emit_expr(ctx, head, false)?;
+                ctx.body.i32_const(args.len() as i64);
+                ctx.body.call(RT_CALL);
+                return Ok(());
             }
-            self.emit_expr(ctx, head, false)?;
-            ctx.body.i32_const(args.len() as i64);
-            ctx.body.call(RT_CALL);
-            return Ok(());
-        }
-        let Expr::Ident(name, _) = head else {
-            return Err("unsupported call head".to_string());
         };
         if ctx.scope.contains_key(name.as_str()) {
             for arg in args {

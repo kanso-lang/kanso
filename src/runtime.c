@@ -384,6 +384,8 @@ static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
 static KValue k_list_own(KValue* items, long long n);
 KValue k_call1(KValue f, KValue a);
+static KValue k_partial_apply(KClosure* p, long long n, KValue* fresh);
+static KValue k_partial_run(KClosure* p);
 KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps);
 KValue k_env_get(void* env, long long i);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
@@ -5021,6 +5023,7 @@ KValue k_call_decided(KValue f, KValue a) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity < 0) return k_call1(f, a);
         if (c->arity != 1) k_die_arity(c->arity, 1);
         return c->fn(c->env, a);
     }
@@ -6162,6 +6165,7 @@ KValue k_call0(KValue f) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity < 0) return k_partial_run(c);
         if (c->arity != 0) k_die_arity(c->arity, 0);
         return ((KValue(K_CLOSCC *)(void*))c->fn)(c->env);
     }
@@ -6178,6 +6182,7 @@ KValue k_call1(KValue f, KValue a) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity < 0) return k_partial_apply(c, 1, &a);
         if (c->arity != 1) k_die_arity(c->arity, 1);
         if (!k_not_failure(a)) return a;
         return c->fn(c->env, a);
@@ -6212,6 +6217,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity < 0) { KValue fresh[2] = { a, b }; return k_partial_apply(c, 2, fresh); }
         if (c->arity != 2) k_die_arity(c->arity, 2);
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         return ((KValue(K_CLOSCC *)(void*, KValue, KValue))c->fn)(c->env, a, b);
@@ -6230,6 +6236,7 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
+        if (cl->arity < 0) { KValue fresh[3] = { a, b, c }; return k_partial_apply(cl, 3, fresh); }
         if (cl->arity != 3) k_die_arity(cl->arity, 3);
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
@@ -6250,6 +6257,7 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
+        if (cl->arity < 0) { KValue fresh[4] = { a, b, c, d }; return k_partial_apply(cl, 4, fresh); }
         if (cl->arity != 4) k_die_arity(cl->arity, 4);
         if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
         if (!k_not_failure(c)) return c;
@@ -6265,6 +6273,119 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die_not_callable(f);
+    return k_none();
+}
+
+/* A partial over a VALUE: `&f 2` where `f` is a parameter, a lambda, a
+   builtin or a bound name rather than a declared group. The emitter cannot
+   lower it to a lambda, because a lambda fixes its parameter count where it
+   is written and this one settles it when the arguments arrive — the
+   interpreter's rule, which tests/partial.rs specifies. So it is a closure
+   with no body: arity -1 marks it, and the environment holds the callee
+   first and the arguments held so far after it, ncaps counting both. Every
+   dispatcher above tests arity before it calls, so a body-less closure never
+   reaches a call through the fast arm the emitter inlines; it arrives here.
+
+   A new call gathers held and fresh arguments and asks the callee's arity: a
+   closure's is its field, a fnref's its field, anything else — a partial
+   over a partial, a value that is not callable — answers nothing, which is
+   what the interpreter's arities_of answers, and the partial grows. Equal
+   dispatches through k_callN, which orders the failure tests the way the
+   oracle does; short grows; past it dies naming the arity, in the oracle's
+   words. `()` on one runs it or says how many it is short by. */
+static KValue k_partial_build(KValue callee, long long n, KValue* args) {
+    KClosure* c = k_alloc(sizeof(KClosure));
+    KValue* env = k_alloc(sizeof(KValue) * (1 + n));
+    env[0] = callee;
+    for (long long i = 0; i < n; i++) env[1 + i] = args[i];
+    c->fn = 0; c->env = env; c->ncaps = 1 + n; c->arity = -1;
+    KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
+}
+
+/* `&f a b` evaluates the callee and then each argument, and the first
+   failure among them is the answer, callee first — the interpreter's order
+   in its App-with-Partial arm. A bare `&f` wraps whatever `f` holds. */
+KValue k_partial0(KValue f) { return k_partial_build(f, 0, 0); }
+KValue k_partial1(KValue f, KValue a) {
+    if (!k_not_failure(f)) return f;
+    if (!k_not_failure(a)) return a;
+    KValue args[1] = { a };
+    return k_partial_build(f, 1, args);
+}
+KValue k_partial2(KValue f, KValue a, KValue b) {
+    if (!k_not_failure(f)) return f;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    KValue args[2] = { a, b };
+    return k_partial_build(f, 2, args);
+}
+KValue k_partial3(KValue f, KValue a, KValue b, KValue c) {
+    if (!k_not_failure(f)) return f;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(c)) return c;
+    KValue args[3] = { a, b, c };
+    return k_partial_build(f, 3, args);
+}
+KValue k_partial4(KValue f, KValue a, KValue b, KValue c, KValue d) {
+    if (!k_not_failure(f)) return f;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(c)) return c;
+    if (!k_not_failure(d)) return d;
+    KValue args[4] = { a, b, c, d };
+    return k_partial_build(f, 4, args);
+}
+
+/* The count a callee answers to, or -1 when it answers none: a partial
+   itself (arity -1 already), or a value that is not callable at all. */
+static long long k_callee_arity(KValue callee) {
+    if (callee.tag == K_CLOSURE) return ((KClosure*)(intptr_t)callee.payload)->arity;
+    if (callee.tag == K_FNREF) return ((KFnref*)(intptr_t)callee.payload)->arity;
+    return -1;
+}
+
+static KValue k_dispatch_n(KValue callee, long long n, KValue* args) {
+    switch (n) {
+        case 0: return k_call0(callee);
+        case 1: return k_call1(callee, args[0]);
+        case 2: return k_call2(callee, args[0], args[1]);
+        case 3: return k_call3(callee, args[0], args[1], args[2]);
+        case 4: return k_call4(callee, args[0], args[1], args[2], args[3]);
+    }
+    k_die("native backend: a function value takes at most 4 arguments");
+    return k_none();
+}
+
+static KValue k_partial_apply(KClosure* p, long long n, KValue* fresh) {
+    KValue* env = (KValue*)p->env;
+    KValue callee = env[0];
+    long long held = p->ncaps - 1;
+    long long total = held + n;
+    KValue* all = k_alloc(sizeof(KValue) * (total ? total : 1));
+    for (long long i = 0; i < held; i++) all[i] = env[1 + i];
+    for (long long i = 0; i < n; i++) all[held + i] = fresh[i];
+    long long arity = k_callee_arity(callee);
+    if (arity >= 0 && total == arity) return k_dispatch_n(callee, total, all);
+    if (arity >= 0 && total > arity) {
+        char t[24], a[24], said[128];
+        k_itoa(t, total);
+        k_itoa(a, arity);
+        snprintf(said, sizeof said, "no %s-argument arm of `<fn>` (arms take %s)", t, a);
+        k_die(said);
+    }
+    return k_partial_build(callee, total, all);
+}
+
+/* `p()`: the call the partial was built for, or the count it is still
+   short by — zero when it holds more than the callee takes, as the oracle
+   says it. */
+static KValue k_partial_run(KClosure* p) {
+    KValue* env = (KValue*)p->env;
+    long long held = p->ncaps - 1;
+    long long arity = k_callee_arity(env[0]);
+    if (arity >= 0 && held == arity) return k_dispatch_n(env[0], held, env + 1);
+    k_die_arity(arity > held ? arity - held : 0, 0);
     return k_none();
 }
 

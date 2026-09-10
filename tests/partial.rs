@@ -60,30 +60,47 @@ fn a_partial_of_a_parameter_finishes_at_the_call_site() {
     assert_eq!(stdout(&out), "14");
 }
 
-/// "Decline it out loud" is the header's claim, and until this spec existed
-/// nothing held the backend to it. The message it gave named the program's
-/// fault — `&f` holds 1 argument(s), and no `f` takes more — for a program
-/// with no fault: `f` is a parameter, and the arity the sentence asks after
-/// is not knowable until the arguments arrive, which is the feature the spec
-/// above specifies. A backend that covers less has to say so as a limit of
-/// its own, or the reader goes looking for a mistake that is not there.
+/// RULED 2026-08-29, "the backends build the partial over a value". Until
+/// then this spec pinned native DECLINING the program as a limit of its own:
+/// a partial lowered to a lambda fixes its count where it is written, and
+/// `f` is a parameter whose arity is not knowable there. The runtime now
+/// keeps the callee and the held arguments and settles the count when the
+/// rest arrive, so native runs what the oracle runs.
 #[test]
-fn the_native_backend_declines_a_partial_over_a_value_as_its_own_limit() {
+fn native_builds_a_partial_over_a_value_and_agrees_with_the_oracle() {
     let program = "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\nprint \"{(foo add) 5 7}\"\n";
-    let said = stderr(&native("of_param_native", program));
+    let native = native("of_param_native", program);
 
-    assert!(
-        said.contains("`f` is a value here")
-            && said.contains("settles its arity when its arguments arrive"),
-        "the backend did not name its own limit: {said}"
-    );
-    assert!(
-        !said.contains("takes more"),
-        "the refusal still reads as the program's mistake: {said}"
-    );
-    // The oracle runs the same program, which is what makes the refusal a
-    // limit rather than a judgement about the program.
+    assert_eq!(stderr(&native), "", "native refused what the oracle runs");
+    assert_eq!(stdout(&native), "14");
     assert_eq!(stdout(&interp("of_param_oracle", program)), "14");
+}
+
+/// The four shapes a partial over a value takes at run time, each on both
+/// engines: growing in two steps, `()` on a complete one, a lambda held in a
+/// local as the callee, and a partial handed more than any arm takes.
+#[test]
+fn native_and_the_oracle_settle_a_partial_over_a_value_the_same_way() {
+    let grows = "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\ng = foo add\nh = g 5\n\nprint \"{h 7}\"\n";
+    let runs = "fn add a b\n  a + b\n\nfn foo f\n  &f 1 2\n\np = foo add\n\nprint \"{p()}\"\n";
+    let local = "f = (a b -> a - b)\np = &f 10\n\nprint \"{p 3}\"\n";
+    for (name, program, want) in
+        [("grows", grows, "14"), ("runs", runs, "3"), ("local", local, "7")]
+    {
+        let native = native(&format!("value_{name}_native"), program);
+        assert_eq!(stderr(&native), "", "native refused {name}");
+        assert_eq!(stdout(&native), want, "native on {name}");
+        assert_eq!(
+            stdout(&interp(&format!("value_{name}_oracle"), program)),
+            want,
+            "oracle on {name}"
+        );
+    }
+
+    let over = "fn add a b\n  a + b\n\nfn foo f\n  &f 1\n\nprint \"{(foo add) 2 3}\"\n";
+    let said = stderr(&native("value_over_native", over));
+    assert!(said.contains("no 3-argument arm of `<fn>` (arms take 2)"), "native said: {said}");
+    assert_eq!(said, stderr(&interp("value_over_oracle", over)));
 }
 
 /// Short of every arity it stays a partial rather than dispatching early, so
