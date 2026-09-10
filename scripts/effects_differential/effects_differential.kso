@@ -41,43 +41,43 @@ seq_three = shape
   "abc"
 
 bind_drop = shape
-  "io/write \"a\" . (_ -> io/write \"b\")"
+  "io/write \"a\" .> (_ -> io/write \"b\")"
   "bind ignores its value"
   "ab"
 
 bind_value = shape
-  "os/env \"PATH\" . (v -> io/write \"\{v == none}\")"
+  "os/env \"PATH\" .> (v -> io/write \"\{v == none}\")"
   "bind passes its value"
   "false"
 
 bind_twice = shape
-  "io/write \"a\" . (_ -> io/write \"b\") . (_ -> io/write \"c\")"
+  "io/write \"a\" .> (_ -> io/write \"b\") .> (_ -> io/write \"c\")"
   "bind chained twice"
   "abc"
 
 re_enter = shape
-  "io/write \"\" . (_ -> 7) . (n -> io/write \"\{n}\")"
+  "io/write \"\" .> (_ -> 7) .> (n -> io/write \"\{n}\")"
   "a value re-enters"
   "7"
 
 computed = shape
-  "io/write \"\" . (_ -> 7) . (n -> io/write \"\{n + 1}\")"
+  "io/write \"\" .> (_ -> 7) .> (n -> io/write \"\{n + 1}\")"
   "a value computed on"
   "8"
 
 # nesting: a description built inside a bind, and a bind inside a bind
 nested_bind = shape
-  "io/write \"a\" . (_ -> io/write \"b\" . (_ -> io/write \"c\"))"
+  "io/write \"a\" .> (_ -> io/write \"b\" .> (_ -> io/write \"c\"))"
   "bind returns a bind"
   "abc"
 
 seq_in_bind = shape
-  "io/write \"a\" . (_ -> io/write \"b\" >> io/write \"c\")"
+  "io/write \"a\" .> (_ -> io/write \"b\" >> io/write \"c\")"
   "seq inside a bind"
   "abc"
 
 bind_after_seq = shape
-  "io/write \"a\" >> io/write \"b\" . (_ -> io/write \"c\")"
+  "io/write \"a\" >> io/write \"b\" .> (_ -> io/write \"c\")"
   "bind after a seq"
   "abc"
 
@@ -95,45 +95,45 @@ wall = shape
   "abc"
 
 bind_beside = shape
-  "io/write \"a\"\n  io/write \"b\" . (_ -> io/write \"c\")"
+  "io/write \"a\"\n  io/write \"b\" .> (_ -> io/write \"c\")"
   "a bind beside a write"
   "abc"
 
 group_of_binds = shape
-  "os/env \"A\" . (_ -> io/write \"a\")\n  os/env \"B\" . (_ -> io/write \"b\")"
+  "os/args .> (_ -> io/write \"a\")\n  os/env \"B\" .> (_ -> io/write \"b\")"
   "a group of binds"
   "ab"
 
 # the effects that read the world, pinned so they answer the same anywhere
 unset = shape
-  "os/env \"KANSO_NO_SUCH_VAR\" . (v -> io/write \"\{v}\")"
+  "os/env \"KANSO_NO_SUCH_VAR\" .> (v -> io/write \"\{v}\")"
   "an unset variable"
   "<none>"
 
 absent = shape
-  "os/exists \"/no/such/path\" . (v -> io/write \"\{v}\")"
+  "os/exists \"/no/such/path\" .> (v -> io/write \"\{v}\")"
   "a path that is not there"
   "false"
 
 no_args = shape
-  "os/args . (a -> io/write \"\{length a}\")"
+  "os/args .> (a -> io/write \"\{length a}\")"
   "the args of no args"
   "0"
 
 no_dir = shape
-  "os/list_dir \"/no/such/dir\" . (v -> io/write \"\{v}\")"
+  "os/list_dir \"/no/such/dir\" .> (v -> io/write \"\{v}\")"
   "a directory that is not there"
   ""
 
 # a failure inside a combination: it takes the chain with it, and the two
 # engines have to agree on where it stops and what reaches the executor
 exit_in_bind = shape
-  "io/write \"a\" . (_ -> os/exit 3)"
+  "io/write \"a\" .> (_ -> os/exit 3)"
   "exit inside a bind"
   "a"
 
 exit_before = shape
-  "io/write \"a\" . (_ -> os/exit 3) . (_ -> io/write \"b\")"
+  "io/write \"a\" .> (_ -> os/exit 3) .> (_ -> io/write \"b\")"
   "exit before a write"
   "a"
 
@@ -143,12 +143,12 @@ exit_in_group = shape
   ""
 
 read_fails = shape
-  "os/read_file! \"/no/such/file\" . (_ -> io/write \"read\")"
+  "os/read_file! \"/no/such/file\" .> (_ -> io/write \"read\")"
   "a read that fails"
   ""
 
 read_bound_twice = shape
-  "os/read_file! \"/no/f\" . (_ -> io/write \"a\") . (_ -> io/write \"b\")"
+  "os/read_file! \"/no/f\" .> (_ -> io/write \"a\") .> (_ -> io/write \"b\")"
   "a failed read, bound twice"
   ""
 

@@ -636,10 +636,10 @@ oneshot text=112306
 basket text=113170
 widebench text=125362
 deepbench text=75538
-escapebench text=57890
+escapebench text=57458
 pendbench text=91346
-indexbench text=61906
-scanbench text=159842
+indexbench text=61474
+scanbench text=158946
 digestbench text=110530
 readbench text=58418
 livebench text=112882
@@ -649,4 +649,12 @@ livebench text=112882
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=246402
+#
+# 2026-09-10 (the plain dot is an application): the same four rows, and only
+# those four. escapebench 57,890 -> 57,458 and indexbench 61,906 -> 61,474,
+# both exactly -432; scanbench 159,842 -> 158,946 (-896); runbench 246,402 ->
+# 245,954 (-448). The closure body, its wrapper and the k_maybe_bind call go,
+# and escapebench and indexbench lose `d_render/to_string_1` besides -- the
+# target's own definition, which the closure needed as a value and the direct
+# call does not. CI's rows, copied in.
+runbench text=245954

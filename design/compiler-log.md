@@ -3816,6 +3816,50 @@ paragraph. The old side above was read by reverting the two `piped` flags
 in src/parser.rs and rebuilding, on this tree: it reproduces the goldens
 this change replaces, to the digit.
 
+**What CI read, and what it costs.** The prediction in this entry's first
+draft was three host-keyed compile rows and the layout signature. CI red six
+veins, and the extra three are the change doing real work rather than moving
+code around: `work` and `machine code` fall in exactly the four programs whose
+emitted code fell, and `compile_allocs` rises. Retired instructions: escapebench
+85,558,105 -> 85,558,077, indexbench 3,265,786 -> 3,265,756, scanbench
+726,019,079 -> 726,019,023, runbench 2,367,877,484 -> 2,367,877,430 — tens,
+because a plain step over a value runs a handful of times here, not in a loop.
+`.text`: escapebench and indexbench both exactly -432, scanbench -896, runbench
+-448. The compile side pays: compile_instructions 48,393,437 -> 50,114,252
+(+3.5559%), entry_instructions 161,314,264 -> 167,227,331 (+3.6657%),
+library_instructions 162,023,537 -> 167,938,041 (+3.6504%), compile_allocs
+29,000 -> 29,046, compile_peak_bytes byte-identical. Three rows rising together
+by the same proportion is a shared check, and check_box_where_value is one: a
+whole-program pass over every expression reading infer's return sets. It borrows
+rather than holding, which is why peak does not move.
+
+The mirror of the previous entry is worth naming. #1364 predicted six rows and
+CI read three, because a respelling moves layout and not work. This predicted
+three and CI read six, because this changes what the emitter writes. Neither
+prediction was careless; the difference is whether the change reaches the
+emitted code, and that is the question to ask before writing a number down.
+
+**WELFARE FALLS 0.07 AND THAT IS NOT SETTLED HERE.** 66.42185989370925 ->
+66.35. The four run rows fall by tens against a compile term that rises by
+millions, so the pass is three orders of magnitude short of paying for itself
+on the objective's terms, and the objective has no term for what it buys — a
+box handed to a reader is a compile error naming the reader now, instead of a
+runtime one. The first draft of this paragraph moved the floor by hand with
+that as the reason, citing kanso#1362's "a ruled feature spent it". That was
+wrong, and welfare.kso:555 says so in as many words: RULED (Clay, 2026-08-03),
+welfare cannot fall, full stop, not with a reason and not with a named trade;
+the change is optimized until it holds, and if that is genuinely impossible the
+work stops and the question goes to Clay in conversation. The tool enforces it
+above a 0.01 tolerance, which is why the small language-clause falls of #1355,
+#1356 and #1359 went through and this one cannot. `--set` refused and the floor
+file is untouched.
+
+So this change does not land on its welfare reading, and NO optimization has
+been attempted yet — the honest state is "not tried", not "impossible". The
+obvious lever is that the pass walks every expression in the program where it
+only needs the ones whose subject's return set could carry the description bit;
+whether that recovers 3.65% is a measurement nobody has taken.
+
 **Spec.** `tests/golden/micro/a_plain_dot_hands_the_box_over.kso` on native
 and the oracle: `math/random 6 . held` rendered as `held <io>`, the same
 box bound with `.>` after the plain step, and a missing file's read handed
