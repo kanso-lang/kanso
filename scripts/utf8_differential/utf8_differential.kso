@@ -184,29 +184,29 @@ fn dropped s _
   s
 
 fn written source
-  os/write_file extracted_path source . (_ -> os/run "uname" ["-m"])
-    . (u -> compiled (trimmed u.stdout))
+  os/write_file extracted_path source .> (_ -> os/run "uname" ["-m"])
+    .> (u -> compiled (trimmed u.stdout))
 
 fn compiled arch
-  built (flags_for arch) . checked
+  built (flags_for arch) .> checked
 
 fn checked b
   ran (b.status == 0) b.stderr
 
 fn ran false trouble
-  io/write_err trouble . (_ -> os/exit 1)
+  io/write_err trouble .> (_ -> os/exit 1)
 
 fn ran true _
-  os/run binary_path [] . reported
+  os/run binary_path [] .> reported
 
 fn reported r
-  io/write "{trimmed r.stdout}\n" . (_ -> verdict r.status)
+  io/write "{trimmed r.stdout}\n" .> (_ -> verdict r.status)
 
 fn verdict 0
   io/write "PASS  both agree with their references everywhere checked\n"
 
 fn verdict _
   io/write_err "FAIL  a function and its reference disagree\n"
-    . (_ -> os/exit 1)
+    .> (_ -> os/exit 1)
 
-pub play = os/read_file! "src/runtime.c" . (src -> written (as_harness src))
+pub play = os/read_file! "src/runtime.c" .> (src -> written (as_harness src))

@@ -41,7 +41,7 @@ extra_css: /book/book.css
   <div class="code-panel-title">vse/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"./vse"</span>
 
-<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
+<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.&gt;</span> <span class="f">means</span></code></pre>
 </div>
 
 <p>this is chapter 05's machinery doing real work. <code>random 1000</code> is a description of a draw, not a number, so the coordinate has to be received through bind—<code>. (c -&gt; ...)</code>—and the recursion continues inside the lambda, carrying the accumulator forward. <code>point</code> binds one coordinate per step until the dimension count hits the literal-0 clause; <code>cloud</code> binds one whole point per step until the population count does. here is the same shape standing alone, small enough to watch:</p>
@@ -54,15 +54,15 @@ extra_css: /book/book.css
   <span class="f">acc</span>
 
 <span class="k">fn</span> <span class="f">cloud</span> n acc
-  <span class="f">point</span> <span class="n">2</span> [] <span class="o">.</span> (p <span class="o">-&gt;</span> <span class="f">cloud</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc p))
+  <span class="f">point</span> <span class="n">2</span> [] <span class="o">.&gt;</span> (p <span class="o">-&gt;</span> <span class="f">cloud</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc p))
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">cloud</span> <span class="n">3</span> [] <span class="o">.</span> (voters <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three voters: <span class="i">{voters}</span>"</span>)
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">cloud</span> <span class="n">3</span> [] <span class="o">.&gt;</span> (voters <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three voters: <span class="i">{voters}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">point</span> <span class="n">0</span> acc
   <span class="f">acc</span>
 
 <span class="k">fn</span> <span class="f">point</span> d acc
-  <span class="f">math/random</span> <span class="n">1000</span> <span class="o">.</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
+  <span class="f">math/random</span> <span class="n">1000</span> <span class="o">.&gt;</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run cloud.kso</div>
     <pre><code>three voters: [[876 612] [601 850] [662 624]]</code></pre>
@@ -77,7 +77,7 @@ extra_css: /book/book.css
   <div class="code-panel-title">vse/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"./vse"</span>
 
-<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
+<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.&gt;</span> <span class="f">means</span></code></pre>
 </div>
 
 <div class="code-panel">
@@ -641,7 +641,7 @@ minimax:   chen</code></pre>
   <div class="code-panel-title">vse/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"./vse"</span>
 
-<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
+<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.&gt;</span> <span class="f">means</span></code></pre>
 </div>
 
 <p>if the method elected the utility-maximizing candidate, numerator equals denominator and the election scores 1.0. if it elected a candidate exactly as good as the field's average—what a random draw achieves in expectation—it scores 0.0. a method can score below zero in a given election by electing someone worse than average. average the per-election scores over many elections and the number becomes stable enough to compare methods.</p>
@@ -654,7 +654,7 @@ minimax:   chen</code></pre>
   <div class="code-panel-title">vse/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"./vse"</span>
 
-<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
+<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.&gt;</span> <span class="f">means</span></code></pre>
 </div>
 
 <p>the accumulator is a six-slot list of running sums, one per method, seeded with floats and threaded through every trial. <code>trials</code> binds a voter cloud, <code>_with_voters</code> binds a candidate cloud, <code>_tally</code>—pure, no effects—runs all six methods against the resulting matrix and returns the updated sums. there are no channels and no mutable counters; the monte carlo loop is a recursion whose state rides in its arguments, and the only effects in the entire program are the coordinate draws and the final prints. note <code>main</code>'s ending: <code>. means</code> binds the final sums straight into the reporting function, point-free, the same shape as chapter 06's <code>sort prices . at 1</code>.</p>
@@ -667,7 +667,7 @@ minimax:   chen</code></pre>
   <div class="code-panel-title">vse/main.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"./vse"</span>
 
-<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
+<span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.&gt;</span> <span class="f">means</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run vse</div>
     <pre><code>plurality VSE 0.6861199412466163

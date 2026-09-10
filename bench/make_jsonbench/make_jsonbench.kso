@@ -40,23 +40,23 @@ main_text = """
   import "./jsonbench"
   import "std/os"
 
-  os/read_file! "bench/large.json" . go
+  os/read_file! "bench/large.json" .> go
 """
 
 ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
 
 pub play = built
 
-built = os/make_dir out . (_ -> os/make_dir module_dir) . (_ -> copied)
+built = os/make_dir out .> (_ -> os/make_dir module_dir) .> (_ -> copied)
 
-copied = plain "number" . (_ -> plain "scan") . (_ -> plain "text")
-  . (_ -> plain "value") . (_ -> trimmed) . (_ -> written)
+copied = plain "number" .> (_ -> plain "scan") .> (_ -> plain "text")
+  .> (_ -> plain "value") .> (_ -> trimmed) .> (_ -> written)
 
 fn plain name
   os/read_file! "lib/json/{name}.kso"
-    . (s -> os/write_file "{module_dir}/{name}.kso" s)
+    .> (s -> os/write_file "{module_dir}/{name}.kso" s)
 
-trimmed = os/read_file! "lib/json/json.kso" . stripped
+trimmed = os/read_file! "lib/json/json.kso" .> stripped
 
 fn stripped source
   os/write_file "{module_dir}/json.kso" (kept source)
@@ -72,5 +72,5 @@ fn starts_dropped? block
   text/slice block 1 (length dropped) == dropped
 
 written = os/write_file "{module_dir}/bench.kso" bench_text
-  . (_ -> os/write_file "{out}/main.kso" main_text)
-  . (_ -> io/write ready)
+  .> (_ -> os/write_file "{out}/main.kso" main_text)
+  .> (_ -> io/write ready)

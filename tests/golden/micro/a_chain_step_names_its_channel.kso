@@ -1,0 +1,34 @@
+# The three chain words have fused spellings in chain position: `.>` is
+# `bind`, `.!` is `annotate` and `.?` is `rescue`, the chain dot plus one
+# character of channel. Each desugars to its word, so the subjects here are
+# settled failures, which is what lets the page run this one: no world has to
+# refuse anything for a channel to carry something. `told` is a group handed
+# over as a bare right-hand side; the lambdas are the other bare form, and
+# `settled` is the chain written one step to a line.
+import "std/json"
+
+fn told (err r)
+  "rescued: {r.reason}"
+
+fn told v
+  "decoded {length v} values"
+
+fn add_one x
+  x + 1
+
+fn count_of xs
+  length xs
+
+fn settled text
+  json/decode text
+    .> count_of
+    .! (e -> "settled: {e.reason.reason}")
+    .? (e -> "fell back on {e.reason}")
+
+pub play =
+  print (json/decode "[1, 2" .? told)
+  >> print (json/decode "[1, 2]" .> told)
+  >> print (json/decode "[1, 2]" .? told)
+  >> print (3 .> add_one .> (x -> x * 2))
+  >> print (settled "[1, 2, 3]")
+  >> print (settled "[1, 2")

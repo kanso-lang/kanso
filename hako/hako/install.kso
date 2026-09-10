@@ -17,7 +17,7 @@ fn gathered todo found
 fn visiting todo found
   here = todo[1]!
   rest = list/to_list (list/drop todo 1)
-  os/list_dir here . (names -> divided here rest found names [] [])
+  os/list_dir here .> (names -> divided here rest found names [] [])
 
 fn divided here rest found names dirs files
   finished = gathered (text/concat rest dirs) (text/concat found files)
@@ -28,7 +28,7 @@ fn weighed here rest found names dirs files
   full = path/join here names[1]!
   left = list/to_list (list/drop names 1)
   onward = (d -> placed here rest found left dirs files full d)
-  os/is_dir full . onward
+  os/is_dir full .> onward
 
 fn placed here rest found left dirs files full d
   divided here rest found left (added d dirs full) (kept d files full)
@@ -47,7 +47,7 @@ fn kso? full
 
 # `import "owner/repo"` — a std module and a relative path name no hako.
 pub fn required root
-  sources root . (files -> read_all files [])
+  sources root .> (files -> read_all files [])
 
 fn read_all files names
   more = reading files names
@@ -56,7 +56,7 @@ fn read_all files names
 fn reading files names
   rest = list/to_list (list/drop files 1)
   onward = (text -> read_all rest (merged names (imported text)))
-  os/read_file! files[1]! . onward
+  os/read_file! files[1]! .> onward
 
 fn merged names found
   list/fold found names one_of
@@ -86,7 +86,7 @@ fn hako_name spec
 # decision somebody made, and replacing it with a release would change what
 # the build compiles without anybody asking for that.
 pub fn installing dir wanted
-  required dir . (names -> begun dir wanted names)
+  required dir .> (names -> begun dir wanted names)
 
 fn begun dir wanted names
   none_wanted = io/write "no hakos are imported — nothing to install\n"
@@ -108,7 +108,7 @@ fn unimported unknown
 # exceptional-vs-data gavel buys — the alternative was already part of the
 # operation's vocabulary and is now written that way.
 fn locked_at dir wanted names
-  os/read_file "{dir}/hako.lock" . (t -> held_by dir wanted names t)
+  os/read_file "{dir}/hako.lock" .> (t -> held_by dir wanted names t)
 
 fn held_by dir wanted names (file_not_found _)
   settled_for dir wanted names []
@@ -117,14 +117,14 @@ fn held_by dir wanted names t
   settled_for dir wanted names (parse t)
 
 fn settled_for dir wanted names held
-  os/env "KANSO_HAKO" . (set -> at_home dir wanted names held set)
+  os/env "KANSO_HAKO" .> (set -> at_home dir wanted names held set)
 
 fn at_home dir wanted names held set
-  os/env "HOME" . (h -> from_where dir wanted names held (cache_root set h))
+  os/env "HOME" .> (h -> from_where dir wanted names held (cache_root set h))
 
 fn from_where dir wanted names held root
   start = (o -> each_hako dir wanted names held root o "" "")
-  os/env "KANSO_HAKO_REMOTE" . start
+  os/env "KANSO_HAKO_REMOTE" .> start
 
 fn each_hako dir wanted names held root origin lines report
   finished = recorded dir lines report (length names)
@@ -135,7 +135,7 @@ fn one_hako dir wanted names held root origin lines report
   n = names[1]!
   rest = list/to_list (list/drop names 1)
   onward = (two -> next_hako dir wanted rest held root origin lines report two)
-  speakable_name n . (_ -> chosen n wanted held root origin . onward)
+  speakable_name n .> (_ -> chosen n wanted held root origin .> onward)
 
 fn next_hako dir wanted rest held root origin lines report two
   ls = "{lines}{two[1]!}"
@@ -161,7 +161,7 @@ fn chosen n wanted held root origin
 
 fn by_branch n pinned root origin
   branch = pinned[2]!
-  head_of origin n branch . (sha -> fetched_as n branch sha root origin)
+  head_of origin n branch .> (sha -> fetched_as n branch sha root origin)
 
 fn unasked n standing root origin
   fresh = by_release n root origin
@@ -171,7 +171,7 @@ fn standing_pin n standing root origin
   fetched_as n standing.tag standing.sha root origin
 
 fn by_release n root origin
-  newest origin n . (found -> released n found root origin)
+  newest origin n .> (found -> released n found root origin)
 
 fn released n found root origin
   bad = refused "`{n}` publishes no vX.Y.Z release tag"
@@ -180,8 +180,8 @@ fn released n found root origin
 fn fetched_as n tag sha root origin
   mark = if (release? tag) "" " (interim pin)"
   two = ["{n} {tag} {sha} git\n" "  {n} {tag}{mark}\n"]
-  fetched root n tag sha (url origin n) . (_ -> answered two)
+  fetched root n tag sha (url origin n) .> (_ -> answered two)
 
 fn recorded dir lines report count
   said = io/write "installed {count} hako(s):\n{report}"
-  os/write_file "{dir}/hako.lock" lines . (_ -> said)
+  os/write_file "{dir}/hako.lock" lines .> (_ -> said)

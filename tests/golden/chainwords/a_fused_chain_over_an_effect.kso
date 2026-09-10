@@ -1,0 +1,20 @@
+# The fused spellings over an effect that fails when it runs: the file is not
+# there, `.?` opens the executor's door with a fallback, and `.>` carries the
+# fallback on to the endpoint. This is the log's `. rescue orders` example in
+# the spelling the 2026-08-31 gavel gave it; the words in chain position are
+# refused now, and the error corpus pins that.
+import "std/os"
+
+fn orders (err _)
+  "no orders yet"
+
+fn orders text
+  text
+
+fn shout text
+  "{text}!!"
+
+fn fetched path
+  os/read_file! path .? orders .> shout .> print
+
+pub play = fetched "the-orders-file-that-is-not-there.txt"

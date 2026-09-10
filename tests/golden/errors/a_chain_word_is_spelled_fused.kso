@@ -1,0 +1,6 @@
+import "std/json"
+
+fn told v
+  v
+
+pub play = print (json/decode "[1]" . rescue told)

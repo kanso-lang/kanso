@@ -100,8 +100,8 @@ fn tally raw doc a b
   bulk + shapes + split/total split_chars + digested raw digest_bytes
 
 fn shaped raw doc a
-  pend/total pend_cards . (b -> io/write "runbench {tally raw doc a b}\n")
+  pend/total pend_cards .> (b -> io/write "runbench {tally raw doc a b}\n")
 
 pub fn run raw
   doc = json/decode raw
-  deep/total deep_trials . (a -> shaped raw doc a)
+  deep/total deep_trials .> (a -> shaped raw doc a)

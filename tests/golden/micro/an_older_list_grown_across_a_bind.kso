@@ -25,7 +25,7 @@ fn innering dirs at acc _ _ acc2 true
 
 fn innering dirs at acc kids k acc2 false
   on = (_ -> one dirs at acc kids k acc2)
-  io/write "" . on
+  io/write "" .> on
 
 fn one dirs at acc kids k acc2
   inner dirs at acc kids (k + 1) (push acc2 kids[k]!)

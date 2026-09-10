@@ -35,7 +35,7 @@ fn stepped 0 _ _ keep
 # stages. Without the drift a chain of small steps never carries at all.
 fn stepped n xs acc keep
   drift = length (wide 40)
-  io/write "" . (_ -> gathered (n + 40 - drift) xs acc keep)
+  io/write "" .> (_ -> gathered (n + 40 - drift) xs acc keep)
 
 fn loaded acc keep
   xs = wide 400
@@ -45,6 +45,6 @@ fn read_back out
   io/write "kept {length out}\n"
 
 fn begin acc0 keep0
-  io/write "" . (_ -> loaded acc0 keep0) . read_back
+  io/write "" .> (_ -> loaded acc0 keep0) .> read_back
 
 pub play = begin [] []

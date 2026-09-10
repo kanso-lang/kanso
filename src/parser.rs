@@ -189,7 +189,10 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         for line in &lexed.lines[start..] {
             if line.indent != 0
                 && lexed.blank_lines.contains(&(line.number - 1))
-                && matches!(line.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _, _)))
+                && matches!(
+                    line.tokens.first(),
+                    Some((Tok::SeqOp | Tok::Pipe | Tok::Fused(_), _, _))
+                )
             {
                 diags.push(Diagnostic::new(
                     "formatting",
@@ -930,9 +933,9 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _), ..] if w == "if" || w == "build"
             );
         if !head_is_block
-            && children
-                .iter()
-                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _, _))))
+            && children.iter().all(|c| {
+                matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe | Tok::Fused(_), _, _)))
+            })
         {
             out.push(parse_stmt(&body[idx])?);
             idx += 1;
@@ -999,9 +1002,9 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _), ..] if w == "if"
             );
         if !head_is_if
-            && children
-                .iter()
-                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _, _))))
+            && children.iter().all(|c| {
+                matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe | Tok::Fused(_), _, _)))
+            })
         {
             units.push(Unit::Parsed(parse_stmt(line)?));
             idx += 1;
@@ -1531,7 +1534,7 @@ fn tolerated_before(tok: Option<&Tok>) -> u8 {
     match tok {
         Some(Tok::Op(op)) => level(op) + 1,
         Some(tok) if ends_an_atom(tok) => ATOM,
-        Some(Tok::SeqOp | Tok::Pipe) => OR,
+        Some(Tok::SeqOp | Tok::Pipe | Tok::Fused(_)) => OR,
         // A container element and a map's value are each exactly one atom —
         // `[one 1]` is two elements and `{ "k":one 1 }` does not parse — so
         // parentheses there are the only way to write anything else, and
@@ -1979,6 +1982,24 @@ impl<'a> P<'a> {
                     let span = self.span_here();
                     self.pos += 1;
                     let target = self.parse_app()?;
+                    // in chain position a combinator has one spelling, the
+                    // fused one; the word stays a prefix function elsewhere
+                    let head = match &target {
+                        Expr::App { head, .. } => head.as_ref(),
+                        atom => atom,
+                    };
+                    if let Expr::Ident(name, _) = head {
+                        if let Some(sigil) = crate::lexer::fused_sigil(name.as_str()) {
+                            return Err(Diagnostic::new(
+                                "syntax",
+                                format!(
+                                    "in a chain `{name}` is spelled `{sigil}`: write \
+                                     `{sigil} f`"
+                                ),
+                                span,
+                            ));
+                        }
+                    }
                     expr = match target {
                         Expr::App { head, mut args, .. } => {
                             args.insert(0, expr);
@@ -1986,6 +2007,39 @@ impl<'a> P<'a> {
                         }
                         atom => {
                             Expr::App { head: Box::new(atom), args: vec![expr], span, piped: true }
+                        }
+                    };
+                }
+                Some(Tok::Fused(word)) => {
+                    let word: &'static str = word;
+                    let span = self.span_here();
+                    self.pos += 1;
+                    // the right-hand side is one function — a lambda, a name
+                    // or a group — so the common case needs no wrapper lambda
+                    let callee = self.parse_atom()?;
+                    if self.starts_atom() {
+                        let sigil = crate::lexer::fused_sigil(word).expect("a fused word");
+                        return Err(self.err(format!(
+                            "`{sigil}` takes one function: a lambda, a name or a group; \
+                             held arguments are a partial, `&f x`"
+                        )));
+                    }
+                    // `.>` is the piped step: the shape every pass already
+                    // reads as a chain step over a description — the beat
+                    // keys on a piped lambda, and desugaring to a call of the
+                    // word instead lost it (decode's arena peak 2 MB -> 251 MB,
+                    // beat_iters 151 -> 1). The other two words have no
+                    // piped shape and desugar to the call.
+                    expr = match word {
+                        "bind" => Expr::App {
+                            head: Box::new(callee),
+                            args: vec![expr],
+                            span,
+                            piped: true,
+                        },
+                        _ => {
+                            let head = Box::new(Expr::Ident(Name::new(word), span));
+                            Expr::App { head, args: vec![expr, callee], span, piped: false }
                         }
                     };
                 }

@@ -66,8 +66,9 @@ fn golden(name: &str, extension: &str) -> String {
 
 /// Every case in the corpus and what it exits with. A case with no `.err`
 /// beside it must say nothing on that stream.
-const CASES: [(&str, i32); 4] = [
+const CASES: [(&str, i32); 5] = [
     ("a_rescue_opens_the_executors_door", 0),
+    ("a_fused_chain_over_an_effect", 0),
     ("a_rescue_lets_a_success_past", 0),
     ("a_bind_never_sees_a_failure", 1),
     ("an_annotate_cannot_resurrect", 1),

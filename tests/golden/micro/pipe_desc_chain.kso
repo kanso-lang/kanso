@@ -1,9 +1,9 @@
 import "std/math"
 
 fn grow acc
-  math/random 10 . (x -> push acc x)
+  math/random 10 .> (x -> push acc x)
 
 fn report l
   print "{length l}"
 
-pub play = grow [] . report
+pub play = grow [] .> report

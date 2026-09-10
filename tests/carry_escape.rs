@@ -35,7 +35,7 @@ type source_file
   body
 
 fn walk_all path
-  os/list_dir path . (names -> walk_names path names 1 [])
+  os/list_dir path .> (names -> walk_names path names 1 [])
 
 fn walk_names path names at acc
   walking_names path names at acc (at > length names)
@@ -45,15 +45,15 @@ fn walking_names _ _ _ acc true
 
 fn walking_names path names at acc false
   kid = "{path}/{names[at]!}"
-  os/is_dir kid . (d -> walk_kid path names at acc kid d)
+  os/is_dir kid .> (d -> walk_kid path names at acc kid d)
 
 fn walk_kid path names at acc kid true
   on = (deep -> walk_names path names (at + 1) (joined acc deep))
-  walk_all kid . on
+  walk_all kid .> on
 
 fn walk_kid path names at acc kid false
   on = (body -> read_one path names at acc kid body)
-  os/read_file kid . on
+  os/read_file kid .> on
 
 fn read_one path names at acc kid body
   walk_names path names (at + 1) (push acc (source_file kid body))
@@ -61,7 +61,7 @@ fn read_one path names at acc kid body
 fn joined a b
   list/to_list (text/concat a b)
 
-walk_all "a_tree_of_sample_outputs" . (fs -> print (length fs))
+walk_all "a_tree_of_sample_outputs" .> (fs -> print (length fs))
 "#;
 
 const TREE: [(&str, usize); 11] = [

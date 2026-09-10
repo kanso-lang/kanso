@@ -5,4 +5,4 @@ fn show p
 
 pub play =
   os/run "sh" ["-c" "sleep 1; printf written > slow.txt"]
-  >> os/run "cat" ["slow.txt"] . show
+  >> os/run "cat" ["slow.txt"] .> show

@@ -130,12 +130,12 @@ fn hung? _
 # The probe is written once and read by both engines, so a difference is the
 # engines and never two different files.
 fn ran source
-  os/write_file probe source . (_ -> both)
+  os/write_file probe source .> (_ -> both)
 
-both = asked ["play" probe] . matched
+both = asked ["play" probe] .> matched
 
 fn matched native
-  asked ["play" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] .> (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -165,7 +165,7 @@ fn onward _ _ found true
 fn onward shape exprs found false
   rest = list/to_list (list/drop exprs 1)
   expr = exprs[1]!
-  ran (shape expr) . (verdict -> swept shape rest (noted found expr verdict))
+  ran (shape expr) .> (verdict -> swept shape rest (noted found expr verdict))
 
 fn noted found _ ""
   found
@@ -195,25 +195,25 @@ fn works? n i
   sound? n and sound? i
 
 fn ready native
-  asked ["play" probe "--interp"] . (interp -> live native interp)
+  asked ["play" probe "--interp"] .> (interp -> live native interp)
 
 fn live n i
   running (works? n i)
 
 fn running true
-  swept plain values [] . (a -> swept typed shaped a . reported)
+  swept plain values [] .> (a -> swept typed shaped a .> reported)
 
 fn running false
-  io/write_err mute . (_ -> os/exit 2)
+  io/write_err mute .> (_ -> os/exit 2)
 
 fn begun false
-  io/write_err complaint . (_ -> os/exit 2)
+  io/write_err complaint .> (_ -> os/exit 2)
 
 fn begun true
-  os/write_file probe sample . (_ -> asked ["play" probe]) . ready
+  os/write_file probe sample .> (_ -> asked ["play" probe]) .> ready
 
 fn reported found
-  said found . (_ -> os/exit (sound (length found)))
+  said found .> (_ -> os/exit (sound (length found)))
 
 fn said found
   count = length values + length shaped

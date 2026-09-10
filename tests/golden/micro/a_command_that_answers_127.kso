@@ -10,4 +10,4 @@ fn report a
 fn told a
   print (report a)
 
-pub play = os/run "sh" ["-c" "printf gone; exit 127"] . told
+pub play = os/run "sh" ["-c" "printf gone; exit 127"] .> told

@@ -41,7 +41,7 @@ fn program(call: &str, import: &str) -> String {
         "import \"std/{import}\"\n\n\
          pub type stand_in\n  handle\n\n\
          pub fn opaque x\n  x\n\n\
-         pub play = {call} . (r -> print \"{{r}}\")\n"
+         pub play = {call} .> (r -> print \"{{r}}\")\n"
     )
 }
 

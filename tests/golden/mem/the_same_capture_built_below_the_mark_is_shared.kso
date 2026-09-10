@@ -25,6 +25,6 @@ fn step _ _ true
   io/write "done\n"
 
 fn step xs i false
-  io/write "" . (_ -> walk xs (i + 1))
+  io/write "" .> (_ -> walk xs (i + 1))
 
 pub play = walk (built 500 []) 1

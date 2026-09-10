@@ -1,6 +1,6 @@
 import "std/os"
 
-pub play = os/env "KANSO_DEFINITELY_UNSET_XYZ" . announce
+pub play = os/env "KANSO_DEFINITELY_UNSET_XYZ" .> announce
 
 pub fn announce v
   print "unset reads as {v}"

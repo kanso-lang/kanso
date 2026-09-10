@@ -524,7 +524,7 @@ fn read_src _ false rest found
   over_sources rest found
 
 fn read_src name true rest found
-  os/read_file! "src/{name}" . (src -> more_sources rest found src)
+  os/read_file! "src/{name}" .> (src -> more_sources rest found src)
 
 fn more_sources rest found src
   plain = text/concat (driver_in src) (kinded_in src)
@@ -537,13 +537,13 @@ fn more_sources rest found src
 
 fn gathered found
   every = deduped (list/to_list (list/sort found))
-  corpus_of "tests/golden" [] . (parts -> with_samples every parts)
+  corpus_of "tests/golden" [] .> (parts -> with_samples every parts)
 
 # The book's samples are a corpus too: every panel is executed and its output
 # diffed by the book-samples job, so a diagnostic pinned there is pinned as
 # hard as one in tests/golden.
 fn with_samples every parts
-  corpus_of "docs/book/samples" parts . (grown -> with_tests every grown)
+  corpus_of "docs/book/samples" parts .> (grown -> with_tests every grown)
 
 # TWO corpora, because the two openers are pinned in different places and a
 # substring search cannot tell an assertion from a mention.
@@ -565,12 +565,12 @@ fn with_samples every parts
 module_pins = "scripts/module_differential/module_differential.kso"
 
 fn with_tests every parts
-  os/list_dir "tests" . (names -> test_sources (list/to_list names) [])
-    . (rs -> with_module every (text/join parts "") (text/join rs ""))
+  os/list_dir "tests" .> (names -> test_sources (list/to_list names) [])
+    .> (rs -> with_module every (text/join parts "") (text/join rs ""))
 
 fn with_module every stderrs rs
   wide = "{stderrs}{rs}"
-  os/read_file! module_pins . (m -> with_corpus every wide "{stderrs}{m}")
+  os/read_file! module_pins .> (m -> with_corpus every wide "{stderrs}{m}")
 
 fn test_sources names parts
   onward_test names parts (length names == 0)
@@ -587,7 +587,7 @@ fn read_test _ false rest parts
   test_sources rest parts
 
 fn read_test name true rest parts
-  os/read_file! "tests/{name}" . (t -> kept_source rest parts t)
+  os/read_file! "tests/{name}" .> (t -> kept_source rest parts t)
 
 fn kept_source rest parts t
   test_sources rest (push parts (uncommented t))
@@ -620,7 +620,7 @@ fn code? line
   text/slice (squeezed line) 1 2 != "//"
 
 fn corpus_of dir parts
-  os/list_dir dir . (names -> in_dir dir (list/to_list names) parts)
+  os/list_dir dir .> (names -> in_dir dir (list/to_list names) parts)
 
 fn in_dir dir names parts
   onward_corpus dir names parts (length names == 0)
@@ -631,10 +631,10 @@ fn onward_corpus _ _ parts true
 fn onward_corpus dir names parts false
   rest = list/to_list (list/drop names 1)
   here = "{dir}/{names[1]!}"
-  os/is_dir here . (d -> descend here d dir rest parts)
+  os/is_dir here .> (d -> descend here d dir rest parts)
 
 fn descend here true dir rest parts
-  corpus_of here parts . (grown -> in_dir dir rest grown)
+  corpus_of here parts .> (grown -> in_dir dir rest grown)
 
 fn descend here false dir rest parts
   take_stderr here (pinned_file? here) dir rest parts
@@ -643,11 +643,11 @@ fn take_stderr _ false dir rest parts
   in_dir dir rest parts
 
 fn take_stderr here true dir rest parts
-  os/read_file! here . (t -> in_dir dir rest (push parts t))
+  os/read_file! here .> (t -> in_dir dir rest (push parts t))
 
 fn with_corpus every corpus driver_corpus
   os/read_file! listed_path
-    . (t -> judged every corpus driver_corpus (allowances t))
+    .> (t -> judged every corpus driver_corpus (allowances t))
 
 fn allowances t
   lines = list/to_list (list/map (text/split t "\n") squeezed)
@@ -736,8 +736,8 @@ fn reported every excused missing healed
   counts = "{length every} literal diagnostics, {length excused} listed"
   gap = "{length missing} newly unpinned"
   tail = "as unpinned, {gap}, {length healed} now pinned"
-  io/write "{counts} {tail}\n" . (_ -> io/write (lines_for missing healed))
-    . (_ -> advice missing healed)
+  io/write "{counts} {tail}\n" .> (_ -> io/write (lines_for missing healed))
+    .> (_ -> advice missing healed)
 
 fn lines_for missing healed
   no_golden = list/to_list (list/map missing (e -> gap_line e))
@@ -753,8 +753,8 @@ fn healed_line e
 
 fn advice missing healed
   io/write (missing_note (length missing == 0))
-    . (_ -> io/write (healed_note (length healed == 0)))
-    . (_ -> settled (length missing + length healed))
+    .> (_ -> io/write (healed_note (length healed == 0)))
+    .> (_ -> settled (length missing + length healed))
 
 fn missing_note true
   ""
@@ -775,4 +775,4 @@ fn settled 0
 fn settled _
   os/exit 1
 
-pub play = os/list_dir "src" . (names -> over_sources (list/to_list names) [])
+pub play = os/list_dir "src" .> (names -> over_sources (list/to_list names) [])

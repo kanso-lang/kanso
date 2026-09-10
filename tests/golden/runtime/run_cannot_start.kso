@@ -1,3 +1,3 @@
 import "std/os"
 
-pub play = os/run "kanso_no_such_binary" [] . (a -> print "{a.status}")
+pub play = os/run "kanso_no_such_binary" [] .> (a -> print "{a.status}")

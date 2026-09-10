@@ -31,9 +31,9 @@ fn a_directory_is_made_with_its_parents() {
 
     let program = "import \"std/os\"\n\n\
                    fn said yes\n  print \"{yes}\"\n\n\
-                   told = os/is_dir \"deep/nested\" . said\n\
-                   wrote = os/write_file \"deep/nested/f.txt\" \"hello\" . (_ -> told)\n\
-                   made = os/make_dir \"deep/nested\" . (_ -> wrote)\n\n\
+                   told = os/is_dir \"deep/nested\" .> said\n\
+                   wrote = os/write_file \"deep/nested/f.txt\" \"hello\" .> (_ -> told)\n\
+                   made = os/make_dir \"deep/nested\" .> (_ -> wrote)\n\n\
                    made\n";
     let (out, err) = ran(program, &dir);
     let content = std::fs::read_to_string(dir.join("deep/nested/f.txt")).unwrap_or_default();
@@ -52,8 +52,8 @@ fn making_a_directory_that_exists_is_not_an_error() {
     std::fs::create_dir_all(&dir).expect("a directory to run in");
 
     let program = "import \"std/os\"\n\n\
-                   twice = os/make_dir \"here\" . (_ -> print \"ok\")\n\
-                   once = os/make_dir \"here\" . (_ -> twice)\n\n\
+                   twice = os/make_dir \"here\" .> (_ -> print \"ok\")\n\
+                   once = os/make_dir \"here\" .> (_ -> twice)\n\n\
                    once\n";
     let (out, err) = ran(program, &dir);
     let _ = std::fs::remove_dir_all(&dir);

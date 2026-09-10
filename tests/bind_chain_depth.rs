@@ -75,7 +75,7 @@ fn peak_for_chain(links: u64) -> u64 {
              step 1\n\n\
              fn step n\n  going n (n > {links})\n\n\
              fn going _ true\n  io/write \"done\\n\"\n\n\
-             fn going n false\n  io/write \"\" . (_ -> step (n + 1))\n"
+             fn going n false\n  io/write \"\" .> (_ -> step (n + 1))\n"
         ),
     );
     let peak = peak_for_program(&dir);

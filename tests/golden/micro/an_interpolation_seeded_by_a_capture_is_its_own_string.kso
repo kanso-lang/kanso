@@ -48,5 +48,5 @@ fn shown p
 pub play =
   shown ""
   >> shown "-"
-  >> io/write "" . (_ -> nested "+")
+  >> io/write "" .> (_ -> nested "+")
   >> print "{length (built 4 [])}"

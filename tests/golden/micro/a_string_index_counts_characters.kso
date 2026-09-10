@@ -16,11 +16,11 @@ fn glyphs s n acc
 
 fn shown s
   print "{length s} {s[1]} {s[2]} {s[3]} {s[6]}"
-    . (_ -> print (glyphs s (length s) ""))
-    . (_ -> print "{s[2]} {s[5]} {s[1]}")
-    . (_ -> print "{s[0]} {s[7]} {s[99]}")
+    .> (_ -> print (glyphs s (length s) ""))
+    .> (_ -> print "{s[2]} {s[5]} {s[1]}")
+    .> (_ -> print "{s[0]} {s[7]} {s[99]}")
 
 fn plain s
   print "{length s} {s[1]} {s[4]} {s[3]} {s[0]} {s[5]} {s[99]}"
 
-pub play = shown "aé😀b€z" . (_ -> plain "wxyz")
+pub play = shown "aé😀b€z" .> (_ -> plain "wxyz")

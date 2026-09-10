@@ -417,7 +417,7 @@ fn asked path
 fn gauge run w ir ca held ent
   veins = [(counters ir) (counters ca) (counters held) (counters ent)]
   now = measured (counters run) (work_of w) veins
-  os/read_file! floor_path . (f -> against now (json/decode f))
+  os/read_file! floor_path .> (f -> against now (json/decode f))
 
 # Every counter the objective weighs stands on a measurement of its own.
 #
@@ -466,11 +466,11 @@ fn against now held
 
 fn scored now held base _ true
   value = score now base
-  os/args . (a -> either now base held value a)
+  os/args .> (a -> either now base held value a)
 
 fn scored _ _ _ missing false
   listed = text/join missing ", "
-  io/write_err "{unmeasured}  no baseline for: {listed}\n" . (_ -> os/exit 2)
+  io/write_err "{unmeasured}  no baseline for: {listed}\n" .> (_ -> os/exit 2)
 
 # THE COUNTER SET THE SCORE WAS MADE OF, one `name=value` a line.
 #
@@ -574,14 +574,14 @@ unbought = """
 """
 
 fn banked _ _ _ ""
-  io/write_err unsaid . (_ -> os/exit 2)
+  io/write_err unsaid .> (_ -> os/exit 2)
 
 fn banked base held value reason
   fall = held["floor"]! - value
   paid base held value reason (fall > 0.01)
 
 fn paid _ _ _ _ true
-  io/write_err unbought . (_ -> os/exit 2)
+  io/write_err unbought .> (_ -> os/exit 2)
 
 fn paid base held value reason false
   units = math/round (value * 100)
@@ -593,7 +593,7 @@ fn paid base held value reason false
 
 fn written held value reason
   os/write_file floor_path "{json/encode held}\n"
-    . (_ -> io/write "floor moved to {fixed value 2}: {reason}\n")
+    .> (_ -> io/write "floor moved to {fixed value 2}: {reason}\n")
 
 fn era_of held
   length (history_of held) + 1
@@ -624,7 +624,7 @@ fn reported now base held value
   reason = text/slice (last_why held) 1 52
   tail = "(ceiling 100, ratchet {era_of held}: {reason}…)"
   io/write "{head}   {tail}\n"
-    . (_ -> detailed now base . (_ -> verdict value floor))
+    .> (_ -> detailed now base .> (_ -> verdict value floor))
 
 fn moved? now base c
   base[c]! != now[c]!
@@ -649,7 +649,7 @@ fn detailed now base
   changed = list/to_list (list/select counter_names (c -> moved? now base c))
   worse = list/to_list (list/select counter_names (c -> now[c]! > base[c]!))
   lines = list/to_list (list/map changed (t -> line_for now base t))
-  io/write (text/join lines "") . (_ -> traded now base worse)
+  io/write (text/join lines "") .> (_ -> traded now base worse)
 
 # the sum is the gate, but a term that went backwards under the cover of
 # another term's gain is a trade, and a trade has to be said out loud
@@ -661,7 +661,7 @@ fn spoken _ _ _ true
 
 fn spoken now base worse false
   io/write "\nTERMS THAT GOT WORSE — say why each one was worth it:\n"
-    . (_ -> costed now base worse)
+    .> (_ -> costed now base worse)
 
 fn costed now base worse
   lines = list/to_list (list/map worse (t -> cost_line now base t))
@@ -691,13 +691,13 @@ fn verdict value floor
   ruling value floor (value < floor - 0.001) (value > floor + 0.001)
 
 fn ruling value floor true true
-  fell (floor - value) . (_ -> os/exit 1)
+  fell (floor - value) .> (_ -> os/exit 1)
 
 fn ruling value floor true _
-  fell (floor - value) . (_ -> os/exit 1)
+  fell (floor - value) .> (_ -> os/exit 1)
 
 fn ruling value floor _ true
-  rose (value - floor) . (_ -> os/exit 1)
+  rose (value - floor) .> (_ -> os/exit 1)
 
 fn ruling _ _ _ _
   io/write ""
@@ -724,19 +724,20 @@ fn rose gap
 # to read are still written, still compared by their own gates, and no longer
 # inputs to the number.
 fn with_run run
-  asked "bench/instructions_golden.txt" . (w -> with_work run w)
+  asked "bench/instructions_golden.txt" .> (w -> with_work run w)
 
 fn with_work run w
-  asked "bench/compile_instructions_golden.txt" . (ir -> with_ir run w ir)
+  asked "bench/compile_instructions_golden.txt" .> (ir -> with_ir run w ir)
 
 fn with_ir run w ir
-  asked "bench/compile_allocs_golden.txt" . (ca -> with_traffic run w ir ca)
+  asked "bench/compile_allocs_golden.txt" .> (ca -> with_traffic run w ir ca)
 
 fn with_traffic run w ir ca
-  asked "bench/compile_memory_golden.txt" . (held -> with_held run w ir ca held)
+  asked "bench/compile_memory_golden.txt"
+    .> (held -> with_held run w ir ca held)
 
 fn with_held run w ir ca held
   entry_golden = "bench/entry_instructions_golden.txt"
-  asked entry_golden . (e -> gauge run w ir ca held e)
+  asked entry_golden .> (e -> gauge run w ir ca held e)
 
-pub play = asked "bench/cost_golden_run.txt" . (r -> with_run r)
+pub play = asked "bench/cost_golden_run.txt" .> (r -> with_run r)

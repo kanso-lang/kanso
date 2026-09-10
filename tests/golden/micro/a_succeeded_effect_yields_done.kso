@@ -14,5 +14,5 @@ fn tell r
   print "{r} {r == done} {r == none} {shown r} {shown 3}"
 
 pub play =
-  print "first" . tell
-  >> io/write "" . tell
+  print "first" .> tell
+  >> io/write "" .> tell

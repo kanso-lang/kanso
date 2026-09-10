@@ -79,7 +79,7 @@ ours_a = "front_end_rounds=28\nfront_end_visits=23384\n"
 ours_now = "{ours_a}compile_peak_bytes=872591\n"
 
 fn against golden base_text found
-  io/write "" . (_ -> weighed golden golden[2]! base_text ours_now found)
+  io/write "" .> (_ -> weighed golden golden[2]! base_text ours_now found)
 
 fn weighed golden prefix base_text ours found
   mine = counted ours prefix
@@ -125,7 +125,7 @@ fn arrow_of false
 
 fn started _
   g = bench_memory[1]!
-  against g held [] . (ms -> priced "" ms)
+  against g held [] .> (ms -> priced "" ms)
 
 fn priced _ ms
   verdict ms ""
@@ -133,7 +133,7 @@ fn priced _ ms
 fn verdict moves added
   worse = list/to_list (list/select moves (m -> m.worse))
   better = list/to_list (list/reject moves (m -> m.worse))
-  said moves . (_ -> weighed_up moves worse better added)
+  said moves .> (_ -> weighed_up moves worse better added)
 
 fn weighed_up _ worse _ added
   quiet = list/to_list (list/select worse (m -> silent? added m))

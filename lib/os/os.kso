@@ -78,7 +78,7 @@ pub fn make_dir path
 # that set stop being able to prove things about the document. jsonbench's
 # decode loop stopped rewinding when the read briefly took that shape.
 pub fn read_file path
-  builtin_read_file path . (r -> found path r)
+  builtin_read_file path .> (r -> found path r)
 
 # The caller insisting the file is there. The bang is the choice of channel,
 # and the suffix contract holds it to it: a `!` name must be able to answer a
@@ -101,7 +101,7 @@ pub fn read_file path
 # takes a list, string, or map, not os/file_not_found "…"` and the err is
 # gone. The spelling below stays until somebody moves both together.
 pub fn read_file! path
-  builtin_read_file path . (r -> insisted path r)
+  builtin_read_file path .> (r -> insisted path r)
 
 fn found path none
   file_not_found path
@@ -120,10 +120,10 @@ fn insisted _ text
 # beside fs::read_to_string and Go os.ReadFile beside an explicit conversion
 # (ruled 2026-08-29). The same two answers for absence and insistence.
 pub fn read_bytes path
-  builtin_read_bytes path . (r -> found path r)
+  builtin_read_bytes path .> (r -> found path r)
 
 pub fn read_bytes! path
-  builtin_read_bytes path . (r -> insisted path r)
+  builtin_read_bytes path .> (r -> insisted path r)
 
 # Starting a process is a description like any other effect. The answer is
 # three things, so the wrapper reads the builtin's list into a record: a
@@ -133,7 +133,7 @@ pub fn read_bytes! path
 # read it — a missing repository answers 1 and that is the answer — so an err
 # is kept for the process never starting at all.
 pub fn run cmd argv
-  builtin_run cmd argv . answered
+  builtin_run cmd argv .> answered
 
 # Where run waits, start hands back the process so the program decides when it
 # is done — a browser told to render a page ignores its own exit budget and

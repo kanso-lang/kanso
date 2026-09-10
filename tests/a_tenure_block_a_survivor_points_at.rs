@@ -37,19 +37,19 @@ fn made i
   item "{pad}{pad}-{i}" i
 
 fn inner acc 0
-  io/write "" . (_ -> acc)
+  io/write "" .> (_ -> acc)
 
 fn inner acc j
   grown = text/concat acc [(made j)]
-  io/write "" . (_ -> inner grown (j - 1))
+  io/write "" .> (_ -> inner grown (j - 1))
 
 fn onward found 0
-  io/write "" . (_ -> found)
+  io/write "" .> (_ -> found)
 
 fn onward found i
   inner [] 30
-    . (batch -> text/concat found batch)
-    . (grown -> onward grown (i - 1))
+    .> (batch -> text/concat found batch)
+    .> (grown -> onward grown (i - 1))
 
 fn key_of m
   m.key
@@ -62,7 +62,7 @@ fn shown ms
   all = text/join (list/to_list (list/map ms key_of)) "-"
   io/write "{length ms} {length all} {total}\n"
 
-pub play = onward [] 280 . (ms -> onward ms 280) . (more -> shown more)
+pub play = onward [] 280 .> (ms -> onward ms 280) .> (more -> shown more)
 "#;
 
 const ENTRY: &str = r#"import "./lib"

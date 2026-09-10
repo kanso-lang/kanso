@@ -7,5 +7,5 @@ fn report a
   "status {a.status} said {a.stdout}"
 
 pub play =
-  os/run "printf" ["ready"] . (a -> print (report a))
-  >> os/run "false" [] . (b -> print (report b))
+  os/run "printf" ["ready"] .> (a -> print (report a))
+  >> os/run "false" [] .> (b -> print (report b))

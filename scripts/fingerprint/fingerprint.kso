@@ -34,7 +34,7 @@ fn with_args given
   usage (length given != 1) given
 
 fn usage true _
-  io/write_err "usage: fingerprint.kso <site-dir>\n" . (_ -> os/exit 2)
+  io/write_err "usage: fingerprint.kso <site-dir>\n" .> (_ -> os/exit 2)
 
 fn usage false given
   over_assets given[1]! 1 []
@@ -48,10 +48,10 @@ fn walking site _ names true
 fn walking site at names false
   asset = assets[at]!
   source = path/join site asset
-  os/exists source . (there -> one_asset site at names asset source there)
+  os/exists source .> (there -> one_asset site at names asset source there)
 
 fn one_asset _ _ _ asset _ false
-  io/write_err "missing asset: {asset}\n" . (_ -> os/exit 1)
+  io/write_err "missing asset: {asset}\n" .> (_ -> os/exit 1)
 
 fn one_asset site at names asset source true
   reading site at names asset source (path/extension asset == "wasm")
@@ -59,17 +59,17 @@ fn one_asset site at names asset source true
 # The wasm module is bytes and names no asset, so it is read as bytes and
 # digested as it is; a text asset is read as text and may be rewritten first.
 fn reading site at names asset source true
-  os/read_bytes! source . (raw -> digested site at names asset raw)
+  os/read_bytes! source .> (raw -> digested site at names asset raw)
 
 fn reading site at names asset source false
-  os/read_file! source . (raw -> rewritten site at names asset source raw)
+  os/read_file! source .> (raw -> rewritten site at names asset source raw)
 
 # A javascript asset names the ones digested before it, so its own text is
 # rewritten and written back before the digest is taken.
 fn rewritten site at names asset source raw
   fixed = self_references raw names 1
   on = (_ -> digested site at names asset fixed)
-  saved source fixed (raw == fixed) . on
+  saved source fixed (raw == fixed) .> on
 
 fn saved _ _ true
   io/write ""
@@ -93,13 +93,13 @@ fn digested site at names asset raw
   stem = path/stem asset
   name = "{stem}-{short}.{path/extension asset}"
   on = (_ -> over_assets site (at + 1) (push names (named asset name)))
-  os/write_file (path/join site name) raw . on
+  os/write_file (path/join site name) raw .> on
 
 # Every page and every script, however deep, with each asset's name rewritten
 # to its digested one. The tags carry a build-time query today, which the
 # digest replaces.
 fn over_pages site names
-  under site . (pages -> page_loop pages 1 names site)
+  under site .> (pages -> page_loop pages 1 names site)
 
 fn page_loop pages at names site
   paging pages at names site (at > length pages)
@@ -110,11 +110,11 @@ fn paging _ _ names _ true
 fn paging pages at names site false
   page = pages[at]!
   on = (raw -> one_page pages at names site page raw)
-  os/read_file! page . on
+  os/read_file! page .> on
 
 fn one_page pages at names site page raw
   fixed = references raw names 1
-  written page raw fixed . (_ -> page_loop pages (at + 1) names site)
+  written page raw fixed .> (_ -> page_loop pages (at + 1) names site)
 
 fn written page _ fixed
   os/write_file page fixed
@@ -157,7 +157,7 @@ fn guarded c false
   "\\{c}"
 
 fn under dir
-  os/list_dir dir . (names -> walk_names dir names 1 [])
+  os/list_dir dir .> (names -> walk_names dir names 1 [])
 
 fn walk_names dir names at acc
   walking_names dir names at acc (at > length names)
@@ -167,11 +167,11 @@ fn walking_names _ _ _ acc true
 
 fn walking_names dir names at acc false
   kid = path/join dir names[at]!
-  os/is_dir kid . (d -> walk_kid dir names at acc kid d)
+  os/is_dir kid .> (d -> walk_kid dir names at acc kid d)
 
 fn walk_kid dir names at acc kid true
   on = (deep -> walk_names dir names (at + 1) (joined acc deep))
-  under kid . on
+  under kid .> on
 
 fn walk_kid dir names at acc kid false
   walk_names dir names (at + 1) (kept acc kid (rewritable? kid))
@@ -200,7 +200,7 @@ fn telling _ _ true
 fn telling names at false
   one = names[at]!
   io/write "{padded one.asset} -> {one.digested}\n"
-    . (_ -> reported names (at + 1))
+    .> (_ -> reported names (at + 1))
 
 fn padded s
   padding s (length s > 19)
@@ -211,7 +211,7 @@ fn padding s true
 fn padding s false
   padded "{s} "
 
-pub play = os/args . (given -> with_args given)
+pub play = os/args .> (given -> with_args given)
 
 fn as_bytes raw:string
   text/bytes raw

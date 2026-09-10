@@ -18,7 +18,7 @@ fn going _ _ true
 fn going at n false
   hits = regexp/matches "panel [a-z]+" subject
   on = (_ -> spin (at + 1) n)
-  io/write "{length hits}\n" . on
+  io/write "{length hits}\n" .> on
 
 pub fn spin at n
   going at n (at >= n)

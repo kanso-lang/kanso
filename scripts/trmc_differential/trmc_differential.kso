@@ -139,10 +139,10 @@ fn asked argv
   os/run kanso argv
 
 fn ran src
-  os/write_file probe src . (_ -> asked ["play" probe]) . (n -> against n)
+  os/write_file probe src .> (_ -> asked ["play" probe]) .> (n -> against n)
 
 fn against n
-  asked ["play" probe "--interp"] . (i -> verdict n i)
+  asked ["play" probe "--interp"] .> (i -> verdict n i)
 
 # A line is either two answers that must match or the deep sum's own line.
 fn wrong? l

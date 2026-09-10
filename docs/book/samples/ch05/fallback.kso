@@ -6,4 +6,4 @@ fn orders (file_not_found _)
 fn orders text
   "yesterday: {text}"
 
-pub play = os/read_file "yesterday.txt" . orders . print
+pub play = os/read_file "yesterday.txt" .> orders .> print

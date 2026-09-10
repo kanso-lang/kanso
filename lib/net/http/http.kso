@@ -91,13 +91,13 @@ fn as_bytes body
 # One request, answered by the handler it is given. `serve_once` is the whole
 # of what a harness needs: a server that answers and stops.
 pub fn serve_once port handler
-  net/listen port . (l -> taken l handler)
+  net/listen port .> (l -> taken l handler)
 
 fn taken l handler
-  net/accept l . (c -> answered c handler) . (_ -> net/close_listener l)
+  net/accept l .> (c -> answered c handler) .> (_ -> net/close_listener l)
 
 fn answered c handler
-  net/read c . (raw -> replied c handler raw) . (_ -> net/close_conn c)
+  net/read c .> (raw -> replied c handler raw) .> (_ -> net/close_conn c)
 
 fn replied c handler raw
   written c (handler (parsed raw))
@@ -109,7 +109,7 @@ fn delivered c h body:string
   net/write c "{h}{body}"
 
 fn delivered c h body
-  net/write c h . (_ -> net/write c body)
+  net/write c h .> (_ -> net/write c body)
 
 # Many requests, folded. The handler answers a `turn`: the response, and what
 # to carry to the next request. Carrying a `done` closes the door, and what it
@@ -118,7 +118,7 @@ fn delivered c h body
 # whole of what one needs: serve the page, serve its assets, and answer the
 # report.
 pub fn serve_until port handler seed
-  net/listen port . (l -> serving l handler seed)
+  net/listen port .> (l -> serving l handler seed)
 
 # The same server, handed a listener rather than a number. A caller that binds
 # port 0 and reads back what it was given never has to drop the listener and
@@ -127,16 +127,18 @@ pub fn serving l handler seed
   served l handler seed
 
 fn served l handler carried
-  net/accept l . (c -> asked c handler carried) . (next -> more l handler next)
+  net/accept l
+    .> (c -> asked c handler carried)
+    .> (next -> more l handler next)
 
 fn asked c handler carried
-  net/read c . (raw -> gathering c handler carried raw)
+  net/read c .> (raw -> gathering c handler carried raw)
 
 # A browser opens connections it may never use, and sends nothing down them
 # until it does. Such a connection is not a request and gets no answer: the
 # door closes and the next one is accepted.
 fn gathering c _ carried ""
-  net/close_conn c . (_ -> carried)
+  net/close_conn c .> (_ -> carried)
 
 fn gathering c handler carried raw
   heard c handler carried raw (whole? raw)
@@ -149,10 +151,10 @@ fn heard c handler carried raw true
 # dropped; a client with nothing more to say sends an empty read and the door
 # closes on it, which is what stops this waiting forever.
 fn heard c handler carried raw false
-  net/read c . (nxt -> joined c handler carried raw nxt)
+  net/read c .> (nxt -> joined c handler carried raw nxt)
 
 fn joined c _ carried _ ""
-  net/close_conn c . (_ -> carried)
+  net/close_conn c .> (_ -> carried)
 
 fn joined c handler carried raw nxt
   gathering c handler carried "{raw}{nxt}"
@@ -189,10 +191,10 @@ fn counted parts true
 
 fn answered_with c handler carried raw
   took = handler (parsed raw) carried
-  written c took.answer . (_ -> net/close_conn c) . (_ -> took.carried)
+  written c took.answer .> (_ -> net/close_conn c) .> (_ -> took.carried)
 
 fn more l _ (stopped value)
-  net/close_listener l . (_ -> value)
+  net/close_listener l .> (_ -> value)
 
 fn more l handler carried
   served l handler carried

@@ -420,7 +420,7 @@ fn browsing chrome at path
 # The server listens before `accept` yields, and only then does the browser
 # start, which is what keeps chrome from meeting a closed door.
 fn visiting set chrome at path on
-  http/serve_until at handled set . on
+  http/serve_until at handled set .> on
   browsing chrome at path
 
 # Headless chrome does not exit on its own, and the process handle is born in
@@ -428,7 +428,7 @@ fn visiting set chrome at path on
 # serves — nothing carries a value between them. The profile name is unique to
 # this harness, so it is what identifies the browser to stop.
 fn stopping on
-  os/run "pkill" ["-f" "kanso-smoke-profile"] . on
+  os/run "pkill" ["-f" "kanso-smoke-profile"] .> on
 
 fn saw? text needle
   length (text/split text needle) > 1
@@ -625,7 +625,7 @@ fn ended _ _ true
 
 fn ended failures report false
   said = "FAIL  {text/join failures "; "}\n  the page said: {report}\n"
-  io/write said . (_ -> os/exit 1)
+  io/write said .> (_ -> os/exit 1)
 
 # The history is embedded as a JS string, and declared after the stub that
 # reads it: the page's own scripts run once this one has finished, so nothing
@@ -662,7 +662,7 @@ fn gathered _ _ acc true
 
 fn gathered paths at acc false
   on = (body -> read_each paths (at + 1) (text/concat acc [body]))
-  read_one paths[at]! . on
+  read_one paths[at]! .> on
 
 # The engine is bytes and everything else is text; read_file refuses bytes
 # that are not text, on every engine, so the module is read as what it is.
@@ -691,7 +691,7 @@ fn assembled bodies shown read drawn index
   wanted set
 
 fn wanted set
-  os/env "KANSO_CHROME" . (told_where -> chosen set told_where)
+  os/env "KANSO_CHROME" .> (told_where -> chosen set told_where)
 
 fn chosen set none
   first_chrome set chrome_paths 1
@@ -699,24 +699,24 @@ fn chosen set none
 # A browser that never starts is a server that waits forever, so a name given
 # by hand is checked before it is trusted.
 fn chosen set where
-  os/exists where . (there -> told_of set where there)
+  os/exists where .> (there -> told_of set where there)
 
 fn told_of set where true
   running set where
 
 fn told_of _ where false
   said = "KANSO_CHROME names {where}, which is not there\n"
-  io/write said . (_ -> os/exit 1)
+  io/write said .> (_ -> os/exit 1)
 
 fn first_chrome set paths at
   searched set paths at (at > length paths)
 
 fn searched _ _ _ true
-  io/write "no chrome found: set KANSO_CHROME\n" . (_ -> os/exit 1)
+  io/write "no chrome found: set KANSO_CHROME\n" .> (_ -> os/exit 1)
 
 fn searched set paths at false
   on = (there -> found_at set paths at there)
-  os/exists paths[at]! . on
+  os/exists paths[at]! .> on
 
 fn found_at set paths at true
   running set paths[at]!

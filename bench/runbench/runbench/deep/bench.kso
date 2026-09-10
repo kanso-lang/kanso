@@ -24,13 +24,13 @@ fn row 0 _ acc
   acc
 
 fn row d k acc
-  io/write "" . (_ -> row (d - 1) k (push acc (mixed d k)))
+  io/write "" .> (_ -> row (d - 1) k (push acc (mixed d k)))
 
 fn grid 0 _ acc
   acc
 
 fn grid n k acc
-  row deep (n + k) [] . (r -> grid (n - 1) k (push acc r))
+  row deep (n + k) [] .> (r -> grid (n - 1) k (push acc r))
 
 fn scored g
   list/fold g 0 (m r -> m + list/fold r 0 (a v -> a + v))
@@ -39,7 +39,7 @@ fn trials 0 acc
   acc
 
 fn trials k acc
-  grid wide k [] . (g -> trials (k - 1) (acc + scored g))
+  grid wide k [] .> (g -> trials (k - 1) (acc + scored g))
 
 pub fn total n
   trials n 0

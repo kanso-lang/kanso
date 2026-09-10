@@ -25,6 +25,10 @@ pub enum Tok {
     Bind,
     Arrow,
     Pipe,
+    /// The chain dot fused with one character of channel: `.>` is `bind`,
+    /// `.!` is `annotate`, `.?` is `rescue`. The token carries the word it
+    /// desugars to, so the parser learns three operators and no meanings.
+    Fused(&'static str),
     SeqOp,
     Op(&'static str),
     Underscore,
@@ -152,7 +156,8 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             }
             continue;
         }
-        // A continuation line starts with a chain operator (`.` or `>>`) at
+        // A continuation line starts with a chain operator (`.`, a fused
+        // `.>` `.!` `.?`, or `>>`) at
         // the parent statement's indent plus two; its tokens splice into the
         // parent so the parser sees one wrapped statement. Spans keep the
         // source line, so diagnostics still point home. Wrapping never changes
@@ -166,7 +171,12 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             !matches!(p.tokens.first(), Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _, _)))
                 && !matches!(p.tokens.last(), Some((Tok::Bind, _, _)))
         });
-        let dot_cont = content.starts_with(". ");
+        // a fused chain operator leads a continuation line the way the bare
+        // dot does: `.> f`, `.! f`, `.? f`
+        let fused_cont = content.starts_with('.')
+            && content.chars().nth(1).is_some_and(|c| fused_word(c).is_some())
+            && content.chars().nth(2) == Some(' ');
+        let dot_cont = content.starts_with(". ") || fused_cont;
         let seq_cont = content.starts_with(">> ") && cont_indent_ok && parent_wrappable;
         if dot_cont || seq_cont {
             if !cont_indent_ok {
@@ -500,6 +510,29 @@ fn kanso_form_for(head: &str) -> Option<&'static str> {
     }
 }
 
+/// The word a fused chain operator stands for. `x .> f` IS `bind x f`; the
+/// other two are `annotate` and `rescue`, each one character of channel
+/// after the chain dot.
+pub fn fused_word(channel: char) -> Option<&'static str> {
+    match channel {
+        '>' => Some("bind"),
+        '!' => Some("annotate"),
+        '?' => Some("rescue"),
+        _ => None,
+    }
+}
+
+/// The fused spelling of a chain word, which is its only spelling in chain
+/// position.
+pub fn fused_sigil(word: &str) -> Option<&'static str> {
+    match word {
+        "bind" => Some(".>"),
+        "annotate" => Some(".!"),
+        "rescue" => Some(".?"),
+        _ => None,
+    }
+}
+
 struct Scanner<'a> {
     chars: Vec<char>,
     /// The line as it was written. `pos` indexes characters, so this is only
@@ -657,6 +690,13 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
                 "kanso has no commas; enumerations are space-separated".to_string(),
                 span,
             ));
+        }
+        if c == '.' {
+            if let Some(word) = s.peek(1).and_then(fused_word) {
+                s.pos += 2;
+                tokens.push((Tok::Fused(word), span, s.span().col));
+                continue;
+            }
         }
         let tok = match c {
             '(' => Some(Tok::LParen),

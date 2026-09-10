@@ -25,7 +25,7 @@ fn a_module_named(name: &str) -> std::path::PathBuf {
     std::fs::create_dir_all(&module).expect("a directory to build in");
     std::fs::write(
         module.join(format!("{name}.kso")),
-        "import \"std/os\"\n\npub play = os/args . (a -> print \"ran with {length a}\")\n",
+        "import \"std/os\"\n\npub play = os/args .> (a -> print \"ran with {length a}\")\n",
     )
     .expect("the module writes");
     std::fs::write(module.join("main.kso"), format!("import \"./{name}\"\n\n{name}/play\n"))

@@ -1,0 +1,4 @@
+error[syntax]: in a chain `rescue` is spelled `.?`: write `.? f`
+  --> a_chain_word_is_spelled_fused.kso:6:37
+   6 | pub play = print (json/decode "[1]" . rescue told)
+                                           ^

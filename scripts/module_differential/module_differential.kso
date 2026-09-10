@@ -679,8 +679,8 @@ fn up parts false
 
 fn made root f after
   os/run "mkdir" ["-p" "{root}{holding f.name}"]
-    . (_ -> os/write_file "{root}/{f.name}" f.text)
-    . (_ -> after)
+    .> (_ -> os/write_file "{root}/{f.name}" f.text)
+    .> (_ -> after)
 
 fn laid root files at after
   laying root files at after (at > length files)
@@ -705,8 +705,8 @@ fn judged k after
   root = "{work}/m"
   target = aimed root k.entry
   os/run "rm" ["-rf" work]
-    . (_ -> laid root k.files 1 (asked ["check" target]))
-    . (c -> ruled k.verdict target k c after)
+    .> (_ -> laid root k.files 1 (asked ["check" target]))
+    .> (c -> ruled k.verdict target k c after)
 
 fn aimed root ""
   root
@@ -736,10 +736,10 @@ fn compiled _ _ c after false
   after "expected it to compile: {clipped c.stderr}"
 
 fn compiled target k _ after true
-  asked ["run" target] . (n -> crossed target k n after)
+  asked ["run" target] .> (n -> crossed target k n after)
 
 fn crossed target k n after
-  asked ["run" target "--interp"] . (i -> after (agreed k n i (same? n i)))
+  asked ["run" target "--interp"] .> (i -> after (agreed k n i (same? n i)))
 
 fn same? n i
   n.status == i.status and n.stdout == i.stdout and n.stderr == i.stderr
@@ -809,9 +809,9 @@ fn reported wrong healed
   seen = "{length known_wrong} known defects, {length healed}"
   tail = "{seen} no longer as recorded\n"
   os/run "rm" ["-rf" work]
-    . (_ -> io/write "{count}{tail}")
-    . (_ -> io/write "{spelled wrong}{spelled healed}")
-    . (_ -> closed wrong healed)
+    .> (_ -> io/write "{count}{tail}")
+    .> (_ -> io/write "{spelled wrong}{spelled healed}")
+    .> (_ -> closed wrong healed)
 
 fn spelled lines
   said (text/join lines "\n") (length lines == 0)
@@ -827,7 +827,7 @@ fn closed wrong healed
   second = "should.\nif one is settled, delete its entry — do not update it.\n"
   advice = "{first} {second}"
   clean = length wrong == 0 and length healed == 0
-  io/write (spoken advice (length healed == 0)) . (_ -> ending clean)
+  io/write (spoken advice (length healed == 0)) .> (_ -> ending clean)
 
 fn spoken _ true
   ""

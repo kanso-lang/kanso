@@ -1,9 +1,9 @@
 import "std/os"
 
 pub play =
-  os/exists "listing" . show
-  >> os/exists "listing/nope" . show
-  >> os/list_dir "listing" . show
+  os/exists "listing" .> show
+  >> os/exists "listing/nope" .> show
+  >> os/list_dir "listing" .> show
 
 pub fn show v
   print "{v}"

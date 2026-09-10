@@ -15,12 +15,12 @@ const START_AND_KILL: &str = r#"import "std/os"
 import "std/time"
 
 fn asked _
-  os/exists "late" . (there -> print "the late file arrived: {there}")
+  os/exists "late" .> (there -> print "the late file arrived: {there}")
 
 os/start "sh" ["-c" "sleep 2 && echo late > late"]
-  . os/kill
-  . (_ -> time/sleep 3000)
-  . asked
+  .> os/kill
+  .> (_ -> time/sleep 3000)
+  .> asked
 "#;
 
 fn ran(engine: &[&str], dir: &std::path::Path) -> String {

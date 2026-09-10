@@ -249,7 +249,7 @@ import "std/math"
 import "std/time"
 
 fn roll i
-  math/random 6 . (n -> print "roll {i}: a {n + 1}")
+  math/random 6 .> (n -> print "roll {i}: a {n + 1}")
 
 brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
 rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5

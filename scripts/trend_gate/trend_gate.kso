@@ -519,7 +519,7 @@ fn short s false
   "{grouped head},{tail}"
 
 fn from_git base path
-  asked ["show" "{base}:{path}"] . (r -> answered r.status r.stdout)
+  asked ["show" "{base}:{path}"] .> (r -> answered r.status r.stdout)
 
 fn answered 0 text
   text
@@ -538,7 +538,7 @@ fn recorded text
 
 fn attributed? base
   from_git base floor_file
-    . (theirs -> os/read_file! floor_file . (ours -> grew? theirs ours))
+    .> (theirs -> os/read_file! floor_file .> (ours -> grew? theirs ours))
 
 fn grew? theirs ours
   recorded ours > recorded theirs
@@ -649,7 +649,7 @@ fn shifted? pins key
 
 fn log_delta base
   argv = ["diff" base "--" "design/compiler-log.md"]
-  asked argv . (r -> plus_lines r.stdout)
+  asked argv .> (r -> plus_lines r.stdout)
 
 fn plus_lines out
   kept = list/select (text/split out "\n") added?
@@ -658,11 +658,11 @@ fn plus_lines out
 # A fixture this branch adds has nothing to be compared against, and counting
 # its counters as movement would read every new pin as a regression.
 fn against _ "" found _
-  io/write "" . (_ -> found)
+  io/write "" .> (_ -> found)
 
 fn against golden base_text found pins
   os/read_file! golden[1]!
-    . (ours -> weighed golden golden[2]! base_text ours found pins)
+    .> (ours -> weighed golden golden[2]! base_text ours found pins)
 
 # The sums run over the samples BOTH sides have.
 #
@@ -686,7 +686,7 @@ fn weighed golden prefix base_text ours found pins
   mine = counted (without ours joiners) prefix
   theirs = counted base_text prefix
   named_new golden joiners (length joiners == 0)
-    . (_ -> scored golden mine theirs found pins)
+    .> (_ -> scored golden mine theirs found pins)
 
 fn named_new _ _ true
   io/write ""
@@ -824,14 +824,14 @@ fn walked base goldens found pins
   onward base goldens found pins (length goldens == 0)
 
 fn onward _ _ found _ true
-  io/write "" . (_ -> found)
+  io/write "" .> (_ -> found)
 
 fn onward base goldens found pins false
   rest = list/to_list (list/drop goldens 1)
   g = goldens[1]!
   from_git base g[1]!
-    . (base_text -> against g base_text found pins)
-    . (grown -> walked base rest grown pins)
+    .> (base_text -> against g base_text found pins)
+    .> (grown -> walked base rest grown pins)
 
 fn base_of args
   given args (length args == 0)
@@ -844,21 +844,21 @@ fn given args false
 
 fn started base
   from_git base floor_file
-    . (theirs -> os/read_file! floor_file . (ours -> both base theirs ours))
+    .> (theirs -> os/read_file! floor_file .> (ours -> both base theirs ours))
 
 fn both base theirs ours
   os/read_file! sources_file
-    . (src -> reading base (linkage (baselines theirs) (baselines ours) src))
+    .> (src -> reading base (linkage (baselines theirs) (baselines ours) src))
 
 fn reading base pins
-  os/list_dir mem_dir . (names -> gathered base names pins)
+  os/list_dir mem_dir .> (names -> gathered base names pins)
 
 fn gathered base names pins
-  walked base (every_golden names) [] pins . (ms -> priced base ms pins)
+  walked base (every_golden names) [] pins .> (ms -> priced base ms pins)
 
 fn priced base ms pins
   log_delta base
-    . (added -> attributed? base . (att -> verdict ms added att pins))
+    .> (added -> attributed? base .> (att -> verdict ms added att pins))
 
 fn verdict moves added att pins
   new_ones = list/to_list (list/select moves (m -> m.minted))
@@ -872,7 +872,7 @@ fn verdict moves added att pins
   orphans = unclaimed pins[2]! pins[3]! shifted
   reb = [shifted orphans]
   seen = [worse better adrift]
-  said moves . (_ -> weighed_up moves seen new_ones reb added att)
+  said moves .> (_ -> weighed_up moves seen new_ones reb added att)
 
 # A baseline value that moved and no golden row claimed. See `baselines`: the
 # runtime counters are renamed on the way into the objective, so this is where
@@ -897,11 +897,11 @@ fn weighed_up moves seen new_ones reb added att
   quiet = list/to_list (list/select owed (m -> silent? added m))
   mute = list/to_list (list/reject orphans (k -> named_in? added k))
   unclassified adrift
-    . (_ -> newly new_ones)
-    . (_ -> rebasing shifted orphans)
-    . (_ -> unstated mute)
-    . (_ -> unpriced quiet)
-    . (_ -> summary moves quiet . (_ -> ruling worse better att))
+    .> (_ -> newly new_ones)
+    .> (_ -> rebasing shifted orphans)
+    .> (_ -> unstated mute)
+    .> (_ -> unpriced quiet)
+    .> (_ -> summary moves quiet .> (_ -> ruling worse better att))
 
 fn named_in? added k
   length (text/split added k) > 1
@@ -914,7 +914,7 @@ fn named_in? added k
 # is exactly what the write-up of a re-basing states.
 fn rebasing shifted orphans
   re_based shifted (length shifted == 0)
-    . (_ -> unattributed orphans (length orphans == 0))
+    .> (_ -> unattributed orphans (length orphans == 0))
 
 fn re_based _ true
   io/write ""
@@ -1048,7 +1048,7 @@ fn settled true true
   banked 0
 
 fn settled true false
-  refused 0 . (_ -> os/exit 1)
+  refused 0 .> (_ -> os/exit 1)
 
 fn settled false _
   io/write ""
@@ -1064,4 +1064,4 @@ fn refused _
   >> io/write "the gate refuses outright. A language change that must spend\n"
   >> io/write "the score says so in bench/welfare_floor.json's history.\n"
 
-pub play = os/args . (a -> started (base_of a))
+pub play = os/args .> (a -> started (base_of a))

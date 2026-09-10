@@ -1,4 +1,4 @@
 import "./version"
 import "std/os"
 
-os/args . version/announce
+os/args .> version/announce
