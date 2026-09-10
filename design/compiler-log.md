@@ -3515,3 +3515,73 @@ which is exactly the shape a partial over a value arrives in: `(foo add) 5
 7`, a call whose answer is the callee. The backend now computes any such head
 as a value and calls it, the runtime naming what it cannot call, so the two
 page specs and the runtime fixture run on the third engine.
+
+**CI's rows, round one.** Five veins moved and the job named all five.
+
+The three compile rows rise: `compile_instructions` 48,866,385 -> 48,879,362
+(+12,977, +0.0266%), `entry_instructions` 162,751,831 -> 162,822,303 (+70,472,
++0.0433%), `library_instructions` 163,473,663 -> 163,543,712 (+70,049,
++0.0429%). `src/runtime.c` is `include_str!`'d into the compiler, so
+`k_partial0..4` and the branch each of `k_call0..4` gains are bytes the
+compiler carries and compiles, and `src/codegen.rs` and `src/wasm_backend.rs`
+change beside it. `compile_allocs` 29,276 and `compile_peak_bytes` 773,818 are
+byte-identical: the front end does no more work, it only has more text.
+
+The whole `.text` vein rises, and it was not in the prediction this branch was
+pushed with. Every one of the fourteen rows gains 2,096 bytes or 2,432 --
+`text_jsonbench` 97,986 -> 100,418, `text_encodebench` 118,834 -> 120,930,
+`text_oneshot` 109,858 -> 112,290, `text_basket` 112,018 -> 114,226,
+`text_widebench` 124,098 -> 126,194, `text_deepbench` 74,306 -> 76,402,
+`text_escapebench` 55,442 -> 57,874, `text_pendbench` 90,738 -> 92,834,
+`text_indexbench` 59,458 -> 61,890, `text_scanbench` 158,642 -> 160,738,
+`text_digestbench` 109,554 -> 111,650, `text_readbench` 55,970 -> 58,402,
+`text_livebench` 110,434 -> 112,866, `text_runbench` 245,858 -> 247,954. The
+runtime is linked into every program, so a runtime that grows grows all of
+them; the 336-byte spread is the arms a program's own dispatch makes
+reachable. The PR body predicted the host-keyed compile rows and stopped
+there, which was the wrong list: a change to src/runtime.c moves the compile
+rows AND the text vein, and nothing on this container could see either.
+
+**And the work vein FALLS, on ten rows of fourteen, with none rising.**
+`work_runbench` 2,369,917,611 -> 2,369,679,773 (-237,838, -0.0100%),
+`work_deepbench` 389,214,251 -> 387,470,247 (-1,744,004, -0.4481%),
+`work_widebench` 35,332,240 -> 35,268,228 (-64,012, -0.1812%), `work_pendbench`
+590,971,748 -> 590,970,940 (-808), and a uniform -8 on `work_jsonbench`,
+`work_encodebench`, `work_oneshot`, `work_digestbench`, `work_readbench` and
+`work_livebench`. `work_basket`, `work_escapebench`, `work_indexbench` and
+`work_scanbench` are byte-identical.
+
+That is the opposite of what the change looks like it should do. It adds a
+branch in front of every `k_call0..4` arity test, and the naive reading is that
+every native call pays one more test. What moved is the emitter's inlined fast
+arm: it tests `arity == n` before it calls now rather than after, which is both
+what keeps a partial from ever reaching a body through it and a cheaper test
+than the one it replaced. deepbench and widebench build the deepest and widest
+structures in the corpus and call hardest, and they carry most of the fall. The
+uniform -8 is one instruction on a path six programs take eight times and the
+four flat rows never take.
+
+The fall is small and it is measured rather than argued: both sittings are
+CI's, on the same glibc 2.39-0ubuntu8.9 image, and the only difference between
+them is this commit.
+
+Summed, the vein the gate weighs is `text` 1,523,196 -> 1,554,668, a rise of
+31,472 (+2.0662%). That is the whole of the runtime's growth counted once per
+program across the fourteen. Machine-code size carries no welfare term, ruled
+2026-09-05, so it is watched exactly and priced here rather than traded.
+
+**Welfare falls, and the floor moves under the language clause.**
+66.37750307886598 -> 66.37657452327063, a spend of 0.00093. The run term
+improves and the compile term pays more: `work_runbench` falls 0.010% where
+the three compile rows rise 0.039% together, and the smaller relative move on
+the heavier, later-satiating term does not cover the larger one on the lighter.
+`compile_allocs` and `compile_peak_bytes` are byte-identical, so the front end
+does no more work; it has more text to compile.
+
+The floor moves to the reading because a RULED feature spent it, which is the
+2026-08-25 clause and the same ground #1359 and #1356 moved on. It is not a
+claim that the weights are wrong: the objective is reporting the trade
+correctly, and a partial over a value on every engine is worth 0.00093 of it
+by Clay's own "BUILD IT". The first cut of this entry recorded the move as a
+`--set` with a reason that read like a banked gain, which was wrong about the
+direction; the history entry says the fall and its size now.
