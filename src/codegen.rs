@@ -18,6 +18,7 @@ const K_NONE: i64 = 4;
 /// A succeeded effect's yield; the runtime's newest tag, after K_SUB.
 const K_DONE: i64 = 16;
 const K_ERR: i64 = 5;
+const K_DESC: i64 = 8;
 
 /// What an arm's discriminating pattern tests, when a switch on the value's tag
 /// can express it. Records are `Rec` rather than a tag because they all carry
@@ -3028,8 +3029,11 @@ impl<'a> Backend<'a> {
                 false => None,
             },
             Pattern::Annotated { ty, .. } => {
-                // These two answer before the guard and typeset logic below
+                // These answer before the guard and typeset logic below
                 // them in the cascade, so they answer before it here too.
+                if crate::ast::is_effect_type(ty) {
+                    return Some(ArmCase::Tags(vec![K_DESC]));
+                }
                 if ty.ends_with("[]") {
                     return Some(ArmCase::Tags(vec![9]));
                 }
@@ -3476,6 +3480,10 @@ impl<'a> Backend<'a> {
     fn type_check_call(&self, value: &str, ty: &str) -> Result<String, String> {
         let subs = !self.sub_parents.is_empty();
         Ok(match ty {
+            // a box is a box whatever it yields, and never a subtype
+            t if crate::ast::is_effect_type(t) => {
+                format!("call i64 @k_check_tag(%KValue {value}, i64 {K_DESC})")
+            }
             "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
             "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
             "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),

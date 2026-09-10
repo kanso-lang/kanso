@@ -1,0 +1,4 @@
+error[syntax]: `<int>` says what an effect yields, and only `effect` takes a yield — `<int>effect`
+  --> only_an_effect_takes_a_yield.kso:3:16
+   3 | fn held e:<int>list
+                      ^

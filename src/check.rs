@@ -905,49 +905,69 @@ fn check_box_where_value<'p>(
     // ONE MAP, NOT TWO. Both keys began with the declaration's name, so the
     // second hashed that string once per PARAMETER to build and once per
     // ARGUMENT to read, on top of the hash the same call site already paid for
-    // the return set. The per-position bool sits in a bitmask beside the set
-    // now: one hash per declaration to build it, one per call site to read it.
+    // the return set. The per-position bool is a bitmask beside the set and
+    // the group's member list: one hash per declaration to build it, one per
+    // call site to read it.
     //
     // A position past the mask's width reads as BINDING, which is the
     // under-refusing direction — the same choice kanso#1369 made for the
     // exhaustiveness mask, and for the same reason: a refusal this pass cannot
     // justify is worse than one it declines to make. The widest group in lib/
     // takes five parameters against a width of sixty-four.
-    let mut returns: crate::hash::Map<(&str, usize), (Set, u64)> =
+    //
+    // The middle field threads the group's members — the first in the map, the
+    // rest through `next` — for the tail read below.
+    let mut returns: crate::hash::Map<(&str, usize), (Set, u32, u64)> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    let mut next: Vec<u32> = vec![u32::MAX; program.fns.len()];
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
-        let slot = returns.entry(key).or_insert((0, 0));
-        slot.0 |= inference.returns[i];
+        let group = returns.entry(key).or_insert((0, u32::MAX, 0));
+        group.0 |= inference.returns[i];
+        next[i] = group.1;
+        group.1 = i as u32;
         for (pos, param) in d.params.iter().enumerate().take(64) {
-            if matches!(param, Pattern::Var(..) | Pattern::Wildcard(..)) {
-                slot.1 |= 1u64 << pos;
+            // a bare binder takes a box, and so does an arm that names the
+            // effect type: `e:<int>effect` says it holds the channel
+            let anything = match param {
+                Pattern::Var(..) | Pattern::Wildcard(..) => true,
+                Pattern::Annotated { ty, .. } => crate::ast::is_effect_type(ty),
+                _ => false,
+            };
+            if anything {
+                group.2 |= 1u64 << pos;
             }
         }
     }
     let values = TOP & !FAIL & !THUNK & !DESC;
     let boxed = |s: Set| s & DESC != 0 && s & values == 0;
-    // WHETHER ANY NAME IN THE PROGRAM ANSWERS A BOX. When none does, a name
-    // and a call can never be one, so the two arms below that ask the table
-    // answer no without asking -- and the binder set those arms consult is
-    // never read, so it is never built either. What is left is the chain,
+    // WHETHER ANY NAME IN THE PROGRAM COULD ANSWER A BOX. When none could, a
+    // name and a call can never be one, so the two arms below that ask the
+    // table answer no without asking -- and the binder set those arms consult
+    // is never read, so it is never built either. What is left is the chain,
     // which the expression says on its own. A program that never names an
     // effect pays a walk instead of a walk plus a set.
-    let any_boxed = returns.values().any(|(s, _)| boxed(*s));
+    //
+    // The test is the DESCRIPTION BIT, not `boxed`. A wrapper like
+    // `os/read_file` carries its callback's answer beside that bit, so its set
+    // is not `boxed` and the tail walk below is what decides it; gating that
+    // walk on `boxed` would hide every such group behind the short circuit.
+    // Asking for the bit alone admits a superset of what `boxed` admits, so no
+    // refusal is lost, and a program with no io at all still pays nothing.
+    let any_boxed = returns.values().any(|(s, _, _)| s & DESC != 0);
     // a name the declaration binds itself — a parameter, a binding, a
     // lambda's parameter — is that binding, whatever declaration shares
     // its spelling; `fn either ... args` reads its own list, not `os/args`
     fn yields_box(
         e: &Expr,
-        returns: &crate::hash::Map<(&str, usize), (Set, u64)>,
+        boxed_group: &dyn Fn(&str, usize) -> bool,
         shadows: &dyn Fn(&str) -> bool,
-        boxed: &dyn Fn(Set) -> bool,
         any_boxed: bool,
     ) -> bool {
         match e {
             // a `.>` step answers the chain its subject opened
             Expr::App { args, piped: true, .. } => {
-                args.first().is_some_and(|a| yields_box(a, returns, shadows, boxed, any_boxed))
+                args.first().is_some_and(|a| yields_box(a, boxed_group, shadows, any_boxed))
             }
             // THE TABLE ANSWERS BEFORE THE BINDER SET DOES, and both are a hash
             // of the same name. A name the table does not hold, or holds as
@@ -957,20 +977,116 @@ fn check_box_where_value<'p>(
             // name in every expression to short-circuit the locals, and the
             // locals are the common case only in the arms this pass walks past.
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
+                // both branches of an `if` answering a box makes the `if` one
+                Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
+                    yields_box(&args[1], boxed_group, shadows, any_boxed)
+                        && yields_box(&args[2], boxed_group, shadows, any_boxed)
+                }
                 Expr::Ident(name, _) => {
-                    returns.get(&(name.as_str(), args.len())).is_some_and(|(s, _)| boxed(*s))
-                        && !shadows(name.as_str())
+                    boxed_group(name.as_str(), args.len()) && !shadows(name.as_str())
                 }
                 _ => false,
             },
             Expr::Ident(name, _) if any_boxed => {
-                returns.get(&(name.as_str(), 0)).is_some_and(|(s, _)| boxed(*s))
-                    && !shadows(name.as_str())
+                boxed_group(name.as_str(), 0) && !shadows(name.as_str())
             }
             Expr::Seq(..) | Expr::Join { .. } => true,
             _ => false,
         }
     }
+    // A group answers a box when its set says so, or when every arm ENDS in
+    // one. The set alone misses the shape most of std/os takes: `os/read_file`
+    // is `builtin_read_file path .> (r -> found path r)`, and a pipe's set
+    // carries the callback's answer beside the description bit, because the
+    // yield rides in the set — so `length (os/read_file p)` read as a value
+    // and died at run time with `chars takes a string`. The tail can tell: a
+    // `.>` over a box, a `>>`, a join, an effect builtin, or a call of a group
+    // that answers one, followed through the callee's own tail, so a wrapper
+    // of a wrapper is seen. Every arm must agree, which the one-shape rule at
+    // dispatch already asks of them. A group still being decided — a tail
+    // that calls back into its own group — answers no, which refuses nothing.
+    //
+    // Whether the tail's head is a name the arm binds is asked of the arm
+    // itself rather than of a set built per arm: a tail asks it once or
+    // twice, and a set for every declaration is an allocation apiece.
+    struct Tails<'a> {
+        program: &'a Program,
+        returns: &'a crate::hash::Map<(&'a str, usize), (Set, u32, u64)>,
+        next: &'a [u32],
+        boxed: &'a dyn Fn(Set) -> bool,
+        state: Vec<std::cell::Cell<u8>>,
+    }
+    const UNKNOWN: u8 = 0;
+    const DECIDING: u8 = 1;
+    const NO: u8 = 2;
+    const YES: u8 = 3;
+    impl Tails<'_> {
+        fn group(&self, name: &str, arity: usize) -> bool {
+            let Some(&(set, head, _)) = self.returns.get(&(name, arity)) else {
+                return crate::infer::is_effect_builtin(name);
+            };
+            if (self.boxed)(set) {
+                return true;
+            }
+            // the state lives on the group's first member
+            let cell = &self.state[head as usize];
+            match cell.get() {
+                YES => return true,
+                NO | DECIDING => return false,
+                _ => cell.set(DECIDING),
+            }
+            let mut i = head;
+            let mut all = true;
+            while i != u32::MAX && all {
+                let decl = &self.program.fns[i as usize];
+                all = match decl.body.last() {
+                    Some(Stmt::Expr(tail)) => {
+                        yields_box(tail, &|n, a| self.group(n, a), &|n| binds_name(decl, n), true)
+                    }
+                    _ => false,
+                };
+                i = self.next[i as usize];
+            }
+            cell.set(if all { YES } else { NO });
+            all
+        }
+    }
+    fn binds_name(decl: &FnDecl, name: &str) -> bool {
+        fn lambda_binds(e: &Expr, name: &str) -> bool {
+            if let Expr::Lambda { params, .. } = e {
+                if params.iter().any(|(n, _)| n == name) {
+                    return true;
+                }
+            }
+            let mut hit = false;
+            crate::for_each_child(e, |c| {
+                if !hit {
+                    hit = lambda_binds(c, name);
+                }
+            });
+            hit
+        }
+        let mut hit = false;
+        for param in &decl.params {
+            for_each_param_name(param, &mut |n| hit |= n == name);
+        }
+        hit || decl.body.iter().any(|stmt| match stmt {
+            Stmt::Bind { pattern, expr } => {
+                let mut bound = false;
+                for_each_param_name(pattern, &mut |n| bound |= n == name);
+                bound || lambda_binds(expr, name)
+            }
+            Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => lambda_binds(expr, name),
+        })
+    }
+    let tails = Tails {
+        program,
+        returns: &returns,
+        next: &next,
+        boxed: &boxed,
+        state: vec![std::cell::Cell::new(UNKNOWN); program.fns.len()],
+    };
+    let boxed_group = |name: &str, arity: usize| tails.group(name, arity);
     // the builtins that read a value. The words take the box; `print` and an
     // interpolation render it; `is_desc` asks about it; `push` and `put`
     // store it, which is holding; `err` and `wrap_err` carry it as a reason
@@ -1033,7 +1149,7 @@ fn check_box_where_value<'p>(
         b.set.contains(name)
     };
     let site = |e: &Expr, shadow: &dyn Fn(&str) -> bool, diags: &mut Vec<Diagnostic>| {
-        let is_box = |e: &Expr| yields_box(e, &returns, shadow, &boxed, any_boxed);
+        let is_box = |e: &Expr| yields_box(e, &boxed_group, shadow, any_boxed);
         match e {
             Expr::BinOp { op, lhs, rhs, .. } => {
                 for side in [lhs, rhs] {
@@ -1081,7 +1197,7 @@ fn check_box_where_value<'p>(
                 if found.is_none() && !reads_value(name.as_str()) {
                     return;
                 }
-                let binds = found.map_or(0, |(_, b)| b);
+                let binds = found.map_or(0, |(_, _, b)| b);
                 for (pos, arg) in args.iter().enumerate() {
                     if !is_box(arg) {
                         continue;
@@ -1325,7 +1441,8 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
         .filter_map(|t| t.parent.as_deref().map(|p| (t.name.as_str(), p)))
         .collect();
     let relation = |a: &str, b: &str| -> Option<i64> {
-        if a == b {
+        // two effect types are one shape at dispatch, whatever they yield
+        if a == b || (crate::ast::is_effect_type(a) && crate::ast::is_effect_type(b)) {
             return Some(0);
         }
         let mut cur = a;
@@ -2602,6 +2719,8 @@ fn type_admits(ty: &str, kind: LitKind, types: &HashMap<&str, &TypeDecl>) -> boo
         return kind == LitKind::Map;
     }
     match ty {
+        // a box is never written down as a literal
+        t if crate::ast::is_effect_type(t) => false,
         "int" => kind == LitKind::Int,
         // dispatch does not widen: an int literal reaches no float64 arm,
         // whatever arithmetic does with the two together
@@ -3359,6 +3478,9 @@ fn check_annotation_names(
 /// folds `[]T` to `T[]` and `map[K V]` to `map[K V]`, so both are read back
 /// here rather than at each comparison — one place that knows the spelling.
 fn annotation_names(ty: &str) -> Vec<&str> {
+    if let Some(yield_) = crate::ast::effect_yield(ty) {
+        return annotation_names(yield_);
+    }
     if let Some(rest) = ty.strip_prefix("map[").and_then(|r| r.strip_suffix(']')) {
         return rest.split_whitespace().filter(|n| *n != "map").collect();
     }
@@ -3620,7 +3742,9 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
         (Pattern::IntLit(x, _), Pattern::IntLit(y, _)) => x == y,
         (Pattern::StrLit(x, _), Pattern::StrLit(y, _)) => x == y,
         (Pattern::Nullary(x, _), Pattern::Nullary(y, _)) => x == y,
-        (Pattern::Annotated { ty: x, .. }, Pattern::Annotated { ty: y, .. }) => x == y,
+        (Pattern::Annotated { ty: x, .. }, Pattern::Annotated { ty: y, .. }) => {
+            x == y || (crate::ast::is_effect_type(x) && crate::ast::is_effect_type(y))
+        }
         (Pattern::Ctor { ty: x, fields: fa, .. }, Pattern::Ctor { ty: y, fields: fb, .. }) => {
             x == y && fa.len() == fb.len() && same_shape(fa, fb)
         }

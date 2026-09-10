@@ -166,9 +166,9 @@ hojicha</code></pre>
 
 <p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the bind dot in one screenshot: <code>&gt;&gt;</code> sequences io values that don't pass data (the plan lists every step up front), while <code>.&gt;</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
 
-<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller and no annotation to write—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
 
-<p>that is not the same as saying effects are untyped. an effect has a type, <code>&lt;t&gt;effect</code>, and the compiler tracks it through your program without being told. you never write the name; it is inferred from the io values you touch, the way every other type in kanso is inferred. what it buys you is that the compiler knows which of your expressions is a box, so it can refuse one wherever the thing inside is what's wanted:</p>
+<p>that is not the same as saying effects are untyped. an effect has a type, <code>&lt;t&gt;effect</code>, and the compiler tracks it through your program without being told: it is inferred from the io values you touch, the way every other type in kanso is inferred. what it buys you is that the compiler knows which of your expressions is a box, so it can refuse one wherever the thing inside is what's wanted:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">boxed.kso</div>
@@ -185,6 +185,50 @@ hojicha</code></pre>
 </div>
 
 <p><code>os/args</code> is an io, so <code>length</code> is being handed the box rather than the list inside it, and the compiler says so before the program runs. the same refusal covers <code>+</code>, <code>if</code>, an index, <code>==</code>, and any function of your own that wants a value. the fix is the operator you already know: <code>os/args .&gt; (a -&gt; print (length a))</code> opens the box and lets <code>length</code> see the list. this is the whole content of "the words are the only doors"&#8212;the dot applies, <code>.&gt;</code> opens, and nothing opens a box by accident.</p>
+
+<h2>a box has a type</h2>
+
+<p>an io is a value, and a value can be handed around before anyone opens it. a function that wants the box itself, rather than what comes out of it, says so in its signature: <code>&lt;string&gt;effect</code> is the type of an io that will yield a string. the box arrives unopened, and the function opens it with <code>.&gt;</code> the way <code>play</code> did above:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">counted.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/os"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">count_lines</span> text
+  newlines <span class="o">=</span> <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+  <span class="s">"flavors.txt has <span class="i">{newlines}</span> lines"</span>
+
+<span class="k">fn</span> <span class="f">counted</span> e:<span class="o">&lt;</span>string<span class="o">&gt;</span>effect
+  <span class="f">e</span> <span class="o">.&gt;</span> <span class="f">count_lines</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">counted</span> (<span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run counted.kso</div>
+    <pre><code>flavors.txt has 3 lines</code></pre>
+  </div>
+</div>
+
+<p><code>counted</code> holds the read and hands it on with a step attached. nothing has been read when it returns. its answer is another io, the same box with <code>count_lines</code> wired behind it, and the runtime performs the whole chain when <code>play</code> reaches the executor. the annotation does one job: it names the parameter as a box, so an arm can dispatch on "an io that yields a string" the way another arm dispatches on <code>n:int</code>.</p>
+
+<p>the other direction is refused. <code>length</code> reads a string; hand it the io and <code>kanso check</code> stops before anything runs:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">unopened_check.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">length</span> (<span class="f">os/read_file!</span> <span class="s">"flavors.txt"</span>))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check unopened_check.kso</div>
+    <pre><code><span class="k">error[effect]</span>: this is an effect — a box the words open — and `length` takes a value; open it with `.&gt;`
+<span class="c">  --&gt; unopened_check.kso:3:27</span>
+   3 | pub play = print (length (os/read_file! "flavors.txt"))
+                                 <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the message names the fix. a box travels wherever a value travels—into a parameter, a list, an interpolation—but where something reads the value inside, the box has to be opened first, and <code>.&gt;</code> is how. the compiler refuses only what it can prove is a box: an io from the standard library, or a function of your own whose every arm ends in one.</p>
 
 <h2>holding an argument back</h2>
 

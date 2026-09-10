@@ -1,0 +1,6 @@
+# `<int>effect` is one type, so it is written tight: the brackets hug the
+# yield and the head hugs the closing bracket.
+fn held e:<int> effect
+  "{e}"
+
+pub play = print (held 1)

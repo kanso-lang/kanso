@@ -318,6 +318,15 @@ once.** ch04, ch05's framing and compiler.html entry 23 move together in
 that pass. Nothing here is a question for Clay; the entry stays as the
 record of what the book owes and what it is waiting for.
 
+**ch05 and entry 23 done with the type's build, 2026-09-10.** ch05 gained
+"a box has a type": `counted` holds a `<string>effect` and hands it on,
+`unopened` shows the refusal of a box where `length` reads a value, and the
+sentence "no effect type to declare" is gone. compiler.html's entry 23
+points at the section. Sizing the refusal sample found the check blind to
+a library function whose tail is a `.>` step (`os/read_file`), fixed in the
+same build. ch04's "nothing is asked of the signature" still describes the
+railway, which still runs, and waits on the 2026-08-31 rider.
+
 ### The maps parse is 100% of the compile row's binary-to-binary drift
 
 **Cited: the ruling of 2026-09-03 (NO EXCLUSION; the toggle dropped, sorts

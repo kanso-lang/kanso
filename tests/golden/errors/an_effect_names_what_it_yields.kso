@@ -1,0 +1,6 @@
+# An effect is the unresolved outcome of an operation, so its type names
+# what it will yield: `<int>effect`. Bare `effect` says nothing.
+fn held e:effect
+  "{e}"
+
+pub play = print (held 1)

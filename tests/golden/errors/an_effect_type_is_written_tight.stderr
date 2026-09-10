@@ -1,0 +1,4 @@
+error[formatting]: canonical form requires no space here
+  --> an_effect_type_is_written_tight.kso:3:17
+   3 | fn held e:<int> effect
+                       ^
