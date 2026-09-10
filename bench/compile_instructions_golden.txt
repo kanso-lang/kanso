@@ -1079,4 +1079,14 @@
 # roughly the same tiny scale. The DIRECTION is not evidence the fix is
 # cheaper -- a condition that is strictly added cannot be -- and this note
 # says so rather than banking a win the change did not make.
-compile_instructions=48849164
+# 2026-09-10 (kanso#1361): compile_instructions=48,866,385, a RISE of 17,221
+# (+0.0353%) from 48,849,164.
+#
+# Records print qualified, everywhere. ast::Program gains `root`, the name an
+# importer would write for the root module, set where each compile path
+# returns: one String per program for a file's stem or a directory's name.
+# Everything else the change does is rendering, and `kanso check` never
+# renders. All three instruction rows rose together and in one band --
+# 0.0353%, 0.0131%, 0.0257% -- which is the layout reading the notes above
+# give, with that one String of real per-program work under it.
+compile_instructions=48866385

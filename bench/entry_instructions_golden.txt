@@ -102,4 +102,14 @@
 # a test on every fold site, where the row fell anyway. The prior that this
 # vein moves under any src/ edit now has a case in each direction with the
 # work counters green throughout.
-entry_instructions=162730512
+# 2026-09-10 (kanso#1361): entry_instructions=162,751,831, a RISE of 21,319
+# (+0.0131%) from 162,730,512.
+#
+# Records print qualified, everywhere. ast::Program gains `root`, the name an
+# importer would write for the root module, set where each compile path
+# returns: one String per program for a file's stem or a directory's name.
+# Everything else the change does is rendering, and `kanso check` never
+# renders. All three instruction rows rose together and in one band --
+# 0.0353%, 0.0131%, 0.0257% -- which is the layout reading the notes above
+# give, with that one String of real per-program work under it.
+entry_instructions=162751831

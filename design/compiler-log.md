@@ -3338,9 +3338,9 @@ switch, and the benchmarks are all that shape. The first cut emitted the
 switch unconditionally and cost each program a define, a branch and thirty
 to sixty lines. Every runtime vein is byte-identical: the render calls one
 table where it called the other. The host-keyed compile rows are CI's;
-`qualify` is untouched, and the same-box pair against #462's tree is below.
+`qualify` is untouched, and the same-box pair against #1360's tree is below.
 
-Same-box pair, callgrind on the gate's boxes, #462's tree against this one:
+Same-box pair, callgrind on the gate's boxes, #1360's tree against this one:
 module 50,397,314 -> 50,386,179 (−11,135, −0.0221%), entry 167,533,649 ->
 167,577,852 (+44,203, +0.0264%), library 168,348,197 -> 168,341,016 (−7,181,
 −0.0043%): the root's name and the shown-name table are a few thousand
@@ -3373,3 +3373,25 @@ module like any other and its name is the file's, so the line reads
 `nullary_native/unit` on native and `nullary_oracle/unit` on the oracle,
 one per staged file name; the expectation moved, found when the queue was
 stacked on one worktree on 2026-09-10.
+
+**Round one's compile rows, and the got file CI could not show.**
+`compile_instructions` 48,849,164 -> 48,866,385 (+17,221, +0.0353%),
+`entry_instructions` 162,730,512 -> 162,751,831 (+21,319, +0.0131%),
+`library_instructions` 163,431,666 -> 163,473,663 (+41,997, +0.0257%), CI's
+sitting on round one, copied in and noted in each golden. Three rows in one
+band, on a change whose only per-program work in the front end is the root's
+own String: the layout reading the compile goldens' older notes carry.
+`compile_allocs` also disagreed, and its value is not in this entry because
+nothing could reach it. The gate refuses to measure on a host the golden does
+not name — this container is rustc 1.94.1 against the golden's 1.98.1, and it
+says in as many words to let CI measure and copy the rows out of the job log.
+The job log's own step for that, "the rows as measured here, to copy into the
+goldens", named three got files by hand and there are five;
+`allocs_got.txt` was one of the two it missed, and the gate's own message sits
+fourteen gates and two callgrind dumps from the end, past what the log API's
+tail returns. So the step globs `*_got.txt` now. The hand-written list
+arrived with the first compile vein in #1214 and has been extended by hand
+twice since, at #1330 for the entry row and #1337 for the library row, and
+#1337 paid a round for the omission; the glob is what stops a third.
+`compile_allocs` stays deliberately red this round, and round two prints the
+number this one could only have guessed.

@@ -464,16 +464,17 @@ jobs:
         # job has not failed yet when this runs — the verdict step below is
         # what fails. Printing on a green run costs thirty lines and is the
         # difference between a session having the numbers and guessing them.
+        # The got files are globbed rather than named: the hand-written list
+        # carried three of the five, and compile_allocs was one of the two it
+        # missed, so kanso#1361's round one had a red row whose measured value
+        # the tail could not reach.
         if: always()
         run: |
-          for f in work.txt emitted.txt emitted_others.txt text.txt; do
+          for f in work.txt emitted.txt emitted_others.txt text.txt *_got.txt; do
             [ -f "$f" ] || continue
             echo "=== $f"
             cat "$f"
           done
-          [ -f compile_ir_got.txt ] && { echo "=== compile_ir_got.txt"; cat compile_ir_got.txt; }
-          [ -f entry_ir_got.txt ] && { echo "=== entry_ir_got.txt"; cat entry_ir_got.txt; }
-          [ -f library_ir_got.txt ] && { echo "=== library_ir_got.txt"; cat library_ir_got.txt; }
           exit 0
       - name: every vein had its say
         if: always()
