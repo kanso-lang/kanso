@@ -136,6 +136,62 @@ const DEFERRED: i32 = -2;
 /// The same closure while its own body is running. Reaching it means the value
 /// depends on itself with nothing in between.
 const RUNNING: i32 = -3;
+/// A partial over a VALUE: the environment holds the callee first and the
+/// arguments held so far after it, and the count is settled when the rest
+/// arrive. Built by `rt_partial`, read by `call_closure`.
+const PARTIAL: i32 = -4;
+/// A group or builtin handed out as a value carries the counts its arms take
+/// as bits below this base (`MASKED - mask`), so a partial over it can tell
+/// when it is finished. The backend's MASKED_ARITY.
+const MASKED: i32 = -1000;
+
+/// Every count a callee answers to, smallest first — the interpreter's
+/// `arities_of`. A lambda answers its one count, a wrapper the mask it was
+/// handed, and anything else — a partial, a cell, a value that is not
+/// callable — nothing, which is what makes a partial over it grow.
+fn arities_of(callee: u32) -> Vec<usize> {
+    let Slot::C { arity, .. } = closure_slot(callee) else { return Vec::new() };
+    if arity >= 0 {
+        return vec![arity as usize];
+    }
+    if arity > MASKED {
+        return Vec::new();
+    }
+    let mask = MASKED - arity;
+    (0..31).filter(|a| mask & (1 << a) != 0).collect()
+}
+
+/// A call on a partial. The held and fresh arguments are gathered; a count
+/// an arm takes dispatches through `call_closure`, which orders the failure
+/// tests the way the oracle does; short of every arm the partial grows; past
+/// every arm is the error, naming the arities that exist. No fresh argument
+/// is `p()`: the call the partial was built for, or how many it is short by.
+fn partial_apply(env: u32, fresh: Vec<u32>) -> u32 {
+    let Slot::E(held) = slot(env) else {
+        die("bad environment access".to_string());
+    };
+    let callee = held[0];
+    let mut all: Vec<u32> = held[1..].to_vec();
+    let running = fresh.is_empty();
+    all.extend(fresh);
+    let arities = arities_of(callee);
+    if arities.contains(&all.len()) {
+        return call_closure(callee, all);
+    }
+    if running {
+        let waiting = arities.iter().filter(|a| **a > all.len()).min().copied();
+        let short = waiting.map(|a| a - all.len()).unwrap_or(0);
+        die(format!("this function takes {short} argument(s), got 0"));
+    }
+    if !arities.is_empty() && arities.iter().all(|a| *a < all.len()) {
+        let names: Vec<String> = arities.iter().map(usize::to_string).collect();
+        die(format!("no {}-argument arm of `<fn>` (arms take {})", all.len(), names.join(" or ")));
+    }
+    let mut env_handles = vec![callee];
+    env_handles.extend(all);
+    let env = push(Slot::E(Rc::new(env_handles)));
+    push(Slot::C { tidx: 0, env, arity: PARTIAL })
+}
 
 /// A container read reaches through a deferral. The answer is written back
 /// over the closure, so a cycle read twice costs one call.
@@ -273,6 +329,9 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
         }
         die("this value is not callable".to_string());
     };
+    if arity == PARTIAL {
+        return partial_apply(env, arg_handles);
+    }
     if arity >= 0 && arity as usize != arg_handles.len() {
         die(format!("this function takes {arity} argument(s), got {}", arg_handles.len()));
     }
@@ -314,6 +373,9 @@ fn call_decided(c_h: u32, arg: u32) -> u32 {
     let Slot::C { tidx, env, arity } = closure_slot(c_h) else {
         return call_closure(c_h, vec![arg]);
     };
+    if arity == PARTIAL {
+        return partial_apply(env, vec![arg]);
+    }
     if arity >= 0 && arity != 1 {
         die(format!("this function takes {arity} argument(s), got 1"));
     }
@@ -1231,6 +1293,28 @@ pub extern "C" fn rt_mkclosure(tidx: u32, ncap: u32, arity: i32) -> u32 {
     let env_handles = pop_args(ncap);
     let env = push(Slot::E(Rc::new(env_handles)));
     push(Slot::C { tidx, env, arity })
+}
+
+/// `&f a b` over a VALUE. The callee is evaluated first and then each
+/// argument, and the first failure among them is the answer, callee first —
+/// the interpreter's order in its App-with-Partial arm; a bare `&f` wraps
+/// whatever `f` holds.
+#[no_mangle]
+pub extern "C" fn rt_partial(callee: u32, n: u32) -> u32 {
+    let args = pop_args(n);
+    if n > 0 {
+        for &h in std::iter::once(&callee).chain(args.iter()) {
+            if let Slot::V(v) = slot(h) {
+                if is_failure(&v) {
+                    return h;
+                }
+            }
+        }
+    }
+    let mut env_handles = vec![callee];
+    env_handles.extend(args);
+    let env = push(Slot::E(Rc::new(env_handles)));
+    push(Slot::C { tidx: 0, env, arity: PARTIAL })
 }
 
 #[no_mangle]

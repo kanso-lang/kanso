@@ -606,17 +606,23 @@
 #
 # The measured-on line at the top moves to clang 19.1.1 with these rows. A
 # clang-18 host writes the fallback module and cannot regenerate this file.
-jsonbench text=97986
-encodebench text=118834
-oneshot text=109858
-basket text=112018
-widebench text=124098
-deepbench text=74306
-escapebench text=55442
-pendbench text=90738
-indexbench text=59458
-scanbench text=158642
-digestbench text=109554
-readbench text=55970
-livebench text=110434
-runbench text=245858
+jsonbench text=100418
+encodebench text=120930
+oneshot text=112290
+basket text=114226
+widebench text=126194
+deepbench text=76402
+escapebench text=57874
+pendbench text=92834
+indexbench text=61890
+scanbench text=160738
+digestbench text=111650
+readbench text=58402
+livebench text=112866
+# 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
+# one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
+# the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
+# src/runtime.c, which is linked into every program. The 336-byte spread is the
+# arms a program's own dispatch makes reachable. Machine-code size carries no
+# welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
+runbench text=247954

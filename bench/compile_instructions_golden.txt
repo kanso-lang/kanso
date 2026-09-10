@@ -1105,4 +1105,13 @@
 # 1.98.1 -- and read 48,866,385 both times. So the line above moves and the
 # value stays. bench/instructions_golden.txt carries the account of what the
 # revision did move.
-compile_instructions=48866385
+# 2026-09-10 (kanso#1362): compile_instructions=48,879,362, a RISE of 12,977 (+0.0266%) from 48,866,385.
+#
+# The backends build the partial over a value. src/runtime.c is include_str!'d
+# into the compiler, so its new k_partial0..4 and the k_call0..4 branches are
+# bytes the compiler carries and compiles; src/codegen.rs and src/wasm_backend.rs
+# change beside it. The entry and library rows rise together at 0.0433% and
+# 0.0429% where the module row rises 0.0266%, which is the split those rows
+# already record: the two corpora that merge a dependency program pay the
+# larger share.
+compile_instructions=48879362

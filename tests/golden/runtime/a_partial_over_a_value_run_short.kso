@@ -1,0 +1,12 @@
+# `p()` on a partial over a VALUE that is still short of every arm: there
+# is nothing to run, and the count it is short by is the one the sentence
+# names (RULED 2026-08-29, "the backends build the partial over a value").
+fn plus a b
+  a + b
+
+fn over f
+  &f 1
+
+pub play =
+  p = over plus
+  print "{p()}"

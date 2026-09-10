@@ -378,19 +378,19 @@
 # The container measured the same direction on its own pair of builds, and its
 # absolute rows cannot be taken here: it is clang 18.1.3 and would write the
 # fallback module. CI's sitting is the record.
-jsonbench 1485334799
-encodebench 3963988526
-oneshot 21737118
+jsonbench 1485334791
+encodebench 3963988518
+oneshot 21737110
 basket 34694178
-widebench 35332240
-deepbench 389214251
+widebench 35268228
+deepbench 387470247
 escapebench 85558105
-pendbench 590971748
+pendbench 590970940
 indexbench 3265786
 scanbench 726019157
-digestbench 10426549
-readbench 4561941
-livebench 3481899703
+digestbench 10426541
+readbench 4561933
+livebench 3481899695
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -430,4 +430,22 @@ livebench 3481899703
 # not move at all: compile_instructions 48,866,385, entry_instructions
 # 162,751,831 and library_instructions 163,473,663 were each counted once on
 # each revision and read the same both times.
-runbench 2369917611
+# 2026-09-10 (kanso#1362): the backends build the partial over a value. Ten of
+# the fourteen rows FALL and none rises. work_runbench 2,369,917,611 ->
+# 2,369,679,773 (-237,838, -0.0100%), work_deepbench 389,214,251 ->
+# 387,470,247 (-1,744,004, -0.4481%), work_widebench 35,332,240 -> 35,268,228
+# (-64,012, -0.1812%), work_pendbench 590,971,748 -> 590,970,940 (-808), and a
+# uniform -8 on work_jsonbench, work_encodebench, work_oneshot,
+# work_digestbench, work_readbench and work_livebench. work_basket,
+# work_escapebench, work_indexbench and work_scanbench are byte-identical.
+#
+# The change adds a branch in front of every k_call0..4 arity test, so the
+# naive expectation was a rise. What actually moved is the emitter's inlined
+# fast arm, which now tests `arity == n` before it calls rather than after: the
+# partial can never reach a body through it, and the test it replaced was the
+# more expensive one. deepbench and widebench build the deepest and widest
+# structures and call hardest, which is why they carry most of the fall.
+#
+# The uniform -8 across six rows is one instruction on a path each program
+# takes eight times, and the four flat rows never take it at all.
+runbench 2369679773

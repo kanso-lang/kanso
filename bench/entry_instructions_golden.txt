@@ -117,4 +117,13 @@
 # 8.8 in round one and 162,751,831 on 8.9 in round four, same commit content and
 # same clang and rustc. The module row's note carries the reading, and
 # bench/instructions_golden.txt the account of what the revision did move.
-entry_instructions=162751831
+# 2026-09-10 (kanso#1362): entry_instructions=162,822,303, a RISE of 70,472 (+0.0433%) from 162,751,831.
+#
+# The backends build the partial over a value. src/runtime.c is include_str!'d
+# into the compiler, so its new k_partial0..4 and the k_call0..4 branches are
+# bytes the compiler carries and compiles; src/codegen.rs and src/wasm_backend.rs
+# change beside it. The entry and library rows rise together at 0.0433% and
+# 0.0429% where the module row rises 0.0266%, which is the split those rows
+# already record: the two corpora that merge a dependency program pay the
+# larger share.
+entry_instructions=162822303

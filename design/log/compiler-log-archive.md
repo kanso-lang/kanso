@@ -56914,3 +56914,42 @@ not lost anything. The fixture is named `builtin_arg_type`, its own error used
 to be raised first and stop the compile, and moving that check later let this
 refusal reach the reader ahead of it. The bug was already there and had been
 since the refusal was written.
+
+## 2026-09-08 — a projection off one box carries no sign
+
+The `builtin_` fix went to CI three times and the compile-instructions row said
+something different each time. Worth writing down, because the reasoning that
+produced the wrong prediction was not careless.
+
+Round one asked for the slash in front of the `BUILTINS` lookup:
+
+    name.strip_prefix("builtin_").filter(|_| !name.contains('/'))
+
+CI read 50,691,635 against a golden of 50,685,288 — a rise of **6,347**. That
+one is real work, and the diagnosis was easy: every builtin reference the
+standard library makes now scans its own name for a slash, and the library makes
+a great many.
+
+Round two moved the question onto the refusing arm, which a correct program
+never reaches. The container this was written on read 51,095,253 for that shape
+and 51,095,253 for the round-one shape — identical, to the instruction. Two
+source shapes that measure the same locally, with the work provably removed from
+the hot path, and the container's own delta against its baseline was a rise of
+**629**. So the residue was called irreducible layout and the PR body said the
+fix costs 629 instructions.
+
+CI read 50,684,921. A **fall of 367**.
+
+The magnitude was about right and the sign was backwards. Layout is a property of the toolchain and
+the host — this container is rustc 1.94.1 on glibc 2.39, the goldens are measured
+on 1.98.1 — and a layout residue measured on one box says nothing about the same
+residue on another. The correct reading of the local measurement was that the
+6,347 was gone and the remainder was unpredictable; instead it was read as a
+number.
+
+`bench/compile_instructions_golden.txt` is regenerated to 50,684,921 and the two
+`data-golden="compile.compile_instructions"` spans on the compiler page follow
+it. The rule already in CLAUDE.md — project a compile-instructions move from CI
+or take the red round, never write down that it moved before CI has said so —
+now has this as its worked example, and the sign is the part it costs a round to
+learn.

@@ -527,3 +527,15 @@ too many processes at once
 # over a tag must answer every tag, and a fall-through into the return would
 # hand back an uninitialised length.
 k_render_number: not a number
+
+# k_dispatch_n in runtime.c: a partial over a value whose held and fresh
+# arguments sum to the callee's arity dispatches through k_call0..4, and the
+# case past four dies here. No native callee reaches it: the emitter refuses a
+# lambda of more than four parameters ("native backend: a lambda takes at
+# most 4 parameters") and a group handed out as a value past four arguments
+# ("only 1-4 argument functions over plain values are supported"), both at
+# compile time, so every closure and fnref the runtime holds has an arity the
+# switch covers. The interpreter runs the five-parameter program, which is the
+# differential-law escape a backend that covers less is allowed, said at
+# compile time rather than here.
+native backend: a function value takes at most 4 arguments
