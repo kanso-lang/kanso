@@ -3839,7 +3839,22 @@ same byte a second time to compare it. `obj_key_end` is the shape `array_delim`
 and `obj_delim` already take: the colon is an arm, the whitespace is the arm
 before it, and the error is the arm after.
 
-**What they cost, on this tree over origin/main 32080acf.**
+**A deletion at the head of a library file moves every diagnostic below it.**
+Dropping `import "std/text"`, `expect_char` and both `expect_check` arms takes
+eleven lines off the top of lib/json/scan.kso, so `fail` moves from line 13 to
+line 2 and the endpoint diagnostic that names its birthplace moves with it:
+`tests/golden/runtime/a_lone_surrogate_is_half_a_character.stderr` now reads
+`born in json/fail at std/json/scan.kso:2`. Two tests read that one golden —
+`runtime_corpus_reports_endpoint_violations` in tests/golden.rs and
+`interpreter_reports_each_runtime_endpoint_violation` in tests/oracle.rs — and
+both went red until it was regenerated. Nothing else in the tree quotes a
+scan.kso line. Worth writing down because no counter, gate or sweep can see it:
+the change is a deletion of dead helpers, and it moved a user-visible sentence.
+
+**What they cost, on this tree over origin/main ef2f4ea4.** The arms were cut
+against 32080acf and re-measured after #1366 merged in. Not one runtime counter
+moved between the two bases: #1366 changed which constructor `fail` emits, not
+what anything allocates.
 
     pendbench   allocs      4,007,349 ->   807,149   (-79.86%)
                 alloc_bytes   257 MB  ->     65 MB   (-74.66%)
@@ -3865,9 +3880,47 @@ a change that stops building records looks like in the objective.
 more declarations for the front end to visit: front_end_visits 22,562 -> 22,727
 (+165, +0.7313%) with rounds holding at 62, the arms being wider rather than
 deeper so nothing re-converges. Every program that compiles std/list carries
-the counted arm, so the emitted rows rise across the board — the decoder 9,247
--> 9,273 lines, encodebench 11,105 -> 11,233, scanbench 19,674 -> 19,923. That
-is the trade stated plainly: more code written, much less allocated.
+the counted arm, so the emitted rows rise across the board — encodebench 11,104
+-> 11,232 lines, scanbench 19,673 -> 19,922, runbench 34,726 -> 34,979. The
+decoder is the one row that gains lines while LOSING calls: 9,246 -> 9,272 with
+calls 1,236 -> 1,226, because it reaches the colon arm and neither of the other
+two. Four rows are byte-identical — escapebench, indexbench, digestbench and
+readbench reach none of the three. That is the trade stated plainly: more code
+written, much less allocated.
+
+**Every counter that went the wrong way, with the value it landed on.**
+
+The byte class trades string work for byte work, so two counters that were
+zero on scanbench are no longer zero and the same pair rises on runbench, which
+runs split: `scan_find2_calls` 0 -> **501,505**, `scan_sh_bytes` 0 ->
+**24,072,240**, `run_find2_calls` 3,017,520 -> **3,109,759**, `run_sh_bytes`
+36,862,800 -> **41,290,272**. Against them `scan_sh_str` falls 37,039,216 ->
+1,632 and `scan_sh_buf` 24,105,200 -> 33,024. The bytes a class reads are the
+bytes it used to read as a string, and it stops copying them.
+
+The compile-module vein carries the three new declarations: `module_defines`
+100 -> **101**, `module_calls` 727 -> **754**, `module_branches` 430 -> **446**,
+`module_lines` 5,177 -> **5,304**, `module_visits` 2,471 -> **2,534**, beside
+`front_end_visits` 22,562 -> **22,727**.
+
+The emitted veins are the same three arms written out: `emitted_branches` 816
+-> **819** and `emitted_lines` 9,246 -> **9,272** on the decoder;
+`emitted_other_defines` 2,354 -> **2,366**, `emitted_other_calls` 20,245 ->
+**20,445**, `emitted_other_branches` 12,639 -> **12,800**, `emitted_other_lines`
+132,530 -> **133,802** across the thirteen beside it. `emitted_calls` on the
+decoder FALLS, 1,236 -> 1,226.
+
+Two rows of the inner-beat tenure fixture move with the counted fold, which is
+what that fixture folds:
+
+    an_inner_beat_opens_its_tenure_in_the_block_outside_survive_slots 2,004 -> 32,404
+    an_inner_beat_opens_its_tenure_in_the_block_outside_ten_frees 3 -> 2
+
+with `ten_blocks` 3 -> 2 beside them. The fold stops building four records an
+element, so far less
+is allocated inside the beat (allocs 512,494 -> 177,420, alloc_bytes 41.2 MB ->
+16.9 MB) and the beat runs a third as many iterations (158 -> 68); what survives
+a longer-lived block is counted in more slots and freed in one fewer.
 
 **Five veins are CI's.** machine_code, compile_allocs, compile_instructions,
 entry_instructions and library_instructions are refused on this container, and
