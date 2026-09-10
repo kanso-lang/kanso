@@ -361,6 +361,13 @@ pub struct Program {
     pub types: Vec<TypeDecl>,
     pub imports: Vec<Import>,
     pub reexports: Vec<Reexport>,
+    /// The root module's name, the one an importer would write for it: a
+    /// file's stem, a directory's name. RULED 2026-08-29, "records print
+    /// qualified, everywhere": a record prints `{module}/{type}` whatever the
+    /// entry path, so the root's own types render under this name, the way
+    /// they already did when the same file was reached through an import.
+    /// Empty when nothing named the root, and a bare type then prints bare.
+    pub root: String,
 }
 
 /// `pub name` re-exports an imported pub (or, when `name` is an import's

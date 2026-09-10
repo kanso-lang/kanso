@@ -179,24 +179,15 @@ fn mem_corpus_pins_native_allocator_counters() {
     // bench/cost_golden.txt but per-program. Every fixture runs as a LIBRARY
     // through the harness-generated entry, and the counters must match the
     // direct-run goldens byte for byte — an imported program pays the same
-    // allocation shape as a direct one. The one exception is qualified
-    // record rendering, whose longer type names cost string bytes; those
-    // fixtures carry `.imported.*` goldens. The lazy fragment will extend
-    // these with engine-shared semantic counters (forces, evaluations,
-    // cells live at exit) asserted on both engines.
+    // allocation shape as a direct one. Qualified record rendering used to
+    // be the one exception, its longer type names costing string bytes only
+    // on the imported path; since the 2026-08-29 ruling a record prints
+    // qualified on both paths, and the `.imported.*` twins are gone. The lazy
+    // fragment will extend these with engine-shared semantic counters
+    // (forces, evaluations, cells live at exit) asserted on both engines.
     for program in kso_files(&manifest_dir().join("tests/golden/mem")) {
-        let imported_out = program.with_extension("imported.stdout");
-        let expected_out = if imported_out.exists() {
-            std::fs::read_to_string(&imported_out).expect("the imported golden reads")
-        } else {
-            expected(&program, "stdout")
-        };
-        let imported_mem = program.with_extension("imported.mem");
-        let expected_mem = if imported_mem.exists() {
-            std::fs::read_to_string(&imported_mem).expect("the imported golden reads")
-        } else {
-            expected(&program, "mem")
-        };
+        let expected_out = expected(&program, "stdout");
+        let expected_mem = expected(&program, "mem");
         let output = run_kanso_as_library(&program, &[], &[("KANSO_COUNTERS", "1")]);
 
         assert_eq!(
@@ -207,9 +198,8 @@ fn mem_corpus_pins_native_allocator_counters() {
         // A new counter is additive and moves every file in this vein at
         // once; regenerating by hand is how one gets missed.
         if std::env::var_os("KANSO_REGEN_MEM_GOLDEN").is_some() {
-            let at =
-                if imported_mem.exists() { imported_mem } else { program.with_extension("mem") };
-            std::fs::write(&at, &output.stderr).expect("the mem golden writes");
+            std::fs::write(program.with_extension("mem"), &output.stderr)
+                .expect("the mem golden writes");
             continue;
         }
         assert_eq!(
@@ -348,17 +338,12 @@ fn micro_corpus_agrees_across_engines() {
             continue;
         }
 
-        // RULED: an imported record prints its QUALIFIED type name, so a
-        // sample that prints records legitimately answers differently as a
-        // library — `sample/point 3 4` where the direct run says `point 3 4`.
-        // Those samples carry a second golden for this path; everything else
-        // must match its ordinary one byte for byte.
-        let imported_golden = program.with_extension("imported.out");
-        let expected_out = if imported_golden.exists() {
-            std::fs::read_to_string(&imported_golden).expect("the imported golden reads")
-        } else {
-            expected(&program, "out")
-        };
+        // RULED 2026-08-29, "records print qualified, everywhere": a record
+        // prints `sample/point 3 4` whether the sample is run directly or
+        // reached through an import, so one golden answers both paths. The
+        // `.imported.out` twins that pinned the old divergence are gone, and
+        // no_golden_carries_an_imported_twin keeps them gone.
+        let expected_out = expected(&program, "out");
         covered += 1;
 
         // A program's stderr is part of what it does, and only `.out` was
@@ -429,11 +414,7 @@ fn micro_corpus_survives_a_release_build() {
         if !text.contains("\npub play") {
             continue;
         }
-        let imported_golden = program.with_extension("imported.out");
-        let expected_out = match imported_golden.exists() {
-            true => std::fs::read_to_string(&imported_golden).expect("the imported golden reads"),
-            false => expected(&program, "out"),
-        };
+        let expected_out = expected(&program, "out");
         covered += 1;
 
         let stage = std::env::temp_dir().join(format!("kanso-release-{name}"));
@@ -502,4 +483,27 @@ fn micro_corpus_survives_a_release_build() {
     }
 
     assert!(covered > 53, "only {covered} samples were release-built");
+}
+
+/// RULED 2026-08-29, "records print qualified, everywhere". The micro and mem
+/// corpora once carried `.imported.out`, `.imported.stdout` and `.imported.mem`
+/// twins for fixtures that printed a record, because the direct run printed
+/// `point 3 4` and the imported one `sample/point 3 4`. Both paths print the
+/// qualified form now, the twins were folded into the ordinary goldens, and a
+/// twin reappearing would mean the two paths had drifted apart again — which
+/// is the divergence the ruling ended, so it fails here rather than growing a
+/// second golden.
+#[test]
+fn no_golden_carries_an_imported_twin() {
+    let mut twins = Vec::new();
+    for corpus in ["tests/golden/micro", "tests/golden/mem"] {
+        for entry in std::fs::read_dir(manifest_dir().join(corpus)).expect("the corpus reads") {
+            let path = entry.expect("an entry reads").path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            if name.contains(".imported.") {
+                twins.push(format!("{corpus}/{name}"));
+            }
+        }
+    }
+    assert!(twins.is_empty(), "a record prints the same reached either way; twins: {twins:?}");
 }

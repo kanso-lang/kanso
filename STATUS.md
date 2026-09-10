@@ -126,14 +126,6 @@ arm has always been the way the language works." The flag comes out; the
 group-level return set the campaign's last report blamed is the
 implementer's to sharpen.
 
-### Records print qualified, everywhere (2026-08-29)
-
-The archive entry of that name: `slow_lane 7` prints `lane/slow_lane 7` in
-both entry paths, and tests/entry_file.rs "flips its expectation to the
-qualified form and stops being ignored". On 2026-09-09 that test still
-carries `#[ignore = "the two conventions collide; the rule is a gavel, not a
-fix"]` and still expects the unqualified form.
-
 ### The backends build the partial over a value (2026-08-29)
 
 The archive entry of that name, Clay: "BUILD IT." On 2026-09-09

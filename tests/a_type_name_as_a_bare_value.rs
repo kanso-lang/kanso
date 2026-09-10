@@ -63,8 +63,8 @@ fn native_declines_a_bare_subtype_name_instead_of_building_a_record() {
 /// thing, and naming it builds it, on both engines.
 #[test]
 fn a_record_type_with_no_fields_is_still_a_value_on_both_engines() {
-    assert_eq!(stdout(&run("nullary_native", NULLARY, &[])), "unit");
-    assert_eq!(stdout(&run("nullary_oracle", NULLARY, &["--interp"])), "unit");
+    assert_eq!(stdout(&run("nullary_native", NULLARY, &[])), "nullary_native/unit");
+    assert_eq!(stdout(&run("nullary_oracle", NULLARY, &["--interp"])), "nullary_oracle/unit");
 }
 
 /// The neighbour that was already right, and the sentence the subtype now

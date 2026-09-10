@@ -165,28 +165,16 @@ fn a_typeset_keeps_its_members_across_an_import() {
     assert_eq!(interp, native, "the engines disagree on an imported typeset");
 }
 
-/// An err's reason renders by the name its declaring module gave it.
-/// Qualification renames that declaration to keep it unique across a merge,
-/// and the qualified spelling is the compiler's bookkeeping — a reader never
-/// wrote `lane/slow_lane` and should never be shown it. Run the module
-/// directly and the import must not change what the program prints.
-///
-/// Ignored because it fails, and because the obvious fix is wrong. Stripping
-/// the qualifier at render breaks two tests that pin it on purpose:
-/// cross_module_fields asserts a diagnostic naming `geo/label`, and asserts
-/// `lib/pair 6 "v"` as rendered output. Both are right for an IMPORTED type —
-/// `lib/pair` is what that program wrote. The bug is only for a module's OWN
-/// type, which it wrote bare and never qualified.
-///
-/// So render would have to know which module is asking, which it does not, and
-/// "what does a record print as" is a language-surface question rather than a
-/// compiler-internal one. See design/compiler-log.md.
+/// A record prints its module-qualified name whatever the entry path (RULED
+/// 2026-08-29, "records print qualified, everywhere", Go's `main.T`). Reached
+/// through an import the module is `lane`; run directly the root takes its
+/// file's name, `lane.kso`, so both paths print `lane/slow_lane 7`, and the
+/// reason inside an err renders the same way. Until the ruling was built the
+/// direct path printed `slow_lane 7`, and this test was ignored for it.
 #[test]
-#[ignore = "the two conventions collide; the rule is a gavel, not a fix"]
-fn an_err_reason_renders_unqualified_across_an_import() {
+fn a_record_prints_qualified_whatever_the_entry_path() {
     let dir = "tests/golden/entryfile/an_err_reason_across_the_import";
-    let answer = |target: &str, engine: &[&str]| {
-        let verb = if target.ends_with("_alone.kso") { "play" } else { "run" };
+    let answer = |verb: &str, target: &str, engine: &[&str]| {
         let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
             .arg(verb)
             .arg(target)
@@ -200,14 +188,17 @@ fn an_err_reason_renders_unqualified_across_an_import() {
         )
     };
 
-    let (direct, _) = answer(&format!("{dir}/lane_alone.kso"), &[]);
-    let (imported, complaint) = answer(&format!("{dir}/main.kso"), &[]);
-    let (interp, _) = answer(&format!("{dir}/main.kso"), &["--interp"]);
+    let (direct, complaint) = answer("play", &format!("{dir}/alone/lane.kso"), &[]);
+    assert_eq!(complaint, "", "the direct entry refused");
+    let (direct_interp, _) = answer("play", &format!("{dir}/alone/lane.kso"), &["--interp"]);
+    let (imported, complaint) = answer("run", &format!("{dir}/main.kso"), &[]);
+    assert_eq!(complaint, "", "native refused a record reached through an import");
+    let (interp, _) = answer("run", &format!("{dir}/main.kso"), &["--interp"]);
 
-    assert_eq!(complaint, "", "native refused an err reason reached through an import");
-    assert_eq!(direct, "trouble: slow_lane 7\n");
-    assert_eq!(imported, direct, "the import changed how the reason renders");
-    assert_eq!(interp, imported, "the engines disagree on an imported err reason");
+    assert_eq!(direct, "trouble: [err lane/slow_lane 7] lane/slow_lane 7\n");
+    assert_eq!(imported, direct, "the import changed how the record renders");
+    assert_eq!(direct_interp, direct, "the engines disagree on the direct entry");
+    assert_eq!(interp, imported, "the engines disagree on an imported record");
 }
 
 /// A module may claim rendering for a type it owns, and importing that module

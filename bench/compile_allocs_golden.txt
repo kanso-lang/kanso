@@ -319,4 +319,13 @@
 # CI's reading, and this container measured the same 29,606 — allocations count
 # the compiler's own algorithm, so the two hosts agree to the unit even though
 # this golden's measured-on line refuses the comparison.
-compile_allocs=29262
+# 2026-09-10 (kanso#1361): compile_allocs=29,276, a RISE of 14 (+0.0478%)
+# from 29,262.
+#
+# Records print qualified, everywhere. ast::Program gains `root` and the
+# interpreter records the set of bare types a program declares; the front end
+# pays for the root's own String and that set once per compile. Fourteen
+# allocations is what one name and one small set cost. This row compared where
+# four others could not: it is keyed on rustc alone, and the runs that carried
+# it sat on a toolchain the glibc-keyed goldens do not name.
+compile_allocs=29276

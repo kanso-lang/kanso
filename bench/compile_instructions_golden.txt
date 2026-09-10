@@ -69,7 +69,7 @@
 # moves when a test file changes its imports answers a question nobody asked.
 # scripts/gates/library_box.sh stages it. Ruled by Clay 2026-08-25 with the
 # welfare rebuild: the library's compile golden measures the library.
-# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
+# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
 #
 # 2026-09-03: the runner's rustc moved 1.98.0 -> 1.98.1 and this line moves
 # with it. THE POINT RELEASE MOVED NOTHING. CI re-sat all three compile veins
@@ -1079,4 +1079,30 @@
 # roughly the same tiny scale. The DIRECTION is not evidence the fix is
 # cheaper -- a condition that is strictly added cannot be -- and this note
 # says so rather than banking a win the change did not make.
-compile_instructions=48849164
+# 2026-09-10 (kanso#1361): compile_instructions=48,866,385, a RISE of 17,221
+# (+0.0353%) from 48,849,164.
+#
+# Records print qualified, everywhere. ast::Program gains `root`, the name an
+# importer would write for the root module, set where each compile path
+# returns: one String per program for a file's stem or a directory's name.
+# Everything else the change does is rendering, and `kanso check` never
+# renders. All three instruction rows rose together and in one band --
+# 0.0353%, 0.0131%, 0.0257% -- which is the layout reading the notes above
+# give, with that one String of real per-program work under it.
+# 2026-09-10 (the runner image moves, kanso#1361): measured-on takes
+# glibc=2.39-0ubuntu8.9 and the row below does not move.
+#
+# ubuntu-latest took the 8.8 -> 8.9 revision between 14:21Z and 14:32Z today.
+# Every run before that compared and every run after refused, so four veins
+# went red at once without disagreeing with anything. A REFUSAL FAILS THE JOB
+# EXACTLY AS A DISAGREEMENT DOES, and the verdict line says "disagrees with its
+# golden" for both. The tell is arithmetic: this gate measured 48,866,385
+# against a golden holding 48,866,385 and still failed. A gate whose measured
+# value equals its golden is refusing, whatever the verdict line calls it.
+#
+# The revision costs this row nothing. #1361 round one counted it on 8.8 and
+# round four on 8.9 -- same commit content, same clang 19.1.1, same rustc
+# 1.98.1 -- and read 48,866,385 both times. So the line above moves and the
+# value stays. bench/instructions_golden.txt carries the account of what the
+# revision did move.
+compile_instructions=48866385

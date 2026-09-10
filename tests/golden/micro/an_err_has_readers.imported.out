@@ -1,8 +1,0 @@
-config missing 1
-config: config missing 2
-config missing 3
-<none>
-cause: config missing 5
-an_err_has_readers/boom
-an_err_has_readers/wrapped
-unexpected end of input

@@ -221,7 +221,13 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         file: crate::ast::unstamped(),
         synthetic: false,
     };
-    Ok(Program { fns: vec![main], types: Vec::new(), imports, reexports: Vec::new() })
+    Ok(Program {
+        fns: vec![main],
+        types: Vec::new(),
+        imports,
+        reexports: Vec::new(),
+        root: String::new(),
+    })
 }
 
 pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
@@ -336,7 +342,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         i = body_end;
     }
     if diags.is_empty() {
-        Ok(Program { fns, types, imports, reexports })
+        Ok(Program { fns, types, imports, reexports, root: String::new() })
     } else {
         Err(diags)
     }

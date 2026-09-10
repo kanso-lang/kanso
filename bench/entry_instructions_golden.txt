@@ -23,7 +23,7 @@
 # has rustc 1.94.1 against CI's 1.98.1 and reads about 0.8% high on both
 # compile rows, so its number is a projection and not a sitting.
 #
-# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
+# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
 #
 # 2026-09-08 (the vein opens): entry_instructions=163,886,731.
 #
@@ -102,4 +102,19 @@
 # a test on every fold site, where the row fell anyway. The prior that this
 # vein moves under any src/ edit now has a case in each direction with the
 # work counters green throughout.
-entry_instructions=162730512
+# 2026-09-10 (kanso#1361): entry_instructions=162,751,831, a RISE of 21,319
+# (+0.0131%) from 162,730,512.
+#
+# Records print qualified, everywhere. ast::Program gains `root`, the name an
+# importer would write for the root module, set where each compile path
+# returns: one String per program for a file's stem or a directory's name.
+# Everything else the change does is rendering, and `kanso check` never
+# renders. All three instruction rows rose together and in one band --
+# 0.0353%, 0.0131%, 0.0257% -- which is the layout reading the notes above
+# give, with that one String of real per-program work under it.
+# 2026-09-10 (the runner image moves, kanso#1361): measured-on takes
+# glibc=2.39-0ubuntu8.9 and the row below does not move. Counted 162,751,831 on
+# 8.8 in round one and 162,751,831 on 8.9 in round four, same commit content and
+# same clang and rustc. The module row's note carries the reading, and
+# bench/instructions_golden.txt the account of what the revision did move.
+entry_instructions=162751831
