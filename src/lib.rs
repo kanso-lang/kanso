@@ -1816,13 +1816,30 @@ fn qualify(
     // only them. Until this, the twin took `dep/join` first and the module's
     // own pub read as private from outside, or — with that refusal lifted —
     // a consumer's `dep/join` reached std's arm under dep's name.
+    // An import's twin is a synthetic bare declaration, and so is the loop
+    // wrapper trmc writes over a module's own counted recursion, under the
+    // module's own name. `synthetic` alone cannot tell them apart: read that
+    // way, the wrapper of `weigh` made `weigh` a mixed group in a module that
+    // imports nothing, the wrapper went to the bare space as if it were std's,
+    // and once the module's own arms stood ahead of it there the bare call
+    // took the plain recursion and ran out of stack. What separates them is
+    // the file: a twin is cloned from its import's declaration and carries
+    // that file, where everything the module writes, and everything a pass
+    // writes for it, carries one of the module's own.
+    let own_files: crate::hash::Set<std::sync::Arc<str>> = dep
+        .fns
+        .iter()
+        .filter(|f| !f.synthetic && !ast::has_slash(&f.name))
+        .map(|f| f.file.clone())
+        .collect();
+    let is_twin = |f: &ast::FnDecl| f.synthetic && !own_files.contains(&f.file);
     let mut own_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     let mut twin_bare: crate::hash::Set<&str> = crate::hash::Set::default();
     for f in &dep.fns {
         if f.is_getter() || is_ambient_group(&f.name) || ast::has_slash(&f.name) {
             continue;
         }
-        match f.synthetic {
+        match is_twin(f) {
             true => twin_bare.insert(f.name.as_str()),
             false => own_bare.insert(f.name.as_str()),
         };
@@ -1900,7 +1917,7 @@ fn qualify(
             // GAVEL 51: an already-qualified name enrolls under the spelling
             // it already has. Composing `{qual}/` onto it would register the
             // route rather than the identity.
-            if in_mixed && f.synthetic {
+            if in_mixed && is_twin(f) {
                 // The import's twin: into the bare overload space, and never
                 // exported. It holds no claim on the qualified spelling.
                 f.name = ast::bare_space(qual, &f.name);
@@ -1951,7 +1968,7 @@ fn qualify(
         for stmt in &mut f.body {
             rewrite_stmt(stmt, &owned, &mut bound);
         }
-        if in_mixed && !f.synthetic {
+        if in_mixed && !is_twin(f) {
             // The module's own arm, once more in the bare overload space, so a
             // bare call inside the module still dispatches over its own arms
             // and the import's together. The clone's body was rewritten with
@@ -1967,7 +1984,30 @@ fn qualify(
     for clone in &bare_clones {
         exports.insert(clone.name.to_string(), false);
     }
-    dep.fns.extend(bare_clones);
+    // The clones go in AHEAD of the import's twins. Dispatch tries a group's
+    // arms in declaration order, and before the ruling the module's own arms
+    // stood before the twins `enroll_bare` appended, so a bare call inside the
+    // module that both could take reached the module's own. Appending the
+    // clones flipped that: kq's `sum`, declared over its own import of the
+    // same name, dispatched into std's, and its specs stopped compiling.
+    let mut pending: Vec<(String, Vec<ast::FnDecl>)> = Vec::new();
+    for clone in bare_clones {
+        match pending.iter_mut().find(|(n, _)| *n == clone.name) {
+            Some((_, group)) => group.push(clone),
+            None => pending.push((clone.name.clone(), vec![clone])),
+        }
+    }
+    let mut fns = Vec::with_capacity(dep.fns.len() + pending.len());
+    for f in dep.fns.drain(..) {
+        if let Some(at) = pending.iter().position(|(n, _)| *n == f.name) {
+            fns.extend(pending.remove(at).1);
+        }
+        fns.push(f);
+    }
+    for (_, group) in pending {
+        fns.extend(group);
+    }
+    dep.fns = fns;
     // Every name this import puts within reach, by the spelling a caller may
     // write bare. Recorded after the loops above have settled each name, so
     // one walk covers a declaration of this module and one it re-exports

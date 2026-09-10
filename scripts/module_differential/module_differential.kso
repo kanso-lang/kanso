@@ -584,7 +584,71 @@ c33said = "no overload of `dep/join` matches these arguments"
 
 c33 = kase c33l [c33o c33d c33a] "app" "run refuses" c33said
 
-cases = text/concat cases_d [c24 c25 c26 c27 c28 c29 c30 c31 c32 c33]
+c34d = filed "dep/dep.kso" """
+  import "std/list"
+
+  pub fn sum xs
+    0 - list/sum xs
+
+  pub fn twice xs
+    sum xs + sum xs
+"""
+
+c34a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/twice [1 2 3])
+  print (dep/sum [1 2 3])
+"""
+
+c34l = "a bare call inside the module tries its own arm before the import's"
+
+c34 = kase c34l [c34d c34a] "app" "prints" "-12\n-6\n"
+
+c35d = filed "dep/dep.kso" """
+  import "std/text"
+
+  pub bytes = text/bytes "hi"
+
+  pub fn count _
+    length bytes
+"""
+
+c35a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/count 0)
+  print dep/bytes
+"""
+
+c35l = "a module's own constant beside an import's arm of the same name"
+
+c35 = kase c35l [c35d c35a] "app" "prints" "2\n[104 105]\n"
+
+c36d = filed "dep/dep.kso" """
+  fn count 0
+    0
+
+  fn count n
+    1 + count (n - 1)
+
+  pub fn deep _
+    count 1000000
+"""
+
+c36a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/deep 0)
+"""
+
+c36l = "a counted recursion inside a module still loops"
+
+c36 = kase c36l [c36d c36a] "app" "prints" "1000000\n"
+
+cases_e = text/concat cases_d [c24 c25 c26 c27 c28 c29 c30 c31 c32 c33]
+
+cases = text/concat cases_e [c34 c35 c36]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written

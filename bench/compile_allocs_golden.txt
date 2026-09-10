@@ -319,4 +319,4 @@
 # CI's reading, and this container measured the same 29,606 — allocations count
 # the compiler's own algorithm, so the two hosts agree to the unit even though
 # this golden's measured-on line refuses the comparison.
-compile_allocs=29249
+compile_allocs=29262

@@ -3219,16 +3219,26 @@ name" diagnostic as the settled answer, now describes the ruling.
 
 **Verified on the container.** clippy, rustfmt, the errors_module corpus, the
 golden suite, reexports, the wasm engine walk on a fresh blob, the unit tests,
-the diagnostic scan (311 literal diagnostics, two fewer: the opacity refusal
-and its "took the name" clause are gone, 0 newly unpinned), `all_counters.sh`
+the diagnostic scan (313 literal diagnostics either side, 0 newly unpinned), `all_counters.sh`
 (the twelve cost veins and the lazy tier agree), `all_pages.sh` (three gates
-agree; the §12 paragraph is the page edit), module_differential 33 modules 0
+agree; the §12 paragraph is the page edit), module_differential 36 modules 0
 wrong.
 
 **Veins.** `emitted_code` moved on two of the thirteen others, scanbench
-19,752 -> 19,761 and runbench 34,806 -> 34,815 lines (the summed key
-`emitted_other_lines` 133,241 -> 133,259), defines, calls and
-branches identical on both. The lines are the string table: `std/regexp`
+19,752 -> 19,764 and runbench 34,806 -> 34,828 lines (the summed key
+`emitted_other_lines` 133,241 -> 133,275). Against round one's tree, built
+on this box for the comparison, the difference is dead text: each program
+interns the raw name of a bare-space group (`scanbench/~split`, `split/~split`,
+`runbench/~total`) beside the spoken form, and nothing in the IR names the
+constant; runbench also carries a second copy of the capture-free thunk for
+pend's `cards -> spent cards`, the lambda in `pend/total`, whose twin sits in
+runbench's `~total` group, and neither copy is named either. `emitted_other_defines`
+2,353 -> 2,354 and `emitted_other_calls` 20,516 -> 20,517 are that thunk.
+Defines, calls and branches hold on scanbench. For the trend gate, the landed
+host rows, CI's sitting on round one's commit: `compile_instructions`
+48,820,567 -> 48,784,668 (−35,899, −0.0735%), `entry_instructions`
+162,736,962 -> 162,434,379 (−302,583, −0.1859%), `library_instructions`
+163,024,919 -> 163,223,647 (+198,728, +0.1219%). The lines are the string table: `std/regexp`
 declares private `first`, `spread` and `repeat` while importing `std/list`,
 which exports all three, so those are mixed groups now, and the own-only
 `regexp/spread` group's name and dispatch sentence are interned beside the
@@ -3242,13 +3252,48 @@ pair below is the container's projection, not the row.
 Same-box pair, callgrind on the gate's boxes, #461's tree against this one:
 module 50,441,411 -> 50,397,314 (−44,097, −0.0874%), entry 167,441,542 ->
 167,533,649 (+92,107, +0.0550%), library 168,198,150 -> 168,348,197
-(+150,047, +0.0892%); `compile_allocs` 29,714 -> 29,249 (−465), the
-two-claims bookkeeping and the `shadowed` set gone, `compile_alloc_bytes`
+(+150,047, +0.0892%); `compile_allocs` 29,714 -> 29,262 (−452: −465 for the
+two-claims bookkeeping and the `shadowed` set gone, +13 for the vectors the
+reorder builds), `compile_alloc_bytes`
 4,806,203 -> 4,826,630 (+20,427, the clones), `compile_peak_bytes` 777,308
 identical, rounds 66 and visits 22,133 identical. The allocation fall is
 worth about 0.03 on the index by the per-term arithmetic in the 2026-09-09
 read_bytes entry and the instruction move is inside the band, so the
 projection is a small rise, to be banked with `--set` once CI's rows are in.
+
+**Round one's kq failure, and two fixes on the bare space.** CI's kq job died
+in the scale gate with `` `-` is not defined for these values ``: a bare call
+inside a module that declares an arm over a name one of its imports exports
+reached the import's arm. Dispatch tries a group's arms in declaration order,
+and before the ruling the module's own arms stood ahead of the twins
+`enroll_bare` appends, so a bare call both could take reached the module's
+own. The clones were appended after the twins, which flipped that. c34 is the
+shape: a module declaring `sum` over `list/sum` and calling `sum` bare from
+`twice` printed `12` where the ruling's compiler prints `-12`, watched red.
+The clones go in ahead of the twins now, each group of them in front of the
+first twin of its name. Putting the two side by side found the second defect:
+`check_constants` walks consecutive runs of one name, and a module's own
+constant `bytes` beside the twin of `text/bytes` (the fold fixture #1349
+added, run as a library by the golden suite) is a run holding an arity-0 arm,
+refused as `a constant admits no overloads`. It had passed by accident, the
+clone and the twin never adjacent. The check reads the arms the module wrote,
+since the bare space is a union nobody declared and the module's constant
+already stands alone under `dep/bytes`; c35 pins the shape and is red under
+the reorder alone. The reorder found a third, in the golden suite's library
+twins of `an_operand_that_varies_still_loops` and `trmc_count`: trmc writes
+its loop wrapper as a synthetic arm under the module's own name, and qualify
+read every synthetic bare arm as an import's twin, so `weigh` was a mixed
+group in a module that imports nothing and the wrapper went to the bare space
+as if it were std's. With the twin last, the bare call still reached it; with
+the module's own arms ahead, the plain recursion ran first and the stack ran
+out on every engine. A twin is now a synthetic bare arm from a file the module
+does not own, `own_files` being the files of its non-synthetic bare
+declarations; the wrapper keeps its qualified spelling and gets its clone
+like any own arm. c36 pins it, a counted recursion inside a module called bare
+a million deep, red under the reorder alone. The three compile rows below are
+CI's reading of round one's commit, copied in; this commit moves src/lib.rs
+and src/check.rs, so they are expected red once more and copied again from
+that sitting.
 
 **What stays in STATUS.md's "Ruled, unbuilt", and why.** Read whole before
 this PR was chosen: block-born landed in #1359; this row, records printing

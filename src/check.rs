@@ -3210,13 +3210,29 @@ fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {
         while at < program.fns.len() && program.fns[at].name == *name {
             at += 1;
         }
-        let arms = &program.fns[start..at];
-        if arms.len() > 1 && arms.iter().any(|d| d.params.is_empty()) {
-            diags.push(Diagnostic::new(
-                "dispatch",
-                format!("`{name}` is a constant (arity 0); a constant admits no overloads"),
-                arms[1].span,
-            ));
+        // Only the arms the module wrote. A bare overload space (the
+        // qualified-name ruling: `dep/~bytes`, holding a clone of the module's
+        // own `bytes` beside the twin of its import's) is a union nobody
+        // declared, every arm in it is synthetic, and the module's own
+        // constant has already stood alone under `dep/bytes`. Until
+        // 2026-09-10 the pair passed here by accident, because the clone was
+        // appended after every twin and the two were never adjacent; the
+        // dispatch-order fix put them side by side and this refused a program
+        // that had compiled.
+        let mut real = program.fns[start..at].iter().filter(|d| !d.synthetic);
+        let first = real.next();
+        let second = real.next();
+        if let (Some(first), Some(second)) = (first, second) {
+            if first.params.is_empty()
+                || second.params.is_empty()
+                || real.any(|d| d.params.is_empty())
+            {
+                diags.push(Diagnostic::new(
+                    "dispatch",
+                    format!("`{name}` is a constant (arity 0); a constant admits no overloads"),
+                    second.span,
+                ));
+            }
         }
     }
 }
