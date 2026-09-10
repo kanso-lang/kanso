@@ -1144,4 +1144,11 @@
 # That reasoning is right about which rows CAN move and silent about which
 # will: a respelling that changes no emitted code and no allocation moves the
 # instruction rows and leaves allocs, peak and .text alone.
-compile_instructions=48393437
+# 2026-09-10 (a constructor no longer builds into a record it is about to
+# hold): CI's sitting, 48,393,437 -> 48,412,144 (+18,707 / +0.0387%).
+# src/linear.rs asks `field_reads_in` of every mention a candidate
+# constructor makes, where counting mentions asked nothing; the walk is
+# the price of the answer. The three compile rows rise together and by
+# nearly the same fraction, which is what a per-declaration check looks
+# like when every route runs it.
+compile_instructions=48412144

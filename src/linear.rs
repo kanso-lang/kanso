@@ -713,6 +713,23 @@ fn count_uses(var: &str, body: &[Stmt]) -> usize {
 /// passes it on, never both. Taking the larger branch rather than their sum is
 /// what a move actually is, and it is still conservative: no path uses the
 /// value more often than the number this returns.
+/// Mentions of `var` that are the base of a field read, `var.x`. By the time
+/// this pass runs a read is the getter applied to the record, so both
+/// spellings are one read.
+fn field_reads_in(var: &str, e: &Expr) -> usize {
+    let is_var = |b: &Expr| matches!(b, Expr::Ident(n, _) if n == var);
+    let here = match e {
+        Expr::Field { base, .. } => is_var(base),
+        Expr::App { head, args, .. } => {
+            matches!(head.as_ref(), Expr::Ident(n, _) if crate::ast::getter_field(n).is_some())
+                && args.len() == 1
+                && is_var(&args[0])
+        }
+        _ => false,
+    } as usize;
+    here + child_exprs(e).into_iter().map(|c| field_reads_in(var, c)).sum::<usize>()
+}
+
 fn count_in_expr(var: &str, e: &Expr) -> usize {
     let here = matches!(e, Expr::Ident(n, _) if n == var) as usize;
     // `if c a b`: the condition always runs, exactly one arm follows it
@@ -841,6 +858,16 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
         let Pattern::Var(name, _) = pattern else { continue };
         let here: usize = args.iter().map(|arg| count_in_expr(name, arg)).sum();
         if here == 0 {
+            continue;
+        }
+        // Finished means read from, and a field read is the only read that
+        // leaves nothing behind. A bare mention stores the record itself --
+        // `node n i` puts the previous node in the new node's first field --
+        // and building into its storage would make the new node point at
+        // its own slot: a chain of records came out cyclic on native and
+        // correct on the oracle until 2026-09-10.
+        let through_fields: usize = args.iter().map(|arg| field_reads_in(name, arg)).sum();
+        if here != through_fields {
             continue;
         }
         let everywhere: usize = decl
