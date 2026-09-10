@@ -3315,3 +3315,36 @@ language clause applies, so the floor moves down to the reading, 66.3596,
 by hand in `bench/welfare_floor.json` with its history entry (`--set` refuses
 a fall of this size by design, and says the file is the door), and no
 optimisation rides along to hide the price.
+
+---
+
+## 2026-09-10 — gavel: rows 15..390 stay unscored, and re-measurement is a lead with a probe in front of it
+
+On "The reconstruction the 2026-09-07 ruling ordered has two usable phases,
+not four, for 376 of the 439 rows", Clay: "I'm okay being pragmatic and
+taking the first one." Ruled: option (1). Rows 15..390 carry no run terms and
+get none reconstructed; they stay scored on the compile terms they carry, at
+the coverage the rescore already stamps on them, and the chart keeps drawing
+the coverage boundary at 2026-09-03 the way kanso#1346 draws every boundary.
+The eight-phase half (rows 391..438) is built and stays. Nothing further is
+owed on this entry; it leaves the ledger with this ruling.
+
+Clay's second sentence is a question, and it is answered here so it is not
+re-derived: "isn't it pretty trivial to just rerun the current metrics on the
+old versions?" Mechanical, not trivial, and one unknown decides whether it is
+possible at all. The mechanics: for each of 376 commits, `cargo build
+--release` at that commit, `kanso build bench/runbench` with the compiler it
+produced, one callgrind run for `run_instructions` and one counters run for
+`run_peak_bytes`, on ONE host in ONE sitting that also re-measures HEAD, so
+every row is on the same ruler by construction. About four minutes a commit
+with a warm cargo cache, so a day of serial machine time for all 376, or an
+afternoon sampling every fourth. The unknown: whether a compiler from
+2026-08-10 accepts today's bench/runbench source. The surface moved between
+then and now — the bang choosing the channel, `done`, the consolidated run
+program itself — and nobody has tried. So the lead is filed with its probe
+first: build the compiler at row 15's commit, compile today's runbench with
+it, and read the answer. Yes means the sweep is a script and the rows come
+back as `run_source: remeasured`. No means a runbench pinned to the old
+surface, which measures a different program and would need its own ruling.
+This is a lead, not a ruling: it goes on cloud's list as a lead and stays
+off the "Ruled, unbuilt" section unless Clay says the word.

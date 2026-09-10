@@ -7,9 +7,11 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one** — the 2026-09-07 reconstruction ruling has two
-usable phases and not four for 376 of the 439 rows, so the half of it that
-covers them cannot be built faithfully; the other half is built. Clay ruled
+only indexes it. **Blocking right now: nothing.** The reconstruction coverage
+question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
+stay unscored on the run terms, the eight-phase half stays built, and
+re-measuring the old commits is filed as a lead with a feasibility probe in
+front of it. Clay ruled
 the two before it on 2026-09-08,
 taking the recommendation each carried: the compile term reads a fixed
 corpus rather than whatever lib/json imports, and an infinite or nan float
@@ -33,7 +35,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Three questions are waiting** — one blocking. Two more left the ledger on
+**Two questions are waiting** — none blocking. Two more left the ledger on
 2026-09-05 in the same sitting as the compile row: machine-code size gets no
 term in welfare, and `.text` stays in its own exact vein. Counted from the ledger, which is the only place that count is true;
 this file said fourteen in one paragraph and sixteen in another until the
@@ -387,7 +389,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+**Two questions wait in `design/pending-gavels.md`** — zero blocking, two
 open — each with a recommendation. Counted from the ledger on 2026-09-09 by
 reading its `###` headings, which is what this line has always claimed to do
 and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
