@@ -3854,11 +3854,28 @@ above a 0.01 tolerance, which is why the small language-clause falls of #1355,
 #1356 and #1359 went through and this one cannot. `--set` refused and the floor
 file is untouched.
 
-So this change does not land on its welfare reading, and NO optimization has
-been attempted yet — the honest state is "not tried", not "impossible". The
-obvious lever is that the pass walks every expression in the program where it
-only needs the ones whose subject's return set could carry the description bit;
-whether that recovers 3.65% is a measurement nobody has taken.
+**The pass, attributed: the walk is the bigger half, and the obvious lever is
+the smaller one.** Three builds on this container, same box and tunables as
+`compile_instructions.sh`, `kanso check compile_corpus` under callgrind. The
+absolute numbers carry this host's offset and only the differences are read:
+
+    walk + per-node check   51,094,289
+    walk, check made inert  50,438,978     the check   655,311  (37%)
+    call removed entirely   49,331,796     the walk  1,107,182  (63%)
+                                           together  1,762,493  (3.573%)
+
+3.573% here against CI's +3.5559% on compile_instructions, so the local reading
+tracks the row. The baseline reproduced to the instruction after the probes were
+reverted.
+
+That refutes the lever this entry's previous draft named. Skipping the per-node
+check on declarations that cannot hold a box recovers 655,311 of 1,762,493 —
+about a third — and the fall it would leave is still several times welfare's
+0.01 tolerance. The walk is what costs, and no cheap test avoids it: deciding
+whether a declaration can hold a box means looking at its body, which is the
+walk. Recovering that half needs the flag computed in a pass that already walks
+the body — infer, or the parser — and threaded to the check, which is a design
+change rather than a tightening. It has not been built and is not costed.
 
 **Spec.** `tests/golden/micro/a_plain_dot_hands_the_box_over.kso` on native
 and the oracle: `math/random 6 . held` rendered as `held <io>`, the same
