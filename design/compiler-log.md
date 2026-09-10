@@ -3344,4 +3344,7 @@ block.
 cohort walk is a few hundred instructions more than the set walk on every
 build block the corpus compiles, and the three routes carry the same
 checker. `compile_allocs` and `compile_peak_bytes` did not move; nothing on
-the runtime side did. Welfare holds the floor to the fourth place.
+the runtime side did. Welfare reads 66.3596 either side, a fall of 0.00002
+that the trend gate reads as a pure regression, so the fall is recorded in
+bench/welfare_floor.json's history under the 2026-08-25 language clause,
+the floor 66.35962 -> 66.35960.
