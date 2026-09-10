@@ -3884,10 +3884,11 @@ the floor merely held; CI's sitting is where the change actually shows.
     basket        34,690,216 ->    34,672,719        -17,497   -0.0504%
     livebench  3,481,899,695 -> 3,481,803,955        -95,740   -0.0027%
 
-Five rows are byte-identical: encodebench, widebench, escapebench, indexbench,
-digestbench and readbench reach none of the three arms. Nine of the fourteen
-fall. pendbench losing three fifths of its instructions is the counted fold
-alone -- the four records an element were not only allocated but walked.
+Eight of the fourteen fall and none rises. The other six are byte-identical:
+encodebench, widebench, escapebench, indexbench, digestbench and readbench
+reach none of the three arms. pendbench losing three fifths of its instructions
+is the counted fold alone -- the four records an element were not only
+allocated but walked.
 
 **Welfare 66.42 -> 67.56**, the largest single move since the 2026-09-03
 rebuild, banked with `--set` in this same PR. Both the allocation terms and
