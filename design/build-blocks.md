@@ -33,11 +33,18 @@ graph = [a b]
 
 ## The legality rule
 
-`set`'s target must be **block-born**: the checker traces the target
-to a construction inside the same `build` block. Values passed in
+`set`'s target must be **block-born**: the checker proves the target
+was born inside the same `build` block. Born is a dataflow property
+(gaveled 2026-08-29, "block-born is the whole cohort"): a construction
+is born, and so is a name that aliases one, the value an `if` chooses
+when both arms are born, an element of a list or map literal whose
+every element is born, and a field of a born value that a constructor
+argument or a later write filled with a born value. Values passed in
 from outside are immutable as always — a function cannot modify a
 data structure that was passed to it, only point new structures at
-it. This static rule is also exactly the premise the theorem needs.
+it — and so is anything a call answers, since the checker cannot see
+what it was born from. This static rule is also exactly the premise
+the theorem needs.
 
 ## The birthday theorem
 

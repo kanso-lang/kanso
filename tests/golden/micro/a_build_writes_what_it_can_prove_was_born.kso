@@ -1,0 +1,29 @@
+# A field write's target is anything the checker can prove was born in the
+# block: a name that aliases a construction, a node reached through a field a
+# construction filled or a write set, a node taken out of a list the block
+# built, and a node chosen by an `if`. The write form is unchanged; what
+# widened is how the target's birthday is proven. A write through the choice
+# reaches whichever arm was taken, so after `chosen.up = a` neither `b.up`
+# nor `c.up` is proved, which is why `over` reads `b.up` before it.
+type node
+  id
+  up
+
+pub play =
+  build
+    a = node 1 none
+    b = node 2 a
+    c = node 3 none
+    twin = a
+    twin.up = b
+    over = b.up
+    over.id = 10
+    down = a.up
+    down.up = c
+    ring = [a b c]
+    middle = ring[2]!
+    middle.id = 20
+    chosen = if (a.id < b.id) c b
+    chosen.up = a
+  print "{a.id} {b.id} {c.id}"
+  >> print "{a.up.id} {b.up.id} {c.up.id}"

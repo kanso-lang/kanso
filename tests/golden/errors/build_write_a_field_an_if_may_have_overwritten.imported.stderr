@@ -1,0 +1,1 @@
+error[build]: `held.link = ...` writes only block-born values: `held` is not a construction made in this `build` block, so it stays immutable (module build_write_a_field_an_if_may_have_overwritten)
