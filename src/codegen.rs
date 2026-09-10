@@ -15,6 +15,8 @@ struct Cond {
 }
 const K_FALSE: i64 = 3;
 const K_NONE: i64 = 4;
+/// A succeeded effect's yield; the runtime's newest tag, after K_SUB.
+const K_DONE: i64 = 16;
 const K_ERR: i64 = 5;
 
 /// What an arm's discriminating pattern tests, when a switch on the value's tag
@@ -1809,6 +1811,9 @@ impl FnEmit {
         if operand == "{ i64 4, i64 0 }" {
             return NONE;
         }
+        if operand == "{ i64 16, i64 0 }" {
+            return infer::DONE;
+        }
         self.sets.get(operand).copied().unwrap_or(TOP)
     }
 }
@@ -2393,7 +2398,7 @@ impl<'a> Backend<'a> {
     /// Primitive-only sets keep the direct call — coherence proves no arm can
     /// exist for them (design/render-plan.md).
     fn render_dispatchable(&self, f: &FnEmit, value: &str) -> bool {
-        f.set_of(value) & (REC | NONE | DESC) != 0
+        f.set_of(value) & (REC | NONE | infer::DONE | DESC) != 0
             && self.program.fns.iter().any(|d| d.name == RENDER_GROUP)
     }
 
@@ -3012,6 +3017,7 @@ impl<'a> Backend<'a> {
             Pattern::Nullary(nm, _) => Some(ArmCase::Tags(vec![match nm.as_str() {
                 "true" => K_TRUE,
                 "false" => K_FALSE,
+                "done" => K_DONE,
                 _ => K_NONE,
             }])),
             // A marker's bare mention is its value, so it binds nothing and
@@ -3042,6 +3048,7 @@ impl<'a> Backend<'a> {
                     "string" => Some(ArmCase::Tags(vec![6])),
                     "bool" => Some(ArmCase::Tags(vec![K_TRUE, K_FALSE])),
                     "none" => Some(ArmCase::Tags(vec![K_NONE])),
+                    "done" => Some(ArmCase::Tags(vec![K_DONE])),
                     // `some` is every tag but none and err, which a default
                     // expresses and a case does not.
                     "some" => None,
@@ -3066,6 +3073,7 @@ impl<'a> Backend<'a> {
             3 => infer::FALSE,
             4 => NONE,
             6 => STR,
+            16 => infer::DONE,
             9 => LIST,
             10 => MAP,
             _ => TOP,
@@ -3080,6 +3088,7 @@ impl<'a> Backend<'a> {
                 Pattern::Nullary(nm, _) => Some(match nm.as_str() {
                     "true" => infer::TRUE,
                     "false" => infer::FALSE,
+                    "done" => infer::DONE,
                     _ => NONE,
                 }),
                 _ => None,
@@ -3302,6 +3311,7 @@ impl<'a> Backend<'a> {
                         let t = match nm.as_str() {
                             "true" => K_TRUE,
                             "false" => K_FALSE,
+                            "done" => K_DONE,
                             _ => K_NONE,
                         };
                         nullary_cases.push((t, label));
@@ -3471,6 +3481,7 @@ impl<'a> Backend<'a> {
             "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
             "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
             "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
+            "done" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_DONE})"),
             // `some` is any value that is not none, and a failure is not a
             // value: without this arm the backend refused the annotation
             // outright, where the interpreter took it and the checker had
@@ -3998,6 +4009,7 @@ impl<'a> Backend<'a> {
                 let tag = match name.as_str() {
                     "true" => K_TRUE,
                     "false" => K_FALSE,
+                    "done" => K_DONE,
                     _ => K_NONE,
                 };
                 let b = tag_is(f, value, tag);
@@ -4615,6 +4627,7 @@ impl<'a> Backend<'a> {
                     "true" => Ok("{ i64 2, i64 0 }".to_string()),
                     "false" => Ok("{ i64 3, i64 0 }".to_string()),
                     "none" => Ok("{ i64 4, i64 0 }".to_string()),
+                    "done" => Ok(format!("{{ i64 {K_DONE}, i64 0 }}")),
                     "args" => {
                         let t = f.tmp();
                         f.line(&format!("{t} = call %KValue @k_desc_args()"));
@@ -5873,7 +5886,7 @@ impl<'a> Backend<'a> {
             // computed path already and dies naming itself, and these must say
             // the same words rather than the emitter's.
             Expr::Ident(name, _) => {
-                matches!(name.as_str(), "true" | "false" | "none")
+                matches!(name.as_str(), "true" | "false" | "none" | "done")
                     || f.lookup(name).is_some()
                     || (call_arity >= 1
                         && self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty())

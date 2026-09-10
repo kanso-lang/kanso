@@ -112,11 +112,6 @@ box; `foo["bar"]` stays the data form. Rides with the effect type above and
 is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
 promises is visible as owed.
 
-### `done` is minted (2026-08-26)
-
-The archive entry "gavel: the July letters close", letter D: a succeeded
-effect yields `done`, never `none`. No such value exists.
-
 ### Exhaustiveness on arm match, without the flag (recorded 2026-08-15; the language since its first days)
 
 `check_none_exhaustive` runs only under `KANSO_EXHAUSTIVE`, where the

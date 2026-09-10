@@ -15,6 +15,7 @@ pub enum Lit {
     True,
     False,
     NoneV,
+    Done,
 }
 
 pub struct Compiled {
@@ -32,6 +33,7 @@ enum LitKey {
     True,
     False,
     NoneV,
+    Done,
 }
 
 const RT_IS_FAILURE: u32 = 0;
@@ -607,6 +609,7 @@ impl<'a> WasmBackend<'a> {
         match name {
             "true" => self.lit(LitKey::True, || Lit::True),
             "false" => self.lit(LitKey::False, || Lit::False),
+            "done" => self.lit(LitKey::Done, || Lit::Done),
             _ => self.lit(LitKey::NoneV, || Lit::NoneV),
         }
     }
@@ -626,6 +629,7 @@ impl<'a> WasmBackend<'a> {
             "some" => 8,
             "err" => 6,
             "none" => 7,
+            "done" => 9,
             _ => {
                 let tid = self.type_ids.get(ty).ok_or_else(|| format!("unknown type `{ty}`"))?;
                 100 + tid
@@ -1029,7 +1033,7 @@ impl<'a> WasmBackend<'a> {
         // same normalization every other site does
         let bare = name.strip_prefix("builtin_").unwrap_or(name);
         match bare {
-            "true" | "false" | "none" => {
+            "true" | "false" | "none" | "done" => {
                 let lit = self.nullary_lit(bare);
                 ctx.body.i32_const(lit as i64);
             }
@@ -1349,8 +1353,7 @@ impl<'a> WasmBackend<'a> {
         // a partial, is the same case once more: any head that is not a name
         // is a value, computed and then called, and the runtime names what it
         // cannot call.
-        let keyword_head =
-            matches!(head, Expr::Ident(n, _) if matches!(n.as_str(), "true" | "false" | "none"));
+        let keyword_head = matches!(head, Expr::Ident(n, _) if matches!(n.as_str(), "true" | "false" | "none" | "done"));
         let name = match head {
             Expr::Ident(name, _) if !keyword_head => name,
             _ => {

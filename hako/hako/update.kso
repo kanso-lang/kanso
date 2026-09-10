@@ -41,9 +41,9 @@ fn remoted dir only pins root
   os/env "KANSO_HAKO_REMOTE" . start
 
 fn walked dir only pins root origin lines moved held
-  done = written dir lines moved held
+  finished = written dir lines moved held
   more = stepped dir only pins root origin lines moved held
-  if (length pins == 0) done more
+  if (length pins == 0) finished more
 
 fn stepped dir only pins root origin lines moved held
   p = pins[1]!

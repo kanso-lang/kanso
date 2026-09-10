@@ -56953,3 +56953,51 @@ it. The rule already in CLAUDE.md — project a compile-instructions move from C
 or take the red round, never write down that it moved before CI has said so —
 now has this as its worked example, and the sign is the part it costs a round to
 learn.
+## 2026-09-08 — the whole-program check ran over declarations the next pass deletes
+
+`enroll_bare` gives every exported declaration of every imported module a twin
+under its short name, so `import "std/list"` puts both `list/next` and `next`
+into the merged program. `canonicalize_bare_aliases` then takes most of those
+twins straight back out: where a bare name has exactly one qualified target and
+is never locally bound, it rewrites the references to the qualified spelling and
+drops the clone.
+
+On `bench/compile_corpus` that pass declines nothing. All 83 twins go, out of
+394 declarations — 21% of the merged program. And it ran at src/lib.rs:3599,
+seventeen lines after `check_merged` at 3581. So the whole-program check, and
+every pass reading its results, ran over 83 declarations that were about to be
+deleted.
+
+Moving `canonicalize_types` and `canonicalize_bare_aliases` in front of the
+check, on CI:
+
+    compile_instructions   50,684,921 -> 48,757,859   -1,927,062  (-3.80%)
+    compile_allocs              29,941 ->     29,606        -335  (-1.12%)
+    compile_peak_bytes         819,217 ->    773,818     -45,399  (-5.54%)
+    front_end_visits            23,723 ->     22,426      -1,297  (-5.47%)
+
+welfare 60.04 -> 60.21.
+
+The container measured the instruction row at 51,095,251 -> 49,162,592, a fall
+of 1,932,659, from the gate's own valgrind recipe minus its host-comparability
+check — this box cannot be compared against CI's golden, but it can be compared
+against itself across two builds, which is what an A/B needs. The two hosts
+disagree by 5,597 on a delta of nearly two million. On a work fall of this size
+the sign and the magnitude both carry across hosts; on the 629 the entry above
+records, neither did, and the difference is that this one is not layout. The
+allocation row agrees to the unit, 29,606 on both, because allocations count the
+compiler's own algorithm.
+
+The census that found this was looking for something else. Task #427 recorded
+"99 of 428 merged declarations are a second copy reached through a further
+qualifier" — the diamond's duplicates, a module reached by two import paths
+contributing its declarations twice. On the compile corpus there are none of
+those: `collapse_diamonds` already drops them, and every one of the 83 pairs the
+census turned up is a bare twin beside its qualified original. The number was
+right and the reading of it was wrong.
+
+Nothing else changes. The alias pass removes a twin only where the bare name has
+one target and no local binding, so an ambiguous bare name keeps both copies and
+`check_bare_ambiguity` still sees them. The full golden suite is green,
+including all 173 error fixtures and the micro corpus run twice.
+

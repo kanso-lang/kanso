@@ -88,6 +88,7 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
                 Lit::True => Value::True,
                 Lit::False => Value::False,
                 Lit::NoneV => Value::NoneV,
+                Lit::Done => Value::Done,
             };
             reg.push(Slot::V(value));
         }
@@ -449,6 +450,7 @@ pub extern "C" fn rt_eq_lit(h: u32, lit: u32) -> u32 {
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::True, Value::True) | (Value::False, Value::False) => true,
         (Value::NoneV, Value::NoneV) => true,
+        (Value::Done, Value::Done) => true,
         _ => false,
     };
     eq as u32
@@ -475,6 +477,7 @@ pub extern "C" fn rt_check_type(h: u32, code: u32) -> u32 {
             5 => matches!(v, Value::Map(_)),
             6 => matches!(v, Value::ErrV(_)),
             7 => matches!(v, Value::NoneV),
+            9 => matches!(v, Value::Done),
             // `some` is a value that is not none; a failure is neither
             8 => !matches!(v, Value::NoneV | Value::ErrV(_)),
             tid => match v {

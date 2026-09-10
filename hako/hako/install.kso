@@ -20,9 +20,9 @@ fn visiting todo found
   os/list_dir here . (names -> divided here rest found names [] [])
 
 fn divided here rest found names dirs files
-  done = gathered (text/concat rest dirs) (text/concat found files)
+  finished = gathered (text/concat rest dirs) (text/concat found files)
   more = weighed here rest found names dirs files
-  if (length names == 0) done more
+  if (length names == 0) finished more
 
 fn weighed here rest found names dirs files
   full = path/join here names[1]!
@@ -127,9 +127,9 @@ fn from_where dir wanted names held root
   os/env "KANSO_HAKO_REMOTE" . start
 
 fn each_hako dir wanted names held root origin lines report
-  done = recorded dir lines report (length names)
+  finished = recorded dir lines report (length names)
   more = one_hako dir wanted names held root origin lines report
-  if (length names == 0) done more
+  if (length names == 0) finished more
 
 fn one_hako dir wanted names held root origin lines report
   n = names[1]!

@@ -2,11 +2,11 @@
 # std/list arms it for cursors; a consumer drives until done.
 import "std/list"
 
+fn drain done acc
+  acc
+
 fn drain (step elem rest) acc
   drain (next rest) (push acc elem)
-
-fn drain (done _) acc
-  acc
 
 start = cursor 1 [10 20 30]
 print "drained: {drain (next start) []}"

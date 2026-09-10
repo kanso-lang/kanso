@@ -129,7 +129,7 @@ front_end_rounds=62
 # twins back out — 83 of the corpus's 394 declarations, all of them, on this
 # corpus. That pass used to run seventeen lines AFTER `check_merged`, so the
 # whole-program check visited 83 declarations the next pass deleted. Banked.
-front_end_visits=22426
+front_end_visits=22562
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -185,4 +185,15 @@ front_end_visits=22426
 # are gone before the check starts, so the front end holds less at its peak.
 # Written from this container, which this golden's host gate admits for these
 # three rows.
-compile_peak_bytes=773818
+
+# 2026-09-10 (kanso#1363): compile_peak_bytes=773,818 -> 769,071, a FALL of
+# 4,747 (-0.6135%); front_end_rounds unchanged at 62; front_end_visits 22,426
+# -> 22,562, a RISE of 136 (+0.6064%).
+#
+# `done` is minted. The peak falls because std/list's one-field `done` record
+# is deleted -- a declaration the front end no longer holds. The visits rise
+# because `DONE` is a bit the inference fixpoint carries where a record was a
+# type it did not, so a nullary in an arm is a cheaper emit and a slightly
+# longer inference. The two go opposite ways on purpose and the welfare
+# objective weighs only the peak.
+compile_peak_bytes=769071

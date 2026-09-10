@@ -606,23 +606,47 @@
 #
 # The measured-on line at the top moves to clang 19.1.1 with these rows. A
 # clang-18 host writes the fallback module and cannot regenerate this file.
-jsonbench text=100418
-encodebench text=120930
-oneshot text=112290
-basket text=114226
-widebench text=126194
-deepbench text=76402
-escapebench text=57874
-pendbench text=92834
-indexbench text=61890
-scanbench text=160738
-digestbench text=111650
-readbench text=58402
-livebench text=112866
+# 2026-09-10 (kanso#1363): `done` is minted. Eight rows FALL and six RISE by
+# exactly 16 bytes, and the split is the std/list import list:
+#
+#   encodebench  120,930 -> 120,098    -832
+#   basket       114,226 -> 113,170  -1,056
+#   widebench    126,194 -> 125,362    -832
+#   deepbench     76,402 ->  75,538    -864
+#   pendbench     92,834 ->  91,346  -1,488
+#   scanbench    160,738 -> 159,842    -896
+#   digestbench  111,650 -> 110,530  -1,120
+#   runbench     247,954 -> 246,402  -1,552
+#   jsonbench    100,418 -> 100,434     +16
+#   oneshot      112,290 -> 112,306     +16
+#   escapebench   57,874 ->  57,890     +16
+#   indexbench    61,890 ->  61,906     +16
+#   readbench     58,402 ->  58,418     +16
+#   livebench    112,866 -> 112,882     +16
+#
+# The +16 is K_DONE, the tag appended after K_SUB in src/runtime.c, which links
+# into every program whether or not the program can produce the value. The
+# eight that fall are the eight that import std/list: eleven arms match a tag
+# now instead of destructuring a one-field record, and the constructions that
+# built it are a word. Machine-code size carries no welfare term (ruled
+# 2026-09-05); this vein is exact and watched on its own.
+jsonbench text=100434
+encodebench text=120098
+oneshot text=112306
+basket text=113170
+widebench text=125362
+deepbench text=75538
+escapebench text=57890
+pendbench text=91346
+indexbench text=61906
+scanbench text=159842
+digestbench text=110530
+readbench text=58418
+livebench text=112882
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=247954
+runbench text=246402

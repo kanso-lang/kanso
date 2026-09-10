@@ -1113,18 +1113,18 @@ fn reads? _ _ false
 fn walked (rep node least most greedy) s at slots k
   repeat node least most greedy s at 0 slots k
 
-fn repeat node least most greedy s at done slots k
-  capped = most >= 0 and done >= most
-  ordered node least most greedy s at done slots k capped
+fn repeat node least most greedy s at reps slots k
+  capped = most >= 0 and reps >= most
+  ordered node least most greedy s at reps slots k capped
 
-fn ordered _ least _ _ _ at done slots k true
-  enough at done least slots k
+fn ordered _ least _ _ _ at reps slots k true
+  enough at reps least slots k
 
-fn ordered node least most greedy s at done slots k false
-  first node least most greedy s at done slots k greedy
+fn ordered node least most greedy s at reps slots k false
+  first node least most greedy s at reps slots k greedy
 
-fn enough at done least slots k
-  reached at slots k (done >= least)
+fn enough at reps least slots k
+  reached at slots k (reps >= least)
 
 fn reached at slots k true
   k at slots
@@ -1133,38 +1133,38 @@ fn reached _ _ _ false
   none
 
 # Greedy: take another, and only fall back to stopping if that fails.
-fn first node least most greedy s at done slots k true
-  more = another node least most greedy s at done slots k
-  or_stop more at done least slots k
+fn first node least most greedy s at reps slots k true
+  more = another node least most greedy s at reps slots k
+  or_stop more at reps least slots k
 
-fn or_stop none at done least slots k
-  enough at done least slots k
+fn or_stop none at reps least slots k
+  enough at reps least slots k
 
 fn or_stop won _ _ _ _ _
   won
 
 # Lazy: stop if the rest accepts it, and only then take another.
-fn first node least most greedy s at done slots k false
-  stopped = enough at done least slots k
-  or_more stopped node least most greedy s at done slots k
+fn first node least most greedy s at reps slots k false
+  stopped = enough at reps least slots k
+  or_more stopped node least most greedy s at reps slots k
 
-fn or_more none node least most greedy s at done slots k
-  another node least most greedy s at done slots k
+fn or_more none node least most greedy s at reps slots k
+  another node least most greedy s at reps slots k
 
 fn or_more won _ _ _ _ _ _ _ _ _
   won
 
-fn another node least most greedy s at done slots k
-  on = (next caught -> again node least most greedy s at next done caught k)
+fn another node least most greedy s at reps slots k
+  on = (next caught -> again node least most greedy s at next reps caught k)
   walked node s at slots on
 
 # A body that consumed nothing would repeat for ever, so a rep only continues
 # when the position actually moved.
-fn again node least most greedy s at next done slots k
-  moved_on node least most greedy s next done slots k (next == at)
+fn again node least most greedy s at next reps slots k
+  moved_on node least most greedy s next reps slots k (next == at)
 
 fn moved_on _ _ _ _ _ _ _ _ _ true
   none
 
-fn moved_on node least most greedy s next done slots k false
-  repeat node least most greedy s next (done + 1) slots k
+fn moved_on node least most greedy s next reps slots k false
+  repeat node least most greedy s next (reps + 1) slots k

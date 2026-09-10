@@ -378,17 +378,34 @@
 # The container measured the same direction on its own pair of builds, and its
 # absolute rows cannot be taken here: it is clang 18.1.3 and would write the
 # fallback module. CI's sitting is the record.
+# 2026-09-10 (kanso#1363): `done` is minted and std/list's one-field `done`
+# record is deleted. Ten rows FALL and four are byte-identical:
+#
+#   encodebench  3,963,988,518 ->  3,963,988,451      -67  (-0.0000%)
+#   basket          34,694,178 ->     34,690,245   -3,933  (-0.0113%)
+#   widebench       35,268,228 ->     35,268,161      -67  (-0.0000%)
+#   deepbench      387,470,247 ->    387,470,234      -13  (-0.0000%)
+#   pendbench      590,970,940 ->    583,758,224 -7,212,716 (-1.2205%)
+#   scanbench      726,019,157 ->    726,019,079      -78  (-0.0000%)
+#   digestbench     10,426,541 ->     10,426,515      -26  (-0.0002%)
+#   runbench     2,369,679,773 ->  2,367,877,484 -1,802,289 (-0.0761%)
+#
+# jsonbench, oneshot, escapebench, indexbench, readbench and livebench do not
+# move at all. The mechanism is one allocation per drained source: the record
+# `next` used to answer is a word now, so a program pays the fall in proportion
+# to how many sources it drains. pendbench drains one per pending cell, which
+# is why it takes 1.22% where the rest take a handful of instructions.
 jsonbench 1485334791
-encodebench 3963988518
+encodebench 3963988451
 oneshot 21737110
-basket 34694178
-widebench 35268228
-deepbench 387470247
+basket 34690245
+widebench 35268161
+deepbench 387470234
 escapebench 85558105
-pendbench 590970940
+pendbench 583758224
 indexbench 3265786
-scanbench 726019157
-digestbench 10426541
+scanbench 726019079
+digestbench 10426515
 readbench 4561933
 livebench 3481899695
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
@@ -448,4 +465,4 @@ livebench 3481899695
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2369679773
+runbench 2367877484

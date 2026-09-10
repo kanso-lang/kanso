@@ -22,6 +22,9 @@ pub enum Value {
     True,
     False,
     NoneV,
+    /// What a succeeded effect yields. `none` is absence and nothing else,
+    /// so a print, a write or a sleep that finished answers this instead.
+    Done,
     ErrV(Rc<ErrInfo>),
     List(Rc<Vec<Value>>),
     /// Byte data, as `text/bytes` and the scanner produce it. Distinct from
@@ -1759,6 +1762,7 @@ impl<'a> Interp<'a> {
             "true" => Ok(Value::True),
             "false" => Ok(Value::False),
             "none" => Ok(Value::NoneV),
+            "done" => Ok(Value::Done),
             _ if self.fns.contains_key(name)
                 || self.types.contains_key(name)
                 || name == "err"
@@ -3180,7 +3184,11 @@ impl<'a> Interp<'a> {
             // coherence licence that keeps primitives on the direct path
             // does not reach a wrapper
             (
-                Value::Record { .. } | Value::NoneV | Value::Desc(_) | Value::Sub { .. },
+                Value::Record { .. }
+                | Value::NoneV
+                | Value::Done
+                | Value::Desc(_)
+                | Value::Sub { .. },
                 Some(overloads),
             ) => {
                 let overloads = overloads.clone();
@@ -3432,6 +3440,7 @@ fn match_one(
         (Pattern::Nullary(name, _), Value::True) if name == "true" => Some(0),
         (Pattern::Nullary(name, _), Value::False) if name == "false" => Some(0),
         (Pattern::Nullary(name, _), Value::NoneV) if name == "none" => Some(0),
+        (Pattern::Nullary(name, _), Value::Done) if name == "done" => Some(0),
         (Pattern::Wildcard(_), _) => match is_failure(arg) {
             true => None,
             false => Some(0),
@@ -3659,6 +3668,7 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
         ("true", Value::True) => true,
         ("false", Value::False) => true,
         ("none", Value::NoneV) => true,
+        ("done", Value::Done) => true,
         ("err", Value::ErrV(_)) => true,
         (name, Value::Record { ty, .. }) => name == &**ty,
         _ => false,
@@ -4035,6 +4045,7 @@ fn values_equal_seen(
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::True, Value::True) | (Value::False, Value::False) => true,
         (Value::NoneV, Value::NoneV) => true,
+        (Value::Done, Value::Done) => true,
         (Value::List(x), Value::List(y)) => {
             if x.len() != y.len() {
                 return Ok(false);
@@ -4221,6 +4232,7 @@ fn render_seen(
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
         Value::NoneV => "<none>".to_string(),
+        Value::Done => "<done>".to_string(),
         Value::ErrV(info) => format!("err {}", render_seen(interp, &info.reason, true, seen)),
         // On the path like a record, so a knot that closes through a cell
         // holding this very list prints the list once and says `<cycle>`
@@ -4283,7 +4295,7 @@ impl<'a> Interp<'a> {
         match desc {
             Desc::Print(text, _) => {
                 executor.print(text);
-                Ok(Value::NoneV)
+                Ok(Value::Done)
             }
             Desc::Seq(..) | Desc::Bind(..) | Desc::Rescue(..) | Desc::Annotate(..) => {
                 self.execute_chain(Rc::new(desc.clone()), executor)
@@ -4291,10 +4303,10 @@ impl<'a> Interp<'a> {
             Desc::Join(_, _) => self.schedule(desc, executor),
             Desc::Sleep(ms) => {
                 executor.sleep(*ms);
-                Ok(Value::NoneV)
+                Ok(Value::Done)
             }
             Desc::Random(n) => Ok(Value::Int(executor.random(*n).into())),
-            Desc::Nil => Ok(Value::NoneV),
+            Desc::Nil => Ok(Value::Done),
             Desc::Args => {
                 let list = executor.args().into_iter().map(Value::Str).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -4329,11 +4341,11 @@ impl<'a> Interp<'a> {
             }),
             Desc::Write(text) => {
                 executor.write(text);
-                Ok(Value::NoneV)
+                Ok(Value::Done)
             }
             Desc::WriteErr(text) => {
                 executor.write_err(text);
-                Ok(Value::NoneV)
+                Ok(Value::Done)
             }
             Desc::Env(name) => Ok(match executor.env(name) {
                 Some(value) => Value::Str(value),
@@ -4353,15 +4365,15 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::MakeDir(path) => Ok(match executor.make_dir(path) {
-                Ok(()) => Value::NoneV,
+                Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
-                Ok(()) => Value::NoneV,
+                Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::WriteBytes(path, raw) => Ok(match executor.write_bytes(path, raw) {
-                Ok(()) => Value::NoneV,
+                Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Start(cmd, argv) => Ok(match executor.start(cmd, argv) {
@@ -4369,7 +4381,7 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Kill(handle) => Ok(match executor.kill(*handle) {
-                Ok(()) => Value::NoneV,
+                Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Listen(port) => Ok(match executor.listen(*port) {
@@ -4394,15 +4406,15 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
-                Ok(()) => Value::NoneV,
+                Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::SendBytes(conn, raw) => Ok(match executor.send_bytes(*conn, raw) {
-                Ok(()) => Value::NoneV,
+                Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::CloseSocket(handle) => Ok(match executor.close_socket(*handle) {
-                Ok(()) => Value::NoneV,
+                Ok(()) => Value::Done,
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
         }

@@ -21,9 +21,9 @@ pub play =
   three = over add
   two = over plus
   grown = three 5
-  done = twice plus
+  both = twice plus
   sub = (a b -> a - b)
   print "{three 5 7} {two 40}"
   print "{grown 7}"
-  print "{done()} {three}"
+  print "{both()} {three}"
   print "{(&sub 10) 3}"

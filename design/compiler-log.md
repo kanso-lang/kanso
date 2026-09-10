@@ -20,54 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 — the whole-program check ran over declarations the next pass deletes
-
-`enroll_bare` gives every exported declaration of every imported module a twin
-under its short name, so `import "std/list"` puts both `list/next` and `next`
-into the merged program. `canonicalize_bare_aliases` then takes most of those
-twins straight back out: where a bare name has exactly one qualified target and
-is never locally bound, it rewrites the references to the qualified spelling and
-drops the clone.
-
-On `bench/compile_corpus` that pass declines nothing. All 83 twins go, out of
-394 declarations — 21% of the merged program. And it ran at src/lib.rs:3599,
-seventeen lines after `check_merged` at 3581. So the whole-program check, and
-every pass reading its results, ran over 83 declarations that were about to be
-deleted.
-
-Moving `canonicalize_types` and `canonicalize_bare_aliases` in front of the
-check, on CI:
-
-    compile_instructions   50,684,921 -> 48,757,859   -1,927,062  (-3.80%)
-    compile_allocs              29,941 ->     29,606        -335  (-1.12%)
-    compile_peak_bytes         819,217 ->    773,818     -45,399  (-5.54%)
-    front_end_visits            23,723 ->     22,426      -1,297  (-5.47%)
-
-welfare 60.04 -> 60.21.
-
-The container measured the instruction row at 51,095,251 -> 49,162,592, a fall
-of 1,932,659, from the gate's own valgrind recipe minus its host-comparability
-check — this box cannot be compared against CI's golden, but it can be compared
-against itself across two builds, which is what an A/B needs. The two hosts
-disagree by 5,597 on a delta of nearly two million. On a work fall of this size
-the sign and the magnitude both carry across hosts; on the 629 the entry above
-records, neither did, and the difference is that this one is not layout. The
-allocation row agrees to the unit, 29,606 on both, because allocations count the
-compiler's own algorithm.
-
-The census that found this was looking for something else. Task #427 recorded
-"99 of 428 merged declarations are a second copy reached through a further
-qualifier" — the diamond's duplicates, a module reached by two import paths
-contributing its declarations twice. On the compile corpus there are none of
-those: `collapse_diamonds` already drops them, and every one of the 83 pairs the
-census turned up is a bare twin beside its qualified original. The number was
-right and the reading of it was wrong.
-
-Nothing else changes. The alias pass removes a twin only where the bare name has
-one target and no local binding, so an ambiguous bare name keeps both copies and
-`check_bare_ambiguity` still sees them. The full golden suite is green,
-including all 173 error fixtures and the micro corpus run twice.
-
 ## 2026-09-08 (third) — three page gates in three CI jobs, and no sweep over them
 
 Searched the log, the archive and design/ before filing. `golden_prose` appears
@@ -3585,3 +3537,161 @@ correctly, and a partial over a value on every engine is worth 0.00093 of it
 by Clay's own "BUILD IT". The first cut of this entry recorded the move as a
 `--set` with a reason that read like a banked gain, which was wrong about the
 direction; the history entry says the fall and its size now.
+## 2026-09-09 — a succeeded effect yields `done`
+
+Built: the 2026-08-26 ruling "the July letters close", letter D (STATUS.md's
+row "`done` is minted", now removed): a succeeded effect yields `done`, and
+`none` means absence and nothing else. Until now a print, a write, a sleep, a
+`make_dir`, a `write_file`, a kill or a socket close yielded `none` on every
+engine, so a chain that bound the yield could not tell a finished effect
+from a missing value, which is the railway-skip the ruling closed.
+
+**The value.** `done` is the fourth nullary beside `true`, `false` and
+`none`: a literal, an arm's pattern, an annotation's type word and a typeset
+member. It renders `<done>`, the way `none` renders `<none>` and a
+description `<io>` — a value that is not data prints in brackets, so a
+yield that reaches an interpolation is visible for what it is rather than
+passing as a word. It equals itself and nothing else; `done == none` is
+false on every engine. Infer carries it as its own bit, `DONE`, above the
+thunk bit, and the twelve effects that used to yield the empty set yield
+`DONE` now: the empty set was how the decided dispatch chose the catch-all
+arm for a yield, and with the bit in place a `done` arm is reached on
+native the way the oracle reaches it. Native's tag is `K_DONE`, appended
+after `K_SUB` so every existing tag keeps its number; the page spells the
+literal `Lit::Done` and answers type code 9 for it; its effects run through
+the interpreter's executor, so the page's yields moved with the oracle's.
+
+**Twelve effects on two executors.** The interpreter's `execute` and
+native's `k_exec` each answer `done` for print, write, write_err, sleep,
+the nil description a sleep settles into, make_dir, write_file,
+write_bytes, kill, send, send_bytes and the socket close. A read that finds
+no file, an environment variable that is not set and `read_bytes` on a
+missing path still answer `none`, since those are absences.
+
+**`done` was already a name, twice.** `std/list` declared `pub type done`
+with one field, `drained`, and every construction in the module was `done
+true`: a record carrying no information, matched by `(done _)` in eleven
+arms and re-answered as `done d`. design/enumerable.md §8 had spelled the
+iterator's end bare, `next src . (done -> acc)`, all along. So the record
+is gone and `next` answers the nullary when a source is drained; the
+arms read `done` and the constructions are the word. `std/net/http`'s
+`done value` carries the value a serve loop stops with, which is a
+different thing, so it is `stopped value` and `http/stop` builds it, with
+both callers in scripts/ unchanged since they call `http/stop`.
+`std/regexp` used `done` as the name of a repetition count in one arm
+family, twenty-five sites; it is `reps`. examples/next_protocol.kso reads
+`fn drain done acc`. Anything outside this repository that matched
+`(done _)` on a list iterator reads `done` now, and a binding named `done`
+is refused with the sentence every other taken name gets,
+`done_is_a_value_not_a_name` in the error corpus.
+
+**Spec.** `tests/golden/micro/a_succeeded_effect_yields_done` on all three
+engines: a print's yield and a write's yield bound and printed, `<done>`,
+equal to `done`, not `none`, and dispatched to an arm that names `done`
+beside the arm that does not. The old compiler refuses the file at the
+arm, `unused binding done`, since `done` was a parameter name to it.
+
+**What moved.** The list record was one allocation per drained source, so
+three runtime cost goldens fall by exactly the drains their programs make:
+basket 28,169 -> 28,166 allocs, pend 4,007,549 -> 4,007,349, run
+6,936,567 -> 6,936,517, and four `.mem` fixtures with them
+(`a_carried_value_written_into_an_older_node` 100,550 -> 100,149, the
+other three the same shape). Eight programs that import std/list emit less
+now that eleven arms match a tag instead of destructuring a record:
+encodebench 1,638 -> 1,607 calls and 11,197 -> 11,105 lines, basket,
+widebench, deepbench, pendbench, scanbench, digestbench and runbench each
+31 to 40 calls and 92 to 103 lines fewer, branches down 8 or 9 apiece;
+the decoder does not import it and is byte-identical. The module compile
+golden reads lines 5,269 -> 5,177, calls 758 -> 727, branches 437 -> 430
+and `module_visits` 2,409 -> 2,471, and `compile_memory`'s
+`front_end_visits` 22,426 -> 22,562, the page's span rewritten: a nullary
+in an arm is a cheaper emit and a
+slightly longer inference, since `DONE` is a bit the fixpoint carries
+where a record was a type it did not. **Re-measured on the base this opens against.** The rows above were first
+counted on main 3c7a163b and this change opens against dc980ddf, three merges
+later, so `all_compile.sh` was re-run and the two veins it can see were
+regenerated here: `emitted_code` on the eight programs and `compile_cost`'s
+module row. The deltas are dn's own and did not move -- 31 to 40 calls and 92
+to 103 lines fewer, visits 2,409 -> 2,471 -- but two LEVELS did, by the two
+lines a program kanso#1361's alias added: encodebench's lines read 11,197 ->
+11,105 where the first sitting read 11,195 -> 11,103, and the module row
+5,269 -> 5,177 where it read 5,268 -> 5,176. `front_end_visits` 22,426 ->
+22,562 is measured rather than projected: `compile_memory` checks rounds and
+visits before it asks the host anything, because those count the compiler's
+own algorithm and are the same everywhere, and only its `compile_peak_bytes`
+row refused.
+
+**CI's sitting, and a prediction that was six-sevenths right.** Round one named
+SEVEN veins and this entry had named six of them: the four host-keyed compile
+rows, `compile_memory`'s peak, and `machine_code`. The seventh was `work`, the
+runtime instruction vein, and the miss is instructive because the entry's own
+record implies it: a change that removes one allocation per drained source
+removes the instructions that allocation cost. The seventh name written above
+was the `text` vein, which is not a seventh gate at all -- `machine_code.sh`
+diffs bench/text_golden.txt, so the two are one. Six gates predicted, seven
+named, and the arithmetic was wrong in both directions at once.
+
+Every one of the thirty-nine moved keys, by name:
+
+    work           encodebench 3,963,988,518 -> 3,963,988,451        -67
+                   basket         34,694,178 ->     34,690,245     -3,933  -0.0113%
+                   widebench      35,268,228 ->     35,268,161        -67
+                   deepbench     387,470,247 ->    387,470,234        -13
+                   pendbench     590,970,940 ->    583,758,224 -7,212,716  -1.2205%
+                   scanbench     726,019,157 ->    726,019,079        -78
+                   digestbench    10,426,541 ->     10,426,515        -26
+                   runbench    2,369,679,773 ->  2,367,877,484 -1,802,289  -0.0761%
+
+    text           encodebench       120,930 ->        120,098       -832
+                   basket            114,226 ->        113,170     -1,056
+                   widebench         126,194 ->        125,362       -832
+                   deepbench          76,402 ->         75,538       -864
+                   pendbench          92,834 ->         91,346     -1,488
+                   scanbench         160,738 ->        159,842       -896
+                   digestbench       111,650 ->        110,530     -1,120
+                   runbench          247,954 ->        246,402     -1,552
+                   jsonbench         100,418 ->        100,434        +16
+                   oneshot           112,290 ->        112,306        +16
+                   escapebench        57,874 ->         57,890        +16
+                   indexbench         61,890 ->         61,906        +16
+                   readbench          58,402 ->         58,418        +16
+                   livebench         112,866 ->        112,882        +16
+
+    compile_allocs                     29,276 ->        29,000       -276  -0.9427%
+    compile_instructions           48,879,362 ->    48,572,851   -306,511  -0.6271%
+    entry_instructions            162,822,303 ->   161,836,689   -985,614  -0.6053%
+    library_instructions          163,543,712 ->   162,541,723 -1,001,989  -0.6127%
+    compile_peak_bytes                773,818 ->       769,071     -4,747  -0.6135%
+    front_end_visits                   22,426 ->        22,562       +136  +0.6064%
+
+jsonbench, oneshot, escapebench, indexbench, readbench and livebench do not
+move on the work vein at all, and they are the six that rise exactly 16 bytes
+on the text vein. That is the whole shape of the change in two lines: the +16
+is `K_DONE`, the tag appended after `K_SUB` in src/runtime.c, which links into
+every program whether or not the program can produce the value; the eight that
+fall are the eight that import std/list, where eleven arms match a tag instead
+of destructuring a one-field record. pendbench takes 1.22% of the work vein
+because it drains one source per pending cell, where the rest drain a handful.
+
+The five compile rows fall in one band -- 0.9427%, 0.6271%, 0.6053%, 0.6127%,
+0.6135% -- which reads as work removed rather than as the layout move the
+compile-row notes usually record: a declaration the front end used to lex,
+parse, infer and check is gone. `front_end_visits` goes the other way by 136,
+and that is deliberate: `DONE` is a bit the inference fixpoint carries where a
+record was a type it did not, so a nullary in an arm is a cheaper emit and a
+slightly longer inference. Only the peak is a welfare term.
+
+Welfare 66.38 -> 66.42, banked with `--set` in this same PR. All five terms
+improved: `run_instructions` and `compile_peak_bytes` by the deletions above,
+`compile_instructions` (the objective's sum of the module, entry and library
+rows) by 2,294,114, and `compile_allocs` by 276.
+
+**A blank line cost a round.** Round two took all seven veins' rows and CI came
+back with six green and `compile allocations` still red -- on a golden whose
+value matched CI's to the digit. The diff was `1d0` against a blank: the note
+above the row had been separated from the note before it by an empty line, and
+`compile_allocs.sh` builds its expected file with `grep -v '^#'` and nothing
+else, so the blank survived into the comparison. The other four compile goldens
+carry blanks today and their gates do not mind. Round three deletes the blank
+and writes the trap into that golden's own header, because the habit it broke --
+separate notes with an empty line -- is right in every other file here.

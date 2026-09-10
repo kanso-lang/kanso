@@ -18,9 +18,6 @@ pub type cycled
   at
   source
 
-pub type done
-  drained
-
 pub type grown
   seed
   stretch
@@ -58,7 +55,7 @@ pub type step
 pub fn all? coll pred
   holds_all? (next (iter coll)) pred
 
-fn holds_all? (done _) _
+fn holds_all? done _
   true
 
 fn holds_all? (step e rest) pred
@@ -67,7 +64,7 @@ fn holds_all? (step e rest) pred
 pub fn any? coll pred
   holds_any? (next (iter coll)) pred
 
-fn holds_any? (done _) _
+fn holds_any? done _
   false
 
 fn holds_any? (step e rest) pred
@@ -108,7 +105,7 @@ pub fn find (sorted items) pred
 pub fn find coll pred
   found_in (next (iter coll)) pred
 
-fn found_in (done _) _
+fn found_in done _
   none
 
 fn found_in (step e rest) pred
@@ -117,7 +114,7 @@ fn found_in (step e rest) pred
 pub fn first coll
   first_of (next (iter coll))
 
-fn first_of (done _)
+fn first_of done
   none
 
 fn first_of (step e _)
@@ -184,7 +181,7 @@ pub fn fold coll init f
 fn fold_flat coll acc f i len
   if (len < i) acc (fold_flat coll (f acc coll[i]!) f (i + 1) len)
 
-fn fold_go (done _) acc _
+fn fold_go done acc _
   acc
 
 fn fold_go (step e rest) acc f
@@ -274,23 +271,23 @@ pub fn next (capped left (cursor at source))
   next (bounded at (at + left - 1) source)
 
 pub fn next (bounded at stop source)
-  if (stop < at) (done true) (next_bounded at stop source)
+  if (stop < at) done (next_bounded at stop source)
 
 # the window says when to stop asking; the source says when it has run out,
 # and taking more than there is has to end on the second one
 fn next_bounded at stop source
   onward = bounded (at + 1) stop source
-  if (length source < at) (done true) (step source[at]! onward)
+  if (length source < at) done (step source[at]! onward)
 
 pub fn next (capped left source)
-  if (left < 1) (done true) (next_capped left (next source))
+  if (left < 1) done (next_capped left (next source))
 
 pub fn next (counting at)
   step at (counting (at + 1))
 
 pub fn next (cursor at source)
   onward = cursor (at + 1) source
-  if (length source < at) (done true) (step source[at]! onward)
+  if (length source < at) done (step source[at]! onward)
 
 pub fn next (cycled at source)
   onward = cycled (at + 1) source
@@ -314,26 +311,26 @@ pub fn next (sifted keep source test)
 pub fn next (skipped burn source)
   next_skipped burn source
 
-fn next_capped _ (done d)
-  done d
+fn next_capped _ done
+  done
 
 fn next_capped left (step e rest)
   step e (capped (left - 1) rest)
 
-fn next_mapped _ (done d)
-  done d
+fn next_mapped _ done
+  done
 
 fn next_mapped shape (step e rest)
   step (shape e) (mapped shape rest)
 
-fn next_paired (done d) _
-  done d
+fn next_paired done _
+  done
 
 fn next_paired (step x lrest) right
   next_zip x lrest (next right)
 
-fn next_sifted _ _ (done d)
-  done d
+fn next_sifted _ _ done
+  done
 
 fn next_sifted keep test (step e rest)
   onward = sifted keep rest test
@@ -380,8 +377,8 @@ pub fn repeat value
 pub fn select coll pred
   sifted true (iter coll) pred
 
-fn skip_one (done d)
-  done d
+fn skip_one done
+  done
 
 fn skip_one (step _ rest)
   rest
@@ -485,8 +482,8 @@ fn put_shaped acc (entry k v) f
 pub fn zip a b
   paired (iter a) (iter b)
 
-fn next_zip _ _ (done d)
-  done d
+fn next_zip _ _ done
+  done
 
 fn next_zip x lrest (step y rrest)
   step [x y] (paired lrest rrest)

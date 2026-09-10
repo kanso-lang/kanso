@@ -15,7 +15,7 @@ pub type turn
   answer
   carried
 
-pub type done
+pub type stopped
   value
 
 pub type response
@@ -49,7 +49,7 @@ pub fn reply answer carried
   turn answer carried
 
 pub fn stop value
-  done value
+  stopped value
 
 # Parsing stops at the head because that is all a request line and its headers
 # are; the body is whatever the read brought with it.
@@ -191,7 +191,7 @@ fn answered_with c handler carried raw
   took = handler (parsed raw) carried
   written c took.answer . (_ -> net/close_conn c) . (_ -> took.carried)
 
-fn more l _ (done value)
+fn more l _ (stopped value)
   net/close_listener l . (_ -> value)
 
 fn more l handler carried

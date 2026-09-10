@@ -22,7 +22,10 @@ pub const BYTES: Set = 1 << 12;
 /// Lazy v1: the value may be an unforced thunk; force sites are emitted
 /// only where this bit is present, so strict code pays nothing.
 pub const THUNK: Set = 1 << 13;
-pub const TOP: Set = (1 << 14) - 1;
+/// A succeeded effect's yield: the one value that means "finished" and
+/// nothing else, so an absence never stands in for a success.
+pub const DONE: Set = 1 << 14;
+pub const TOP: Set = (1 << 15) - 1;
 /// What propagates on its own. A none is a value and stays where it is put;
 /// only an err abandons the computation that produced it.
 pub const FAIL: Set = ERR;
@@ -562,6 +565,7 @@ fn bind_pattern<'a>(
 fn pattern_catches(pat: &Pattern) -> Set {
     match pat {
         Pattern::Nullary(name, _) if name == "none" => NONE,
+        Pattern::Nullary(name, _) if name == "done" => DONE,
         Pattern::Ctor { ty, .. } if ty == "err" => ERR,
         _ => 0,
     }
@@ -754,6 +758,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
         "true" => TRUE,
         "false" => FALSE,
         "none" => NONE,
+        "done" => DONE,
         "args" | "stdin" | "now" => DESC,
         _ => {
             // a zero-field type's bare mention is its marker value
@@ -1060,7 +1065,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 Expr::Ident(n, _) if base(n) == "list_dir" => LIST,
                 Expr::Ident(n, _) if base(n) == "now" => INT,
                 // an unset variable yields none, which is a value the consumer
-                // dispatches on rather than a failure it has to trap
+                // dispatches on rather than a failure it has to trap; an
+                // effect with nothing to answer yields `done` when it finished
                 Expr::Ident(n, _)
                     if matches!(
                         base(n),
@@ -1075,7 +1081,7 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                             | "net_close"
                     ) =>
                 {
-                    0
+                    DONE
                 }
                 _ => TOP & !FAIL,
             }

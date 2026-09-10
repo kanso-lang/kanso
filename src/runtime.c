@@ -24,7 +24,7 @@
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
-enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB };
+enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB, K_DONE };
 
 /* `cap` is spare room the string may grow into. Zero for every string built
    the ordinary way; positive only for a builder, whose storage is malloc'd
@@ -2644,6 +2644,8 @@ static inline void k_copy_short(char* d, const char* s, long long n) {
 KValue k_int(long long i) { KValue v; v.tag = K_INT; v.payload = i; return v; }
 KValue k_bool(long long b) { KValue v; v.tag = b ? K_TRUE : K_FALSE; v.payload = 0; return v; }
 KValue k_none(void) { KValue v; v.tag = K_NONE; v.payload = 0; return v; }
+/* What a succeeded effect yields: `none` is absence and nothing else. */
+KValue k_done(void) { KValue v; v.tag = K_DONE; v.payload = 0; return v; }
 
 static KValue k_ascii_cache[128];
 static char k_ascii_ready[128];
@@ -4282,6 +4284,7 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_TRUE: return k_str("true");
         case K_FALSE: return k_str("false");
         case K_NONE: return k_str("<none>");
+        case K_DONE: return k_str("<done>");
         case K_ERR: return k_concat(k_str("err "), k_render_at(k_err_inner(v), 1, 1));
         case K_STR:
             if (!quote) return v;
@@ -4496,7 +4499,7 @@ static long long k_eq_rec(KValue a, KValue b) {
     switch (a.tag) {
         case K_INT: return a.payload == b.payload;
         case K_FLOAT: return k_as_f(a) == k_as_f(b);
-        case K_TRUE: case K_FALSE: case K_NONE: return 1;
+        case K_TRUE: case K_FALSE: case K_NONE: case K_DONE: return 1;
         case K_STR: {
             KStr* sa = k_as_str(a);
             KStr* sb = k_as_str(b);
@@ -5144,7 +5147,7 @@ static KValue k_exec(KDesc* d) {
             KStr* s = k_as_str(d->x);
             fwrite(s->data, 1, s->len, stdout);
             fputc('\n', stdout);
-            return k_none();
+            return k_done();
         }
         case 1: {
             /* a >> step is a beat: the left side's yield is discarded by
@@ -5311,7 +5314,7 @@ static KValue k_exec(KDesc* d) {
                 if (n <= 0) return k_err(k_str("cannot write"), NULL);
                 sent += n;
             }
-            return k_none();
+            return k_done();
         }
         case 24: {
             long long h = d->x.payload;
@@ -5319,7 +5322,7 @@ static KValue k_exec(KDesc* d) {
             if (fd < 0) return k_err(k_str("that is not an open socket"), NULL);
             close(fd);
             k_sockets[h % K_SOCKETS].used = 0;
-            return k_none();
+            return k_done();
         }
         case 19: {
             KStr* p = k_as_str(d->x);
@@ -5340,7 +5343,7 @@ static KValue k_exec(KDesc* d) {
                 work[i] = held;
             }
             free(work);
-            return k_none();
+            return k_done();
         }
         case 5: {
             KStr* p = k_as_str(d->x);
@@ -5358,7 +5361,7 @@ static KValue k_exec(KDesc* d) {
                 fwrite(c->data, 1, c->len, fh);
             }
             fclose(fh);
-            return k_none();
+            return k_done();
         }
         case 7: {
             /* no order between the sides, and both always run — a failure on
@@ -5371,24 +5374,24 @@ static KValue k_exec(KDesc* d) {
             /* a bare sleep executed outside a group: pause for real */
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
             if (ms > 0) usleep((useconds_t)(ms * 1000));
-            return k_none();
+            return k_done();
         }
         case 9: {
             long long n = d->x.tag == K_INT ? d->x.payload : 0;
             return k_int(k_rng_below(n));
         }
         case 10: {
-            return k_none();
+            return k_done();
         }
         case 11: {
             KStr* s = k_as_str(d->x);
             fwrite(s->data, 1, s->len, stdout);
-            return k_none();
+            return k_done();
         }
         case 12: {
             KStr* s = k_as_str(d->x);
             fwrite(s->data, 1, s->len, stderr);
-            return k_none();
+            return k_done();
         }
         case 13: {
             const char* found = getenv(k_as_str(d->x)->data);
@@ -5710,7 +5713,7 @@ static KValue k_kill_kid(KValue handle) {
     free(k_kids[slot].obuf);
     free(k_kids[slot].ebuf);
     k_kids[slot].used = 0;
-    return k_none();
+    return k_done();
 }
 
 static KStep k_step(KDesc* d) {
