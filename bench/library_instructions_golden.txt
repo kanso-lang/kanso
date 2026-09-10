@@ -28,7 +28,7 @@
 # has rustc 1.94.1 against CI's 1.98.1 and reads about 0.8% high on both of the
 # other compile rows, so its number is a projection and not a sitting.
 #
-# measured-on glibc=2.39-0ubuntu8.8 rustc=1.98.1
+# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
 #
 # 2026-09-08 (the vein opens): library_instructions=164,253,088.
 #
@@ -98,4 +98,9 @@
 # renders. All three instruction rows rose together and in one band --
 # 0.0353%, 0.0131%, 0.0257% -- which is the layout reading the notes above
 # give, with that one String of real per-program work under it.
+# 2026-09-10 (the runner image moves, kanso#1361): measured-on takes
+# glibc=2.39-0ubuntu8.9 and the row below does not move. Counted 163,473,663 on
+# 8.8 in round one and 163,473,663 on 8.9 in round four, same commit content and
+# same clang and rustc. The module row's note carries the reading, and
+# bench/instructions_golden.txt the account of what the revision did move.
 library_instructions=163473663

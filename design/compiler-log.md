@@ -3432,3 +3432,49 @@ the printing step will cat. Watched red with the hand list restored, where it
 names both files that list missed, `allocs_got.txt` and
 `compile_libraries_got.txt`. The glob satisfies the property today; what the
 spec is for is the next session writing the list out by hand again.
+
+**Round five re-measures the four refusing veins, and it rides here.** The
+paragraph above says the re-measure is its own change. That was wrong. The
+runner pool has rolled forward, so a branch opened to carry the fix would land
+on the new image and refuse in the same four places, and there is no tree that
+goes green on both. It rides here.
+
+The image is glibc 2.39-0ubuntu8.9 against the goldens' 2.39-0ubuntu8.8, and
+nothing else moved with it: `compile_memory` printed "measured-on rustc=1.98.1;
+here rustc=1.98.1" and compared, and the `machine_code` gate compares against
+clang=19.1.1 and passed. Every run through 14:21Z compared and every run from
+14:32Z has refused, four rounds of this PR straddling the change. main's last
+run is 14:15Z and green, so main is green on the record and would be red if it
+ran again.
+
+The revision costs almost nothing, and round one is what makes that a
+measurement rather than two sittings read side by side. Round one counted this
+branch's content on 8.8 and round four counted it on 8.9 -- same commit
+content, same clang, same rustc, same benchmark sources -- and the work vein
+compared GREEN in round one, so every row sat exactly on its golden with this
+change already in the tree. Of the seventeen glibc-keyed values, fifteen are
+byte-identical across the pair: `compile_instructions` read 48,866,385 both
+times, `entry_instructions` 162,751,831, `library_instructions` 163,473,663,
+and twelve of the fourteen work rows did not move at all. The two that moved
+are `work_deepbench` 389,214,232 -> 389,214,251, a RISE of 19 (+0.000005%), and
+`work_runbench` 2,369,917,628 -> 2,369,917,611, a fall of 17 (-0.000001%). Both
+are
+the revision and neither is this change.
+
+Both rows are copied and the four measured-on lines take 8.9:
+`bench/instructions_golden.txt`, `bench/compile_instructions_golden.txt`,
+`bench/entry_instructions_golden.txt` and `bench/library_instructions_golden.txt`.
+This is the shape the runbench note in the first of those already recorded for
+8.7 -> 8.8, where one row moved 1,014 instructions and the rest did not, and it
+is smaller. Two ubuntu revisions have now been measured across and each moved
+one or two of the allocator-heavy rows by tens of instructions; what a revision
+costs is a property of the revision, and the gate refuses either way, which is
+why both of these were read instead of assumed.
+
+Welfare reads 66.38 against the 66.37750307886598 floor and is not re-set. The
+17 instructions `work_runbench` gives back are worth about a ten-millionth of a
+point, and they are the revision's rather than this change's. Ratcheting them
+would pin a glibc package revision into the floor, so a pool that rolled back
+would read fractionally under it and redden CI for a reason no pull request
+caused. The rule that a rise is banked is for a gain a change earned; this one
+is left where it is, said out loud here rather than passed over.

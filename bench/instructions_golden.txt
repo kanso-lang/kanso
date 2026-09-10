@@ -36,7 +36,7 @@
 # container one glibc revision off the runner, whose rows sat about four
 # hundred instructions low. Two ubuntu 24.04 boxes at 2.39-0ubuntu8.7 and
 # 2.39-0ubuntu8.8 differ by more than most changes this vein is here to catch.
-# measured-on glibc=2.39-0ubuntu8.8
+# measured-on glibc=2.39-0ubuntu8.9
 #
 # AND THE COMPILER THAT BUILT THEM. Since 2026-09-06 the emitter probes for
 # the preserve_none calling convention and writes a DIFFERENT module when it
@@ -383,7 +383,7 @@ encodebench 3963988526
 oneshot 21737118
 basket 34694178
 widebench 35332240
-deepbench 389214232
+deepbench 389214251
 escapebench 85558105
 pendbench 590971748
 indexbench 3265786
@@ -405,4 +405,29 @@ livebench 3481899703
 # refuses the comparison rather than the measurement. The mix percentages in
 # bench/runbench's header are the container's and move by less than this
 # difference; they are not re-derived.
-runbench 2369917628
+# 2026-09-10 (the runner image moves, kanso#1361): measured-on takes
+# glibc=2.39-0ubuntu8.9. deepbench 389,214,232 -> 389,214,251, a rise of 19
+# (+0.000005%); runbench 2,369,917,628 -> 2,369,917,611, a fall of 17
+# (-0.000001%). The other twelve rows are byte-identical.
+#
+# Neither is a change in the work, and that is measured rather than argued.
+# ubuntu-latest took the 8.8 -> 8.9 revision between 14:21Z and 14:32Z today.
+# #1361's round one ran on 8.8 and this vein compared GREEN on it, against the
+# rows above; round four ran the same commit content on 8.9 and read the two
+# rows below. Same clang 19.1.1, same rustc 1.98.1, same benchmark sources. The
+# whole of the difference is the revision, and #1361 moves this vein by nothing.
+#
+# It is the shape the runbench note above already records for 8.7 -> 8.8, where
+# one row moved 1,014 and the rest did not, and it is smaller. What a revision
+# costs is a property of the revision: the header's warning that a toolchain
+# bump looks like an enormous regression is about UPSTREAM releases, and the two
+# ubuntu revisions measured so far have each moved one or two rows by tens of
+# instructions. The four hundred the header quotes is a different pair and a
+# different row set and is not re-derived here. The gate refuses either way, and
+# the refusal is why both of these were read rather than assumed.
+#
+# Three compile veins moved their host lines with this one and their values did
+# not move at all: compile_instructions 48,866,385, entry_instructions
+# 162,751,831 and library_instructions 163,473,663 were each counted once on
+# each revision and read the same both times.
+runbench 2369917611
