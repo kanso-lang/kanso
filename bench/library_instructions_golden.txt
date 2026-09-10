@@ -120,4 +120,12 @@
 # and the entry row move together again, 0.6127% against 0.6053%, the split the
 # notes above already record: the two corpora that merge a dependency program
 # pay the larger share, and here they save it.
-library_instructions=162541723
+
+# 2026-09-10 (kanso#1364): library_instructions=162,023,537, a FALL of 518,186
+# (-0.3188%) from 162,541,723.
+#
+# The fused chain operators. Layout, as on the other two rows. This row and the
+# entry row move together again -- 0.3188% against 0.3228% -- which is the pair
+# these notes keep recording: the two corpora are the same shape and both merge
+# a dependency program before checking it.
+library_instructions=162023537

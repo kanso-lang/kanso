@@ -133,4 +133,11 @@
 # `done` is minted and std/list's one-field `done` record is deleted. See
 # bench/compile_instructions_golden.txt for the reading: five compile rows fall
 # together in one band, which is work removed rather than layout.
-entry_instructions=161836689
+
+# 2026-09-10 (kanso#1364): entry_instructions=161,314,264, a FALL of 522,425
+# (-0.3228%) from 161,836,689.
+#
+# The fused chain operators. See bench/compile_instructions_golden.txt for the
+# reading: layout, with compile_allocs, compile_peak_bytes and the .text vein
+# all byte-identical in the same job.
+entry_instructions=161314264

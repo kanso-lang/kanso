@@ -3759,3 +3759,27 @@ and `done` is on main now. Re-verified on the picked tree rather than on the
 branch's own worktree: that worktree carries `done`'s code against `done`'s
 pre-change module golden, since dn's own commit moves the row and the
 regeneration happened later, so `compile_cost` is red there and green here.
+
+**CI named THREE of the six, and the three that held say what the change is.**
+The prediction above reasoned from the library edit alone -- three `lib/*.kso`
+files change, `lib/*.kso` is `include_str!`'d into the compiler, so all six
+host-keyed rows are in play -- and that is right about which rows CAN move and
+silent about which will. What moved:
+
+    compile_instructions   48,572,851 ->  48,393,437   -179,414  -0.3693%
+    entry_instructions    161,836,689 -> 161,314,264   -522,425  -0.3228%
+    library_instructions  162,541,723 -> 162,023,537   -518,186  -0.3188%
+
+and `compile_allocs` (29,000), `compile_peak_bytes` (769,071) and the whole
+`text` vein are BYTE-IDENTICAL in the job that counted those three. The front
+end allocated exactly the same and held exactly the same doing this compile, and
+the linker emitted the same machine code, so nothing about the work changed;
+what changed is src/lexer.rs and src/parser.rs, and the three instruction rows
+are the layout veins CLAUDE.md's prior describes. Three rows falling together in
+one narrow band with the allocation row still is the layout signature; real work
+removed would have moved allocs with them, the way `done` did an hour earlier.
+
+Welfare 66.42 held and re-set: the objective's compile term sums the three rows,
+so it takes the whole 1,220,025, and the rise is under a hundredth of a point.
+Five compiler.html spans quoting the three rows were rewritten by
+`golden_prose --write`.
