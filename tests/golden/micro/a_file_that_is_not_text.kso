@@ -14,4 +14,4 @@ fn counted b
 
 pub play =
   rescue (os/read_file! "not_text.bin") refused
-  >> os/read_bytes! "not_text.bin" . counted
+  >> os/read_bytes! "not_text.bin" .> counted

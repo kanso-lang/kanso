@@ -95,15 +95,6 @@ still binds automatically, so `effect . rescue orders` parses and its handler
 never runs. Owes: the type, the refusal of a box where a value is expected,
 the end of the automatic bind, and ch04/ch05 moving with it.
 
-### The fused chain operators `.>` `.!` `.?` (2026-08-31)
-
-The archive entry "gavel: the fused chain operators": `x .> f` IS `bind x f`,
-`.!` annotate, `.?` rescue, bare-function right-hand sides, and in chain
-position the fused form is the only spelling (superseding the 2026-08-29
-keep-the-dot ruling for the three combinators; plain `.` untouched). Not in
-the lexer, the parser or any fixture. The 305 `. (lambda)` steps standing in
-lib/ and scripts/ on 2026-09-09 respell as `.>` under it.
-
 ### Pure fallibility is boxed too (2026-08-31)
 
 The archive entry "rider: pure fallibility is boxed too": any operation whose

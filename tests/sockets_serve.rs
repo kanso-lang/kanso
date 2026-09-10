@@ -26,9 +26,9 @@ import "std/time"
 
 fn answered l c
   net/read c
-    . (_ -> net/write c (page "kanso"))
-    . (_ -> net/close_conn c)
-    . (_ -> net/close_listener l)
+    .> (_ -> net/write c (page "kanso"))
+    .> (_ -> net/close_conn c)
+    .> (_ -> net/close_listener l)
 
 fn page body
   "HTTP/1.1 200 OK\r\ncontent-length: {length body}\r\n\r\n{body}"
@@ -37,15 +37,15 @@ fn said r
   print "the page says: {r.stdout}"
 
 fn serving_at l p
-  os/write_file "port.txt" "{p}" . (_ -> net/accept l) . (c -> answered l c)
+  os/write_file "port.txt" "{p}" .> (_ -> net/accept l) .> (c -> answered l c)
 
-asked = time/sleep 400 . (_ -> os/read_file "port.txt") . fetched
+asked = time/sleep 400 .> (_ -> os/read_file "port.txt") .> fetched
 
 fn fetched p
   url = "http://127.0.0.1:{p}/"
-  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] . said
+  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] .> said
 
-net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+net/listen 0 .> (l -> net/port l .> (p -> serving_at l p))
 asked
 "#;
 
@@ -70,18 +70,18 @@ fn answered _ _ carried
 
 fn serving_at l p
   os/write_file "port.txt" "{p}"
-    . (_ -> http/serving l handled "open")
-    . (r -> print "the report says: {r}")
+    .> (_ -> http/serving l handled "open")
+    .> (r -> print "the report says: {r}")
 
-asked = time/sleep 400 . (_ -> os/read_file "port.txt") . visited
+asked = time/sleep 400 .> (_ -> os/read_file "port.txt") .> visited
 
 fn visited p
   url = "http://127.0.0.1:{p}"
   get = ["-s" "--retry" "5" "--retry-connrefused" "{url}/"]
   post = ["-s" "-d" "green" "{url}/report"]
-  os/run "curl" get . (_ -> os/run "curl" post)
+  os/run "curl" get .> (_ -> os/run "curl" post)
 
-net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+net/listen 0 .> (l -> net/port l .> (p -> serving_at l p))
 asked
 "#;
 
@@ -105,11 +105,11 @@ fn answered _ _ carried
 
 fn serving_at l p
   os/write_file "port.txt" "{p}"
-    . (_ -> http/serving l handled "open")
-    . (r -> print "the report says: {r}")
+    .> (_ -> http/serving l handled "open")
+    .> (r -> print "the report says: {r}")
 
-net/listen 0 . (l -> net/port l . (p -> serving_at l p))
-os/run "sleep" ["3"] . (_ -> print "waited")
+net/listen 0 .> (l -> net/port l .> (p -> serving_at l p))
+os/run "sleep" ["3"] .> (_ -> print "waited")
 "#;
 
 /// A request read off a socket and threaded through a loop that allocates.
@@ -129,10 +129,10 @@ import "std/time"
 
 fn answered l c
   net/read c
-    . tallied
-    . (_ -> net/write c (page "kanso"))
-    . (_ -> net/close_conn c)
-    . (_ -> net/close_listener l)
+    .> tallied
+    .> (_ -> net/write c (page "kanso"))
+    .> (_ -> net/close_conn c)
+    .> (_ -> net/close_listener l)
 
 fn tallied r
   print "tallied {tally r 200 0}"
@@ -150,15 +150,15 @@ fn page body
   "HTTP/1.1 200 OK\r\ncontent-length: {length body}\r\n\r\n{body}"
 
 fn serving_at l p
-  os/write_file "port.txt" "{p}" . (_ -> net/accept l) . (c -> answered l c)
+  os/write_file "port.txt" "{p}" .> (_ -> net/accept l) .> (c -> answered l c)
 
-asked = time/sleep 400 . (_ -> os/read_file "port.txt") . fetched
+asked = time/sleep 400 .> (_ -> os/read_file "port.txt") .> fetched
 
 fn fetched p
   url = "http://127.0.0.1:{p}/"
-  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] . done
+  os/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] .> done
 
-net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+net/listen 0 .> (l -> net/port l .> (p -> serving_at l p))
 asked
 "#;
 
@@ -383,8 +383,8 @@ fn a_served_report_reaches_the_program_on_both_engines() {
 /// ends, by which time there is nothing to connect to.
 #[test]
 fn a_listener_answers_the_port_it_was_given_on_both_engines() {
-    const ANNOUNCE: &str = "import \"std/net\"\nimport \"std/os\"\nimport \"std/time\"\n\npub fn announced l p\n  os/write_file \"port.txt\" \"{p}\"\n    . (_ -> time/sleep 3000)\n    . (_ -> net/close_listener l)\n";
-    const ENTRY: &str = "import \"./announce\"\nimport \"std/net\"\n\nnet/listen 0 . (l -> net/port l . (p -> announce/announced l p))\n";
+    const ANNOUNCE: &str = "import \"std/net\"\nimport \"std/os\"\nimport \"std/time\"\n\npub fn announced l p\n  os/write_file \"port.txt\" \"{p}\"\n    .> (_ -> time/sleep 3000)\n    .> (_ -> net/close_listener l)\n";
+    const ENTRY: &str = "import \"./announce\"\nimport \"std/net\"\n\nnet/listen 0 .> (l -> net/port l .> (p -> announce/announced l p))\n";
 
     for (tag, engine) in [("native", &[][..]), ("interp", &["--interp"][..])] {
         let dir = std::env::temp_dir().join(format!("kanso-netport-{}-{tag}", std::process::id()));

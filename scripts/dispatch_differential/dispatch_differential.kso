@@ -315,12 +315,12 @@ fn hung? _
   false
 
 fn ran source
-  os/write_file probe source . (_ -> both)
+  os/write_file probe source .> (_ -> both)
 
-both = asked ["play" probe] . against
+both = asked ["play" probe] .> against
 
 fn against native
-  asked ["play" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] .> (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -363,24 +363,24 @@ fn verdict a line false
   "  {a.label}: took {line}, the rules say {a.wants}\n"
 
 fn told ""
-  io/write "" . (_ -> 0)
+  io/write "" .> (_ -> 0)
 
 fn told line
-  io/write line . (_ -> 1)
+  io/write line .> (_ -> 1)
 
 fn swept arms count
   onward arms count (length arms == 0)
 
 fn onward _ count true
-  io/write "" . (_ -> count)
+  io/write "" .> (_ -> count)
 
 fn onward arms count false
   rest = list/to_list (list/drop arms 1)
   a = arms[1]!
-  ran (source_for a) . (v -> reported a rest count v)
+  ran (source_for a) .> (v -> reported a rest count v)
 
 fn reported a rest count v
-  told (judged a v) . (n -> swept rest (count + n))
+  told (judged a v) .> (n -> swept rest (count + n))
 
 # A probe that lost its interpolation prints a plain string, which both engines
 # render identically — so the sweep agrees with itself about nothing.
@@ -411,30 +411,30 @@ fn works? n i
   sound? n and sound? i
 
 fn ready native
-  asked ["play" probe "--interp"] . (interp -> live native interp)
+  asked ["play" probe "--interp"] .> (interp -> live native interp)
 
 fn live n i
   running (works? n i)
 
 fn running true
-  counted 0 . finished
+  counted 0 .> finished
 
 fn running false
-  io/write_err mute . (_ -> os/exit 2)
+  io/write_err mute .> (_ -> os/exit 2)
 
 fn begun false
-  io/write_err complaint . (_ -> os/exit 2)
+  io/write_err complaint .> (_ -> os/exit 2)
 
 fn begun true
-  os/write_file probe sound_src . (_ -> asked ["play" probe]) . ready
+  os/write_file probe sound_src .> (_ -> asked ["play" probe]) .> ready
 
 fn counted _
-  io/write banner . (_ -> swept cases 0)
+  io/write banner .> (_ -> swept cases 0)
 
 fn finished 0
   io/write "0 wrong\n"
 
 fn finished n
-  io/write "{n} wrong\n" . (_ -> os/exit 1)
+  io/write "{n} wrong\n" .> (_ -> os/exit 1)
 
 pub play = begun (source_for check == sample)

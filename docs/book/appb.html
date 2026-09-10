@@ -383,7 +383,7 @@ zero non-positive</code></pre>
 <span class="k">fn</span> <span class="f">first</span> xs
   xs[<span class="n">1</span>]
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/args</span> <span class="o">.&gt;</span> <span class="f">first</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run argv.kso -- clay</div>
     <pre><code>&lt;none&gt;</code></pre>
@@ -444,7 +444,7 @@ third</code></pre>
 
 <h3 id="b-random"><code>math/random</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>math/random int → io (yields int)</code></p>
-<p>a description that yields an integer in the half-open range <code>[0, bound)</code>. the scheduler's generator is deterministic, so a program's rolls are reproducible run to run—random enough for a simulation, repeatable enough for a test. pipe the yielded value into a function with <code>.</code>.</p>
+<p>a description that yields an integer in the half-open range <code>[0, bound)</code>. the scheduler's generator is deterministic, so a program's rolls are reproducible run to run—random enough for a simulation, repeatable enough for a test. pipe the yielded value into a function with <code>.&gt;</code>.</p>
 
 <h3 id="b-sleep"><code>time/sleep</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>time/sleep int → io</code></p>
@@ -455,7 +455,7 @@ third</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
 <span class="k">import</span> <span class="s">"std/time"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">time/sleep</span> <span class="n">10</span> <span class="o">&gt;&gt;</span> <span class="f">math/random</span> <span class="n">6</span> <span class="o">.</span> <span class="f">show</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">time/sleep</span> <span class="n">10</span> <span class="o">&gt;&gt;</span> <span class="f">math/random</span> <span class="n">6</span> <span class="o">.&gt;</span> <span class="f">show</span>
 
 <span class="k">fn</span> <span class="f">show</span> n
   <span class="f">print</span> <span class="s">"rolled <span class="i">{n}</span>"</span></code></pre>
@@ -473,7 +473,7 @@ third</code></pre>
 
 <h3 id="b-read_file"><code>os/read_file</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/read_file string → io (yields string | file_not_found)</code></p>
-<p>a description that yields the contents of a file. a path that is not there yields <code>file_not_found</code>, which carries the path and dispatches like any other value — an absent file is an outcome a program can anticipate, so it is data. anything else that stops the read — a permission, a device, bytes that are not text — fails at execution time, at the executor, when the read is actually attempted rather than when the description is built. pipe the contents into a function with <code>.</code>.</p>
+<p>a description that yields the contents of a file. a path that is not there yields <code>file_not_found</code>, which carries the path and dispatches like any other value — an absent file is an outcome a program can anticipate, so it is data. anything else that stops the read — a permission, a device, bytes that are not text — fails at execution time, at the executor, when the read is actually attempted rather than when the description is built. pipe the contents into a function with <code>.&gt;</code>.</p>
 
 <h3 id="b-read_file-bang"><code>os/read_file!</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/read_file! string → io (yields string)</code></p>
@@ -481,7 +481,7 @@ third</code></pre>
 
 <h3 id="b-write"><code>io/write</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>io/write string → io</code></p>
-<p>a description of writing a string to standard output exactly as given—no newline. <code>print</code> is the whole-line form; <code>write</code> is for assembling a line from pieces, and for streaming: a chain that writes a chunk and <em>binds</em> the rest (<code>io/write chunk . (_ -&gt; more)</code>) builds each chunk only when the executor reaches it, so output of any size flows in constant memory.</p>
+<p>a description of writing a string to standard output exactly as given—no newline. <code>print</code> is the whole-line form; <code>write</code> is for assembling a line from pieces, and for streaming: a chain that writes a chunk and <em>binds</em> the rest (<code>io/write chunk .&gt; (_ -&gt; more)</code>) builds each chunk only when the executor reaches it, so output of any size flows in constant memory.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">write_stream.kso</div>
@@ -505,7 +505,7 @@ third</code></pre>
   <div class="code-panel-title">files.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
-<span class="f">os/write_file</span> <span class="s">"note.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">&gt;&gt;</span> <span class="f">os/read_file!</span> <span class="s">"note.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">os/write_file</span> <span class="s">"note.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">&gt;&gt;</span> <span class="f">os/read_file!</span> <span class="s">"note.txt"</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run files.kso</div>
     <pre><code>one taiyaki</code></pre>
@@ -520,7 +520,7 @@ third</code></pre>
   <div class="code-panel-title">input.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/stdin</span> <span class="o">.</span> <span class="f">shout</span> <span class="o">.</span> <span class="f">print</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/stdin</span> <span class="o">.&gt;</span> <span class="f">shout</span> <span class="o">.&gt;</span> <span class="f">print</span>
 
 <span class="k">fn</span> <span class="f">shout</span> text
   <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>

@@ -137,10 +137,10 @@ fn asked argv
   os/run "target/release/kanso" argv
 
 fn ran source
-  os/write_file probe source . (_ -> asked ["run" probe]) . (n -> against n)
+  os/write_file probe source .> (_ -> asked ["run" probe]) .> (n -> against n)
 
 fn against n
-  asked ["run" probe "--interp"] . (i -> both (told n) (told i))
+  asked ["run" probe "--interp"] .> (i -> both (told n) (told i))
 
 fn told r
   answer r.status r.stderr r.stdout
@@ -182,7 +182,7 @@ fn started rounds
   fixed = every_edge_case
   everything = joined fixed (rounds_of seed rounds [])
   batches = chunked everything 1 []
-  over_batches batches 1 [] . (suspect -> narrowed everything batches suspect)
+  over_batches batches 1 [] .> (suspect -> narrowed everything batches suspect)
 
 fn over_batches batches at suspect
   onward_batch batches at suspect (at > length batches)
@@ -192,7 +192,7 @@ fn onward_batch _ _ suspect true
 
 fn onward_batch batches at suspect false
   here = batches[at]!
-  ran (program here) . (r -> kept batches at suspect here r)
+  ran (program here) .> (r -> kept batches at suspect here r)
 
 fn kept batches at suspect here r
   over_batches batches (at + 1) (widened suspect here (agree? r[1]! r[2]!))
@@ -204,7 +204,7 @@ fn widened suspect here false
   joined suspect here
 
 fn narrowed everything batches suspect
-  alone suspect 1 [] 0 . (found -> reported everything batches found)
+  alone suspect 1 [] 0 .> (found -> reported everything batches found)
 
 fn alone suspect at bad known
   onward_one suspect at bad known (at > length suspect)
@@ -214,7 +214,7 @@ fn onward_one _ _ bad known true
 
 fn onward_one suspect at bad known false
   c = suspect[at]!
-  ran (program [c]) . (r -> judged suspect at bad known c r)
+  ran (program [c]) .> (r -> judged suspect at bad known c r)
 
 fn judged suspect at bad known c r
   settled suspect at bad known c r (agree? r[1]! r[2]!)
@@ -236,8 +236,8 @@ fn reported everything batches found
   known = found[2]!
   head = "{length everything} programs in {length batches} batches"
   tail = "{known} at the known ceiling, {length bad} disagreements"
-  io/write "{head}, {tail}\n" . (_ -> io/write (findings bad))
-    . (_ -> closed (length bad) known)
+  io/write "{head}, {tail}\n" .> (_ -> io/write (findings bad))
+    .> (_ -> closed (length bad) known)
 
 # Ten of them, by index. Ten is what a reader can hold; the count above says
 # how many there really were.
@@ -286,14 +286,14 @@ fn dropped s _
 
 fn closed 0 0
   io/write "\nnothing reached the native ceiling — either the gap closed,\n"
-    . (_ -> io/write "or the ranges above stopped straddling it.\n")
-    . (_ -> os/exit 1)
+    .> (_ -> io/write "or the ranges above stopped straddling it.\n")
+    .> (_ -> os/exit 1)
 
 fn closed 0 _
   io/write ""
 
 fn closed _ _
   io/write "\nthe interpreter is the oracle: these are native's to fix.\n"
-    . (_ -> os/exit 1)
+    .> (_ -> os/exit 1)
 
-pub play = os/args . (given -> started (rounds_from given))
+pub play = os/args .> (given -> started (rounds_from given))

@@ -3,4 +3,4 @@
 # which is what the printed line says: `true`, not `rescued: true`.
 import "std/os"
 
-pub play = rescue (os/exists "/") (seen -> "rescued: {seen}") . print
+pub play = rescue (os/exists "/") (seen -> "rescued: {seen}") .> print

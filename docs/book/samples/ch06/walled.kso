@@ -12,4 +12,4 @@ pub play =
   >> roll 5
 
 fn roll i
-  math/random 6 . (n -> print "roll {i}: a {n + 1}")
+  math/random 6 .> (n -> print "roll {i}: a {n + 1}")

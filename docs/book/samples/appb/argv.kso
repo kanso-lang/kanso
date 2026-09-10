@@ -3,4 +3,4 @@ import "std/os"
 fn first xs
   xs[1]
 
-pub play = os/args . first . print
+pub play = os/args .> first .> print

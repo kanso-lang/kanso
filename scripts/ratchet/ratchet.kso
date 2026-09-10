@@ -1422,7 +1422,7 @@ fn stale declared
   both = text/concat claimed excused
   list/to_list (list/select both (n -> not known? declared n))
 
-cover = os/read_file! workflow . (text -> against (jobs_in text))
+cover = os/read_file! workflow .> (text -> against (jobs_in text))
 
 fn against declared
   gaps = missing declared
@@ -1431,14 +1431,14 @@ fn against declared
 
 fn verdict _ _ true
   io/write "ratchet: every ci job carries a mutation or a stated reason\n"
-    . (_ -> applies_all)
+    .> (_ -> applies_all)
 
 fn verdict gaps ghosts false
   said = list/to_list (list/map gaps (n -> "  no row and no reason: {n}\n"))
   gone = list/to_list (list/map ghosts (n -> "  no such ci job: {n}\n"))
   body = text/join (text/concat said gone) ""
   saying = "ratchet: the table and ci.yml disagree\n{body}"
-  io/write_err saying . (_ -> os/exit 1)
+  io/write_err saying .> (_ -> os/exit 1)
 
 # APPLYING a mutation costs a sed; proving it reddens its gate costs a build.
 # Those are different prices, and only the second one needs the nightly. So the
@@ -1458,25 +1458,25 @@ applies_all = borrowed "/tmp/kanso-ratchet-applies"
 
 fn borrowed dir
   os/run "git" ["worktree" "add" "--detach" "--force" dir "HEAD"]
-    . (_ -> applying dir rows 1 [])
+    .> (_ -> applying dir rows 1 [])
 
 fn applying dir list at acc
   applied dir list at acc (at > length list)
 
 fn applied dir _ _ acc true
-  os/run "git" ["worktree" "remove" "--force" dir] . (_ -> intact acc)
+  os/run "git" ["worktree" "remove" "--force" dir] .> (_ -> intact acc)
 
 fn applied dir list at acc false
   r = list[at]!
-  shell dir r.mutation . (m -> after_try dir list at acc r m.status)
+  shell dir r.mutation .> (m -> after_try dir list at acc r m.status)
 
 # The worktree is restored between rows so one stale mutation cannot make the
 # next one look stale too.
 fn after_try dir list at acc _ 0
-  restored dir . (_ -> applying dir list (at + 1) acc)
+  restored dir .> (_ -> applying dir list (at + 1) acc)
 
 fn after_try dir list at acc r _
-  restored dir . (_ -> applying dir list (at + 1) (push acc r))
+  restored dir .> (_ -> applying dir list (at + 1) (push acc r))
 
 fn restored dir
   shell dir "git checkout -- . && git clean -fdq"
@@ -1491,7 +1491,7 @@ fn standing acc false
   said = list/to_list (list/map acc (r -> "  STALE {r.job} — {r.claim}\n"))
   body = text/join said ""
   saying = "ratchet: {length acc} mutations no longer apply\n{body}"
-  io/write_err saying . (_ -> os/exit 1)
+  io/write_err saying .> (_ -> os/exit 1)
 
 # Each row runs in a worktree of HEAD, so a mutation cannot reach the tree the
 # author is working in and two rows cannot see each other's damage.
@@ -1546,7 +1546,7 @@ fn shell dir cmd
 # from a distance — the guard #1157 added is in the file, but a change to what
 # a gate READS could hollow a row without touching a line any sed matches.
 fn touched base mode
-  os/run "git" ["diff" "--name-only" "{base}...HEAD"] . (d -> diffed d mode)
+  os/run "git" ["diff" "--name-only" "{base}...HEAD"] .> (d -> diffed d mode)
 
 fn diffed d mode
   branch_files d mode (d.status == 0)
@@ -1556,7 +1556,7 @@ fn diffed d mode
 # a reader to the ratchet rather than to the workflow's fetch-depth.
 fn branch_files d _ false
   said = "ratchet: git could not name this branch's files\n"
-  io/write_err "{said}{d.stderr}" . (_ -> os/exit 1)
+  io/write_err "{said}{d.stderr}" .> (_ -> os/exit 1)
 
 fn branch_files d mode true
   named = list/select (text/split d.stdout "\n") (f -> length f > 0)
@@ -1570,7 +1570,7 @@ fn winnowed mode _ _ _ acc true
 
 fn winnowed mode files list at acc false
   r = list[at]!
-  os/read_file! (script_of r) . (s -> read_it mode files list at acc r s)
+  os/read_file! (script_of r) .> (s -> read_it mode files list at acc r s)
 
 # A row's mutation is a shell command and its script is the word after `sh `.
 fn script_of r
@@ -1647,7 +1647,7 @@ fn chose mode acc false
   said = "ratchet: {length acc} rows patch a file this branch changed\n"
   listed = list/to_list (list/map acc (r -> "  {r.job} — {r.claim}\n"))
   body = text/join listed ""
-  io/write "{said}{body}" . (_ -> onto mode acc)
+  io/write "{said}{body}" .> (_ -> onto mode acc)
 
 # `list` names the handful and stops, the way somebody about to spend six
 # minutes of runner wants to know what they are spending it on. Anything else
@@ -1665,7 +1665,7 @@ fn prove_all scope
 # A scope naming no row would otherwise prove nothing and report that every
 # row turned its gate red, which is the same false green in miniature.
 fn chose_rows scope _ true
-  io/write_err "ratchet: no row is named by `{scope}`\n" . (_ -> os/exit 1)
+  io/write_err "ratchet: no row is named by `{scope}`\n" .> (_ -> os/exit 1)
 
 fn chose_rows _ picked false
   baselined picked
@@ -1725,26 +1725,26 @@ fn kept list at acc r false
 
 fn baselined picked
   made = ["worktree" "add" "--detach" "--force" base_dir "HEAD"]
-  os/run "git" made . (_ -> base_linked picked)
+  os/run "git" made .> (_ -> base_linked picked)
 
 fn base_linked picked
   linking = "mkdir -p {shared_target} && ln -s {shared_target} target"
   pairs = pairs_in picked 1 []
-  shell base_dir linking . (_ -> greening picked pairs 1 [])
+  shell base_dir linking .> (_ -> greening picked pairs 1 [])
 
 fn greening picked pairs at acc
   greened picked pairs at acc (at > length pairs)
 
 fn greened picked pairs _ acc true
   os/run "git" ["worktree" "remove" "--force" base_dir]
-    . (_ -> unmutated picked pairs acc)
+    .> (_ -> unmutated picked pairs acc)
 
 fn greened picked pairs at acc false
   p = pairs[at]!
-  shell base_dir p.setup . (s -> base_setup picked pairs at acc p s.status)
+  shell base_dir p.setup .> (s -> base_setup picked pairs at acc p s.status)
 
 fn base_setup picked pairs at acc p 0
-  shell base_dir p.gate . (g -> base_gate picked pairs at acc p g)
+  shell base_dir p.gate .> (g -> base_gate picked pairs at acc p g)
 
 fn base_setup picked pairs at acc p s
   greening picked pairs (at + 1) (push acc (unmade p s))
@@ -1814,7 +1814,7 @@ fn unmutated picked pairs acc
 fn settled_base picked pairs acc true
   said = green_line pairs acc (length acc == 0)
   answerable_rows = kept_provable picked acc
-  io/write_err (said_with acc said) . (_ -> proving answerable_rows 1 [])
+  io/write_err (said_with acc said) .> (_ -> proving answerable_rows 1 [])
 
 # Two numbers when any gate went unproven, because "green" would be a claim
 # about gates this runner never answered. One number when none did, which is
@@ -1828,7 +1828,7 @@ fn green_line pairs acc false
 
 fn settled_base _ _ acc false
   said = "ratchet: the baseline is not green\n"
-  io/write_err (said_with acc said) . (_ -> os/exit 1)
+  io/write_err (said_with acc said) .> (_ -> os/exit 1)
 
 fn said_with acc said
   lines = list/to_list (list/map acc (f -> f.line))
@@ -1889,7 +1889,7 @@ fn proven list at acc false
   r = list[at]!
   dir = "/tmp/kanso-ratchet-{at}"
   made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
-  os/run "git" made . (_ -> after_worktree list at acc r dir)
+  os/run "git" made .> (_ -> after_worktree list at acc r dir)
 
 # Every row's build lands in one directory, so the first is cold and the rest
 # are incremental. A dozen rows each paying a full release build is an hour
@@ -1902,28 +1902,28 @@ shared_target = "/tmp/kanso-ratchet-target"
 
 fn after_worktree list at acc r dir
   linking = "mkdir -p {shared_target} && ln -s {shared_target} target"
-  shell dir linking . (_ -> after_target list at acc r dir)
+  shell dir linking .> (_ -> after_target list at acc r dir)
 
 fn after_target list at acc r dir
-  shell dir r.mutation . (m -> after_mutation list at acc r dir m.status)
+  shell dir r.mutation .> (m -> after_mutation list at acc r dir m.status)
 
 fn after_mutation list at acc r dir 0
-  shell dir r.setup . (s -> after_setup list at acc r dir s.status)
+  shell dir r.setup .> (s -> after_setup list at acc r dir s.status)
 
 fn after_mutation list at acc r dir _
-  cleaned dir . (_ -> proving list (at + 1) (push acc (broke r)))
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (broke r)))
 
 fn after_setup list at acc r dir 0
-  shell dir r.gate . (g -> after_gate list at acc r dir g.status)
+  shell dir r.gate .> (g -> after_gate list at acc r dir g.status)
 
 fn after_setup list at acc r dir _
-  cleaned dir . (_ -> proving list (at + 1) (push acc (unbuilt r)))
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (unbuilt r)))
 
 fn after_gate list at acc r dir 0
-  cleaned dir . (_ -> proving list (at + 1) (push acc (blind r)))
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (blind r)))
 
 fn after_gate list at acc r dir _
-  cleaned dir . (_ -> proving list (at + 1) (push acc (red r)))
+  cleaned dir .> (_ -> proving list (at + 1) (push acc (red r)))
 
 fn cleaned dir
   os/run "git" ["worktree" "remove" "--force" dir]
@@ -1945,7 +1945,7 @@ fn reported list acc
   lines = list/to_list (list/map acc (f -> f.line))
   body = text/join lines ""
   bad = list/to_list (list/select acc (f -> not f.ok))
-  io/write "ratchet: {length list} rows\n{body}" . (_ -> settled list bad)
+  io/write "ratchet: {length list} rows\n{body}" .> (_ -> settled list bad)
 
 fn settled list bad
   closed list bad (length bad == 0)
@@ -1968,7 +1968,7 @@ fn none_left false
   io/write "ratchet: every row turned its gate red\n"
 
 fn closed _ bad false
-  io/write_err "ratchet: {length bad} rows proved nothing\n" . (_ -> os/exit 1)
+  io/write_err "ratchet: {length bad} rows proved nothing\n" .> (_ -> os/exit 1)
 
 fn asked given
   verb given (length given > 0)
@@ -2020,4 +2020,4 @@ fn past given _ true
 fn past _ fallback false
   fallback
 
-pub play = os/args . (given -> asked given)
+pub play = os/args .> (given -> asked given)

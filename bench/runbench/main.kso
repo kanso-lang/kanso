@@ -1,4 +1,4 @@
 import "./runbench"
 import "std/os"
 
-os/read_file! "bench/large.json" . run
+os/read_file! "bench/large.json" .> run

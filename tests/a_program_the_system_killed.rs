@@ -19,7 +19,7 @@ use std::process::Command;
 // program inside `os/run` until the signal has landed.
 const KILLS_ITSELF: &str = r#"import "std/os"
 
-os/run "sh" ["-c" "kill -TERM $PPID; sleep 5"] . (_ -> print "survived")
+os/run "sh" ["-c" "kill -TERM $PPID; sleep 5"] .> (_ -> print "survived")
 "#;
 
 #[test]

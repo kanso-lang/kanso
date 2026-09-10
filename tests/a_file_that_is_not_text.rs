@@ -19,12 +19,12 @@ use std::process::Command;
 const BYTES: [u8; 3] = [b'a', 0xFF, b'b'];
 
 const AS_TEXT: &str =
-    "import \"std/io\"\nimport \"std/os\"\n\nos/read_file \"three.bin\" . io/write\n";
+    "import \"std/io\"\nimport \"std/os\"\n\nos/read_file \"three.bin\" .> io/write\n";
 
 /// The bytes go out through `write_file`, which the ruling says takes bytes;
 /// the copy is what the spec reads back.
 const AS_BYTES: &str =
-    "import \"std/os\"\n\nos/read_bytes \"three.bin\" . (b -> os/write_file \"copy.bin\" b)\n";
+    "import \"std/os\"\n\nos/read_bytes \"three.bin\" .> (b -> os/write_file \"copy.bin\" b)\n";
 
 /// One directory per test. They share nothing but the bytes: each writes
 /// `run.kso` and cargo runs them at the same time, so a shared directory let

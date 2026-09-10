@@ -34,7 +34,7 @@ fn built 0 acc
   acc
 
 fn built n acc
-  io/write "" . (_ -> gathered n acc)
+  io/write "" .> (_ -> gathered n acc)
 
 fn gathered n acc
   built (n - 1) (push acc (made n))
@@ -52,4 +52,4 @@ fn spent cards
   list/sum (list/to_list (list/map cards (e -> worth e)))
 
 pub fn total n
-  built n [] . (cards -> spent cards)
+  built n [] .> (cards -> spent cards)

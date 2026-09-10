@@ -198,7 +198,7 @@ fn reading _ _ acc after true
 
 fn reading wanted at acc after false
   on = (body -> read_next wanted at acc after body)
-  os/read_file! wanted[at]! . on
+  os/read_file! wanted[at]! .> on
 
 fn read_next wanted at acc after body
   read_each wanted (at + 1) (push acc body) after
@@ -292,13 +292,13 @@ fn checking _ _ found after true
 fn checking qs at found after false
   q = qs[at]!
   on = (there -> as_file qs at found after q there)
-  os/exists q.title . on
+  os/exists q.title .> on
 
 # A path this repository holds: the panel excerpts one file, and the package
 # beside it is what that file may name.
 fn as_file qs at found after q true
   on = (names -> beside qs at found after q names)
-  os/list_dir (dir_of q.title) . on
+  os/list_dir (dir_of q.title) .> on
 
 fn beside qs at found after q names
   wanted = paths_in (dir_of q.title) names
@@ -310,7 +310,7 @@ fn beside qs at found after q names
 # may name.
 fn as_file qs at found after q false
   on = (owned -> not_a_sample qs at found after q owned)
-  os/exists "{q.samples}/{q.title}" . on
+  os/exists "{q.samples}/{q.title}" .> on
 
 # A title that resolves to a FILE beside its chapter is book_panels' panel:
 # that harness regenerates the body from the sample and this must not second-
@@ -352,7 +352,7 @@ fn rooting qs at found after _ _ _ true
 
 fn rooting qs at found after q roots n false
   on = (there -> rooted qs at found after q roots n there)
-  os/exists roots[n]! . on
+  os/exists roots[n]! .> on
 
 fn rooted qs at found after q roots n false
   try_roots qs at found after q roots (n + 1)
@@ -360,7 +360,7 @@ fn rooted qs at found after q roots n false
 fn rooted qs at found after q roots n true
   path = roots[n]!
   on = (names -> beside_root qs at found after q path names)
-  os/list_dir (dir_of path) . on
+  os/list_dir (dir_of path) .> on
 
 fn beside_root qs at found after q path names
   wanted = paths_in (dir_of path) names
@@ -399,7 +399,7 @@ fn chapter? n
 fn only_chapters names
   list/sort (list/to_list (list/select names (n -> chapter? n)))
 
-over_chapters = os/list_dir chapters . (names -> from_root names)
+over_chapters = os/list_dir chapters .> (names -> from_root names)
 
 fn from_root names
   chapter_loop (only_chapters names) 1 []
@@ -412,7 +412,7 @@ fn walking _ _ found true
 
 fn walking names at found false
   on = (raw -> one_chapter names at found names[at]! raw)
-  os/read_file! "{chapters}/{names[at]!}" . on
+  os/read_file! "{chapters}/{names[at]!}" .> on
 
 fn one_chapter names at found name raw
   after = (more -> chapter_loop names (at + 1) more)
@@ -425,7 +425,7 @@ fn telling _ true
   io/write "book quotes: every quoting panel matches the file it names\n"
 
 fn telling found false
-  say_each found 1 . (_ -> os/exit 1)
+  say_each found 1 .> (_ -> os/exit 1)
 
 fn say_each found at
   saying found at (at > length found)
@@ -437,7 +437,7 @@ fn saying found at false
   f = found[at]!
   where = "{f.chapter}, the panel for {f.title} at {f.lead}"
   line = "{where}: {f.kind} `{f.name}`\n"
-  io/write line . (_ -> say_each found (at + 1))
+  io/write line .> (_ -> say_each found (at + 1))
 
 pub play = over_chapters
 
@@ -445,13 +445,13 @@ pub play = over_chapters
 # does not. Borrowed in shape from scripts/book_panels, which walks the same
 # tree for the panels it does own.
 fn walk_all path after
-  os/is_dir path . (there -> walk_there path there after)
+  os/is_dir path .> (there -> walk_there path there after)
 
 fn walk_there _ false after
   after []
 
 fn walk_there path true after
-  os/list_dir path . (names -> walk_names path names 1 [] after)
+  os/list_dir path .> (names -> walk_names path names 1 [] after)
 
 fn walk_names path names at acc after
   walking_names path names at acc after (at > length names)
@@ -461,7 +461,7 @@ fn walking_names _ _ _ acc after true
 
 fn walking_names path names at acc after false
   kid = "{path}/{names[at]!}"
-  os/is_dir kid . (d -> walk_kid path names at acc after kid d)
+  os/is_dir kid .> (d -> walk_kid path names at acc after kid d)
 
 fn walk_kid path names at acc after kid true
   on = (deep -> walk_names path names (at + 1) (merged acc deep) after)

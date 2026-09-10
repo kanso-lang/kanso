@@ -6,4 +6,4 @@ pub type stand_in
 pub fn opaque x
   x
 
-pub play = net/accept (opaque (stand_in "x")) . (r -> print "{r}")
+pub play = net/accept (opaque (stand_in "x")) .> (r -> print "{r}")

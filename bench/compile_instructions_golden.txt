@@ -1124,4 +1124,24 @@
 # Five rows moving together and in proportion is the shape of real work
 # removed, not the layout reading the notes above record: a declaration the
 # front end used to lex, parse, infer and check is gone.
-compile_instructions=48572851
+
+# 2026-09-10 (kanso#1364): compile_instructions=48,393,437, a FALL of 179,414
+# (-0.3693%) from 48,572,851.
+#
+# The fused chain operators. Three libraries respell their chain steps and
+# lib/*.kso is include_str!'d into the compiler, but the front end allocated
+# exactly the same doing it: compile_allocs and compile_peak_bytes are
+# BYTE-IDENTICAL in the job that counted this, and the machine-code vein is
+# too. So the move is not work -- it is this file's usual layout reading, and
+# src/lexer.rs and src/parser.rs are where the change lands. All three
+# instruction rows fall in one narrow band, 0.3693%, 0.3228% and 0.3188%,
+# which is what layout looks like and what a change in the decisions would
+# not: a real change in front-end work would have moved the allocation row
+# with them.
+#
+# THE PREDICTION SAID SIX ROWS AND THREE MOVED. The pull request expected all
+# six host-keyed compile gates red, reasoning from the library edit alone.
+# That reasoning is right about which rows CAN move and silent about which
+# will: a respelling that changes no emitted code and no allocation moves the
+# instruction rows and leaves allocs, peak and .text alone.
+compile_instructions=48393437

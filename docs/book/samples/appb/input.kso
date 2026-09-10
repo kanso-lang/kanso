@@ -1,6 +1,6 @@
 import "std/io"
 
-pub play = io/stdin . shout . print
+pub play = io/stdin .> shout .> print
 
 fn shout text
   "{text}!!"

@@ -35,9 +35,9 @@ fn more _ true
 fn more at false
   where = "http://127.0.0.1:PORT/"
   wanted = ["-s" "-o" "/dev/null" "--retry-connrefused" where]
-  os/run "curl" wanted . (_ -> asked (at + 1))
+  os/run "curl" wanted .> (_ -> asked (at + 1))
 
-http/serve_until PORT handled 1 . (n -> print "answered {n}")
+http/serve_until PORT handled 1 .> (n -> print "answered {n}")
 asked 1
 "#;
 

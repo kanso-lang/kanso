@@ -1,0 +1,4 @@
+error[syntax]: `.>` takes one function: a lambda, a name or a group; held arguments are a partial, `&f x`
+  --> a_fused_step_takes_one_function.kso:6:45
+   6 | pub play = print (json/decode "[1]" .> told 3)
+                                                   ^

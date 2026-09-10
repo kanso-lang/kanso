@@ -198,12 +198,12 @@ fn hung? _
 # The probe is written once and read by both engines, so a difference is the
 # engines and never two different files.
 fn ran source
-  os/write_file probe source . (_ -> both)
+  os/write_file probe source .> (_ -> both)
 
-both = asked ["play" probe] . against
+both = asked ["play" probe] .> against
 
 fn against native
-  asked ["play" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] .> (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -223,10 +223,10 @@ fn agreed n i false
   "{native}    interp: {i.status} {i.stdout}{i.stderr}\n"
 
 fn told ""
-  io/write "" . (_ -> 0)
+  io/write "" .> (_ -> 0)
 
 fn told line
-  io/write line . (_ -> 1)
+  io/write line .> (_ -> 1)
 
 fn named _ ""
   ""
@@ -240,15 +240,15 @@ fn swept module exprs count
   onward module exprs count (length exprs == 0)
 
 fn onward _ _ count true
-  io/write "" . (_ -> count)
+  io/write "" .> (_ -> count)
 
 fn onward module exprs count false
   rest = list/to_list (list/drop exprs 1)
   expr = exprs[1]!
-  ran (shaped module expr) . (v -> reported module rest count expr v)
+  ran (shaped module expr) .> (v -> reported module rest count expr v)
 
 fn reported module rest count expr v
-  told (named expr v) . (n -> swept module rest (count + n))
+  told (named expr v) .> (n -> swept module rest (count + n))
 
 # A probe that lost its interpolation prints a plain string, which both engines
 # render identically — so the sweep agrees with itself about nothing and
@@ -278,33 +278,33 @@ fn works? n i
   sound? n and sound? i
 
 fn ready native
-  asked ["play" probe "--interp"] . (interp -> live native interp)
+  asked ["play" probe "--interp"] .> (interp -> live native interp)
 
 fn live n i
   running (works? n i)
 
 fn running true
-  counted 0 . answered
+  counted 0 .> answered
 
 fn running false
-  io/write_err mute . (_ -> os/exit 2)
+  io/write_err mute .> (_ -> os/exit 2)
 
 fn begun false
-  io/write_err complaint . (_ -> os/exit 2)
+  io/write_err complaint .> (_ -> os/exit 2)
 
 fn begun true
-  os/write_file probe sample . (_ -> asked ["play" probe]) . ready
+  os/write_file probe sample .> (_ -> asked ["play" probe]) .> ready
 
 fn counted _
-  io/write banner . (_ -> swept "text" text_probes 0)
+  io/write banner .> (_ -> swept "text" text_probes 0)
 
 fn answered n
-  swept "list" list_probes n . (m -> swept "math" math_probes m . finished)
+  swept "list" list_probes n .> (m -> swept "math" math_probes m .> finished)
 
 fn finished 0
   io/write "0 disagree\n"
 
 fn finished n
-  io/write "{n} disagree\n" . (_ -> os/exit 1)
+  io/write "{n} disagree\n" .> (_ -> os/exit 1)
 
 pub play = begun (shaped "text" "text/trim \" 1 \"" == sample)

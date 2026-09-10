@@ -260,12 +260,12 @@ fn hung? _
   false
 
 fn ran source
-  os/write_file probe source . (_ -> both)
+  os/write_file probe source .> (_ -> both)
 
-both = asked ["play" probe] . against
+both = asked ["play" probe] .> against
 
 fn against native
-  asked ["play" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] .> (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -303,21 +303,22 @@ fn wanted s wrote false
 # a list instead ran the interpreter out of stack, and the reduction is an open
 # thread rather than a diagnosis.
 fn told ""
-  io/write "" . (_ -> 0)
+  io/write "" .> (_ -> 0)
 
 fn told line
-  io/write line . (_ -> 1)
+  io/write line .> (_ -> 1)
 
 fn swept exprs count
   onward exprs count (length exprs == 0)
 
 fn onward _ count true
-  io/write "" . (_ -> count)
+  io/write "" .> (_ -> count)
 
 fn onward exprs count false
   s = exprs[1]!
   more = list/to_list (list/drop exprs 1)
-  ran (shaped s.body) . (v -> told (judged s v) . (n -> swept more (count + n)))
+  ran (shaped s.body)
+    .> (v -> told (judged s v) .> (n -> swept more (count + n)))
 
 # The shape of one probe is checked before any of them run. A probe that lost
 # its interpolation is a program both engines agree about for the wrong reason,
@@ -332,20 +333,20 @@ sample = """
 """
 
 fn begun false
-  io/write_err complaint . (_ -> os/exit 2)
+  io/write_err complaint .> (_ -> os/exit 2)
 
 fn begun true
-  counted 0 . reported
+  counted 0 .> reported
 
 banner = "{length all_probes} combinations\n"
 
 fn counted _
-  io/write banner . (_ -> swept all_probes 0)
+  io/write banner .> (_ -> swept all_probes 0)
 
 fn reported 0
   io/write "0 wrong\n"
 
 fn reported n
-  io/write "{n} wrong\n" . (_ -> os/exit 1)
+  io/write "{n} wrong\n" .> (_ -> os/exit 1)
 
 pub play = begun (shaped "io/write \"\{1}\"" == sample)

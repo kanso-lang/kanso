@@ -87,7 +87,7 @@ t4 = "(?i)<p>\\s*of course,\\b"
 throat = [t1 t2 t3 t4]
 
 fn with_book top
-  os/list_dir "docs/book" . (inner -> over_pages top inner)
+  os/list_dir "docs/book" .> (inner -> over_pages top inner)
 
 fn over_pages top inner
   both = text/concat (under "docs" top) (under "docs/book" inner)
@@ -109,7 +109,7 @@ fn reading _ _ acc after true
 
 fn reading pages at acc after false
   page = pages[at]!
-  os/read_file! page . (raw -> scanned_page pages at acc after page raw)
+  os/read_file! page .> (raw -> scanned_page pages at acc after page raw)
 
 fn scanned_page pages at acc after page raw
   text = prose raw
@@ -149,7 +149,7 @@ fn line_of text at
 
 fn reported pages found
   head = "{length pages} pages read, {length found} machine-detectable tells\n"
-  io/write "{head}{spelled found 1 ""}" . (_ -> closed found)
+  io/write "{head}{spelled found 1 ""}" .> (_ -> closed found)
 
 fn spelled found at acc
   telling found at acc (at > length found)
@@ -172,7 +172,7 @@ fn shortened q true
   text/slice q 1 150
 
 fn closed found
-  io/write (advice (length found == 0)) . (_ -> ending (length found == 0))
+  io/write (advice (length found == 0)) .> (_ -> ending (length found == 0))
 
 fn advice true
   ""
@@ -188,4 +188,4 @@ fn ending true
 fn ending false
   os/exit 1
 
-pub play = os/list_dir "docs" . (top -> with_book top)
+pub play = os/list_dir "docs" .> (top -> with_book top)

@@ -43,13 +43,16 @@ keywords = ["fn" "pub" "type" "import"]
 
 ops = [">>" "->" "==" "!=" "<=" ">=" "=" "<" ">" "+" "-" "*" "/" "."]
 
+# The chain dot pressed against its channel: bind, annotate, rescue.
+fused = [".>" ".!" ".?"]
+
 str_tok = "\"(?:\\\\.|[^\"\\\\])*\""
 
 ident_tok = "[a-z_][a-zA-Z0-9_/]*[?!]?"
 
 num_tok = "[0-9]+\\.[0-9]+|[0-9]+"
 
-op_tok = ">>|->|==|!=|<=|>=|[=<>+\\-*/.]"
+op_tok = ">>|->|==|!=|<=|>=|\\.[>!?]|[=<>+\\-*/.]"
 
 token_pattern = "{str_tok}|#[^\n]*|{ident_tok}|{num_tok}|{op_tok}|."
 
@@ -76,13 +79,13 @@ fn writing? given
 # without asking the filesystem anything: a substitution walk that could take a
 # bind half way through would have to carry the whole chapter through it.
 fn walk_all path after
-  os/is_dir path . (there -> walk_there path there after)
+  os/is_dir path .> (there -> walk_there path there after)
 
 fn walk_there _ false after
   after []
 
 fn walk_there path true after
-  os/list_dir path . (names -> walk_names path names 1 [] after)
+  os/list_dir path .> (names -> walk_names path names 1 [] after)
 
 fn walk_names path names at acc after
   walking_names path names at acc after (at > length names)
@@ -92,7 +95,7 @@ fn walking_names _ _ _ acc after true
 
 fn walking_names path names at acc after false
   kid = "{path}/{names[at]!}"
-  os/is_dir kid . (d -> walk_kid path names at acc after kid d)
+  os/is_dir kid .> (d -> walk_kid path names at acc after kid d)
 
 fn walk_kid path names at acc after kid true
   on = (deep -> walk_names path names (at + 1) (joined acc deep) after)
@@ -115,14 +118,14 @@ fn reading _ _ acc after true
 fn reading wanted at acc after false
   path = wanted[at]!
   on = (body -> read_next wanted at acc after path body)
-  os/read_file! path . on
+  os/read_file! path .> on
 
 fn read_next wanted at acc after path body
   read_each wanted (at + 1) (push acc (source_file path body)) after
 
 fn over_chapters write
   on = (names -> chapter_loop (only_chapters names) 1 0 write)
-  os/list_dir chapters . on
+  os/list_dir chapters .> on
 
 fn only_chapters names
   list/sort (list/to_list (list/select names (n -> chapter? n)))
@@ -139,7 +142,7 @@ fn walking _ _ drift write true
 fn walking names at drift write false
   name = names[at]!
   on = (raw -> one_chapter names at drift write name raw)
-  os/read_file! "{chapters}/{name}" . on
+  os/read_file! "{chapters}/{name}" .> on
 
 fn one_chapter names at drift write name raw
   dir = dir_of name
@@ -200,7 +203,7 @@ fn again acc found false
 fn with_files names at drift write name raw p files dir
   said = rebuilt raw (merged p.src p.out 1 1 []) name dir files write
   on = (_ -> next_chapter names at drift write name raw said)
-  io/write said.log . on
+  io/write said.log .> on
 
 # Both panel shapes in one ascending list, because one pass over the chapter is
 # what keeps an offset honest. Matched separately and rewritten in two passes,
@@ -240,7 +243,7 @@ fn dir_of name
 
 fn next_chapter names at drift write name raw said
   saved "{chapters}/{name}" raw said.text write
-    . (_ -> chapter_loop names (at + 1) (drift + said.drift) write)
+    .> (_ -> chapter_loop names (at + 1) (drift + said.drift) write)
 
 fn saved path raw text write
   keeping path text (not write or text == raw)
@@ -506,7 +509,7 @@ fn numeric _ _ t true
   "<span class=\"n\">{t}</span>"
 
 fn numeric toks at t false
-  operator toks at t (word? ops t)
+  operator toks at t (word? ops t or word? fused t)
 
 fn operator _ _ t true
   "<span class=\"o\">{escaped t}</span>"
@@ -640,7 +643,7 @@ fn head_spot? ""
   true
 
 fn head_spot? b
-  word? ["=" ">>" "." "(" "->"] b
+  word? ["=" ">>" "." ".>" ".!" ".?" "(" "->"] b
 
 fn heads t _ _ false
   t
@@ -664,7 +667,7 @@ fn applied t _ true
   "<span class=\"f\">{t}</span>"
 
 fn applied t after false
-  trailing t (word? [">>" "."] after)
+  trailing t (word? [">>" "." ".>" ".!" ".?"] after)
 
 fn trailing t true
   "<span class=\"f\">{t}</span>"
@@ -722,7 +725,7 @@ fn carets line false
 
 fn reported drift write
   quiet = write or drift == 0
-  io/write "{drift} panel(s) {done_word write}\n" . (_ -> ending quiet)
+  io/write "{drift} panel(s) {done_word write}\n" .> (_ -> ending quiet)
 
 fn done_word true
   "rewritten"
@@ -736,4 +739,4 @@ fn ending true
 fn ending false
   os/exit 1
 
-pub play = os/args . (given -> over_chapters (writing? given))
+pub play = os/args .> (given -> over_chapters (writing? given))

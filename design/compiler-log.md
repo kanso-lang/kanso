@@ -20,60 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 (third) — three page gates in three CI jobs, and no sweep over them
-
-Searched the log, the archive and design/ before filing. `golden_prose` appears
-once in the live log (kanso#1300's round three, where it caught a span) and
-seventeen times in the archive; the closest entry is 2026-09-02, "the sweep the
-page owed after four twins", which is about prose figures carrying no
-`data-golden` tag at all. Neither asks whether the page gates have an entry
-point.
-
-**DONE.** `scripts/gates/all_pages.sh` runs the three gates that read the
-published pages, and `tests/every_page_gate_is_in_the_sweep.rs` pins the list to
-the tree.
-
-The three are `golden_prose` (the `data-golden` spans against the goldens they
-name), `page_drift` (docs/compiler.html against the log's budget of unpublished
-entries) and `prose_check` (the three mechanically detectable slop families over
-all 29 pages). They run in three different CI jobs — welfare, docs, and its own —
-so a session editing a page has three commands to remember and none to run.
-
-kanso#1328 is what that costs. Round two left the page's `front_end_visits` span
-at 23,723 where its golden had moved to 22,426. page_drift and prose_check both
-pass on that tree, because neither reads a `data-golden` span, and those are the
-two I ran before pushing. golden_prose turned its own job red and welfare with
-it: welfare runs golden_prose as its last step, so it reported ALREADY RED and
-could prove nothing about the three rows sharing that gate.
-
-The sweep reads all three and reports all three. Stopping at the first objection
-would rebuild the failure it exists to prevent, which is the rule
-`all_counters.sh` already carries for the same reason. It costs 31 seconds, 28 of
-them prose_check reading 29 pages through a regexp engine written in kanso; the
-figure is in the script's header so a reader waiting on it knows it has not hung.
-
-The spec is the half that does not go stale. Eight programs under scripts/ hold a
-literal `docs` path: three are the page gates and five read one for something
-that is not the prose, so each of the eight has to appear as a row or in an
-`elsewhere` list carrying a reason. `book_panels` and `book_quotes` are excused
-to `scripts/book_check.sh`, which already runs both before it replays the sample
-outputs, and the spec opens that file to check the claim rather than believing
-the comment. A fourth assertion pins the property the round actually turned on:
-something the sweep runs has to read a `data-golden` span, whatever it ends up
-being called.
-
-All four were watched red. Dropping golden_prose from the table fires two of
-them and the message names golden_prose. Claiming page_drift takes `--write`
-fires the third. Pointing book_panels' excuse at `scripts/build_wasm.sh` fires
-the fourth — and the first attempt at that mutation reported GREEN, because my
-`sed` anchor missed the row: it is the first line of the table and carries the
-`elsewhere="` prefix. I came within one command of recording a spec that cannot
-fail. A mutation is evidence only once the file has actually changed, and the
-check for that is to read the line back.
-
-Nothing in ci.yml moves. The three gates already run there, and the spec rides in
-the specs job with every other `cargo test`.
-
 ## 2026-09-08 (fourth) — the entry path's reorder costs a diagnostic, and is reverted
 
 Searched the log, the archive and design/ before filing: the 2026-09-08 entry
@@ -3695,3 +3641,145 @@ else, so the blank survived into the comparison. The other four compile goldens
 carry blanks today and their gates do not mind. Round three deletes the blank
 and writes the trap into that golden's own header, because the habit it broke --
 separate notes with an empty line -- is right in every other file here.
+## 2026-09-09 — the fused chain operators
+
+Built: the 2026-08-31 gavel "the fused chain operators" (archive; STATUS.md's
+row, now removed). In chain position each of the three words has one
+spelling, the chain dot plus one character of channel: `.>` is `bind`, `.!`
+is `annotate`, `.?` is `rescue`.
+
+    settled = json/decode text
+      .> count_of
+      .! (e -> "settled: {e.reason.reason}")
+      .? (e -> "fell back on {e.reason}")
+
+**What the parser learned.** The lexer reads `.` pressed against `>`, `!` or
+`?` as one token carrying the word it stands for, and lets that token lead a
+continuation line the way the bare dot does. `.!` and `.?` desugar to the
+ordinary applications `annotate x f` and `rescue x f`, which every engine
+already speaks prefix-style (kanso#1116), so a desugared step reaches the
+same `k_b_annotate`, `Desc::Rescue` and `rt_rescue` the prefix form reaches
+and the emitters, the runtime and the page are untouched. The right-hand
+side is one function, a lambda, a name or a group: `.> f x` is refused with
+the partial named, since the gavel's common case is the bare function and a
+held argument already has a spelling, `&f x`. A `. bind f`, `. annotate f`
+or `. rescue f` step is refused with the fused form named. In chain position
+that spelling retired, as ruled, superseding the 2026-08-29 keep-the-dot
+ruling for the three words. The words remain prefix functions everywhere
+else, and every fixture that calls them that way is unchanged.
+
+**`.>` desugars to the piped step, and the measurement that decided it.**
+The first cut desugared `x .> f` to the application `bind x f` like the
+other two. On the interpreter that is the same program: `bind` on a
+description builds `Desc::Bind`, on a settled failure skips the callback,
+on a value calls it, which is what the automatic bind does at a piped step
+in each case. Native did not agree. The beat keys on a piped lambda — `App
+{ piped: true, head: Lambda }` is the shape beat.rs and infer.rs read as a
+chain step whose body is the loop — and a lambda handed to `bind` as an
+argument is an escaping closure to both, so the arena stopped rewinding:
+with the tree respelled (below) the decoder's `beat_iters` read 151 -> 1
+and its `arena_peak_bytes` 2,097,152 -> 251,658,240, runbench's 45,944,528
+-> 209,522,384, and welfare fell 9.23 points. So `x .> f` desugars to the
+piped application, `App { head: f, args: [x], piped: true }`, the node the
+automatic bind has always been, and every pass reads it as it did. The
+gavel's sentence holds — `x .> f` IS `bind x f` on every input — and the
+node that carries it is the one the compiler already optimises. When the
+effect type ends the automatic bind, the plain-dot step over a box will
+mean something else and this node will need its own flag; that build owns
+the flag, and the emitter's `k_b_bind` stays the prefix word's.
+
+**Every automatic bind is spelled `.>`.** With the spelling in, infer's
+piped-over-DESC branch was instrumented to print the file and the head
+position of every step it bound automatically, and the tree was checked
+program by program (every scripts/ directory, hako, bench, the examples,
+the book samples and the golden corpora; the play files through `kanso
+play`): 519 sites, 372 with a lambda on the right and 147 with a bare name,
+none with a held argument. A script rewrote the dot at each head position
+to `.>` — 498 dots, since a chain of several steps reports one site per
+step — and a second census under the same instrument read zero. That zero
+was over the programs the sweeps compile, and it was not the tree. A dot
+followed by a lambda or a name is a grep, and compiling every file that
+grep names under the same instrument found 44 more dots in 22 files that
+no sweep reaches: the benchmark sources `build_benchmarks.sh` builds and
+nothing checks (`total 4000 . (t -> io/write "{t}\n")`, the deep, pend
+and wide bodies, and the main text `make_jsonbench` writes out), the
+book's ch09 `vse` sample, the trace-demo example, the two workahead
+programs, and 56 more in the programs thirteen Rust specs under tests/
+carry as string literals, which no census of `.kso` files could reach,
+and one in the playground's dice example in docs/play.js. Those are
+respelled too — 599 dots in 132 files — and the grep census reads zero. The lesson is the one §30 already records: a dynamic census
+counts the programs that ran, so the check is the static list of
+candidates, each one compiled. Four statements crossed 80 columns and
+wrap onto continuation lines; nothing else changed, and no golden moved:
+the piped node is the one those goldens were measured on. The plain-dot
+steps whose subject infer reads as a value keep their dot — `"kanso" .
+greet . print`, `expect 42 . to (equal 42)` — because under the effect
+type a plain-dot step over a value stays an application and only the
+steps over a box change meaning. The book's panels were regenerated and
+the sentences beside them that named the dot as the way into an effect
+now name `.>`; ch04 and ch05's teaching of the railway itself waits on the
+effect type, as the ledger says. The book's highlighter tokenised `.>` as a
+dot and a `>` and lost the name after it, so `scripts/book_panels` reads
+the three fused spellings as one operator token and a name in front of one
+as a head; the 29 panels that carry one are re-rendered. The panel check
+compares a panel's text with its sample, markup stripped, so a highlighter
+change moves no panel on its own; four panels in ch03 and appa carry
+markup the highlighter cannot produce (an ascription's type, a name after
+an operator, a bare name on its own line), which is why the check stays
+on the text.
+
+**Spec.** `tests/golden/micro/a_chain_step_names_its_channel.kso` runs on all
+three engines, settled failures only: a group as the bare right-hand side of
+`.?` and `.>`, two lambdas, a value bound twice, and the chain above on a
+success and on a failure. `tests/golden/chainwords/a_fused_chain_over_an_effect.kso`
+is the log's `. rescue orders` program in the ruled spelling: a missing file,
+`.? orders .> shout .> print`, prints `no orders yet!!` on native and the
+oracle. Two error fixtures pin the refusals, `a_chain_word_is_spelled_fused`
+(`. rescue told`) and `a_fused_step_takes_one_function` (`.> told 3`). The
+compiler page's combinators section says what landed.
+
+**Three libraries changed, so the compile rows are CI's.** `lib/net/net.kso`,
+`lib/net/http/http.kso` and `lib/os/os.kso` respell their chain steps, and
+`lib/*.kso` is `include_str!`'d into the compiler, so those are bytes the
+compiler carries and compiles. The two compile-side veins this host can read
+are unmoved -- `emitted_code` on all fourteen programs and `compile_cost`'s
+module and modules rows -- which is what a respelling that changes no emitted
+code does. The six host-keyed rows (`machine_code`, `compile_memory`,
+`compile_allocs`, `compile_instructions`, `entry_instructions`,
+`library_instructions`) refuse here and are expected to move on CI, by layout
+at minimum; whatever it reports is copied in from its sitting rather than
+projected from this container, which takes clang 18.1.3 against CI's 19.1.1.
+
+**Cherry-picked onto 0d7b3e57, not rebased.** The branch sat on `local/done`,
+whose content main now carries in squashed form. The pick asked for two
+resolutions, both the log's and the archive's both-append hunks;
+`lib/net/http/http.kso` auto-merged, because the collision integration had
+predicted there was `done`'s `stopped` against this change's `.>` on one line
+and `done` is on main now. Re-verified on the picked tree rather than on the
+branch's own worktree: that worktree carries `done`'s code against `done`'s
+pre-change module golden, since dn's own commit moves the row and the
+regeneration happened later, so `compile_cost` is red there and green here.
+
+**CI named THREE of the six, and the three that held say what the change is.**
+The prediction above reasoned from the library edit alone -- three `lib/*.kso`
+files change, `lib/*.kso` is `include_str!`'d into the compiler, so all six
+host-keyed rows are in play -- and that is right about which rows CAN move and
+silent about which will. What moved:
+
+    compile_instructions   48,572,851 ->  48,393,437   -179,414  -0.3693%
+    entry_instructions    161,836,689 -> 161,314,264   -522,425  -0.3228%
+    library_instructions  162,541,723 -> 162,023,537   -518,186  -0.3188%
+
+and `compile_allocs` (29,000), `compile_peak_bytes` (769,071) and the whole
+`text` vein are BYTE-IDENTICAL in the job that counted those three. The front
+end allocated exactly the same and held exactly the same doing this compile, and
+the linker emitted the same machine code, so nothing about the work changed;
+what changed is src/lexer.rs and src/parser.rs, and the three instruction rows
+are the layout veins CLAUDE.md's prior describes. Three rows falling together in
+one narrow band with the allocation row still is the layout signature; real work
+removed would have moved allocs with them, the way `done` did an hour earlier.
+
+Welfare 66.42 held and re-set: the objective's compile term sums the three rows,
+so it takes the whole 1,220,025, and the rise is under a hundredth of a point.
+Five compiler.html spans quoting the three rows were rewritten by
+`golden_prose --write`.

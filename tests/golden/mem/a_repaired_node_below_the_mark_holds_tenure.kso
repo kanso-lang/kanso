@@ -43,7 +43,7 @@ fn stepped 0 _ acc
 # makes the list real; `n + 40 - drift` is `n`.
 fn stepped n xs acc
   drift = length (wide 40)
-  io/write "" . (_ -> gathered (n + 40 - drift) xs acc)
+  io/write "" .> (_ -> gathered (n + 40 - drift) xs acc)
 
 fn loaded acc
   xs = wide 400
@@ -53,6 +53,6 @@ fn read_back out
   io/write "kept {length out}, first {out[1]!}, last {out[400]!}\n"
 
 fn begin acc0
-  io/write "" . (_ -> loaded acc0) . read_back
+  io/write "" .> (_ -> loaded acc0) .> read_back
 
 pub play = begin []

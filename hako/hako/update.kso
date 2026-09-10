@@ -6,7 +6,7 @@ import "std/os"
 # only thing it walks to; a pin that is not a release stays where it is,
 # which is the dev-sha discipline made structural.
 pub fn updating dir only
-  os/read_file! "{dir}/hako.lock" . (text -> opened dir only (parse text))
+  os/read_file! "{dir}/hako.lock" .> (text -> opened dir only (parse text))
 
 fn opened dir only pins
   nothing_pinned = refused "hako.lock pins nothing — run `kanso install` first"
@@ -31,14 +31,14 @@ fn held_reason only tag
   "`{only}` is pinned to `{tag}`, {walks} — {advice}, {drop}"
 
 fn settings dir only pins
-  os/env "KANSO_HAKO" . (set -> homed dir only pins set)
+  os/env "KANSO_HAKO" .> (set -> homed dir only pins set)
 
 fn homed dir only pins set
-  os/env "HOME" . (home -> remoted dir only pins (cache_root set home))
+  os/env "HOME" .> (home -> remoted dir only pins (cache_root set home))
 
 fn remoted dir only pins root
   start = (origin -> walked dir only pins root origin "" "" "")
-  os/env "KANSO_HAKO_REMOTE" . start
+  os/env "KANSO_HAKO_REMOTE" .> start
 
 fn walked dir only pins root origin lines moved held
   finished = written dir lines moved held
@@ -49,7 +49,7 @@ fn stepped dir only pins root origin lines moved held
   p = pins[1]!
   rest = list/to_list (list/drop pins 1)
   onward = (got -> advanced dir only rest root origin lines moved held got)
-  speakable p . (_ -> resolved p only root origin . onward)
+  speakable p .> (_ -> resolved p only root origin .> onward)
 
 fn advanced dir only rest root origin lines moved held got
   ls = "{lines}{got[1]!}"
@@ -72,10 +72,10 @@ fn resolved p only root origin
 fn kept p interim
   row = "{p.name} {p.tag} {p.sha} {p.protocol}\n"
   note = if interim "  {p.name} {p.tag} (interim pin)\n" ""
-  io/write "" . (_ -> [row "" note])
+  io/write "" .> (_ -> [row "" note])
 
 fn forward p root origin
-  newest origin p.name . (found -> taken p root origin found)
+  newest origin p.name .> (found -> taken p root origin found)
 
 fn taken p root origin found
   stay = kept p false
@@ -86,16 +86,16 @@ fn moved_to p root origin found
   note = if (found[1]! == p.tag) "" "  {p.name} {p.tag} -> {found[1]!}\n"
   got = [row note ""]
   pulled = fetched root p.name found[1]! found[2]! (url origin p.name)
-  pulled . (_ -> answered got)
+  pulled .> (_ -> answered got)
 
 fn answered x
-  io/write "" . (_ -> x)
+  io/write "" .> (_ -> x)
 
 fn written dir lines moved held
   left = if (held == "") "" "left where they are:\n{held}"
   still = "every hako is already at its highest release\n{left}"
   report = if (moved == "") still "updated:\n{moved}{left}"
-  os/write_file "{dir}/hako.lock" lines . (_ -> io/write report)
+  os/write_file "{dir}/hako.lock" lines .> (_ -> io/write report)
 
 fn refused why
-  io/write_err "error: {why}\n" . (_ -> os/exit 2)
+  io/write_err "error: {why}\n" .> (_ -> os/exit 2)

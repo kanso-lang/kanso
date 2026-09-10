@@ -5,9 +5,9 @@ import "std/os"
 
 pub play = made
 
-made = os/make_dir "." . (_ -> told)
+made = os/make_dir "." .> (_ -> told)
 
-told = os/is_dir "." . said
+told = os/is_dir "." .> said
 
 fn said yes
   print "{yes}"

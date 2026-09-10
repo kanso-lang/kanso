@@ -10,12 +10,12 @@ fn outer 0 acc
   acc
 
 fn outer n acc
-  inner 2 [] . (p -> outer (n - 1) (push acc p))
+  inner 2 [] .> (p -> outer (n - 1) (push acc p))
 
 fn inner 0 acc
   acc
 
 fn inner d acc
-  math/random 1000 . (c -> inner (d - 1) (push acc c))
+  math/random 1000 .> (c -> inner (d - 1) (push acc c))
 
-pub play = outer 3 [] . (v -> print "points {v}")
+pub play = outer 3 [] .> (v -> print "points {v}")

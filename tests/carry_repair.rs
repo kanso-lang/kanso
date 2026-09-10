@@ -26,7 +26,7 @@ fn read_next _ _ acc true
 
 fn read_next paths at acc false
   on = (body -> gathered paths (at + 1) (text/concat acc [body]))
-  os/read_file paths[at]! . on
+  os/read_file paths[at]! .> on
 
 wanted = ["README.md" "STATUS.md" "CLAUDE.md" "Cargo.toml"]
 

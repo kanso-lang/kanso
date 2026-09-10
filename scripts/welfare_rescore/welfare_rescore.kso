@@ -66,10 +66,10 @@ pub type splice
   counters
   target
 
-pub play = io/stdin . (model -> with_model model)
+pub play = io/stdin .> (model -> with_model model)
 
 fn with_model model
-  os/args . (given -> over_rows (read model) given)
+  os/args .> (given -> over_rows (read model) given)
 
 # The model in one value, so the walk below takes an argument rather than
 # three that have to stay in step.
@@ -420,14 +420,14 @@ fn at_row m divs row
 fn over_rows m given
   path = where given
   phases = "bench/runbench_phases.txt"
-  os/read_file! phases . (t -> with_phases m (phase_map t) path)
+  os/read_file! phases .> (t -> with_phases m (phase_map t) path)
 
 fn with_phases m phases path
   epochs = "bench/compile_epochs.txt"
-  os/read_file! epochs . (t -> with_epochs m phases (epoch_map t) path)
+  os/read_file! epochs .> (t -> with_epochs m phases (epoch_map t) path)
 
 fn with_epochs m phases epochs path
-  os/read_file! path . (raw -> written m phases epochs raw)
+  os/read_file! path .> (raw -> written m phases epochs raw)
 
 fn where given
   chosen given (length given == 0)

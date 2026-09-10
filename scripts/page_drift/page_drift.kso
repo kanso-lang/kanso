@@ -65,7 +65,7 @@ fn depth r
   full (text/trim r.stdout == "false")
 
 fn full true
-  asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] . measured
+  asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] .> measured
 
 fn full false
   io/write_err "page drift: this clone is shallow, so the page's last\n"
@@ -81,7 +81,7 @@ fn against ""
   io/write "no commit has touched docs/compiler.html — nothing to compare\n"
 
 fn against sha
-  asked ["diff" "{sha}..HEAD" "--" "design/compiler-log.md"] . counted
+  asked ["diff" "{sha}..HEAD" "--" "design/compiler-log.md"] .> counted
 
 # Both numbers are printed, always. A gate that silently drops entries is one
 # nobody can check, and the skipped count is how a reader sees that the
@@ -98,7 +98,7 @@ fn verdict _ count skipped true
   >> io/write "{aside skipped}\n"
 
 fn verdict owed count skipped false
-  told owed count skipped . (_ -> os/exit 1)
+  told owed count skipped .> (_ -> os/exit 1)
 
 fn aside 0
   ""
@@ -128,4 +128,4 @@ fn owes _
   >> io/write "fallen behind what the compiler does. Write the entry the\n"
   >> io/write "page owes — one for a campaign is fine, not one per commit.\n"
 
-pub play = asked ["rev-parse" "--is-shallow-repository"] . depth
+pub play = asked ["rev-parse" "--is-shallow-repository"] .> depth

@@ -91,12 +91,12 @@ fn hung? _
   false
 
 fn ran source
-  os/write_file probe source . (_ -> both)
+  os/write_file probe source .> (_ -> both)
 
-both = asked ["play" probe] . against
+both = asked ["play" probe] .> against
 
 fn against native
-  asked ["play" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] .> (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -116,10 +116,10 @@ fn agreed n i false
   "{native}    interp: {i.status} {i.stdout}{i.stderr}\n"
 
 fn told ""
-  io/write "" . (_ -> 0)
+  io/write "" .> (_ -> 0)
 
 fn told line
-  io/write line . (_ -> 1)
+  io/write line .> (_ -> 1)
 
 fn named _ ""
   ""
@@ -133,15 +133,15 @@ fn swept todo count
   onward todo count (length todo == 0)
 
 fn onward _ count true
-  io/write "" . (_ -> count)
+  io/write "" .> (_ -> count)
 
 fn onward todo count false
   rest = list/to_list (list/drop todo 1)
   c = todo[1]!
-  ran (shaped c.a c.b c.reader) . (v -> reported rest count c v)
+  ran (shaped c.a c.b c.reader) .> (v -> reported rest count c v)
 
 fn reported rest count c v
-  told (named c.label v) . (n -> swept rest (count + n))
+  told (named c.label v) .> (n -> swept rest (count + n))
 
 fn cased ai bi ri
   a = layouts[ai]!
@@ -195,16 +195,16 @@ fn works? n i
   sound? n and sound? i
 
 fn ready native
-  asked ["play" probe "--interp"] . (interp -> live native interp)
+  asked ["play" probe "--interp"] .> (interp -> live native interp)
 
 fn live n i
   running (works? n i)
 
 fn running true
-  io/write banner . (_ -> swept cases 0 . finished)
+  io/write banner .> (_ -> swept cases 0 .> finished)
 
 fn running false
-  io/write_err mute . (_ -> os/exit 2)
+  io/write_err mute .> (_ -> os/exit 2)
 
 banner = "{length cases} beats, every layout pair by every hand\n"
 
@@ -212,6 +212,6 @@ fn finished 0
   io/write "0 disagree\n"
 
 fn finished n
-  io/write "{n} disagree\n" . (_ -> os/exit 1)
+  io/write "{n} disagree\n" .> (_ -> os/exit 1)
 
-pub play = os/write_file probe sample . (_ -> asked ["play" probe]) . ready
+pub play = os/write_file probe sample .> (_ -> asked ["play" probe]) .> ready
