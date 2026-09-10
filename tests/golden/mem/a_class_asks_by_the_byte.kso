@@ -1,0 +1,17 @@
+# a class asks whether the character at a position is one of its members. the
+# set is a string, and asking by splitting it on the character built a list
+# and two pieces at every position. a one-byte character is found by its
+# byte now; the allocation count pins which way the question is answered.
+import "std/regexp"
+import "std/text"
+
+fn grow 0 acc
+  acc
+
+fn grow n acc
+  grow (n - 1) (text/append acc "vowels and consonants ")
+
+pub play =
+  subject = text/utf8 (grow 100 (text/bytes ""))
+  hits = regexp/find_all "[aeiou]" subject
+  print "found {length hits} in {length subject}"

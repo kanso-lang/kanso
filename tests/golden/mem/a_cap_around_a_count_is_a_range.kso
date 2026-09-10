@@ -1,0 +1,9 @@
+# a cap around a count is a range, and a range is walked by adding one. the
+# general capped arm pulls each element through `next`, which rebuilds a
+# count, a step, a cap and another step — four records an element, read once
+# and dropped. the record bytes pin which arm the fold took.
+import "std/list"
+
+pub play =
+  taken = list/to_list (list/take list/naturals 3000)
+  print "took {length taken} first {taken[1]} last {taken[3000]}"

@@ -3783,3 +3783,59 @@ Welfare 66.42 held and re-set: the objective's compile term sums the three rows,
 so it takes the whole 1,220,025, and the rise is under a hundredth of a point.
 Five compiler.html spans quoting the three rows were rewritten by
 `golden_prose --write`.
+
+## 2026-09-10 — three library shapes off the run program's profile
+
+Three arms, each one a shape the profile pointed at, each one measured on
+today's main rather than on the base they were first cut against.
+
+**A cap around a count is a range.** pendbench's churn fuses to a fold over
+`take naturals n`, and the general capped arm pulled every element through
+`next`, building a count, a step, a cap and another step apiece — four records
+read once and dropped. `fold (capped left (counting at))` counts instead, the
+sibling of the window arm already beside it.
+
+**A class asks by the byte.** std/regexp's character classes walked a string
+per candidate; the arm reads the byte.
+
+**The colon is the arm before the error.** lib/json's `obj_key` ran `skip_ws`
+to the colon, took back only its position, and then had `expect_char` load the
+same byte a second time to compare it. `obj_key_end` is the shape `array_delim`
+and `obj_delim` already take: the colon is an arm, the whitespace is the arm
+before it, and the error is the arm after.
+
+**What they cost, on this tree over origin/main 32080acf.**
+
+    pendbench   allocs      4,007,349 ->   807,149   (-79.86%)
+                alloc_bytes   257 MB  ->     65 MB   (-74.66%)
+                arena peak      2 MB  ->      1 MB
+                sh_rec    192,067,248 ->    54,448   (-99.97%)
+    scanbench   allocs      3,975,884 -> 3,011,152   (-24.26%)
+                arena peak    198 MB  ->    161 MB   (-18.52%)
+                sh_str     37,039,216 ->     1,632
+    runbench    allocs      6,936,517 -> 5,958,961   (-14.09%)
+                arena peak   45.9 MB  ->   39.7 MB   (-13.70%)
+
+`sh_rec` falling by a factor of three and a half thousand on pendbench is the
+counted fold: those four records an element were most of what the benchmark
+allocated. `sh_str` on scanbench is the byte class, which is why that row goes
+to almost nothing rather than down a fraction.
+
+**Welfare reads 0.86 ABOVE the floor**, the largest single move since the
+2026-09-03 rebuild, and it is banked in this same PR. The gain is mostly
+run_peak_bytes and the allocation terms rather than instructions, which is what
+a change that stops building records looks like in the objective.
+
+**The compile side pays, and the emitted code grows.** Three new arms is three
+more declarations for the front end to visit: front_end_visits 22,562 -> 22,727
+(+165, +0.7313%) with rounds holding at 62, the arms being wider rather than
+deeper so nothing re-converges. Every program that compiles std/list carries
+the counted arm, so the emitted rows rise across the board — the decoder 9,247
+-> 9,273 lines, encodebench 11,105 -> 11,233, scanbench 19,674 -> 19,923. That
+is the trade stated plainly: more code written, much less allocated.
+
+**Five veins are CI's.** machine_code, compile_allocs, compile_instructions,
+entry_instructions and library_instructions are refused on this container, and
+compile_memory_golden.txt is refused whole (measured-on rustc=1.98.1, here
+1.94.1) even though the visits row it carries is host-invariant. Round one is
+red on those and CI's sitting is what lands.
