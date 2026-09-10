@@ -3685,3 +3685,13 @@ Welfare 66.38 -> 66.42, banked with `--set` in this same PR. All five terms
 improved: `run_instructions` and `compile_peak_bytes` by the deletions above,
 `compile_instructions` (the objective's sum of the module, entry and library
 rows) by 2,294,114, and `compile_allocs` by 276.
+
+**A blank line cost a round.** Round two took all seven veins' rows and CI came
+back with six green and `compile allocations` still red -- on a golden whose
+value matched CI's to the digit. The diff was `1d0` against a blank: the note
+above the row had been separated from the note before it by an empty line, and
+`compile_allocs.sh` builds its expected file with `grep -v '^#'` and nothing
+else, so the blank survived into the comparison. The other four compile goldens
+carry blanks today and their gates do not mind. Round three deletes the blank
+and writes the trap into that golden's own header, because the habit it broke --
+separate notes with an empty line -- is right in every other file here.

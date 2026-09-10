@@ -328,9 +328,16 @@
 # allocations is what one name and one small set cost. This row compared where
 # four others could not: it is keyed on rustc alone, and the runs that carried
 # it sat on a toolchain the glibc-keyed goldens do not name.
-
 # 2026-09-10 (kanso#1363): compile_allocs=29,000, a FALL of 276 (-0.9427%) from
 # 29,276.
+#
+# A BLANK LINE ABOVE THIS NOTE FAILED THE GATE FOR ONE ROUND. compile_allocs.sh
+# builds its expected file with `grep -v '^#'` and nothing else, so a blank line
+# anywhere outside a comment survives into the comparison and diffs as `1d0`
+# against a got-file that holds one row. The value matched exactly; the gate was
+# objecting to whitespace. Every other compile gate tolerates blanks -- three of
+# them carry blanks today -- so the habit of separating notes with one is safe
+# in those files and is not safe here. Separate notes with a bare `#`.
 #
 # `done` is minted, and std/list's one-field `done` record goes with it. A
 # record type the compiler no longer has to read is a type it no longer
