@@ -20,9 +20,7 @@ pub play =
   shown 7
   >> shown 1.5
   >> shown true
-  # through the wrapper, because a literal none is refused at check: neither
-  # `shown` nor `apply` names it
-  >> shown (apply (_ -> none) 0)
+  >> shown none
   >> shown [7 8]
   >> shown "ab"
   >> shown (point 1 2)

@@ -305,8 +305,14 @@ fn gathering_slots _ _ acc _ true
   acc
 
 fn gathering_slots caught at acc wanted false
-  seen = latest caught 1 "" at
-  caught_in_order caught (at + 1) (push acc seen) wanted
+  seen = latest caught 1 none at
+  caught_in_order caught (at + 1) (push acc (or_blank seen)) wanted
+
+fn or_blank none
+  ""
+
+fn or_blank text
+  text
 
 fn latest caught i best at
   seeking caught i best at (i > length caught)

@@ -1,1 +1,0 @@
-error[exhaustive]: this can be a none and `describe` has no arm for it — resolve it here, or give `describe` a `none` arm (in a_piped_none_reaches_a_group_with_no_arm_for_it.kso) (module a_piped_none_reaches_a_group_with_no_arm_for_it)

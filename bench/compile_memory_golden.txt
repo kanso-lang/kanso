@@ -116,14 +116,7 @@
 # run can be appended in one piece — and a declaration is expressions to visit
 # and two more rounds for the fixpoint to reach it. Banked as the price of the
 # runtime fall it buys.
-# 2026-09-09 (a catch-all none arm empties the none from the arms below it):
-# rounds 62 -> 66 and visits 22,339 -> 22,133, a FALL of 206. The arms an
-# `insisted path none` stands in front of are no longer seeded with the
-# none it catches, so fewer widenings reach them and fewer declarations are
-# re-visited; the sets that do change settle four sweeps later than before,
-# each sweep visiting one to seven declarations. A doctrine-compelled
-# change, and the compile rows it moves are recorded as such.
-front_end_rounds=66
+front_end_rounds=62
 # 2026-09-06 (the array's second walk over the same whitespace): visits 17,169
 # -> 17,115, a fall of 54, or 0.31%, and rounds hold at 40. Two expressions
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
@@ -136,16 +129,7 @@ front_end_rounds=66
 # twins back out — 83 of the corpus's 394 declarations, all of them, on this
 # corpus. That pass used to run seventeen lines AFTER `check_merged`, so the
 # whole-program check visited 83 declarations the next pass deleted. Banked.
-#
-# 2026-09-09 (the possible-none check runs without its flag): visits
-# 22,426 -> 22,339, a FALL of 87, and rounds hold at 62. The check itself
-# visits nothing the fixpoint counts; the fall is the corpus's own
-# respelling. lib/regexp lost the `or_blank` pair and lib/list's bisect
-# carries an index instead of a slice, so the front end has 87 fewer
-# expressions to visit. Banked.
-# 2026-09-09 (a catch-all none arm empties the none from the arms below it):
-# 22,339 -> 22,133, a FALL of 206; the note on the rounds row above says why.
-front_end_visits=22133
+front_end_visits=22426
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -201,4 +185,4 @@ front_end_visits=22133
 # are gone before the check starts, so the front end holds less at its peak.
 # Written from this container, which this golden's host gate admits for these
 # three rows.
-compile_peak_bytes=777308
+compile_peak_bytes=773818

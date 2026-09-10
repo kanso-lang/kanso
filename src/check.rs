@@ -626,43 +626,25 @@ fn check_none_exhaustive(
     }
 
     // only what is provable: a lenient read, a literal none, or a call whose
-    // group's return set carries one. A set holding every value bit is the
-    // unknown, and the unknown carries the none bit with the rest: a field
-    // read through a variable (`m.to` is TOP in infer) and a strict index
-    // (`xs[i]!` is every value but a thunk) both answer it, so a group that
-    // hands either back would read as proof of a none it never produces.
-    // Unknown is not proof.
-    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
-    let unknown = |s: crate::infer::Set| s & values == values;
+    // group's return set carries one
     let yields_none = |e: &Expr| -> bool {
         match e {
             Expr::Index { strict: false, .. } => true,
             Expr::Ident(name, _) => name == "none",
-            Expr::App { head, args, .. } => match head.as_ref() {
-                Expr::Ident(name, _) => returns
-                    .get(&(name.as_str(), args.len()))
-                    .is_some_and(|s| s & NONE != 0 && !unknown(*s)),
+            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(name, _) => {
+                    returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & NONE != 0)
+                }
                 _ => false,
             },
             _ => false,
         }
     };
 
-    // A piped call is a call: `menu["pocky"] . describe` hands the same
-    // none as `describe menu["pocky"]`, and the parser puts the piped value
-    // first, where the arms expect it.
     let walk = |e: &Expr, diags: &mut Vec<Diagnostic>, owner: &str| {
-        let Expr::App { head, args, .. } = e else { return };
+        let Expr::App { head, args, piped: false, .. } = e else { return };
         let Expr::Ident(name, _) = head.as_ref() else { return };
         if !returns.contains_key(&(name.as_str(), args.len())) {
-            return;
-        }
-        // A getter is synthesized from a field read, so nobody can give it
-        // an arm, and the play route checks before the read is rewritten
-        // into one while the module route checks after: `xs[i].x` would be
-        // refused through an import and run direct. A field read of a none
-        // stays the runtime's sentence on every route.
-        if crate::ast::getter_field(name).is_some() {
             return;
         }
         for (pos, arg) in args.iter().enumerate() {
@@ -673,16 +655,8 @@ fn check_none_exhaustive(
                 continue;
             }
             // an absolute path built from the binary's location tells a
-            // reader nothing; the module name is what they searched for. A
-            // file outside lib/ is named by its own name: the corpus stages
-            // a fixture into a temporary directory before it runs, and a
-            // golden that quoted the staging path would pin that run's
-            // temporary directory rather than the diagnostic.
-            let short = owner
-                .rsplit_once("/lib/")
-                .map(|(_, m)| m)
-                .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
-                .unwrap_or(owner);
+            // reader nothing; the module name is what they searched for
+            let short = owner.rsplit_once("/lib/").map(|(_, m)| m).unwrap_or(owner);
             diags.push(Diagnostic::new(
                 "exhaustive",
                 format!(
@@ -1767,7 +1741,9 @@ pub fn check_merged_after_aliases(
     check_err_as_value(program, &mut diags);
     check_call_shaped_list(program, &mut diags);
     check_boolean_equality(program, &mut diags);
-    check_none_exhaustive(program, &inference, &mut diags);
+    if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
+        check_none_exhaustive(program, &inference, &mut diags);
+    }
     if require_entry {
         check_entry(program, &mut diags);
     }

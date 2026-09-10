@@ -81,19 +81,11 @@ pub fn argmin coll key
 
 # the predicate must be monotonic over the order — false for a prefix,
 # true for the rest — which is what lets the range halve instead of walk
-# `best` is the index of the best element seen, and 0 before any is: an
-# index is never a none, so the search carries no none for its receivers
-# to answer, and the one read at the end says what 0 means.
 fn bisect xs p lo hi best
-  return found_at xs best if hi < lo
+  return best if hi < lo
   mid = lo + (hi - lo) / 2
-  if (p xs[mid]!) (bisect xs p lo (mid - 1) mid) (bisect xs p (mid + 1) hi best)
-
-fn found_at _ 0
-  none
-
-fn found_at xs i
-  xs[i]!
+  here = xs[mid]!
+  if (p here) (bisect xs p lo (mid - 1) here) (bisect xs p (mid + 1) hi best)
 
 fn bump none
   1
@@ -111,7 +103,7 @@ pub fn drop coll n
   skipped n (iter coll)
 
 pub fn find (sorted items) pred
-  bisect items pred 1 (length items) 0
+  bisect items pred 1 (length items) none
 
 pub fn find coll pred
   found_in (next (iter coll)) pred
@@ -370,13 +362,10 @@ fn outrank_by m x key
   if (key m < key x) x m
 
 # the statistical spread; a bounded integer generator is naturals . take n
-# An empty collection has no least and no greatest, and it has neither at
-# once: the arm names the none at both ends, which is what a receiver of a
-# possible none owes.
 pub fn spread coll
   gap (min coll) (max coll)
 
-fn gap none none
+fn gap none _
   none
 
 fn gap lo hi
@@ -399,9 +388,6 @@ fn skip_one (step _ rest)
 
 pub fn sort coll
   msort (to_list coll)
-
-fn msort none
-  none
 
 # Merging halves rather than placing each element into a sorted run: placing
 # walked the whole run twice and built two lists for every element, so a

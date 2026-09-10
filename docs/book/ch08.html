@@ -249,10 +249,10 @@ err at 1: unexpected character `?`</code></pre>
 
 <span class="k">fn</span> <span class="f">decode_u</span> s
   cs <span class="o">=</span> <span class="f">text/bytes</span> s
-  h1 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">1</span>]!
-  h2 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">2</span>]!
-  h3 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">3</span>]!
-  h4 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">4</span>]!
+  h1 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">1</span>]
+  h2 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">2</span>]
+  h3 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">3</span>]
+  h4 <span class="o">=</span> <span class="f">hex_digit</span> cs[<span class="n">4</span>]
   <span class="f">text/from_code</span> (h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4)
 
 <span class="k">fn</span> <span class="f">hex_alpha</span> c
@@ -358,9 +358,6 @@ err at 1: unexpected character `?`</code></pre>
 
 <span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">101</span> _ _
   <span class="f">true</span>
-
-<span class="k">fn</span> <span class="f">mark_step</span> _ none _ _
-  <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">mark_step</span> cs _ p q
   <span class="f">mark_from</span> cs (p <span class="o">+</span> <span class="n">1</span>) q

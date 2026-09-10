@@ -3,12 +3,8 @@
 # want two of them before it would — so this is where a base case wired to the
 # wrong arm, or a non-int sent to the base, shows up. `none` is the case the two
 # paths could differ on: the cascade's generic arm accepts it, and so must the
-# switch's default. It arrives through a closure parameter because a none the
-# check can see is refused before the run: `step` has no arm naming it.
+# switch's default.
 import "std/json"
-
-fn unseen f
-  f 0
 
 fn said (err r)
   "no arm: {r.reason}"
@@ -30,6 +26,6 @@ pub play =
   >> print (step 3)
   >> print (step (0 - 1))
   >> print (step "x")
-  >> print (step (unseen (_ -> none)))
+  >> print (step none)
   >> print (rescue (step (json/decode "[1, 2")) said)
   >> print "{total 0 10}"

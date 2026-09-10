@@ -1,9 +1,3 @@
 import "std/list"
 
-# A none the check cannot see. A call handing a provable none to a group with
-# no `none` arm is refused at check, so the runtime sentence below is reached
-# through a closure parameter, which the check does not look into.
-fn unseen f
-  f 0
-
-pub play = print "{list/to_list (list/map [1 2] (unseen (_ -> none)))}"
+pub play = print "{list/to_list (list/map [1 2] none)}"

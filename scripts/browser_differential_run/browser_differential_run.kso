@@ -672,7 +672,7 @@ fn more_crashes _ _ acc true
 
 fn more_crashes results at acc false
   one = results[at]!
-  crashes results (at + 1) (kept_crash acc one one["kind"]!)
+  crashes results (at + 1) (kept_crash acc one one["kind"])
 
 fn kept_crash acc one "crash"
   text/concat acc ["{one["name"]}: {one["reason"]}"]
@@ -790,7 +790,7 @@ fn filed progs seen gaps at bad agreed skipped _ _ _ true
 
 fn filed progs seen gaps at bad agreed skipped p r said false
   mine = "native {r.status} {said_natively r}"
-  theirs = tab_said said said["kind"]!
+  theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
   against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
 
@@ -808,13 +808,7 @@ fn excused? gaps path said
   wanted = gaps[path]
   matches? wanted said["text"]
 
-fn matches? none none
-  false
-
 fn matches? none _
-  false
-
-fn matches? _ none
   false
 
 fn matches? wanted text

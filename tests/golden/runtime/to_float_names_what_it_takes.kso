@@ -5,10 +5,7 @@
 # direct run and the run through an import say the same words.
 import "std/text"
 
-# A none the check cannot see. A call handing a provable none to a group with
-# no `none` arm is refused at check, so the runtime sentence below is reached
-# through a closure parameter, which the check does not look into.
-fn unseen f
-  f 0
+fn measured 0
+  none
 
-pub play = print "{text/to_float (unseen (_ -> none))}"
+pub play = print "{text/to_float (measured 0)}"

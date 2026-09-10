@@ -56,9 +56,6 @@ fn hex_char n
 fn hex_code n
   hex_byte_table[n + 1]
 
-fn hex_digit none
-  err "unexpected end of input"
-
 fn hex_digit c
   if (47 < c and c < 58) (c - 48) (hex_alpha c)
 
