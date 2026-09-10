@@ -3967,3 +3967,74 @@ entry_instructions and library_instructions are refused on this container, and
 compile_memory_golden.txt is refused whole (measured-on rustc=1.98.1, here
 1.94.1) even though the visits row it carries is host-invariant. Round one is
 red on those and CI's sitting is what lands.
+
+## 2026-09-10 — a validated string knows its length
+
+The utf-8 validator already classifies every byte on its way through. Counting
+the continuation bytes while it does gives the character count for free on the
+ascii path and for two vector instructions a block on the wide one, and that
+count seeds the memo `k_str_chars` would otherwise fill by scanning the string
+a second time. `length` on a validated string never walks it.
+
+Three doors seed: `read_file`, `k_b_utf8`, and the whole-string check. The
+decoder's token door in `k_b_utf8_slice_raw` deliberately does not. Those are
+861,498 slices on runbench and none of them is ever asked its length, so
+seeding each one measured 7,728,237 instructions against the 13,280,580 the
+other three save. The comment at that call site says so, because the omission
+looks like an oversight and is not.
+
+**The counters.** `str_scans` goes to zero on the encode, live and oneshot
+programs (400, 400 and 1 scans, 75,479,200, 75,479,200 and 188,698 bytes), and
+on the run program falls 254 -> 163 with `str_scan_bytes` 22,644,612 ->
+5,473,094. Nine lazy-tier fixtures move those two rows and nothing else: no
+allocation counter, no peak, no evacuation counter differs anywhere. The ninth
+is kanso#1367's own `a_class_asks_by_the_byte`, which lands 7 scans and 12
+scanned bytes where it read 8 and 2,212 — the byte class validates a string
+and then asks its length, so the two changes meet on one fixture.
+
+**Instructions, measured here under callgrind.** Both compilers built in the
+same worktree, both binaries run from the same directory under the same
+filename with the environment emptied, so the fixed fourteen-instruction offset
+that a two-worktree A/B puts on every row is not in these numbers.
+
+    livebench    3,484,129,797 -> 3,452,753,847   -31,375,950  -0.9006%
+    encodebench  4,084,100,523 -> 4,052,767,921   -31,332,602  -0.7672%
+    pendbench      225,398,305 ->   220,436,506    -4,961,799  -2.2015%
+    runbench     2,241,481,220 -> 2,232,013,849    -9,467,371  -0.4224%
+    jsonbench    1,438,095,130 -> 1,436,454,329    -1,640,801  -0.1141%
+    oneshot         21,417,863 ->    21,396,929       -20,934  -0.0977%
+    readbench        4,562,212 ->     4,631,248       +69,036  +1.5132%
+    widebench       36,429,055 ->    36,509,001       +79,946  +0.2194%
+    deepbench      395,527,105 ->   395,911,106      +384,001  +0.0971%
+    basket          34,861,960 ->    34,891,911       +29,951  +0.0859%
+    indexbench       3,226,185 ->     3,226,248           +63
+    digestbench     10,497,723 ->    10,497,757           +34
+    scanbench      600,502,339 ->   600,502,367           +28
+    escapebench     85,489,183 ->    85,489,184            +1
+
+runbench is the objective's whole run-speed term and it falls 0.4224%.
+
+**The same fourteen deltas, to the instruction, on both bases.** This was
+measured once over ef2f4ea4 and again over 6c32079a with kanso#1367's three
+library arms in between, and every one of the fourteen absolute deltas is
+identical: -31,375,950 on livebench both times, -4,961,799 on pendbench, +69,036
+on readbench. The percentages move because the bases did — pendbench reads
+-2.2015% here against -0.8568% before, since kanso#1367 took three fifths of
+that program away and the same saving is now a larger share of what is left.
+Worth writing down: the two changes touch disjoint work, so neither measurement
+had to be redone for correctness, only for its denominator.
+
+**readbench is the pure-cost case, and it is worth naming rather than
+averaging away.** Its +69,036 is `k_utf8_bad_wide` and nothing else:
+274,748 -> 343,792 under `callgrind_annotate`, which is the whole delta to
+within eight instructions. readbench reads one file whose bytes take the wide
+path and never asks its length, so it pays the two vector instructions a block
+and collects nothing. widebench, deepbench and basket rise for the same reason
+in smaller amounts. The counting is cheap where the answer is wanted and not
+free where it is not, and four benchmarks are on the wrong side of that.
+
+**Welfare cannot be read for this change on this container.** `run_instructions`
+comes from `bench/instructions_golden.txt`, which is host-keyed and refused
+here, so the objective reads main's row whatever the tree does — a change whose
+entire effect is instructions is invisible to a local `welfare` run. The number
+that matters is CI's, on CI's rows.
