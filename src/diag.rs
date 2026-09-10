@@ -44,6 +44,9 @@ pub struct Diagnostic {
 
 impl Diagnostic {
     pub fn new(kind: &'static str, message: String, span: Span) -> Self {
+        // A group in a module's bare overload space is spelled `dep/~join`
+        // inside the compiler and `dep/join` by everyone else.
+        let message = crate::ast::spoken(&message).into_owned();
         Diagnostic { kind, message, span, file: None }
     }
 

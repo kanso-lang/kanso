@@ -103,8 +103,7 @@ fn compile_parsed_entry(
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = crate::hash::Set::default();
-    let (dep_program, exports, shadowed, surfaced) =
-        load_dependencies(&base, &import_list, &mut visited)?;
+    let (dep_program, exports, surfaced) = load_dependencies(&base, &import_list, &mut visited)?;
     let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
     mark_bare_quals(&program, &surfaced, &mut quals);
@@ -117,7 +116,7 @@ fn compile_parsed_entry(
     open_qualified_doors(&mut program, &surfaced, &exports);
     for decl in &program.fns {
         for stmt in &decl.body {
-            private_uses(stmt, &exports, &shadowed, &mut diags);
+            private_uses(stmt, &exports, &mut diags);
         }
     }
     foreign_destructures(&program, &mut diags);
@@ -298,10 +297,9 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = crate::hash::Set::default();
-    let (mut dep_program, exports, shadowed, surfaced) =
-        phase::watched("load_dependencies", || {
-            load_dependencies(&base, &import_list, &mut visited)
-        })?;
+    let (mut dep_program, exports, surfaced) = phase::watched("load_dependencies", || {
+        load_dependencies(&base, &import_list, &mut visited)
+    })?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut quals = crate::hash::Set::default();
     used_quals(&program, &mut quals);
@@ -315,7 +313,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     open_qualified_doors(&mut program, &surfaced, &exports);
     for decl in &program.fns {
         for stmt in &decl.body {
-            private_uses(stmt, &exports, &shadowed, &mut diags);
+            private_uses(stmt, &exports, &mut diags);
         }
     }
     foreign_destructures(&program, &mut diags);
@@ -400,7 +398,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = crate::hash::Set::default();
-    let (mut dep_program, exports, shadowed, surfaced) =
+    let (mut dep_program, exports, surfaced) =
         load_dependencies(&base, &import_list, &mut visited)?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut quals = crate::hash::Set::default();
@@ -415,7 +413,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     open_qualified_doors(&mut program, &surfaced, &exports);
     for decl in &program.fns {
         for stmt in &decl.body {
-            private_uses(stmt, &exports, &shadowed, &mut diags);
+            private_uses(stmt, &exports, &mut diags);
         }
     }
     foreign_destructures(&program, &mut diags);
@@ -1750,7 +1748,7 @@ fn try_fuse(
 /// what the front end holds does not grow with a module's own spellings.
 type Surfaced = crate::hash::Map<String, crate::hash::Map<String, crate::hash::Set<String>>>;
 
-type Loaded = (ast::Program, crate::hash::Map<String, bool>, crate::hash::Set<String>, Surfaced);
+type Loaded = (ast::Program, crate::hash::Map<String, bool>, Surfaced);
 
 /// The groups syntax names, spelled the same in every module. An arm carries
 /// this name because the compiler put it there, not because anybody wrote it,
@@ -1788,7 +1786,6 @@ fn qualify(
     // and nothing in that name says the importer reached it through `geo`.
     // The qualifier is recorded here because this is where it is known.
     surfaced: &mut Surfaced,
-    shadowed: &mut crate::hash::Set<String>,
 ) {
     // A getter's declaration is left bare below, because one group answers a
     // field name across every module. Its calls have to be left bare too: a
@@ -1806,12 +1803,58 @@ fn qualify(
     // canonical spelling. Prefixing it again mints a second `shape/blank`
     // under every route that reaches it, and a value built by one matches no
     // arm compiled against the other.
-    let owned: crate::hash::Set<String> = check::declared_names(dep)
+    // RULED 2026-08-29, "a qualified name is its module's declaration":
+    // `dep/join` is dep's own `pub fn join` and nothing else. A bare name
+    // this module declares AND one of its imports exports has two kinds of
+    // declaration under it — the module's own arms and the bare-enrollment
+    // twins of the import's — and that mixed group is the bare overload
+    // space, where a bare call inside the module dispatches over both. It
+    // moves to a spelling no consumer can write (`dep/~join`, the mark being
+    // a character the lexer never makes part of a name), the module's own
+    // bare call sites are rewritten into it, and a synthetic clone of each
+    // own arm joins it there; the qualified spelling keeps the own arms and
+    // only them. Until this, the twin took `dep/join` first and the module's
+    // own pub read as private from outside, or — with that refusal lifted —
+    // a consumer's `dep/join` reached std's arm under dep's name.
+    // An import's twin is a synthetic bare declaration, and so is the loop
+    // wrapper trmc writes over a module's own counted recursion, under the
+    // module's own name. `synthetic` alone cannot tell them apart: read that
+    // way, the wrapper of `weigh` made `weigh` a mixed group in a module that
+    // imports nothing, the wrapper went to the bare space as if it were std's,
+    // and once the module's own arms stood ahead of it there the bare call
+    // took the plain recursion and ran out of stack. What separates them is
+    // the file: a twin is cloned from its import's declaration and carries
+    // that file, where everything the module writes, and everything a pass
+    // writes for it, carries one of the module's own.
+    let own_files: crate::hash::Set<std::sync::Arc<str>> = dep
+        .fns
+        .iter()
+        .filter(|f| !f.synthetic && !ast::has_slash(&f.name))
+        .map(|f| f.file.clone())
+        .collect();
+    let is_twin = |f: &ast::FnDecl| f.synthetic && !own_files.contains(&f.file);
+    let mut own_bare: crate::hash::Set<&str> = crate::hash::Set::default();
+    let mut twin_bare: crate::hash::Set<&str> = crate::hash::Set::default();
+    for f in &dep.fns {
+        if f.is_getter() || is_ambient_group(&f.name) || ast::has_slash(&f.name) {
+            continue;
+        }
+        match is_twin(f) {
+            true => twin_bare.insert(f.name.as_str()),
+            false => own_bare.insert(f.name.as_str()),
+        };
+    }
+    let mixed: crate::hash::Set<String> =
+        own_bare.iter().filter(|n| twin_bare.contains(*n)).map(|n| n.to_string()).collect();
+    let owned: crate::hash::Map<String, String> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(*n))
         .filter(|n| !ast::has_slash(n))
         .filter(|n| *n != MATH_FAILURE && *n != DIVIDE_BY_ZERO)
-        .map(String::from)
+        .map(|n| match mixed.contains(n) {
+            true => (n.to_string(), ast::bare_space(qual, n)),
+            false => (n.to_string(), format!("{qual}/{n}")),
+        })
         .collect();
     // The prelude's own declarations go, rather than travelling under this
     // module's name: `install_prelude` puts one bare pair back on the merged
@@ -1857,75 +1900,114 @@ fn qualify(
         }
         for (_, members, _) in &mut ty.fields {
             for member in members {
-                if owned.contains(member.as_str()) {
-                    *member = format!("{qual}/{member}");
+                if let Some(spelling) = owned.get(member.as_str()) {
+                    *member = spelling.clone();
                 }
             }
         }
     }
+    let mut bare_clones: Vec<ast::FnDecl> = Vec::new();
     for f in &mut dep.fns {
         // A getter is structural, not owned: one group per field name across
         // every module, reachable without an import. Only its NAME is exempt —
         // the type it matches on belongs to this module and is being renamed
         // under it, so the arm has to follow or it matches nothing.
+        let in_mixed = !ast::has_slash(&f.name) && mixed.contains(f.name.as_str());
         if !f.is_getter() && !is_ambient_group(&f.name) {
-            // A module that declares a name one of its imports also exports
-            // has two claims on one qualified spelling: its own declaration
-            // and the bare-enrollment clone of the import. First writer wins,
-            // which is the clone whenever the loader reached the import
-            // first — so the module's own `pub` read as private from outside.
-            // The claim is remembered so the refusal can say what happened.
             // GAVEL 51: an already-qualified name enrolls under the spelling
             // it already has. Composing `{qual}/` onto it would register the
             // route rather than the identity.
-            let key = match ast::has_slash(&f.name) {
-                true => f.name.clone(),
-                false => format!("{qual}/{}", f.name),
-            };
-            let taken = exports.get(&key).copied();
-            let same_decl = claims.get(&key).is_some_and(|c| *c == canon_id(&f.file));
-            // GAVEL 51: the two-claims rule is about THIS module declaring a
-            // name one of its imports also exports. An already-qualified name
-            // is not this module's declaration — it is a dependency arriving,
-            // and a diamond makes it arrive twice under the identical
-            // spelling. Reading the second arrival as a rival claim turned
-            // `shape/describe` into an opacity refusal on the very program
-            // the ruling exists to make work.
-            let own_claim = !ast::has_slash(&f.name);
-            match (taken, f.synthetic) {
-                // The same declaration arriving by a second route. One
-                // module, so its visibility is what the importer's routes
-                // grant between them: an open route is not vetoed by a sealed
-                // one that happened to load first.
-                (Some(false), _) if same_decl && f.is_pub => {
-                    exports.insert(key.clone(), true);
+            if in_mixed && is_twin(f) {
+                // The import's twin: into the bare overload space, and never
+                // exported. It holds no claim on the qualified spelling.
+                f.name = ast::bare_space(qual, &f.name);
+                f.is_pub = false;
+                exports.insert(f.name.to_string(), false);
+            } else {
+                let key = match ast::has_slash(&f.name) {
+                    true => f.name.clone(),
+                    false => format!("{qual}/{}", f.name),
+                };
+                let taken = exports.get(&key).copied();
+                let same_decl = claims.get(&key).is_some_and(|c| *c == canon_id(&f.file));
+                // GAVEL 51: the two-claims rule is about THIS module declaring
+                // a name one of its imports also exports. An already-qualified
+                // name is not this module's declaration — it is a dependency
+                // arriving, and a diamond makes it arrive twice under the
+                // identical spelling. Reading the second arrival as a rival
+                // claim turned `shape/describe` into an opacity refusal on the
+                // very program the ruling exists to make work.
+                match taken {
+                    // The same declaration arriving by a second route. One
+                    // module, so its visibility is what the importer's routes
+                    // grant between them: an open route is not vetoed by a
+                    // sealed one that happened to load first.
+                    Some(false) if same_decl && f.is_pub => {
+                        exports.insert(key.clone(), true);
+                    }
+                    Some(_) => {}
+                    None => {
+                        exports.insert(key.clone(), f.is_pub);
+                        claims.insert(key.clone(), canon_id(&f.file));
+                    }
                 }
-                (Some(false), false) if f.is_pub && own_claim && !same_decl => {
-                    shadowed.insert(key.clone());
+                // GAVEL 51: a name that already carries a qualification came
+                // from this module's own dependency and keeps its canonical
+                // spelling — it still enrolls, it just does not get a second
+                // prefix.
+                if !ast::has_slash(&f.name) {
+                    f.name = format!("{qual}/{}", f.name);
                 }
-                (Some(_), _) => {}
-                (None, _) => {
-                    exports.insert(key.clone(), f.is_pub);
-                    claims.insert(key.clone(), canon_id(&f.file));
-                }
-            }
-            // GAVEL 51: a name that already carries a qualification came
-            // from this module's own dependency and keeps its canonical
-            // spelling — it still enrolls, it just does not get a second
-            // prefix.
-            if !ast::has_slash(&f.name) {
-                f.name = format!("{qual}/{}", f.name);
             }
         }
         let mut bound = Vec::new();
         for p in &mut f.params {
-            rewrite_pattern(p, qual, &owned);
+            rewrite_pattern(p, &owned);
             pattern_binds(p, &mut bound);
         }
         for stmt in &mut f.body {
-            rewrite_stmt(stmt, qual, &owned, &mut bound);
+            rewrite_stmt(stmt, &owned, &mut bound);
+        }
+        if in_mixed && !is_twin(f) {
+            // The module's own arm, once more in the bare overload space, so a
+            // bare call inside the module still dispatches over its own arms
+            // and the import's together. The clone's body was rewritten with
+            // the original's, so its own bare calls already point inside.
+            let mut clone = f.clone();
+            let short = ast::split_qual(&f.name).map_or(f.name.as_str(), |(_, n)| n);
+            clone.name = ast::bare_space(qual, short);
+            clone.synthetic = true;
+            clone.is_pub = false;
+            bare_clones.push(clone);
         }
     }
+    for clone in &bare_clones {
+        exports.insert(clone.name.to_string(), false);
+    }
+    // The clones go in AHEAD of the import's twins. Dispatch tries a group's
+    // arms in declaration order, and before the ruling the module's own arms
+    // stood before the twins `enroll_bare` appended, so a bare call inside the
+    // module that both could take reached the module's own. Appending the
+    // clones flipped that: kq's `sum`, declared over its own import of the
+    // same name, dispatched into std's, and its specs stopped compiling.
+    let mut pending: Vec<(String, Vec<ast::FnDecl>)> = Vec::new();
+    for clone in bare_clones {
+        match pending.iter_mut().find(|(n, _)| *n == clone.name) {
+            Some((_, group)) => group.push(clone),
+            None => pending.push((clone.name.clone(), vec![clone])),
+        }
+    }
+    let mut fns = Vec::with_capacity(dep.fns.len() + pending.len());
+    for f in dep.fns.drain(..) {
+        if let Some(at) = pending.iter().position(|(n, _)| *n == f.name) {
+            fns.extend(pending.remove(at).1);
+        }
+        fns.push(f);
+    }
+    for (_, group) in pending {
+        fns.extend(group);
+    }
+    dep.fns = fns;
     // Every name this import puts within reach, by the spelling a caller may
     // write bare. Recorded after the loops above have settled each name, so
     // one walk covers a declaration of this module and one it re-exports
@@ -2157,18 +2239,18 @@ fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
     }
 }
 
-fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &crate::hash::Set<String>) {
+fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<String, String>) {
     match p {
         ast::Pattern::Ctor { ty, fields, .. } => {
-            if owned.contains(ty.as_str()) {
-                *ty = Name::new(&format!("{qual}/{ty}"));
+            if let Some(spelling) = owned.get(ty.as_str()) {
+                *ty = Name::new(spelling);
             }
             for f in fields {
-                rewrite_pattern(f, qual, owned);
+                rewrite_pattern(f, owned);
             }
         }
-        ast::Pattern::Annotated { ty, .. } if owned.contains(ty.as_str()) => {
-            *ty = Name::new(&format!("{qual}/{ty}"));
+        ast::Pattern::Annotated { ty, .. } if owned.contains_key(ty.as_str()) => {
+            *ty = Name::new(&owned[ty.as_str()]);
         }
         _ => {}
     }
@@ -2176,101 +2258,101 @@ fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &crate::hash::Set<St
 
 fn rewrite_stmt(
     stmt: &mut ast::Stmt,
-    qual: &str,
-    owned: &crate::hash::Set<String>,
+    owned: &crate::hash::Map<String, String>,
     bound: &mut Vec<String>,
 ) {
     match stmt {
         ast::Stmt::Bind { expr, pattern } => {
-            rewrite_pattern(pattern, qual, owned);
-            rewrite_expr(expr, qual, owned, bound);
+            rewrite_pattern(pattern, owned);
+            rewrite_expr(expr, owned, bound);
             pattern_binds(pattern, bound);
         }
-        ast::Stmt::Expr(e) => rewrite_expr(e, qual, owned, bound),
-        ast::Stmt::Set { value, .. } => rewrite_expr(value, qual, owned, bound),
+        ast::Stmt::Expr(e) => rewrite_expr(e, owned, bound),
+        ast::Stmt::Set { value, .. } => rewrite_expr(value, owned, bound),
     }
 }
 
 fn rewrite_scope(
     stmts: &mut [ast::Stmt],
-    qual: &str,
-    owned: &crate::hash::Set<String>,
+    owned: &crate::hash::Map<String, String>,
     bound: &[String],
 ) {
     let mut inner = bound.to_vec();
     for stmt in stmts {
-        rewrite_stmt(stmt, qual, owned, &mut inner);
+        rewrite_stmt(stmt, owned, &mut inner);
     }
 }
 
-fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &crate::hash::Set<String>, bound: &[String]) {
+fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, String>, bound: &[String]) {
     match e {
         ast::Expr::Guard { cond, early, rest, .. } => {
-            rewrite_expr(cond, qual, owned, bound);
-            rewrite_expr(early, qual, owned, bound);
-            rewrite_scope(rest, qual, owned, bound);
+            rewrite_expr(cond, owned, bound);
+            rewrite_expr(early, owned, bound);
+            rewrite_scope(rest, owned, bound);
         }
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
-            rewrite_scope(stmts, qual, owned, bound)
+            rewrite_scope(stmts, owned, bound)
         }
         // `&f` names a function the way a mention does, so it moves with the
         // module the way a mention does. Left behind, the sigil holds a bare
         // name after every declaration has been qualified away from it.
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
-            if owned.contains(name.as_str()) && !bound.iter().any(|b| b == name) {
-                *name = Name::new(&format!("{qual}/{name}"));
+            if let Some(spelling) = owned.get(name.as_str()) {
+                if !bound.iter().any(|b| b == name) {
+                    *name = Name::new(spelling);
+                }
             }
         }
-        ast::Expr::Field { base, .. } => rewrite_expr(base, qual, owned, bound),
+        ast::Expr::Field { base, .. } => rewrite_expr(base, owned, bound),
         // The target names a type the way an annotation does, so it moves
         // with the module the way an annotation's does. Left bare it survives
         // every declaration being qualified away from it, and then names
         // nothing: the interpreter reports that the value is not a `num`
         // while holding one, and both backends refuse the module outright.
         ast::Expr::Upcast { expr, ty, .. } => {
-            if owned.contains(ty.as_str()) {
-                *ty = format!("{qual}/{ty}");
+            if let Some(spelling) = owned.get(ty.as_str()) {
+                *ty = spelling.clone();
             }
-            rewrite_expr(expr, qual, owned, bound);
+            rewrite_expr(expr, owned, bound);
         }
         ast::Expr::App { head, args, .. } => {
-            rewrite_expr(head, qual, owned, bound);
+            rewrite_expr(head, owned, bound);
             for a in args {
-                rewrite_expr(a, qual, owned, bound);
+                rewrite_expr(a, owned, bound);
             }
         }
         ast::Expr::Index { base, index, .. } => {
-            rewrite_expr(base, qual, owned, bound);
-            rewrite_expr(index, qual, owned, bound);
+            rewrite_expr(base, owned, bound);
+            rewrite_expr(index, owned, bound);
         }
         ast::Expr::BinOp { lhs, rhs, .. } | ast::Expr::Join { lhs, rhs, .. } => {
-            rewrite_expr(lhs, qual, owned, bound);
-            rewrite_expr(rhs, qual, owned, bound);
+            rewrite_expr(lhs, owned, bound);
+            rewrite_expr(rhs, owned, bound);
         }
         ast::Expr::Seq(a, b, _) => {
-            rewrite_expr(a, qual, owned, bound);
-            rewrite_expr(b, qual, owned, bound);
+            rewrite_expr(a, owned, bound);
+            rewrite_expr(b, owned, bound);
         }
         ast::Expr::Lambda { params, body, .. } => {
             let mut inner = bound.to_vec();
             inner.extend(params.iter().map(|(n, _)| n.clone()));
-            rewrite_expr(body, qual, owned, &inner);
+            rewrite_expr(body, owned, &inner);
         }
         ast::Expr::List(items, _) => {
             for i in items {
-                rewrite_expr(i, qual, owned, bound);
+                rewrite_expr(i, owned, bound);
             }
         }
         ast::Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
-                rewrite_expr(k, qual, owned, bound);
-                rewrite_expr(v, qual, owned, bound);
+                rewrite_expr(k, owned, bound);
+                rewrite_expr(v, owned, bound);
             }
         }
         ast::Expr::Str(parts, _) => {
             for p in parts {
                 if let ast::TemplatePart::Interp(inner) = p {
-                    rewrite_expr(inner, qual, owned, bound);
+                    rewrite_expr(inner, owned, bound);
                 }
             }
         }
@@ -2433,7 +2515,6 @@ fn load_dependencies(
     let mut exports = crate::hash::Map::default();
     let mut claims: crate::hash::Map<String, u32> = crate::hash::Map::default();
     let mut surfaced: Surfaced = crate::hash::Map::default();
-    let mut shadowed = crate::hash::Set::default();
     for import in imports {
         let path = &import.path;
         let qual_owned;
@@ -2501,7 +2582,7 @@ fn load_dependencies(
                 files.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
                 compile_module_inner(std::path::Path::new(local), false, visited, Some(&borrowed))?;
-            qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
+            qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
@@ -2525,7 +2606,7 @@ fn load_dependencies(
                 qualified.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
                 compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
-            qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
+            qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
@@ -2552,7 +2633,7 @@ fn load_dependencies(
             ));
         }
         let mut dep = compile_module_inner(&dep_dir, false, visited, None)?;
-        qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
+        qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced);
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
     }
@@ -2609,7 +2690,7 @@ fn load_dependencies(
         }
     }
     collapse_diamonds(&mut dep_program);
-    Ok((dep_program, exports, shadowed, surfaced))
+    Ok((dep_program, exports, surfaced))
 }
 
 /// A re-export is a use of the import it names.
@@ -2954,37 +3035,28 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
 fn private_uses(
     stmt: &ast::Stmt,
     exports: &crate::hash::Map<String, bool>,
-    shadowed: &crate::hash::Set<String>,
     diags: &mut Vec<diag::Diagnostic>,
 ) {
     fn walk(
         e: &ast::Expr,
         exports: &crate::hash::Map<String, bool>,
-        shadowed: &crate::hash::Set<String>,
         diags: &mut Vec<diag::Diagnostic>,
     ) {
         if let ast::Expr::Ident(name, span) = e {
             if let Some(false) = exports.get(name.as_str()) {
                 let (module, base) = ast::split_qual(name).unwrap_or(("", name));
-                let shadow = format!(
-                    "`{module}` declares `{base}` pub, but an import of `{module}` exports `{base}` too and took the name — rename that import inside `{module}`"
-                );
                 let private = format!(
                     "`{base}` is private to module `{module}` — only pub names cross an import"
                 );
-                let said = match shadowed.contains(name.as_str()) {
-                    true => shadow,
-                    false => private,
-                };
-                diags.push(diag::Diagnostic::new("opacity", said, *span));
+                diags.push(diag::Diagnostic::new("opacity", private, *span));
             }
         }
-        for_each_child(e, |child| walk(child, exports, shadowed, diags));
+        for_each_child(e, |child| walk(child, exports, diags));
     }
     match stmt {
-        ast::Stmt::Bind { expr, .. } => walk(expr, exports, shadowed, diags),
-        ast::Stmt::Expr(e) => walk(e, exports, shadowed, diags),
-        ast::Stmt::Set { value, .. } => walk(value, exports, shadowed, diags),
+        ast::Stmt::Bind { expr, .. } => walk(expr, exports, diags),
+        ast::Stmt::Expr(e) => walk(e, exports, diags),
+        ast::Stmt::Set { value, .. } => walk(value, exports, diags),
     }
 }
 
@@ -3528,7 +3600,7 @@ fn compile_module_loaded(
         true => dir.parent().unwrap_or(dir),
         false => dir,
     };
-    let (mut dep_program, exports, shadowed, surfaced) =
+    let (mut dep_program, exports, surfaced) =
         phase::watched("load_dependencies", || load_dependencies(base, &import_list, visited))?;
     // A module's surface is its own. Dependency pubs demote at this
     // boundary — importers of this module see none of them — and only an
@@ -3665,7 +3737,7 @@ fn compile_module_loaded(
         let mut diags = Vec::new();
         for decl in &program.fns {
             for stmt in &decl.body {
-                private_uses(stmt, &exports, &shadowed, &mut diags);
+                private_uses(stmt, &exports, &mut diags);
             }
         }
         diags.extend(unused_imports(&program.imports, &quals));

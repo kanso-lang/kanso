@@ -486,14 +486,10 @@ c29l = "a call from a library file at the wrong arity"
 
 c29 = kase c29l [c10a c27c] "use.kso" "check refuses" arity_said
 
-cases = text/concat cases_d [c24 c25 c26 c27 c28 c29]
-
-# Behaviour that is wrong, and known to be wrong. Recorded the way
-# tests/golden/wasm_gaps.txt records an engine's declines: a defect written
-# down stops being a surprise, and a defect that quietly changes shape is how
-# it survives a rewrite. An entry here that stops matching fails this sweep,
-# which is the reminder to settle it and delete the entry — never to update the
-# expectation to whatever it does now.
+# GAVEL 2026-08-29: a qualified name is its module's declaration. `dep/join`
+# is dep's own `pub fn join`, and never the bare-enrollment twin of an import's
+# arm. Until the ruling was built this was the one entry in known_wrong: the
+# twin took the name and the check refused the program as opaque.
 dep_src = """
   import "std/text"
 
@@ -510,17 +506,158 @@ app_src = """
   print "\{dep/join "x" "y"}"
 """
 
-w1d = filed "dep/dep.kso" dep_src
+c30d = filed "dep/dep.kso" dep_src
 
-w1a = filed "app/main.kso" app_src
+c30a = filed "app/main.kso" app_src
 
-w1l = "a module's own pub, shadowed by a dependency's name (ledger)"
+c30l = "a module's own pub, sharing a name with a dependency's"
 
-w1said = "an import of `dep` exports `join` too and took the name"
+c30 = kase c30l [c30d c30a] "app" "prints" "OWN(x,y)\n"
 
-w1 = kase w1l [w1d w1a] "app" "check refuses" w1said
+# The hazard the ruling names: a consumer handing `dep/join` the list that
+# text's arm takes. That arm is not dep's, so the group has no arm for a list
+# and the check says so, rather than dispatching into the import.
+typed_src = """
+  import "std/text"
 
-known_wrong = [w1]
+  pub fn join a:int b:int
+    "OWN(\{a},\{b})"
+
+  pub fn inside _
+    join ["x" "y"] "-"
+"""
+
+c31d = filed "dep/dep.kso" typed_src
+
+c31a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/join ["x" "y"] "-")
+"""
+
+c31l = "a list handed to a module's own int arm, through its name"
+
+c31said = "no arm of `dep/join` takes a list here (arms take int)"
+
+c31 = kase c31l [c31d c31a] "app" "check refuses" c31said
+
+# Inside the module the bare name still reaches both, its own arms and the
+# import's dispatched together, so `join ["x" "y"] "-"` finds text's arm.
+c32a = filed "app/main.kso" """
+  import "../dep"
+
+  print "\{dep/inside 0} \{dep/join 1 2}"
+"""
+
+c32l = "a bare call inside the module reaches the import's arm"
+
+c32 = kase c32l [c31d c32a] "app" "prints" "x-y OWN(1,2)\n"
+
+# The same hazard at run time, where the check cannot see the argument: the
+# sentence names `dep/join`, the group the author wrote, on both engines. The
+# bare overload space is spelled with a mark inside the compiler, and the
+# mark reaches no message a program can print.
+c33o = filed "other/other.kso" """
+  pub fn join a:string _
+    "OTHER(\{a})"
+"""
+
+c33d = filed "dep/dep.kso" """
+  import "../other"
+
+  pub fn join a:int b:int
+    "OWN(\{a},\{b})"
+
+  pub fn loose x
+    join x "-"
+"""
+
+c33a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/loose 2.5)
+"""
+
+c33l = "a runtime dispatch failure names the group the author wrote"
+
+c33said = "no overload of `dep/join` matches these arguments"
+
+c33 = kase c33l [c33o c33d c33a] "app" "run refuses" c33said
+
+c34d = filed "dep/dep.kso" """
+  import "std/list"
+
+  pub fn sum xs
+    0 - list/sum xs
+
+  pub fn twice xs
+    sum xs + sum xs
+"""
+
+c34a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/twice [1 2 3])
+  print (dep/sum [1 2 3])
+"""
+
+c34l = "a bare call inside the module tries its own arm before the import's"
+
+c34 = kase c34l [c34d c34a] "app" "prints" "-12\n-6\n"
+
+c35d = filed "dep/dep.kso" """
+  import "std/text"
+
+  pub bytes = text/bytes "hi"
+
+  pub fn count _
+    length bytes
+"""
+
+c35a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/count 0)
+  print dep/bytes
+"""
+
+c35l = "a module's own constant beside an import's arm of the same name"
+
+c35 = kase c35l [c35d c35a] "app" "prints" "2\n[104 105]\n"
+
+c36d = filed "dep/dep.kso" """
+  fn count 0
+    0
+
+  fn count n
+    1 + count (n - 1)
+
+  pub fn deep _
+    count 1000000
+"""
+
+c36a = filed "app/main.kso" """
+  import "../dep"
+
+  print (dep/deep 0)
+"""
+
+c36l = "a counted recursion inside a module still loops"
+
+c36 = kase c36l [c36d c36a] "app" "prints" "1000000\n"
+
+cases_e = text/concat cases_d [c24 c25 c26 c27 c28 c29 c30 c31 c32 c33]
+
+cases = text/concat cases_e [c34 c35 c36]
+
+# Behaviour that is wrong, and known to be wrong. Recorded the way
+# tests/golden/wasm_gaps.txt records an engine's declines: a defect written
+# down stops being a surprise, and a defect that quietly changes shape is how
+# it survives a rewrite. An entry here that stops matching fails this sweep,
+# which is the reminder to settle it and delete the entry — never to update the
+# expectation to whatever it does now. Empty since the qualified-name ruling
+# was built; c30 is what its one entry became.
+known_wrong = []
 
 fn in? hay needle
   length (text/split hay needle) > 1

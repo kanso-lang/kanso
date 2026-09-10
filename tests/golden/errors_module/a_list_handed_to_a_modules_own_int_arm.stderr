@@ -1,0 +1,8 @@
+error[type]: no arm of `dep/join` takes a list here (arms take int)
+  --> tests/golden/errors_module/a_list_handed_to_a_modules_own_int_arm/main.kso:4:17
+   4 | print (dep/join ["x" "y"] "-")
+                       ^
+error[type]: no arm of `dep/join` takes a string here (arms take int)
+  --> tests/golden/errors_module/a_list_handed_to_a_modules_own_int_arm/main.kso:4:27
+   4 | print (dep/join ["x" "y"] "-")
+                                 ^

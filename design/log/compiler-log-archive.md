@@ -56691,3 +56691,186 @@ resolve to one module for the whole build — but it changes what a qualified na
 means, so it is its own piece of work rather than a tidy on this one.
 
 Declined, reverted, nothing shipped.
+
+## What the per-module reshape costs the diagnostics, fixture by fixture
+
+The reshape is `src/lib.rs`'s `outermost` branch: a dependency runs
+`check::check_own_declarations` — the three checks that skip any name carrying a
+slash — plus `canonicalize_bare_aliases`, `finish_program` and `trmc::rewrite`,
+and hands its declarations up. Everything else runs once, at the outermost
+compile. Against the 193 fixtures in `tests/golden/errors`, run as libraries
+behind a generated entry the way `tests/golden.rs` drives them:
+
+    155 agree   38 move   0 without a golden
+
+Thirty-one of the thirty-eight carry an `.imported.stderr` golden, which the
+corpus already keeps for fixtures whose names spell qualified through an import.
+The seven with a plain golden are the ones worth reading, and they are two
+kinds.
+
+Three are an improvement. `a_wall_whose_right_side_is_a_name`,
+`fields_that_no_one_record_declares` and `sequencing_takes_two_descriptions`
+traded the `(module X)` suffix for a `--> X.kso:line:col`, which is the
+attribution work doing what it was written to do.
+
+Four print a qualified name where the old output printed a short one:
+
+    fixture                          was                 is now
+    constructor_in_a_list            `point`             `constructor_in_a_list/point`
+    an_arm_set_with_no_settling_arm  `open_start?`       `an_arm_set_with_no_settling_arm/open_start?`
+    field_of_the_wrong_record        `point`             `field_of_the_wrong_record/point`
+    field_of_an_annotated_parameter  `money`             `field_of_an_annotated_parameter/money`
+
+Measured both ways on the same fixtures rather than inferred: the base binary
+prints the short name for all four when they run as libraries, so the reshape
+introduces this and does not inherit it.
+
+The mechanism is the reshape itself. Today a module's own `check_merged` runs
+inside its own compile, before its declarations are qualified for an importer,
+so a message that names a declaration reads the spelling the source wrote. Move
+that check to the outermost compile and the same message sees the name after
+qualification.
+
+Where a fix goes. Every diagnostic now carries the file it belongs to, and a
+module's qualifier is that module's short name, so one rule at render time
+covers it: print a name without the qualifier that names the diagnostic's own
+module, since that is the spelling the file being pointed at uses. One site,
+one rule.
+
+It does not cover all four. `an_arm_set_with_no_settling_arm` attributes to
+`run_an_arm_set_with_no_settling_arm.kso`, the generated entry, because a
+dispatch tie is reported at a call rather than at the arms it is about. The
+qualifier there is not the diagnostic's own module and the rule would leave it
+alone. That is a second defect, in where a tie points, and it wants its own
+fixture.
+
+That rule was then written and measured. `diag::spelled_in` runs at the one
+place a message is rendered: it derives the qualifier from the path the
+diagnostic points at — the file's stem and its parent directory's name, which
+covers a module that is a directory and a module that is one file — and removes
+that qualifier inside backticks only. A message quotes a name in them and a
+single span can hold more than the bare name (`(mod/point …)` and `&mod/point`
+are both how a message spells the fix), so the span is what it works on; prose
+outside the backticks is left alone.
+
+Three of the four then read exactly as the base spells them, spelling for
+spelling:
+
+    error[name]: `point` has no field `name`
+      --> field_of_the_wrong_record.kso:21:12
+
+The fourth is unchanged, as predicted. `an_arm_set_with_no_settling_arm` still
+says `an_arm_set_with_no_settling_arm/open_start?` because the diagnostic points
+at the generated entry, so the qualifier it carries is not the one this rule
+derives. Where a dispatch tie points is the second defect, and it stays open.
+
+The whole corpus was re-run with the rule in: 155 agree, 38 move, the same
+numbers as without it. It repairs three messages and moves nothing else.
+
+Then the fourth. The tie's span was already an arm's — `b.span`, the second of
+the pair — so the file it named was wrong rather than the line. The walk reaches
+`program.fns` by index, through a group table built earlier, and the attribution
+the walks carry rides on `diag::attributing`, an iterator. An indexed walk never
+touches it, so the diagnostic reads whatever attribution was last set and the
+render falls back to the file it was handed. Taking `b`'s file explicitly at the
+push site fixes it, and all four fixtures then read as the base spells them:
+
+    error[dispatch]: these `open_start?` arms tie: each is the more specific one
+    somewhere, and a call could match both — write the arm that is most specific
+    in every position
+      --> an_arm_set_with_no_settling_arm.kso:7:4
+
+That is a class, not one site, and the class has two halves.
+
+The near half is walks that reach declarations by index rather than through the
+iterator: `check_constants` reads `arms[1].span` out of a slice it indexed,
+`check_overlapping_arms` walks a filtered `Vec<&FnDecl>`, and
+`check_overload_ranks` walks `windows(2)`. None goes through `diag::attributing`,
+so none carries a file. The corpus surfaced only the tie because only the tie has
+a fixture that crosses files; the other three want fixtures before fixes.
+
+The far half is larger and was found by chasing the one remaining leak.
+`sub_of_none` comes from `check_sub_parents`, which walks `program.types` with a
+plain `for` — the shape `attributing` was written for. It cannot use it.
+`stamp_file` stamps `program.fns` and nothing else, `TypeDecl` has no `file`
+field, and `HasFile` is implemented for `FnDecl` alone. So no diagnostic about a
+type declaration can carry a file however it is walked, and the attribution
+covers half the declarations in a program.
+
+Closing that is a real change rather than a call-site repair: a field on
+`TypeDecl`, a second loop in `stamp_file`, an impl, and one `Arc` refcount bump
+per type declaration — the same cost the fns side already pays, and the same
+shape kanso#1324 measured when it made a module's path shared. It is the next
+step on this thread.
+
+Then the goldens, which is where the reshape actually stands or falls. All 38
+movers were regenerated with the harness's own staging — `pub play` files behind
+a generated entry, everything else run in place, which is what
+`run_kanso_as_library` does — and each candidate compared to its golden with the
+`(module X)` suffix and the `-->` block removed, so the comparison is of message
+TEXT alone. Three classes came out:
+
+    30  message text identical: only the location changed
+     6  one diagnostic became two
+     2  the message text itself changed
+
+The thirty are the reshape's improvement, in bulk. The six wanted reading, and
+reading them changed the count above: they are the same diagnostic twice, at the
+same file, line and column.
+
+    error[name]: no record type has a field `name`
+      --> field_missing.kso:6:12
+    error[name]: no record type has a field `name`
+      --> field_missing.kso:6:12
+
+Two reports of one source location is a declaration present twice in the merged
+program, which is the finding the module memo turned up above — 99 of the
+corpus's 428 merged declarations are a second copy reached through a further
+qualifier. The reshape did not create those copies; it moved the check that
+walks them from per module, where each saw one copy, to once at the end, where
+one walk sees both. Under the old suffix the two reports read as different
+messages, so nothing noticed.
+
+That makes the duplicate declarations a blocker for the reshape rather than a
+performance question beside it, and it is where this thread now goes.
+
+The two are the blockers, and they are different from each other.
+
+`sub_of_none` still leaks: `sub_of_none/missing cannot derive from none yet`,
+pointing at `run_sub_of_none.kso:1:6`, the import line in the generated entry.
+That is the same class as the dispatch tie — a check that raises without a file,
+so `spelled_in` derives the qualifier from the entry and leaves the name alone.
+It is the fourth member of the class this entry already names, and it has a
+fixture, which the other three do not.
+
+`builtin_arg_type` looked like the serious one. Its own error disappeared and a
+different one took its place:
+
+    was  error[type]: `length` takes a list, a map, or a string here, not an int
+    then error[name]: `builtin_arg_type/play` is internal to the standard
+         library — import its module
+
+Diagnosed, and the first reading was wrong: this belongs to the entry below
+rather than to the reshape. `resolve_name` stripped `builtin_` from a qualified
+name, so a fixture named `builtin_arg_type` had every reference to it refused.
+That bug predates the reshape by as long as the refusal has existed; the fixture
+survived only because its own error used to be raised first and stop the compile.
+With the prefix check restricted to bare names, the fixture reports its own
+error again, and better than before:
+
+    error[type]: `length` takes a list, a map, or a string here, not an int
+      --> builtin_arg_type.kso:1:27
+
+`sub_of_none` was the other, and it is fixed: `check_sub_parents` walks
+`program.types`, `stamp_file` stamped only `program.fns`, and giving `TypeDecl`
+a file — a field, a second loop in `stamp_file`, an `impl HasFile`, and the walk
+through `diag::attributing` — makes it read `missing` at
+`sub_of_none.kso:1:6`. With that in, every one of the thirty-eight is either
+location-only (32) or the doubled report below (6). No message text is worse
+than it was.
+
+Nothing of the reshape shipped. The rules are dead code on main — no diagnostic
+carries a file until the attribution patch lands — so they belong to its bundle
+rather than to changes of their own. Five patches held; the candidates are
+written out beside them. What remains before it lands is `sub_of_none`, the
+thirty-seven goldens, and the compile veins measured for the whole bundle.
