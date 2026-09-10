@@ -402,19 +402,19 @@
 # 2,367,877,484 -> 2,367,876,664 (-820). lib/json's `fail` emits k_rec
 # instead of the wider constructor, so the four programs that reach that
 # shape at run time do slightly less work; the other ten never call it.
-jsonbench 1485334791
+jsonbench 1470973791
 encodebench 3963988451
-oneshot 21737110
-basket 34690216
+oneshot 21641370
+basket 34672719
 widebench 35268161
-deepbench 387470234
+deepbench 387090234
 escapebench 85558105
-pendbench 583755724
+pendbench 226874035
 indexbench 3265786
-scanbench 726018879
+scanbench 587488478
 digestbench 10426515
 readbench 4561933
-livebench 3481899695
+livebench 3481803955
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -472,4 +472,4 @@ livebench 3481899695
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2367876664
+runbench 2262265575

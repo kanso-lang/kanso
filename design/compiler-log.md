@@ -3871,10 +3871,28 @@ counted fold: those four records an element were most of what the benchmark
 allocated. `sh_str` on scanbench is the byte class, which is why that row goes
 to almost nothing rather than down a fraction.
 
-**Welfare reads 0.86 ABOVE the floor**, the largest single move since the
-2026-09-03 rebuild, and it is banked in this same PR. The gain is mostly
-run_peak_bytes and the allocation terms rather than instructions, which is what
-a change that stops building records looks like in the objective.
+**And the instructions, which this container could not see at all.** The work
+vein is host-keyed and refused here, so welfare read main's row and reported
+the floor merely held; CI's sitting is where the change actually shows.
+
+    pendbench    583,755,724 ->   226,874,035   -356,881,689  -61.1355%
+    scanbench    726,018,879 ->   587,488,478   -138,530,401  -19.0808%
+    runbench   2,367,876,664 -> 2,262,265,575   -105,611,089   -4.4602%
+    jsonbench  1,485,334,791 -> 1,470,973,791    -14,361,000   -0.9669%
+    oneshot       21,737,110 ->    21,641,370        -95,740   -0.4404%
+    deepbench    387,470,234 ->   387,090,234       -380,000   -0.0981%
+    basket        34,690,216 ->    34,672,719        -17,497   -0.0504%
+    livebench  3,481,899,695 -> 3,481,803,955        -95,740   -0.0027%
+
+Five rows are byte-identical: encodebench, widebench, escapebench, indexbench,
+digestbench and readbench reach none of the three arms. Nine of the fourteen
+fall. pendbench losing three fifths of its instructions is the counted fold
+alone -- the four records an element were not only allocated but walked.
+
+**Welfare 66.42 -> 67.56**, the largest single move since the 2026-09-03
+rebuild, banked with `--set` in this same PR. Both the allocation terms and
+run_instructions pay for it; the container's blind reading had put the gain at
+0.86 and the whole of that was the memory side.
 
 **The compile side pays, and the emitted code grows.** Three new arms is three
 more declarations for the front end to visit: front_end_visits 22,562 -> 22,727
@@ -3902,6 +3920,27 @@ The compile-module vein carries the three new declarations: `module_defines`
 100 -> **101**, `module_calls` 727 -> **754**, `module_branches` 430 -> **446**,
 `module_lines` 5,177 -> **5,304**, `module_visits` 2,471 -> **2,534**, beside
 `front_end_visits` 22,562 -> **22,727**.
+
+Three more declarations cost the compiler itself, and these are CI's rows:
+`compile_instructions` 48,412,144 -> **49,091,884** (+679,740, +1.4040%),
+`entry_instructions` 161,360,451 -> **164,041,672** (+2,681,221, +1.6616%),
+`library_instructions` 162,069,092 -> **164,324,373** (+2,255,281, +1.3910%),
+`compile_allocs` 29,000 -> **29,350**, `compile_peak_bytes` 769,071 ->
+**774,660** (+5,589, +0.7267%). The objective's compile term is module plus
+entry, 209,772,595 -> 213,133,556, a rise of 1.60% against a run-instruction
+fall of 4.46% on a term that satiates late; the trade is not close.
+
+The `text` vein sums 1,543,836 -> **1,547,852** across the fourteen, and it
+moves both ways by families: **+800 or so** where the
+counted fold lands (deepbench 75,538 -> 76,338, digestbench 110,530 ->
+111,330, encodebench 119,826 -> 120,642, widebench 125,090 -> 125,906,
+runbench 246,082 -> 246,914, pendbench 91,090 -> 91,778, basket 113,154 ->
+113,650), **-400** where the colon arm does (jsonbench 100,130 -> 99,730,
+oneshot 112,002 -> 111,602, livebench 112,578 -> 112,178), and scanbench
+159,602 -> **159,570**, the one row that carries the byte class and comes out
+32 bytes smaller. escapebench, indexbench and readbench are byte-identical.
+The machine code grows where an arm is added and shrinks where three helpers
+go, which is what the emitted vein says in lines.
 
 The emitted veins are the same three arms written out: `emitted_branches` 816
 -> **819** and `emitted_lines` 9,246 -> **9,272** on the decoder;
