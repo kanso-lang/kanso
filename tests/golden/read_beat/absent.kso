@@ -1,7 +1,7 @@
 # The read's other arm, on both engines.
 import "std/os"
 
-os/read_file "nowhere.txt" .> told
+os/read_file "nowhere.txt" . told
 
 fn told (file_not_found path)
   print "absent: {path}"

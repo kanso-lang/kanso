@@ -345,10 +345,4 @@
 # constructions that built it are a word. All four compile rows fall together
 # and this one falls furthest in relative terms, which is what a change that
 # deletes a declaration rather than reshaping one looks like.
-#
-# 2026-09-10 (the plain dot is an application): 29,000 -> 29,046, +46.
-# check_box_where_value is a new whole-program pass reading infer's return
-# sets, and 46 allocations is what it costs the module compile. CI's row.
-# compile_peak_bytes did NOT move (769,071 both sides), so the pass borrows
-# rather than holding.
-compile_allocs=29046
+compile_allocs=29000

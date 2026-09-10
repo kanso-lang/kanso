@@ -401,10 +401,10 @@ oneshot 21737110
 basket 34690245
 widebench 35268161
 deepbench 387470234
-escapebench 85558077
+escapebench 85558105
 pendbench 583758224
-indexbench 3265756
-scanbench 726019023
+indexbench 3265786
+scanbench 726019079
 digestbench 10426515
 readbench 4561933
 livebench 3481899695
@@ -465,13 +465,4 @@ livebench 3481899695
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-#
-# 2026-09-10 (the plain dot is an application): four rows fall and ten hold.
-# escapebench 85,558,105 -> 85,558,077 (-28), indexbench 3,265,786 ->
-# 3,265,756 (-30), scanbench 726,019,079 -> 726,019,023 (-56), runbench
-# 2,367,877,484 -> 2,367,877,430 (-54). These are the four programs whose
-# emitted code fell: a `.` step over a value used to build a one-parameter
-# closure and call k_maybe_bind with it, and the ordinary application calls
-# the target directly. The counts are tens because those sites run a handful
-# of times, not in a loop. CI's rows, copied in.
-runbench 2367877430
+runbench 2367877484

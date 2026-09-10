@@ -8,7 +8,7 @@
 import "std/os"
 import "std/text"
 
-os/read_file "reading.kso" .> fed
+os/read_file "reading.kso" . fed
 
 fn fed (file_not_found f)
   err "cannot read {f}"

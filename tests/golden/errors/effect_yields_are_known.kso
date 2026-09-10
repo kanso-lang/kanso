@@ -1,9 +1,9 @@
 import "std/os"
 
 pub play =
-  os/exists "somewhere" .> answer
-  >> os/env "SOME_VAR" .> named?
-  >> os/list_dir "." .> listed?
+  os/exists "somewhere" . answer
+  >> os/env "SOME_VAR" . named?
+  >> os/list_dir "." . listed?
 
 fn answer b
   b

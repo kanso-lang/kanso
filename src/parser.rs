@@ -2000,17 +2000,13 @@ impl<'a> P<'a> {
                             ));
                         }
                     }
-                    // `x . f a` is `f x a`, an ordinary application: the dot
-                    // supplies the first argument and opens nothing. A box
-                    // handed through it stays a box; `.>` is the step that
-                    // binds one.
                     expr = match target {
                         Expr::App { head, mut args, .. } => {
                             args.insert(0, expr);
-                            Expr::App { head, args, span, piped: false }
+                            Expr::App { head, args, span, piped: true }
                         }
                         atom => {
-                            Expr::App { head: Box::new(atom), args: vec![expr], span, piped: false }
+                            Expr::App { head: Box::new(atom), args: vec![expr], span, piped: true }
                         }
                     };
                 }

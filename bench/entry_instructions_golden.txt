@@ -140,12 +140,4 @@
 # The fused chain operators. See bench/compile_instructions_golden.txt for the
 # reading: layout, with compile_allocs, compile_peak_bytes and the .text vein
 # all byte-identical in the same job.
-#
-# 2026-09-10 (the plain dot is an application): 161,314,264 -> 167,227,331,
-# +5,913,067 (+3.6657%). The rise is check_box_where_value, a new
-# whole-program pass over every expression reading infer's return sets. All
-# three rows move together and by the same proportion, which is what a shared
-# check does; compile_allocs rises 46 and compile_peak_bytes holds. Priced as
-# the cost of the refusal: a box handed to a reader is a compile error now
-# instead of a runtime one. CI's row, copied in.
-entry_instructions=167227331
+entry_instructions=161314264

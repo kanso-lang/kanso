@@ -20,6 +20,63 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
+## 2026-09-08 (fourth) — the entry path's reorder costs a diagnostic, and is reverted
+
+Searched the log, the archive and design/ before filing: the 2026-09-08 entry
+above records the same reorder on the MODULE path (kanso#1328), and kanso#1120
+records the rule this breaks — a module is named the way an import writes it.
+Neither anticipates the interaction.
+
+**REVERTED.** `compile_parsed_entry` has the same ordering kanso#1328 fixed on
+the module path, and moving its alias pass in front of the whole-program check
+is worth 1,674,396 instructions. It also renames a diagnostic, so it does not
+ship in that shape.
+
+The measurement first, because it is real and the idea is worth returning to.
+`enroll_bare` is called at src/lib.rs:2477, inside `load_dependencies`, so
+`dep_program` carries a synthetic twin for every exported declaration of every
+import — and both paths merge that program. On the entry path the twins landed
+in `merged`, `check_merged` walked them, and `canonicalize_bare_aliases` deleted
+them four lines later. Hoisting the two canonicalize calls out of the success
+arm reads, in the box:
+
+    entry_instructions   165,184,791 -> 163,510,395   -1,674,396  (-1.0136%)
+
+and CI counted 162,218,854 against the container on the same tree, the two boxes
+0.79% apart where the module row sits 0.81% apart on that pair.
+
+**What it costs.** `scripts/module_differential` went from 0 wrong to 2:
+
+    a call from the entry at the wrong arity
+      refused, but not with 'error[arity]: no 2-argument arm of `one` (arms take 1)':
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
+
+The alias pass rewrites a bare reference to its qualified spelling, so once it
+runs before the check, the arity refusal quotes `m/one` where the program says
+`one`. That is a diagnostic naming a spelling the user did not write, which
+kanso#1120 settled the other way, and it is a worse trade than a per-cent of
+compile work is worth. Reverting the reorder alone takes the differential back
+to 0 wrong, which is what says the reorder is the whole cause.
+
+The module path does not have this problem because a dependency's own call
+sites are already qualified by the time they are merged; the entry's are the
+ones the user wrote. That asymmetry is why one of the two reorders shipped.
+
+**A GREEN SUITE SAID NOTHING ABOUT IT, and the reason is worth having.** Before
+pushing I ran the error corpus, both micro corpora, the .mem vein and
+tests/reexports.rs, all green, and reported that as the correctness evidence.
+`scripts/module_differential` is a kanso program run by the diagnostics-
+differential CI job; `cargo test` does not run it, so no amount of the suite
+would have found this. It is the same shape as the page gates — a check that
+lives outside the harness a session reaches for by habit. The nine differential
+sweeps each have this property.
+
+What would make the reorder shippable is deciding what the arity refusal should
+quote when the pass that rewrote the name has already run: either the check
+reads the pre-canonical spelling, or the pass records what it rewrote. That is a
+design question about diagnostics rather than about ordering, and it is where
+this thread now sits.
+
 ## 2026-09-08 (fifth) — the entry path compiles and nothing counted it
 
 Searched the log, the archive and design/ before filing: `compile_parsed_entry`
@@ -3726,164 +3783,3 @@ Welfare 66.42 held and re-set: the objective's compile term sums the three rows,
 so it takes the whole 1,220,025, and the rise is under a hundredth of a point.
 Five compiler.html spans quoting the three rows were rewritten by
 `golden_prose --write`.
-## 2026-09-10 — the plain dot is an application, and a box where a value is expected is refused
-
-Built: the first half of the 2026-08-29 gavel "effects are types, and the
-words are the only doors" (archive; STATUS.md's row, now shortened to what
-is still owed). Two things the row measured as unbuilt on 2026-09-09: the
-automatic bind, and the refusal of a box where a value is expected.
-
-**The plain dot opens nothing.** `x . f a` is `f x a`, an ordinary
-application — the parser folds a `.` step into the same node the prefix
-spelling makes, so a box handed through it arrives as a box, a settled
-failure handed through it dispatches to the arm that names it as a prefix
-call would, and `.>` is the one step that binds. That is the whole of the
-change in the parser, and it changed no program's meaning: the previous
-entry respelled every step the compiler bound automatically as `.>`, keyed
-on infer's own judgement, so no plain-dot step over a description was left
-for this to change. That is true now and was not on the first build here:
-`build_benchmarks.sh` died inside `make_jsonbench` with `write_file` handed
-a box, because the benchmark sources are built by that script and compiled
-by nothing the census ran, and the 44 dots the previous entry now records
-were found and respelled from this branch before anything else was
-measured. Three consequences fell out. `effect . rescue orders`,
-the sentence STATUS.md held up as the ruling's unbuilt point, is refused
-in chain position by the previous entry and spelled `effect .? orders`,
-which works. The enumerable fusion no longer needs its piped copy for a
-plain chain: `xs . list/map f . list/length` is the prefix chain now and
-fuses through the plain path, where before it took `try_fuse_piped`'s
-`is_desc` test and a second copy of the chain. And the beat reads the
-piped node as the loop step it always was, since only `.>` makes one.
-
-**A box where a value is expected is refused.** `check_box_where_value`
-reads infer's return sets the way the none check does. A box is provable
-when a group's joined return set holds the description bit and no value
-bit, when a `.>` step's subject is one, when the expression is a wall, or
-when a constant holds one — `os/args`, `math/random 6`, `io/write "x"`.
-Handing one to an operator, an index, a field read, `if`'s condition, a
-builtin that reads values, or a group none of whose arms binds anything at
-that position is refused with one sentence: `this is an effect — a box the
-words open — and `length` takes a value; open it with `.>``, the reader
-named. Holding is not opening, so a parameter that binds anything takes the
-box (`held e` above), `print` and an interpolation render it as `<io>`,
-`is_desc` asks about it, `push` and `put` store it, and `err` and
-`wrap_err` carry it as a reason. A name the declaration binds itself is that
-binding whatever declaration shares its spelling: the first cut refused
-`length args` in scripts/welfare, where `args` is a parameter and the
-constant it shadows is `os/args`.
-
-**What the tree said.** Under the check, every scripts/ directory, hako,
-the library tests, the golden corpora and the play files (through `kanso
-play`) answered twelve refusals, all deliberate: eleven runtime fixtures
-that hand a description to an operator, an index, a field, `if` or a
-comparison to pin the runtime's sentence, and one micro fixture handing
-one to `push`. `push` holds, so that one passes as written. The eleven
-now route the box through a list — `opaque v` answers `(push [] v)[1]!`,
-and a strict index is every value but a thunk, which no check can call a
-box — so the runtime sentences they pin stay pinned on every engine, and
-the errors corpus gains `a_box_where_a_value_is_expected`: six readers
-refused in one file, and the two holders that pass beside them.
-
-**What moved.** `emitted_code`, and down, in four of the thirteen programs.
-`escapebench` defines 51 → 48, calls 117 → 106, branches 122 → 120, lines
-1,638 → 1,584; `scanbench` defines 333 → 328, calls 3,243 → 3,228, branches
-2,112 → 2,105, lines 19,674 → 19,573; `indexbench` defines 57 → 54, calls
-158 → 146, branches 139 → 135, lines 1,954 → 1,893; `runbench` defines
-594 → 591, calls 5,954 → 5,941, branches 3,453 → 3,446, lines 34,727 →
-34,653. The mechanism is `emit_call_full`'s piped arm: when the subject's
-set carried DESC it built a one-parameter closure over the target and
-called `k_maybe_bind` with it, and the ordinary application calls the
-target directly. `k_maybe_bind` goes 2 → 0 in escapebench, 3 → 0 in
-scanbench, 2 → 0 in indexbench and 11 → 10 in runbench, taking each
-closure and its wrapper with it; escapebench and indexbench also lose
-`d_render/to_string_1`, the target's own definition, which the closure
-needed as a value and the direct call does not. The nine that hold still
-carry `k_maybe_bind` — encodebench 3, oneshot 3, digestbench 3 — because a
-`.>` step stays piped, which is what it is for. The decoder's own golden is
-byte-identical, and the twelve cost veins and the lazy tier agree: the
-runtime work is the same because the test those defines carried always
-answered the same way. The host-keyed compile rows are CI's to measure;
-parser.rs and check.rs both change.
-
-These twelve figures replace a set measured on the branch's old base and
-carried through a rebase. Every one was two to fifty-five out — escapebench's
-lines read 1,636 → 1,582 against the 1,638 → 1,584 here, scanbench's calls
-3,269 → 3,254 against 3,243 → 3,228 — because the branch was built over an
-earlier spelling of the previous entry's respellings and the emitted code
-moved under it. A branch's counter reading expires when its base moves, and
-the way to notice is to re-measure at the pick rather than to carry the
-paragraph. The old side above was read by reverting the two `piped` flags
-in src/parser.rs and rebuilding, on this tree: it reproduces the goldens
-this change replaces, to the digit.
-
-**What CI read, and what it costs.** The prediction in this entry's first
-draft was three host-keyed compile rows and the layout signature. CI red six
-veins, and the extra three are the change doing real work rather than moving
-code around: `work` and `machine code` fall in exactly the four programs whose
-emitted code fell, and `compile_allocs` rises. Retired instructions: escapebench
-85,558,105 -> 85,558,077, indexbench 3,265,786 -> 3,265,756, scanbench
-726,019,079 -> 726,019,023, runbench 2,367,877,484 -> 2,367,877,430 — tens,
-because a plain step over a value runs a handful of times here, not in a loop.
-`.text`: escapebench and indexbench both exactly -432, scanbench -896, runbench
--448. The compile side pays: compile_instructions 48,393,437 -> 50,114,252
-(+3.5559%), entry_instructions 161,314,264 -> 167,227,331 (+3.6657%),
-library_instructions 162,023,537 -> 167,938,041 (+3.6504%), compile_allocs
-29,000 -> 29,046, compile_peak_bytes byte-identical. Three rows rising together
-by the same proportion is a shared check, and check_box_where_value is one: a
-whole-program pass over every expression reading infer's return sets. It borrows
-rather than holding, which is why peak does not move.
-
-The mirror of the previous entry is worth naming. #1364 predicted six rows and
-CI read three, because a respelling moves layout and not work. This predicted
-three and CI read six, because this changes what the emitter writes. Neither
-prediction was careless; the difference is whether the change reaches the
-emitted code, and that is the question to ask before writing a number down.
-
-**WELFARE FALLS 0.07 AND THAT IS NOT SETTLED HERE.** 66.42185989370925 ->
-66.35. The four run rows fall by tens against a compile term that rises by
-millions, so the pass is three orders of magnitude short of paying for itself
-on the objective's terms, and the objective has no term for what it buys — a
-box handed to a reader is a compile error naming the reader now, instead of a
-runtime one. The first draft of this paragraph moved the floor by hand with
-that as the reason, citing kanso#1362's "a ruled feature spent it". That was
-wrong, and welfare.kso:555 says so in as many words: RULED (Clay, 2026-08-03),
-welfare cannot fall, full stop, not with a reason and not with a named trade;
-the change is optimized until it holds, and if that is genuinely impossible the
-work stops and the question goes to Clay in conversation. The tool enforces it
-above a 0.01 tolerance, which is why the small language-clause falls of #1355,
-#1356 and #1359 went through and this one cannot. `--set` refused and the floor
-file is untouched.
-
-**The pass, attributed: the walk is the bigger half, and the obvious lever is
-the smaller one.** Three builds on this container, same box and tunables as
-`compile_instructions.sh`, `kanso check compile_corpus` under callgrind. The
-absolute numbers carry this host's offset and only the differences are read:
-
-    walk + per-node check   51,094,289
-    walk, check made inert  50,438,978     the check   655,311  (37%)
-    call removed entirely   49,331,796     the walk  1,107,182  (63%)
-                                           together  1,762,493  (3.573%)
-
-3.573% here against CI's +3.5559% on compile_instructions, so the local reading
-tracks the row. The baseline reproduced to the instruction after the probes were
-reverted.
-
-That refutes the lever this entry's previous draft named. Skipping the per-node
-check on declarations that cannot hold a box recovers 655,311 of 1,762,493 —
-about a third — and the fall it would leave is still several times welfare's
-0.01 tolerance. The walk is what costs, and no cheap test avoids it: deciding
-whether a declaration can hold a box means looking at its body, which is the
-walk. Recovering that half needs the flag computed in a pass that already walks
-the body — infer, or the parser — and threaded to the check, which is a design
-change rather than a tightening. It has not been built and is not costed.
-
-**Spec.** `tests/golden/micro/a_plain_dot_hands_the_box_over.kso` on native
-and the oracle: `math/random 6 . held` rendered as `held <io>`, the same
-box bound with `.>` after the plain step, and a missing file's read handed
-through `held` and rescued with `.?`. The error fixture above. The eleven
-runtime fixtures, rewritten, and the pre-change binary's answers on the
-micro fixture and the error fixture are the watched-red half.
-
-**Owed.** The `<t>effect` spelling, which the canonical-spacing rule refuses
-today; ch04 and ch05, per the ledger's "The book teaches the boundary
-language"; and the drop question the gavel filed.

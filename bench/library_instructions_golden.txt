@@ -128,12 +128,4 @@
 # entry row move together again -- 0.3188% against 0.3228% -- which is the pair
 # these notes keep recording: the two corpora are the same shape and both merge
 # a dependency program before checking it.
-#
-# 2026-09-10 (the plain dot is an application): 162,023,537 -> 167,938,041,
-# +5,914,504 (+3.6504%). The rise is check_box_where_value, a new
-# whole-program pass over every expression reading infer's return sets. All
-# three rows move together and by the same proportion, which is what a shared
-# check does; compile_allocs rises 46 and compile_peak_bytes holds. Priced as
-# the cost of the refusal: a box handed to a reader is a compile error now
-# instead of a runtime one. CI's row, copied in.
-library_instructions=167938041
+library_instructions=162023537

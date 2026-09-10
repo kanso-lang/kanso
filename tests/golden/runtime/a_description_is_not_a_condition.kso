@@ -2,12 +2,10 @@
 # with its own words — so `rt_truthy`, which opens with `match val(h)`, never
 # reached the sentence it wrote for exactly this case. That sentence had been
 # converged across all three engines the same morning this was found.
-# The check refuses a provable box here now (the errors corpus pins that
-# sentence), so the box travels through a list, where nothing can prove it.
 import "std/io"
 
 pub fn opaque v
-  (push [] v)[1]!
+  v
 
 d = io/write "a\n" >> io/write "b\n"
 

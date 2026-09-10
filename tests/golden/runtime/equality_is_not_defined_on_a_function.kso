@@ -2,10 +2,8 @@
 # were handed, and that is the question dispatch answers. An effect is the
 # same: if the answer would change what happens next, an arm names it. So the
 # comparison is refused rather than answered — `<` already refuses it here.
-# The check refuses a provable box here now (the errors corpus pins that
-# sentence), so the box travels through a list, where nothing can prove it.
 import "std/io"
 
-w = (push [] (io/write "x"))[1]!
+w = io/write "x"
 
 pub play = print "{w == w}"

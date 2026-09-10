@@ -12,7 +12,7 @@ fn pick n
   a = os/read_file! "reading_branch.kso"
   b = os/read_file! "reading_branch.kso"
   source = if (n > 0) a b
-  source .> fed
+  source . fed
 
 fn fed cs
   print "tallied {tally cs 200 0}"

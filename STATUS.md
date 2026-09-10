@@ -90,13 +90,10 @@ not audited.
 
 ### Effects are types, and the words are the only doors (2026-08-29)
 
-The archive entry of that name. Built on 2026-09-10: the automatic bind is
-gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
-and a provable box handed to something that reads the value inside is
-refused at check. Owes: the `<t>effect` spelling (`e:<int>effect` is refused
-by the canonical-spacing rule today), ch04/ch05 moving with it (the ledger's
-"The book teaches the boundary language"), and the drop question the gavel
-filed — what becomes of a box in tail position that nothing eliminates.
+The archive entry of that name. No `<t>effect` type exists; a `.` over an io
+still binds automatically, so `effect . rescue orders` parses and its handler
+never runs. Owes: the type, the refusal of a box where a value is expected,
+the end of the automatic bind, and ch04/ch05 moving with it.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
