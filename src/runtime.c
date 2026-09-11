@@ -227,7 +227,9 @@ KValue k_thunk_release_unless(KValue cell, KValue result) {
 
 KValue k_render(KValue v, long long quote);
 static KValue k_bytes_view(const unsigned char* data, long long len);
-static KValue k_utf8_bad(const char* data, long long len, const char* origin);
+static KValue k_utf8_bad(const char* data, long long len, const char* origin,
+                         long long* chars);
+static inline void k_str_seed_count(KStr* s, long long chars);
 static KValue k_render_at(KValue v, long long quote, int held);
 KValue k_b_render_value(KValue v) {
     return k_render(v, 0);
@@ -5223,12 +5225,14 @@ static KValue k_exec(KDesc* d) {
                read_bytes's to hand back. Until 2026-09-09 native read any
                file and printed its bytes back unchanged, the one divergence
                the differential law let stand only for a refusal. */
-            if (k_utf8_bad(data, (long long)got, NULL).tag == K_ERR) {
+            long long chars;
+            if (k_utf8_bad(data, (long long)got, NULL, &chars).tag == K_ERR) {
                 free(data);
                 return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
                                       k_str(": the bytes are not text")), NULL);
             }
             KValue out = k_str_n(data, (long long)got);
+            k_str_seed_count(k_as_str(out), chars);
             free(data);
             return out;
         }
@@ -6878,8 +6882,10 @@ static int k_all_ascii(const char* data, long long len) {
    answer for seven bytes was what jsonbench measured. Every arm returns the
    same sentence the wide pass returns, so which one answered is not
    observable. */
-static KValue k_utf8_bad_scalar(const char* data, long long len, const char* origin) {
+static KValue k_utf8_bad_scalar(const char* data, long long len, const char* origin,
+                                long long* chars) {
     long long i = 0;
+    long long conts = 0;
     while (i < len) {
         unsigned char b0 = (unsigned char)data[i];
         if (b0 < 0x80) {
@@ -6930,12 +6936,15 @@ static KValue k_utf8_bad_scalar(const char* data, long long len, const char* ori
         for (long j = 2; j < w; j++) {
             if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
         }
+        conts += w - 1;
         i += w;
     }
+    if (chars) *chars = len - conts;
     return k_none();
 }
 
-static KValue k_utf8_bad_wide(const char* data, long long len, const char* origin);
+static KValue k_utf8_bad_wide(const char* data, long long len, const char* origin,
+                              long long* chars);
 
 /* The front door to utf-8 validation, and it answers without one for every
    token a json document holds. The wide pass below is nearly all setup —
@@ -6947,11 +6956,24 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
    ascii falls through and the wide pass reads it from the start, so nothing
    is scanned twice. */
 static inline __attribute__((always_inline))
-KValue k_utf8_bad(const char* data, long long len, const char* origin) {
+KValue k_utf8_bad(const char* data, long long len, const char* origin,
+                  long long* chars) {
     k_stat_utf8_bytes += len;
-    if (k_all_ascii(data, len)) return k_none();
-    if (len <= K_UTF8_SCALAR_MAX) return k_utf8_bad_scalar(data, len, origin);
-    return k_utf8_bad_wide(data, len, origin);
+    if (k_all_ascii(data, len)) {
+        if (chars) *chars = len;
+        return k_none();
+    }
+    if (len <= K_UTF8_SCALAR_MAX) return k_utf8_bad_scalar(data, len, origin, chars);
+    return k_utf8_bad_wide(data, len, origin, chars);
+}
+
+/* A string the validator just read has its character count in hand: every
+   byte was ascii, or the pass counted the continuation bytes as it
+   classified them. The memo `k_str_chars` writes lazily is written now, so
+   `length` on the string never scans it. Runbench asked the length of 117
+   encoder outputs and scanned 22,644,612 bytes a second time to answer. */
+static inline void k_str_seed_count(KStr* s, long long chars) {
+    if (s->cap == 0 && chars < 2147483647LL) s->cap = (int)(-chars - 1);
 }
 static KValue k_utf8_check(char* data, long long len, const char* origin);
 static KValue k_utf8_finish(KValue bv, const char* origin);
@@ -6983,7 +7005,11 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
         data += from - 1;
         len = to - from + 1;
     }
-    KValue bad = k_utf8_bad(data, len, origin);
+    /* The count is not asked for here: these are the decoder's tokens,
+       861,498 of them on runbench, and none of them is asked its length.
+       Seeding each one cost 7,728,237 instructions there against 13,280,580
+       the whole-string doors below save. */
+    KValue bad = k_utf8_bad(data, len, origin, NULL);
     if (bad.tag == K_ERR) return bad;
     if (len >= 4 && len < 8) {
         /* The decoder's tokens: 840,807 of runbench's 861,498 slices are
@@ -7030,15 +7056,18 @@ KValue k_b_utf8(KValue lv, const char* origin) {
         s->data[i] = (char)item.payload;
     }
     s->data[l->len] = 0;
-    KValue bad = k_utf8_bad(s->data, l->len, origin);
+    long long chars;
+    KValue bad = k_utf8_bad(s->data, l->len, origin, &chars);
     if (bad.tag == K_ERR) return bad;
+    k_str_seed_count(s, chars);
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
 
 /* Reached only by a run carrying a byte with the high bit set: the ascii test
    and the byte counter both live in `k_utf8_bad` above, inlined at each call
    site. */
-static KValue k_utf8_bad_wide(const char* data, long long len, const char* origin) {
+static KValue k_utf8_bad_wide(const char* data, long long len, const char* origin,
+                              long long* chars) {
 #if defined(__aarch64__)
     /* keiser & lemire, "validating utf-8 in less than one instruction per
        byte" (2021): three nibble lookups classify every two-byte window,
@@ -7084,6 +7113,7 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
     uint8x16_t prev = vdupq_n_u8(0);
     uint8x16_t error = vdupq_n_u8(0);
     long long i = 0;
+    long long conts = 0;
     long long nblocks = (len + 15) / 16 + 1;
     for (long long blk = 0; blk < nblocks; blk++) {
         uint8_t buf[16];
@@ -7124,9 +7154,15 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
         uint8x16_t must23 = vcgtq_u8(vorrq_u8(is3, is4), vdupq_n_u8(0));
         uint8x16_t must23_80 = vandq_u8(must23, vdupq_n_u8(0x80));
         error = vorrq_u8(error, veorq_u8(sc, must23_80));
+        /* a continuation byte is 10xxxxxx; only a block that reached the
+           classification can hold one, so the ascii blocks above cost
+           nothing here */
+        uint8x16_t cont = vceqq_u8(vandq_u8(cur, vdupq_n_u8(0xC0)), vdupq_n_u8(0x80));
+        conts += vaddvq_u8(vshrq_n_u8(cont, 7));
         prev = cur;
     }
     if (vmaxvq_u8(error) != 0) return k_err(k_str("invalid utf-8"), origin);
+    if (chars) *chars = len - conts;
     return k_none();
 #elif defined(__x86_64__)
     /* the same keiser & lemire structure as the neon path, on sse:
@@ -7167,6 +7203,7 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
     __m128i prev = _mm_setzero_si128();
     __m128i error = _mm_setzero_si128();
     long long i = 0;
+    long long conts = 0;
     long long nblocks = (len + 15) / 16 + 1;
     for (long long blk = 0; blk < nblocks; blk++) {
         unsigned char tail[16];
@@ -7214,21 +7251,30 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
             _mm_or_si128(is3, is4), _mm_setzero_si128());
         __m128i must23_80 = _mm_and_si128(must23, _mm_set1_epi8((char)0x80));
         error = _mm_or_si128(error, _mm_xor_si128(sc, must23_80));
+        /* a continuation byte is 10xxxxxx; only a block that reached the
+           classification can hold one, so the ascii blocks above cost
+           nothing here */
+        __m128i cont = _mm_cmpeq_epi8(
+            _mm_and_si128(cur, _mm_set1_epi8((char)0xC0)), _mm_set1_epi8((char)0x80));
+        conts += __builtin_popcount((unsigned)_mm_movemask_epi8(cont));
         prev = cur;
     }
     if (_mm_movemask_epi8(_mm_cmpeq_epi8(error, _mm_setzero_si128())) != 0xFFFF)
         return k_err(k_str("invalid utf-8"), origin);
+    if (chars) *chars = len - conts;
     return k_none();
 #else
-    return k_utf8_bad_scalar(data, len, origin);
-    return k_none();
+    return k_utf8_bad_scalar(data, len, origin, chars);
 #endif
 }
 
 static KValue k_utf8_check(char* data, long long len, const char* origin) {
-    KValue bad = k_utf8_bad(data, len, origin);
+    long long chars;
+    KValue bad = k_utf8_bad(data, len, origin, &chars);
     if (bad.tag == K_ERR) return bad;
-    return k_str_n(data, len);
+    KValue v = k_str_n(data, len);
+    k_str_seed_count(k_as_str(v), chars);
+    return v;
 }
 
 /* The builder-aware finish: when the bytes own a KBuf-headed buffer with
@@ -7238,7 +7284,8 @@ static KValue k_utf8_check(char* data, long long len, const char* origin) {
    string. */
 static KValue k_utf8_finish(KValue bv, const char* origin) {
     KBytes* b = k_as_bytes(bv);
-    KValue bad = k_utf8_bad((const char*)b->data, b->len, origin);
+    long long chars;
+    KValue bad = k_utf8_bad((const char*)b->data, b->len, origin, &chars);
     if (bad.tag == K_ERR) return bad;
     long long bcap = b->cap < 0 ? -b->cap : b->cap;
     if (bcap && b->len < bcap) {
@@ -7261,11 +7308,14 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
             s->len = (long)b->len;
             s->data = (char*)b->data;
             s->cap = 0;
+            k_str_seed_count(s, chars);
             k_stat_utf8_zerocopy++;
             KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
         }
     }
-    return k_str_n((const char*)b->data, b->len);
+    KValue v = k_str_n((const char*)b->data, b->len);
+    k_str_seed_count(k_as_str(v), chars);
+    return v;
 }
 
 KValue k_b_chars(KValue sv) {
@@ -8017,8 +8067,12 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
     buf->cap = cap;
     buf->used = a->len + n;
     unsigned char* data = (unsigned char*)(buf + 1);
-    memcpy(data, a->data, (size_t)a->len);
-    memcpy(data + a->len, src, (size_t)n);
+    /* The first append into `text/bytes ""` grows from nothing: 176,697 of
+       runbench's grows carry no bytes forward, and glibc's memcpy spent its
+       dispatch deciding how to move zero of them. The run being appended is
+       a token's worth, so it takes the short ladder. */
+    if (a->len) memcpy(data, a->data, (size_t)a->len);
+    k_copy_short((char*)data + a->len, (const char*)src, n);
     if (mutate) {
         /* A builder's cap is positive only for buffers made here, which is
            what makes this free safe: uniqueness is proven at mut sites, so
@@ -8340,13 +8394,11 @@ KValue k_b_join(KValue lv, KValue sep) {
            23.6, over 400,019 calls in runbench; storing the byte where the
            length says one saves 5.5 on an average call. */
         if (i) {
-            if (ss->len == 1) data[at] = ss->data[0];
-            else if (ss->len) memcpy(data + at, ss->data, (size_t)ss->len);
+            k_copy_short(data + at, ss->data, ss->len);
             at += ss->len;
         }
         KStr* is = k_as_str(l->items[i]);
-        if (is->len == 1) data[at] = is->data[0];
-        else if (is->len) memcpy(data + at, is->data, (size_t)is->len);
+        k_copy_short(data + at, is->data, is->len);
         at += is->len;
     }
     KStr* os = k_alloc(sizeof(KStr));

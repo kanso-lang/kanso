@@ -3967,3 +3967,124 @@ entry_instructions and library_instructions are refused on this container, and
 compile_memory_golden.txt is refused whole (measured-on rustc=1.98.1, here
 1.94.1) even though the visits row it carries is host-invariant. Round one is
 red on those and CI's sitting is what lands.
+
+## 2026-09-10 — a validated string knows its length
+
+The utf-8 validator already classifies every byte on its way through. Counting
+the continuation bytes while it does gives the character count for free on the
+ascii path and for two vector instructions a block on the wide one, and that
+count seeds the memo `k_str_chars` would otherwise fill by scanning the string
+a second time. `length` on a validated string never walks it.
+
+Three doors seed: `read_file`, `k_b_utf8`, and the whole-string check. The
+decoder's token door in `k_b_utf8_slice_raw` deliberately does not. Those are
+861,498 slices on runbench and none of them is ever asked its length, so
+seeding each one measured 7,728,237 instructions against the 13,280,580 the
+other three save. The comment at that call site says so, because the omission
+looks like an oversight and is not.
+
+**The counters.** `str_scans` goes to zero on the encode, live and oneshot
+programs (400, 400 and 1 scans, 75,479,200, 75,479,200 and 188,698 bytes), and
+on the run program falls 254 -> 163 with `str_scan_bytes` 22,644,612 ->
+5,473,094. Nine lazy-tier fixtures move those two rows and nothing else: no
+allocation counter, no peak, no evacuation counter differs anywhere. The ninth
+is kanso#1367's own `a_class_asks_by_the_byte`, which lands 7 scans and 12
+scanned bytes where it read 8 and 2,212 — the byte class validates a string
+and then asks its length, so the two changes meet on one fixture.
+
+**Instructions, measured here under callgrind.** Both compilers built in the
+same worktree, both binaries run from the same directory under the same
+filename with the environment emptied, so the fixed fourteen-instruction offset
+that a two-worktree A/B puts on every row is not in these numbers.
+
+    livebench    3,484,129,797 -> 3,452,753,847   -31,375,950  -0.9006%
+    encodebench  4,084,100,523 -> 4,052,767,921   -31,332,602  -0.7672%
+    pendbench      225,398,305 ->   220,436,506    -4,961,799  -2.2015%
+    runbench     2,241,481,220 -> 2,232,013,849    -9,467,371  -0.4224%
+    jsonbench    1,438,095,130 -> 1,436,454,329    -1,640,801  -0.1141%
+    oneshot         21,417,863 ->    21,396,929       -20,934  -0.0977%
+    readbench        4,562,212 ->     4,631,248       +69,036  +1.5132%
+    widebench       36,429,055 ->    36,509,001       +79,946  +0.2194%
+    deepbench      395,527,105 ->   395,911,106      +384,001  +0.0971%
+    basket          34,861,960 ->    34,891,911       +29,951  +0.0859%
+    indexbench       3,226,185 ->     3,226,248           +63
+    digestbench     10,497,723 ->    10,497,757           +34
+    scanbench      600,502,339 ->   600,502,367           +28
+    escapebench     85,489,183 ->    85,489,184            +1
+
+runbench is the objective's whole run-speed term and it falls 0.4224%.
+
+**The same fourteen deltas, to the instruction, on both bases.** This was
+measured once over ef2f4ea4 and again over 6c32079a with kanso#1367's three
+library arms in between, and every one of the fourteen absolute deltas is
+identical: -31,375,950 on livebench both times, -4,961,799 on pendbench, +69,036
+on readbench. The percentages move because the bases did — pendbench reads
+-2.2015% here against -0.8568% before, since kanso#1367 took three fifths of
+that program away and the same saving is now a larger share of what is left.
+Worth writing down: the two changes touch disjoint work, so neither measurement
+had to be redone for correctness, only for its denominator.
+
+**readbench is the pure-cost case, and it is worth naming rather than
+averaging away.** Its +69,036 is `k_utf8_bad_wide` and nothing else:
+274,748 -> 343,792 under `callgrind_annotate`, which is the whole delta to
+within eight instructions. readbench reads one file whose bytes take the wide
+path and never asks its length, so it pays the two vector instructions a block
+and collects nothing. widebench, deepbench and basket rise for the same reason
+in smaller amounts. The counting is cheap where the answer is wanted and not
+free where it is not, and four benchmarks are on the wrong side of that.
+
+**Welfare cannot be read for this change on this container.** `run_instructions`
+comes from `bench/instructions_golden.txt`, which is host-keyed and refused
+here, so the objective reads main's row whatever the tree does — a change whose
+entire effect is instructions is invisible to a local `welfare` run. The number
+that matters is CI's, on CI's rows.
+
+**CI's sitting, and the twelve counters that rose.** The container refuses the
+work vein, the text vein and the three compile rows, so round one was red on
+all five and CI's numbers are written into the goldens here. Six of the
+fourteen work rows fall — `work_encodebench` 3,932,651,503 (-0.7905%),
+`work_livebench` 3,450,423,659 (-0.9012%), `work_runbench` 2,252,446,969
+(-0.4340%), `work_pendbench` 221,912,236 (-2.1870%), `work_jsonbench`
+1,468,801,090 (-0.1477%), `work_oneshot` 21,616,888 (-0.1131%). Eight rise, and
+they are the accumulator the validator carries for strings whose count nobody
+asks for: `work_readbench` 4,630,969 (+69,036), `work_deepbench` 387,474,235
+(+384,001), `work_widebench` 35,316,107 (+47,946), `work_basket` 34,698,668
+(+25,949), `work_indexbench` 3,265,849 (+63), `work_digestbench` 10,426,549
+(+34), `work_scanbench` 587,488,506 (+28), `work_escapebench` 85,558,106 (+1).
+
+`text` 1,547,852 -> 1,551,324, a rise of 3,472 bytes spread over all fourteen
+rows — jsonbench 100,050, encodebench 120,962,
+oneshot 111,922, basket 114,082, widebench 126,226, deepbench 76,354,
+escapebench 57,922, pendbench 92,034, indexbench 62,162, scanbench 159,842,
+digestbench 111,362, readbench 58,434, livebench 112,498, runbench 247,474 —
+most by 320 bytes and runbench by 560: the
+three utf-8 arms carry a fourth parameter and a conditional store, and they
+live in src/runtime.c, which every program links. The three compile rows rise
+by the same fraction and for the same reason — `compile_instructions`
+49,097,584 (+5,700, +0.0116%), `entry_instructions` 164,060,471 (+18,799,
++0.0115%), `library_instructions` 164,342,505 (+18,132, +0.0110%). The front
+end does no more work; runtime.c is carried inside the compiler, so its bytes
+and the layout under them move when it changes. Welfare reads 67.59 against a
+floor of 67.56 and is ratcheted to it.
+
+**Eight of the fourteen deltas match the container to the digit, six do not.**
+deepbench +384,001, readbench +69,036, pendbench -4,961,799, indexbench +63,
+digestbench +34, scanbench +28, escapebench +1 are identical between the local
+callgrind A/B and CI's perf sitting. The six that differ do so by under a third
+of a per cent of the delta — runbench -9,818,606 here against -9,467,371
+locally, widebench +47,946 against +79,946 — and no row changes sign. Two
+instruments counting the same program agree on what moved and disagree in the
+last digits; the goldens carry CI's, which is what the gate reads.
+
+**The signature change broke a gate that reads the real source text.**
+`scripts/utf8_differential` extracts `k_utf8_bad`, `k_utf8_bad_wide` and
+`k_utf8_bad_scalar` out of src/runtime.c by searching for their signatures, and
+all three signatures gained a parameter and started wrapping across two lines.
+The search found nothing, `body_of` asked for the second half of a split that
+had only one part, and the harness died with `missing index 2` before it
+compiled anything. That is the cost of extracting the real text rather than a
+copy, and it is the right cost: a harness reading a stale copy would have gone
+on passing. The three signature constants now carry the wrapped form, the two
+inner wrappers take `long long* chars`, and the door's wrapper declares one as
+NULL since harness.c calls it with two arguments. 45,189,025 cases and
+8,346,016 count checks, 0 mismatches.

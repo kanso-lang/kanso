@@ -147,4 +147,7 @@
 # the price of the answer. The three compile rows rise together and by
 # nearly the same fraction, which is what a per-declaration check looks
 # like when every route runs it.
-entry_instructions=164041672
+# 2026-09-11 (a validated string knows its length): 164,041,672 -> 164,060,471,
+# a rise of 18,799 (+0.0115%). The same layout move as the other two compile
+# rows; see bench/compile_instructions_golden.txt.
+entry_instructions=164060471
