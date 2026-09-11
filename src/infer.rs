@@ -280,8 +280,8 @@ pub fn infer(program: &Program) -> Inference {
             let arity = program.fns[i].params.len();
             for pos in 0..arity {
                 let mut taken: Set = 0;
-                for e in start as usize..k {
-                    let params = &program.fns[group_members[e]].params;
+                for &above in &group_members[start as usize..k] {
+                    let params = &program.fns[above].params;
                     let caught = params.get(pos).map_or(0, pattern_catches);
                     let settles = params.iter().enumerate().all(|(q, pat)| {
                         q == pos || matches!(pat, Pattern::Var(..) | Pattern::Wildcard(..))
