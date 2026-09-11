@@ -859,6 +859,13 @@ fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
     ctx.readers[at] |= 1u64 << (ctx.current_index % 64);
 }
 
+// PINNED INLINE, measured rather than assumed. This is three lines and every
+// caller is a hot fixpoint site, and LLVM inlined it at all of them until the
+// shadow load below was added — after which it outlined, and the profile read
+// 584,011 instructions against a main that spent none here under this name.
+// That figure is the call, not the mask: forcing the inline back leaves the
+// load in place and the row falls by most of it.
+#[inline(always)]
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     let at = ctx.param_starts[decl] as usize + param;
     let set = set & !ctx.shadow[at];

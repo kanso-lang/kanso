@@ -4247,3 +4247,50 @@ work_encodebench 3,932,651,503 -> 3,958,779,263 is the vendored encode
 benchmark's own source, and text 1,551,324 -> 1,552,476 is the .text vein
 summed — up 1,152 bytes across fourteen programs, where seven rows move and
 the two vendored ones carry all of the rise.
+
+## 2026-09-11 — the ruling's compile cost, paid down by a third
+
+The entry above priced per-call exhaustiveness at +3.3614% on
+compile_instructions and sent the welfare fall to Clay. Two of the structures
+the rule added were doing the same work twice, and profiling the same box the
+three-way split was read on names both.
+
+`check_none_exhaustive` kept two maps: `returns`, keyed by (name, arity), and
+`handles`, keyed by (name, arity, position) and holding one bool. Both keys
+start with the declaration's name, so building `handles` hashed that string
+once per PARAMETER and reading it hashed it once per ARGUMENT, on top of the
+`returns` hash the same call site already paid. The two are one map now, the
+per-position bool a bitmask beside the return set, so a call site pays one
+hash and a declaration pays one insert. `check_merged_after_aliases` falls
+2,519,015 -> 2,293,470 and the module row falls 276,320.
+
+`widen_param` is three lines and LLVM inlined it at every caller until the
+shadow mask was added, at which point it outlined: the profile read 584,011
+instructions under a name main spends nothing on. That figure is the call
+overhead. Pinned `#[inline(always)]` the symbol disappears, the load stays,
+and the module row falls another 223,326.
+
+Together, on this container, one build per reading:
+
+    module compile    50,199,441 main    51,758,263 ruled    51,258,065 now
+    entry compile    166,705,591 main   171,650,496 ruled   169,903,991 now
+
+The objective's compile term is those two summed. It reads +2.9984% against
+main as the rule shipped and +1.9626% now, so 34.5% of the rise is recovered.
+What is left is the check's own walk and the shadow load, and the rule needs
+both to do its job.
+
+Nothing the rule refuses moved. Each structure was watched red, and the two
+mutations fail on different fixtures in opposite directions: with the mask
+never learning a position, `foreign_destructure` is refused though it has a
+`none` arm; with every position reading as handled, the ruling's own fixture
+stops being refused at all. `emitted_code`, `compile_cost` and the twelve
+runtime cost veins are byte-identical, so no decision moved — only what
+deciding costs.
+
+A position past the mask's width reads as handled, which is the same
+under-refusing direction as the two gaps the entry above records. The widest
+group in lib/ takes five parameters against a width of sixty-four.
+
+The welfare question in the entry above stands with a smaller number in it,
+and CI prices it.

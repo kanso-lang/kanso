@@ -607,28 +607,37 @@ fn check_none_exhaustive(
     use crate::infer::NONE;
     // inference is handed in: one pass serves every check that reads it
 
-    // group -> joined return set, and whether any arm names none at a position
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    let mut handles: crate::hash::Map<(&str, usize, usize), bool> =
+    // group -> its joined return set and the positions some arm names a none
+    // at, one bit per position. Two facts about the same group live in one
+    // entry so a call site pays ONE hash of the name: a separate
+    // (name, arity, position) map cost a string hash per PARAMETER to build
+    // and another per ARGUMENT to read, and both keys start with the name.
+    // A position past the mask's width reads as handled, the same under-
+    // refusing direction as the two below, and nothing in the tree is close:
+    // the widest group in lib/ takes five.
+    let mut returns: crate::hash::Map<(&str, usize), (crate::infer::Set, u64)> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
-        let key = (d.name.as_str(), d.params.len());
-        *returns.entry(key).or_insert(0) |= inference.returns[i];
+        // Only an arm that NAMES a none handles one. A wildcard binds a
+        // none the same way a bare name does, and the ruling's own
+        // fixture is a bare name: `fn describe price` runs for a none
+        // and prints `<none> yen`, which is the program the check
+        // exists to refuse. Counting either as an arm would leave the
+        // rule with nothing to say.
+        let mut named = 0u64;
         for (pos, param) in d.params.iter().enumerate() {
-            // Only an arm that NAMES a none handles one. A wildcard binds a
-            // none the same way a bare name does, and the ruling's own
-            // fixture is a bare name: `fn describe price` runs for a none
-            // and prints `<none> yen`, which is the program the check
-            // exists to refuse. Counting either as an arm would leave the
-            // rule with nothing to say.
             let names_none = match param {
                 Pattern::Nullary(n, _) => n == "none",
                 Pattern::Annotated { ty, .. } => ty == "none",
                 _ => false,
             };
-            *handles.entry((d.name.as_str(), d.params.len(), pos)).or_insert(false) |= names_none;
+            if names_none {
+                named |= 1u64 << pos.min(63);
+            }
         }
+        let entry = returns.entry((d.name.as_str(), d.params.len())).or_insert((0, 0));
+        entry.0 |= inference.returns[i];
+        entry.1 |= named;
     }
 
     // only what is provable: a lenient read, a literal none, or a call whose
@@ -647,7 +656,7 @@ fn check_none_exhaustive(
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
                 Expr::Ident(name, _) => returns
                     .get(&(name.as_str(), args.len()))
-                    .is_some_and(|s| s & NONE != 0 && !unknown(*s)),
+                    .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
                 _ => false,
             },
             _ => false,
@@ -657,9 +666,7 @@ fn check_none_exhaustive(
     let walk = |e: &Expr, diags: &mut Vec<Diagnostic>, owner: &str| {
         let Expr::App { head, args, piped: false, .. } = e else { return };
         let Expr::Ident(name, _) = head.as_ref() else { return };
-        if !returns.contains_key(&(name.as_str(), args.len())) {
-            return;
-        }
+        let Some(&(_, named)) = returns.get(&(name.as_str(), args.len())) else { return };
         // A getter is synthesized from a field read, so nobody can give it
         // an arm, and the play route checks before the read is rewritten
         // into one while the module route checks after: `xs[i].x` would be
@@ -672,7 +679,7 @@ fn check_none_exhaustive(
             if !yields_none(arg) {
                 continue;
             }
-            if *handles.get(&(name.as_str(), args.len(), pos)).unwrap_or(&false) {
+            if named & (1u64 << pos.min(63)) != 0 {
                 continue;
             }
             // an absolute path built from the binary's location tells a
