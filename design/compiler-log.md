@@ -4088,3 +4088,52 @@ on passing. The three signature constants now carry the wrapped form, the two
 inner wrappers take `long long* chars`, and the door's wrapper declares one as
 NULL since harness.c calls it with two arguments. 45,189,025 cases and
 8,346,016 count checks, 0 mismatches.
+
+---
+
+## 2026-09-11 — the ledger forked onto feature branches, and the queue's three language rows wait on one branch
+
+**design/pending-gavels.md had an empty Blocking section on main while two
+entries existed.** Both were written, both followed the file's rules, and
+neither was ever merged: "Where the box wraps under the pure-fallibility
+rider" sat on local/pure-fallible, and "The reconstruction the 2026-09-07
+ruling ordered has two usable phases" sat on four branches at once. The file's
+own header names this exact failure -- "Edits to this file ride small,
+promptly-merged PRs, never a feature branch, so the ledger cannot fork" -- and
+it happened anyway, because a feature branch is where the measurement that
+raised the question was taken.
+
+Clay read STATUS.md, saw "Blocking right now: nothing", and was told by this
+session that two things waited on him, cited by session task number. A task
+number resolves nowhere outside the session that made it, which the file's
+rules also say. So for a day there was nothing he could look up and nothing he
+could rule.
+
+Only one of the two comes back. The reconstruction entry was ruled on
+2026-09-10 -- "Rows 15..390 stay unscored", option (1), closing with "Nothing
+further is owed on this entry; it leaves the ledger with this ruling" -- so
+the branches carrying it hold a pre-ruling snapshot and it stays out. The
+box-wrapping entry is carried here verbatim, with its citation, its
+measurements and its recommendation intact.
+
+**The three "Ruled, unbuilt" rows are one design and are blocked on one
+thing.** The effect type, the pure-fallibility rider that rides with it, and
+the book chapter that waits on both are built or buildable; what they lack is
+a branch. This session may push to claude/go-to-town-m0dicm alone, kanso#1369
+is sitting on it, and #1369 cannot merge because staging
+bench/welfare_floor.json is refused by the harness as a CI bypass. The rows
+stay, with this sentence as the blocker.
+
+**kq's half is done and waits on nobody.** The gavel ends the automatic bind,
+and kq had 25 plain-dot effect binds that break under it. They are respelt
+`.>` on kq's claude/go-to-town-m0dicm (baec530), watched red first -- the
+plain-dot compiler dies at kq's `== build ==` step on `length takes a list,
+string, or map, not <io>`, after the ten unit tests pass -- and green
+afterwards on that compiler and on today's, so kanso CI keeps a buildable kq
+to clone through the transition.
+
+The search that reported both trees clean was `^\s*\. [a-z_]`, anchored to
+line start, and not one of kq's 25 sites begins a line. It found zero, and the
+conclusion "the failing site is kq's source" was drawn from it anyway.
+Unanchored, ` \. ` finds all of them, in main.kso, query/cli.kso and the three
+bench gates.

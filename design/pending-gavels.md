@@ -55,6 +55,75 @@ went to the log rather than here.
 implementer's, per this file's own charter. The log carries the
 research mandate it left with.)
 
+### Where the box wraps under the pure-fallibility rider: at every err-carrying answer, or at the `!` name
+
+**Cited:** the archive's "rider: pure fallibility is boxed too" (2026-08-31),
+"gavel: effects are types, and the words are the only doors" (2026-08-29),
+"gavel: the suffix contracts are refusals, as ruled in July" (2026-09-03),
+and the live log's "the effect type is spellable" (2026-09-10), which sized
+the rider. None of them says what a non-`!` declaration that raises `err` in
+one arm and answers a value in another yields, or where its value arm is
+lifted into the box.
+
+**The question.** The rider says any operation whose answer includes an err
+yields `<t>effect`. Read literally, a declaration like json's `hex_digit`,
+`if (…) (c - 55) (err "invalid hex digit")`, yields `<int>effect`: the
+compiler lifts its value arm into the box at the declaration's boundary,
+every caller opens it with `.>`, and by infer's reading 3,801 declarations in
+the tree answer that way, 738 of lib's 770, because a declaration that hands
+a fallible answer through is fallible too. Measured on 2026-09-10 with the
+checker made to read it so: the first layer of refusals alone is 108 sites in
+lib (list 49, regexp 25, sha256 25, json 3, http 3, path 3), and each bind
+written for one moves the refusal a caller outward until the 738 are chained.
+The library becomes bind chains from `parse_value` down, and every bind is a
+closure and a box the arena pays for.
+
+The insist alone is smaller, and it has the same problem in a sharper form.
+With only `foo[k]!` answering a box, which is the case the rider was raised
+on, the checker refuses 143 sites in the tree (lib 28, scripts 61, the test
+corpus 54). The readers are `==`, `+` and `-` in sha256's compress and
+regexp's scanner, where the index is in range by construction. The lenient
+form looked like the answer for those, and it is not: under the 2026-09-07
+exhaustiveness ruling `choice s[5] s[6] s[7]` is refused three times, since
+each index can be a none and `choice` has no arm for one, and `walked
+parts[i] s` the same. So an in-range read has no spelling left. `xs[i]` is a
+none at every group; `xs[i]!` is a box at every operator; what remains is
+`xs[i]! .> (v -> …)`, a box and a closure per element in the kernels, or a
+`none` arm on every group an element reaches. Of the 723 `]!` sites in the
+tree, 13 open their answer with a word today; the other 710 hand it to an
+operator, a group or a field. The bind shape was priced on native with the
+box built: a loop reading two million in-range elements costs 9 allocations
+and 21 ms as `acc + xs[i]!`, and 8,000,014 allocations (four an element: the
+box, the closure, the bind and the rewrap), 352 MB and 65 ms as
+`xs[i]! .> (v -> go (acc + v))`, the same sum both ways.
+
+**Options.**
+
+1. The literal rider: every err-carrying answer is a box, lifted at the
+   declaration boundary. The cost is the paragraph above.
+2. Fallibility is spelled in the name, which is how the suffix contract
+   already reads it in one direction: a `!` name answers a box; a name
+   without `!` answers data and may not raise, absence being `none`, as
+   `foo[k]` already is. `to_int` answers none on bad text and `to_int!` the
+   box. The 71 lib declarations that raise or insist themselves choose a
+   spelling each; the other 667 are untouched. The railway retires the same
+   day, since nothing outside a box carries an err any more.
+3. As 2, with `err reason` itself answering a box, so a non-`!` name may
+   still raise and its callers must open it. Wherever that is written it
+   costs what 1 costs.
+
+4. The index keeps a third spelling for the in-range read, and the ledger
+   does not propose one: it is a language question. What the kernels need
+   is a read that is neither a none nor a box, which is what `xs[i]!` was
+   before the rider.
+
+**Recommendation:** 2 for names, and for the index a ruling on 4 before the
+insist lands, because without it the insist PR respells sha256 and regexp
+into bind chains or none arms and pays for it in every cost vein. The insist
+answers a box on all three engines in the worktree today (the oracle and
+native print the same four lines on the fixture); the respell of the 710
+sites is what waits.
+
 ## Open, not blocking
 
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
