@@ -345,4 +345,8 @@
 # constructions that built it are a word. All four compile rows fall together
 # and this one falls furthest in relative terms, which is what a change that
 # deletes a declaration rather than reshaping one looks like.
-compile_allocs=29350
+# 2026-09-11 (a none that reaches a group with no arm for it is refused):
+# 29,350 -> 29,483, a rise of 133 (+0.4532%). The shadow table is one vector
+# the length of the parameter list, and the exhaustiveness check builds two
+# maps over the program's returns and handled positions.
+compile_allocs=29483

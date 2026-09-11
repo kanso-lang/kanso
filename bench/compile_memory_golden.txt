@@ -214,4 +214,7 @@ front_end_visits=22452
 # type it did not, so a nullary in an arm is a cheaper emit and a slightly
 # longer inference. The two go opposite ways on purpose and the welfare
 # objective weighs only the peak.
-compile_peak_bytes=774660
+# 2026-09-11 (a none that reaches a group with no arm for it is refused):
+# 774,660 -> 777,126, a rise of 2,466 (+0.3184%). The shadow table is held
+# beside the parameter sets for the whole of inference, one Set per parameter.
+compile_peak_bytes=777126

@@ -1155,4 +1155,14 @@
 # a rise of 5,700 (+0.0116%). src/runtime.c is carried in the compiler, so its
 # bytes and the layout under them move when it changes; the front end does no
 # more work. The entry and library rows rise by the same fraction.
-compile_instructions=49097584
+# 2026-09-11 (a none that reaches a group with no arm for it is refused):
+# 49,097,584 -> 50,747,925, a rise of 1,650,341 (+3.3614%). Two pieces of
+# per-declaration work every route now does. check_none_exhaustive ran only
+# under KANSO_EXHAUSTIVE and the flag was set nowhere, so the ruling cost
+# nothing to carry and answered nothing; it runs on every compile now. And
+# infer builds a shadow table beside its parameter sets -- per parameter, the
+# bits an arm earlier in the group takes first -- so an arm below a `none` arm
+# is not handed the none it can never be given. The three compile rows rise
+# together and by nearly the same fraction, which is what per-declaration work
+# looks like when every route runs it.
+compile_instructions=50747925

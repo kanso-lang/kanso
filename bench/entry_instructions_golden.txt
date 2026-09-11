@@ -150,4 +150,8 @@
 # 2026-09-11 (a validated string knows its length): 164,041,672 -> 164,060,471,
 # a rise of 18,799 (+0.0115%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-entry_instructions=164060471
+# 2026-09-11 (a none that reaches a group with no arm for it is refused):
+# 164,060,471 -> 168,851,345, a rise of 4,790,874 (+2.9202%). The
+# exhaustiveness check stops being flag-gated and infer gains a shadow table;
+# see bench/compile_instructions_golden.txt.
+entry_instructions=168851345

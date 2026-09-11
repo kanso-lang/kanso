@@ -4200,3 +4200,50 @@ Welfare reads 67.59 = floor here, and cannot say more: `run_instructions`,
 `compile_instructions`, `compile_allocs` and `compile_peak_bytes` all come from
 goldens this container's host gate refuses, so the objective sees no movement
 until CI writes its own sitting in. Round one expects red on those rows.
+
+**CI's sitting, and what the ruling costs.** The three compile rows rise
+together: compile_instructions 49,097,584 -> 50,747,925 (+1,650,341 /
++3.3614%), entry_instructions 164,060,471 -> 168,851,345 (+4,790,874 /
++2.9202%), library_instructions 164,342,505 -> 169,613,006 (+5,270,501 /
++3.2070%). With them compile_allocs 29,350 -> 29,483 (+133) and
+compile_peak_bytes 774,660 -> 777,126 (+2,466 / +0.3184%).
+
+Split three ways on this container, one build per reading: the head measures
+51,460,049, the head with `check_none_exhaustive` not called measures
+50,564,701, and the head with the shadow mask off as well measures 50,288,026.
+So the check is 895,348 instructions and the shadow table 276,675, against a
+container total of 1,172,023; the rest of CI's rise is the library source the
+rule forced and layout. The check is the larger half and could not be smaller:
+it sat behind `KANSO_EXHAUSTIVE`, the flag was set nowhere, and a ruling that
+costs nothing to carry is a ruling that answers nothing. The container reads
+about 1.4% high against CI on this row, so read the split as a ratio rather
+than as CI instructions.
+
+In the work vein two of fourteen rows move and twelve are byte-identical:
+encodebench 3,932,651,503 -> 3,958,779,263 (+0.6644%) and widebench 35,316,107
+-> 35,202,913 (-0.3205%), both the vendored benchmark sources taking strict
+indexes and `none` arms rather than anything in the runtime. **runbench, the
+objective's whole run term, does not move**, and neither does run_peak_bytes.
+In the .text vein seven rows move: four fall by the same 176 bytes (jsonbench,
+oneshot, livebench) and runbench by 160 with their work rows identical, which
+is the shadow table reaching the emitter — an arm below a `none` arm loses the
+case it was compiled with. encodebench +1,360, widebench +464 and scanbench
++16 are the vendored sources again.
+
+**Welfare falls 67.58619 -> 67.52, and that is Clay's call, not mine.** Every
+term that moved is a compile term and every one of them got worse; nothing
+improves. `--set` refuses a fall this size by design and the floor file is
+edited by hand, which is what the 2026-08-25 language clause has meant three
+times before (#1355, #1356, #1359) — but those spent 0.001 to 0.01 and this
+spends 0.07, an order of magnitude more than any ruled feature has taken from
+the objective. Sent to Clay rather than banked: the change is a ruling and
+cannot go, so the only question left is whether the objective should record
+what the ruling costs. Not filed in design/pending-gavels.md here — that
+ledger's own rule is that its edits ride small, promptly-merged PRs and never
+a feature branch, and this is one.
+
+Named for the trend gate, which asks a worsened row for its landed value:
+work_encodebench 3,932,651,503 -> 3,958,779,263 is the vendored encode
+benchmark's own source, and text 1,551,324 -> 1,552,476 is the .text vein
+summed — up 1,152 bytes across fourteen programs, where seven rows move and
+the two vendored ones carry all of the rise.

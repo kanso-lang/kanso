@@ -413,11 +413,21 @@
 # delta to within eight instructions. deepbench +384,001, widebench +47,946,
 # basket +25,949, and four rows move by less than a hundred: indexbench +63,
 # digestbench +34, scanbench +28, escapebench +1. Measured on CI.
+# 2026-09-11 (a none that reaches a group with no arm for it is refused): two
+# rows move and the other twelve are byte-identical. encodebench 3,932,651,503
+# -> 3,958,779,263 (+26,127,760 / +0.6644%) and widebench 35,316,107 ->
+# 35,202,913 (-113,194 / -0.3205%). Both are the vendored benchmark sources,
+# not the runtime: the rule refuses their lenient indexes into a group with no
+# `none` arm, so each gained a strict `!` and an arm naming the end of input.
+# The strict index raises where the lenient one returned a none, and the two
+# benchmarks pay and collect differently for it. runbench, the objective's
+# run term, does not move.
+#
 jsonbench 1468801090
-encodebench 3932651503
+encodebench 3958779263
 oneshot 21616888
 basket 34698668
-widebench 35316107
+widebench 35202913
 deepbench 387474235
 escapebench 85558106
 pendbench 221912236
