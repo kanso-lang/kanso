@@ -1165,4 +1165,15 @@
 # is not handed the none it can never be given. The three compile rows rise
 # together and by nearly the same fraction, which is what per-declaration work
 # looks like when every route runs it.
-compile_instructions=50747925
+# 2026-09-11 (the ruling's compile cost, paid down by a third): CI's
+# sitting, 50,747,925 -> 50,228,060, a fall of 519,865 (-1.0244%). Two
+# structures the entry above added were doing the same work twice.
+# check_none_exhaustive kept `returns` keyed by (name, arity) and `handles`
+# keyed by (name, arity, position); both keys start with the declaration's
+# name, so the second hashed that string once per parameter to build and
+# once per argument to read. They are one map now, the per-position bool a
+# u64 bitmask beside the return set. And widen_param, three lines that LLVM
+# inlined at every caller until the shadow load was added, had outlined; the
+# inline is pinned and the load stays. The three instruction rows fall
+# together by nearly the same fraction, the same signature the rise had.
+compile_instructions=50228060

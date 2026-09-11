@@ -154,4 +154,7 @@
 # 164,060,471 -> 168,851,345, a rise of 4,790,874 (+2.9202%). The
 # exhaustiveness check stops being flag-gated and infer gains a shadow table;
 # see bench/compile_instructions_golden.txt.
-entry_instructions=168851345
+# 2026-09-11 (the ruling's compile cost, paid down by a third):
+# 168,851,345 -> 167,038,742, a fall of 1,812,603 (-1.0735%). The one map
+# and the pinned inline; see bench/compile_instructions_golden.txt.
+entry_instructions=167038742

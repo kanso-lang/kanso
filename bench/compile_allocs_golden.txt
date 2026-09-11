@@ -349,4 +349,8 @@
 # 29,350 -> 29,483, a rise of 133 (+0.4532%). The shadow table is one vector
 # the length of the parameter list, and the exhaustiveness check builds two
 # maps over the program's returns and handled positions.
-compile_allocs=29483
+# 2026-09-11 (the ruling's compile cost, paid down by a third): CI's
+# sitting, 29,483 -> 29,473, a fall of 10 (-0.0339%). The exhaustiveness
+# check kept two maps over the program where one carries both facts; the
+# second map is gone, and with it its table.
+compile_allocs=29473

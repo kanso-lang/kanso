@@ -4292,5 +4292,28 @@ A position past the mask's width reads as handled, which is the same
 under-refusing direction as the two gaps the entry above records. The widest
 group in lib/ takes five parameters against a width of sixty-four.
 
+CI's sitting, on the run that read `9d737dec`. Step 30 names four failures and
+no others: `work`, `emitted`, `machine code` and `compile memory` all agree, so
+no runtime counter and no emitted line moved, and `compile_peak_bytes` holds at
+777,126. The four rows that did move, each against main and against the value
+the entry above landed them on:
+
+    compile_instructions   49,097,584 main   50,747,925 ruled   50,228,060 now
+    entry_instructions    164,060,471 main  168,851,345 ruled  167,038,742 now
+    library_instructions  164,342,505 main  169,613,006 ruled  167,802,001 now
+    compile_allocs             29,350 main       29,483 ruled       29,473 now
+
+So compile_instructions falls 519,865 (-1.0244%) from where the ruling left it,
+entry_instructions 1,812,603 (-1.0735%), library_instructions 1,811,005
+(-1.0677%), and compile_allocs 10 (-0.0339%) as the second map's table goes.
+All four still stand above main, and that residue is the check's walk and the
+shadow load.
+
+The objective's compile term is the module and entry rows summed: 213,158,055
+on main, 219,599,270 as the ruling shipped (+3.0218%), 217,266,802 now
+(+1.9276%). **36.2% of the rise is recovered.** The container projected 34.5%
+off its own three readings and was pessimistic by a point and a half, which is
+the usual direction for this box.
+
 The welfare question in the entry above stands with a smaller number in it,
 and CI prices it.
