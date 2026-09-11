@@ -4038,3 +4038,53 @@ comes from `bench/instructions_golden.txt`, which is host-keyed and refused
 here, so the objective reads main's row whatever the tree does — a change whose
 entire effect is instructions is invisible to a local `welfare` run. The number
 that matters is CI's, on CI's rows.
+
+**CI's sitting, and the twelve counters that rose.** The container refuses the
+work vein, the text vein and the three compile rows, so round one was red on
+all five and CI's numbers are written into the goldens here. Six of the
+fourteen work rows fall — `work_encodebench` 3,932,651,503 (-0.7905%),
+`work_livebench` 3,450,423,659 (-0.9012%), `work_runbench` 2,252,446,969
+(-0.4340%), `work_pendbench` 221,912,236 (-2.1870%), `work_jsonbench`
+1,468,801,090 (-0.1477%), `work_oneshot` 21,616,888 (-0.1131%). Eight rise, and
+they are the accumulator the validator carries for strings whose count nobody
+asks for: `work_readbench` 4,630,969 (+69,036), `work_deepbench` 387,474,235
+(+384,001), `work_widebench` 35,316,107 (+47,946), `work_basket` 34,698,668
+(+25,949), `work_indexbench` 3,265,849 (+63), `work_digestbench` 10,426,549
+(+34), `work_scanbench` 587,488,506 (+28), `work_escapebench` 85,558,106 (+1).
+
+`text` 1,547,852 -> 1,551,324, a rise of 3,472 bytes spread over all fourteen
+rows — jsonbench 100,050, encodebench 120,962,
+oneshot 111,922, basket 114,082, widebench 126,226, deepbench 76,354,
+escapebench 57,922, pendbench 92,034, indexbench 62,162, scanbench 159,842,
+digestbench 111,362, readbench 58,434, livebench 112,498, runbench 247,474 —
+most by 320 bytes and runbench by 560: the
+three utf-8 arms carry a fourth parameter and a conditional store, and they
+live in src/runtime.c, which every program links. The three compile rows rise
+by the same fraction and for the same reason — `compile_instructions`
+49,097,584 (+5,700, +0.0116%), `entry_instructions` 164,060,471 (+18,799,
++0.0115%), `library_instructions` 164,342,505 (+18,132, +0.0110%). The front
+end does no more work; runtime.c is carried inside the compiler, so its bytes
+and the layout under them move when it changes. Welfare reads 67.59 against a
+floor of 67.56 and is ratcheted to it.
+
+**Eight of the fourteen deltas match the container to the digit, six do not.**
+deepbench +384,001, readbench +69,036, pendbench -4,961,799, indexbench +63,
+digestbench +34, scanbench +28, escapebench +1 are identical between the local
+callgrind A/B and CI's perf sitting. The six that differ do so by under a third
+of a per cent of the delta — runbench -9,818,606 here against -9,467,371
+locally, widebench +47,946 against +79,946 — and no row changes sign. Two
+instruments counting the same program agree on what moved and disagree in the
+last digits; the goldens carry CI's, which is what the gate reads.
+
+**The signature change broke a gate that reads the real source text.**
+`scripts/utf8_differential` extracts `k_utf8_bad`, `k_utf8_bad_wide` and
+`k_utf8_bad_scalar` out of src/runtime.c by searching for their signatures, and
+all three signatures gained a parameter and started wrapping across two lines.
+The search found nothing, `body_of` asked for the second half of a split that
+had only one part, and the harness died with `missing index 2` before it
+compiled anything. That is the cost of extracting the real text rather than a
+copy, and it is the right cost: a harness reading a stale copy would have gone
+on passing. The three signature constants now carry the wrapped form, the two
+inner wrappers take `long long* chars`, and the door's wrapper declares one as
+NULL since harness.c calls it with two arguments. 45,189,025 cases and
+8,346,016 count checks, 0 mismatches.

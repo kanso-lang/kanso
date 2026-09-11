@@ -1151,4 +1151,8 @@
 # the price of the answer. The three compile rows rise together and by
 # nearly the same fraction, which is what a per-declaration check looks
 # like when every route runs it.
-compile_instructions=49091884
+# 2026-09-11 (a validated string knows its length): 49,091,884 -> 49,097,584,
+# a rise of 5,700 (+0.0116%). src/runtime.c is carried in the compiler, so its
+# bytes and the layout under them move when it changes; the front end does no
+# more work. The entry and library rows rise by the same fraction.
+compile_instructions=49097584
