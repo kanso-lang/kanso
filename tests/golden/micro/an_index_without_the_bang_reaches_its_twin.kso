@@ -7,6 +7,12 @@
 # the `<none>` and the `é` below check.
 import "std/text"
 
+# Every read below can be out of range, so `shown` names the none the reads
+# answer with rather than letting the generic arm catch it. Both arms
+# interpolate, so the output is what it always was.
+fn shown none
+  "<none>"
+
 fn shown v
   "{v}"
 

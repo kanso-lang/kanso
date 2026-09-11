@@ -10,7 +10,7 @@ fn check text
   print (banner summary)
 
 fn chosen argv
-  if (length argv == 0) "examples/trace_demo/VERSION" argv[1]
+  if (length argv == 0) "examples/trace_demo/VERSION" argv[1]!
 
 fn describe v
   "major version {v} detected"

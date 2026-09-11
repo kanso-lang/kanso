@@ -3,9 +3,16 @@
 #
 # A `none` is the argument because it renders without a module name, so the
 # direct run and the run through an import say the same words.
+#
+# It arrives through a LAMBDA. The exhaustiveness check proves a none from a
+# lenient index, a literal, or a call to a named group whose return set carries
+# one; a lambda's call has no name to look up, so the check says nothing and
+# the none reaches the runtime. That is the under-refusing direction and is
+# safe, but it is also the only shape left that can pin this message: written
+# as `measured 0` with `fn measured 0 -> none`, the check refuses the program
+# before it runs.
 import "std/text"
 
-fn measured 0
-  none
+vanish = (_ -> none)
 
-pub play = print "{text/to_float (measured 0)}"
+pub play = print "{text/to_float (vanish 0)}"

@@ -10,8 +10,19 @@ type point
 fn render/to_string p:point
   "({p.x},{p.y})"
 
+# A none is named at every hop it takes. `shown none` and `apply print none`
+# each need an arm that says `none`, because the rule asks the group that is
+# handed one to have a name for it and neither of these is the end of the
+# journey. The `f none` inside is not a hop the check reads: `f` is a
+# parameter, not a group, so there is no arm list to look up.
+fn apply f none
+  f none
+
 fn apply f x
   f x
+
+fn shown none
+  apply print none
 
 fn shown x
   apply print x

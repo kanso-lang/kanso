@@ -38,15 +38,16 @@ fn bare tag
   parts = text/split tag "^"
   parts[1]!
 
+# The empty case is answered here rather than carried through the fold as a
+# none seed: `list/fold` has no `none` arm, and under the exhaustiveness rule
+# the caller resolves. Seeding with the first release also retires `later`,
+# whose only job was to recognise that seed.
 fn highest tags
-  releases = list/reject tags unreleased?
-  list/fold releases none later
+  releases = list/to_list (list/reject tags unreleased?)
+  if (length releases == 0) none (list/fold releases releases[1]! further)
 
 fn unreleased? pair
   not release? pair[1]!
-
-fn later seen pair
-  if (seen == none) pair (further seen pair)
 
 fn further seen pair
   if (after? pair[1]! seen[1]!) pair seen

@@ -4088,3 +4088,115 @@ on passing. The three signature constants now carry the wrapped form, the two
 inner wrappers take `long long* chars`, and the door's wrapper declares one as
 NULL since harness.c calls it with two arguments. 45,189,025 cases and
 8,346,016 count checks, 0 mismatches.
+
+## 2026-09-11 — exhaustiveness on arm match, and the inference it needed
+
+Searched the log, the archive and design/ before filing: `check_none_exhaustive`
+appears in the 2026-07-24 none-campaign entries that built it and in the
+2026-08-15 sitting that recorded the rule, and nowhere since. The archive's
+last campaign report blames the group-level return set for the migration cost
+and leaves it there; STATUS.md's row said that set was "the implementer's to
+sharpen". This entry is the sharpening and the flag's removal together.
+
+**The ruling.** Clay, 2026-09-09: "the exhaustiveness when you're looking for a
+match on an arm has always been the way the language works." `KANSO_EXHAUSTIVE`
+comes out of src/check.rs and the check runs on every compile, on every route.
+The refusal fixture is the book's menu sample with its `none` arm deleted:
+`describe menu["pocky"]` where `fn describe price` interpolates. Until now that
+program ran and printed `<none> yen`.
+
+**A wildcard is NOT a `none` arm, and getting that wrong is silent.** The first
+cut counted `Pattern::Wildcard` as an arm that handles a none, on the reasoning
+that `_` does bind one. It does — and so does a bare name, which is what the
+ruling's own fixture writes. Counting either leaves the rule with nothing to
+say: the refusal fixture went green, the whole tree checked clean, and the only
+thing that noticed was the golden's empty stderr. Only a pattern that NAMES a
+none — `none` or `x:none` — is an arm for one.
+
+**Two under-refusals are load-bearing, deliberately.** The check reads a call's
+ARGUMENTS, not its head, so `nothing 1` where `nothing = none` is permitted.
+And a lambda's call has no `Expr::Ident` head to look up, so `(_ -> none) 0` is
+not proof either. Both are the safe direction — the rule refuses less than it
+could rather than more — and both are what keep two runtime fixtures reachable
+at all: tests/golden/runtime/calling_none_names_it.kso and
+to_float_names_what_it_takes.kso exist to run a none into a builtin and read
+the runtime's sentence, which the rule would otherwise refuse at compile time.
+
+**Unknown is not proof.** A set holding every value bit is infer's don't-know,
+and it carries the none bit with the rest. A field read through a variable is
+TOP; a strict index `xs[i]!` is every value but a thunk. Without the guard a
+group that hands either back reads as proof of a none it never produces, and
+half the tree is refused for nothing. Getters are skipped for a different
+reason: a getter is synthesized from a field read, so nobody can give it an
+arm, and the play route checks before the read is rewritten into one while the
+module route checks after — `xs[i].x` would be refused through an import and
+run direct.
+
+**The phantom, and the fix the rule actually needed.** `scripts/fingerprint`
+was refused at `sha256/hex (as_bytes raw)`, for a none that cannot happen.
+Traced with a debug dump of every group's return set: the source is
+`os/read_file!`, whose set carries NONE. Its body is
+`builtin_read_file path .> (r -> insisted path r)`, and `insisted` is two arms —
+`insisted path none` answering the missing file, `insisted _ text` handing the
+text back. The first arm answers every none. The second inherits it anyway,
+because `widen_param` widens EVERY arm's parameter by the whole argument set
+with no account of what the arms above it already took, so `text` carries NONE,
+the arm hands it back, and `read_file!` reads as an answer that could be a
+none — all the way down to whatever the caller did with it.
+
+infer now carries a per-parameter `shadow` table beside `params`: an arm
+earlier in its group takes the bits it NAMES at a position, and `widen_param`
+subtracts them. The narrowing is sound only when the earlier arm's OTHER
+positions accept anything, because `f 1 none` catches a none at position two
+for a 1 alone and says nothing about the arm below it; the table is built once
+from the group table rather than per call, so the fixpoint pays nothing for it.
+`pattern_catches` already existed for the FAIL pass-through on the same
+reasoning — this is the same question asked of the parameter instead of the
+result.
+
+Watched red first: tests/golden/micro/an_arm_below_a_none_arm_is_never_handed_one.kso
+is `kept none` / `kept s` fed a group that answers a literal none, its result
+handed to a `shouted` with no `none` arm. With the subtraction disabled the
+module is refused with the exhaustiveness diagnostic naming `shouted`; with it
+the program compiles and prints `nothing!` / `7!`. Note what the fixture could
+NOT be: a lenient index is TOP in infer, so `word[9]` would have been caught by
+the unknown guard and proved nothing — the none source has to be narrow.
+
+Every other site the rule refused was re-verified by reverting it and
+re-checking: all genuine, none of them a phantom the narrowing would have
+removed.
+
+**What the rule forced.** One library shape: `lib/list`'s `bisect` carried a
+`none` seed through `list/fold`, and `fold` has no `none` arm. It carries the
+INDEX now and answers through `found_at`, which is shorter and retires nothing
+the module needed. `lib/regexp`'s `gathering_slots` had the same shape and
+seeds with the first value, retiring `or_blank`. `hako/remote`'s `highest`
+seeds with the first release and retires `later`. Four programs outside lib
+resolve at the site: `examples/trace_demo` and `scripts/browser_differential_run`
+take the strict index they meant, `scripts/welfare_rescore` replaces a
+boolean-flag arm with a `none` arm, and eleven vendored benchmark files under
+bench/encodebench and bench/widebench take strict indexes and `none` arms to
+match the library they were copied from.
+
+Five corpus fixtures were reshaped rather than excused, because each existed to
+run a none into a generic arm — which is exactly the program the rule refuses.
+They name the none now and assert the same output.
+
+**The veins.** The narrowing pays where a scrutinee stops carrying a none the
+arms above it already answered: the emitter drops the arm's none test and the
+force in front of it. The decoder loses 16 calls, 24 branches and 109 lines;
+of the thirteen rows beside it six fall, four rise by seven lines apiece (the
+`none` arms in std/list, in programs that reach none of the narrowing shapes)
+and three hold. Summed: emitted_other_calls 20,445 -> 20,386,
+emitted_other_branches 12,800 -> 12,689, emitted_other_defines 2,366 -> 2,364,
+emitted_other_lines 133,802 -> 133,375. The front end's own work falls too:
+front_end_visits 22,727 -> 22,452 (-1.2100%), and on the module corpus
+module_visits 2,534 -> 2,511. **module_lines 5,304 -> 5,310** is the one rise
+— six lines, the `none` arms the rule forced into lib/list and lib/regexp, and
+the price of every fall above. Every runtime cost counter and the lazy tier are
+byte-identical: `all_counters.sh` reports the twelve cost veins agree.
+
+Welfare reads 67.59 = floor here, and cannot say more: `run_instructions`,
+`compile_instructions`, `compile_allocs` and `compile_peak_bytes` all come from
+goldens this container's host gate refuses, so the objective sees no movement
+until CI writes its own sitting in. Round one expects red on those rows.

@@ -1,0 +1,27 @@
+# Dispatch is in source order, so `kept none` answers every none handed to
+# `kept` and the arm below it is only ever given a string. The inference has
+# to know that: without it, `kept`'s second arm inherits the none it can
+# never be given and hands it straight back, so `kept`'s answer reads as one
+# that could be a none, and passing that to `shouted` — which has no `none`
+# arm — is refused under the per-call exhaustiveness rule, for a none no run
+# can produce. `os/read_file!` is the real shape: it answers the builtin's
+# none through an `insisted path none` arm, and every caller of its result
+# was refused.
+fn maybe 0
+  none
+
+fn maybe n
+  "{n}"
+
+fn kept none
+  "nothing"
+
+fn kept s
+  s
+
+fn shouted s
+  "{s}!"
+
+pub play =
+  print (shouted (kept (maybe 0)))
+  print (shouted (kept (maybe 7)))

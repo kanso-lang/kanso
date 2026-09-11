@@ -100,6 +100,14 @@ struct Ctx<'a> {
     type_names: HashMap<&'a str, usize>,
     params: Vec<Set>,
     param_starts: Vec<u32>,
+    /// Per parameter, beside `params`: the bits an arm EARLIER in its group
+    /// takes first at that position, so they never arrive here. Dispatch is
+    /// in source order, so `insisted path none` answers every none handed to
+    /// `insisted` at position one and the arm below it sees a string. Without
+    /// this the arm below inherits the none it can never be given, and hands
+    /// it back as its own answer: `os/read_file!` read as an answer that
+    /// could be a none, all the way down to whatever the caller did with it.
+    shadow: Vec<Set>,
     returns: Vec<Set>,
     /// Per declaration: what a description this one answers hands the
     /// continuation bound to it. `returns` says what calling it produces;
@@ -262,6 +270,30 @@ pub fn infer(program: &Program) -> Inference {
         at += d.params.len() as u32;
     }
     param_starts.push(at);
+    // An earlier arm settles a position only when its OTHER positions accept
+    // anything: `f 1 none` catches a none at position two for a 1 alone, so
+    // it says nothing about what the arm below it can be handed there.
+    let mut shadow: Vec<Set> = vec![0; at as usize];
+    for (start, end) in groups.values().copied() {
+        for k in start as usize..end as usize {
+            let i = group_members[k];
+            let arity = program.fns[i].params.len();
+            for pos in 0..arity {
+                let mut taken: Set = 0;
+                for e in start as usize..k {
+                    let params = &program.fns[group_members[e]].params;
+                    let caught = params.get(pos).map_or(0, pattern_catches);
+                    let settles = params.iter().enumerate().all(|(q, pat)| {
+                        q == pos || matches!(pat, Pattern::Var(..) | Pattern::Wildcard(..))
+                    });
+                    if caught != 0 && settles {
+                        taken |= caught;
+                    }
+                }
+                shadow[param_starts[i] as usize + pos] = taken;
+            }
+        }
+    }
     let mut ctx = Ctx {
         defers_into_containers,
         program,
@@ -280,6 +312,7 @@ pub fn infer(program: &Program) -> Inference {
         type_names,
         params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
         param_starts,
+        shadow,
         returns: vec![0; program.fns.len()],
         decl_yields: vec![0; program.fns.len()],
         type_fields: program.types.iter().map(|t| vec![0; t.fields.len()]).collect(),
@@ -828,6 +861,7 @@ fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
 
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     let at = ctx.param_starts[decl] as usize + param;
+    let set = set & !ctx.shadow[at];
     if ctx.params[at] | set != ctx.params[at] {
         ctx.params[at] |= set;
         ctx.changed = true;

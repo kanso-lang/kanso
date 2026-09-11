@@ -11,7 +11,7 @@ fn sep _
   ",\n"
 
 fn stream_one xs i
-  io/write (elem_chunk xs[i] (sep i)) .> (_ -> stream_elems xs (i + 1))
+  io/write (elem_chunk xs[i]! (sep i)) .> (_ -> stream_elems xs (i + 1))
 
 fn stream_elems xs i
   if (length xs < i) (io/write "\n]\n") (stream_one xs i)

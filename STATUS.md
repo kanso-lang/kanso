@@ -103,15 +103,6 @@ box; `foo["bar"]` stays the data form. Rides with the effect type above and
 is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
 promises is visible as owed.
 
-### Exhaustiveness on arm match, without the flag (recorded 2026-08-15; the language since its first days)
-
-`check_none_exhaustive` runs only under `KANSO_EXHAUSTIVE`, where the
-2026-07-24 none campaign left it to measure the migration before imposing it.
-Clay, 2026-09-09: "the exhaustiveness when you're looking for a match on an
-arm has always been the way the language works." The flag comes out; the
-group-level return set the campaign's last report blamed is the
-implementer's to sharpen.
-
 ### The book teaches the boundary language (queued P1, 2026-08-26)
 
 Held in the ledger's "Open, not blocking" until the effect type exists; the
