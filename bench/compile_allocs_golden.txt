@@ -349,4 +349,37 @@
 # CI's sitting, 29,386 -> 29,374, a fall of 12 (-0.0408%). The binder set is
 # one reused table, so skipping the fill costs it its growth rather than its
 # creation; twelve blocks is what that growth was.
-compile_allocs=29374
+#
+# 2026-09-12 (the shadow set deferred): 29,350 -> 29,338, a FALL of 12
+# (-0.0409%). The set of a declaration's bound names is a HashSet, and the
+# twelve are its first allocations on the declarations that now never build
+# it. A CORRECTION to the round before this one: that round's notes said the
+# five paydowns could not move this row because reordering tests and sharing
+# frames allocates nothing new, and CI agreed. Deferring a set is a different
+# shape -- it stops allocating something old -- and this row is where that
+# shows up. The row moved for the reason the earlier note ruled out, which is
+# the point: the note was right about those five changes and not about the
+# family.
+#
+# 2026-09-12 (a declaration's callees deduplicated by range): 29,338 -> 29,341,
+# a RISE of 3 (+0.0102%). `callee_first` gained a second scratch vector, the
+# ranges the gathered names resolve to. It is cleared per declaration rather
+# than rebuilt, so the three are its growth steps over the whole compile and
+# not a per-declaration cost. The dead scan removed in the same branch
+# allocated nothing, so none of the three is its.
+#
+# 2026-09-12 (three checks each rebuilt the same (name, arity) table): 29,341
+# -> 29,327, a FALL of 14 (-0.0477%). Three checks each built their own
+# `(name, arity) -> Set` map over `inference.returns`; the table is built once
+# now and handed round. Fourteen rather than three, because the row counts the
+# whole compile and `check_merged_after_aliases` runs once per module the
+# directory holds, not once per compile.
+#
+# 2026-09-12 (a dispatch group's catch mask is decided once): 29,327 -> 29,335,
+# a RISE of 8 (+0.0273%). One `Vec<Set>` beside `group_members`, a row per
+# dispatch group and a column per parameter position, replaces a fold that
+# recomputed the same mask on every visit. Eight rather than one because the
+# row counts the whole compile and the table is built once per module the
+# directory holds. What it buys on this same corpus is in
+# bench/compile_instructions_golden.txt.
+compile_allocs=29335

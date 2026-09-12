@@ -148,4 +148,52 @@
 # library rows fall within 1,767 instructions of each other on the same change,
 # which is kanso#1344's finding restated: the two corpora name the identical
 # imports and are the same measurement.
-library_instructions=166320043
+# 2026-09-12 (five compile-cost paydowns in the whole-program checks):
+# 164,342,505 -> 160,184,317, a FALL of 4,158,188 (-2.5302%). The same three
+# fusions and two necessary conditions; see
+# bench/compile_instructions_golden.txt.
+# 2026-09-12 (the shadow set deferred, on top of the five paydowns):
+# 160,184,317 -> 158,447,681, a further FALL of 1,736,636 (-1.0842%), and
+# 164,342,505 -> 158,447,681 against main, a FALL of 5,894,824 (-3.5868%).
+# See bench/compile_instructions_golden.txt. This row and the entry row fall
+# within 1,490 instructions and 0.0009 percentage points of each other, which
+# is what a per-declaration saving looks like on two routes that differ only
+# in how they were entered.
+# 2026-09-12 (a declaration's callees deduplicated by range, and a dead scan):
+# 158,447,681 -> 157,092,747, a FALL of 1,354,934 (-0.8552%). See
+# bench/compile_instructions_golden.txt. This row and the entry row have fallen
+# together on every round since they were minted; here they part by 0.2725
+# percentage points, the widest gap yet. The library route checks a file of
+# definitions where the entry route checks statements too, so a saving that
+# scales with declarations reaches them in different proportion.
+# 2026-09-12 (a name is a type only where a cheap test says it could be):
+# 157,092,747 -> 156,463,912, a FALL of 628,835 (-0.4003%). See
+# bench/compile_instructions_golden.txt. This row and the entry row are back
+# within 0.0104 percentage points of each other after last round's 0.2725,
+# which is what a saving keyed to identifiers rather than to declarations looks
+# like: both routes walk the same bodies.
+# 2026-09-12 (three checks each rebuilt the same (name, arity) table):
+# 156,463,912 -> 155,663,482, a FALL of 800,430 (-0.5116%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0096 percentage points, the closest they have ever run.
+# 2026-09-12 (the decidable check joins the one descent):
+# 155,663,482 -> 155,103,784, a FALL of 559,698 (-0.3596%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0018 percentage points, closer than last round's 0.0096 and the closest
+# they have run. Both routes walk the same bodies and the saving is per node,
+# so there is nothing left for the two entrances to differ over.
+# 2026-09-12 (the shapes walk joins the one descent too) -- SUPERSEDED, see
+# below: 155,103,784 -> 154,346,192 was read on the pre-catch-mask base.
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 155,103,784 -> 153,023,863, a FALL of 2,079,921 (-1.3410%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0015 percentage points, the closest they have run: both routes merge the
+# same library and call into it the same way, and there is nothing left for the
+# two entrances to differ over on a per-call-site saving.
+# 2026-09-12 (the shapes walk joins the one descent too, re-measured on the
+# catch-mask base):
+# 153,023,863 -> 152,261,219, a FALL of 762,644 (-0.4984%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0035 percentage points. Both routes walk the same bodies and the saving is
+# per node, so there is nothing for the two entrances to differ over.
+library_instructions=152261219

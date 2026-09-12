@@ -1,0 +1,8 @@
+error[naming]: `silly?` asks a question: a `?` function answers true or false (err may ride along)
+  --> a_none_in_a_list_does_not_silence_the_rest.kso:1:4
+   1 | fn silly? n
+          ^
+error[none]: a list cannot hold a none: a lookup answers "not found" with one, so an element would be indistinguishable
+  --> a_none_in_a_list_does_not_silence_the_rest.kso:2:6
+   2 |   [n none 3]
+            ^

@@ -1,0 +1,4 @@
+fn silly b
+  b == true
+
+pub play = print "{silly 1}"

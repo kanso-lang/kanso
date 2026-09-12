@@ -213,22 +213,142 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// linter elsewhere would warn about is refused here.
 /// An `if` is a condition and two branches, and inference indexes all three,
 /// so the shape is refused before inference ever runs.
-fn check_if_arity(program: &Program, diags: &mut Vec<Diagnostic>) {
+/// ONE DESCENT, MANY CHECKS.
+///
+/// Each check gathered here visits every expression of every non-synthetic
+/// declaration and asks one cheap question of the node it is standing on.
+/// They used to do that separately, so the program's syntax tree was walked
+/// once per check: the stack traffic and the child enumeration paid for
+/// again and again to answer questions that could all be asked at the same
+/// node. A bare descent over the compile corpus and the entry corpus costs
+/// 1,147,185 instructions, measured with a walk that does no per-node work
+/// at all, and every check added here stops paying one.
+///
+/// WHAT MAY JOIN. A check belongs here when its per-node question is a
+/// function of the node alone. It need not descend into every child: a check
+/// that visits fewer nodes joins by carrying a flag, and the walk keeps
+/// descending for everybody else. `check_decidable_failures` was written up
+/// here as the counter-example that could not join, on the grounds that it
+/// PRUNES — taking only the condition of an `if`, because a guarded branch
+/// may be unreachable and refusing it would refuse a program that runs. That
+/// is a reason to stop ASKING at the branches, not a reason to stop walking
+/// them, and `shapes_walk` already carried `raised` for the same shape. It
+/// joined as `decidable_failure_at` under a `decidable` flag.
+///
+/// What still cannot join is a question about something other than the node:
+/// a check that needs its own bindings in scope, or one whose answer depends
+/// on where in the declaration it is standing.
+///
+/// ORDER. The diagnostics interleave now where they used to arrive in
+/// check-sized runs, and that is safe because every route sorts by span
+/// before rendering. The sort is stable, so two diagnostics at one line and
+/// column would keep the order they were pushed in — the error corpus is
+/// what pins that, and no pair here shares a node.
+///
+/// ONLY THE ARITY ANSWER GATES INFERENCE. The caller returns without running
+/// inference when this walk refuses an `if`, because inference indexes an
+/// `if`'s three children and must not run over a shape that has fewer. That
+/// guarantee is `if_arity_at`'s alone. The other two questions have nothing
+/// to do with it, and when their diagnostics shared that gate a program whose
+/// only fault was `b == true` returned from it and skipped every check after
+/// — the boolean naming rule, the call arities, the field-existence check,
+/// all of it, silently. The caller reads the arity answer back off the
+/// diagnostic's own kind, and rotates the walk's other two answers to the
+/// back. Handing this walk a SECOND vector to separate them at the source is
+/// the shape to avoid: it carries a third pointer through every node of every
+/// declaration to answer a question asked once per compile, and the reading
+/// that says what that costs is CI's, since this row moves with the layout.
+fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let mut arities: crate::hash::Map<&str, usize> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for decl in &program.fns {
+        let widest = arities.entry(decl.name.as_str()).or_insert(0);
+        *widest = (*widest).max(decl.params.len());
+    }
+    for decl in &program.types {
+        if !decl.members.is_empty() {
+            continue;
+        }
+        let takes = match decl.parent {
+            Some(_) => 1,
+            None => decl.fields.len(),
+        };
+        let widest = arities.entry(decl.name.as_str()).or_insert(0);
+        *widest = (*widest).max(takes);
+    }
+    let mut bound: crate::hash::Set<&str> = Default::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
+        }
+        bound.clear();
+        for p in &decl.params {
+            collect_pattern_names(p, &mut bound);
+        }
+        for stmt in &decl.body {
+            if let Stmt::Bind { pattern, .. } = stmt {
+                collect_pattern_names(pattern, &mut bound);
+            }
         }
         for stmt in &decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            if_arity_walk(expr, diags);
+            per_node_walk(expr, &arities, &bound, true, true, diags);
         }
     }
 }
 
-fn if_arity_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+fn per_node_walk(
+    expr: &Expr,
+    arities: &crate::hash::Map<&str, usize>,
+    bound: &crate::hash::Set<&str>,
+    decidable: bool,
+    raised: bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if_arity_at(expr, diags);
+    boolean_equality_at(expr, diags);
+    none_in_collections_at(expr, diags);
+    if decidable {
+        decidable_failure_at(expr, diags);
+    }
+    if raised {
+        err_as_value_at(expr, diags);
+    }
+    call_shaped_at(expr, arities, bound, diags);
+    // An `if` guards its branches, and `and`/`or` are written as one — so a
+    // branch may be unreachable, and a decidable failure inside one is not a
+    // failure the program will meet. examples/logical_ops.kso demonstrates
+    // exactly that: `2 < 1 and 1 / 0 < 9` never divides. The condition itself
+    // is unguarded. The other three questions are about the node alone and
+    // keep descending into all three children, which is why the flag turns
+    // off here rather than the walk stopping.
+    if let Expr::App { head, args, .. } = expr {
+        if let Expr::Ident(name, _) = head.as_ref() {
+            if name == "if" && args.len() == 3 {
+                per_node_walk(head, arities, bound, decidable, true, diags);
+                per_node_walk(&args[0], arities, bound, decidable, true, diags);
+                per_node_walk(&args[1], arities, bound, false, true, diags);
+                per_node_walk(&args[2], arities, bound, false, true, diags);
+                return;
+            }
+            if name == "err" && !args.is_empty() {
+                per_node_walk(head, arities, bound, decidable, false, diags);
+                for arg in args {
+                    per_node_walk(arg, arities, bound, decidable, true, diags);
+                }
+                return;
+            }
+        }
+    }
+    crate::for_each_child(expr, |child| {
+        per_node_walk(child, arities, bound, decidable, true, diags)
+    });
+}
+
+fn if_arity_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
     if let Expr::App { head, args, span, .. } = expr {
         if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() != 3 {
             diags.push(Diagnostic::new(
@@ -241,25 +361,9 @@ fn if_arity_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             ));
         }
     }
-    crate::for_each_child(expr, |child| if_arity_walk(child, diags));
 }
 
-fn check_boolean_equality(program: &Program, diags: &mut Vec<Diagnostic>) {
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            let expr = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
-            };
-            boolean_equality_walk(expr, diags);
-        }
-    }
-}
-
-fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+fn boolean_equality_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
     if let Expr::BinOp { op, lhs, rhs, span } = expr {
         if matches!(*op, "==" | "!=") {
             if let Some(word) = boolean_literal(lhs).or_else(|| boolean_literal(rhs)) {
@@ -267,7 +371,6 @@ fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             }
         }
     }
-    crate::for_each_child(expr, |child| boolean_equality_walk(child, diags));
 }
 
 fn boolean_literal(expr: &Expr) -> Option<&'static str> {
@@ -299,58 +402,12 @@ fn said_plainly(op: &str, word: &str) -> String {
 /// There is no guessing involved, because both readings have a spelling: `(f
 /// x)` calls, and `&f` holds. Refusing the bare form costs a sigil and takes
 /// away a shape whose two meanings looked identical.
-fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut arities: crate::hash::Map<&str, usize> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for decl in &program.fns {
-        let widest = arities.entry(decl.name.as_str()).or_insert(0);
-        *widest = (*widest).max(decl.params.len());
-    }
-    // A constructor applies like anything else, so `[point 3 4]` is the same
-    // ambiguity as `[f x]` and wants the same sentence. Without this the map
-    // holds only functions, the arity reads zero, and the check walks past —
-    // which is why `[want 7]` answered a list of two rather than a diagnostic.
-    // A typeset never constructs, and a subtype takes exactly its one value.
-    for decl in &program.types {
-        if !decl.members.is_empty() {
-            continue;
-        }
-        let takes = match decl.parent {
-            Some(_) => 1,
-            None => decl.fields.len(),
-        };
-        let widest = arities.entry(decl.name.as_str()).or_insert(0);
-        *widest = (*widest).max(takes);
-    }
-    // One set, cleared per declaration. Opening a fresh one each time was an
-    // allocation per declaration in each of the three passes that do this,
-    // and the capacity it had just grown to went with it.
-    let mut bound: crate::hash::Set<&str> = Default::default();
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        // A name bound here is this scope's, whatever a function elsewhere is
-        // called: sha256 binds `first` and `list/first` is not what it means.
-        bound.clear();
-        for p in &decl.params {
-            collect_pattern_names(p, &mut bound);
-        }
-        for stmt in &decl.body {
-            if let Stmt::Bind { pattern, .. } = stmt {
-                collect_pattern_names(pattern, &mut bound);
-            }
-        }
-        for stmt in &decl.body {
-            let expr = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
-            };
-            call_shaped_walk(expr, &arities, &bound, diags);
-        }
-    }
-}
-
+/// ONE DESCENT, MANY CHECKS — the pair at the end.
+///
+/// Both refuse a SHAPE that reads two ways: a bare `err` that looks like a
+/// value, and a list element that looks like a call. They are next to each
+/// other in the run above and stay in that order here, so nothing about
+/// which diagnostic comes first changes.
 fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>) {
     match p {
         Pattern::Var(name, _) => {
@@ -376,7 +433,25 @@ fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>
     }
 }
 
-fn call_shaped_walk(
+/// `err` raises, so a bare mention of it is not a value.
+fn err_as_value_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+    let (Expr::Ident(name, span) | Expr::Partial(name, span)) = expr else {
+        return;
+    };
+    if name != "err" {
+        return;
+    }
+    diags.push(Diagnostic::new(
+        "name",
+        "`err` raises, so it is a call and not a value — an err records the line it \
+         was raised on, and a bare mention has no line to record. Write \
+         `(reason -> err reason)`"
+            .to_string(),
+        *span,
+    ));
+}
+
+fn call_shaped_at(
     expr: &Expr,
     arities: &crate::hash::Map<&str, usize>,
     bound: &crate::hash::Set<&str>,
@@ -406,137 +481,19 @@ fn call_shaped_walk(
             }
         }
     }
-    crate::for_each_child(expr, |child| call_shaped_walk(child, arities, bound, diags));
-}
-
-fn check_err_as_value(program: &Program, diags: &mut Vec<Diagnostic>) {
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    err_value_walk(expr, diags)
-                }
-            }
-        }
-    }
-}
-
-fn err_value_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
-    let mut found = Vec::new();
-    err_value_scan(expr, &mut found);
-    for span in found {
-        diags.push(Diagnostic::new(
-            "name",
-            "`err` raises, so it is a call and not a value — an err records the line it \
-             was raised on, and a bare mention has no line to record. Write \
-             `(reason -> err reason)`"
-                .to_string(),
-            span,
-        ));
-    }
-}
-
-/// Every mention of `err` outside call position, collected rather than
-/// reported so the walk stays a plain traversal.
-fn err_value_scan(expr: &Expr, found: &mut Vec<Span>) {
-    match expr {
-        Expr::Int(..) | Expr::Float(..) => {}
-        Expr::Ident(name, span) => {
-            if name == "err" {
-                found.push(*span);
-            }
-        }
-        Expr::Partial(name, span) => {
-            if name == "err" {
-                found.push(*span);
-            }
-        }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
-            for stmt in stmts {
-                match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        err_value_scan(expr, found)
-                    }
-                }
-            }
-        }
-        Expr::MapLit(pairs, _) => {
-            for (key, value) in pairs {
-                err_value_scan(key, found);
-                err_value_scan(value, found);
-            }
-        }
-        Expr::Str(parts, _) => {
-            for part in parts {
-                if let TemplatePart::Interp(inner) = part {
-                    err_value_scan(inner, found);
-                }
-            }
-        }
-        Expr::List(items, _) => {
-            for item in items {
-                err_value_scan(item, found);
-            }
-        }
-        Expr::App { head, args, .. } => {
-            // the head of a call with arguments IS the raise, which is the one
-            // place the mention names a line of its own
-            match (&**head, args.is_empty()) {
-                (Expr::Ident(name, _), false) if name == "err" => {}
-                _ => err_value_scan(head, found),
-            }
-            for arg in args {
-                err_value_scan(arg, found);
-            }
-        }
-        Expr::Field { base, .. } => err_value_scan(base, found),
-        Expr::Upcast { expr, .. } => err_value_scan(expr, found),
-        Expr::Index { base, index, .. } => {
-            err_value_scan(base, found);
-            err_value_scan(index, found);
-        }
-        Expr::Seq(lhs, rhs, _) => {
-            err_value_scan(lhs, found);
-            err_value_scan(rhs, found);
-        }
-        Expr::Lambda { body, .. } => err_value_scan(body, found),
-        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
-            err_value_scan(lhs, found);
-            err_value_scan(rhs, found);
-        }
-        Expr::Guard { cond, early, rest, .. } => {
-            err_value_scan(cond, found);
-            err_value_scan(early, found);
-            for stmt in rest {
-                match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        err_value_scan(expr, found)
-                    }
-                }
-            }
-        }
-    }
 }
 
 fn check_effect_discarded(
     program: &Program,
-    inference: &crate::infer::Inference,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::DESC;
-    // inference is handed in: one pass serves every check that reads it
 
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     // a position every arm throws away
     let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, d) in program.fns.iter().enumerate() {
-        let key = (d.name.as_str(), d.params.len());
-        *returns.entry(key).or_insert(0) |= inference.returns[i];
+    for d in &program.fns {
         for (pos, param) in d.params.iter().enumerate() {
             let wildcard = matches!(param, Pattern::Wildcard(_));
             let slot = discarded.entry((d.name.as_str(), d.params.len(), pos)).or_insert(true);
@@ -920,50 +877,34 @@ fn check_box_where_value<'p>(
 /// hold one would make every lenient read ambiguous. A record field is
 /// different: it is known to exist, so a none there means the value is
 /// nothing and nothing else.
-fn check_none_in_collections(program: &Program, diags: &mut Vec<Diagnostic>) {
+fn none_in_collections_at(e: &Expr, diags: &mut Vec<Diagnostic>) {
     fn is_none_lit(e: &Expr) -> bool {
         matches!(e, Expr::Ident(name, _) if name == "none")
     }
-    fn walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
-        match e {
-            Expr::List(items, _) => {
-                for item in items.iter().filter(|i| is_none_lit(i)) {
-                    diags.push(Diagnostic::new(
-                        "none",
-                        "a list cannot hold a none: a lookup answers \"not found\" \
-                         with one, so an element would be indistinguishable"
-                            .to_string(),
-                        item.span(),
-                    ));
-                }
+    match e {
+        Expr::List(items, _) => {
+            for item in items.iter().filter(|i| is_none_lit(i)) {
+                diags.push(Diagnostic::new(
+                    "none",
+                    "a list cannot hold a none: a lookup answers \"not found\" \
+                     with one, so an element would be indistinguishable"
+                        .to_string(),
+                    item.span(),
+                ));
             }
-            Expr::MapLit(pairs, _) => {
-                for (_, value) in pairs.iter().filter(|(_, v)| is_none_lit(v)) {
-                    diags.push(Diagnostic::new(
-                        "none",
-                        "a map cannot hold a none: a lookup answers \"not found\" \
-                         with one, so a value would be indistinguishable"
-                            .to_string(),
-                        value.span(),
-                    ));
-                }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (_, value) in pairs.iter().filter(|(_, v)| is_none_lit(v)) {
+                diags.push(Diagnostic::new(
+                    "none",
+                    "a map cannot hold a none: a lookup answers \"not found\" \
+                     with one, so a value would be indistinguishable"
+                        .to_string(),
+                    value.span(),
+                ));
             }
-            _ => {}
         }
-        crate::for_each_child(e, |child| walk(child, diags));
-    }
-    for decl in &program.fns {
-        // The synthetic twin's body is the original's; see the long note in
-        // check_field_exists.
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            };
-            walk(e, diags);
-        }
+        _ => {}
     }
 }
 
@@ -1235,12 +1176,21 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                 // the tie has a winner and there is nothing to report. Without
                 // this the check is pairwise, and a covering arm the author
                 // already wrote is invisible to it.
-                let settled = overlap
+                //
+                // THE CHEAP TEST COMES FIRST. The scan below reads every other
+                // arm of the group and compares each one's parameters twice,
+                // and it can only change the answer for a pair that already
+                // conflicts. It used to be computed for every OVERLAPPING
+                // pair, which is most of them — two arms of equal rank in
+                // every position overlap and neither is stricter anywhere, so
+                // the scan ran and said nothing.
+                let conflicting = overlap && a_stricter && b_stricter;
+                let settled = conflicting
                     && arms.iter().enumerate().any(|(k, c)| {
                         let c = &program.fns[*c as usize];
                         k != i && k != j && covers(c, a, &compare) && covers(c, b, &compare)
                     });
-                if overlap && a_stricter && b_stricter && !settled {
+                if conflicting && !settled {
                     diags.push(Diagnostic::new(
                         "dispatch",
                         format!(
@@ -1937,36 +1887,52 @@ pub fn check_merged_after_aliases(
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    check_if_arity(program, &mut diags);
-    if !diags.is_empty() {
+    check_per_node(program, &mut diags);
+    let walked = diags.len();
+    if diags.iter().any(|d| d.kind == "arity") {
         // inference indexes an if's branches, so it never runs over a shape
-        // the walk above refused
+        // the walk above refused. ONLY that refusal stops it, and only the
+        // refusal is reported: what `retain` drops here is what the checks
+        // below would have said about a program they never got to see.
+        diags.retain(|d| d.kind == "arity");
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         return diags;
     }
     let inference = crate::phase::watched("infer", || crate::infer::infer(program));
+    // What a dispatch group answers, keyed by name and arity. Three checks
+    // below asked this and each built it for itself, in loops identical to
+    // the byte; inference is handed round for exactly this reason and the
+    // table over it should be too. A fourth build sits in
+    // `check_none_exhaustive`, which runs only under KANSO_EXHAUSTIVE and so
+    // keeps its own.
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for (i, d) in program.fns.iter().enumerate() {
+        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
+    }
+    let returns = returns;
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
     check_predicates(program, &inference, &mut diags);
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
-    check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
-    check_call_arities(program, rewritten, &mut diags);
-    foreign_constructions(program, rewritten, &mut diags);
-    typeset_constructions(program, &mut diags);
+    check_named_per_node(program, rewritten, &mut diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
-    check_effect_discarded(program, &inference, &mut diags);
-    check_wall_operands(program, &inference, &mut diags);
-    check_decidable_failures(program, &mut diags);
-    check_discarded_value(program, &inference, &mut diags);
-    check_err_as_value(program, &mut diags);
-    check_call_shaped_list(program, &mut diags);
-    check_boolean_equality(program, &mut diags);
+    check_effect_discarded(program, &returns, &mut diags);
+    check_wall_operands(program, &returns, &mut diags);
+    check_discarded_value(program, &returns, &mut diags);
+    // This route hands its diagnostics back in push order — only the gated
+    // return above sorts — so where a check pushes is what a reader sees.
+    // The walk ran first and its two non-gating questions belong where the
+    // checks they replaced used to push, which for `check_boolean_equality`
+    // was last of the run. Rotating the walk's answers to the back puts them
+    // there and leaves both halves in their own order.
+    diags.rotate_left(walked);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
     }
@@ -2049,48 +2015,24 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// them gets to see the name. Annotations are untouched: a parameter's `:shape`
 /// is a pattern, a field's is a type list, and neither is an expression. What
 /// stays at run time is the same test on the interpreter's construction path.
-fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let annotating: HashSet<&str> = program
-        .types
-        .iter()
-        .filter(|ty| !ty.members.is_empty())
-        .map(|ty| ty.name.as_str())
-        .collect();
-    if annotating.is_empty() {
-        return;
-    }
-    fn walk(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
-        let named = match e {
-            Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name.as_str(), span)),
-            // A widening names its target after the colon, and a typeset is
-            // not something a value can become: `(circle 1):shape` for a
-            // typeset holding `circle` refused at RUN time, on both engines,
-            // with "this value is not a shape" — a sentence that blames a
-            // program whose circle is exactly what the typeset admits.
-            Expr::Upcast { ty, span, .. } => Some((ty.as_str(), span)),
-            _ => None,
-        };
-        if let Some((name, span)) = named {
-            if annotating.contains(name) {
-                diags.push(Diagnostic::new(
-                    "type",
-                    format!("`{name}` is a typeset — it only annotates"),
-                    *span,
-                ));
-            }
-        }
-        crate::for_each_child(e, |child| walk(child, annotating, diags));
-    }
-    for decl in &program.fns {
-        if decl.synthetic || crate::ast::has_slash(&decl.name) {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    walk(expr, &annotating, diags)
-                }
-            }
+fn typeset_at(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    let named = match e {
+        Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name.as_str(), span)),
+        // A widening names its target after the colon, and a typeset is
+        // not something a value can become: `(circle 1):shape` for a
+        // typeset holding `circle` refused at RUN time, on both engines,
+        // with "this value is not a shape" — a sentence that blames a
+        // program whose circle is exactly what the typeset admits.
+        Expr::Upcast { ty, span, .. } => Some((ty.as_str(), span)),
+        _ => None,
+    };
+    if let Some((name, span)) = named {
+        if annotating.contains(name) {
+            diags.push(Diagnostic::new(
+                "type",
+                format!("`{name}` is a typeset — it only annotates"),
+                *span,
+            ));
         }
     }
 }
@@ -2101,65 +2043,26 @@ fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
 ///
 /// A qualified name can never be a local binding, so unlike the arity walk
 /// beside it this needs no shadowing set: the slash IS the foreignness.
-fn foreign_constructions(
-    program: &Program,
-    rewritten: &crate::Rewrites,
-    diags: &mut Vec<Diagnostic>,
-) {
-    let foreign: HashSet<&str> = program
-        .types
-        .iter()
-        .filter(|ty| {
-            crate::ast::has_slash(&ty.name) && (!ty.fields.is_empty() || ty.parent.is_some())
-        })
-        .map(|ty| ty.name.as_str())
-        .collect();
-    if foreign.is_empty() {
-        return;
-    }
-    fn walk(
-        e: &Expr,
-        foreign: &HashSet<&str>,
-        rewritten: &crate::Rewrites,
-        diags: &mut Vec<Diagnostic>,
-    ) {
-        if let Expr::App { head, .. } = e {
-            if let Expr::Ident(name, span) = &**head {
-                // The slash here was written by `canonicalize_bare_aliases`, not
-                // by a person, so it says nothing about foreignness: the program
-                // called an imported FUNCTION by its bare name and the pass
-                // qualified it. Refusing that as a construction of the imported
-                // type of the same name rejects a program that compiles.
-                let pass_wrote_it = match rewritten.get(&(span.line, span.col)) {
-                    Some(bare) => name.as_str().ends_with(bare.as_str()),
-                    None => false,
-                };
-                if !pass_wrote_it && foreign.contains(name.as_str()) {
-                    let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
-                    diags.push(Diagnostic::new(
-                        "opacity",
-                        format!(
-                            "`{name}` is foreign — only `{owner}` builds a `{base}`; \
-                             ask it for one through a pub function"
-                        ),
-                        *span,
-                    ));
-                }
-            }
-        }
-        crate::for_each_child(e, |child| walk(child, foreign, rewritten, diags));
-    }
-    for decl in &program.fns {
-        if decl.synthetic || crate::ast::has_slash(&decl.name) {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    walk(expr, &foreign, rewritten, diags)
-                }
-            }
-        }
+fn foreign_at(name: &str, span: Span, named: &Named<'_>, diags: &mut Vec<Diagnostic>) {
+    // The slash here was written by `canonicalize_bare_aliases`, not
+    // by a person, so it says nothing about foreignness: the program
+    // called an imported FUNCTION by its bare name and the pass
+    // qualified it. Refusing that as a construction of the imported
+    // type of the same name rejects a program that compiles.
+    let pass_wrote_it = match named.rewritten.get(&(span.line, span.col)) {
+        Some(bare) => name.ends_with(bare.as_str()),
+        None => false,
+    };
+    if !pass_wrote_it && named.foreign.contains(name) {
+        let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
+        diags.push(Diagnostic::new(
+            "opacity",
+            format!(
+                "`{name}` is foreign — only `{owner}` builds a `{base}`; \
+                 ask it for one through a pub function"
+            ),
+            span,
+        ));
     }
 }
 
@@ -2206,21 +2109,83 @@ impl<'a> Arities<'a> {
     }
 }
 
-fn check_call_arities(program: &Program, rewritten: &crate::Rewrites, diags: &mut Vec<Diagnostic>) {
-    // Construction is positional and complete, and the same seam hid it: a
-    // type declared in one file of a module and built in another was checked
-    // by nobody, and a foreign type never was. A typeset does not construct
-    // and a subtype takes the one value it wraps, so neither is entered.
-    let fields: HashMap<&str, usize> = program
-        .types
-        .iter()
-        .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
-        .map(|ty| (ty.name.as_str(), ty.fields.len()))
-        .collect();
-    let arities = Arities::of(program);
+/// ONE DESCENT, MANY CHECKS — the half that has to wait.
+///
+/// These three all ask about a NAME, and none of them can join
+/// `check_per_node`: that driver runs in front of inference and returns on
+/// its first diagnostic, so a wrong-arity call reported there would take
+/// every check between it and here with it. They stay where they were, in
+/// the order they were in, and share a descent with each other instead.
+///
+/// The App-with-an-Ident-head destructure happens once, here. Each of these
+/// used to ask it again, so a call node was taken apart three times to ask
+/// three questions about the same name.
+///
+/// Two of the three refuse to look inside a declaration the loader
+/// qualified, and the arity check reads all of them, so that skip is a flag
+/// the walk carries rather than a `continue` in the loop.
+fn check_named_per_node(
+    program: &Program,
+    rewritten: &crate::Rewrites,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let named = Named {
+        // Construction is positional and complete, and the same seam hid it: a
+        // type declared in one file of a module and built in another was checked
+        // by nobody, and a foreign type never was. A typeset does not construct
+        // and a subtype takes the one value it wraps, so neither is entered.
+        fields: program
+            .types
+            .iter()
+            .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
+            .map(|ty| (ty.name.as_str(), ty.fields.len()))
+            .collect(),
+        arities: Arities::of(program),
+        foreign: program
+            .types
+            .iter()
+            .filter(|ty| {
+                crate::ast::has_slash(&ty.name) && (!ty.fields.is_empty() || ty.parent.is_some())
+            })
+            .map(|ty| ty.name.as_str())
+            .collect(),
+        annotating: program
+            .types
+            .iter()
+            .filter(|ty| !ty.members.is_empty())
+            .map(|ty| ty.name.as_str())
+            .collect(),
+        rewritten,
+    };
+    // THE SHADOW SET IS BUILT ONLY WHEN THERE IS SOMETHING TO SHADOW.
+    //
+    // `arity_at`'s one use of the declaration's bound names is to SUPPRESS a
+    // diagnostic: a local binding that shadows a declared group means the
+    // call is not that group's. Walking the parameters and every statement to
+    // collect those names costs the compile corpus 286,809 instructions, and
+    // on a program that compiles it suppresses nothing, because a program
+    // that compiles raises no arity diagnostic to suppress.
+    //
+    // So the walk runs without the set and says what it would say, each
+    // stretch of diagnostics one call pushed remembered with the name it was
+    // about; the set is built only if that list is non-empty. Same answers,
+    // and a clean declaration never builds it.
     let mut bound: HashSet<&str> = HashSet::default();
+    let mut shadowable: Vec<(usize, usize, &str)> = Vec::new();
     for decl in &program.fns {
         if decl.synthetic {
+            continue;
+        }
+        let own = !crate::ast::has_slash(&decl.name);
+        shadowable.clear();
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    named_walk(expr, &named, own, diags, &mut shadowable)
+                }
+            }
+        }
+        if shadowable.is_empty() {
             continue;
         }
         bound.clear();
@@ -2232,10 +2197,54 @@ fn check_call_arities(program: &Program, rewritten: &crate::Rewrites, diags: &mu
         for stmt in &decl.body {
             bound_in_stmt(stmt, &mut bound);
         }
-        for stmt in &decl.body {
-            arity_walk_stmt(stmt, &arities, &fields, &bound, rewritten, diags);
+        // highest first, so an earlier stretch's indices still address the
+        // diagnostics it named
+        for (from, to, name) in shadowable.iter().rev() {
+            if bound.contains(name) {
+                diags.drain(*from..*to);
+            }
         }
     }
+}
+
+/// What the three share: four tables built once over the whole program, and
+/// the record of what the alias pass rewrote.
+struct Named<'a> {
+    fields: HashMap<&'a str, usize>,
+    arities: Arities<'a>,
+    foreign: HashSet<&'a str>,
+    annotating: HashSet<&'a str>,
+    rewritten: &'a crate::Rewrites,
+}
+
+fn named_walk<'a>(
+    e: &'a Expr,
+    named: &Named<'_>,
+    own: bool,
+    diags: &mut Vec<Diagnostic>,
+    shadowable: &mut Vec<(usize, usize, &'a str)>,
+) {
+    if let Expr::App { head, args, .. } = e {
+        if let Expr::Ident(name, span) = &**head {
+            let from = diags.len();
+            arity_at(name, *span, args.len(), named, diags);
+            if diags.len() > from {
+                shadowable.push((from, diags.len(), name.as_str()));
+            }
+            // Each of these two answered nothing on a program with no
+            // foreign types or no typesets, and said so by returning before
+            // its walk began. The walk is shared now, so the emptiness test
+            // moves to the node — a field read, where the lookup it skips is
+            // a hash of the name.
+            if own && !named.foreign.is_empty() {
+                foreign_at(name, *span, named, diags);
+            }
+        }
+    }
+    if own && !named.annotating.is_empty() {
+        typeset_at(e, &named.annotating, diags);
+    }
+    crate::for_each_child(e, |child| named_walk(child, named, own, diags, shadowable));
 }
 
 /// Hands each name a pattern binds to `f`, in the order the pattern spells
@@ -2303,91 +2312,56 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     crate::for_each_child(e, |child| bound_in_expr(child, out));
 }
 
-fn arity_walk_stmt(
-    stmt: &Stmt,
-    arities: &Arities,
-    fields: &HashMap<&str, usize>,
-    bound: &HashSet<&str>,
-    rewritten: &crate::Rewrites,
-    diags: &mut Vec<Diagnostic>,
-) {
-    match stmt {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            arity_walk_expr(expr, arities, fields, bound, rewritten, diags)
+/// A call's argument count against the arms that could answer it.
+/// A call's argument count against the arms that could answer it.
+fn arity_at(name: &str, span: Span, argc: usize, named: &Named<'_>, diags: &mut Vec<Diagnostic>) {
+    // Bare names count too. No binding may shadow a declaration —
+    // `adder = ...` beside `fn adder` is a name error — so a bare
+    // name matching a declared group is that group, and the per-file
+    // pass sees only one file of a module, which leaves every call
+    // to a sibling file unchecked.
+    let known = named.arities.get(name);
+    if let Some(count) = named.fields.get(name) {
+        if argc != *count {
+            diags.push(Diagnostic::new(
+                "arity",
+                format!(
+                    "`{name}` has {count} field(s), got {argc} \
+                     (construction is positional, fields alphabetical)"
+                ),
+                span,
+            ));
         }
     }
-}
-
-fn arity_walk_expr(
-    e: &Expr,
-    arities: &Arities,
-    fields: &HashMap<&str, usize>,
-    bound: &HashSet<&str>,
-    rewritten: &crate::Rewrites,
-    diags: &mut Vec<Diagnostic>,
-) {
-    if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(name, span) = &**head {
-            // Bare names count too. No binding may shadow a declaration —
-            // `adder = ...` beside `fn adder` is a name error — so a bare
-            // name matching a declared group is that group, and the per-file
-            // pass sees only one file of a module, which leaves every call
-            // to a sibling file unchecked.
-            let known = arities.get(name);
-            if !bound.contains(name.as_str()) {
-                if let Some(count) = fields.get(name.as_str()) {
-                    if args.len() != *count {
-                        diags.push(Diagnostic::new(
-                            "arity",
-                            format!(
-                                "`{name}` has {count} field(s), got {} \
-                                 (construction is positional, fields alphabetical)",
-                                args.len()
-                            ),
-                            *span,
-                        ));
-                    }
-                }
-                if known.is_none() {
-                    if let Some(takes) = builtin_arity(name) {
-                        if args.len() != takes {
-                            diags.push(Diagnostic::new(
-                                "arity",
-                                format!("`{name}` takes {takes} argument(s), got {}", args.len()),
-                                *span,
-                            ));
-                        }
-                    }
-                }
-                if let Some(known) = known {
-                    if !known.contains(&args.len()) && !known.contains(&0) {
-                        let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
-                        takes.sort();
-                        // kanso#1120: a diagnostic names what the import
-                        // writes. Where the alias pass qualified a bare call,
-                        // that is the bare name, not the one it wrote.
-                        let said = match rewritten.get(&(span.line, span.col)) {
-                            Some(bare) if name.as_str().ends_with(bare.as_str()) => bare.as_str(),
-                            _ => name.as_str(),
-                        };
-                        diags.push(Diagnostic::new(
-                            "arity",
-                            format!(
-                                "no {}-argument arm of `{}` (arms take {})",
-                                args.len(),
-                                said,
-                                takes.join(", ")
-                            ),
-                            *span,
-                        ));
-                    }
-                }
+    if known.is_none() {
+        if let Some(takes) = builtin_arity(name) {
+            if argc != takes {
+                diags.push(Diagnostic::new(
+                    "arity",
+                    format!("`{name}` takes {takes} argument(s), got {argc}"),
+                    span,
+                ));
             }
         }
     }
-    crate::for_each_child(e, |child| {
-        arity_walk_expr(child, arities, fields, bound, rewritten, diags)
-    });
+    if let Some(known) = known {
+        if !known.contains(&argc) && !known.contains(&0) {
+            let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
+            takes.sort();
+            // kanso#1120: a diagnostic names what the import
+            // writes. Where the alias pass qualified a bare call,
+            // that is the bare name, not the one it wrote.
+            let said = match named.rewritten.get(&(span.line, span.col)) {
+                Some(bare) if name.ends_with(bare.as_str()) => bare.as_str(),
+                _ => name,
+            };
+            diags.push(Diagnostic::new(
+                "arity",
+                format!("no {argc}-argument arm of `{said}` (arms take {})", takes.join(", ")),
+                span,
+            ));
+        }
+    }
 }
 
 /// A literal argument no arm could ever take.
@@ -2616,7 +2590,14 @@ fn literal_walk_expr(
 ) {
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(name, _) = &**head {
-            if !bound.contains(name.as_str()) {
+            // THE CHEAP TEST COMES FIRST, and the shadowing lookup is not one.
+            // Every arm below is guarded by `literal_kind(arg)`, so a call
+            // with no literal argument can say nothing at all — and asking
+            // that is a discriminant match on each argument, where what it
+            // skips hashes the callee's name three times over and takes a
+            // qualified name apart.
+            if args.iter().any(|arg| literal_kind(arg).is_some()) && !bound.contains(name.as_str())
+            {
                 // a std wrapper is a rename over a builtin, so the builtin's
                 // demand is the one that will actually be met
                 let alias = builtins.get(&(name.as_str(), args.len())).copied();
@@ -4154,15 +4135,10 @@ fn moved_to_os(name: &str) -> String {
 /// which those are. An operand it cannot judge is left alone.
 fn check_wall_operands(
     program: &Program,
-    inference: &crate::infer::Inference,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, d) in program.fns.iter().enumerate() {
-        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
-    }
 
     // An err is a legitimate operand — propagating one is what the wall does
     // when a side fails — so only a side that can be neither an effect nor a
@@ -4300,15 +4276,10 @@ fn check_wall_operands(
 /// group's join naming `&`, an operator the author never wrote.
 fn check_discarded_value(
     program: &Program,
-    inference: &crate::infer::Inference,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, d) in program.fns.iter().enumerate() {
-        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
-    }
 
     // A construction answers its own type and nothing else, so it is refused
     // wherever a call that can only answer a value is. A typeset is a
@@ -4382,22 +4353,11 @@ fn flatten_join<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
 /// conversion whose argument IS a literal that does not parse. A divisor that
 /// arrives as a parameter cannot be decided here and is left alone — refusing
 /// what it cannot read would be worse than the bug.
-fn check_decidable_failures(program: &Program, diags: &mut Vec<Diagnostic>) {
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    decidable_walk(expr, diags)
-                }
-            }
-        }
-    }
-}
-
-fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
+///
+/// The descent is `per_node_walk`'s, which carries a flag saying whether the
+/// node is reached unguarded; see the rule there for why a guarded branch is
+/// not asked.
+fn decidable_failure_at(e: &Expr, diags: &mut Vec<Diagnostic>) {
     if let Expr::BinOp { op, rhs, span, .. } = e {
         if matches!(*op, "/" | "%") && matches!(rhs.as_ref(), Expr::Int(n, _) if n.is_zero()) {
             let named = match *op {
@@ -4412,18 +4372,6 @@ fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
             unparseable_conversion(name, args, diags);
         }
     }
-    // An `if` guards its branches, and `and`/`or` are written as one — so a
-    // branch may be unreachable and refusing it would refuse a program that
-    // runs. examples/logical_ops.kso demonstrates exactly that: `2 < 1 and
-    // 1 / 0 < 9` never divides. The condition itself is unguarded and stays
-    // in the walk.
-    if let Expr::App { head, args, .. } = e {
-        if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() == 3 {
-            decidable_walk(&args[0], diags);
-            return;
-        }
-    }
-    crate::for_each_child(e, |child| decidable_walk(child, diags));
 }
 
 /// `to_int` and `to_float` given a literal that will not parse.

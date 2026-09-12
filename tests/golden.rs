@@ -148,9 +148,15 @@ fn plan_prints_the_description_without_executing_it() {
 
 /// Every fixture runs as a LIBRARY through the harness-generated entry, per
 /// the play migration — this corpus no longer touches the compiler's entry
-/// synthesis. Most diagnostics are byte-identical either way; the 23 that
+/// synthesis. Most diagnostics are byte-identical either way; the ones that
 /// gain the loader's ` (module …)` suffix carry a second golden for this
 /// path, the same shape as the micro corpus's `.imported.out`.
+///
+/// This sentence said TWENTY-THREE of them and there were 41 the day it was
+/// corrected. A count of files on disk goes stale every time somebody adds a
+/// fixture, and nothing here reads it, so it is a number with a maintenance
+/// cost and no reader. `ls tests/golden/errors/*.imported.stderr | wc -l`
+/// answers it, and the answer is true when you ask.
 #[test]
 fn error_corpus_reports_each_golden_diagnostic() {
     for program in kso_files(&manifest_dir().join("tests/golden/errors")) {
