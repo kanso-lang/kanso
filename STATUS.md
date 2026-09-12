@@ -96,9 +96,15 @@ The archive entry of that name. Built on 2026-09-10: the automatic bind is
 gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
 and a provable box handed to something that reads the value inside is
 refused at check. Owes: the `<t>effect` spelling (`e:<int>effect` is refused
-by the canonical-spacing rule today), ch04/ch05 moving with it (the ledger's
-"The book teaches the boundary language"), and the drop question the gavel
-filed — what becomes of a box in tail position that nothing eliminates.
+by the canonical-spacing rule today) and ch04/ch05 moving with it (the
+ledger's "The book teaches the boundary language").
+
+It does NOT owe the drop question. The same 2026-08-29 sitting closed it —
+the archive's "gavel: the drop question closes — explicitness IS the
+guarantee" — and closed it by DECLINING to mint anything: an unused binding
+is already a compile error, so a dropped effect is already unspellable, and
+Clay ruled the premise backwards. "No new checker rule and no io-edge rule
+is minted." An earlier draft of this row carried it as owed.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
