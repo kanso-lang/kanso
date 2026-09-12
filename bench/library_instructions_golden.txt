@@ -145,4 +145,8 @@
 # 2026-09-11 (the ruling's compile cost, paid down by a third):
 # 169,613,006 -> 167,802,001, a fall of 1,811,005 (-1.0677%). The one map
 # and the pinned inline; see bench/compile_instructions_golden.txt.
-library_instructions=167802001
+#
+# 2026-09-12, the same two paydowns. 167,802,001 -> 167,177,778, -624,223
+# (-0.372%). This row is not in the objective; it moves with the other two
+# because the three are one compile counted on three routes.
+library_instructions=167177778

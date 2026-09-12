@@ -157,4 +157,8 @@
 # 2026-09-11 (the ruling's compile cost, paid down by a third):
 # 168,851,345 -> 167,038,742, a fall of 1,812,603 (-1.0735%). The one map
 # and the pinned inline; see bench/compile_instructions_golden.txt.
-entry_instructions=167038742
+#
+# 2026-09-12, the same two paydowns. 167,038,742 -> 166,387,431, -651,311
+# (-0.390%), which is the same fraction the module row moved -- the
+# signature these two rows have had on every change that reaches both.
+entry_instructions=166387431

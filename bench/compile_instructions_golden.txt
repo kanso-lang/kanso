@@ -1176,4 +1176,12 @@
 # inlined at every caller until the shadow load was added, had outlined; the
 # inline is pinned and the load stays. The three instruction rows fall
 # together by nearly the same fraction, the same signature the rise had.
-compile_instructions=50228060
+#
+# 2026-09-12, the exhaustiveness rule's two paydowns. The walk asks its
+# arguments before it asks the returns table, and the shadow table
+# accumulates instead of re-deriving. 50,228,060 -> 50,022,458, -205,602
+# (-0.409%). The container read the two changes at -256,721 SUMMED across
+# this row and the entry row where CI reads -856,913; the toolchains differ
+# and this is a layout vein, so the container sized the change and CI
+# priced it. Both agree on the sign.
+compile_instructions=50022458

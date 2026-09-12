@@ -353,4 +353,12 @@
 # sitting, 29,483 -> 29,473, a fall of 10 (-0.0339%). The exhaustiveness
 # check kept two maps over the program where one carries both facts; the
 # second map is gone, and with it its table.
-compile_allocs=29473
+#
+# 2026-09-12 -- A RISE, and it is the shadow paydown's own ask. 29,473 ->
+# 29,485, +12. The running-total rewrite needs one scratch vector where the
+# derivation it replaces used a scalar; that vector is the only allocation
+# the change introduces, which makes it the candidate rather than a proven
+# cause, and nothing has yet measured the two apart. It is priced against
+# -205,602 on compile_instructions in the same welfare term, and the sum is
+# what the objective reads.
+compile_allocs=29485

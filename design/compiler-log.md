@@ -4459,3 +4459,26 @@ The whole pass, ablated, is 2,500,754 of the branch's compile cost and the
 shadow machinery another 985,601, against roughly 3.9M the branch carries at
 container levels. What is left of that is the traversal, which is kanso#487's
 and not this pass's alone.
+
+**CI's rows for the two paydowns**, landed the round after. compile_instructions
+50,228,060 -> 50,022,458 (-205,602), entry_instructions 167,038,742 ->
+166,387,431 (-651,311), library_instructions 167,802,001 -> 167,177,778
+(-624,223). The objective's compile term is the first two summed: 217,266,802
+-> 216,409,889, **-856,913**.
+
+That is 3.3x the -256,721 this container read for the same two commits, and the
+direction of the disagreement is worth writing down rather than smoothing over.
+Both figures are before-and-after on one host, so neither is a host offset in
+the usual sense; what differs is the toolchain (container rustc 1.94.1 against
+CI's 1.98.1), and compile_instructions is a layout vein whose deltas move with
+inlining. The container sized the change and got the sign right; CI priced it.
+Neither number is wrong and only CI's is the row.
+
+compile_allocs ROSE, 29,473 -> 29,485, +12. The running-total rewrite needs one
+scratch vector where the derivation it replaces used a scalar, and that vector
+is the only allocation the change introduces -- which makes it the candidate
+and not a proven cause, since nothing has measured the two apart. It sits in
+the same welfare term as the -205,602, so the objective reads the pair
+together; the compile corpus is one file importing four modules, so the "one
+vector per module" story that would explain a twelve does NOT fit it, and that
+is the reason this is written as an open attribution rather than an answer.
