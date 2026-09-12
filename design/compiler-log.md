@@ -4378,3 +4378,31 @@ that costs: the compile term's saturating factor moves from 0.8588 to 0.8595,
 worth roughly 0.011 points against a 0.07 shortfall. The floor still moves by
 hand under the 2026-08-25 language clause, and the entry it moves under names
 this paydown, so a reader can see what was tried before the floor moved.
+
+**Every row of "Ruled, unbuilt" waits on this one, and the reorder that would
+avoid that does not exist.** Written here because a blocked row owes a sentence
+naming its blocker, and until now those sentences lived only in a session's
+task list, which resolves nowhere outside that session.
+
+Four rows stand in STATUS.md. Two are builds waiting on the welfare floor and
+nothing else: this one, and kanso#1369 for the 2026-08-15 exhaustiveness
+ruling. The floor shows up in three CI jobs rather than one — welfare, specs
+and the macos host — because `tests/the_digest_is_priced_on_both_sides.rs`
+runs welfare against undoctored goldens and asserts it exits 0, so it fails
+wherever welfare does, and `cargo test --no-fail-fast` carries that target onto
+the other host. One cause, three reds, and they clear together.
+
+The third row, the book's ch04/ch05, waits because `book_check` executes every
+panel and compares its output: the prose cannot describe the effect type before
+it ships. The fourth, the pure-fallibility rider, waits twice — on this PR, and
+on the ledger's Blocking entry asking where the box wraps.
+
+The way to keep the section moving while the floor sits with Clay would be to
+land the `<t>effect` spelling first, since the dependency recorded for it is
+that it "edits a golden this one creates". That reading is too narrow and the
+diff says so. Cherry-picking the spelling onto main conflicts in src/check.rs,
+and every line of the conflict is a change to `check_box_where_value`: the
+map's value type, the group members threaded through it, and the arm that lets
+`e:<int>effect` take a box. The spelling amends the pass this PR introduces, so
+the order is fixed by the code rather than by a golden, and the section stays
+behind the floor.
