@@ -213,7 +213,30 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// linter elsewhere would warn about is refused here.
 /// An `if` is a condition and two branches, and inference indexes all three,
 /// so the shape is refused before inference ever runs.
-fn check_if_arity(program: &Program, diags: &mut Vec<Diagnostic>) {
+/// ONE DESCENT, MANY CHECKS.
+///
+/// Each check gathered here visits every expression of every non-synthetic
+/// declaration and asks one cheap question of the node it is standing on.
+/// They used to do that separately, so the program's syntax tree was walked
+/// once per check: the stack traffic and the child enumeration paid for
+/// again and again to answer questions that could all be asked at the same
+/// node. A bare descent over the compile corpus and the entry corpus costs
+/// 1,147,185 instructions, measured with a walk that does no per-node work
+/// at all, and every check added here stops paying one.
+///
+/// WHAT MAY JOIN. A check belongs here when it descends into every child and
+/// its per-node question is a function of the node alone. `check_decidable_
+/// failures` is the counter-example and stays where it is: it PRUNES, taking
+/// only the condition of an `if` and refusing to look at the branches,
+/// because a guarded branch may be unreachable and refusing it would refuse
+/// a program that runs.
+///
+/// ORDER. The diagnostics interleave now where they used to arrive in
+/// check-sized runs, and that is safe because every route sorts by span
+/// before rendering. The sort is stable, so two diagnostics at one line and
+/// column would keep the order they were pushed in — the error corpus is
+/// what pins that, and no pair here shares a node.
+fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -223,12 +246,19 @@ fn check_if_arity(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            if_arity_walk(expr, diags);
+            per_node_walk(expr, diags);
         }
     }
 }
 
-fn if_arity_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+fn per_node_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+    if_arity_at(expr, diags);
+    boolean_equality_at(expr, diags);
+    none_in_collections_at(expr, diags);
+    crate::for_each_child(expr, |child| per_node_walk(child, diags));
+}
+
+fn if_arity_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
     if let Expr::App { head, args, span, .. } = expr {
         if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() != 3 {
             diags.push(Diagnostic::new(
@@ -241,25 +271,9 @@ fn if_arity_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             ));
         }
     }
-    crate::for_each_child(expr, |child| if_arity_walk(child, diags));
 }
 
-fn check_boolean_equality(program: &Program, diags: &mut Vec<Diagnostic>) {
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            let expr = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
-            };
-            boolean_equality_walk(expr, diags);
-        }
-    }
-}
-
-fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+fn boolean_equality_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
     if let Expr::BinOp { op, lhs, rhs, span } = expr {
         if matches!(*op, "==" | "!=") {
             if let Some(word) = boolean_literal(lhs).or_else(|| boolean_literal(rhs)) {
@@ -267,7 +281,6 @@ fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
             }
         }
     }
-    crate::for_each_child(expr, |child| boolean_equality_walk(child, diags));
 }
 
 fn boolean_literal(expr: &Expr) -> Option<&'static str> {
@@ -694,50 +707,34 @@ fn check_none_exhaustive(
 /// hold one would make every lenient read ambiguous. A record field is
 /// different: it is known to exist, so a none there means the value is
 /// nothing and nothing else.
-fn check_none_in_collections(program: &Program, diags: &mut Vec<Diagnostic>) {
+fn none_in_collections_at(e: &Expr, diags: &mut Vec<Diagnostic>) {
     fn is_none_lit(e: &Expr) -> bool {
         matches!(e, Expr::Ident(name, _) if name == "none")
     }
-    fn walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
-        match e {
-            Expr::List(items, _) => {
-                for item in items.iter().filter(|i| is_none_lit(i)) {
-                    diags.push(Diagnostic::new(
-                        "none",
-                        "a list cannot hold a none: a lookup answers \"not found\" \
-                         with one, so an element would be indistinguishable"
-                            .to_string(),
-                        item.span(),
-                    ));
-                }
+    match e {
+        Expr::List(items, _) => {
+            for item in items.iter().filter(|i| is_none_lit(i)) {
+                diags.push(Diagnostic::new(
+                    "none",
+                    "a list cannot hold a none: a lookup answers \"not found\" \
+                     with one, so an element would be indistinguishable"
+                        .to_string(),
+                    item.span(),
+                ));
             }
-            Expr::MapLit(pairs, _) => {
-                for (_, value) in pairs.iter().filter(|(_, v)| is_none_lit(v)) {
-                    diags.push(Diagnostic::new(
-                        "none",
-                        "a map cannot hold a none: a lookup answers \"not found\" \
-                         with one, so a value would be indistinguishable"
-                            .to_string(),
-                        value.span(),
-                    ));
-                }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (_, value) in pairs.iter().filter(|(_, v)| is_none_lit(v)) {
+                diags.push(Diagnostic::new(
+                    "none",
+                    "a map cannot hold a none: a lookup answers \"not found\" \
+                     with one, so a value would be indistinguishable"
+                        .to_string(),
+                    value.span(),
+                ));
             }
-            _ => {}
         }
-        crate::for_each_child(e, |child| walk(child, diags));
-    }
-    for decl in &program.fns {
-        // The synthetic twin's body is the original's; see the long note in
-        // check_field_exists.
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            };
-            walk(e, diags);
-        }
+        _ => {}
     }
 }
 
@@ -1711,7 +1708,7 @@ pub fn check_merged_after_aliases(
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    check_if_arity(program, &mut diags);
+    check_per_node(program, &mut diags);
     if !diags.is_empty() {
         // inference indexes an if's branches, so it never runs over a shape
         // the walk above refused
@@ -1725,7 +1722,6 @@ pub fn check_merged_after_aliases(
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
-    check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, rewritten, &mut diags);
     foreign_constructions(program, rewritten, &mut diags);
@@ -1740,7 +1736,6 @@ pub fn check_merged_after_aliases(
     check_discarded_value(program, &inference, &mut diags);
     check_err_as_value(program, &mut diags);
     check_call_shaped_list(program, &mut diags);
-    check_boolean_equality(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
     }
