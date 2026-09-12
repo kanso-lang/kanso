@@ -312,7 +312,13 @@ fn said_plainly(op: &str, word: &str) -> String {
 /// There is no guessing involved, because both readings have a spelling: `(f
 /// x)` calls, and `&f` holds. Refusing the bare form costs a sigil and takes
 /// away a shape whose two meanings looked identical.
-fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
+/// ONE DESCENT, MANY CHECKS — the pair at the end.
+///
+/// Both refuse a SHAPE that reads two ways: a bare `err` that looks like a
+/// value, and a list element that looks like a call. They are next to each
+/// other in the run above and stay in that order here, so nothing about
+/// which diagnostic comes first changes.
+fn check_shapes_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
     let mut arities: crate::hash::Map<&str, usize> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
@@ -359,7 +365,7 @@ fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            call_shaped_walk(expr, &arities, &bound, diags);
+            shapes_walk(expr, &arities, &bound, true, diags);
         }
     }
 }
@@ -389,7 +395,54 @@ fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>
     }
 }
 
-fn call_shaped_walk(
+/// `raised` is false for exactly one node: the head of a call that HAS
+/// arguments and is spelled `err`. That head is the raise itself, which is
+/// the one mention naming a line of its own, and the separate walk this
+/// replaces expressed the same exception by declining to descend into it.
+fn shapes_walk(
+    expr: &Expr,
+    arities: &crate::hash::Map<&str, usize>,
+    bound: &crate::hash::Set<&str>,
+    raised: bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if raised {
+        err_as_value_at(expr, diags);
+    }
+    call_shaped_at(expr, arities, bound, diags);
+    match expr {
+        Expr::App { head, args, .. }
+            if !args.is_empty()
+                && matches!(head.as_ref(), Expr::Ident(name, _) if name == "err") =>
+        {
+            shapes_walk(head, arities, bound, false, diags);
+            for arg in args {
+                shapes_walk(arg, arities, bound, true, diags);
+            }
+        }
+        _ => crate::for_each_child(expr, |child| shapes_walk(child, arities, bound, true, diags)),
+    }
+}
+
+/// `err` raises, so a bare mention of it is not a value.
+fn err_as_value_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+    let (Expr::Ident(name, span) | Expr::Partial(name, span)) = expr else {
+        return;
+    };
+    if name != "err" {
+        return;
+    }
+    diags.push(Diagnostic::new(
+        "name",
+        "`err` raises, so it is a call and not a value — an err records the line it \
+         was raised on, and a bare mention has no line to record. Write \
+         `(reason -> err reason)`"
+            .to_string(),
+        *span,
+    ));
+}
+
+fn call_shaped_at(
     expr: &Expr,
     arities: &crate::hash::Map<&str, usize>,
     bound: &crate::hash::Set<&str>,
@@ -416,119 +469,6 @@ fn call_shaped_walk(
                     ),
                     *span,
                 ));
-            }
-        }
-    }
-    crate::for_each_child(expr, |child| call_shaped_walk(child, arities, bound, diags));
-}
-
-fn check_err_as_value(program: &Program, diags: &mut Vec<Diagnostic>) {
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    err_value_walk(expr, diags)
-                }
-            }
-        }
-    }
-}
-
-fn err_value_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
-    let mut found = Vec::new();
-    err_value_scan(expr, &mut found);
-    for span in found {
-        diags.push(Diagnostic::new(
-            "name",
-            "`err` raises, so it is a call and not a value — an err records the line it \
-             was raised on, and a bare mention has no line to record. Write \
-             `(reason -> err reason)`"
-                .to_string(),
-            span,
-        ));
-    }
-}
-
-/// Every mention of `err` outside call position, collected rather than
-/// reported so the walk stays a plain traversal.
-fn err_value_scan(expr: &Expr, found: &mut Vec<Span>) {
-    match expr {
-        Expr::Int(..) | Expr::Float(..) => {}
-        Expr::Ident(name, span) => {
-            if name == "err" {
-                found.push(*span);
-            }
-        }
-        Expr::Partial(name, span) => {
-            if name == "err" {
-                found.push(*span);
-            }
-        }
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
-            for stmt in stmts {
-                match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        err_value_scan(expr, found)
-                    }
-                }
-            }
-        }
-        Expr::MapLit(pairs, _) => {
-            for (key, value) in pairs {
-                err_value_scan(key, found);
-                err_value_scan(value, found);
-            }
-        }
-        Expr::Str(parts, _) => {
-            for part in parts {
-                if let TemplatePart::Interp(inner) = part {
-                    err_value_scan(inner, found);
-                }
-            }
-        }
-        Expr::List(items, _) => {
-            for item in items {
-                err_value_scan(item, found);
-            }
-        }
-        Expr::App { head, args, .. } => {
-            // the head of a call with arguments IS the raise, which is the one
-            // place the mention names a line of its own
-            match (&**head, args.is_empty()) {
-                (Expr::Ident(name, _), false) if name == "err" => {}
-                _ => err_value_scan(head, found),
-            }
-            for arg in args {
-                err_value_scan(arg, found);
-            }
-        }
-        Expr::Field { base, .. } => err_value_scan(base, found),
-        Expr::Upcast { expr, .. } => err_value_scan(expr, found),
-        Expr::Index { base, index, .. } => {
-            err_value_scan(base, found);
-            err_value_scan(index, found);
-        }
-        Expr::Seq(lhs, rhs, _) => {
-            err_value_scan(lhs, found);
-            err_value_scan(rhs, found);
-        }
-        Expr::Lambda { body, .. } => err_value_scan(body, found),
-        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
-            err_value_scan(lhs, found);
-            err_value_scan(rhs, found);
-        }
-        Expr::Guard { cond, early, rest, .. } => {
-            err_value_scan(cond, found);
-            err_value_scan(early, found);
-            for stmt in rest {
-                match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                        err_value_scan(expr, found)
-                    }
-                }
             }
         }
     }
@@ -1723,9 +1663,7 @@ pub fn check_merged_after_aliases(
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
-    check_call_arities(program, rewritten, &mut diags);
-    foreign_constructions(program, rewritten, &mut diags);
-    typeset_constructions(program, &mut diags);
+    check_named_per_node(program, rewritten, &mut diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
@@ -1734,8 +1672,7 @@ pub fn check_merged_after_aliases(
     check_wall_operands(program, &inference, &mut diags);
     check_decidable_failures(program, &mut diags);
     check_discarded_value(program, &inference, &mut diags);
-    check_err_as_value(program, &mut diags);
-    check_call_shaped_list(program, &mut diags);
+    check_shapes_per_node(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
     }
@@ -1817,48 +1754,24 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// them gets to see the name. Annotations are untouched: a parameter's `:shape`
 /// is a pattern, a field's is a type list, and neither is an expression. What
 /// stays at run time is the same test on the interpreter's construction path.
-fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let annotating: HashSet<&str> = program
-        .types
-        .iter()
-        .filter(|ty| !ty.members.is_empty())
-        .map(|ty| ty.name.as_str())
-        .collect();
-    if annotating.is_empty() {
-        return;
-    }
-    fn walk(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
-        let named = match e {
-            Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name.as_str(), span)),
-            // A widening names its target after the colon, and a typeset is
-            // not something a value can become: `(circle 1):shape` for a
-            // typeset holding `circle` refused at RUN time, on both engines,
-            // with "this value is not a shape" — a sentence that blames a
-            // program whose circle is exactly what the typeset admits.
-            Expr::Upcast { ty, span, .. } => Some((ty.as_str(), span)),
-            _ => None,
-        };
-        if let Some((name, span)) = named {
-            if annotating.contains(name) {
-                diags.push(Diagnostic::new(
-                    "type",
-                    format!("`{name}` is a typeset — it only annotates"),
-                    *span,
-                ));
-            }
-        }
-        crate::for_each_child(e, |child| walk(child, annotating, diags));
-    }
-    for decl in &program.fns {
-        if decl.synthetic || crate::ast::has_slash(&decl.name) {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    walk(expr, &annotating, diags)
-                }
-            }
+fn typeset_at(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    let named = match e {
+        Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name.as_str(), span)),
+        // A widening names its target after the colon, and a typeset is
+        // not something a value can become: `(circle 1):shape` for a
+        // typeset holding `circle` refused at RUN time, on both engines,
+        // with "this value is not a shape" — a sentence that blames a
+        // program whose circle is exactly what the typeset admits.
+        Expr::Upcast { ty, span, .. } => Some((ty.as_str(), span)),
+        _ => None,
+    };
+    if let Some((name, span)) = named {
+        if annotating.contains(name) {
+            diags.push(Diagnostic::new(
+                "type",
+                format!("`{name}` is a typeset — it only annotates"),
+                *span,
+            ));
         }
     }
 }
@@ -1869,65 +1782,26 @@ fn typeset_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
 ///
 /// A qualified name can never be a local binding, so unlike the arity walk
 /// beside it this needs no shadowing set: the slash IS the foreignness.
-fn foreign_constructions(
-    program: &Program,
-    rewritten: &crate::Rewrites,
-    diags: &mut Vec<Diagnostic>,
-) {
-    let foreign: HashSet<&str> = program
-        .types
-        .iter()
-        .filter(|ty| {
-            crate::ast::has_slash(&ty.name) && (!ty.fields.is_empty() || ty.parent.is_some())
-        })
-        .map(|ty| ty.name.as_str())
-        .collect();
-    if foreign.is_empty() {
-        return;
-    }
-    fn walk(
-        e: &Expr,
-        foreign: &HashSet<&str>,
-        rewritten: &crate::Rewrites,
-        diags: &mut Vec<Diagnostic>,
-    ) {
-        if let Expr::App { head, .. } = e {
-            if let Expr::Ident(name, span) = &**head {
-                // The slash here was written by `canonicalize_bare_aliases`, not
-                // by a person, so it says nothing about foreignness: the program
-                // called an imported FUNCTION by its bare name and the pass
-                // qualified it. Refusing that as a construction of the imported
-                // type of the same name rejects a program that compiles.
-                let pass_wrote_it = match rewritten.get(&(span.line, span.col)) {
-                    Some(bare) => name.as_str().ends_with(bare.as_str()),
-                    None => false,
-                };
-                if !pass_wrote_it && foreign.contains(name.as_str()) {
-                    let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
-                    diags.push(Diagnostic::new(
-                        "opacity",
-                        format!(
-                            "`{name}` is foreign — only `{owner}` builds a `{base}`; \
-                             ask it for one through a pub function"
-                        ),
-                        *span,
-                    ));
-                }
-            }
-        }
-        crate::for_each_child(e, |child| walk(child, foreign, rewritten, diags));
-    }
-    for decl in &program.fns {
-        if decl.synthetic || crate::ast::has_slash(&decl.name) {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    walk(expr, &foreign, rewritten, diags)
-                }
-            }
-        }
+fn foreign_at(name: &str, span: Span, named: &Named<'_>, diags: &mut Vec<Diagnostic>) {
+    // The slash here was written by `canonicalize_bare_aliases`, not
+    // by a person, so it says nothing about foreignness: the program
+    // called an imported FUNCTION by its bare name and the pass
+    // qualified it. Refusing that as a construction of the imported
+    // type of the same name rejects a program that compiles.
+    let pass_wrote_it = match named.rewritten.get(&(span.line, span.col)) {
+        Some(bare) => name.ends_with(bare.as_str()),
+        None => false,
+    };
+    if !pass_wrote_it && named.foreign.contains(name) {
+        let (owner, base) = crate::ast::split_qual(name).unwrap_or(("", name));
+        diags.push(Diagnostic::new(
+            "opacity",
+            format!(
+                "`{name}` is foreign — only `{owner}` builds a `{base}`; \
+                 ask it for one through a pub function"
+            ),
+            span,
+        ));
     }
 }
 
@@ -1974,18 +1848,54 @@ impl<'a> Arities<'a> {
     }
 }
 
-fn check_call_arities(program: &Program, rewritten: &crate::Rewrites, diags: &mut Vec<Diagnostic>) {
-    // Construction is positional and complete, and the same seam hid it: a
-    // type declared in one file of a module and built in another was checked
-    // by nobody, and a foreign type never was. A typeset does not construct
-    // and a subtype takes the one value it wraps, so neither is entered.
-    let fields: HashMap<&str, usize> = program
-        .types
-        .iter()
-        .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
-        .map(|ty| (ty.name.as_str(), ty.fields.len()))
-        .collect();
-    let arities = Arities::of(program);
+/// ONE DESCENT, MANY CHECKS — the half that has to wait.
+///
+/// These three all ask about a NAME, and none of them can join
+/// `check_per_node`: that driver runs in front of inference and returns on
+/// its first diagnostic, so a wrong-arity call reported there would take
+/// every check between it and here with it. They stay where they were, in
+/// the order they were in, and share a descent with each other instead.
+///
+/// The App-with-an-Ident-head destructure happens once, here. Each of these
+/// used to ask it again, so a call node was taken apart three times to ask
+/// three questions about the same name.
+///
+/// Two of the three refuse to look inside a declaration the loader
+/// qualified, and the arity check reads all of them, so that skip is a flag
+/// the walk carries rather than a `continue` in the loop.
+fn check_named_per_node(
+    program: &Program,
+    rewritten: &crate::Rewrites,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let named = Named {
+        // Construction is positional and complete, and the same seam hid it: a
+        // type declared in one file of a module and built in another was checked
+        // by nobody, and a foreign type never was. A typeset does not construct
+        // and a subtype takes the one value it wraps, so neither is entered.
+        fields: program
+            .types
+            .iter()
+            .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
+            .map(|ty| (ty.name.as_str(), ty.fields.len()))
+            .collect(),
+        arities: Arities::of(program),
+        foreign: program
+            .types
+            .iter()
+            .filter(|ty| {
+                crate::ast::has_slash(&ty.name) && (!ty.fields.is_empty() || ty.parent.is_some())
+            })
+            .map(|ty| ty.name.as_str())
+            .collect(),
+        annotating: program
+            .types
+            .iter()
+            .filter(|ty| !ty.members.is_empty())
+            .map(|ty| ty.name.as_str())
+            .collect(),
+        rewritten,
+    };
     let mut bound: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.synthetic {
@@ -2000,10 +1910,51 @@ fn check_call_arities(program: &Program, rewritten: &crate::Rewrites, diags: &mu
         for stmt in &decl.body {
             bound_in_stmt(stmt, &mut bound);
         }
+        let own = !crate::ast::has_slash(&decl.name);
         for stmt in &decl.body {
-            arity_walk_stmt(stmt, &arities, &fields, &bound, rewritten, diags);
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    named_walk(expr, &named, &bound, own, diags)
+                }
+            }
         }
     }
+}
+
+/// What the three share: four tables built once over the whole program, and
+/// the record of what the alias pass rewrote.
+struct Named<'a> {
+    fields: HashMap<&'a str, usize>,
+    arities: Arities<'a>,
+    foreign: HashSet<&'a str>,
+    annotating: HashSet<&'a str>,
+    rewritten: &'a crate::Rewrites,
+}
+
+fn named_walk(
+    e: &Expr,
+    named: &Named<'_>,
+    bound: &HashSet<&str>,
+    own: bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if let Expr::App { head, args, .. } = e {
+        if let Expr::Ident(name, span) = &**head {
+            arity_at(name, *span, args.len(), named, bound, diags);
+            // Each of these two answered nothing on a program with no
+            // foreign types or no typesets, and said so by returning before
+            // its walk began. The walk is shared now, so the emptiness test
+            // moves to the node — a field read, where the lookup it skips is
+            // a hash of the name.
+            if own && !named.foreign.is_empty() {
+                foreign_at(name, *span, named, diags);
+            }
+        }
+    }
+    if own && !named.annotating.is_empty() {
+        typeset_at(e, &named.annotating, diags);
+    }
+    crate::for_each_child(e, |child| named_walk(child, named, bound, own, diags));
 }
 
 /// Hands each name a pattern binds to `f`, in the order the pattern spells
@@ -2071,91 +2022,66 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     crate::for_each_child(e, |child| bound_in_expr(child, out));
 }
 
-fn arity_walk_stmt(
-    stmt: &Stmt,
-    arities: &Arities,
-    fields: &HashMap<&str, usize>,
+/// A call's argument count against the arms that could answer it.
+/// A call's argument count against the arms that could answer it.
+fn arity_at(
+    name: &str,
+    span: Span,
+    argc: usize,
+    named: &Named<'_>,
     bound: &HashSet<&str>,
-    rewritten: &crate::Rewrites,
     diags: &mut Vec<Diagnostic>,
 ) {
-    match stmt {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            arity_walk_expr(expr, arities, fields, bound, rewritten, diags)
+    // Bare names count too. No binding may shadow a declaration —
+    // `adder = ...` beside `fn adder` is a name error — so a bare
+    // name matching a declared group is that group, and the per-file
+    // pass sees only one file of a module, which leaves every call
+    // to a sibling file unchecked.
+    let known = named.arities.get(name);
+    if bound.contains(name) {
+        return;
+    }
+    if let Some(count) = named.fields.get(name) {
+        if argc != *count {
+            diags.push(Diagnostic::new(
+                "arity",
+                format!(
+                    "`{name}` has {count} field(s), got {argc} \
+                     (construction is positional, fields alphabetical)"
+                ),
+                span,
+            ));
         }
     }
-}
-
-fn arity_walk_expr(
-    e: &Expr,
-    arities: &Arities,
-    fields: &HashMap<&str, usize>,
-    bound: &HashSet<&str>,
-    rewritten: &crate::Rewrites,
-    diags: &mut Vec<Diagnostic>,
-) {
-    if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(name, span) = &**head {
-            // Bare names count too. No binding may shadow a declaration —
-            // `adder = ...` beside `fn adder` is a name error — so a bare
-            // name matching a declared group is that group, and the per-file
-            // pass sees only one file of a module, which leaves every call
-            // to a sibling file unchecked.
-            let known = arities.get(name);
-            if !bound.contains(name.as_str()) {
-                if let Some(count) = fields.get(name.as_str()) {
-                    if args.len() != *count {
-                        diags.push(Diagnostic::new(
-                            "arity",
-                            format!(
-                                "`{name}` has {count} field(s), got {} \
-                                 (construction is positional, fields alphabetical)",
-                                args.len()
-                            ),
-                            *span,
-                        ));
-                    }
-                }
-                if known.is_none() {
-                    if let Some(takes) = builtin_arity(name) {
-                        if args.len() != takes {
-                            diags.push(Diagnostic::new(
-                                "arity",
-                                format!("`{name}` takes {takes} argument(s), got {}", args.len()),
-                                *span,
-                            ));
-                        }
-                    }
-                }
-                if let Some(known) = known {
-                    if !known.contains(&args.len()) && !known.contains(&0) {
-                        let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
-                        takes.sort();
-                        // kanso#1120: a diagnostic names what the import
-                        // writes. Where the alias pass qualified a bare call,
-                        // that is the bare name, not the one it wrote.
-                        let said = match rewritten.get(&(span.line, span.col)) {
-                            Some(bare) if name.as_str().ends_with(bare.as_str()) => bare.as_str(),
-                            _ => name.as_str(),
-                        };
-                        diags.push(Diagnostic::new(
-                            "arity",
-                            format!(
-                                "no {}-argument arm of `{}` (arms take {})",
-                                args.len(),
-                                said,
-                                takes.join(", ")
-                            ),
-                            *span,
-                        ));
-                    }
-                }
+    if known.is_none() {
+        if let Some(takes) = builtin_arity(name) {
+            if argc != takes {
+                diags.push(Diagnostic::new(
+                    "arity",
+                    format!("`{name}` takes {takes} argument(s), got {argc}"),
+                    span,
+                ));
             }
         }
     }
-    crate::for_each_child(e, |child| {
-        arity_walk_expr(child, arities, fields, bound, rewritten, diags)
-    });
+    if let Some(known) = known {
+        if !known.contains(&argc) && !known.contains(&0) {
+            let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
+            takes.sort();
+            // kanso#1120: a diagnostic names what the import
+            // writes. Where the alias pass qualified a bare call,
+            // that is the bare name, not the one it wrote.
+            let said = match named.rewritten.get(&(span.line, span.col)) {
+                Some(bare) if name.ends_with(bare.as_str()) => bare.as_str(),
+                _ => name,
+            };
+            diags.push(Diagnostic::new(
+                "arity",
+                format!("no {argc}-argument arm of `{said}` (arms take {})", takes.join(", ")),
+                span,
+            ));
+        }
+    }
 }
 
 /// A literal argument no arm could ever take.
