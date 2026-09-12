@@ -206,6 +206,22 @@ IS the ruling. The same holds for kanso#1369, whose own paydown already
 recovered 34.5% of its rise and left the rest in the check's own walk. There
 is no third structure to find; the cost is the rule being enforced.
 
+**And the ceiling is lower than that estimate: the gap does not close even at
+zero.** Replaying the model against kanso#1372's counters with
+`compile_instructions` set to main's own 213,158,055 — the effect type costing
+nothing whatever to compile — scores 67.58523299827530 against the floor's
+67.58619464088068. The residue is `compile_allocs`, which went 29,350 ->
+29,374. Twenty-four allocations are worth 0.00096182 of the score on their
+own, more than several recent changes moved the number in total. Restoring
+those as well lands on 67.58619481394834, which agrees with the floor to seven
+decimal places and leaves nothing to ship into.
+
+So the fall is two counters and no others: +4,549,526 compile instructions
+(+2.13%) worth 0.04024, and +24 compile allocations worth 0.00096. The run
+side did not move at all. There is no compile-side engineering that holds this
+floor, and the shape that comes closest sits on the boundary rather than above
+it. The floor edit is not a shortcut around work that could be done instead.
+
 **Options.**
 
 1. Add a Bash permission rule allowing `git add bench/welfare_floor.json` (or
