@@ -383,9 +383,11 @@
 # directory holds. What it buys on this same corpus is in
 # bench/compile_instructions_golden.txt.
 #
-# 2026-09-12 (the effect type, re-measured on main with the four folds in):
-# 29,335 -> 29,359, a RISE of 24 (+0.0818%). check_none_exhaustive's one map
-# per module, keyed (name, arity) with the per-position bool a u64 mask beside
-# the return set. Twenty-four rather than one because the row counts the whole
-# compile and the map is built once per module the directory holds.
-compile_allocs=29359
+# 2026-09-12 (the literal-argument check joins the one descent): 29,335 ->
+# 29,323, a FALL of 12 (-0.0409%). `literal_walk_expr`'s driver built a bound
+# set per declaration to decide which head names were locally shadowed; the
+# fused walk reads the one `check_per_node` already keeps. Twelve rather than
+# one because the row counts the whole compile and the set is built once per
+# declaration in each module the directory holds. What the fold buys on the
+# instruction rows is in bench/compile_instructions_golden.txt.
+compile_allocs=29323

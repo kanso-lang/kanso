@@ -258,6 +258,16 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// the shape to avoid: it carries a third pointer through every node of every
 /// declaration to answer a question asked once per compile, and the reading
 /// that says what that costs is CI's, since this row moves with the layout.
+/// The tables the fused walk carries. One reference rather than four: the
+/// walk is called once per node of every declaration and each table it
+/// gained would otherwise be another pointer in the frame.
+struct PerNode<'a> {
+    arities: crate::hash::Map<&'a str, usize>,
+    groups: LiteralGroups<'a>,
+    types: HashMap<&'a str, &'a TypeDecl>,
+    builtins: HashMap<(&'a str, usize), &'a str>,
+}
+
 fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
     let mut arities: crate::hash::Map<&str, usize> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
@@ -276,6 +286,14 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
         let widest = arities.entry(decl.name.as_str()).or_insert(0);
         *widest = (*widest).max(takes);
     }
+    let tables = PerNode {
+        arities,
+        groups: LiteralGroups::of(program),
+        types: program.types.iter().map(|t| (t.name.as_str(), t)).collect(),
+        // Borrowed: the map is keyed by an owned name, and looking one up
+        // needed a String built from the callee at every call expression.
+        builtins: crate::inline::aliases(program),
+    };
     let mut bound: crate::hash::Set<&str> = Default::default();
     for decl in &program.fns {
         if decl.synthetic {
@@ -295,14 +313,14 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            per_node_walk(expr, &arities, &bound, true, true, diags);
+            per_node_walk(expr, &tables, &bound, true, true, diags);
         }
     }
 }
 
 fn per_node_walk(
     expr: &Expr,
-    arities: &crate::hash::Map<&str, usize>,
+    tables: &PerNode,
     bound: &crate::hash::Set<&str>,
     decidable: bool,
     raised: bool,
@@ -317,7 +335,8 @@ fn per_node_walk(
     if raised {
         err_as_value_at(expr, diags);
     }
-    call_shaped_at(expr, arities, bound, diags);
+    call_shaped_at(expr, &tables.arities, bound, diags);
+    literal_argument_at(expr, tables, bound, diags);
     // An `if` guards its branches, and `and`/`or` are written as one — so a
     // branch may be unreachable, and a decidable failure inside one is not a
     // failure the program will meet. examples/logical_ops.kso demonstrates
@@ -328,23 +347,23 @@ fn per_node_walk(
     if let Expr::App { head, args, .. } = expr {
         if let Expr::Ident(name, _) = head.as_ref() {
             if name == "if" && args.len() == 3 {
-                per_node_walk(head, arities, bound, decidable, true, diags);
-                per_node_walk(&args[0], arities, bound, decidable, true, diags);
-                per_node_walk(&args[1], arities, bound, false, true, diags);
-                per_node_walk(&args[2], arities, bound, false, true, diags);
+                per_node_walk(head, tables, bound, decidable, true, diags);
+                per_node_walk(&args[0], tables, bound, decidable, true, diags);
+                per_node_walk(&args[1], tables, bound, false, true, diags);
+                per_node_walk(&args[2], tables, bound, false, true, diags);
                 return;
             }
             if name == "err" && !args.is_empty() {
-                per_node_walk(head, arities, bound, decidable, false, diags);
+                per_node_walk(head, tables, bound, decidable, false, diags);
                 for arg in args {
-                    per_node_walk(arg, arities, bound, decidable, true, diags);
+                    per_node_walk(arg, tables, bound, decidable, true, diags);
                 }
                 return;
             }
         }
     }
     crate::for_each_child(expr, |child| {
-        per_node_walk(child, arities, bound, decidable, true, diags)
+        per_node_walk(child, tables, bound, decidable, true, diags)
     });
 }
 
@@ -1922,7 +1941,6 @@ pub fn check_merged_after_aliases(
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
-    check_literal_arguments(program, &mut diags);
     check_effect_discarded(program, &returns, &mut diags);
     check_wall_operands(program, &returns, &mut diags);
     check_discarded_value(program, &returns, &mut diags);
@@ -2419,32 +2437,6 @@ impl<'a> LiteralGroups<'a> {
     }
 }
 
-fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let groups = LiteralGroups::of(program);
-    let types: HashMap<&str, &TypeDecl> =
-        program.types.iter().map(|t| (t.name.as_str(), t)).collect();
-    // Borrowed for the walk: the map is keyed by an owned name, and looking
-    // one up needed a String built from the callee at every call expression —
-    // twice, since the same key answered `forwards`. A view keyed by the
-    // program's own names answers both from one lookup and allocates nothing.
-    let builtins = crate::inline::aliases(program);
-    let mut bound: HashSet<&str> = HashSet::default();
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        bound.clear();
-        for param in &decl.params {
-            for_each_param_name(param, &mut |n| {
-                bound.insert(n);
-            });
-        }
-        for stmt in &decl.body {
-            literal_walk_stmt(stmt, &groups, &types, &bound, &builtins, diags);
-        }
-    }
-}
-
 /// What each builtin will accept in each position, verified by running the
 /// wrong thing at each one and reading the diagnostic it gives. Absent
 /// entries are unconstrained: this says nothing it has not checked.
@@ -2565,109 +2557,89 @@ fn type_admits(ty: &str, kind: LitKind, types: &HashMap<&str, &TypeDecl>) -> boo
     }
 }
 
-fn literal_walk_stmt(
-    stmt: &Stmt,
-    groups: &LiteralGroups,
-    types: &HashMap<&str, &TypeDecl>,
-    bound: &HashSet<&str>,
-    builtins: &HashMap<(&str, usize), &str>,
+/// A call whose argument is a literal the callee cannot take. Rides
+/// `per_node_walk`'s descent: its driver was that loop written a second time,
+/// down to skipping synthetic declarations and taking each statement's
+/// expression the same way.
+fn literal_argument_at(
+    e: &Expr,
+    tables: &PerNode,
+    bound: &crate::hash::Set<&str>,
     diags: &mut Vec<Diagnostic>,
 ) {
-    match stmt {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            literal_walk_expr(expr, groups, types, bound, builtins, diags)
+    let Expr::App { head, args, .. } = e else { return };
+    let Expr::Ident(name, _) = &**head else { return };
+    // THE CHEAP TEST COMES FIRST, and the shadowing lookup is not one.
+    // Every arm below is guarded by `literal_kind(arg)`, so a call
+    // with no literal argument can say nothing at all — and asking
+    // that is a discriminant match on each argument, where what it
+    // skips hashes the callee's name three times over and takes a
+    // qualified name apart.
+    if !args.iter().any(|arg| literal_kind(arg).is_some()) || bound.contains(name.as_str()) {
+        return;
+    }
+    let groups = &tables.groups;
+    let types = &tables.types;
+    // a std wrapper is a rename over a builtin, so the builtin's
+    // demand is the one that will actually be met
+    let alias = tables.builtins.get(&(name.as_str(), args.len())).copied();
+    let bare =
+        alias.unwrap_or_else(|| crate::ast::split_qual(name).map(|(_, n)| n).unwrap_or(name));
+    let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
+    // A program that declares its own `run` calls its own `run`,
+    // and the arms below say what those take. Without this, every
+    // function sharing a bare name with a builtin would inherit
+    // the builtin's demands.
+    //
+    // A std wrapper is a declaration too, and it forwards to the
+    // builtin rather than replacing it — so treating it as a
+    // shadow silenced the demand for every builtin somebody had
+    // written a wrapper over. That is how `print 5` came to be
+    // refused at compile time naming its argument while
+    // `text/chars 5` answered a bare runtime string: not a
+    // decision, an accident of which names have wrappers.
+    let forwards = alias.is_some();
+    let declared = groups.has(name, args.len());
+    let shadowed = !forwards && declared;
+    for (i, arg) in args.iter().enumerate() {
+        let Some(kind) = literal_kind(arg) else { continue };
+        let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {
+            continue;
+        };
+        if !allowed.contains(&kind) {
+            let want: Vec<String> =
+                allowed.iter().map(|k| describe_literal(*k).to_string()).collect();
+            diags.push(Diagnostic::new(
+                "type",
+                format!("`{bare}` takes {} here, not {}", or_join(want), describe_literal(kind)),
+                arg.span(),
+            ));
         }
     }
-}
-
-fn literal_walk_expr(
-    e: &Expr,
-    groups: &LiteralGroups,
-    types: &HashMap<&str, &TypeDecl>,
-    bound: &HashSet<&str>,
-    builtins: &HashMap<(&str, usize), &str>,
-    diags: &mut Vec<Diagnostic>,
-) {
-    if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(name, _) = &**head {
-            // THE CHEAP TEST COMES FIRST, and the shadowing lookup is not one.
-            // Every arm below is guarded by `literal_kind(arg)`, so a call
-            // with no literal argument can say nothing at all — and asking
-            // that is a discriminant match on each argument, where what it
-            // skips hashes the callee's name three times over and takes a
-            // qualified name apart.
-            if args.iter().any(|arg| literal_kind(arg).is_some()) && !bound.contains(name.as_str())
-            {
-                // a std wrapper is a rename over a builtin, so the builtin's
-                // demand is the one that will actually be met
-                let alias = builtins.get(&(name.as_str(), args.len())).copied();
-                let bare = alias.unwrap_or_else(|| {
-                    crate::ast::split_qual(name).map(|(_, n)| n).unwrap_or(name)
-                });
-                let bare = bare.strip_prefix("builtin_").unwrap_or(bare);
-                // A program that declares its own `run` calls its own `run`,
-                // and the arms below say what those take. Without this, every
-                // function sharing a bare name with a builtin would inherit
-                // the builtin's demands.
-                //
-                // A std wrapper is a declaration too, and it forwards to the
-                // builtin rather than replacing it — so treating it as a
-                // shadow silenced the demand for every builtin somebody had
-                // written a wrapper over. That is how `print 5` came to be
-                // refused at compile time naming its argument while
-                // `text/chars 5` answered a bare runtime string: not a
-                // decision, an accident of which names have wrappers.
-                let forwards = alias.is_some();
-                let shadowed = !forwards && groups.has(name, args.len());
-                for (i, arg) in args.iter().enumerate() {
-                    let Some(kind) = literal_kind(arg) else { continue };
-                    let Some(allowed) = builtin_demand(bare, i).filter(|_| !shadowed) else {
-                        continue;
-                    };
-                    if !allowed.contains(&kind) {
-                        let want: Vec<String> =
-                            allowed.iter().map(|k| describe_literal(*k).to_string()).collect();
-                        diags.push(Diagnostic::new(
-                            "type",
-                            format!(
-                                "`{bare}` takes {} here, not {}",
-                                or_join(want),
-                                describe_literal(kind)
-                            ),
-                            arg.span(),
-                        ));
-                    }
-                }
-                if groups.has(name, args.len()) {
-                    for (i, arg) in args.iter().enumerate() {
-                        let Some(kind) = literal_kind(arg) else { continue };
-                        let admitted = groups.arms(name, args.len()).any(|a| {
-                            a.params.get(i).is_some_and(|p| pattern_admits(p, kind, types))
-                        });
-                        if !admitted {
-                            let wanted: Vec<String> = groups
-                                .arms(name, args.len())
-                                .filter_map(|a| a.params.get(i))
-                                .map(describe_pattern)
-                                .collect();
-                            diags.push(Diagnostic::new(
-                                "type",
-                                format!(
-                                    "no arm of `{name}` takes {} here (arms take {})",
-                                    describe_literal(kind),
-                                    dedup_join(wanted)
-                                ),
-                                arg.span(),
-                            ));
-                        }
-                    }
-                }
+    if declared {
+        for (i, arg) in args.iter().enumerate() {
+            let Some(kind) = literal_kind(arg) else { continue };
+            let admitted = groups
+                .arms(name, args.len())
+                .any(|a| a.params.get(i).is_some_and(|p| pattern_admits(p, kind, types)));
+            if !admitted {
+                let wanted: Vec<String> = groups
+                    .arms(name, args.len())
+                    .filter_map(|a| a.params.get(i))
+                    .map(describe_pattern)
+                    .collect();
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!(
+                        "no arm of `{name}` takes {} here (arms take {})",
+                        describe_literal(kind),
+                        dedup_join(wanted)
+                    ),
+                    arg.span(),
+                ));
             }
         }
     }
-    crate::for_each_child(e, |child| {
-        literal_walk_expr(child, groups, types, bound, builtins, diags)
-    });
 }
 
 fn describe_literal(kind: LitKind) -> &'static str {
