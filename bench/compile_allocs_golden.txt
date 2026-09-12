@@ -382,4 +382,10 @@
 # row counts the whole compile and the table is built once per module the
 # directory holds. What it buys on this same corpus is in
 # bench/compile_instructions_golden.txt.
-compile_allocs=29335
+#
+# 2026-09-12 (the effect type, re-measured on main with the four folds in):
+# 29,335 -> 29,359, a RISE of 24 (+0.0818%). check_none_exhaustive's one map
+# per module, keyed (name, arity) with the per-position bool a u64 mask beside
+# the return set. Twenty-four rather than one because the row counts the whole
+# compile and the map is built once per module the directory holds.
+compile_allocs=29359

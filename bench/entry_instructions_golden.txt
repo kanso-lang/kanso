@@ -210,4 +210,9 @@
 # bench/compile_instructions_golden.txt. The entry row carries 76.0% of the
 # summed fall, against 76.1% for the same diff on the pre-catch-mask base --
 # the share a saving keyed to nodes takes here, twice.
-entry_instructions=151534916
+# 2026-09-12 (the effect type, re-measured on main with the four folds in):
+# 151,534,916 -> 153,540,262, a RISE of 2,005,346 (+1.3233%). See
+# bench/compile_instructions_golden.txt. The entry row rises 1.12x the module
+# row's fraction, the same direction the folds' FALLS took: this corpus names
+# effects and runs statements, so a per-declaration rule is felt here hardest.
+entry_instructions=153540262

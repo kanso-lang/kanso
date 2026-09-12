@@ -1291,4 +1291,15 @@
 # every pair is measured on the base it lands on.
 #
 # The container projected -273,196 on this row and CI reads 0.88 of that.
-compile_instructions=45522524
+#
+# 2026-09-12 (the effect type, re-measured on main with the four folds in):
+# 45,522,524 -> 46,059,799, a RISE of 537,275 (+1.1802%). The rule's own walk
+# and the shadow load; see the PR. THE RISE SHRANK WITH THE BASE AND THE
+# WELFARE FALL DID NOT. On the pre-fold base the summed compile term rose
+# 1.9626%; with kanso#1381's catch mask and the kanso#1382/#1383 folds
+# underneath it, the same diff rises 1.2903% summed -- and welfare still reads
+# 0.02 below the floor, exactly as it did before. The objective's compile term
+# is a ratio, so the fold gains raise the score and raise the floor with it;
+# what the rule costs is a share, and a share does not shrink because the
+# denominator did.
+compile_instructions=46059799

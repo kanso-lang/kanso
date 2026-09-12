@@ -196,4 +196,10 @@
 # bench/compile_instructions_golden.txt. This row and the entry row part by
 # 0.0035 percentage points. Both routes walk the same bodies and the saving is
 # per node, so there is nothing for the two entrances to differ over.
-library_instructions=152261219
+# 2026-09-12 (the effect type, re-measured on main with the four folds in):
+# 152,261,219 -> 154,267,894, a RISE of 2,006,675 (+1.3179%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 1,329 instructions on a rise of two million -- the two corpora name the same
+# ten imports and are the same measurement, which kanso#1344 established and
+# every round since has re-read.
+library_instructions=154267894

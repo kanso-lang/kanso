@@ -4556,3 +4556,31 @@ a ceiling on what folding could reach rather than a target. The entry side is
 `for_each_child` inclusive under each and the predicates running outside the
 child enumeration are not in that figure. Every one of those four checks
 refuses something a program can do wrong, and the suite is red with them gone.
+
+**Re-measured on main with the four folds underneath it, and the welfare fall
+did not move.** kanso#1381's catch mask and the kanso#1382/#1383/#1384 folds
+all take instructions off the same compile term this rule adds to, so the
+question was whether the fall the floor decision is about survives a base that
+much lower. CI's rows on the merged tree:
+
+    module   45,522,524 ->  46,059,799    +537,275  +1.1802%
+    entry   151,534,916 -> 153,540,262  +2,005,346  +1.3233%
+    library 152,261,219 -> 154,267,894  +2,006,675  +1.3179%
+    summed  197,057,440 -> 199,600,061  +2,542,621  +1.2903%
+
+`compile_allocs` 29,335 -> 29,359, a rise of 24. Against the pre-fold base the
+same diff rose 1.9626% summed; it rises 1.2903% now. The RELATIVE cost fell by
+a third and welfare still reads 0.02 below the floor — 67.71 against 67.73,
+where before the merge it read 67.56 against 67.59. The merge moved the score
++0.15 and the floor +0.14.
+
+That is the objective behaving as written rather than a surprise. The compile
+term is `r / (r + satiation)` with `r` the baseline over the current reading,
+so a fold that lowers the current reading raises the score, and the ratchet
+raises the floor to hold it. What the rule costs is a SHARE of that term, and a
+share does not shrink because the denominator did. No amount of paydown
+underneath this branch dissolves the decision; only a ruling on the weights, or
+dropping the rule, does.
+
+Worth having tried: the alternative was to leave a stale 1.9626% standing as
+the number the decision rested on.
