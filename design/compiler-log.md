@@ -3769,6 +3769,111 @@ order, and every diagnostic in the 201-fixture error corpus is byte-identical.
 There is nothing here that a program could observe and the goldens could not.
 Full release suite green: 129 binaries, 0 failures.
 
+## 2026-09-12 — the decidable check joins the one descent, and the rule that kept it out was about the wrong thing
+
+`check_merged_after_aliases` is 34.64% of the entry-corpus compile inclusive
+and 4.93% exclusive, and the profile says why: SEVEN separate whole-program
+expression walks, each entered once per declaration, visiting the same nodes.
+`for_each_child` inclusive under each, on `kanso check entry_corpus/main.kso`:
+
+    named_walk         2,638x   1,791,359
+    shapes_walk        2,618x   1,333,580
+    literal_walk_expr  2,638x   1,306,073
+    field_reads_expr   2,630x   1,087,632
+    per_node_walk      2,638x     881,059
+    decidable_walk     2,410x     748,969
+    BuildScan::expr    2,632x     743,211
+                                ---------
+                                7,891,883   5.00% of 157,728,439
+
+`check_per_node`'s own doc comment already knew: it prices a bare descent at
+1,147,185 over the compile corpus and the entry corpus together, and says every
+check that joins stops paying one. Six of the seven are still separate.
+
+**The rule that kept this one out was about the wrong thing.** The same comment
+named `check_decidable_failures` as the counter-example that could not join,
+because it PRUNES — taking only the condition of an `if` and refusing to look
+at the branches, since a guarded branch may be unreachable and refusing it
+would refuse a program that runs. That is a reason to stop ASKING at the
+branches. It is not a reason to stop WALKING them, and `shapes_walk` beside it
+already carried `raised: bool` for exactly that shape. The check joins as
+`decidable_failure_at` under a `decidable` flag the walk turns off for an
+`if`'s two branches and leaves on for its condition. The rule in the comment is
+rewritten to say what it actually excludes: a question about something other
+than the node.
+
+**The head, caught by reading rather than by a test.** `for_each_child` hands an
+`App` its head first and then its arguments in order, so the fused `if` arm
+descends into the head explicitly. Writing only the three arguments would have
+silently stopped asking the other three questions about it.
+
+**Watched red, both halves.** Pass `decidable` instead of `false` to the two
+branches and `examples/logical_ops.kso` is refused — `error[value]: division by
+zero` at `2 < 1 and 1 / 0 < 9`, a program that runs; restored, it prints again.
+And nothing pinned the other half: no fixture in the 203-case error corpus held
+a literal `1 / 0`, guarded or not, so the refusal itself was unpinned. That gap
+closes here with
+`tests/golden/errors/a_decidable_failure_outside_a_guard.kso`, which goes red
+the moment `decidable_failure_at` leaves the walk.
+
+**The whole error corpus is byte-identical across the change.** The refusal's
+diagnostics move in push order — out of position 15 of the sequence and into
+the walk's block, which `rotate_left(walked)` sends to the back — and not one
+fixture moves, because none carries a decidable failure beside another
+diagnostic. `diag::render` does not sort, so this was worth checking rather
+than assuming.
+
+**Container reading**, `kanso::main` inclusive under callgrind, pinned
+tunables, against main at 025c703f:
+
+    module  47,467,069 -> 47,317,375   -149,694  -0.3154%
+    entry  158,096,940 -> 157,558,081   -538,859  -0.3408%
+    summed 205,564,009 -> 204,875,456   -688,553  -0.3349%
+
+Both readings were taken at 025c703f; main gained the `(name, arity)` table
+fold (kanso#1379, dd465f26) while this branch was in flight, and the branch
+carries that merge. The two changes touch different things — that one removed
+three rebuilds of a table, this one removes a traversal — so the pair should be
+close to additive, and CI's rows are what say whether they were.
+
+**CI's rows**, on the post-#1379 base, are the ones the goldens carry:
+
+    module   46,504,130 ->  46,347,735   -156,395  -0.3363%
+    entry   154,931,615 -> 154,371,750   -559,865  -0.3614%
+    library 155,663,482 -> 155,103,784   -559,698  -0.3596%
+    summed  201,435,745 -> 200,719,485   -716,260  -0.3556%
+
+The container projected -688,553 summed and CI reads 1.04x that, the closest
+the two hosts have agreed on a compile delta since these rows were minted —
+#1379's round held the previous record at 2.9%. The entry row takes 78.2% of
+the summed fall against #1379's 76.5%, which is the shape of a saving keyed to
+nodes rather than to declarations. The entry and library rows part by 0.0018
+percentage points, closer than any round before them: both routes walk the same
+bodies and a per-node saving gives the two entrances nothing to differ over.
+Welfare 67.69189 -> 67.69834, banked.
+
+**The descent figure is a ceiling and this realises 60% of it.** 688,553 of
+1,147,185 on the container, both measured here; CI's summed fall is 716,260
+against a ceiling nobody has re-measured on that host. What comes off is the traversal: the per-declaration re-entry, the
+statement loop, the child enumeration. What stays is the per-node question
+work, which is the same work asked from a different place, plus the flag and
+the `if` test the fused walk now carries at every node. A session sizing the
+remaining six walks from the 1,147,185 alone will be about 40% high.
+
+**A stale count corrected on the way.** `tests/golden.rs` said TWENTY-THREE
+fixtures gain the loader's ` (module …)` suffix and carry a second golden.
+There were 41. The count is removed rather than re-pinned: nothing reads it,
+and `ls tests/golden/errors/*.imported.stderr | wc -l` answers it truthfully.
+
+**OPEN: six walks left, and they are not all this cheap.** `decidable_walk`
+was the one whose visitor took `(expr, diags)` and nothing else. The other six
+carry tables — `field_reads_expr` a scan, a local map and an `Open`,
+`literal_walk_expr` four tables, `named_walk` a `Named` and a shadowing
+vector — so joining them means the fused walk carries those pointers through
+every node, which is the cost the `check_per_node` comment already warns about
+for a single extra vector. Each is worth roughly what this one was worth and
+each needs its own measurement.
+
 ## 2026-09-12 — a dispatch group's catch mask is the same answer every visit
 
 Searched the log, the archive and design/ before filing: `pattern_catches`
@@ -3805,25 +3910,19 @@ symbol, and removing it also removes the slice bounds work, the `params.get`
 per arm, and the call into `pattern_catches` that the inclusive figure counts
 under its own name.
 
-**CI's rows**, on the post-#1379 base this branch carries, are the ones the
-goldens hold:
+**CI read this on the pre-#1382 base and those rows are superseded.** On main
+at dd465f26 CI gave module -585,100 (-1.2582%), entry -2,073,436 (-1.3383%),
+library -2,080,469 (-1.3365%), summed -2,658,536 (-1.3198%) against the
+container's -2,545,266, with compile_allocs 29,327 -> 29,335. kanso#1382's
+fold then landed on the same function, so this branch takes a base update and
+a fresh reading: the rows the goldens carry are the ones CI measures with both
+changes in. The allocation row is the exception and stands at 29,335, because
+kanso#1382 allocates nothing.
 
-    module   46,504,130 ->  45,919,030    -585,100  -1.2582%
-    entry   154,931,615 -> 152,858,179  -2,073,436  -1.3383%
-    library 155,663,482 -> 153,583,013  -2,080,469  -1.3365%
-    summed  201,435,745 -> 198,777,209  -2,658,536  -1.3198%
-
-    compile_allocs   29,327 ->  29,335          +8  +0.0273%
-
-CI reads 1.04x the container's -2,545,266 summed, the same ratio the
-fold-decidable round read on this same day from a different change. Two
-readings do not make a constant, and the offset has been anywhere from
-0.8% to 1.6x across the rounds these rows have seen. The entry row carries
-78.0% of the summed fall and the entry and library rows part by 0.0018
-percentage points, which is the shape of a saving priced per call site on two
-routes that merge the same library. The eight allocations are the table,
-built once per module the compile corpus holds. Welfare 67.69189 -> 67.71555,
-banked.
+What the superseded round did establish, and what a re-measure will not
+change: the entry row carried 78.0% of the summed fall, the entry and library
+rows parted by 0.0018 percentage points, and CI read 1.04x the container. Two
+readings of that ratio do not make a constant.
 
 **No fixture.** The mask the table holds is the mask the fold computed, over
 the same arms in the same order, and `pattern_catches` reads no state. Every

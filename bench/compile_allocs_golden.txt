@@ -376,6 +376,6 @@
 # dispatch group and a column per parameter position, replaces a fold that
 # recomputed the same mask on every visit. Eight rather than one because the
 # row counts the whole compile and the table is built once per module the
-# directory holds. The 585,100 instructions it buys on this same corpus are in
+# directory holds. What it buys on this same corpus is in
 # bench/compile_instructions_golden.txt.
 compile_allocs=29335

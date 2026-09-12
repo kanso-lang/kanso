@@ -183,10 +183,10 @@
 # summed fall at almost exactly the module row's fraction, which is what a
 # saving keyed to declarations looks like when both routes merge the same
 # library.
-# 2026-09-12 (a dispatch group's catch mask is decided once):
-# 154,931,615 -> 152,858,179, a FALL of 2,073,436 (-1.3383%). See
-# bench/compile_instructions_golden.txt. The entry row carries 78.0% of the
-# summed fall, the same share as the fold-decidable round earlier today, and
-# here it is the larger fraction of the two: the saving is per call site and
-# the entry corpus holds more of them per declaration.
-entry_instructions=152858179
+# 2026-09-12 (the decidable check joins the one descent):
+# 154,931,615 -> 154,371,750, a FALL of 559,865 (-0.3614%). See
+# bench/compile_instructions_golden.txt. The entry row carries 78.2% of the
+# summed fall against last round's 76.5%, and by the larger fraction of the
+# two rows, which is what a saving keyed to nodes rather than to declarations
+# looks like: the entry corpus holds more expression nodes per declaration.
+entry_instructions=154371750
