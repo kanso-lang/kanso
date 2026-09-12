@@ -177,4 +177,10 @@
 # minted: the entry corpus asks the map more often and rejects a smaller
 # proportion of those asks (78.0% against the module corpus's 91.5%), so the
 # filter earns less per ask there.
-entry_instructions=155743367
+# 2026-09-12 (three checks each rebuilt the same (name, arity) table):
+# 155,743,367 -> 154,931,615, a FALL of 811,752 (-0.5212%). See
+# bench/compile_instructions_golden.txt. The entry row carries 76.5% of the
+# summed fall at almost exactly the module row's fraction, which is what a
+# saving keyed to declarations looks like when both routes merge the same
+# library.
+entry_instructions=154931615

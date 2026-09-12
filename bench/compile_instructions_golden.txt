@@ -1202,4 +1202,13 @@
 # no answer moves. The container projected -148,797 on this row, so CI reads a
 # fall 1.64x larger. As with kanso#1376's round, the offset is not a constant
 # and is not a correction to apply -- it is why the rows are CI's to write.
-compile_instructions=46753954
+# 2026-09-12 (three checks each rebuilt the same (name, arity) table):
+# 46,753,954 -> 46,504,130, a FALL of 249,824 (-0.5343%). `check_effect_
+# discarded`, `check_wall_operands` and `check_discarded_value` each built the
+# same union of `inference.returns[i]` over the declarations sharing a name and
+# a parameter count, two of them in text identical to the byte. Built once
+# beside `inference` and handed round; all three then stop reading the
+# inference at all. The container projected -1,092,217 summed against CI's
+# -1,061,576, within 2.9% -- the closest the two hosts have agreed on a compile
+# delta, and no reason to expect the next one to.
+compile_instructions=46504130
