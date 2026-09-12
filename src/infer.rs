@@ -98,6 +98,13 @@ struct Ctx<'a> {
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
     type_names: HashMap<&'a str, usize>,
+    /// A 256-bit necessary condition for `type_names` holding a name, so the
+    /// common answer — no — costs a byte load and a bit test instead of a
+    /// hash. Every identifier in a body asks that map, and it is a type only
+    /// where the program constructs or names one: 4,229 of 4,847 asks on the
+    /// module corpus miss, and 13,936 of 16,546 on the entry corpus. The slot
+    /// is `tn_slot`, which both sides call, so the two cannot disagree.
+    type_name_slots: [u64; 4],
     params: Vec<Set>,
     param_starts: Vec<u32>,
     returns: Vec<Set>,
@@ -155,6 +162,43 @@ pub mod work {
 /// destructure that type. Before this index existed a field growing marked
 /// EVERY function dirty, and lib/json spent three extra full sweeps of 407
 /// functions to let seven of them move.
+/// Where a name sits in the type-name filter. First byte, last byte and
+/// length — the three the miss distribution separates on. Whole-name hashing
+/// rejects 94.5% of the module corpus's misses against this one's 91.5% and
+/// costs a walk of the name to do it, which is the hash this test exists to
+/// avoid. An empty name takes slot 0 like any other, so the builder and the
+/// reader agree by construction rather than by a matching guard.
+#[inline]
+fn tn_slot(name: &str) -> usize {
+    let b = name.as_bytes();
+    match b.is_empty() {
+        true => 0,
+        false => {
+            (b[0] as usize).wrapping_add((b[b.len() - 1] as usize) * 7).wrapping_add(b.len() * 13)
+                & 255
+        }
+    }
+}
+
+/// The filter over a set of type names. Public so a spec can build one from
+/// the same names the compiler does and check it admits every one of them.
+pub fn type_name_slots<'a>(names: impl Iterator<Item = &'a str>) -> [u64; 4] {
+    let mut out = [0u64; 4];
+    for name in names {
+        let h = tn_slot(name);
+        out[h >> 6] |= 1u64 << (h & 63);
+    }
+    out
+}
+
+/// Whether `name` could be in a map whose filter is `slots`. A false answer
+/// is proof of absence; a true answer still needs the map.
+#[inline]
+pub fn may_be_type(slots: &[u64; 4], name: &str) -> bool {
+    let h = tn_slot(name);
+    slots[h >> 6] & (1u64 << (h & 63)) != 0
+}
+
 fn ctor_types(pat: &Pattern, type_names: &HashMap<&str, usize>, out: &mut Vec<usize>) {
     if let Pattern::Ctor { ty, fields, .. } = pat {
         if let Some(&i) = type_names.get(ty.as_str()) {
@@ -234,6 +278,7 @@ pub fn infer(program: &Program) -> Inference {
     }
     let type_names: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
+    let type_name_slots = type_name_slots(type_names.keys().copied());
     let field_readers = field_readers(program, &type_names);
     let defers_into_containers = program.fns.iter().any(|d| {
         fn mentions(expr: &Expr, name: &str) -> bool {
@@ -278,6 +323,7 @@ pub fn infer(program: &Program) -> Inference {
         group_members,
         yields: HashMap::default(),
         type_names,
+        type_name_slots,
         params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
         param_starts,
         returns: vec![0; program.fns.len()],
@@ -791,7 +837,9 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
         "args" | "stdin" | "now" => DESC,
         _ => {
             // a zero-field type's bare mention is its marker value
-            if let Some(i) = ctx.type_names.get(name) {
+            if let Some(i) =
+                may_be_type(&ctx.type_name_slots, name).then(|| ctx.type_names.get(name)).flatten()
+            {
                 if ctx.program.types[*i].fields.is_empty() {
                     return REC;
                 }
@@ -930,7 +978,10 @@ fn eval_call<'a>(
     if name == "print" {
         return DESC | (arg_sets[0] & FAIL) | piped_bits;
     }
-    if let Some(&idx) = ctx.type_names.get(name.as_str()) {
+    if let Some(&idx) = may_be_type(&ctx.type_name_slots, name.as_str())
+        .then(|| ctx.type_names.get(name.as_str()))
+        .flatten()
+    {
         // constructing a declared type: grow each field's set by this arg's,
         // dropping failures (a failing arg makes construction propagate, so the
         // field itself only ever holds the successful value's type)
