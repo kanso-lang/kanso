@@ -538,6 +538,22 @@ Only Clay arms, disarms or retimes it.
   declaring the objective wrong without saying so.
 - **A rise is held, not banked.** When the number goes up, run `--set` in the
   same PR. A gain nobody ratchets is a gain the next change is free to spend.
+- **Raising the floor is never a decision, and never waits on Clay.** The two
+  directions have different owners, and a session confused them on 2026-09-12.
+  Lowering it to admit a regression is a judgement about what the project will
+  pay and it stays his. Raising it to hold a gain is arithmetic: the objective
+  went up, and the ratchet is what keeps it up. Clay that day: "raising the
+  floor is always a good thing if you can do it and you should never have to
+  ask my permission." So run `--set` and carry on. Do not file it as a gavel,
+  do not park the pull request behind it, and do not write the rise into a
+  body as though saying so were enough. The floor sentinel fails a rise nobody
+  banks, so an unratcheted gain is a red pull request rather than a gift to
+  the next change. If the tooling refuses the command, that is a permission to
+  get granted, said once and briefly; it is not a question about the objective.
+- **Bank AFTER the goldens carry CI's rows, never before.** `--set` records
+  whatever score the committed goldens produce, so running it while they still
+  hold the previous sitting freezes a number this box projected rather than the
+  one CI measured. The order is CI's rows, then `--set`, then the page spans.
 - **Improvement saturates, at a rate each term chooses.** A term contributes
   `r / (r + satiation)` where `r` is baseline over current, so successive
   doublings pay less and less, and how fast they stop paying is a property of
