@@ -57449,3 +57449,415 @@ corruption that may or may not happen; this one is the decision that allows it.
 
 No counter moves. `kanso run`'s temp handling is not on any measured path: the
 compile veins run `kanso check`, which never reaches `cached_program_binary`.
+
+## 2026-09-08 (fifth) — the entry reorder re-derived, and the alias pass refuses a valid program
+
+Searched the log, the archive and design/ before filing: the 2026-09-08 entry
+"the entry path's reorder costs a diagnostic, and is reverted" is this same
+change, and the entry after it records the vein that now measures it. The
+archive's `canonicalize_bare_aliases` entries are about what the pass costs, not
+about when it runs. What neither has is the failure set as it stands today.
+
+**DECLINED, a second time, on wider grounds than the first.** Hoisting
+`canonicalize_types` and `canonicalize_bare_aliases` out of
+`compile_parsed_entry`'s success arm is worth, on 9ec9f7e9 in this box:
+
+    entry_instructions   164,922,557 -> 163,362,291   -1,560,266  (-0.9461%)
+    compile_instructions  49,170,337 ->  49,170,337            0
+
+against kanso#1329's -1,674,396 (-1.0136%) for the same edit a few merges
+earlier. The module row is byte-identical here, which is what a
+`compile_parsed_entry`-only edit should read; CI has not been asked, so that is
+a projection.
+
+**The failure set has moved since the revert.** `scripts/module_differential`
+reads 0 wrong on 9ec9f7e9 and 2 wrong with the reorder, and only one of the two
+is the one kanso#1329 recorded:
+
+    a call from the entry at the wrong arity
+      error[arity]: no 2-argument arm of `m/one` (arms take 1)
+      where the program says `one`
+
+    a type and a function sharing a name
+      expected it to compile; got
+      error[opacity]: `m/thing` is foreign -- only `m` builds a `thing`
+
+The sibling-arity case kanso#1329 also lost now passes. In its place is a
+program that compiled before the reorder and does not compile after it, which is
+a worse thing than a diagnostic quoting the wrong spelling. `m/b.kso` declares
+`pub fn thing _`, the entry writes `print "{thing 0}"`, and the answer should be
+`m/thing 0`.
+
+**Both objections are the alias pass, not the type pass.** Moving
+`canonicalize_bare_aliases` alone and leaving `canonicalize_types` in the success
+arm leaves the differential at the same 2 wrong, and reads slightly BETTER than
+moving both:
+
+    entry_instructions   164,922,557 -> 163,353,361   -1,569,196  (-0.9515%)
+
+8,930 better than the pair, because the alias pass deletes the twins before
+`canonicalize_types` walks them rather than after. `thing` in `print "{thing 0}"` is a CALL, so the alias pass rewrites it to
+`m/thing` like any other bare name, and the opacity check then reads a qualified
+name as a foreign type construction. One pass, one mechanism, two checks that
+read a name after something else has rewritten it.
+
+**What would make it shippable**, stated more narrowly than kanso#1329 could:
+`check_merged`'s opacity and arity checks have to see the spelling the program
+used. The obvious inverse map from `aliases` is unsound -- it is keyed by name,
+so it would also rewrite the diagnostic for a call the user really did write
+qualified. The per-site record was then built as a probe and measured, and it is
+affordable:
+
+    alias-only reorder, no record   163,353,361
+    with the per-site record        163,380,706   +27,345
+
+1.7% of the prize, leaving -1,541,851 (-0.9349%) against 164,922,557. And the
+27,345 is not the recording. THE PASS REWRITES NOTHING ON ANY MEASURED CORPUS: a
+counter at the rewrite site reads 0 sites on bench/entry_corpus, 0 on
+bench/compile_corpus and 0 on lib/json, against 1 on the `m/thing` fixture that
+draws the opacity refusal. The vector never allocates, so what the 27,345 buys is
+an extra parameter carried through a recursive walk over every expression in the
+program, and a shape that hangs the recorder off a walker rather than threading
+it should cost less. Two things a real implementation must handle that the probe
+did not: the reader half in check.rs, and the second caller of the same walker at
+src/lib.rs:2616, which walks with the door map.
+
+**And the two readers want different things, which reading `foreign_constructions`
+settles.** Its own comment states the invariant the reorder breaks, at
+check.rs:1847: "A qualified name can never be a local binding, so unlike the
+arity walk beside it this needs no shadowing set: the slash IS the foreignness."
+That holds only while every slash in the merged program was written by a person.
+After the alias pass has run a slash also means the pass put one there, and the
+check fires on `m/thing 0` -- a call of an imported function -- as though it were
+a construction of the imported type of the same name. So opacity does not want a
+spelling to quote. It wants to SKIP a head the pass rewrote, because that head
+was never a construction. Arity is the one that wants the spelling. One record,
+two uses, and a fix that handed both readers the old name would leave the opacity
+refusal exactly where it is.
+
+This is not a gavel: the
+substance was ruled in kanso#1120, a diagnostic names what the import writes, and
+which mechanism satisfies it is the implementer's.
+
+**How this came to be built twice, since the answer is a process one.** The task
+list carried it as BUILT AND PROVEN with a full `cargo test` behind it. The
+kanso#1329 entry names that exact evidence as worthless here --
+`scripts/module_differential` is a kanso program run by the diagnostics-
+differential CI job and `cargo test` never invokes it -- so the suite was green
+both times and said nothing both times. The filing search caught it before the
+branch was pushed, which is what the search is for.
+
+- **DECLINED** — the entry path's alias-pass reorder, in any shape that leaves a
+  check reading a rewritten name. Re-measured, re-refused, and this time the
+  opacity refusal is on the record beside the arity one.
+- **OPEN** — the pre-canonical spelling for `check_merged`'s two name-reading
+  checks. Worth -1,569,196 on the entry row in the alias-only shape, and
+  -1,541,851 with the per-site record that makes it sound. What is unbuilt is
+  the reader half: the two checks in check.rs that have to consult the record
+  instead of the node, and a fixture for each.
+- **OPEN, unchanged** — the twins inside `infer`, which is the other half of the
+  reorder's value and is blocked on a different thing: `infer` indexes
+  declarations positionally, and a group keyed by (name, arity) is a dispatch
+  group, so the twin is what lets a bare name resolve.
+
+## 2026-09-08 — the welfare column spans four measurement epochs and the rewrite scores them on one ruler
+
+Clay, reading kanso-lang.dev/numbers after kanso#1331 landed: "I still have
+no clear accounting of why the welfare went down and the website still does
+not look great." The account, read off the rewritten column on
+origin/perf-history:
+
+    2026-09-06 11:26   91.57 -> 58.96   -32.62   #1284  one consolidated run program
+    2026-09-08 01:53   70.03 -> 67.75    -2.27   #1321  the compile corpus is named
+    2026-09-08 10:17   67.91 -> 66.29    -1.63   #1331  the compile term sums both compiles
+
+None of the three is the compiler getting worse. Each is a change in what is
+measured, and the column still steps at each one because
+`scripts/welfare_rescore` scores every row against the single baseline the
+floor file holds today.
+
+**The mechanism.** The rewrite exists so the column is "rewritten under one
+formula whenever the formula moves, which is what makes two points on it
+comparable" (docs/numbers.html). One formula does make rows comparable when
+the WEIGHTS move. It does not when the MEASUREMENT moves, because the counters
+change magnitude while the baseline does not. Today's compile baseline is
+671,773,822, and the rows it divides come from four epochs:
+
+    epoch                           compile_instructions   ratio    term
+    lib/json, one compile                 19,316,962       34.78   0.9858
+    compile_corpus, one compile           52,603,220       12.77   0.9623
+    compile_corpus, module row            48,757,859       13.78   0.9650
+    compile_corpus, both summed          212,644,590        3.16   0.8634
+
+Adjacent epochs differ by a factor that is the workload and never the
+compiler, and the term falls across each boundary by that factor. The -2.27
+and the -1.63 are those two falls, weighted. #1331 re-based the floor so the
+row it wrote is right; it could not re-base the rows before it, because the
+rewrite has no notion of an epoch to re-base them to.
+
+**The run side is the same disease and the larger cliff.** #1284 re-based the
+run counters to parity at the changeover, so every row before it scores its
+run terms against a baseline it never carried. Clay ruled the repair on
+2026-09-07: share-weighted phases, renormalised over the phases a row carries,
+based at row 70 (2026-08-10), and the ruling closes with "the rewrite is
+cloud's." As of this entry, `scripts/` holds no share-weighted reconstruction.
+The -32.62 on the chart is that ruling unbuilt.
+
+**What makes the column flat across a change of measurement.** The rewrite
+needs an epoch table: for each change of measurement, the head it happened at
+and the per-row factor measured there. The corpus move's factors are already
+recorded in the floor file (2.7232, 2.7207, 2.1047) and the summing's is
+computed in kanso#1331. A row is then scored against the baseline scaled to its
+own epoch, which is one re-basing per epoch, applied in the rewrite rather than
+only in the floor file. It is what the three floor-file precedents did by hand
+for the current row, done for every row.
+
+**OPEN, cloud's, two items.** Build the 2026-09-07 ruling for the run side.
+Apply the same per-epoch scaling to the compile side's two changes of
+measurement. Until both land, the chart shows the history of what was measured
+rather than the history of the compiler, and no reader can tell which.
+
+## 2026-09-08 (sixth) — the pre-canonical spelling, and the entry reorder ships
+
+Searched the log, the archive and design/ before filing: the entry above
+("the entry reorder re-derived") is this thread's own, and leaves exactly this
+as OPEN with the recorder measured and the reader half unbuilt. kanso#1329
+records the first revert, kanso#1328 the module path's reorder, kanso#1120 the
+ruling both readers have to satisfy. This builds what that OPEN item names.
+
+**The reorder ships, with the two readers that make it honest.**
+`canonicalize_bare_aliases` runs in front of `check_merged` on the entry path
+now, so the whole-program check no longer walks the synthetic twins the pass is
+about to delete. `canonicalize_types` stays in the success arm, which is the
+cheaper of the two shapes by 8,930 instructions.
+
+The pass returns a `Rewrites` — line and column to the bare name it replaced —
+and `check_merged_after_aliases` hands it to the two checks that read a call's
+name. Every other caller runs the pass after the check and passes an empty
+record, where both readers behave as they always did.
+
+**The two readers want different things, and that is the whole finding.**
+
+    check.rs arity (two sites)   quotes the recorded bare name
+    foreign_constructions        SKIPS a head the pass rewrote
+
+Arity is a wording question and kanso#1120 settles it: the diagnostic names what
+the import writes. Opacity is not. Its own comment states the invariant, at
+check.rs:1847 — "A qualified name can never be a local binding, so unlike the
+arity walk beside it this needs no shadowing set: the slash IS the foreignness."
+That holds only while every slash was written by a person. After the pass, a
+slash also means the pass put one there, and the check fires on a call of an
+imported function as though it were a construction of the imported type of the
+same name. No wording of that message is right; the site is not a construction
+at all.
+
+**On scripts/module_differential: 0 wrong, from the 2 wrong the reorder cost
+before.** Both objections are gone, and both readers were watched red on their
+own:
+
+    opacity skip disabled   1 wrong -- `m/thing` is foreign, on a program that compiles
+    arity spelling disabled 1 wrong -- quotes `m/one` where the source says `one`
+
+Each mutation loses exactly its own fixture and no other, so neither reader is
+dead code and neither is doing the other's work.
+
+**What it costs, in this box.**
+
+    entry_instructions   164,922,557 -> 163,499,802   -1,422,755  (-0.8627%)
+    compile_instructions  49,170,337 ->  49,207,870      +37,533  (+0.0763%)
+    summed                214,092,894 -> 212,707,672  -1,385,222  (-0.6470%)
+
+The module row rises for the same reason kanso#1332's did: the path pays for
+something it cannot use. Its record is always empty, and what it pays is a
+parameter carried through `arity_walk_expr` and `foreign_constructions`'s walk,
+both recursive over every expression. Neither lookup runs on a clean module
+compile -- the arity one sits inside the refusal branch and the opacity one
+behind a name being in the foreign set -- so the cost is the threading, not the
+reading. Under kanso#1331's summed compile term the trade is 38 to 1 in favour,
+and the sum is what the objective reads.
+
+Against the reorder measured WITHOUT the readers (163,353,361), the readers cost
+the entry row 146,320. The probe in the entry above put the recorder alone at
+27,345; the rest is the two further walkers now carrying the same parameter.
+
+These are container numbers and none of them is a row. CI counts both compile
+veins, and this branch expects a deliberate red first round for exactly that.
+**CI's rows, and what the container got wrong about them.**
+
+    entry_instructions   163,612,976 -> 162,170,772   -1,442,204  (-0.8814%)
+    compile_instructions  48,761,165 ->  48,791,172      +30,007  (+0.0615%)
+    summed               212,374,141 -> 210,961,944   -1,412,197  (-0.6650%)
+
+Welfare 66.2898 -> 66.30, ratcheted in the same change.
+
+The container projected -1,422,755 and +37,533. Sign and order right on both,
+digits wrong on both, and the two errors ran the same way: it UNDERSTATED the
+entry fall by 19,449 and OVERSTATED the module rise by 7,526. Its standing
+offset is +0.8% on the LEVEL of each row, so the naive expectation was that it
+would overstate a fall; a level offset between toolchains does not carry to a
+delta, and this pair is the demonstration. Under the summed term the trade is
+48 to 1 in favour, against the 38 to 1 the container projected.
+
+
+**The module path had both defects live, and nothing in the tree asked it.**
+kanso#1328 moved the same pass in front of the same check on the module path
+three days before this, and handed the check nothing. So on main today:
+
+    kanso check <a module>   opacity REFUSES a program that compiles
+    kanso check <a module>   arity quotes `m/one` where the source says `one`
+
+Reduced, that is a module whose sibling declares `pub type thing` beside
+`pub fn thing _`, importing it and calling `thing 0`. The entry-path form of
+exactly that program is c7 in scripts/module_differential, and it was watched
+through both reverts of the entry reorder; the module form had no case at all,
+so the sweep read 0 wrong on a defect it could not see. The fix is the entry
+path's, and both programs go into the sweep as c26 and c27 -- watched red on the
+pre-fix compiler for the two messages above, verbatim, before they went green.
+
+Threading the module path costs almost nothing because it was already paying:
+`check_merged` built an empty `Rewrites` on every call, and the change replaces
+that construction with the real one. Entry +121, compile +63 against the
+readings in the table above, both already folded in.
+
+**And the third path is now watched before it moves.** `kanso check` on a single
+library file takes `compile_library`, which still checks before it canonicalizes
+-- so both readers are right there today. c28 and c29 say so, and they were
+watched red by making exactly the reorder the OPEN item below proposes for that
+path: both go wrong together, with the same two messages. `compile_one` carries
+a byte-identical block, so the mutation is one edit applied twice and the two
+paths answer as one.
+
+**What this says about where a defect gets found.** The reorder was reverted
+twice on the entry path for objections the sweep caught within a round, because
+the entry path had cases. The same reorder shipped on the module path and its
+two objections sat for three days. The corpus decides what a sweep can see, and
+a path with no case in it reads clean whatever it does.
+
+- **DONE** — the OPEN item the entry above filed. The reorder, the record, both
+  readers, both mutations, and the differential back to 0 wrong.
+- **OPEN, and now priced** — src/lib.rs:348 and :425 still check before
+  canonicalizing. compile_one is reached only from `compile_repl`
+  (src/repl.rs:290) and compile_library only from `kanso check <a library
+  file>`. Both merge `dep_program`, so both see the twins, and both would break
+  the way the entry path did -- they were never blocked on a measurement, they
+  were blocked on this.
+
+  Measured on this box, on `kanso check bench/compile_corpus/compile_corpus.kso`
+  with the reorder and the record applied to both sites:
+
+      library_instructions   50,244,948 -> 48,681,802   -1,563,146  (-3.111%)
+
+  Larger in proportion than the entry path's -0.8627%, on a path no vein
+  watches. The differential stays 29 cases 0 wrong through it, which is what
+  says the record makes the reorder correct there and not merely cheaper; c28
+  and c29 go red on the same edit with the record left out. The baseline
+  reproduced to the instruction on a second run. What is owed before it ships
+  is the vein, since a fall nothing counts is a fall nothing keeps.
+- **OPEN, unchanged** — the twins inside `infer`, the other half of the
+  reorder's value. `infer` indexes declarations positionally and a group keyed
+  by (name, arity) is a dispatch group, so the twin is what lets a bare name
+  resolve.
+
+---
+
+## 2026-09-08 (seventh) — the third compile path gets a row
+
+`kanso check` routes a single file by its content and the three routes are
+three different compiles. A directory is a module and takes
+`compile_module_inner`, which is what `bench/compile_corpus` and
+`compile_instructions` watch. A file with bare statements is an entry and takes
+`compile_parsed_entry`, which `bench/entry_corpus` and `entry_instructions`
+have watched since kanso#1330. A file of definitions alone is a library and
+takes `compile_library` — and nothing in the tree counted it.
+
+That path is not a corner. `kanso test` takes it on every run, and so does
+`kanso check` on any single file that is not an entry, which is most files
+here.
+
+`bench/library_corpus/library_corpus.kso` names ten imports and uses each, the
+shape `bench/entry_corpus` has and for the same reason: `compile_library`
+merges the dependency program and runs its own whole-program check over
+everything the imports bring, so a corpus with one small import would measure
+mostly the work underneath it. The directory is named to the same length as
+`compile_corpus`, because the count tracks the length of the path the compiler
+is handed at about 160 instructions a character.
+
+The container projected 165,589,540 and CI wrote the row: **164,253,088**, on
+binary sha 9bc8f829af68 in the job that also counted
+compile_instructions=48,791,172 and entry_instructions=162,170,772, so all
+three answer for one build. The projection is 1,336,452 high, +0.8136%, which
+lands on the offset the other two rows already carry between this box's rustc
+1.94.1 and CI's 1.98.1. Only CI may write the row, and the reason is that
+offset.
+
+CI's summary named exactly one failing vein and eighteen green, which is what
+round one was for.
+
+**A CORRECTION, made the round after the claim.** This entry and round two's
+commit message both said the ratchet job proved `library_ir` on the runner.
+Read the job log: it did not, and could not have. The ratchet's second pass is
+`ratchet -- touched origin/main`, which selects only rows patching a file the
+branch changed, and it reported
+
+    ratchet: 1 rows patch a file this branch changed
+      the ratchet (every gate has a mutation that turns it red)
+
+-- one row, the ratchet's own. This branch touches ci.yml, CLAUDE.md, three
+gate scripts, the ratchet, the trend gate, a spec, the log and two new bench
+files, and no `src/`; `the_library_program_is_checked_twice.sh` patches
+`src/lib.rs`, so the touched guard correctly passed it over. What CI did run is
+the first pass, `every mutation still matches the source it patches`, which
+does read the new mutation's anchor against `src/lib.rs` and found it. So the
+anchor holds on the runner and the row's provability there is untested; it was
+proved in the container, 165,589,540 -> 190,698,277. The next change to
+`src/lib.rs` -- the reorder -- is the branch that will select this row and
+prove it on CI.
+
+**THE SPEC PREDICTED ITS OWN FAILURE MODE AND THIS IS THE INSTANCE.**
+`tests/the_compile_sweep_names_every_compile_gate.rs` derives the sweep's list
+from goldens matching `bench/compile_*` and `bench/entry_*`, and its own doc
+comment says: *a prefix list is exactly the shape that goes stale when a vein
+is added under a new name.* `bench/library_instructions_golden.txt` matches
+neither prefix, so both derivations in that file walked straight past it and
+the sweep would have looked like coverage while missing the newest vein. Both
+are widened here, in the commit that adds the vein.
+
+The trend gate's own coverage spec did NOT have that hole:
+`tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads `bench/` off
+disk and keys on `contains("golden")`, so it went red the moment the file
+existed and named what was missing. Two coverage specs over the same tree, one
+keyed on a prefix and one on a substring, and only the substring one survived a
+new name.
+
+A third coverage spec found the other half of the same gap. The ratchet keeps a
+`host_bound` list of the gates that count under callgrind, so that a runner the
+golden does not name is reported as unproven rather than credited as a
+regression, and `tests/a_host_bound_gate_is_reported_not_credited.rs` derives
+that list from the gates that actually run the tool. It went red naming `sh
+scripts/gates/library_instructions.sh` as soon as the gate existed. Three specs
+over one tree: the substring-keyed pair spoke, the prefix-keyed one did not.
+
+The mutation is `the_library_program_is_checked_twice.sh`, the library twin of
+the entry one, and its anchor takes two steps rather than one:
+`let merged_diags = check::check_merged(&program, false);` appears twice in
+`src/lib.rs` because `compile_one` carries a byte-identical block, so the
+function is found by its signature and the duplicate goes in at the first such
+call after it. What it proves is the argument for the row: the same edit leaves
+`compile_instructions` and `entry_instructions` green. It rides in the ratchet
+as `library_ir`, beside `compile_ir` and `entry_ir`.
+
+Proved rather than assumed, in the order the rule asks for: it applies (two
+calls become three, and the third is inside `compile_library` at 432 with
+`compile_one`'s at 355 untouched), it compiles, and the row it moves goes
+165,589,540 -> 190,698,277, a rise of 25,108,737 or 15.16%, against a gate that
+asserts equality. Counted here with the host check bypassed on purpose, because
+this container may not compare the row and the question was whether the
+mutation moves it rather than what the value is. Restored, rebuilt, clean.
+
+Still open, unchanged by this: `src/lib.rs`'s two remaining callers check
+before they canonicalize. That reorder is measured — 50,244,948 -> 48,681,802,
+**−1,563,146 / −3.111%** — and was blocked on this vein. It is not in this
+commit, so the row this one opens is the pre-reorder baseline and the next PR
+is what spends it.
+
+---
