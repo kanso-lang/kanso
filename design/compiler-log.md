@@ -3910,19 +3910,33 @@ symbol, and removing it also removes the slice bounds work, the `params.get`
 per arm, and the call into `pattern_catches` that the inclusive figure counts
 under its own name.
 
-**CI read this on the pre-#1382 base and those rows are superseded.** On main
-at dd465f26 CI gave module -585,100 (-1.2582%), entry -2,073,436 (-1.3383%),
-library -2,080,469 (-1.3365%), summed -2,658,536 (-1.3198%) against the
-container's -2,545,266, with compile_allocs 29,327 -> 29,335. kanso#1382's
-fold then landed on the same function, so this branch takes a base update and
-a fresh reading: the rows the goldens carry are the ones CI measures with both
-changes in. The allocation row is the exception and stands at 29,335, because
-kanso#1382 allocates nothing.
+**CI's rows**, measured twice on two different bases, which is how the pair
+turned out to be additive:
 
-What the superseded round did establish, and what a re-measure will not
-change: the entry row carried 78.0% of the summed fall, the entry and library
-rows parted by 0.0018 percentage points, and CI read 1.04x the container. Two
-readings of that ratio do not make a constant.
+              on dd465f26 (pre-#1382)   on 60e01bf8 (post-#1382)
+    module          -585,100                  -584,289  -1.2607%
+    entry         -2,073,436                -2,072,471  -1.3425%
+    library       -2,080,469                -2,079,921  -1.3410%
+    summed        -2,658,536                -2,656,760  -1.3236%
+
+    compile_allocs    +8                        +8      29,327 -> 29,335
+
+The landed rows are the second column: 45,763,446, 152,299,279 and
+153,023,863 against the container's projected -2,545,266 summed.
+
+**THE TWO CHANGES ARE ADDITIVE, AND THAT IS MEASURED RATHER THAN ASSUMED.**
+kanso#1382's fold landed on `check_merged_after_aliases` between the two
+readings, so this branch was re-based and re-read. The summed delta moved
+2,658,536 -> 2,656,760: a difference of 1,776 instructions, 0.067% of the
+delta itself. Both changes touch the same function and could have interacted;
+they do not, because the fold removes a traversal of the expression tree and
+the table removes a recomputation inside `eval_call`, and the two share no
+work. One pair measured twice is not a rule, and the next pair on this
+function is owed its own re-reading.
+
+The entry row carries 78.0% of the summed fall on both bases, and the entry
+and library rows part by 0.0015 percentage points, the closest they have run.
+Welfare 67.69834 -> 67.72201, banked.
 
 **No fixture.** The mask the table holds is the mask the fold computed, over
 the same arms in the same order, and `pattern_catches` reads no state. Every
