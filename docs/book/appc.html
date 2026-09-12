@@ -229,7 +229,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>width is rendering only—it never changes how many statements a body has. an over-wide statement stays one statement, wrapped across continuation lines. there are exactly two continuation forms, and they are the same two tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
+<p>width is rendering only—it never changes how many statements a body has. an over-wide statement stays one statement, wrapped across continuation lines. the continuation forms are the tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, <code>.&gt;</code>, <code>.!</code> and <code>.?</code> for the three chain words, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
 
 <p>here is a sequence too wide for one line. its first step stays on the <code>main =</code> line; each further <code>&gt;&gt;</code> step drops to a continuation line at indent plus two:</p>
 
@@ -244,7 +244,7 @@ pouring the water in a thin stream from well above the first cup</code></pre>
   </div>
 </div>
 
-<p>and here is a pipe too wide for one line, wrapped onto <code>.</code> continuation lines. the whole thing is still a single binding of <code>ranked</code>:</p>
+<p>and here is a pipe too wide for one line, wrapped onto continuation lines. the whole thing is still a single binding of <code>ranked</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">wrap_pipe.kso</div>
@@ -340,7 +340,7 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
 </div>
 </div>
 
-<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, types before functions and both alphabetical, one blank line between declarations and none inside a body, eighty columns with <code>.</code> and <code>&gt;&gt;</code> continuation lines when a statement runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
+<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, types before functions and both alphabetical, one blank line between declarations and none inside a body, eighty columns with <code>.</code>, <code>.&gt;</code>, <code>.!</code>, <code>.?</code> and <code>&gt;&gt;</code> continuation lines when a statement runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
 
 <h2>exercises</h2>
 
