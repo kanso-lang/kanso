@@ -345,4 +345,8 @@
 # constructions that built it are a word. All four compile rows fall together
 # and this one falls furthest in relative terms, which is what a change that
 # deletes a declaration rather than reshaping one looks like.
-compile_allocs=29386
+# 2026-09-12 (the box check asks a question the program has already answered):
+# CI's sitting, 29,386 -> 29,374, a fall of 12 (-0.0408%). The binder set is
+# one reused table, so skipping the fill costs it its growth rather than its
+# creation; twelve blocks is what that growth was.
+compile_allocs=29374

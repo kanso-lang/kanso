@@ -4460,3 +4460,20 @@ equality, so it turns red.
 This does NOT take the branch green. The floor still has to move, by less; the
 ledger's "The welfare floor cannot be staged from this session" is unchanged
 and still the blocker.
+
+**CI's sitting for the hoist.** Four host-keyed compile veins moved, all falls,
+every runtime vein byte-identical and `compile_memory` unmoved at 774,660.
+`compile_instructions` 50,544,369 -> 49,937,088 (−607,281 / −1.2015%),
+`entry_instructions` 168,998,559 -> 167,770,493 (−1,228,066 / −0.7267%),
+`library_instructions` 169,284,150 -> 168,056,074 (−1,228,076 / −0.7255%),
+`compile_allocs` 29,386 -> 29,374 (−12). The objective's compile term is the
+first two summed: 219,542,928 -> 217,707,581, a fall of 1,835,347, against the
+1,946,144 this container projected — 6% high, the direction and the size the
+container's offset has had on every compile row.
+
+The entry and library rows fall within ten instructions of each other on the
+same change, which is kanso#1344's finding restated: those two corpora name the
+identical ten imports and are the same measurement.
+
+Against main the compile term now stands at +4,549,526 rather than +6,384,873,
+so 28.7% of the fall is recovered and the floor still has to move for the rest.

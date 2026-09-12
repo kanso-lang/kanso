@@ -1155,4 +1155,11 @@
 # a rise of 5,700 (+0.0116%). src/runtime.c is carried in the compiler, so its
 # bytes and the layout under them move when it changes; the front end does no
 # more work. The entry and library rows rise by the same fraction.
-compile_instructions=50544369
+# 2026-09-12 (the box check asks a question the program has already answered):
+# CI's sitting, 50,544,369 -> 49,937,088, a fall of 607,281 (-1.2015%). The
+# pass reads `any_boxed` once over its returns table, and when nothing in the
+# program answers a box the two arms that ask the table answer no without
+# asking -- so the binder set those arms read is never read, and the second
+# walk of every body that built it is never taken. The three instruction rows
+# fall together, which is what per-declaration work looks like on every route.
+compile_instructions=49937088

@@ -138,4 +138,9 @@
 # 2026-09-11 (a validated string knows its length): 164,324,373 -> 164,342,505,
 # a rise of 18,132 (+0.0110%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-library_instructions=169284150
+# 2026-09-12 (the box check asks a question the program has already answered):
+# CI's sitting, 169,284,150 -> 168,056,074, a fall of 1,228,076 (-0.7255%).
+# The `any_boxed` hoist; see bench/compile_instructions_golden.txt. Ten
+# instructions from the entry row's fall on the same change, which is what
+# kanso#1344 found these two corpora to be: the same measurement.
+library_instructions=168056074
