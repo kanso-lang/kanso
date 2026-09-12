@@ -4624,3 +4624,48 @@ excess over main, 45.7%. The floor still has to move for the rest.
 Watched red: with the fill never taken (`if b.loaded != i` to `if false`) the
 set stays empty, `shadows` answers false everywhere, and the micro fixture above
 fails on that sample alone.
+
+**What the effect check costs when it costs as little as it can, measured
+rather than argued.** DONE. Searched the log, the archive and design/ for a
+prior ceiling on this pass: the three entries above are the only ones, and none
+of them asked this question.
+
+Three ablations on the shipped build, container levels, `kanso::main` inclusive:
+
+                              with pass     without pass      the pass
+    module (compile_corpus)   50,463,222    49,922,292         540,930
+    entry  (entry_corpus)    168,748,436   166,725,054       2,023,382
+    summed                                                   2,564,312
+
+The remaining excess over main is 2,472,374, and those two agree to within
+92,000 — about 20,000 of it the container's standing 0.8% offset from CI, the
+rest the eight lines this branch adds to src/parser.rs, and layout. The excess
+is this pass and essentially nothing else. Twice on this branch that was
+guessed otherwise, so it is now measured.
+
+Splitting the pass into its traversal and its per-node work:
+
+    entry, walk + site   168,793,445
+    entry, walk only     168,124,479
+    site's own work         668,966
+    traversal + table     1,354,416
+
+The first attempt at that split put `std::env::var_os` inside the walk loop and
+both readings came back ABOVE the un-ablated baseline, the ablated one highest —
+a missing key walks the whole environ on every expression, and a present one
+stops early. Hoisting the flag out of the loop gives the reading above. A gate
+read per node measures the gate.
+
+**The traversal is the reachable part and the check is not.** Twenty-odd
+whole-program checks in `check_merged_after_aliases` each walk every expression,
+three of them holding the same `&inference`; fusing this one into a neighbour
+recovers roughly the 1,354,416 on entry plus its share of the module row. What
+stays is the match on each expression, the table lookup on each call and the
+refusal — the check itself, about 0.9M summed. A language feature that refuses a
+box where a value is wanted costs the front end something to decide, and the
+objective reads that as a fall however it is arranged.
+
+So the floor edit is needed, and the paydown has taken it from 4,549,526 to
+2,472,374 with a fusion plausibly reaching ~800,000. The fusion is filed as its
+own lead rather than ridden here: it reorders diagnostics across two dozen
+checks and regenerates the error corpus, which should stand on its own.
