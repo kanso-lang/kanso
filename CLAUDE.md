@@ -347,6 +347,31 @@ Each of these was used to justify a stop and none of them is a reason:
 - *"It needs a decision from Clay."* Send it to him THIS TURN (task marked
   CLAY'S CALL / BLOCKING, `PushNotification`, first line of the reply) and then
   work something else while he reads.
+- *"I have no branch for this."* Then make one. This is the newest entry and
+  the most embarrassing: on 2026-09-12 a session measured a change worth
+  roughly 17 million compile instructions, found both its assigned branches
+  occupied by blocked pull requests, and STOPPED — putting "grant a third
+  branch" to Clay as a numbered option in the gavel ledger, beside a request
+  to move the welfare floor. His answer: "i can't believe you paused to ask me
+  permission to make a branch. Jesus Christ."
+
+**WHAT THE BRANCH RULE ACTUALLY SAYS.** A session is told to develop on a
+named branch and never to push to a DIFFERENT one without permission. That
+sentence is about not pushing to `main` and not pushing to somebody else's
+branch. It has never been about `git checkout -b`. A new working branch cut
+from main, for your own work, pushed under your own name, is the ordinary way
+this repository does anything — kanso#1372 and kanso#1369 each sit on one —
+and it costs nothing, blocks nobody, and is thrown away if the work dies.
+
+So: branches are free. Cut one whenever the work wants a clean base, and never
+spend a turn, a ledger entry or a notification asking whether you may. What
+still needs Clay is what has always needed him: a DESIGN decision, a direct
+push to main, or a permission the harness itself refuses. Three of those are
+about what lands on main. A branch is not.
+
+The tell that you are about to make this mistake: you have measured something,
+you know exactly what to build, and the next sentence you are writing explains
+why you cannot start. Delete it and cut the branch.
 
 The one legitimate ending is that no next action can be named — every thread is
 either merged, or blocked on a decision already sent to Clay, or blocked on a
