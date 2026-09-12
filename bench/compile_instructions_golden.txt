@@ -1229,23 +1229,26 @@
 # that, 62%: the traversal comes off, the per-node question work stays where it
 # was, and the fused walk now carries a flag and an `if` test at every node.
 # Sizing the six remaining walks at 1,147,185 apiece will read about 60% high.
-# 2026-09-12 (the shapes walk joins the one descent too):
-# 46,347,735 -> 46,109,174, a FALL of 238,561 (-0.5147%).
-# The second of the seven whole-program walks `check_merged_after_aliases`
-# runs over the same nodes. `check_shapes_per_node`'s driver was
-# `check_per_node`'s loop written a second time -- iterate `program.fns`, skip
-# synthetic, take each statement's expression, descend -- so `err_as_value_at`
-# and `call_shaped_at` ride the descent that was already happening now.
+# 2026-09-12 (the shapes walk joins the one descent too) -- SUPERSEDED, see
+# below: this branch read 46,347,735 -> 46,109,174 on the pre-catch-mask base,
+# and that base has since moved. The fold stands; the row it lands is measured
+# again beneath the entry after it.
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 46,347,735 -> 45,763,446, a FALL of 584,289 (-1.2607%). `eval_call` walked a
+# group's arms once per argument position and ORed `pattern_catches` over the
+# pattern found there, on every round of the fixpoint. `program.fns` is fixed
+# before inference starts and `pattern_catches` reads no state, so every one of
+# those folds returned the answer the first had. A table built beside
+# `group_members` -- a row per group, a column per position -- turns the fold
+# into an index. It costs 8 allocations, in bench/compile_allocs_golden.txt.
 #
-# The fused walk carries two tables it did not before: the arity map, built
-# once over the whole program, and the bound set, cleared and refilled per
-# declaration. `check_per_node`'s doc comment warns that a joining check makes
-# the fused walk carry its state through every node, and names a single extra
-# vector as the cost to weigh. Two tables still pay: this row falls 1.53x last
-# round's 156,395, and the summed fall of 997,728 is 1.39x its 716,260. The
-# warning is about a real cost and this measurement bounds it.
-#
-# The container projected -273,196 on this row and CI reads 0.873 of that,
-# where last round CI read 1.04x the container's projection. Two rounds, two
-# offsets in opposite directions: project from CI or take the red round.
-compile_instructions=46109174
+# THIS CHANGE AND kanso#1382's FOLD ARE ADDITIVE, MEASURED RATHER THAN ASSUMED.
+# CI read this same change on the pre-#1382 base at -585,100 on this row,
+# -2,073,436 on entry and -2,080,469 on library; on top of the fold it reads
+# -584,289, -2,072,471 and -2,079,921. The summed module-plus-entry delta moves
+# 2,658,536 -> 2,656,760, a difference of 1,776 instructions, 0.067% of the
+# delta itself. Both touch `check_merged_after_aliases`, so the pair could have
+# interacted and did not: the fold removes a traversal of the expression tree
+# and the table removes a recomputation inside `eval_call`, and they do not
+# share work. Do not read this as a rule -- it is one pair, measured twice.
+compile_instructions=45763446

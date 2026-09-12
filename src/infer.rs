@@ -92,8 +92,15 @@ struct Ctx<'a> {
     /// take one and leave `ctx` free to be borrowed mutably while it walks
     /// the arms — where holding the group itself meant cloning its `Vec` on
     /// every call the pass inferred, 2,693 heap blocks on `lib/json`.
-    groups: HashMap<(&'a str, usize), (u32, u32)>,
+    groups: HashMap<(&'a str, usize), (u32, u32, u32)>,
     group_members: Vec<usize>,
+    /// For each dispatch group and each parameter position, the union of what
+    /// that position's patterns CATCH -- `pattern_catches` folded over the
+    /// group's arms. It depends on the declarations and on nothing the
+    /// fixpoint changes, so it was the same answer every visit: `eval_call`
+    /// re-folded it once per argument of every call, on every round. The
+    /// third word of a `groups` value is where this group's row starts.
+    caught: Vec<Set>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
@@ -257,16 +264,20 @@ pub fn infer(program: &Program) -> Inference {
     // only to be flattened on the next line. The counting pass of #1161: count
     // per group, turn the counts into starts, then place each declaration at
     // its group's cursor. Arms come out in declaration order either way.
-    let mut groups: HashMap<(&str, usize), (u32, u32)> =
+    let mut groups: HashMap<(&str, usize), (u32, u32, u32)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
-        groups.entry((decl.name.as_str(), decl.params.len())).or_insert((0, 0)).1 += 1;
+        groups.entry((decl.name.as_str(), decl.params.len())).or_insert((0, 0, 0)).1 += 1;
     }
     let mut at = 0;
-    for slot in groups.values_mut() {
+    // `caught_at` runs alongside: one Set per parameter position per group,
+    // and a group's arity is the second half of its own key.
+    let mut caught_at = 0;
+    for (key, slot) in groups.iter_mut() {
         let count = slot.1;
-        *slot = (at, at);
+        *slot = (at, at, caught_at);
         at += count;
+        caught_at += key.1 as u32;
     }
     let mut group_members: Vec<usize> = vec![0; program.fns.len()];
     for (i, decl) in program.fns.iter().enumerate() {
@@ -275,6 +286,18 @@ pub fn infer(program: &Program) -> Inference {
             .expect("every group was counted");
         group_members[slot.1 as usize] = i;
         slot.1 += 1;
+    }
+    // Fold `pattern_catches` over each group's arms, once. The fixpoint reads
+    // this where it used to walk the arms per argument of every call.
+    let mut caught: Vec<Set> = vec![0; caught_at as usize];
+    for (key, &(start, end, base)) in groups.iter() {
+        for pos in 0..key.1 {
+            let mut acc = 0;
+            for &i in &group_members[start as usize..end as usize] {
+                acc |= program.fns[i].params.get(pos).map_or(0, pattern_catches);
+            }
+            caught[base as usize + pos] = acc;
+        }
     }
     let type_names: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
@@ -321,6 +344,7 @@ pub fn infer(program: &Program) -> Inference {
         field_readers,
         groups,
         group_members,
+        caught,
         yields: HashMap::default(),
         type_names,
         type_name_slots,
@@ -845,7 +869,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
                 }
             }
             // constant mention evaluates; fn mention is a value (params go TOP)
-            if let Some(&(start, _)) = ctx.groups.get(&(name, 0)) {
+            if let Some(&(start, ..)) = ctx.groups.get(&(name, 0)) {
                 let i = ctx.group_members[start as usize];
                 mark_reader(ctx, i);
                 // A constant naming itself inside its own body hands over its
@@ -1005,18 +1029,15 @@ fn eval_call<'a>(
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
         return REC | fails | piped_bits;
     }
-    if let Some(&(start, end)) = ctx.groups.get(&(name.as_str(), args.len())) {
-        let (start, end) = (start as usize, end as usize);
+    if let Some(&(start, end, caught_at)) = ctx.groups.get(&(name.as_str(), args.len())) {
+        let (start, end, caught_at) = (start as usize, end as usize, caught_at as usize);
         let mut out: Set = 0;
         // pass-through: a failure in arg `pos` reaches the result only when no arm
         // catches it there. an arm whose pattern is `none`/`(err _)` handles that
         // failure (e.g. `_is_ws none -> false`), so it must not contaminate the
         // result — that spurious `none` is what kept scanner positions off `int`.
         for (pos, arg) in arg_sets.iter().enumerate() {
-            let caught = ctx.group_members[start..end].iter().fold(0, |acc, &i| {
-                acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
-            });
-            out |= (arg & FAIL) & !caught;
+            out |= (arg & FAIL) & !ctx.caught[caught_at + pos];
         }
         for k in start..end {
             let i = ctx.group_members[k];
@@ -1060,7 +1081,7 @@ fn call_yield(ctx: &Ctx<'_>, i: usize) -> Set {
 /// The declarations `name` dispatches over at this arity, joined. `None` when
 /// the name is a builtin or anything else the program did not declare.
 fn group_yield<'a>(ctx: &mut Ctx<'a>, name: &'a str, arity: usize) -> Option<Set> {
-    let (start, end) = *ctx.groups.get(&(name, arity))?;
+    let (start, end, _) = *ctx.groups.get(&(name, arity))?;
     let mut out: Set = 0;
     for k in start as usize..end as usize {
         let i = ctx.group_members[k];

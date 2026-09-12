@@ -3874,6 +3874,75 @@ every node, which is the cost the `check_per_node` comment already warns about
 for a single extra vector. Each is worth roughly what this one was worth and
 each needs its own measurement.
 
+## 2026-09-12 — a dispatch group's catch mask is the same answer every visit
+
+Searched the log, the archive and design/ before filing: `pattern_catches`
+appears in the 2026-08-19 entry that introduced the pass-through rule and in
+kanso#1229's arity work, and neither asks how often the fold over it runs.
+
+**The fold.** `eval_call`, for every call to a declared group, walks the
+group's arms once per ARGUMENT POSITION and ORs `pattern_catches` over the
+pattern at that position:
+
+    let caught = ctx.group_members[start..end].iter().fold(0, |acc, &i| {
+        acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
+    });
+
+The result depends on the declarations and on nothing the fixpoint changes.
+`program.fns` is fixed before inference starts and `pattern_catches` is a pure
+function of one pattern, so this is the same mask every time — once per
+argument of every call, on every round of the fixpoint. Callgrind put
+`Iter::fold` under `eval_expr` at 716,879 instructions on the module corpus,
+1.49% of the compile, and it is nearly all this.
+
+**What shipped.** One `Vec<Set>` built beside `group_members`, a row per group
+and a column per parameter position. A `groups` value grows a third word for
+the row's start, which is the only reason the other three read sites changed at
+all (they take `..` or `_`). The fold becomes an index.
+
+    module  47,467,069 -> 46,797,142    -669,927  -1.4114%
+    entry  158,096,940 -> 156,221,601  -1,875,339  -1.1862%
+    summed 205,564,009 -> 203,018,743  -2,545,266  -1.2381%
+
+Measured on top of kanso#1378. The fall is 3.6x the profile's attribution of
+the fold itself, which is the shape to expect: the profile names the `fold`
+symbol, and removing it also removes the slice bounds work, the `params.get`
+per arm, and the call into `pattern_catches` that the inclusive figure counts
+under its own name.
+
+**CI's rows**, measured twice on two different bases, which is how the pair
+turned out to be additive:
+
+              on dd465f26 (pre-#1382)   on 60e01bf8 (post-#1382)
+    module          -585,100                  -584,289  -1.2607%
+    entry         -2,073,436                -2,072,471  -1.3425%
+    library       -2,080,469                -2,079,921  -1.3410%
+    summed        -2,658,536                -2,656,760  -1.3236%
+
+    compile_allocs    +8                        +8      29,327 -> 29,335
+
+The landed rows are the second column: 45,763,446, 152,299,279 and
+153,023,863 against the container's projected -2,545,266 summed.
+
+**THE TWO CHANGES ARE ADDITIVE, AND THAT IS MEASURED RATHER THAN ASSUMED.**
+kanso#1382's fold landed on `check_merged_after_aliases` between the two
+readings, so this branch was re-based and re-read. The summed delta moved
+2,658,536 -> 2,656,760: a difference of 1,776 instructions, 0.067% of the
+delta itself. Both changes touch the same function and could have interacted;
+they do not, because the fold removes a traversal of the expression tree and
+the table removes a recomputation inside `eval_call`, and the two share no
+work. One pair measured twice is not a rule, and the next pair on this
+function is owed its own re-reading.
+
+The entry row carries 78.0% of the summed fall on both bases, and the entry
+and library rows part by 0.0015 percentage points, the closest they have run.
+Welfare 67.69834 -> 67.72201, banked.
+
+**No fixture.** The mask the table holds is the mask the fold computed, over
+the same arms in the same order, and `pattern_catches` reads no state. Every
+diagnostic in the 201-fixture error corpus is byte-identical, and the emitted
+code with it. There is nothing here a program could observe.
+
 ## 2026-09-12 — the shapes walk joins the one descent too, and two tables ride with it
 
 `check_merged_after_aliases` runs seven whole-program expression walks over the
@@ -3884,14 +3953,17 @@ time — iterate `program.fns`, skip synthetic, take each statement's expression
 descend — so `err_as_value_at` and `call_shaped_at` ride the descent that was
 already happening now.
 
-**CI's rows:**
+**CI's rows, on the base this branch was opened against** — kanso#1381 landed
+underneath while it was in flight, so these are a reading of the same change
+against a base that has moved, and the goldens this branch lands carry CI's
+second sitting rather than this one:
 
     module   46,347,735 ->  46,109,174   -238,561  -0.5147%
     entry   154,371,750 -> 153,612,583   -759,167  -0.4918%
     library 155,103,784 -> 154,346,192   -757,592  -0.4884%
     summed  200,719,485 -> 199,721,757   -997,728  -0.4971%
 
-Welfare 67.69834 -> 67.70734, banked. `compile_allocs` and
+Welfare read 67.70734 against that base. `compile_allocs` and
 `compile_peak_bytes` are byte-identical: the fold moves where work happens and
 allocates nothing new.
 

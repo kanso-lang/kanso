@@ -189,12 +189,12 @@
 # summed fall against last round's 76.5%, and by the larger fraction of the
 # two rows, which is what a saving keyed to nodes rather than to declarations
 # looks like: the entry corpus holds more expression nodes per declaration.
-# 2026-09-12 (the shapes walk joins the one descent too):
-# 154,371,750 -> 153,612,583, a FALL of 759,167 (-0.4918%). See
-# bench/compile_instructions_golden.txt. The entry row carries 76.1% of the
-# summed fall against last round's 78.2%, and it is still the larger of the
-# two fractions, which is what a saving keyed to nodes rather than to
-# declarations looks like. The fall is 56.9% of the 1,333,580 the walk cost
-# on this corpus by the census in that file's comment; the container read 65%
-# of the census before CI trimmed the whole delta by an eighth.
-entry_instructions=153612583
+# 2026-09-12 (the shapes walk joins the one descent too) -- SUPERSEDED, see
+# below: 154,371,750 -> 153,612,583 was read on the pre-catch-mask base.
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 154,371,750 -> 152,299,279, a FALL of 2,072,471 (-1.3425%). See
+# bench/compile_instructions_golden.txt. The entry row carries 78.0% of the
+# summed fall, the same share it carried on the pre-#1382 base and the same the
+# fold-decidable round read, which is what a saving priced per call site looks
+# like on a corpus whose declaration mix has not moved.
+entry_instructions=152299279

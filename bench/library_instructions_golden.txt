@@ -172,10 +172,12 @@
 # 0.0018 percentage points, closer than last round's 0.0096 and the closest
 # they have run. Both routes walk the same bodies and the saving is per node,
 # so there is nothing left for the two entrances to differ over.
-# 2026-09-12 (the shapes walk joins the one descent too):
-# 155,103,784 -> 154,346,192, a FALL of 757,592 (-0.4884%). See
+# 2026-09-12 (the shapes walk joins the one descent too) -- SUPERSEDED, see
+# below: 155,103,784 -> 154,346,192 was read on the pre-catch-mask base.
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 155,103,784 -> 153,023,863, a FALL of 2,079,921 (-1.3410%). See
 # bench/compile_instructions_golden.txt. This row and the entry row part by
-# 0.0033 percentage points against last round's 0.0018. Both routes walk the
-# same bodies and the saving is per node, so there is nothing for the two
-# entrances to differ over and the gap is measurement.
-library_instructions=154346192
+# 0.0015 percentage points, the closest they have run: both routes merge the
+# same library and call into it the same way, and there is nothing left for the
+# two entrances to differ over on a per-call-site saving.
+library_instructions=153023863
