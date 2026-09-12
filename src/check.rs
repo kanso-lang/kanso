@@ -1540,6 +1540,19 @@ fn field_reads<'a>(
         Stmt::Set { value, .. } => value,
     };
     field_reads_expr(expr, scan, local, open, true, diags);
+    field_reads_after(stmt, scan, open, diags);
+}
+
+/// The open-list bookkeeping a statement owes AFTER its expression has been
+/// walked. Split from the walk because it is the half that is about the
+/// STATEMENT rather than about a node: a caller that already descends into
+/// the expression for its own reasons needs this half and not the other.
+fn field_reads_after<'a>(
+    stmt: &'a Stmt,
+    scan: &FieldScan<'a>,
+    open: &mut Open<'a>,
+    diags: &mut Vec<Diagnostic>,
+) {
     match stmt {
         // The initialiser is read before the name it binds changes meaning,
         // and from there on the name is a different value.
