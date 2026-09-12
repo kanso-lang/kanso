@@ -236,6 +236,20 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// before rendering. The sort is stable, so two diagnostics at one line and
 /// column would keep the order they were pushed in — the error corpus is
 /// what pins that, and no pair here shares a node.
+///
+/// ONLY THE ARITY ANSWER GATES INFERENCE. The caller returns without running
+/// inference when this walk refuses an `if`, because inference indexes an
+/// `if`'s three children and must not run over a shape that has fewer. That
+/// guarantee is `if_arity_at`'s alone. The other two questions have nothing
+/// to do with it, and when their diagnostics shared that gate a program whose
+/// only fault was `b == true` returned from it and skipped every check after
+/// — the boolean naming rule, the call arities, the field-existence check,
+/// all of it, silently. The caller reads the arity answer back off the
+/// diagnostic's own kind, and rotates the walk's other two answers to the
+/// back. Handing this walk a SECOND vector to separate them at the source is
+/// the shape to avoid: it carries a third pointer through every node of every
+/// declaration to answer a question asked once per compile, and the reading
+/// that says what that costs is CI's, since this row moves with the layout.
 fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
     for decl in &program.fns {
         if decl.synthetic {
@@ -1658,9 +1672,13 @@ pub fn check_merged_after_aliases(
     // program is the most expensive thing the front end does. One pass,
     // handed round.
     check_per_node(program, &mut diags);
-    if !diags.is_empty() {
+    let walked = diags.len();
+    if diags.iter().any(|d| d.kind == "arity") {
         // inference indexes an if's branches, so it never runs over a shape
-        // the walk above refused
+        // the walk above refused. ONLY that refusal stops it, and only the
+        // refusal is reported: what `retain` drops here is what the checks
+        // below would have said about a program they never got to see.
+        diags.retain(|d| d.kind == "arity");
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         return diags;
     }
@@ -1682,6 +1700,13 @@ pub fn check_merged_after_aliases(
     check_decidable_failures(program, &mut diags);
     check_discarded_value(program, &inference, &mut diags);
     check_shapes_per_node(program, &mut diags);
+    // This route hands its diagnostics back in push order — only the gated
+    // return above sorts — so where a check pushes is what a reader sees.
+    // The walk ran first and its two non-gating questions belong where the
+    // checks they replaced used to push, which for `check_boolean_equality`
+    // was last of the run. Rotating the walk's answers to the back puts them
+    // there and leaves both halves in their own order.
+    diags.rotate_left(walked);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
     }
