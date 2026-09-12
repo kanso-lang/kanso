@@ -1211,4 +1211,22 @@
 # inference at all. The container projected -1,092,217 summed against CI's
 # -1,061,576, within 2.9% -- the closest the two hosts have agreed on a compile
 # delta, and no reason to expect the next one to.
-compile_instructions=46504130
+# 2026-09-12 (the decidable check joins the one descent):
+# 46,504,130 -> 46,347,735, a FALL of 156,395 (-0.3363%).
+# `check_merged_after_aliases` ran seven whole-program walks over the same
+# nodes, and `check_decidable_failures` was the seventh. The file's own comment
+# had written that one off as unfoldable, on the grounds that it asks about
+# something other than the node -- which is not what it asks. It needs to know
+# whether the node sits under a guard, because `if` and `and` and `or` may
+# leave a branch unreached and a decidable failure inside one is not a failure
+# the program meets. `per_node_walk` carries that as a flag and descends into
+# an `if`'s two branches with it cleared, so the check rides the descent that
+# was already happening. The container projected -149,694 on this row and CI
+# reads a fall 1.04x larger.
+#
+# The descent itself is priced at 1,147,185 over this corpus and the entry one
+# together, in `check_per_node`'s doc comment. This round takes 716,260 of
+# that, 62%: the traversal comes off, the per-node question work stays where it
+# was, and the fused walk now carries a flag and an `if` test at every node.
+# Sizing the six remaining walks at 1,147,185 apiece will read about 60% high.
+compile_instructions=46347735

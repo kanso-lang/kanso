@@ -3836,8 +3836,25 @@ carries that merge. The two changes touch different things — that one removed
 three rebuilds of a table, this one removes a traversal — so the pair should be
 close to additive, and CI's rows are what say whether they were.
 
+**CI's rows**, on the post-#1379 base, are the ones the goldens carry:
+
+    module   46,504,130 ->  46,347,735   -156,395  -0.3363%
+    entry   154,931,615 -> 154,371,750   -559,865  -0.3614%
+    library 155,663,482 -> 155,103,784   -559,698  -0.3596%
+    summed  201,435,745 -> 200,719,485   -716,260  -0.3556%
+
+The container projected -688,553 summed and CI reads 1.04x that, the closest
+the two hosts have agreed on a compile delta since these rows were minted —
+#1379's round held the previous record at 2.9%. The entry row takes 78.2% of
+the summed fall against #1379's 76.5%, which is the shape of a saving keyed to
+nodes rather than to declarations. The entry and library rows part by 0.0018
+percentage points, closer than any round before them: both routes walk the same
+bodies and a per-node saving gives the two entrances nothing to differ over.
+Welfare 67.69189 -> 67.69834, banked.
+
 **The descent figure is a ceiling and this realises 60% of it.** 688,553 of
-1,147,185. What comes off is the traversal: the per-declaration re-entry, the
+1,147,185 on the container, both measured here; CI's summed fall is 716,260
+against a ceiling nobody has re-measured on that host. What comes off is the traversal: the per-declaration re-entry, the
 statement loop, the child enumeration. What stays is the per-node question
 work, which is the same work asked from a different place, plus the flag and
 the `if` test the fused walk now carries at every node. A session sizing the
