@@ -156,4 +156,10 @@
 # percentage points, the widest gap yet. The library route checks a file of
 # definitions where the entry route checks statements too, so a saving that
 # scales with declarations reaches them in different proportion.
-library_instructions=157092747
+# 2026-09-12 (a name is a type only where a cheap test says it could be):
+# 157,092,747 -> 156,463,912, a FALL of 628,835 (-0.4003%). See
+# bench/compile_instructions_golden.txt. This row and the entry row are back
+# within 0.0104 percentage points of each other after last round's 0.2725,
+# which is what a saving keyed to identifiers rather than to declarations looks
+# like: both routes walk the same bodies.
+library_instructions=156463912
