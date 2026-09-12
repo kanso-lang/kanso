@@ -4119,3 +4119,73 @@ them. Both readings say the same thing: the entry and library corpora hold
 different mixes of call sites in bodies, and this check keys on exactly those,
 where the earlier folds' savings were keyed to nodes and could not see the
 difference.
+
+## 2026-09-12 — the field-read check joins the one descent, and the module row lands on a number it has produced before
+
+`check_merged_after_aliases` ran seven whole-program expression walks. kanso#1382
+folded the first, kanso#1383 the second, kanso#1384 the third. This is the
+fourth, and the largest of them on this host.
+
+`field_reads` did two different jobs in one function. Per NODE it asks whether a
+dot-read reaches a field, and whether the record it reaches is certain — that
+half is a question `check_per_node` was already at the node to ask. Per
+STATEMENT it does ordered bookkeeping: a bind closes the runs its pattern binds
+and calls `judge_cooccurrence`, a set notes a read. Ordered work cannot ride a
+descent that visits children in whatever order `for_each_child` hands them over,
+so the two halves are now two functions. `field_read_at` joins the fused walk.
+`field_reads_after` stays a statement loop and is called from the fused walk's
+`Expr::Build` arm, where the statements it needs are.
+
+The fused walk carries a third flag with the two it already had. `decidable` is
+off inside an `if`'s branches (kanso#1382). `raised` is off for the head of a
+call spelled `err` (kanso#1383). `certain` is off wherever the record a read
+reaches is not settled: inside a lambda, inside either arm of an `if`, in a
+guard's early and rest, and to the right of an `and` or an `or`. Three flags,
+three shapes that turn them off, and no shape turns off more than one.
+
+Measured against merged main. Container, `kanso::main` inclusive under callgrind, pinned tunables, read twice
+on the same box path with two builds identical to the instruction:
+
+```
+module   45,488,806 ->  45,174,081    -314,725  -0.6919%
+entry   151,905,787 -> 150,841,086  -1,064,701  -0.7009%
+summed  197,394,593 -> 196,015,167  -1,379,426  -0.6988%
+```
+
+The module row's fall is 314,725, which is the figure the previous entry
+records as this container's projection for the literal fold on the same row.
+Two different changes, one host, the same count. The candidate reason is that
+the module corpus is small enough for the removed DRIVER — the outer loop over
+declarations and the recursion setup — to dominate a fold's saving there, where
+the predicates the two folds move differ; the entry rows, 1,064,701 against
+1,609,713, would then be where the predicates show. That is a hypothesis and
+nothing here tests it. Both readings are exact counts and both repeated.
+
+Six mutations against `tests/golden/errors/uncertain_reads_are_not_counted.kso`,
+whose six legal declarations each read a field somewhere the record is not
+settled and whose seventh, `both_certain`, is refused. Five of the six turn the
+fixture red. The sixth cannot: the `Expr::BinOp` arm for `and` and `or` is
+unreachable, because `parse_and` and `parse_or` build `logical_if(...)` — an
+`Expr::App` with head `if` — so the walk never meets an `and` as a BinOp and the
+`if` arm is what clears `certain` to its right. Proved twice: by census over
+every `Expr::BinOp` construction site in the parser (`parse_cmp`, `parse_bits`,
+`parse_add`, `parse_mul`, and trmc's two, filtered to `+` and `*`), and in
+isolation, with a fixture holding only an `and` that stays legal, goes red under
+the `if`-arm mutation, and is legal again restored.
+
+The error corpus is byte-identical otherwise. `diag::render` does not sort, and
+`diags.rotate_left(walked)` sends the fused walk's block to the back, so a
+fixture carrying a field diagnostic beside another would move; none does.
+
+`sh scripts/gates/all_counters.sh`: the twelve runtime cost veins and the lazy
+tier agree. `sh scripts/gates/all_compile.sh`: `emitted_code`,
+`compile_libraries` and `compile_cost` AGREED; the six host-keyed rows are
+refused on this container and are CI's to write. `cargo clippy --release
+--all-targets` and `cargo fmt --check` clean, full release suite green after
+`scripts/build_wasm.sh`.
+
+`BuildScan::expr` is the fifth and last foldable walk, census 743,211, the
+smallest. `named_walk` is the largest remaining at 1,791,359 and stays out:
+`arity_at` pushes diagnostics of kind `arity`, and `check_merged_after_aliases`
+gates on that kind immediately after `check_per_node`, so folding it would put
+those diagnostics in front of their own early return.
