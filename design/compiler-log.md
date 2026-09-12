@@ -4160,3 +4160,24 @@ the shadow load". These numbers split that: the walk's lookups are 38,906 of
 it, its traversal 486,988 in total, and the remaining ~643,000 is the keyed map
 build and the shadow load. The rule needs all three, which is why the fall
 stands rather than being bought back.
+
+## 2026-09-12 — the formatting appendix knew two continuation forms and there are five
+
+kanso#1364 minted `.>`, `.!` and `.?`, and each is legal at the head of a
+continuation line. The evidence was already in the corpus rather than in a
+fixture written to argue this: `tests/golden/micro/a_chain_step_names_its_
+channel.kso` wraps a `json/decode` onto three continuation lines headed
+`.>`, `.!` and `.?`, and `kanso check` answers ok on it. Appendix C said
+"there are exactly two continuation
+forms ... `.` for a data-flow pipe, and `>>` for a pure sequence", and its
+closing summary of the whole law repeated the pair. Both name all five now.
+
+A third sentence introduced the wrap_pipe panel as "wrapped onto `.`
+continuation lines" where the panel holds one `.` line and one `.>` line; it
+no longer counts them. That mixed spelling inside one chain is on main and is
+left alone here: changing the sample moves a golden, and the sentence was the
+thing that was wrong.
+
+This is independent of the effect-type sequence. The appendix has been wrong
+since #1364 landed, which is why it lands on its own rather than behind the
+plain dot becoming an application.
