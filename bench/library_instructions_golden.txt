@@ -172,4 +172,10 @@
 # 0.0018 percentage points, closer than last round's 0.0096 and the closest
 # they have run. Both routes walk the same bodies and the saving is per node,
 # so there is nothing left for the two entrances to differ over.
-library_instructions=155103784
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 155,103,784 -> 153,023,863, a FALL of 2,079,921 (-1.3410%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0015 percentage points, the closest they have run: both routes merge the
+# same library and call into it the same way, and there is nothing left for the
+# two entrances to differ over on a per-call-site saving.
+library_instructions=153023863

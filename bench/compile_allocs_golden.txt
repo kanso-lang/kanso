@@ -370,4 +370,12 @@
 # now and handed round. Fourteen rather than three, because the row counts the
 # whole compile and `check_merged_after_aliases` runs once per module the
 # directory holds, not once per compile.
-compile_allocs=29327
+#
+# 2026-09-12 (a dispatch group's catch mask is decided once): 29,327 -> 29,335,
+# a RISE of 8 (+0.0273%). One `Vec<Set>` beside `group_members`, a row per
+# dispatch group and a column per parameter position, replaces a fold that
+# recomputed the same mask on every visit. Eight rather than one because the
+# row counts the whole compile and the table is built once per module the
+# directory holds. What it buys on this same corpus is in
+# bench/compile_instructions_golden.txt.
+compile_allocs=29335
