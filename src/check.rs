@@ -666,7 +666,6 @@ fn check_none_exhaustive(
     let walk = |e: &Expr, diags: &mut Vec<Diagnostic>, owner: &str| {
         let Expr::App { head, args, piped: false, .. } = e else { return };
         let Expr::Ident(name, _) = head.as_ref() else { return };
-        let Some(&(_, named)) = returns.get(&(name.as_str(), args.len())) else { return };
         // A getter is synthesized from a field read, so nobody can give it
         // an arm, and the play route checks before the read is rewritten
         // into one while the module route checks after: `xs[i].x` would be
@@ -675,6 +674,17 @@ fn check_none_exhaustive(
         if crate::ast::getter_field(name).is_some() {
             return;
         }
+        // THE CHEAP TESTS COME FIRST, and asking the table is not one of
+        // them: the lookup hashes the callee's name, where a none question
+        // about an argument is a match on the argument's own shape. A call
+        // whose arguments are literals, arithmetic or field reads answers no
+        // on the match alone and never touches the table, which is most of
+        // them. The second walk over the arguments below costs a few compares
+        // on the sites that reach it, and those are the rare ones.
+        if !args.iter().any(&yields_none) {
+            return;
+        }
+        let Some(&(_, named)) = returns.get(&(name.as_str(), args.len())) else { return };
         for (pos, arg) in args.iter().enumerate() {
             if !yields_none(arg) {
                 continue;
