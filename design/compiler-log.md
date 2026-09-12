@@ -4669,3 +4669,33 @@ So the floor edit is needed, and the paydown has taken it from 4,549,526 to
 2,472,374 with a fusion plausibly reaching ~800,000. The fusion is filed as its
 own lead rather than ridden here: it reorders diagnostics across two dozen
 checks and regenerates the error corpus, which should stand on its own.
+
+**CI's sitting for the three paydown rounds.** The three entries above quote
+container readings; these are the landed values the goldens now carry, read off
+the cost-goldens job on 35847282.
+
+    compile_instructions   49,937,088 -> 49,626,153   (−310,935 / −0.6226%)
+    entry_instructions    167,770,493 -> 166,036,229  (−1,734,264 / −1.0337%)
+    library_instructions  168,056,074 -> 166,320,043  (−1,736,031 / −1.0330%)
+    compile_allocs            29,374 -> 29,374        (unchanged, green)
+    compile_peak_bytes                                (unchanged, green)
+
+The objective's compile term is the first two summed: 217,707,581 ->
+215,662,382, a fall of 2,045,199 against the 2,077,152 this container projected
+— 1.5% high, the direction and rough size the container's offset has had on
+every compile row.
+
+Eighteen of the twenty-one veins in that job were green before this
+regeneration and the three that were not are these. Nothing else moved: the
+work rows, the machine-code rows, the memory rows and the run program's
+counters are all byte-identical, which is what a change confined to one
+whole-program check should look like.
+
+The entry and library rows fall within 1,767 instructions of each other, which
+is kanso#1344's finding for the third time on this branch: those two corpora
+name the identical ten imports and are the same measurement.
+
+Five spans on compiler.html quote these goldens and `all_pages.sh --write`
+rewrote them. A sixth thing on that page was stale in a way no gate can see —
+the library row's paragraph said two changes had moved it since, and there are
+now five — so that sentence is edited by hand rather than regenerated.

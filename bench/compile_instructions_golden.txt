@@ -1162,4 +1162,12 @@
 # asking -- so the binder set those arms read is never read, and the second
 # walk of every body that built it is never taken. The three instruction rows
 # fall together, which is what per-declaration work looks like on every route.
-compile_instructions=49937088
+# 2026-09-12 (three paydown rounds on the box check): CI's sitting,
+# 49,937,088 -> 49,626,153, a fall of 310,935 (-0.6226%). Three changes, each
+# measured on its own: a call asks its arguments before it asks the returns
+# table; the table answers before the binder set does; the binder set is built
+# on the first ask rather than eagerly. The module row is the one that gains
+# least of the three, because this corpus imports no effect-bearing module, so
+# `any_boxed` is false and the eager binder walk it now skips was already
+# being skipped here.
+compile_instructions=49626153

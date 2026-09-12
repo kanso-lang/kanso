@@ -153,4 +153,8 @@
 # 2026-09-12 (the box check asks a question the program has already answered):
 # CI's sitting, 168,998,559 -> 167,770,493, a fall of 1,228,066 (-0.7267%).
 # The `any_boxed` hoist; see bench/compile_instructions_golden.txt.
-entry_instructions=167770493
+# 2026-09-12 (three paydown rounds on the box check): CI's sitting,
+# 167,770,493 -> 166,036,229, a fall of 1,734,264 (-1.0337%). The same three
+# changes as the module row. This corpus names effects, so it is the one that
+# actually saves the second walk of every body, and it falls furthest.
+entry_instructions=166036229

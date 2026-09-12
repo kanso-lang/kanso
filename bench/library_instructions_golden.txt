@@ -143,4 +143,9 @@
 # The `any_boxed` hoist; see bench/compile_instructions_golden.txt. Ten
 # instructions from the entry row's fall on the same change, which is what
 # kanso#1344 found these two corpora to be: the same measurement.
-library_instructions=168056074
+# 2026-09-12 (three paydown rounds on the box check): CI's sitting,
+# 168,056,074 -> 166,320,043, a fall of 1,736,031 (-1.0330%). The entry and
+# library rows fall within 1,767 instructions of each other on the same change,
+# which is kanso#1344's finding restated: the two corpora name the identical
+# imports and are the same measurement.
+library_instructions=166320043
