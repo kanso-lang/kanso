@@ -2310,7 +2310,14 @@ fn literal_walk_expr(
 ) {
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(name, _) = &**head {
-            if !bound.contains(name.as_str()) {
+            // THE CHEAP TEST COMES FIRST, and the shadowing lookup is not one.
+            // Every arm below is guarded by `literal_kind(arg)`, so a call
+            // with no literal argument can say nothing at all — and asking
+            // that is a discriminant match on each argument, where what it
+            // skips hashes the callee's name three times over and takes a
+            // qualified name apart.
+            if args.iter().any(|arg| literal_kind(arg).is_some()) && !bound.contains(name.as_str())
+            {
                 // a std wrapper is a rename over a builtin, so the builtin's
                 // demand is the one that will actually be met
                 let alias = builtins.get(&(name.as_str(), args.len())).copied();
